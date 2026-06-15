@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://dashboard.nexarrow.eu/api";
 
 const schedules = {
   hourly: { label: "Every hour", cron: "0 * * * *" },

@@ -32,7 +32,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
   const fetchDocuments = useCallback(async (showToast = true) => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:5000/documents");
+      const response = await fetch("https://dashboard.nexarrow.eu/api/documents");
       const data = await response.json();
       setDocuments(data.documents || []);
 
@@ -86,7 +86,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
 
       try {
         setUploading(true);
-        const response = await fetch("http://localhost:5000/upload", {
+        const response = await fetch("https://dashboard.nexarrow.eu/api/upload", {
           method: "POST",
           body: formData,
         });
@@ -117,7 +117,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
   const pollStatus = async (documentId, fileName) => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:5000/status/${documentId}`);
+        const res = await fetch(`https://dashboard.nexarrow.eu/api/status/${documentId}`);
         const data = await res.json();
         setProcessingDocs((prev) => ({
           ...prev,
@@ -160,7 +160,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
 
     try {
       setAddingSheet(true);
-      const res = await fetch("http://localhost:5000/sheets", {
+      const res = await fetch("https://dashboard.nexarrow.eu/api/sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sheetId, name }),
@@ -191,7 +191,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
 
   const handleDelete = async (doc) => {
     try {
-      const response = await fetch(`http://localhost:5000/documents/${doc.id}`, {
+      const response = await fetch(`https://dashboard.nexarrow.eu/api/documents/${doc.id}`, {
         method: "DELETE",
       });
       if (response.ok) {
@@ -209,7 +209,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
 
   const handleToggleActive = async (doc) => {
     try {
-      const response = await fetch(`http://localhost:5000/documents/${doc.id}/toggle`, {
+      const response = await fetch(`https://dashboard.nexarrow.eu/api/documents/${doc.id}/toggle`, {
         method: "PATCH",
       });
       if (response.ok) {
@@ -228,7 +228,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
     try {
       setLoadingPreview(true);
       setSheetPreview({ document: doc, sheets: [], overview: null });
-      const response = await fetch(`http://localhost:5000/sheets/${doc.id}/data`);
+      const response = await fetch(`https://dashboard.nexarrow.eu/api/sheets/${doc.id}/data`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setSheetPreview(data);

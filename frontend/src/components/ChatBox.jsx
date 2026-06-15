@@ -49,7 +49,7 @@ export default function ChatBox() {
     try {
       setUploading(true);
       setStatus("Uploading...");
-      const response = await fetch("http://localhost:5000/upload", {
+      const response = await fetch("https://dashboard.nexarrow.eu/api/upload", {
         method: "POST",
         body: formData,
       });
@@ -75,7 +75,7 @@ export default function ChatBox() {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:5000/status/${documentId}`);
+        const res = await fetch(`https://dashboard.nexarrow.eu/api/status/${documentId}`);
         const data = await res.json();
         setStatus(data.stage);
         if (data.ready) {
@@ -109,7 +109,7 @@ export default function ChatBox() {
     setQuestion("");
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:5000/chat", {
+      const response = await fetch("https://dashboard.nexarrow.eu/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMsg, documentId }),

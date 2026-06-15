@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Bell, CheckCircle2, Loader2, MailOpen, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://dashboard.nexarrow.eu/api";
 
 export default function Notifications({ darkMode }) {
   const [notifications, setNotifications] = useState([]);

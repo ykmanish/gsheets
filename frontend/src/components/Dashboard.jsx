@@ -31,7 +31,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
   const fetchDocuments = useCallback(async () => {
     try {
       setLoadingDocs(true);
-      const response = await fetch("http://localhost:5000/documents");
+      const response = await fetch("https://dashboard.nexarrow.eu/api/documents");
       const data = await response.json();
       setDocuments(data.documents || []);
 
@@ -48,7 +48,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const response = await fetch("http://localhost:5000/notifications");
+      const response = await fetch("https://dashboard.nexarrow.eu/api/notifications");
       const data = await response.json();
       setNotifications(data.notifications || []);
       setUnreadCount(data.unreadCount || 0);
@@ -74,7 +74,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
   const markNotificationRead = async (notification) => {
     if (!notification.readAt) {
-      await fetch(`http://localhost:5000/notifications/${notification.id}/read`, { method: "PATCH" });
+      await fetch(`https://dashboard.nexarrow.eu/api/notifications/${notification.id}/read`, { method: "PATCH" });
       await fetchNotifications();
     }
   };
@@ -92,7 +92,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:5000/chat", {
+      const response = await fetch("https://dashboard.nexarrow.eu/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMsg, documentIds: selectedDocs }),

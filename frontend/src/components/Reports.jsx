@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Bot, CheckCircle2, FileText, Loader2, Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://dashboard.nexarrow.eu/api";
 
 export default function Reports({ darkMode }) {
   const [reports, setReports] = useState([]);

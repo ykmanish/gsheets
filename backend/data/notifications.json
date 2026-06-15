@@ -1,0 +1,50 @@
+[
+  {
+    "id": "1781515925752-xb40kh",
+    "automationId": "1781515918833",
+    "automationName": "Custom condition alert",
+    "reportId": "1781515925752",
+    "title": "Custom condition alert",
+    "message": "Operational Briefing:\n\nSummary:\n- The organization has 30 employees across various departments.\n- Average salary is $71,733, and average experience is 5.3 years.\n- Total project count is 137.\n\nImportant findings:\n* Most employees work in Engineering department (9 employees).\n* Highest average salary is in Engineering department.\n* 17 employees work remotely.\n\nRisks or exceptions:\n* 7 employees have 'Average' performance rating, which may need attention.\n* 1 employee has missing data (ID: 32).\n* Salary range is wide ($51,000 - $95,000), which may indicate salary disparities.\n\nRecommended actions:\n* Review employee performance and provide necessary support to employees with 'Average' rating.\n* Verify and update missing data for employee ID: 32.\n* Conduct salary review to identify and address any disparities.",
+    "severity": "info",
+    "category": "condition_alert",
+    "createdAt": "2026-06-15T09:32:05.752Z",
+    "readAt": "2026-06-15T09:59:33.474Z"
+  },
+  {
+    "id": "1781515802302-69ev8n",
+    "automationId": "1781515615015",
+    "automationName": "Scheduled report",
+    "reportId": "1781515802302",
+    "title": "Scheduled report",
+    "message": "Summary:\n- There are 25 invoices listed\n- Total amount due is not calculated in this report\n- Invoices are from various clients and due dates range from 2026-05-19 to 2026-07-26\n\nImportant findings:\n* 17 invoices are pending\n* 5 invoices are overdue\n* 3 invoices are paid\n\nRisks or exceptions:\n* Overdue invoices may lead to late payments or losses\n* No follow-up information is available for pending invoices\n\nRecommended actions:\n* Follow up with clients having overdue invoices\n* Review and process pending invoices\n* Send reminders to clients with upcoming due dates",
+    "severity": "info",
+    "category": "scheduled_report",
+    "createdAt": "2026-06-15T09:30:02.302Z",
+    "readAt": "2026-06-15T09:30:49.837Z"
+  },
+  {
+    "id": "1781515626153-q3ajtr",
+    "automationId": "1781515615015",
+    "automationName": "Scheduled report",
+    "reportId": "1781515626152",
+    "title": "Scheduled report",
+    "message": "**Summary**: \n- Total invoices: 25\n- Total pending: 18\n- Total overdue: 5\n- Total paid: 2\n\n**Important findings**: \n* Largest amount due: $9,475.26 (INV-1010)\n* Smallest amount due: $430.16 (INV-1015)\n* Oldest due date: 2026-05-19 (INV-1001)\n* Newest due date: 2026-07-26 (INV-1007)\n\n**Risks or exceptions**: \n* Overdue invoices: INV-1001, INV-1008, INV-1010, INV-1022\n* No email or phone for some clients: None found\n* Inconsistent address formatting: Found in some addresses\n\n**Recommended actions**: \n* Follow up with clients for overdue invoices (INV-1001, INV-1008, INV-1010, INV-1022)\n* Review and standardize address formatting for consistency\n* Reach out to clients with pending invoices for payment updates\n* Review client communication channels to ensure all necessary contact information is available",
+    "severity": "info",
+    "category": "scheduled_report",
+    "createdAt": "2026-06-15T09:27:06.153Z",
+    "readAt": "2026-06-15T09:30:53.181Z"
+  },
+  {
+    "id": "1781515467921-33vps1",
+    "automationId": "1781514175379",
+    "automationName": "Pending dues notifier",
+    "reportId": "1781515467921",
+    "title": "Pending dues notifier",
+    "message": "23 matching rows found. Open the report for details.",
+    "severity": "warning",
+    "category": "due_monitor",
+    "createdAt": "2026-06-15T09:24:27.921Z",
+    "readAt": "2026-06-15T09:24:34.287Z"
+  }
+]

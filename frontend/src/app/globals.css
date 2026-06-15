@@ -1,0 +1,114 @@
+@import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
+
+
+/* Hide scrollbar for Chrome, Safari, and Edge */
+::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+select {
+  cursor: pointer;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+/* Hide scrollbar for IE, Edge, and Firefox */
+html {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+@font-face {
+  font-family: "Regular";
+  src: url("./font/regular.otf") format("truetype");
+  /* Add additional font weights and styles if needed */
+}
+@font-face {
+  font-family: "Gvibet";
+  src: url("./font/regular.otf") format("truetype");
+  /* Add additional font weights and styles if needed */
+}
+@font-face {
+  font-family: "Starlight";
+  src: url("./font/arivo.ttf") format("truetype");
+  /* Add additional font weights and styles if needed */
+}
+@font-face {
+  font-family: "Beboom";
+  src: url("./font/ovso.otf") format("truetype");
+  /* Add additional font weights and styles if needed */
+}
+
+@font-face {
+  font-family: "Goodly";
+  src: url("./font/goodly.otf") format("truetype");
+  /* Add additional font weights and styles if needed */
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("./font/satre.ttf") format("truetype");
+  /* Add additional font weights and styles if needed */
+}
+
+@font-face {
+  font-family: "Rayton";
+  src: url("./font/rayton.ttf") format("truetype");
+  /* Add additional font weights and styles if needed */
+}
+
+@font-face {
+  font-family: "count";
+  src: url("./font/Countless.ttf") format("truetype");
+  /* Add additional font weights and styles if needed */
+}
+
+@font-face {
+  font-family: "logoz";
+  src: url("./font/Aminute.ttf") format("truetype");
+  /* Add additional font weights and styles if needed */
+}
+
+.test{
+  font-family: "logoz";
+}
+.newq {
+  font-family: "Geist";
+}
+.small {
+  font-family: "Regular";
+}
+
+.smallt {
+  font-family: "Gvibet";
+}
+
+.star {
+  font-family: "Starlight";
+}
+
+.good {
+  font-family: "Goodly";
+}
+
+.boom {
+  font-family: "Beboom";
+}
+
+.ray {
+  font-family: "Rayton";
+}
+
+.count{
+  font-family: "count";
+}
+

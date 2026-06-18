@@ -54,7 +54,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
     try {
       if (showLoader) setLoadingDocs(true);
       setRefreshingDocs(true);
-      const response = await fetch("http://localhost:5000/api/documents");
+      const response = await fetch("https://dashboard.nexarrow.eu/api/documents");
       const data = await response.json();
       setDocuments(data.documents || []);
       setFolders(data.folders || []);
@@ -100,7 +100,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:5000/api/chat", {
+      const response = await fetch("https://dashboard.nexarrow.eu/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMsg, documentIds: selectedDocs }),

@@ -18,7 +18,7 @@ import {
 import toast from "react-hot-toast";
 import { ConfirmModal } from "./ui";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://dashboard.nexarrow.eu/api";
 
 const schedules = {
   hourly: { label: "Every hour", cron: "0 * * * *" },

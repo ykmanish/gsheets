@@ -23,7 +23,7 @@ import ProjectPaymentDashboard from "./sheetViews/ProjectPaymentDashboard";
 import KalhaarPendingTrackerDashboard from "./sheetViews/KalhaarPendingTrackerDashboard";
 import { isWithinDateRange } from "./sheetViews/amountUtils";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://dashboard.nexarrow.eu/api";
 const CHART_COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899", "#84cc16"];
 
 function extractSheetId(url) {

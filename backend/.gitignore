@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.codex-scratch/
 .pnp
 .pnp.js
 
@@ -51,7 +52,13 @@ temp/
 
 # AWS Keys
 *.pem
-backend/sheet_account.json
+sheet_account.json
 # Misc
 .vercel/
 .netlify/
+
+# Application Data & Models
+*.traineddata
+uploads/
+vectors/
+data/

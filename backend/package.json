@@ -11,6 +11,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.0",
     "@xenova/transformers": "^2.17.2",
     "chromadb": "^3.4.3",
     "cors": "^2.8.6",
@@ -19,11 +20,14 @@
     "express": "^5.2.1",
     "googleapis": "^173.0.0",
     "groq-sdk": "^1.2.1",
+    "mammoth": "^1.12.0",
+    "mongodb": "^7.3.0",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
     "nodemailer": "^9.0.0",
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^6.0.227",
+    "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   }
 }

@@ -49,7 +49,7 @@ export default function ChatBox() {
     try {
       setUploading(true);
       setStatus("Uploading...");
-      const response = await fetch("https://dashboard.nexarrow.eu/api/upload", {
+      const response = await fetch("http://localhost:5000/api/upload", {
         method: "POST",
         body: formData,
       });
@@ -75,7 +75,7 @@ export default function ChatBox() {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`https://dashboard.nexarrow.eu/api/status/${documentId}`);
+        const res = await fetch(`http://localhost:5000/api/status/${documentId}`);
         const data = await res.json();
         setStatus(data.stage);
         if (data.ready) {
@@ -109,7 +109,7 @@ export default function ChatBox() {
     setQuestion("");
     try {
       setLoading(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/chat", {
+      const response = await fetch("http://localhost:5000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMsg, documentId }),
@@ -195,7 +195,7 @@ export default function ChatBox() {
               className="text-lg small font-semibold transition-colors duration-300"
               style={{ color: darkMode ? "#e8e8e8" : "#1f2937" }}
             >
-              VectorDocs
+              UIPL Docs
             </h1>
           </div>
 
@@ -403,7 +403,7 @@ export default function ChatBox() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.csv,.xlsx,.xls,.txt"
+              accept=".pdf,.docx,.csv,.xlsx,.xls,.txt,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
               className="hidden"
               onChange={handleFileChange}
             />

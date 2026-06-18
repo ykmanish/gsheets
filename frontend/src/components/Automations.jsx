@@ -16,8 +16,9 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { ConfirmModal } from "./ui";
 
-const API_URL = "https://dashboard.nexarrow.eu/api";
+const API_URL = "http://localhost:5000/api";
 
 const schedules = {
   hourly: { label: "Every hour", cron: "0 * * * *" },
@@ -99,6 +100,8 @@ export default function Automations({ darkMode }) {
   const [saving, setSaving] = useState(false);
   const [runningId, setRunningId] = useState(null);
   const [integrations, setIntegrations] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const panel = darkMode ? "bg-white/[0.03] border border-white/10" : "bg-white/80 border border-black/5";
   const muted = darkMode ? "text-white/50" : "text-black/45";
@@ -267,14 +270,17 @@ export default function Automations({ darkMode }) {
   };
 
   const deleteAutomation = async (automation) => {
-    if (!window.confirm(`Delete "${automation.name}"?`)) return;
     try {
+      setDeleting(true);
       const response = await fetch(`${API_URL}/automations/${automation.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error();
       toast.success("Automation deleted");
+      setDeleteConfirm(null);
       await loadData();
     } catch {
       toast.error("Could not delete automation");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -287,17 +293,17 @@ export default function Automations({ darkMode }) {
     .join(", ");
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-8 newq" style={{ background: darkMode ? "linear-gradient(180deg,#111318,#0c0d10)" : "linear-gradient(180deg,#f7f6f2,#f3f1ea)" }}>
+    <div className="flex-1 overflow-y-auto px-4 py-4 newq sm:px-6 lg:px-8 lg:py-8" style={{ background: darkMode ? "linear-gradient(180deg,#111318,#0c0d10)" : "linear-gradient(180deg,#f7f6f2,#f3f1ea)" }}>
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-8">
           <div>
             <p className={`text-[11px] uppercase tracking-[0.32em] mb-3 ${muted}`}>Automation studio</p>
-            <h2 className={`text-4xl small font-semibold ${darkMode ? "text-white" : "text-black"}`}>Turn sheet data into action</h2>
+            <h2 className={`text-2xl small font-semibold sm:text-3xl md:text-4xl ${darkMode ? "text-white" : "text-black"}`}>Turn sheet data into action</h2>
             <p className={`text-sm mt-4 max-w-2xl ${muted}`}>
               Choose a purpose, add AI if useful, then decide whether it should notify, report, email, or run row-level actions.
             </p>
           </div>
-          <button onClick={openBuilder} disabled={documents.length === 0} className={`flex items-center gap-2 px-5 py-3 rounded-full disabled:opacity-40 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
+          <button onClick={openBuilder} disabled={documents.length === 0} className={`flex w-full items-center justify-center gap-2 px-5 py-3 rounded-full disabled:opacity-40 sm:w-auto ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
             <Plus className="w-4 h-4" /> New automation
           </button>
         </div>
@@ -377,15 +383,15 @@ export default function Automations({ darkMode }) {
                         <span>Last run: {automation.lastRunAt ? new Date(automation.lastRunAt).toLocaleString() : "Not run yet"}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => toggleAutomation(automation)} className={`px-4 h-11 rounded-full flex items-center gap-2 ${darkMode ? "bg-white/5 text-white" : "bg-black/[0.04] text-black"}`}>
+                    <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                      <button onClick={() => toggleAutomation(automation)} className={`h-11 flex-1 rounded-full px-4 flex items-center justify-center gap-2 sm:flex-none ${darkMode ? "bg-white/5 text-white" : "bg-black/[0.04] text-black"}`}>
                         {automation.enabled ? <ToggleRight className="w-5 h-5 text-green-500" /> : <ToggleLeft className="w-5 h-5 opacity-40" />}
                         {automation.enabled ? "Active" : "Paused"}
                       </button>
                       <button onClick={() => runAutomation(automation)} disabled={runningId === automation.id} className={`w-11 h-11 rounded-full flex items-center justify-center ${darkMode ? "bg-white/10 text-white" : "bg-black text-white"}`}>
                         {runningId === automation.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                       </button>
-                      <button onClick={() => deleteAutomation(automation)} className="w-11 h-11 rounded-full flex items-center justify-center text-red-500 hover:bg-red-500/10">
+                      <button onClick={() => setDeleteConfirm(automation)} className="w-11 h-11 rounded-full flex items-center justify-center text-red-500 hover:bg-red-500/10">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -398,8 +404,8 @@ export default function Automations({ darkMode }) {
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-5">
-          <div className={`w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-[30px] p-7 ${darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"}`}>
+        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4 sm:p-5">
+          <div className={`w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-[24px] p-4 sm:rounded-[30px] sm:p-7 ${darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"}`}>
             <div className="flex items-start justify-between mb-7">
               <div>
                 <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${muted}`}>New workflow</p>
@@ -456,7 +462,7 @@ export default function Automations({ darkMode }) {
                 {["due_monitor", "condition_alert"].includes(form.category) && (
                   <div>
                     <span className={`text-xs uppercase tracking-wider block mb-2 ${muted}`}>Condition</span>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid gap-2 sm:grid-cols-3">
                       <input value={form.condition.column} onChange={(e) => setForm({ ...form, condition: { ...form.condition, column: e.target.value } })} placeholder="Column" className={`rounded-2xl px-4 py-3 outline-none ${input}`} />
                       <select value={form.condition.operator} onChange={(e) => setForm({ ...form, condition: { ...form.condition, operator: e.target.value } })} className={`rounded-2xl px-4 py-3 outline-none ${input}`}>
                         <option value="contains_any">contains any</option>
@@ -512,7 +518,7 @@ export default function Automations({ darkMode }) {
               </div>
             </div>
 
-            <div className="flex gap-3 mt-7">
+            <div className="flex flex-col gap-3 mt-7 sm:flex-row">
               <button onClick={() => setModalOpen(false)} className={`flex-1 py-3 rounded-full ${darkMode ? "bg-white/5 text-white" : "bg-black/[0.04] text-black"}`}>Cancel</button>
               <button onClick={createAutomation} disabled={saving} className={`flex-1 py-3 rounded-full flex items-center justify-center gap-2 disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Create workflow
@@ -521,6 +527,15 @@ export default function Automations({ darkMode }) {
           </div>
         </div>
       )}
+      <ConfirmModal
+        darkMode={darkMode}
+        open={Boolean(deleteConfirm)}
+        title="Delete automation"
+        message={`Are you sure you want to delete "${deleteConfirm?.name}"? This workflow will stop running.`}
+        loading={deleting}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => deleteAutomation(deleteConfirm)}
+      />
     </div>
   );
 }

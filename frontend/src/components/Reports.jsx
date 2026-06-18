@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Bot, CheckCircle2, FileText, Loader2, Search, X } from "lucide-react";
 import toast from "react-hot-toast";
+import { DateRangePicker, SelectMenu } from "./ui";
 
-const API_URL = "https://dashboard.nexarrow.eu/api";
+const API_URL = "http://localhost:5000/api";
 
 export default function Reports({ darkMode }) {
   const [reports, setReports] = useState([]);
@@ -13,7 +14,6 @@ export default function Reports({ darkMode }) {
 
   const panel = darkMode ? "bg-white/[0.03] border border-white/10" : "bg-white/80 border border-black/5";
   const muted = darkMode ? "text-white/50" : "text-black/45";
-  const input = darkMode ? "bg-white/5 border border-white/10 text-white" : "bg-black/[0.03] border border-black/10 text-black";
 
   const loadReports = useCallback(async () => {
     try {
@@ -59,11 +59,11 @@ export default function Reports({ darkMode }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-8 newq" style={{ background: darkMode ? "linear-gradient(180deg,#111318,#0c0d10)" : "linear-gradient(180deg,#f7f6f2,#f3f1ea)" }}>
+    <div className="flex-1 overflow-y-auto px-4 py-4 newq sm:px-6 lg:px-8 lg:py-8" style={{ background: darkMode ? "linear-gradient(180deg,#111318,#0c0d10)" : "linear-gradient(180deg,#f7f6f2,#f3f1ea)" }}>
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <p className={`text-[11px] uppercase tracking-[0.32em] mb-3 ${muted}`}>Automation history</p>
-          <h2 className={`text-4xl small font-semibold ${darkMode ? "text-white" : "text-black"}`}>Reports and AI briefings</h2>
+          <h2 className={`text-2xl small font-semibold sm:text-3xl md:text-4xl ${darkMode ? "text-white" : "text-black"}`}>Reports and AI briefings</h2>
           <p className={`text-sm mt-4 max-w-2xl ${muted}`}>Each scheduled or manual run is stored here with matched rows, executed actions, and AI findings.</p>
         </div>
 
@@ -81,19 +81,33 @@ export default function Reports({ darkMode }) {
           ))}
         </div>
 
-        <div className={`rounded-[26px] p-5 mb-6 grid md:grid-cols-4 gap-3 ${panel}`}>
-          <input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} className={`rounded-2xl px-4 py-3 outline-none ${input}`} />
-          <input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} className={`rounded-2xl px-4 py-3 outline-none ${input}`} />
-          <select value={filters.automationId} onChange={(e) => setFilters({ ...filters, automationId: e.target.value })} className={`rounded-2xl px-4 py-3 outline-none ${input}`}>
-            <option value="">All automations</option>
-            {automations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-          <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className={`rounded-2xl px-4 py-3 outline-none ${input}`}>
-            <option value="">All statuses</option>
-            <option value="success">Successful</option>
-            <option value="partial">Partial</option>
-            <option value="failed">Failed</option>
-          </select>
+        <div className={`rounded-[26px] p-4 mb-6 grid gap-3 md:grid-cols-4 sm:p-5 ${panel}`}>
+          <DateRangePicker
+            darkMode={darkMode}
+            from={filters.from}
+            to={filters.to}
+            onChange={(range) => setFilters((current) => ({ ...current, ...range }))}
+          />
+          <SelectMenu
+            darkMode={darkMode}
+            value={filters.automationId}
+            onChange={(automationId) => setFilters((current) => ({ ...current, automationId }))}
+            options={[
+              { value: "", label: "All automations" },
+              ...automations.map((item) => ({ value: item.id, label: item.name })),
+            ]}
+          />
+          <SelectMenu
+            darkMode={darkMode}
+            value={filters.status}
+            onChange={(status) => setFilters((current) => ({ ...current, status }))}
+            options={[
+              { value: "", label: "All statuses" },
+              { value: "success", label: "Successful" },
+              { value: "partial", label: "Partial" },
+              { value: "failed", label: "Failed" },
+            ]}
+          />
         </div>
 
         <div className={`rounded-[30px] overflow-hidden ${panel}`}>
@@ -135,8 +149,8 @@ export default function Reports({ darkMode }) {
       </div>
 
       {selectedReport && (
-        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-5">
-          <div className={`w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-[30px] p-7 ${darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"}`}>
+        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4 sm:p-5">
+          <div className={`w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-[24px] p-4 sm:rounded-[30px] sm:p-7 ${darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"}`}>
             <div className="flex items-start justify-between mb-6">
               <div>
                 <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${muted}`}>Run detail</p>
@@ -146,7 +160,7 @@ export default function Reports({ darkMode }) {
               <button onClick={() => setSelectedReport(null)} className={`w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}><X className={`w-5 h-5 ${muted}`} /></button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 md:grid-cols-4">
               {[
                 ["Rows", selectedReport.totalRowsChecked || 0],
                 ["Matched", selectedReport.totalMatched || selectedReport.totalPendingFound || 0],

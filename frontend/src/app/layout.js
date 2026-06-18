@@ -12,8 +12,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Smart Management System",
-  description: "A smart management system for efficient operations and data-driven decision making.",
+  title: "UIPL Docs",
+  description: "UIPL Docs for efficient operations and document intelligence.",
 };
 
 export default function RootLayout({ children }) {

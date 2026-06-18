@@ -1,28 +1,2798 @@
 [
   {
-    "id": "1781507307136",
-    "name": "Sheet-1Jc4f3s9",
+    "id": "1781767885837",
+    "name": "Sheet-1i0OQDvk",
     "type": "sheet",
-    "sheetId": "1Jc4f3s9oBXdRkgRfGmR10FeGQ1hg7VHNuetESiWxBoQ",
-    "uploadedAt": "2026-06-15T07:08:27.137Z",
+    "ownerId": "6a30f59093d1b8cdb26dce38",
+    "ownerName": "Super Admin",
+    "folderId": "1781767872388",
+    "visibility": "private",
+    "allowedUserIds": [],
+    "accessGrants": [],
+    "sheetId": "1i0OQDvkZf6TyiLxKehAL98v16TWgsnF8",
+    "uploadedAt": "2026-06-18T07:31:25.837Z",
     "isActive": true,
     "isReady": true,
-    "chunks": 4,
+    "chunks": 174,
     "status": "ready",
-    "lastModifiedTime": "2026-06-15T07:30:12.977Z",
-    "lastSyncedAt": "2026-06-15T07:30:38.039Z"
-  },
-  {
-    "id": "1781508752925",
-    "name": "Sheet-1MSucUqZ",
-    "type": "sheet",
-    "sheetId": "1MSucUqZNXQPrNr-zYi81dvvWP0ZecISEV2QULMDHy9s",
-    "uploadedAt": "2026-06-15T07:32:32.925Z",
-    "isActive": true,
-    "isReady": true,
-    "chunks": 3,
-    "status": "ready",
-    "lastModifiedTime": "2026-06-15T06:53:45.405Z",
-    "lastSyncedAt": "2026-06-15T07:32:35.331Z"
+    "lastModifiedTime": "2026-06-18T06:53:17.084Z",
+    "lastSyncedAt": "2026-06-18T07:31:53.271Z",
+    "sheetArchitecture": {
+      "version": 8,
+      "documentId": "1781767885837",
+      "sheetId": "1i0OQDvkZf6TyiLxKehAL98v16TWgsnF8",
+      "savedAt": "2026-06-18T07:31:55.236Z",
+      "sourceModifiedTime": "2026-06-18T06:53:17.084Z",
+      "summary": {
+        "tabCount": 7,
+        "totalRows": 911,
+        "totalColumns": 79,
+        "typeCounts": {
+          "text": 16,
+          "number": 27,
+          "category": 36
+        },
+        "suggestedViews": [
+          "portfolio-overview",
+          "all-tasks",
+          "agency-summary",
+          "design-pending",
+          "selection-procurement",
+          "purchase-priority"
+        ],
+        "purpose": "Track consolidated construction and interior activities across design, approval, selection, procurement, execution, and audit, with agency, trade, owner, and purchasing priority views.",
+        "recordName": "Pending activity"
+      },
+      "tabs": [
+        {
+          "name": "Dashboard",
+          "rowCount": 14,
+          "columnCount": 6,
+          "headers": [
+            "Metric",
+            "Value",
+            "Trade",
+            "Pending Items",
+            "Agency",
+            "Items"
+          ],
+          "columns": [
+            {
+              "name": "Metric",
+              "type": "text",
+              "role": "detail",
+              "filled": 9,
+              "blank": 5,
+              "unique": 9,
+              "examples": [
+                "Total consolidated activities",
+                "Agencies / vendors",
+                "Design pending activities"
+              ]
+            },
+            {
+              "name": "Value",
+              "type": "number",
+              "role": "metric",
+              "filled": 7,
+              "blank": 7,
+              "unique": 6,
+              "examples": [
+                "285",
+                "13",
+                "63"
+              ],
+              "stats": {
+                "min": 13,
+                "max": 285,
+                "total": 1241,
+                "average": 177.28571428571428
+              }
+            },
+            {
+              "name": "Trade",
+              "type": "text",
+              "role": "detail",
+              "filled": 11,
+              "blank": 3,
+              "unique": 11,
+              "examples": [
+                "Electrical",
+                "Paint",
+                "Carpentry"
+              ]
+            },
+            {
+              "name": "Pending Items",
+              "type": "number",
+              "role": "metric",
+              "filled": 11,
+              "blank": 3,
+              "unique": 9,
+              "examples": [
+                "58",
+                "48",
+                "44"
+              ],
+              "stats": {
+                "min": 7,
+                "max": 58,
+                "total": 285,
+                "average": 25.90909090909091
+              }
+            },
+            {
+              "name": "Agency",
+              "type": "text",
+              "role": "detail",
+              "filled": 13,
+              "blank": 1,
+              "unique": 13,
+              "examples": [
+                "Bhavin",
+                "Kalpesh Shukla",
+                "Jayesh Panchal"
+              ]
+            },
+            {
+              "name": "Items",
+              "type": "number",
+              "role": "metric",
+              "filled": 13,
+              "blank": 1,
+              "unique": 11,
+              "examples": [
+                "58",
+                "48",
+                "36"
+              ],
+              "stats": {
+                "min": 2,
+                "max": 58,
+                "total": 285,
+                "average": 21.923076923076923
+              }
+            }
+          ],
+          "primaryLabel": "Metric",
+          "keyMetrics": [
+            "Value",
+            "Pending Items",
+            "Items"
+          ],
+          "workflowColumns": [],
+          "segmentColumns": [
+            "Trade",
+            "Agency"
+          ],
+          "dashboard": {
+            "entityColumn": "Trade",
+            "ownerColumn": "Agency",
+            "metricColumns": [
+              "Value",
+              "Pending Items",
+              "Items"
+            ],
+            "statusColumns": [],
+            "narrativeColumns": [
+              "Metric"
+            ],
+            "cardTitle": "Metric",
+            "cardSubtitle": "Trade",
+            "detailFields": [
+              "Metric",
+              "Value",
+              "Trade",
+              "Pending Items",
+              "Agency",
+              "Items"
+            ],
+            "chartFields": [
+              "Trade",
+              "Pending Items",
+              "Agency",
+              "Items"
+            ]
+          }
+        },
+        {
+          "name": "All Tasks",
+          "rowCount": 285,
+          "columnCount": 19,
+          "headers": [
+            "Trade",
+            "Agency",
+            "Supervisor / Design Owner",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Remark",
+            "Start Date",
+            "End Date",
+            "Duration",
+            "Pending Stages",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Source File",
+            "Source Ref"
+          ],
+          "columns": [
+            {
+              "name": "Trade",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 11,
+              "examples": [
+                "Furniture",
+                "Carpentry",
+                "Electrical"
+              ],
+              "topValues": [
+                {
+                  "value": "Electrical",
+                  "count": 58
+                },
+                {
+                  "value": "Paint",
+                  "count": 48
+                },
+                {
+                  "value": "Carpentry",
+                  "count": 44
+                },
+                {
+                  "value": "Furniture",
+                  "count": 28
+                },
+                {
+                  "value": "POP",
+                  "count": 25
+                },
+                {
+                  "value": "Plumbing",
+                  "count": 24
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 13,
+              "examples": [
+                "Dhaval",
+                "Jayesh Panchal",
+                "Bhavin"
+              ],
+              "topValues": [
+                {
+                  "value": "Bhavin",
+                  "count": 58
+                },
+                {
+                  "value": "Kalpesh Shukla",
+                  "count": 48
+                },
+                {
+                  "value": "Jayesh Panchal",
+                  "count": 36
+                },
+                {
+                  "value": "Dhaval",
+                  "count": 28
+                },
+                {
+                  "value": "Dinesh POP",
+                  "count": 25
+                },
+                {
+                  "value": "Ashok",
+                  "count": 24
+                }
+              ]
+            },
+            {
+              "name": "Supervisor / Design Owner",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 4,
+              "examples": [
+                "Prakash lohar",
+                "Vinit",
+                "Nikhilbhai"
+              ],
+              "topValues": [
+                {
+                  "value": "Vinit",
+                  "count": 175
+                },
+                {
+                  "value": "Nikhilbhai",
+                  "count": 63
+                },
+                {
+                  "value": "Prakash lohar",
+                  "count": 28
+                },
+                {
+                  "value": "Jay Panchal",
+                  "count": 19
+                }
+              ]
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 21,
+              "examples": [
+                "GF",
+                "FF",
+                "Terrace"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 119
+                },
+                {
+                  "value": "FF",
+                  "count": 61
+                },
+                {
+                  "value": "SF",
+                  "count": 59
+                },
+                {
+                  "value": "All Floor",
+                  "count": 11
+                },
+                {
+                  "value": "Out side area",
+                  "count": 5
+                },
+                {
+                  "value": "Terrace",
+                  "count": 4
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 260,
+              "blank": 25,
+              "unique": 131,
+              "examples": [
+                "Kitchen",
+                "Passage",
+                "D Bed"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 285,
+              "blank": 0,
+              "unique": 156,
+              "examples": [
+                "Moduler Furniture Fitting",
+                "TV unit",
+                "Light fixture"
+              ]
+            },
+            {
+              "name": "Remark",
+              "type": "category",
+              "role": "segment",
+              "filled": 20,
+              "blank": 265,
+              "unique": 8,
+              "examples": [
+                "Outer finish and Handle lock Pending",
+                "Veneer selection",
+                "Outer Materials"
+              ],
+              "topValues": [
+                {
+                  "value": "Outer finish and Handle lock Pending",
+                  "count": 11
+                },
+                {
+                  "value": "Lock body and handle",
+                  "count": 2
+                },
+                {
+                  "value": "Veneer selection",
+                  "count": 1
+                },
+                {
+                  "value": "Outer Materials",
+                  "count": 1
+                },
+                {
+                  "value": "Outer finish Materials",
+                  "count": 1
+                },
+                {
+                  "value": "Moulding & Veneer Pending",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 163,
+              "blank": 122,
+              "unique": 22,
+              "examples": [
+                "03-Jun-26",
+                "13-Jun-26",
+                "17-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 2959,
+                "average": 18.153374233128833
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 162,
+              "blank": 123,
+              "unique": 20,
+              "examples": [
+                "20-Jun-26",
+                "25-Jun-26",
+                "22-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 2912,
+                "average": 17.97530864197531
+              }
+            },
+            {
+              "name": "Duration",
+              "type": "number",
+              "role": "metric",
+              "filled": 162,
+              "blank": 123,
+              "unique": 12,
+              "examples": [
+                "18",
+                "13",
+                "9"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 18,
+                "total": 432,
+                "average": 2.6666666666666665
+              }
+            },
+            {
+              "name": "Pending Stages",
+              "type": "category",
+              "role": "workflow",
+              "filled": 285,
+              "blank": 0,
+              "unique": 6,
+              "examples": [
+                "Execution, Audit",
+                "Selection, Procurement, Execution, Audit",
+                "Procurement, Execution, Audit"
+              ],
+              "topValues": [
+                {
+                  "value": "Execution, Audit",
+                  "count": 87
+                },
+                {
+                  "value": "Procurement, Execution, Audit",
+                  "count": 80
+                },
+                {
+                  "value": "Design, Approval, Selection, Procurement, Execution, Audit",
+                  "count": 63
+                },
+                {
+                  "value": "Selection, Procurement, Execution, Audit",
+                  "count": 31
+                },
+                {
+                  "value": "Approval, Selection, Procurement, Execution, Audit",
+                  "count": 22
+                },
+                {
+                  "value": "Audit",
+                  "count": 2
+                }
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "category",
+              "role": "segment",
+              "filled": 284,
+              "blank": 1,
+              "unique": 2,
+              "examples": [
+                "Completed",
+                "Pending"
+              ],
+              "topValues": [
+                {
+                  "value": "Completed",
+                  "count": 221
+                },
+                {
+                  "value": "Pending",
+                  "count": 63
+                }
+              ]
+            },
+            {
+              "name": "Approval",
+              "type": "category",
+              "role": "segment",
+              "filled": 284,
+              "blank": 1,
+              "unique": 2,
+              "examples": [
+                "Completed",
+                "Pending"
+              ],
+              "topValues": [
+                {
+                  "value": "Completed",
+                  "count": 199
+                },
+                {
+                  "value": "Pending",
+                  "count": 85
+                }
+              ]
+            },
+            {
+              "name": "Selection",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 2,
+              "examples": [
+                "Completed",
+                "Pending"
+              ],
+              "topValues": [
+                {
+                  "value": "Completed",
+                  "count": 169
+                },
+                {
+                  "value": "Pending",
+                  "count": 116
+                }
+              ]
+            },
+            {
+              "name": "Procurement",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 2,
+              "examples": [
+                "Completed",
+                "Pending"
+              ],
+              "topValues": [
+                {
+                  "value": "Pending",
+                  "count": 196
+                },
+                {
+                  "value": "Completed",
+                  "count": 89
+                }
+              ]
+            },
+            {
+              "name": "Execution",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 2,
+              "examples": [
+                "Pending",
+                "Completed"
+              ],
+              "topValues": [
+                {
+                  "value": "Pending",
+                  "count": 283
+                },
+                {
+                  "value": "Completed",
+                  "count": 2
+                }
+              ]
+            },
+            {
+              "name": "Audit",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 1,
+              "examples": [
+                "Pending"
+              ],
+              "topValues": [
+                {
+                  "value": "Pending",
+                  "count": 285
+                }
+              ]
+            },
+            {
+              "name": "Source File",
+              "type": "number",
+              "role": "metric",
+              "filled": 285,
+              "blank": 0,
+              "unique": 11,
+              "examples": [
+                "06. China Furniture.pdf;07. Indian Furniture.pdf",
+                "01. Carpentary.pdf",
+                "10. Electrical.pdf"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 13,
+                "total": 1822,
+                "average": 6.392982456140351
+              }
+            },
+            {
+              "name": "Source Ref",
+              "type": "number",
+              "role": "metric",
+              "filled": 285,
+              "blank": 0,
+              "unique": 11,
+              "examples": [
+                "turn1file1,turn1file2",
+                "turn0file0",
+                "turn2file1"
+              ],
+              "stats": {
+                "min": 0,
+                "max": 3,
+                "total": 306,
+                "average": 1.0736842105263158
+              }
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Pending Stages"
+          ],
+          "segmentColumns": [
+            "Trade",
+            "Agency",
+            "Supervisor / Design Owner",
+            "Floor",
+            "Room / Area"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Trade",
+            "ownerColumn": "Agency",
+            "metricColumns": [
+              "Duration"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "Pending Stages"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "Remark",
+              "Floor",
+              "Room / Area"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Trade",
+              "Agency",
+              "Supervisor / Design Owner",
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Remark",
+              "Start Date",
+              "End Date",
+              "Duration",
+              "Pending Stages",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "Source File",
+              "Source Ref"
+            ],
+            "chartFields": [
+              "Trade",
+              "Agency",
+              "Pending Stages",
+              "Duration"
+            ]
+          }
+        },
+        {
+          "name": "Agency Summary",
+          "rowCount": 13,
+          "columnCount": 11,
+          "headers": [
+            "Agency",
+            "Supervisor",
+            "Trade(s)",
+            "Total Items",
+            "Design Pending",
+            "Approval Pending",
+            "Selection Pending",
+            "Procurement Pending",
+            "Execution Pending",
+            "Audit Pending",
+            "Immediate Focus / First 5 Activities"
+          ],
+          "columns": [
+            {
+              "name": "Agency",
+              "type": "text",
+              "role": "detail",
+              "filled": 13,
+              "blank": 0,
+              "unique": 13,
+              "examples": [
+                "Bhavin",
+                "Kalpesh Shukla",
+                "Jayesh Panchal"
+              ]
+            },
+            {
+              "name": "Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 13,
+              "blank": 0,
+              "unique": 4,
+              "examples": [
+                "Vinit",
+                "Prakash lohar",
+                "Nikhilbhai"
+              ],
+              "topValues": [
+                {
+                  "value": "Vinit",
+                  "count": 5
+                },
+                {
+                  "value": "Nikhilbhai",
+                  "count": 5
+                },
+                {
+                  "value": "Jay Panchal",
+                  "count": 2
+                },
+                {
+                  "value": "Prakash lohar",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Trade(s)",
+              "type": "text",
+              "role": "detail",
+              "filled": 13,
+              "blank": 0,
+              "unique": 11,
+              "examples": [
+                "Electrical",
+                "Paint",
+                "Carpentry"
+              ]
+            },
+            {
+              "name": "Total Items",
+              "type": "number",
+              "role": "metric",
+              "filled": 13,
+              "blank": 0,
+              "unique": 11,
+              "examples": [
+                "58",
+                "48",
+                "36"
+              ],
+              "stats": {
+                "min": 2,
+                "max": 58,
+                "total": 285,
+                "average": 21.923076923076923
+              }
+            },
+            {
+              "name": "Design Pending",
+              "type": "number",
+              "role": "metric",
+              "filled": 13,
+              "blank": 0,
+              "unique": 6,
+              "examples": [
+                "7",
+                "12",
+                "21"
+              ],
+              "stats": {
+                "min": 0,
+                "max": 21,
+                "total": 63,
+                "average": 4.846153846153846
+              }
+            },
+            {
+              "name": "Approval Pending",
+              "type": "number",
+              "role": "metric",
+              "filled": 13,
+              "blank": 0,
+              "unique": 7,
+              "examples": [
+                "9",
+                "19",
+                "22"
+              ],
+              "stats": {
+                "min": 0,
+                "max": 22,
+                "total": 85,
+                "average": 6.538461538461538
+              }
+            },
+            {
+              "name": "Selection Pending",
+              "type": "number",
+              "role": "metric",
+              "filled": 13,
+              "blank": 0,
+              "unique": 10,
+              "examples": [
+                "11",
+                "21",
+                "35"
+              ],
+              "stats": {
+                "min": 0,
+                "max": 35,
+                "total": 116,
+                "average": 8.923076923076923
+              }
+            },
+            {
+              "name": "Procurement Pending",
+              "type": "number",
+              "role": "metric",
+              "filled": 13,
+              "blank": 0,
+              "unique": 13,
+              "examples": [
+                "54",
+                "21",
+                "35"
+              ],
+              "stats": {
+                "min": 0,
+                "max": 54,
+                "total": 196,
+                "average": 15.076923076923077
+              }
+            },
+            {
+              "name": "Execution Pending",
+              "type": "number",
+              "role": "metric",
+              "filled": 13,
+              "blank": 0,
+              "unique": 12,
+              "examples": [
+                "58",
+                "48",
+                "36"
+              ],
+              "stats": {
+                "min": 2,
+                "max": 58,
+                "total": 283,
+                "average": 21.76923076923077
+              }
+            },
+            {
+              "name": "Audit Pending",
+              "type": "number",
+              "role": "metric",
+              "filled": 13,
+              "blank": 0,
+              "unique": 11,
+              "examples": [
+                "58",
+                "48",
+                "36"
+              ],
+              "stats": {
+                "min": 2,
+                "max": 58,
+                "total": 285,
+                "average": 21.923076923076923
+              }
+            },
+            {
+              "name": "Immediate Focus / First 5 Activities",
+              "type": "text",
+              "role": "detail",
+              "filled": 13,
+              "blank": 0,
+              "unique": 13,
+              "examples": [
+                "Parking area : Light Fixture; Parking area : Switch Board; Out side area : UGVCL meter; Out side area : Main Panel SLD; Out side area : Stabilizer inverter connection Pending",
+                "Terrace Left Side: Texture; FF Left Side: Touch up and texture; FF Multi A Rm: Veneer Polish; FF Multi A Rm: Wall Paing; FF Multi A Rm: Texture",
+                "GF Passage area: Partition; GF Living Rm: TV unit; GF Entrance: Main Door & Jali Door; GF Temple: Door & Panelling; GF Temple: Ceiling work"
+              ]
+            }
+          ],
+          "primaryLabel": "Agency",
+          "keyMetrics": [
+            "Total Items",
+            "Design Pending",
+            "Approval Pending",
+            "Selection Pending",
+            "Procurement Pending",
+            "Execution Pending",
+            "Audit Pending"
+          ],
+          "workflowColumns": [
+            "Design Pending",
+            "Approval Pending",
+            "Selection Pending",
+            "Procurement Pending",
+            "Execution Pending",
+            "Audit Pending"
+          ],
+          "segmentColumns": [
+            "Agency",
+            "Supervisor",
+            "Trade(s)"
+          ],
+          "dashboard": {
+            "entityColumn": "Agency",
+            "ownerColumn": "Supervisor",
+            "metricColumns": [
+              "Total Items",
+              "Design Pending",
+              "Approval Pending",
+              "Selection Pending",
+              "Procurement Pending",
+              "Execution Pending",
+              "Audit Pending"
+            ],
+            "statusColumns": [],
+            "narrativeColumns": [
+              "Trade(s)",
+              "Immediate Focus / First 5 Activities"
+            ],
+            "cardTitle": "Agency",
+            "cardSubtitle": "Trade(s)",
+            "detailFields": [
+              "Agency",
+              "Supervisor",
+              "Trade(s)",
+              "Total Items",
+              "Design Pending",
+              "Approval Pending",
+              "Selection Pending",
+              "Procurement Pending",
+              "Execution Pending",
+              "Audit Pending",
+              "Immediate Focus / First 5 Activities"
+            ],
+            "chartFields": [
+              "Agency",
+              "Total Items",
+              "Design Pending",
+              "Selection Pending",
+              "Procurement Pending",
+              "Execution Pending"
+            ]
+          }
+        },
+        {
+          "name": "Agency Detail",
+          "rowCount": 285,
+          "columnCount": 11,
+          "headers": [
+            "Agency",
+            "Trade",
+            "Supervisor",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Remark",
+            "Pending Stages",
+            "Start Date",
+            "End Date",
+            "Source File"
+          ],
+          "columns": [
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 13,
+              "examples": [
+                "Agency not mentioned",
+                "Asenzo",
+                "Ashok"
+              ],
+              "topValues": [
+                {
+                  "value": "Bhavin",
+                  "count": 58
+                },
+                {
+                  "value": "Kalpesh Shukla",
+                  "count": 48
+                },
+                {
+                  "value": "Jayesh Panchal",
+                  "count": 36
+                },
+                {
+                  "value": "Dhaval",
+                  "count": 28
+                },
+                {
+                  "value": "Dinesh POP",
+                  "count": 25
+                },
+                {
+                  "value": "Ashok",
+                  "count": 24
+                }
+              ]
+            },
+            {
+              "name": "Trade",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 11,
+              "examples": [
+                "Fabrication",
+                "Glass & Railing",
+                "Plumbing"
+              ],
+              "topValues": [
+                {
+                  "value": "Electrical",
+                  "count": 58
+                },
+                {
+                  "value": "Paint",
+                  "count": 48
+                },
+                {
+                  "value": "Carpentry",
+                  "count": 44
+                },
+                {
+                  "value": "Furniture",
+                  "count": 28
+                },
+                {
+                  "value": "POP",
+                  "count": 25
+                },
+                {
+                  "value": "Plumbing",
+                  "count": 24
+                }
+              ]
+            },
+            {
+              "name": "Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 4,
+              "examples": [
+                "Nikhilbhai",
+                "Jay Panchal",
+                "Vinit"
+              ],
+              "topValues": [
+                {
+                  "value": "Vinit",
+                  "count": 175
+                },
+                {
+                  "value": "Nikhilbhai",
+                  "count": 63
+                },
+                {
+                  "value": "Prakash lohar",
+                  "count": 28
+                },
+                {
+                  "value": "Jay Panchal",
+                  "count": 19
+                }
+              ]
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 285,
+              "blank": 0,
+              "unique": 21,
+              "examples": [
+                "GF",
+                "Terrace",
+                "SF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 119
+                },
+                {
+                  "value": "FF",
+                  "count": 61
+                },
+                {
+                  "value": "SF",
+                  "count": 59
+                },
+                {
+                  "value": "All Floor",
+                  "count": 11
+                },
+                {
+                  "value": "Out side area",
+                  "count": 5
+                },
+                {
+                  "value": "Terrace",
+                  "count": 4
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 260,
+              "blank": 25,
+              "unique": 131,
+              "examples": [
+                "Parking",
+                "Top Terrace",
+                "Entrance walk way"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 285,
+              "blank": 0,
+              "unique": 156,
+              "examples": [
+                "Rolling Shutter",
+                "Plumbinequipmant cover shed",
+                "Poly Carbonate sheet Shed"
+              ]
+            },
+            {
+              "name": "Remark",
+              "type": "category",
+              "role": "segment",
+              "filled": 20,
+              "blank": 265,
+              "unique": 8,
+              "examples": [
+                "Tiles",
+                "Outer finish and Handle lock Pending",
+                "Veneer selection"
+              ],
+              "topValues": [
+                {
+                  "value": "Outer finish and Handle lock Pending",
+                  "count": 11
+                },
+                {
+                  "value": "Lock body and handle",
+                  "count": 2
+                },
+                {
+                  "value": "Tiles",
+                  "count": 1
+                },
+                {
+                  "value": "Veneer selection",
+                  "count": 1
+                },
+                {
+                  "value": "Outer Materials",
+                  "count": 1
+                },
+                {
+                  "value": "Outer finish Materials",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Pending Stages",
+              "type": "category",
+              "role": "workflow",
+              "filled": 285,
+              "blank": 0,
+              "unique": 6,
+              "examples": [
+                "Selection, Procurement, Execution, Audit",
+                "Approval, Selection, Procurement, Execution, Audit",
+                "Procurement, Execution, Audit"
+              ],
+              "topValues": [
+                {
+                  "value": "Execution, Audit",
+                  "count": 87
+                },
+                {
+                  "value": "Procurement, Execution, Audit",
+                  "count": 80
+                },
+                {
+                  "value": "Design, Approval, Selection, Procurement, Execution, Audit",
+                  "count": 63
+                },
+                {
+                  "value": "Selection, Procurement, Execution, Audit",
+                  "count": 31
+                },
+                {
+                  "value": "Approval, Selection, Procurement, Execution, Audit",
+                  "count": 22
+                },
+                {
+                  "value": "Audit",
+                  "count": 2
+                }
+              ]
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 163,
+              "blank": 122,
+              "unique": 22,
+              "examples": [
+                "20-Jun-26",
+                "25-Jun-26",
+                "30-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 2959,
+                "average": 18.153374233128833
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 162,
+              "blank": 123,
+              "unique": 20,
+              "examples": [
+                "28-Jun-26",
+                "25-Jun-26",
+                "26-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 2912,
+                "average": 17.97530864197531
+              }
+            },
+            {
+              "name": "Source File",
+              "type": "number",
+              "role": "metric",
+              "filled": 285,
+              "blank": 0,
+              "unique": 11,
+              "examples": [
+                "08. Fabrication.pdf",
+                "13. Glass work(1).pdf",
+                "09. Plumbing.pdf"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 13,
+                "total": 1822,
+                "average": 6.392982456140351
+              }
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [],
+          "workflowColumns": [
+            "Pending Stages"
+          ],
+          "segmentColumns": [
+            "Agency",
+            "Trade",
+            "Supervisor",
+            "Floor",
+            "Room / Area"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Supervisor",
+            "metricColumns": [],
+            "statusColumns": [
+              "Pending Stages"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "Remark",
+              "Trade",
+              "Floor",
+              "Room / Area"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Agency",
+            "detailFields": [
+              "Agency",
+              "Trade",
+              "Supervisor",
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Remark",
+              "Pending Stages",
+              "Start Date",
+              "End Date",
+              "Source File"
+            ],
+            "chartFields": [
+              "Agency",
+              "Trade",
+              "Supervisor",
+              "Pending Stages"
+            ]
+          }
+        },
+        {
+          "name": "Design Pending",
+          "rowCount": 63,
+          "columnCount": 11,
+          "headers": [
+            "Design Owner / Supervisor",
+            "Trade",
+            "Agency",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Remark",
+            "Design Decision Needed",
+            "Start Date",
+            "End Date",
+            "Source File"
+          ],
+          "columns": [
+            {
+              "name": "Design Owner / Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 63,
+              "blank": 0,
+              "unique": 3,
+              "examples": [
+                "Jay Panchal",
+                "Nikhilbhai",
+                "Vinit"
+              ],
+              "topValues": [
+                {
+                  "value": "Vinit",
+                  "count": 50
+                },
+                {
+                  "value": "Jay Panchal",
+                  "count": 7
+                },
+                {
+                  "value": "Nikhilbhai",
+                  "count": 6
+                }
+              ]
+            },
+            {
+              "name": "Trade",
+              "type": "category",
+              "role": "segment",
+              "filled": 63,
+              "blank": 0,
+              "unique": 7,
+              "examples": [
+                "Glass & Railing",
+                "Plumbing",
+                "Tiles"
+              ],
+              "topValues": [
+                {
+                  "value": "Carpentry",
+                  "count": 21
+                },
+                {
+                  "value": "Paint",
+                  "count": 12
+                },
+                {
+                  "value": "POP",
+                  "count": 10
+                },
+                {
+                  "value": "Glass & Railing",
+                  "count": 7
+                },
+                {
+                  "value": "Electrical",
+                  "count": 7
+                },
+                {
+                  "value": "Plumbing",
+                  "count": 3
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 63,
+              "blank": 0,
+              "unique": 7,
+              "examples": [
+                "Jay Panchal",
+                "Ashok",
+                "Brijesh"
+              ],
+              "topValues": [
+                {
+                  "value": "Jayesh Panchal",
+                  "count": 21
+                },
+                {
+                  "value": "Kalpesh Shukla",
+                  "count": 12
+                },
+                {
+                  "value": "Dinesh POP",
+                  "count": 10
+                },
+                {
+                  "value": "Jay Panchal",
+                  "count": 7
+                },
+                {
+                  "value": "Bhavin",
+                  "count": 7
+                },
+                {
+                  "value": "Ashok",
+                  "count": 3
+                }
+              ]
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 63,
+              "blank": 0,
+              "unique": 9,
+              "examples": [
+                "FF",
+                "GF",
+                "SF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 27
+                },
+                {
+                  "value": "FF",
+                  "count": 18
+                },
+                {
+                  "value": "SF",
+                  "count": 11
+                },
+                {
+                  "value": "Temple",
+                  "count": 2
+                },
+                {
+                  "value": "All Area",
+                  "count": 1
+                },
+                {
+                  "value": "All Floor",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 54,
+              "blank": 9,
+              "unique": 38,
+              "examples": [
+                "D bath Rm",
+                "Master Bath rm",
+                "d Bed rm"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 63,
+              "blank": 0,
+              "unique": 45,
+              "examples": [
+                "Shower cubical",
+                "Basin Mirrir",
+                "Basin Mirror"
+              ]
+            },
+            {
+              "name": "Remark",
+              "type": "category",
+              "role": "segment",
+              "filled": 8,
+              "blank": 55,
+              "unique": 2,
+              "examples": [
+                "Outer finish and Handle lock Pending",
+                "Lock body and handle"
+              ],
+              "topValues": [
+                {
+                  "value": "Outer finish and Handle lock Pending",
+                  "count": 7
+                },
+                {
+                  "value": "Lock body and handle",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Design Decision Needed",
+              "type": "category",
+              "role": "segment",
+              "filled": 63,
+              "blank": 0,
+              "unique": 16,
+              "examples": [
+                "Glass/mirror size and hardware finish approval",
+                "Glass profile/shutter/partition design approval",
+                "Fixture/product technical cutout and location approval"
+              ],
+              "topValues": [
+                {
+                  "value": "Door elevation/outer finish + handle/lock detail approval",
+                  "count": 8
+                },
+                {
+                  "value": "Carpentry detail/elevation freeze",
+                  "count": 8
+                },
+                {
+                  "value": "Glass/mirror size and hardware finish approval",
+                  "count": 5
+                },
+                {
+                  "value": "Joinery elevation/detail and finish freeze",
+                  "count": 5
+                },
+                {
+                  "value": "Texture design/shade/location freeze",
+                  "count": 5
+                },
+                {
+                  "value": "Wall/ceiling paint shade freeze",
+                  "count": 5
+                }
+              ]
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 17,
+              "blank": 46,
+              "unique": 8,
+              "examples": [
+                "26-Jun-26",
+                "25-Jun-26",
+                "27-Jun-26"
+              ],
+              "stats": {
+                "min": 2,
+                "max": 28,
+                "total": 222,
+                "average": 13.058823529411764
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 17,
+              "blank": 46,
+              "unique": 9,
+              "examples": [
+                "27-Jun-26",
+                "26-Jun-26",
+                "28-Jun-26"
+              ],
+              "stats": {
+                "min": 2,
+                "max": 29,
+                "total": 238,
+                "average": 14
+              }
+            },
+            {
+              "name": "Source File",
+              "type": "number",
+              "role": "metric",
+              "filled": 63,
+              "blank": 0,
+              "unique": 7,
+              "examples": [
+                "13. Glass work(1).pdf",
+                "09. Plumbing.pdf",
+                "05. Tiles.pdf;05. Tiles(1).pdf"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 13,
+                "total": 280,
+                "average": 4.444444444444445
+              }
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [],
+          "workflowColumns": [
+            "Design Decision Needed"
+          ],
+          "segmentColumns": [
+            "Design Owner / Supervisor",
+            "Trade",
+            "Agency",
+            "Floor",
+            "Room / Area"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Trade",
+            "ownerColumn": "Design Owner / Supervisor",
+            "metricColumns": [],
+            "statusColumns": [
+              "Design Decision Needed"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "Remark",
+              "Floor",
+              "Room / Area"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Design Decision Needed",
+            "detailFields": [
+              "Design Owner / Supervisor",
+              "Trade",
+              "Agency",
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Remark",
+              "Design Decision Needed",
+              "Start Date",
+              "End Date",
+              "Source File"
+            ],
+            "chartFields": [
+              "Design Owner / Supervisor",
+              "Trade",
+              "Agency"
+            ]
+          }
+        },
+        {
+          "name": "Selection Procurement",
+          "rowCount": 196,
+          "columnCount": 13,
+          "headers": [
+            "Priority",
+            "Trade",
+            "Agency",
+            "Supervisor",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Material/Product Category",
+            "Stage Needed",
+            "Remark",
+            "Start Date",
+            "End Date",
+            "Source File"
+          ],
+          "columns": [
+            {
+              "name": "Priority",
+              "type": "number",
+              "role": "workflow",
+              "filled": 196,
+              "blank": 0,
+              "unique": 4,
+              "examples": [
+                "P1 - freeze today",
+                "P2 - buy in 48 hrs",
+                "P3 - after carpentry/POP"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 3,
+                "total": 337,
+                "average": 1.719387755102041
+              }
+            },
+            {
+              "name": "Trade",
+              "type": "category",
+              "role": "segment",
+              "filled": 196,
+              "blank": 0,
+              "unique": 10,
+              "examples": [
+                "Carpentry",
+                "Electrical",
+                "Fabrication"
+              ],
+              "topValues": [
+                {
+                  "value": "Electrical",
+                  "count": 54
+                },
+                {
+                  "value": "Carpentry",
+                  "count": 43
+                },
+                {
+                  "value": "Paint",
+                  "count": 21
+                },
+                {
+                  "value": "Furniture",
+                  "count": 19
+                },
+                {
+                  "value": "Glass & Railing",
+                  "count": 19
+                },
+                {
+                  "value": "POP",
+                  "count": 14
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 196,
+              "blank": 0,
+              "unique": 12,
+              "examples": [
+                "Jayesh Panchal",
+                "Mukesh",
+                "Bhavin"
+              ],
+              "topValues": [
+                {
+                  "value": "Bhavin",
+                  "count": 54
+                },
+                {
+                  "value": "Jayesh Panchal",
+                  "count": 35
+                },
+                {
+                  "value": "Kalpesh Shukla",
+                  "count": 21
+                },
+                {
+                  "value": "Dhaval",
+                  "count": 19
+                },
+                {
+                  "value": "Jay Panchal",
+                  "count": 17
+                },
+                {
+                  "value": "Dinesh POP",
+                  "count": 14
+                }
+              ]
+            },
+            {
+              "name": "Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 196,
+              "blank": 0,
+              "unique": 4,
+              "examples": [
+                "Vinit",
+                "Nikhilbhai",
+                "Prakash lohar"
+              ],
+              "topValues": [
+                {
+                  "value": "Vinit",
+                  "count": 132
+                },
+                {
+                  "value": "Nikhilbhai",
+                  "count": 26
+                },
+                {
+                  "value": "Prakash lohar",
+                  "count": 19
+                },
+                {
+                  "value": "Jay Panchal",
+                  "count": 19
+                }
+              ]
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 196,
+              "blank": 0,
+              "unique": 19,
+              "examples": [
+                "GF",
+                "FF",
+                "SF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 79
+                },
+                {
+                  "value": "SF",
+                  "count": 42
+                },
+                {
+                  "value": "FF",
+                  "count": 41
+                },
+                {
+                  "value": "All Floor",
+                  "count": 10
+                },
+                {
+                  "value": "Parking area",
+                  "count": 3
+                },
+                {
+                  "value": "Out side area",
+                  "count": 3
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 175,
+              "blank": 21,
+              "unique": 94,
+              "examples": [
+                "Living Rm",
+                "Passage area",
+                "Entrance"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 196,
+              "blank": 0,
+              "unique": 111,
+              "examples": [
+                "TV unit",
+                "Partition",
+                "Main Door & Jali Door"
+              ]
+            },
+            {
+              "name": "Material/Product Category",
+              "type": "category",
+              "role": "segment",
+              "filled": 196,
+              "blank": 0,
+              "unique": 50,
+              "examples": [
+                "TV unit finish, storage hardware, shutters",
+                "Carpentry board, veneer/laminate, finish hardware",
+                "Door shutter / panelling / outer finish material"
+              ],
+              "topValues": [
+                {
+                  "value": "Switch boards and electrical accessories",
+                  "count": 26
+                },
+                {
+                  "value": "Door hardware: handles, locks, lock bodies",
+                  "count": 13
+                },
+                {
+                  "value": "Loose modular furniture package",
+                  "count": 13
+                },
+                {
+                  "value": "Texture paint/coating and shade sample",
+                  "count": 11
+                },
+                {
+                  "value": "Light fixtures / profile / decorative / bracket lights",
+                  "count": 10
+                },
+                {
+                  "value": "Carpentry board, veneer/laminate, finish hardware",
+                  "count": 8
+                }
+              ]
+            },
+            {
+              "name": "Stage Needed",
+              "type": "category",
+              "role": "workflow",
+              "filled": 196,
+              "blank": 0,
+              "unique": 2,
+              "examples": [
+                "Selection, Procurement",
+                "Procurement"
+              ],
+              "topValues": [
+                {
+                  "value": "Selection, Procurement",
+                  "count": 116
+                },
+                {
+                  "value": "Procurement",
+                  "count": 80
+                }
+              ]
+            },
+            {
+              "name": "Remark",
+              "type": "category",
+              "role": "segment",
+              "filled": 19,
+              "blank": 177,
+              "unique": 7,
+              "examples": [
+                "Veneer Selection Pending",
+                "Moulding & Veneer Pending",
+                "Outer finish and Handle lock Pending"
+              ],
+              "topValues": [
+                {
+                  "value": "Outer finish and Handle lock Pending",
+                  "count": 11
+                },
+                {
+                  "value": "Lock body and handle",
+                  "count": 2
+                },
+                {
+                  "value": "Veneer Selection Pending",
+                  "count": 1
+                },
+                {
+                  "value": "Moulding & Veneer Pending",
+                  "count": 1
+                },
+                {
+                  "value": "Outer finish Materials",
+                  "count": 1
+                },
+                {
+                  "value": "Veneer selection",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 117,
+              "blank": 79,
+              "unique": 18,
+              "examples": [
+                "18-Jun-26",
+                "20-Jun-26",
+                "19-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 2169,
+                "average": 18.53846153846154
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 116,
+              "blank": 80,
+              "unique": 19,
+              "examples": [
+                "25-Jun-26",
+                "19-Jun-26",
+                "20-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 2047,
+                "average": 17.646551724137932
+              }
+            },
+            {
+              "name": "Source File",
+              "type": "number",
+              "role": "metric",
+              "filled": 196,
+              "blank": 0,
+              "unique": 10,
+              "examples": [
+                "01. Carpentary.pdf",
+                "10. Electrical.pdf",
+                "08. Fabrication.pdf"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 13,
+                "total": 1268,
+                "average": 6.469387755102041
+              }
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [],
+          "workflowColumns": [
+            "Priority",
+            "Stage Needed"
+          ],
+          "segmentColumns": [
+            "Priority",
+            "Trade",
+            "Agency",
+            "Supervisor",
+            "Material/Product Category"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Trade",
+            "ownerColumn": "Agency",
+            "metricColumns": [],
+            "statusColumns": [
+              "Priority",
+              "Stage Needed"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "Material/Product Category",
+              "Remark",
+              "Floor",
+              "Room / Area"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Material/Product Category",
+            "detailFields": [
+              "Priority",
+              "Trade",
+              "Agency",
+              "Supervisor",
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Material/Product Category",
+              "Stage Needed",
+              "Remark",
+              "Start Date",
+              "End Date",
+              "Source File"
+            ],
+            "chartFields": [
+              "Priority",
+              "Trade",
+              "Agency",
+              "Stage Needed"
+            ]
+          }
+        },
+        {
+          "name": "Purchase Priority",
+          "rowCount": 55,
+          "columnCount": 8,
+          "headers": [
+            "Priority",
+            "Material/Product",
+            "Trade",
+            "Agency",
+            "Linked Activities",
+            "Rooms / Areas",
+            "Action",
+            "Remarks / Notes"
+          ],
+          "columns": [
+            {
+              "name": "Priority",
+              "type": "number",
+              "role": "workflow",
+              "filled": 55,
+              "blank": 0,
+              "unique": 4,
+              "examples": [
+                "P1 - freeze today",
+                "P2 - buy in 48 hrs",
+                "P3 - buy this week"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 3,
+                "total": 83,
+                "average": 1.509090909090909
+              }
+            },
+            {
+              "name": "Material/Product",
+              "type": "text",
+              "role": "detail",
+              "filled": 55,
+              "blank": 0,
+              "unique": 50,
+              "examples": [
+                "Carpentry board, veneer/laminate, finish hardware",
+                "Door hardware: handles, locks, lock bodies",
+                "Door shutter / panelling / outer finish material"
+              ]
+            },
+            {
+              "name": "Trade",
+              "type": "category",
+              "role": "segment",
+              "filled": 55,
+              "blank": 0,
+              "unique": 10,
+              "examples": [
+                "Carpentry",
+                "Electrical",
+                "Fabrication"
+              ],
+              "topValues": [
+                {
+                  "value": "Carpentry",
+                  "count": 12
+                },
+                {
+                  "value": "Electrical",
+                  "count": 11
+                },
+                {
+                  "value": "Glass & Railing",
+                  "count": 6
+                },
+                {
+                  "value": "Plumbing",
+                  "count": 5
+                },
+                {
+                  "value": "POP",
+                  "count": 5
+                },
+                {
+                  "value": "Paint",
+                  "count": 5
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 55,
+              "blank": 0,
+              "unique": 12,
+              "examples": [
+                "Jayesh Panchal",
+                "Mukesh",
+                "Bhavin"
+              ],
+              "topValues": [
+                {
+                  "value": "Bhavin",
+                  "count": 11
+                },
+                {
+                  "value": "Jayesh Panchal",
+                  "count": 7
+                },
+                {
+                  "value": "Mukesh",
+                  "count": 5
+                },
+                {
+                  "value": "Jay Panchal",
+                  "count": 5
+                },
+                {
+                  "value": "Ashok",
+                  "count": 5
+                },
+                {
+                  "value": "Dinesh POP",
+                  "count": 5
+                }
+              ]
+            },
+            {
+              "name": "Linked Activities",
+              "type": "number",
+              "role": "metric",
+              "filled": 55,
+              "blank": 0,
+              "unique": 12,
+              "examples": [
+                "5",
+                "12",
+                "1"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 26,
+                "total": 196,
+                "average": 3.5636363636363635
+              }
+            },
+            {
+              "name": "Rooms / Areas",
+              "type": "text",
+              "role": "detail",
+              "filled": 55,
+              "blank": 0,
+              "unique": 51,
+              "examples": [
+                "GF Passage area; GF Parant's Bed rm; FF Dbed rm",
+                "GF Kitchen; GF formal living; GF Parant's Bed rm; GF Parent's Bath; GF Servant Rm; GF Servant Rm Bath; FF M Bed rm; FF M Bath rm; FF Dbed rm; FF Dbath rm; SF entitlement rm",
+                "SF Office"
+              ]
+            },
+            {
+              "name": "Action",
+              "type": "category",
+              "role": "segment",
+              "filled": 55,
+              "blank": 0,
+              "unique": 2,
+              "examples": [
+                "Select/freeze, Purchase/order",
+                "Purchase/order"
+              ],
+              "topValues": [
+                {
+                  "value": "Select/freeze, Purchase/order",
+                  "count": 44
+                },
+                {
+                  "value": "Purchase/order",
+                  "count": 11
+                }
+              ]
+            },
+            {
+              "name": "Remarks / Notes",
+              "type": "category",
+              "role": "segment",
+              "filled": 6,
+              "blank": 49,
+              "unique": 5,
+              "examples": [
+                "Lock body and handle; Outer finish and Handle lock Pending",
+                "Lock body and handle",
+                "Outer finish Materials"
+              ],
+              "topValues": [
+                {
+                  "value": "Lock body and handle; Outer finish and Handle lock Pending",
+                  "count": 1
+                },
+                {
+                  "value": "Lock body and handle",
+                  "count": 1
+                },
+                {
+                  "value": "Outer finish Materials",
+                  "count": 1
+                },
+                {
+                  "value": "Outer Materials",
+                  "count": 1
+                },
+                {
+                  "value": "Moulding & Veneer Pending; Veneer Selection Pending; Veneer selection",
+                  "count": 1
+                },
+                {
+                  "value": "Outer materials",
+                  "count": 1
+                }
+              ]
+            }
+          ],
+          "primaryLabel": "Material/Product",
+          "keyMetrics": [
+            "Linked Activities"
+          ],
+          "workflowColumns": [
+            "Priority",
+            "Action"
+          ],
+          "segmentColumns": [
+            "Priority",
+            "Trade",
+            "Agency"
+          ],
+          "dashboard": {
+            "entityColumn": "Trade",
+            "ownerColumn": "Agency",
+            "metricColumns": [
+              "Linked Activities"
+            ],
+            "statusColumns": [
+              "Priority",
+              "Action"
+            ],
+            "narrativeColumns": [
+              "Material/Product",
+              "Rooms / Areas",
+              "Remarks / Notes"
+            ],
+            "cardTitle": "Material/Product",
+            "cardSubtitle": "Action",
+            "detailFields": [
+              "Priority",
+              "Material/Product",
+              "Trade",
+              "Agency",
+              "Linked Activities",
+              "Rooms / Areas",
+              "Action",
+              "Remarks / Notes"
+            ],
+            "chartFields": [
+              "Priority",
+              "Trade",
+              "Agency",
+              "Linked Activities"
+            ]
+          }
+        }
+      ],
+      "dashboard": [
+        {
+          "tab": "Dashboard",
+          "dateColumn": null,
+          "entityColumn": "Trade",
+          "ownerColumn": "Agency",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Value",
+            "Pending Items",
+            "Items"
+          ],
+          "statusColumns": [],
+          "narrativeColumns": [
+            "Metric"
+          ],
+          "cardTitle": "Metric",
+          "cardSubtitle": "Trade",
+          "detailFields": [
+            "Metric",
+            "Value",
+            "Trade",
+            "Pending Items",
+            "Agency",
+            "Items"
+          ],
+          "chartFields": [
+            "Trade",
+            "Pending Items",
+            "Agency",
+            "Items"
+          ]
+        },
+        {
+          "tab": "All Tasks",
+          "dateColumn": "Start Date",
+          "entityColumn": "Trade",
+          "ownerColumn": "Agency",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Pending Stages"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "Remark",
+            "Floor",
+            "Room / Area"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Trade",
+            "Agency",
+            "Supervisor / Design Owner",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Remark",
+            "Start Date",
+            "End Date",
+            "Duration",
+            "Pending Stages",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Source File",
+            "Source Ref"
+          ],
+          "chartFields": [
+            "Trade",
+            "Agency",
+            "Pending Stages",
+            "Duration"
+          ]
+        },
+        {
+          "tab": "Agency Summary",
+          "dateColumn": null,
+          "entityColumn": "Agency",
+          "ownerColumn": "Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Total Items",
+            "Design Pending",
+            "Approval Pending",
+            "Selection Pending",
+            "Procurement Pending",
+            "Execution Pending",
+            "Audit Pending"
+          ],
+          "statusColumns": [],
+          "narrativeColumns": [
+            "Trade(s)",
+            "Immediate Focus / First 5 Activities"
+          ],
+          "cardTitle": "Agency",
+          "cardSubtitle": "Trade(s)",
+          "detailFields": [
+            "Agency",
+            "Supervisor",
+            "Trade(s)",
+            "Total Items",
+            "Design Pending",
+            "Approval Pending",
+            "Selection Pending",
+            "Procurement Pending",
+            "Execution Pending",
+            "Audit Pending",
+            "Immediate Focus / First 5 Activities"
+          ],
+          "chartFields": [
+            "Agency",
+            "Total Items",
+            "Design Pending",
+            "Selection Pending",
+            "Procurement Pending",
+            "Execution Pending"
+          ]
+        },
+        {
+          "tab": "Agency Detail",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [],
+          "statusColumns": [
+            "Pending Stages"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "Remark",
+            "Trade",
+            "Floor",
+            "Room / Area"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Agency",
+          "detailFields": [
+            "Agency",
+            "Trade",
+            "Supervisor",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Remark",
+            "Pending Stages",
+            "Start Date",
+            "End Date",
+            "Source File"
+          ],
+          "chartFields": [
+            "Agency",
+            "Trade",
+            "Supervisor",
+            "Pending Stages"
+          ]
+        },
+        {
+          "tab": "Design Pending",
+          "dateColumn": "Start Date",
+          "entityColumn": "Trade",
+          "ownerColumn": "Design Owner / Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [],
+          "statusColumns": [
+            "Design Decision Needed"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "Remark",
+            "Floor",
+            "Room / Area"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Design Decision Needed",
+          "detailFields": [
+            "Design Owner / Supervisor",
+            "Trade",
+            "Agency",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Remark",
+            "Design Decision Needed",
+            "Start Date",
+            "End Date",
+            "Source File"
+          ],
+          "chartFields": [
+            "Design Owner / Supervisor",
+            "Trade",
+            "Agency"
+          ]
+        },
+        {
+          "tab": "Selection Procurement",
+          "dateColumn": "Start Date",
+          "entityColumn": "Trade",
+          "ownerColumn": "Agency",
+          "mediaColumns": [],
+          "metricColumns": [],
+          "statusColumns": [
+            "Priority",
+            "Stage Needed"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "Material/Product Category",
+            "Remark",
+            "Floor",
+            "Room / Area"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Material/Product Category",
+          "detailFields": [
+            "Priority",
+            "Trade",
+            "Agency",
+            "Supervisor",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Material/Product Category",
+            "Stage Needed",
+            "Remark",
+            "Start Date",
+            "End Date",
+            "Source File"
+          ],
+          "chartFields": [
+            "Priority",
+            "Trade",
+            "Agency",
+            "Stage Needed"
+          ]
+        },
+        {
+          "tab": "Purchase Priority",
+          "dateColumn": null,
+          "entityColumn": "Trade",
+          "ownerColumn": "Agency",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Linked Activities"
+          ],
+          "statusColumns": [
+            "Priority",
+            "Action"
+          ],
+          "narrativeColumns": [
+            "Material/Product",
+            "Rooms / Areas",
+            "Remarks / Notes"
+          ],
+          "cardTitle": "Material/Product",
+          "cardSubtitle": "Action",
+          "detailFields": [
+            "Priority",
+            "Material/Product",
+            "Trade",
+            "Agency",
+            "Linked Activities",
+            "Rooms / Areas",
+            "Action",
+            "Remarks / Notes"
+          ],
+          "chartFields": [
+            "Priority",
+            "Trade",
+            "Agency",
+            "Linked Activities"
+          ]
+        }
+      ],
+      "kind": "kalhaar-pending-tracker",
+      "displayName": "Kalhaar Consolidated Pending Tracker",
+      "ai": {
+        "purpose": "Track consolidated construction and interior activities across design, approval, selection, procurement, execution, and audit, with agency, trade, owner, and purchasing priority views.",
+        "recordName": "Pending activity",
+        "importantColumns": [
+          "Trade",
+          "Agency",
+          "Activity",
+          "Pending Stages",
+          "Start Date",
+          "End Date"
+        ],
+        "recommendedViews": [
+          "portfolio-overview",
+          "all-tasks",
+          "agency-summary",
+          "design-pending",
+          "selection-procurement",
+          "purchase-priority"
+        ],
+        "notes": "The spreadsheet tracks various construction and interior activities, including design, approval, selection, procurement, execution, and audit, across different agencies, trades, and rooms/areas."
+      }
+    },
+    "architectureSavedAt": "2026-06-18T07:31:55.236Z"
   }
 ]

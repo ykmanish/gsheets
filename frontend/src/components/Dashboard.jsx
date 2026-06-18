@@ -3,24 +3,46 @@ import {
   Send,
   Loader2,
   FileText,
-  CheckCircle,
-  XCircle,
   RefreshCw,
-  Sheet,
-  Bell,
-  Mail,
+  Eye,
+  X,
+  Search,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { DocumentIcon } from "./ui";
+
+const CHAT_STORAGE_KEY = "raga-dashboard-chat-messages";
 
 export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const storedMessages = window.localStorage.getItem(CHAT_STORAGE_KEY);
+      if (!storedMessages) return [];
+      const parsedMessages = JSON.parse(storedMessages);
+      return Array.isArray(parsedMessages) ? parsedMessages : [];
+    } catch (error) {
+      console.error("Error loading saved chat:", error);
+      return [];
+    }
+  });
   const [documents, setDocuments] = useState([]);
+  const [folders, setFolders] = useState([]);
+  const [sourceSearch, setSourceSearch] = useState("");
   const [loadingDocs, setLoadingDocs] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [refreshingDocs, setRefreshingDocs] = useState(false);
+  const [viewDocument, setViewDocument] = useState(null);
   const scrollRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+    } catch (error) {
+      console.error("Error saving chat:", error);
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -28,56 +50,42 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
     }
   }, [messages, loading]);
 
-  const fetchDocuments = useCallback(async () => {
+  const fetchDocuments = useCallback(async ({ showLoader = false } = {}) => {
     try {
-      setLoadingDocs(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/documents");
+      if (showLoader) setLoadingDocs(true);
+      setRefreshingDocs(true);
+      const response = await fetch("http://localhost:5000/api/documents");
       const data = await response.json();
       setDocuments(data.documents || []);
+      setFolders(data.folders || []);
 
       const activeDocs = (data.documents || [])
         .filter((doc) => doc.isActive && doc.isReady)
         .map((doc) => doc.id);
-      setSelectedDocs((current) => current.length === 0 && activeDocs.length > 0 ? activeDocs : current);
+      setSelectedDocs((current) => {
+        const filteredCurrent = current.filter((id) => activeDocs.includes(id));
+        return filteredCurrent.length === 0 && activeDocs.length > 0 ? activeDocs : filteredCurrent;
+      });
     } catch (error) {
       console.error("Error fetching documents:", error);
     } finally {
-      setLoadingDocs(false);
+      if (showLoader) setLoadingDocs(false);
+      setRefreshingDocs(false);
     }
   }, [setSelectedDocs]);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const response = await fetch("https://dashboard.nexarrow.eu/api/notifications");
-      const data = await response.json();
-      setNotifications(data.notifications || []);
-      setUnreadCount(data.unreadCount || 0);
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-    }
-  }, []);
-
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      void fetchDocuments();
-      void fetchNotifications();
+      void fetchDocuments({ showLoader: true });
     }, 0);
     const interval = setInterval(() => {
       void fetchDocuments();
-      void fetchNotifications();
     }, 10000);
     return () => {
       clearTimeout(timeoutId);
       clearInterval(interval);
     };
-  }, [fetchDocuments, fetchNotifications]);
-
-  const markNotificationRead = async (notification) => {
-    if (!notification.readAt) {
-      await fetch(`https://dashboard.nexarrow.eu/api/notifications/${notification.id}/read`, { method: "PATCH" });
-      await fetchNotifications();
-    }
-  };
+  }, [fetchDocuments]);
 
   const ask = async () => {
     if (!question.trim()) return;
@@ -92,7 +100,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
     try {
       setLoading(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/chat", {
+      const response = await fetch("http://localhost:5000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMsg, documentIds: selectedDocs }),
@@ -120,15 +128,38 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
   const clearChat = () => {
     setMessages([]);
+    window.localStorage.removeItem(CHAT_STORAGE_KEY);
     toast.success("Chat cleared");
   };
 
-  const activeDocumentCount = documents.filter((d) => selectedDocs.includes(d.id) && d.isReady).length;
-  const totalReadyDocuments = documents.filter((d) => d.isReady).length;
+  const activeDocuments = documents.filter((doc) => doc.isReady && doc.isActive);
+  const activeDocumentCount = activeDocuments.filter((d) => selectedDocs.includes(d.id)).length;
+  const totalReadyDocuments = activeDocuments.length;
+  const sourceQuery = sourceSearch.trim().toLowerCase();
+  const folderMap = new Map(folders.map((folder) => [folder.id, folder]));
+  const filteredActiveSources = activeDocuments.filter((doc) => {
+    if (!sourceQuery) return true;
+    const folderName = folderMap.get(doc.folderId)?.name || "Unfiled sources";
+    return `${doc.name} ${doc.type} ${folderName}`.toLowerCase().includes(sourceQuery);
+  });
+  const groupedActiveSources = filteredActiveSources.reduce((groups, doc) => {
+    const folderName = folderMap.get(doc.folderId)?.name || "Unfiled sources";
+    const existingGroup = groups.find((group) => group.name === folderName);
+    if (existingGroup) {
+      existingGroup.docs.push(doc);
+      return groups;
+    }
+    groups.push({ name: folderName, docs: [doc] });
+    return groups;
+  }, []);
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleString();
+  };
 
   return (
     <div
-      className="flex-1 newq flex overflow-hidden"
+      className="flex-1 newq flex min-h-0 flex-col overflow-hidden lg:flex-row"
       style={{
         background: darkMode
           ? "linear-gradient(180deg, #111318 0%, #0c0d10 100%)"
@@ -136,8 +167,8 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
       }}
     >
       {/* ── Chat Area ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-8 space-y-4">
+      <div className="flex-1 flex min-h-[58vh] flex-col overflow-hidden lg:min-h-0">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 space-y-4 sm:px-6 lg:px-8 lg:py-8">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center gap-5 py-16">
               <div
@@ -151,7 +182,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
                 <p className={`text-[11px] uppercase tracking-[0.32em] mb-3 ${darkMode ? "text-white/40" : "text-black/35"}`}>
                   Ask anything
                 </p>
-                <h2 className={`text-3xl small md:text-4xl font-semibold ${darkMode ? "text-white" : "text-black"}`}>
+                <h2 className={`text-2xl small font-semibold sm:text-3xl md:text-4xl ${darkMode ? "text-white" : "text-black"}`}>
                   Chat with your documents
                 </h2>
                 <p className={`text-sm mt-4 max-w-xl ${darkMode ? "text-white/55" : "text-black/45"}`}>
@@ -170,7 +201,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
               return (
                 <div key={i} className="flex justify-end">
                   <div
-                    className="max-w-[72%] text-sm px-5 py-3.5 rounded-[24px] rounded-br-md leading-relaxed"
+                    className="max-w-[88%] break-words text-sm px-4 py-3 rounded-[22px] rounded-br-md leading-relaxed sm:max-w-[72%] sm:px-5 sm:py-3.5"
                     style={{
                       background: darkMode ? "#d8f36a" : "#111111",
                       color: darkMode ? "#111111" : "#ffffff",
@@ -183,9 +214,9 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
             }
 
             return (
-              <div key={i} className="flex gap-3 justify-start items-end">
+              <div key={i} className="flex gap-2 justify-start items-end sm:gap-3">
                 <div
-                  className="w-10 h-10 rounded-2xl flex-shrink-0"
+                  className="hidden w-10 h-10 rounded-2xl flex-shrink-0 sm:block"
                   style={{
                     background: darkMode
                       ? "linear-gradient(135deg, #1b1d22, #2a2f38)"
@@ -194,7 +225,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
                   }}
                 />
                 <div
-                  className="max-w-[72%] text-sm px-5 py-3.5 rounded-[24px] rounded-bl-md leading-relaxed whitespace-pre-wrap"
+                  className="max-w-[88%] break-words text-sm px-4 py-3 rounded-[22px] rounded-bl-md leading-relaxed whitespace-pre-wrap sm:max-w-[72%] sm:px-5 sm:py-3.5"
                   style={{
                     background: darkMode ? "#16181d" : "#ffffff",
                     color: darkMode ? "#e8e8e8" : "#1f2937",
@@ -208,9 +239,9 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
           })}
 
           {loading && (
-            <div className="flex gap-3 justify-start items-end">
+            <div className="flex gap-2 justify-start items-end sm:gap-3">
               <div
-                className="w-10 h-10 rounded-2xl flex-shrink-0"
+                className="hidden w-10 h-10 rounded-2xl flex-shrink-0 sm:block"
                 style={{
                   background: darkMode
                     ? "linear-gradient(135deg, #1b1d22, #2a2f38)"
@@ -234,11 +265,11 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
         </div>
 
         {/* ── Input Bar ── */}
-        <div className="px-8 pb-6 pt-2">
-          <div className="flex gap-3 mb-3">
+        <div className="px-4 pb-4 pt-2 sm:px-6 lg:px-8 lg:pb-6">
+          <div className="flex gap-2 mb-3 sm:gap-3">
             <button
               onClick={clearChat}
-              className={`text-xs px-4 py-2 rounded-full transition-colors ${
+              className={`text-xs px-3 py-2 rounded-full transition-colors sm:px-4 ${
                 darkMode
                   ? "bg-white/5 text-white/70 border border-white/10 hover:bg-white/10"
                   : "bg-white text-black/60 border border-black/5 hover:bg-black/[0.03]"
@@ -247,20 +278,20 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
               Clear Chat
             </button>
             <button
-              onClick={fetchDocuments}
-              className={`text-xs px-4 py-2 rounded-full transition-colors flex items-center gap-1 ${
+              onClick={() => fetchDocuments()}
+              className={`text-xs px-3 py-2 rounded-full transition-colors flex items-center gap-1 sm:px-4 ${
                 darkMode
                   ? "bg-white/5 text-white/70 border border-white/10 hover:bg-white/10"
                   : "bg-white text-black/60 border border-black/5 hover:bg-black/[0.03]"
               }`}
             >
-              <RefreshCw className={`w-3 h-3 ${loadingDocs ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3 h-3 ${refreshingDocs ? "animate-spin" : ""}`} />
               Refresh
             </button>
           </div>
 
           <div
-            className={`rounded-full px-4 py-3 flex items-center gap-3 ${
+            className={`rounded-[24px] px-3 py-2.5 flex items-center gap-2 sm:rounded-full sm:px-4 sm:py-3 sm:gap-3 ${
               darkMode ? "bg-[#16181d] border border-white/10" : "bg-white border border-black/5"
             }`}
           >
@@ -277,7 +308,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
                   : "Ask anything about your documents or sheets..."
               }
               disabled={selectedDocs.length === 0 || totalReadyDocuments === 0}
-              className="flex-1 bg-transparent text-sm outline-none disabled:cursor-not-allowed px-2 py-1"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none disabled:cursor-not-allowed px-2 py-1"
               style={{
                 color: darkMode ? "#f3f4f6" : "#111827",
                 caretColor: darkMode ? "#d8f36a" : "#111111",
@@ -286,7 +317,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
             <button
               onClick={ask}
               disabled={loading || selectedDocs.length === 0 || !question.trim() || totalReadyDocuments === 0}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 disabled:opacity-40 ${
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 disabled:opacity-40 sm:h-11 sm:w-11 ${
                 darkMode ? "bg-[#d8f36a] text-black hover:opacity-90" : "bg-black text-white hover:opacity-90"
               }`}
             >
@@ -298,129 +329,170 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
       {/* ── Sidebar ── */}
       <div
-        className={`w-80 border-l px-6 py-6 overflow-y-auto ${
+        className={`w-full border-t px-4 py-5 overflow-y-auto lg:w-80 lg:border-l lg:border-t-0 lg:px-6 lg:py-6 ${
           darkMode ? "bg-[#0c0d10] border-white/10" : "bg-[#fbfaf7] border-black/5"
         }`}
       >
-        <div className="flex items-center justify-between mb-4">
+        {/* <div className="flex items-center justify-between mb-4">
           <p className={`text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>
             Action Notifications
           </p>
           <span className={`min-w-6 h-6 px-2 rounded-full text-xs flex items-center justify-center ${
-            unreadCount > 0
+            connectedDocuments.length > 0
               ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"
               : darkMode ? "bg-white/5 text-white/40" : "bg-black/5 text-black/40"
           }`}>
-            {unreadCount}
+            {connectedDocuments.length}
+          </span>
+        </div> */}
+
+        {/* <div className={`rounded-2xl overflow-hidden mb-6 border lg:mb-8 ${
+          darkMode ? "bg-white/[0.03] border-white/10" : "bg-white border-black/5"
+        }`}>
+          {loadingDocs ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin" style={{ color: darkMode ? "#ffffff55" : "#9ca3af" }} />
+            </div>
+          ) : connectedDocuments.length === 0 ? (
+            <div className={`p-4 text-sm ${darkMode ? "text-white/45" : "text-black/40"}`}>
+              No connected documents yet.
+            </div>
+          ) : (
+            <div className="max-h-56 overflow-auto">
+              <table className="w-full min-w-[300px] text-left">
+                <thead className={darkMode ? "bg-[#0c0d10]" : "bg-[#fbfaf7]"}>
+                  <tr className={darkMode ? "border-b border-white/10" : "border-b border-black/5"}>
+                    {["Document", "Type", "View"].map((header) => (
+                      <th key={header} className={`px-3 py-3 text-[10px] uppercase tracking-[0.18em] font-medium ${darkMode ? "text-white/45" : "text-black/35"}`}>
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {connectedDocuments.map((doc) => (
+                    <tr key={doc.id} className={darkMode ? "border-b border-white/5 last:border-0" : "border-b border-black/5 last:border-0"}>
+                      <td className="px-3 py-3 min-w-0">
+                        <span className={`block max-w-[130px] truncate text-xs ${darkMode ? "text-white" : "text-black"}`}>
+                          {doc.name}
+                        </span>
+                      </td>
+                      <td className={`px-3 py-3 text-xs ${darkMode ? "text-white/55" : "text-black/45"}`}>
+                        {doc.type === "sheet" ? "Sheet" : "File"}
+                      </td>
+                      <td className="px-3 py-3">
+                        <button
+                          onClick={() => setViewDocument(doc)}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                            darkMode ? "bg-white/5 text-white/70 hover:bg-white/10" : "bg-black/[0.04] text-black/60 hover:bg-black/[0.07]"
+                          }`}
+                          title="View document details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+          )}
+        </div> */}
+
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className={`text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>
+            Active Sources
+          </p>
+          <span className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/5 text-white/45" : "bg-black/5 text-black/45"}`}>
+            {filteredActiveSources.length}
           </span>
         </div>
 
-        <div className="space-y-2 mb-8">
-          {notifications.length === 0 ? (
-            <div className={`rounded-2xl p-4 text-sm ${darkMode ? "bg-white/[0.03] text-white/45" : "bg-white text-black/40"}`}>
-              Automation results will appear here.
-            </div>
-          ) : notifications.slice(0, 3).map((notification) => (
+        <div
+          className={`mb-4 flex items-center gap-2 rounded-2xl border px-3 py-2.5 ${
+            darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/5 bg-white"
+          }`}
+        >
+          <Search className={`h-4 w-4 flex-shrink-0 ${darkMode ? "text-white/35" : "text-black/35"}`} />
+          <input
+            value={sourceSearch}
+            onChange={(event) => setSourceSearch(event.target.value)}
+            placeholder="Search files or folders..."
+            className={`min-w-0 flex-1 bg-transparent text-sm outline-none ${
+              darkMode ? "text-white placeholder:text-white/30" : "text-black placeholder:text-black/35"
+            }`}
+          />
+          {sourceSearch && (
             <button
-              key={notification.id}
-              onClick={() => markNotificationRead(notification)}
-              className={`w-full text-left rounded-2xl p-4 border transition-colors ${
-                darkMode ? "bg-white/[0.03] border-white/10 hover:bg-white/[0.06]" : "bg-white border-black/5 hover:bg-black/[0.02]"
-              }`}
+              type="button"
+              onClick={() => setSourceSearch("")}
+              className={`flex h-7 w-7 items-center justify-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+              title="Clear search"
             >
-              <div className="flex items-start gap-3">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  notification.errors > 0
-                    ? "bg-red-500/10 text-red-500"
-                    : darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-green-50 text-green-700"
-                }`}>
-                  {notification.severity === "warning" ? <Bell className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    {!notification.readAt && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
-                    <p className={`text-sm truncate ${darkMode ? "text-white" : "text-black"}`}>{notification.title || notification.automationName}</p>
-                  </div>
-                  <p className={`text-xs leading-5 mt-1 ${darkMode ? "text-white/45" : "text-black/40"}`}>
-                    {(notification.message || "").slice(0, 90)}{(notification.message || "").length > 90 ? "..." : ""}
-                  </p>
-                  <p className={`text-[11px] mt-1 ${darkMode ? "text-white/30" : "text-black/30"}`}>
-                    {new Date(notification.createdAt).toLocaleString()}
-                  </p>
-                </div>
-              </div>
+              <X className={`h-3.5 w-3.5 ${darkMode ? "text-white/45" : "text-black/40"}`} />
             </button>
-          ))}
+          )}
         </div>
 
-        <p className={`text-[11px] uppercase tracking-[0.28em] mb-4 ${darkMode ? "text-white/40" : "text-black/35"}`}>
-          Active Sources
-        </p>
-        {/* <h3 className={`text-2xl font-semibold mb-6 ${darkMode ? "text-white" : "text-black"}`}>
-          {selectedDocs.length}
-        </h3> */}
-
-        <div className="space-y-3">
-          {loadingDocs ? (
+        <div className="space-y-4">
+          {loadingDocs && documents.length === 0 ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin" style={{ color: darkMode ? "#ffffff55" : "#9ca3af" }} />
             </div>
-          ) : documents.length === 0 ? (
+          ) : activeDocuments.length === 0 ? (
             <p className={`text-sm text-center py-8 ${darkMode ? "text-white/45" : "text-black/40"}`}>
-              No documents uploaded yet.
+              No active sources available.
               <br />
-              Go to Documents to upload files or add a Google Sheet.
+              Enable a ready source in Documents to use it here.
+            </p>
+          ) : groupedActiveSources.length === 0 ? (
+            <p className={`text-sm text-center py-8 ${darkMode ? "text-white/45" : "text-black/40"}`}>
+              No sources match your search.
             </p>
           ) : (
-            documents.map((doc) => (
-              <div
-                key={doc.id}
-                className={`flex items-center justify-between p-4 rounded-2xl  ${
-                  darkMode ? "bg-white/[0.03] border-white/10" : "bg-white border-black/5"
-                }`}
-                style={{ opacity: doc.isReady ? 1 : 0.55 }}
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div
-                    className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                      darkMode ? "bg-white/5" : "bg-black/[0.04]"
-                    }`}
-                  >
-                    {doc.type === "sheet" ? (
-                      <Sheet className={`w-4 h-4 ${darkMode ? "text-[#d8f36a]" : "text-green-600"}`} />
-                    ) : (
-                      <FileText className={`w-4 h-4 ${darkMode ? "text-white/50" : "text-black/40"}`} />
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <span className={`text-sm truncate block ${darkMode ? "text-white" : "text-black"}`}>
-                      {doc.name}
-                    </span>
-                    {doc.type === "sheet" && doc.isReady ? (
-                      <span className={`text-xs ${darkMode ? "text-[#d8f36a]/60" : "text-green-600/70"}`}>
-                        Live Sheet
-                      </span>
-                    ) : !doc.isReady ? (
-                      <span className={`text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
-                        Processing...
-                      </span>
-                    ) : null}
-                  </div>
+            groupedActiveSources.map((group) => (
+              <section key={group.name}>
+                <div className={`mb-2 flex items-center justify-between text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
+                  <span className="max-w-[210px] truncate uppercase tracking-[0.18em]">{group.name}</span>
+                  <span>{group.docs.length}</span>
                 </div>
-
-                {/* {doc.isReady &&
-                  (selectedDocs.includes(doc.id) ? (
-                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                  ) : (
-                    <XCircle className={`w-4 h-4 flex-shrink-0 ${darkMode ? "text-white/30" : "text-black/30"}`} />
-                  ))} */}
-              </div>
+                <div className="space-y-2">
+                  {group.docs.map((doc) => (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => setViewDocument(doc)}
+                      className={`flex w-full items-center justify-between rounded-2xl p-3 text-left transition ${
+                        darkMode ? "bg-white/[0.03] border-white/10 hover:bg-white/[0.06]" : "bg-white border-black/5 hover:bg-black/[0.02]"
+                      }`}
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div
+                          className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl ${
+                            darkMode ? "bg-white/5" : "bg-black/[0.04]"
+                          }`}
+                        >
+                          <DocumentIcon doc={doc} darkMode={darkMode} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className={`block truncate text-sm ${darkMode ? "text-white" : "text-black"}`}>
+                            {doc.name}
+                          </span>
+                          <span className={`mt-0.5 block text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
+                            {doc.type === "sheet" ? "Live Sheet" : doc.source === "drive" ? "Drive file" : "File"}
+                          </span>
+                        </div>
+                      </div>
+                      <Eye className={`h-4 w-4 flex-shrink-0 ${darkMode ? "text-white/35" : "text-black/35"}`} />
+                    </button>
+                  ))}
+                </div>
+              </section>
             ))
           )}
         </div>
 
-        {documents.filter((d) => !d.isReady).length > 0 && (
+        {documents.filter((d) => d.isActive && !d.isReady).length > 0 && (
           <div
             className="mt-4 p-4 rounded-2xl border"
             style={{
@@ -429,11 +501,64 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
             }}
           >
             <p className={`text-xs leading-5 ${darkMode ? "text-[#d8f36a]" : "text-[#92400e]"}`}>
-              ⚡ {documents.filter((d) => !d.isReady).length} source(s) are still processing.
+              {documents.filter((d) => d.isActive && !d.isReady).length} source(s) are still processing.
             </p>
           </div>
         )}
       </div>
+
+      {viewDocument && (
+        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4 sm:p-5">
+          <div
+            className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[24px] p-5 sm:rounded-[28px] sm:p-6 ${
+              darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div className="min-w-0">
+                <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${darkMode ? "text-white/40" : "text-black/35"}`}>
+                  Document details
+                </p>
+                <h3 className={`text-2xl font-semibold truncate ${darkMode ? "text-white" : "text-black"}`}>
+                  {viewDocument.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setViewDocument(null)}
+                className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  darkMode ? "hover:bg-white/5" : "hover:bg-black/5"
+                }`}
+                title="Close"
+              >
+                <X className={`w-5 h-5 ${darkMode ? "text-white/50" : "text-black/40"}`} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[
+                ["Type", viewDocument.type === "sheet" ? "Google Sheet" : "File"],
+                ["Status", viewDocument.isReady ? "Ready" : "Processing"],
+                ["Query state", viewDocument.isActive ? "Active" : "Inactive"],
+                ["Chunks", viewDocument.chunks || 0],
+                ["Uploaded", formatDateTime(viewDocument.uploadedAt)],
+                ["Last synced", formatDateTime(viewDocument.lastSyncedAt)],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-black/[0.025]"}`}
+                >
+                  <p className={`text-[11px] uppercase tracking-[0.18em] ${darkMode ? "text-white/35" : "text-black/35"}`}>
+                    {label}
+                  </p>
+                  <p className={`text-sm mt-2 break-words ${darkMode ? "text-white/80" : "text-black/70"}`}>
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

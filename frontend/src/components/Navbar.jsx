@@ -1,71 +1,102 @@
-import { Moon, Sun, User } from "lucide-react";
+import { useRef, useState } from "react";
+import { Bell, ChevronDown, LogOut, Menu, User } from "lucide-react";
+import { ThemeSwitch, useClickOutside } from "./ui";
 
-export default function Navbar({ darkMode, setDarkMode, activeMenu }) {
-  const titles = {
-    dashboard: "Dashboard",
-    documents: "Documents",
-    automations: "Automation",
-    notifications: "Notifications",
-    reports: "Reports",
-    settings: "Settings",
-  };
+export default function Navbar({ darkMode, setDarkMode, user, onLogout, onMenuClick, onNotificationsClick }) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
+  useClickOutside(profileRef, () => setProfileOpen(false));
+  const currentHour = new Date().getHours();
+  const greeting =
+    currentHour < 12 ? "Good morning" : currentHour < 17 ? "Good afternoon" : "Good evening";
+  const displayName = user?.displayName || user?.username || "there";
+  const initials = (user?.displayName || user?.username || "U")
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
     <div
-      className={`px-8 py-5 newq flex items-center justify-between transition-all duration-300 ${
+      className={`px-4 py-4 sm:px-6 lg:px-8 lg:py-5 newq flex items-center justify-between gap-4 transition-all duration-300 ${
         darkMode
           ? "bg-[#0f1115] border-b border-white/10"
           : "bg-white border-b border-black/5"
       }`}
       
     >
-      <div>
-        {/* <p
-          className={`text-[11px] font-semibold uppercase tracking-[0.32em] mb-2 ${
-            darkMode ? "text-white/45" : "text-black/35"
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          onClick={onMenuClick}
+          className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full md:hidden ${
+            darkMode ? "bg-white/5 text-white hover:bg-white/10" : "bg-black/[0.04] text-black hover:bg-black/[0.07]"
           }`}
         >
-          {activeMenu === "dashboard" ? "Workspace" : "Library"}
-        </p> */}
-        <h2
-          className={`text-2xl small  font-semibold leading-none ${
-            darkMode ? "text-white" : "text-black"
-          }`}
-          
-        >
-          {titles[activeMenu] || "Workspace"}
-        </h2>
-        {/* <p
-          className={`text-sm mt-2 ${
-            darkMode ? "text-white/55" : "text-black/45"
-          }`}
-        >
-          {activeMenu === "dashboard"
-            ? "Chat with your documents"
-            : "Manage your document library"}
-        </p> */}
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="min-w-0">
+          <h2
+            className={`truncate py-1 text-lg small font-semibold leading-none sm:text-2xl ${
+              darkMode ? "text-white" : "text-black"
+            }`}
+          >
+            {greeting}, {displayName}
+          </h2>
+          <p className={`mt-1 hidden truncate text-xs sm:block ${darkMode ? "text-white/45" : "text-black/40"}`}>
+            Welcome back to UIPL Docs
+          </p>
+        </div>
       </div>
 
-      <div className="flex newq items-center gap-3">
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm ${
-            darkMode
-              ? "bg-white/10 text-[#d8f36a] hover:bg-white/15 border border-white/10"
-              : "bg-black text-white hover:bg-black/85 border border-black/5"
-          }`}
-        >
-          {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </button>
+      <div className="flex newq items-center gap-2 sm:gap-3">
+        <ThemeSwitch darkMode={darkMode} onToggle={() => setDarkMode(!darkMode)} />
 
         <button
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm ${
-            darkMode
-              ? "bg-white/10 text-white/70 hover:bg-white/15 border border-white/10"
-              : "bg-white text-black/70 hover:bg-black/5 border border-black/5"
+          onClick={onNotificationsClick}
+          className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-all duration-300 sm:h-11 sm:w-11 ${
+            darkMode ? "bg-white/10 text-white/80 hover:bg-white/15 border border-white/10" : "bg-white text-black/75 hover:bg-black/5 border border-black/5"
           }`}
+          title="Notifications"
         >
-          <User className="w-5 h-5" />
+          <Bell className="h-5 w-5" />
         </button>
+
+        <div ref={profileRef} className="relative">
+          <button
+            onClick={() => setProfileOpen((open) => !open)}
+            className={`h-10 rounded-full pl-1.5 pr-2 flex items-center gap-2 transition-all duration-300 sm:h-11 sm:pl-2 sm:pr-4 sm:gap-3 -sm ${
+              darkMode
+                ? "bg-white/10 text-white/80 hover:bg-white/15 border border-white/10"
+                : "bg-white text-black/75 hover:bg-black/5 border border-black/5"
+            }`}
+          >
+            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
+              {initials || <User className="w-4 h-4" />}
+            </span>
+            <span className="hidden md:block text-left">
+              <span className="block text-sm font-medium leading-tight">{user?.displayName || user?.username}</span>
+              <span className={`block text-xs leading-tight ${darkMode ? "text-white/45" : "text-black/40"}`}>{user?.roleName || "User"}</span>
+            </span>
+            <ChevronDown className="hidden w-4 h-4 sm:block" />
+          </button>
+
+          {profileOpen && (
+            <div className={`absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-64 rounded-3xl border p-3 -lg z-30 ${darkMode ? "bg-[#15171c] border-white/10 text-white" : "bg-white border-black/5 text-black"}`}>
+              <div className={`px-3 py-3 rounded-2xl ${darkMode ? "bg-white/5" : "bg-black/[0.03]"}`}>
+                <p className="text-sm font-semibold">{user?.displayName || user?.username}</p>
+                <p className={`${darkMode ? "text-white/45" : "text-black/45"} text-xs mt-1`}>{user?.username}</p>
+              </div>
+              <button
+                onClick={onLogout}
+                className="mt-2 w-full rounded-2xl px-3 py-2.5 text-left flex items-center gap-2 text-red-500 hover:bg-red-500/10"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

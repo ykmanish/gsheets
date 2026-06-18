@@ -27,6 +27,13 @@ html {
   scrollbar-width: none; /* Firefox */
 }
 
+body,
+body * {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-duration: 220ms;
+  transition-timing-function: ease;
+}
+
 @font-face {
   font-family: "Regular";
   src: url("./font/regular.otf") format("truetype");
@@ -111,4 +118,3 @@ html {
 .count{
   font-family: "count";
 }
-

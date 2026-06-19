@@ -20,6 +20,8 @@ const assetPurchaseRequestsArchitecture = require("./sheetArchitectures/assetPur
 const directorPaymentRequestsArchitecture = require("./sheetArchitectures/directorPaymentRequests");
 const projectPaymentRequestsArchitecture = require("./sheetArchitectures/projectPaymentRequests");
 const kalhaarPendingTrackerArchitecture = require("./sheetArchitectures/kalhaarPendingTracker");
+const asteriaClientDlArchitecture = require("./sheetArchitectures/asteriaClientDl");
+const iskonBhavnagarClientDlArchitecture = require("./sheetArchitectures/iskonBhavnagarClientDl");
 
 const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
@@ -33,7 +35,7 @@ app.use((req, res, next) => {
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://quantabase:manish1728@quants.u266oxg.mongodb.net/sheets?appName=Quants";
 const AUTH_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
-const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || "6LfuVyItAAAAAFLrtggbHFCPk1Rt6qzUftHSF6Mc";
+const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY
 const SUPER_ADMIN_USERNAME = "AdminUIPL";
 const SUPER_ADMIN_PASSWORD = "Admin@9579";
 const MENU_ITEMS = [
@@ -247,14 +249,7 @@ async function verifyRecaptcha(token) {
     body: params.toString(),
   });
   const data = await response.json();
-  
-  if (!data.success) {
-    console.warn("\n[WARNING] reCAPTCHA verification failed from Google:", data);
-    console.warn("Bypassing reCAPTCHA to allow local login. Please verify your keys and domain restrictions in the Google reCAPTCHA Console.\n");
-  }
-  
-  // Return true to unblock the user for now
-  return true;
+  return Boolean(data.success);
 }
 
 app.post("/auth/login", async (req, res) => {
@@ -1230,6 +1225,14 @@ async function fetchSheetRows(sheetId) {
   return sheets.flatMap((sheet) => sheet.rows);
 }
 
+function buildGenericPreparedSheet(values) {
+  return {
+    headers: (values[0] || []).map((value) => String(value).trim()),
+    rows: values.slice(1),
+    firstDataRow: 2,
+  };
+}
+
 async function fetchSheetDataset(sheetId) {
   const sheets = await fetchRawSheetValues(sheetId);
   const result = [];
@@ -1239,7 +1242,11 @@ async function fetchSheetDataset(sheetId) {
     const values = sheet.values || [];
     const prepared = sheetId === kalhaarPendingTrackerArchitecture.SHEET_ID
       ? kalhaarPendingTrackerArchitecture.prepareSheet(title, values)
-      : { headers: (values[0] || []).map((value) => String(value).trim()), rows: values.slice(1), firstDataRow: 2 };
+      : sheetId === asteriaClientDlArchitecture.SHEET_ID
+      ? asteriaClientDlArchitecture.prepareSheet(title, values)
+      : sheetId === iskonBhavnagarClientDlArchitecture.SHEET_ID
+      ? iskonBhavnagarClientDlArchitecture.prepareSheet(title, values)
+      : buildGenericPreparedSheet(values);
     const headers = prepared.headers;
     const rows = prepared.rows.map((row, index) => {
       const item = { __sheetName: title, __rowIndex: index + prepared.firstDataRow };
@@ -1248,7 +1255,7 @@ async function fetchSheetDataset(sheetId) {
       });
       return item;
     });
-    result.push({ name: title, headers, rows });
+    result.push({ name: title, headers, rows, meta: prepared.meta || {} });
   }
 
   return result;
@@ -1861,9 +1868,11 @@ function buildDashboardHints(tabs) {
   });
 }
 
-const SHEET_ARCHITECTURE_VERSION = 8;
+const SHEET_ARCHITECTURE_VERSION = 10;
 const sheetArchitectureProfiles = [
   kalhaarPendingTrackerArchitecture,
+  asteriaClientDlArchitecture,
+  iskonBhavnagarClientDlArchitecture,
   adminMiscExpensesArchitecture,
   assetPurchaseRequestsArchitecture,
   directorPaymentRequestsArchitecture,
@@ -1872,6 +1881,8 @@ const sheetArchitectureProfiles = [
 
 function getSheetProfileDisplayName(sheetId) {
   if (sheetId === kalhaarPendingTrackerArchitecture.SHEET_ID) return "Kalhaar Consolidated Pending Tracker";
+  if (sheetId === asteriaClientDlArchitecture.SHEET_ID) return "Asteria Client DL Dashboard";
+  if (sheetId === iskonBhavnagarClientDlArchitecture.SHEET_ID) return "Iskon Bhavnagar Client DL";
   if (sheetId === adminMiscExpensesArchitecture.SHEET_ID) return "Admin & Misc Expense Requests";
   if (sheetId === assetPurchaseRequestsArchitecture.SHEET_ID) return "Asset Purchase Requests";
   if (sheetId === directorPaymentRequestsArchitecture.SHEET_ID) return "Director Payment Requests";

@@ -5,8 +5,8 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 
-// This should be your v3 site key
-const RECAPTCHA_SITE_KEY = "6LfuVyItAAAAAIPsyazffEfFOcFEEWbIgtww_Bjw";
+// Official Google reCAPTCHA Test Key (always passes for local testing)
+const RECAPTCHA_SITE_KEY = "6LdcwSctAAAAAAG-UP3Bt6SorvofMJWxqMxDDmnA";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");

@@ -15,12 +15,14 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { DateRangePicker } from "./ui";
+import { DateRangePicker, SelectMenu } from "./ui";
 import AdminMiscExpensesDashboard from "./sheetViews/AdminMiscExpensesDashboard";
 import AssetPurchaseDashboard from "./sheetViews/AssetPurchaseDashboard";
 import DirectorPaymentDashboard from "./sheetViews/DirectorPaymentDashboard";
 import ProjectPaymentDashboard from "./sheetViews/ProjectPaymentDashboard";
 import KalhaarPendingTrackerDashboard from "./sheetViews/KalhaarPendingTrackerDashboard";
+import AsteriaClientDashboard from "./sheetViews/AsteriaClientDashboard";
+import IskonBhavnagarDashboard from "./sheetViews/IskonBhavnagarDashboard";
 import { isWithinDateRange } from "./sheetViews/amountUtils";
 
 const API_URL = "https://dashboard.nexarrow.eu/api";
@@ -222,7 +224,7 @@ export default function SheetDashboard({ darkMode }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setSheetData(data);
-      setActiveTab(data.sheets?.[0]?.name || "");
+      setActiveTab(["asteria-client-dl", "iskon-bhavnagar-client-dl"].includes(data.architecture?.kind) ? "__overview" : data.sheets?.[0]?.name || "");
       setDashboardOpen(true);
     } catch (error) {
       toast.error(error.message || "Could not load sheet dashboard");
@@ -465,7 +467,7 @@ export default function SheetDashboard({ darkMode }) {
                     <button onClick={() => setSearchQuery("")} className={`text-xs ${muted}`}>Clear</button>
                   )}
                 </div>
-                <div className="w-full sm:w-[360px]">
+                {!['asteria-client-dl', 'iskon-bhavnagar-client-dl'].includes(sheetData?.architecture?.kind) && <div className="w-full sm:w-[360px]">
                   <DateRangePicker
                     darkMode={darkMode}
                     from={dateFilters.from}
@@ -473,8 +475,8 @@ export default function SheetDashboard({ darkMode }) {
                     onChange={(range) => setDateFilters((current) => ({ ...current, ...range }))}
                     placeholder="Choose sheet dates"
                   />
-                </div>
-                {(dateFilters.from || dateFilters.to) && (
+                </div>}
+                {!['asteria-client-dl', 'iskon-bhavnagar-client-dl'].includes(sheetData?.architecture?.kind) && (dateFilters.from || dateFilters.to) && (
                   <button
                     onClick={() => setDateFilters({ from: "", to: "" })}
                     className={`rounded-full px-3 py-2 text-xs ${darkMode ? "bg-white/5 text-white/65 hover:bg-white/10" : "bg-black/[0.04] text-black/55 hover:bg-black/[0.07]"}`}
@@ -482,15 +484,16 @@ export default function SheetDashboard({ darkMode }) {
                     Clear dates
                   </button>
                 )}
-                {(sheetData?.sheets || []).map((sheet) => (
-                  <button
-                    key={sheet.name}
-                    onClick={() => setActiveTab(sheet.name)}
-                    className={`max-w-[46%] truncate px-3 py-2 rounded-full text-sm sm:max-w-none sm:px-4 ${currentSheet?.name === sheet.name ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white" : darkMode ? "bg-white/5 text-white/60" : "bg-black/[0.04] text-black/55"}`}
-                  >
-                    {sheet.name}
-                  </button>
-                ))}
+                <SelectMenu
+                  darkMode={darkMode}
+                  value={activeTab || ""}
+                  onChange={setActiveTab}
+                  className="w-full min-w-[220px] sm:w-[300px]"
+                  options={[
+                    ...(["asteria-client-dl", "iskon-bhavnagar-client-dl"].includes(sheetData?.architecture?.kind) ? [{ value: "__overview", label: "Executive overview" }] : []),
+                    ...(sheetData?.sheets || []).map((sheet) => ({ value: sheet.name, label: sheet.name })),
+                  ]}
+                />
                 <button onClick={() => setDashboardOpen(false)} className={`w-11 h-11 rounded-full flex items-center justify-center ${darkMode ? "bg-white/5 text-white/60 hover:bg-white/10" : "bg-black/[0.04] text-black/55 hover:bg-black/[0.07]"}`}>
                   <X className="w-5 h-5" />
                 </button>
@@ -505,6 +508,22 @@ export default function SheetDashboard({ darkMode }) {
                 currentSheet={currentSheet}
                 searchQuery={searchQuery}
                 dateRange={dateFilters}
+              />
+            ) : sheetData?.architecture?.kind === "asteria-client-dl" ? (
+              <AsteriaClientDashboard
+                darkMode={darkMode}
+                currentSheet={currentSheet}
+                sheets={sheetData.sheets || []}
+                overview={activeTab === "__overview"}
+                searchQuery={searchQuery}
+              />
+            ) : sheetData?.architecture?.kind === "iskon-bhavnagar-client-dl" ? (
+              <IskonBhavnagarDashboard
+                darkMode={darkMode}
+                currentSheet={currentSheet}
+                sheets={sheetData.sheets || []}
+                overview={activeTab === "__overview"}
+                searchQuery={searchQuery}
               />
             ) : sheetData?.architecture?.kind === "admin-misc-expenses" ? (
               <AdminMiscExpensesDashboard

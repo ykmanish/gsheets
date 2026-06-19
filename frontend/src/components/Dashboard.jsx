@@ -519,7 +519,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
                 <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${darkMode ? "text-white/40" : "text-black/35"}`}>
                   Document details
                 </p>
-                <h3 className={`text-2xl font-semibold truncate ${darkMode ? "text-white" : "text-black"}`}>
+                <h3 className={`text-2xl small font-semibold truncate ${darkMode ? "text-white" : "text-black"}`}>
                   {viewDocument.name}
                 </h3>
               </div>

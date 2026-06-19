@@ -1,6 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronDown, LogOut, Menu, User } from "lucide-react";
+import toast from "react-hot-toast";
 import { ThemeSwitch, useClickOutside } from "./ui";
+import { API_URL } from "./AuthProvider";
 
 export default function Navbar({ darkMode, setDarkMode, user, onLogout, onMenuClick, onNotificationsClick }) {
   const [profileOpen, setProfileOpen] = useState(false);
@@ -16,6 +18,40 @@ export default function Navbar({ darkMode, setDarkMode, user, onLogout, onMenuCl
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  const [unreadCount, setUnreadCount] = useState(0);
+  const lastNotificationIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    const checkNotifications = async () => {
+      try {
+        const response = await fetch(`${API_URL}/notifications?limit=20`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const notifications = data.notifications || [];
+        
+        const unread = notifications.filter(n => !n.readAt);
+        setUnreadCount(unread.length);
+        
+        if (notifications.length > 0) {
+          const topId = notifications[0].id;
+          // If we already have a recorded topId, and the new topId is different, it means there's a new notification.
+          if (lastNotificationIdRef.current && lastNotificationIdRef.current !== topId) {
+            toast(`New notification: ${notifications[0].title || 'You have a new message'}`, { icon: '🔔' });
+          }
+          lastNotificationIdRef.current = topId;
+        }
+      } catch (err) {
+        // ignore silently
+      }
+    };
+
+    checkNotifications();
+    const interval = setInterval(checkNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   return (
     <div
@@ -60,6 +96,14 @@ export default function Navbar({ darkMode, setDarkMode, user, onLogout, onMenuCl
           title="Notifications"
         >
           <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-[22px] w-[22px] items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-60"></span>
+              <span className={`relative inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm border-2 ${darkMode ? "border-[#0f1115]" : "border-white"}`}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            </span>
+          )}
         </button>
 
         <div ref={profileRef} className="relative">

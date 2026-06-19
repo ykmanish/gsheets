@@ -73,7 +73,7 @@ function Modal({ darkMode, title, eyebrow, onClose, children, maxWidth = "max-w-
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <p className={`mb-2 text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>{eyebrow}</p>
-            <h3 className="text-2xl font-semibold">{title}</h3>
+            <h3 className="text-2xl small font-semibold">{title}</h3>
           </div>
           <button type="button" onClick={onClose} className={`flex h-10 w-10 items-center justify-center rounded-full ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}>
             <X className="h-5 w-5" />

@@ -71,7 +71,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
   const fetchDocuments = useCallback(async (showToast = true) => {
     try {
       setLoading(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/documents");
+      const response = await fetch("http://localhost:5000/api/documents");
       const data = await response.json();
       setDocuments(data.documents || []);
       setFolders(data.folders || []);
@@ -160,7 +160,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
       return;
     }
     try {
-      const response = await fetch("https://dashboard.nexarrow.eu/api/document-folders", {
+      const response = await fetch("http://localhost:5000/api/document-folders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(folderForm),
@@ -213,7 +213,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
       return;
     }
     try {
-      const response = await fetch(`https://dashboard.nexarrow.eu/api/document-folders/${folderForm.id}`, {
+      const response = await fetch(`http://localhost:5000/api/document-folders/${folderForm.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(folderForm),
@@ -232,7 +232,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
   const deleteFolder = async (folder) => {
     try {
       setDeleting(true);
-      const response = await fetch(`https://dashboard.nexarrow.eu/api/document-folders/${folder.id}`, { method: "DELETE" });
+      const response = await fetch(`http://localhost:5000/api/document-folders/${folder.id}`, { method: "DELETE" });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Could not delete folder");
       toast.success("Folder deleted");
@@ -249,7 +249,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
   const saveAccess = async () => {
     if (!accessModal) return;
     try {
-      const response = await fetch(`https://dashboard.nexarrow.eu/api/documents/${accessModal.id}`, {
+      const response = await fetch(`http://localhost:5000/api/documents/${accessModal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(accessForm),
@@ -286,7 +286,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
 
       try {
         setUploading(true);
-        const response = await fetch("https://dashboard.nexarrow.eu/api/upload", {
+        const response = await fetch("http://localhost:5000/api/upload", {
           method: "POST",
           body: formData,
         });
@@ -318,7 +318,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
   const pollStatus = async (documentId, fileName) => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`https://dashboard.nexarrow.eu/api/status/${documentId}`);
+        const res = await fetch(`http://localhost:5000/api/status/${documentId}`);
         const data = await res.json();
         setProcessingDocs((prev) => ({
           ...prev,
@@ -385,7 +385,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
 
     try {
       setAddingSheet(true);
-      const res = await fetch("https://dashboard.nexarrow.eu/api/sheets", {
+      const res = await fetch("http://localhost:5000/api/sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sheetId, name, folderId: currentFolderId || null, ...uploadAccessForm }),
@@ -432,7 +432,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
 
     try {
       setAddingDrive(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/drive-documents", {
+      const response = await fetch("http://localhost:5000/api/drive-documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: driveUrl.trim(), name: displayName, folderId: currentFolderId || null, ...uploadAccessForm }),
@@ -467,7 +467,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
   const handleDelete = async (doc) => {
     try {
       setDeleting(true);
-      const response = await fetch(`https://dashboard.nexarrow.eu/api/documents/${doc.id}`, {
+      const response = await fetch(`http://localhost:5000/api/documents/${doc.id}`, {
         method: "DELETE",
       });
       if (response.ok) {
@@ -499,7 +499,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
 
     try {
       setRenaming(true);
-      const response = await fetch(`https://dashboard.nexarrow.eu/api/documents/${renameModal.id}`, {
+      const response = await fetch(`http://localhost:5000/api/documents/${renameModal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nextName }),
@@ -520,7 +520,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
 
   const handleToggleActive = async (doc) => {
     try {
-      const response = await fetch(`https://dashboard.nexarrow.eu/api/documents/${doc.id}/toggle`, {
+      const response = await fetch(`http://localhost:5000/api/documents/${doc.id}/toggle`, {
         method: "PATCH",
       });
       if (response.ok) {
@@ -539,7 +539,7 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
     try {
       setLoadingPreview(true);
       setSheetPreview({ document: doc, sheets: [], overview: null });
-      const response = await fetch(`https://dashboard.nexarrow.eu/api/sheets/${doc.id}/data`);
+      const response = await fetch(`http://localhost:5000/api/sheets/${doc.id}/data`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setSheetPreview(data);

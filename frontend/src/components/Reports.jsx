@@ -3,7 +3,7 @@ import { AlertCircle, Bot, CheckCircle2, FileText, Loader2, Search, X } from "lu
 import toast from "react-hot-toast";
 import { DateRangePicker, SelectMenu } from "./ui";
 
-const API_URL = "https://dashboard.nexarrow.eu/api";
+const API_URL = "http://localhost:5000/api";
 
 export default function Reports({ darkMode }) {
   const [reports, setReports] = useState([]);

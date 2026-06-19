@@ -15,6 +15,7 @@ const crypto = require("crypto");
 const { MongoClient, ObjectId } = require("mongodb");
 
 const { processDocument, processSheetText } = require("./lib/processDocument");
+const { callClaude, retrieveRelevantChunks, routeClaudeModel } = require("./lib/claudeRag");
 const adminMiscExpensesArchitecture = require("./sheetArchitectures/adminMiscExpenses");
 const assetPurchaseRequestsArchitecture = require("./sheetArchitectures/assetPurchaseRequests");
 const directorPaymentRequestsArchitecture = require("./sheetArchitectures/directorPaymentRequests");
@@ -3058,9 +3059,19 @@ app.delete("/reports/:id", requirePrivilege("manage_reports", "Report management
 
 app.post("/chat", async (req, res) => {
   try {
-    const { question, documentIds } = req.body;
+    const question = String(req.body?.question || "").trim();
+    const requestedIds = Array.isArray(req.body?.documentIds)
+      ? req.body.documentIds
+      : req.body?.documentId
+      ? [req.body.documentId]
+      : [];
+    const documentIds = [...new Set(requestedIds.map(String).filter(Boolean))];
+    const modelPreference = req.body?.modelPreference || "auto";
 
-    if (!documentIds || documentIds.length === 0) {
+    if (!question) {
+      return res.status(400).json({ error: "Question is required" });
+    }
+    if (documentIds.length === 0) {
       return res.status(400).json({ error: "No documents selected" });
     }
 
@@ -3074,56 +3085,69 @@ app.post("/chat", async (req, res) => {
     });
     const queryVector = Array.from(queryEmbedding.data);
 
-    let allMatches = [];
+    const accessibleDocuments = documentIds
+      .map((docId) => documents.find((item) => item.id === docId))
+      .filter((doc) => doc && doc.isReady && doc.isActive !== false && isDocumentVisible(doc, req));
+    if (accessibleDocuments.length === 0) {
+      return res.status(404).json({ error: "No ready, accessible documents were found" });
+    }
 
-    for (const docId of documentIds) {
-      const doc = documents.find((item) => item.id === docId);
-      if (!doc || !isDocumentVisible(doc, req)) continue;
-      const vectorPath = path.join(vectorsDir, `${docId}.json`);
+    const routing = routeClaudeModel(question, accessibleDocuments.length, modelPreference);
+    const vectorRecords = [];
+
+    for (const doc of accessibleDocuments) {
+      const vectorPath = path.join(vectorsDir, `${doc.id}.json`);
       if (!fs.existsSync(vectorPath)) continue;
 
       const vectors = JSON.parse(fs.readFileSync(vectorPath, "utf8"));
-
       for (const record of vectors) {
-        const score = cosineSimilarity(queryVector, record.embedding);
-        allMatches.push({ score, text: record.text, docId });
+        if (!Array.isArray(record.embedding) || !record.text) continue;
+        vectorRecords.push({
+          text: record.text,
+          embedding: record.embedding,
+          chunkId: record.id,
+          docId: doc.id,
+          documentName: doc.name,
+        });
       }
     }
 
-    allMatches.sort((a, b) => b.score - a.score);
-    const topMatches = allMatches.slice(0, 5);
-
-    if (topMatches.length === 0) {
+    if (vectorRecords.length === 0) {
       return res.json({
         answer: "No relevant information found in the selected documents.",
+        modelTier: routing.tier,
+        routingReason: routing.reason,
+        sources: [],
       });
     }
 
-    const context = topMatches.map((m) => m.text).join("\n\n---\n\n");
-
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a helpful assistant. Answer the question based only on the provided context. If the answer cannot be found in the context, say so politely.",
-        },
-        {
-          role: "user",
-          content: `Context:\n${context}\n\nQuestion:\n${question}\n\nAnswer based on the context above:`,
-        },
-      ],
+    const matches = retrieveRelevantChunks({
+      question,
+      queryVector,
+      records: vectorRecords,
+      tier: routing.tier,
+    });
+    const claude = await callClaude({
+      question,
+      matches,
+      tier: routing.tier,
+      routingReason: routing.reason,
     });
 
     res.json({
-      answer: completion.choices[0].message.content,
+      ...claude,
+      modelTier: claude.tier,
+      sources: matches.map((match, index) => ({
+        source: index + 1,
+        documentId: match.docId,
+        documentName: match.documentName,
+        chunkId: match.chunkId,
+        score: Number(match.score.toFixed(4)),
+      })),
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message });
   }
 });
 

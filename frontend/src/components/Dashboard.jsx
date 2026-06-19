@@ -54,7 +54,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
     try {
       if (showLoader) setLoadingDocs(true);
       setRefreshingDocs(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/documents");
+      const response = await fetch("http://localhost:5000/api/documents");
       const data = await response.json();
       setDocuments(data.documents || []);
       setFolders(data.folders || []);
@@ -100,16 +100,23 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
     try {
       setLoading(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/chat", {
+      const response = await fetch("http://localhost:5000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMsg, documentIds: selectedDocs }),
       });
       const data = await response.json();
-      setMessages((prev) => [...prev, { role: "ai", text: data.answer }]);
+      if (!response.ok) throw new Error(data.error || "Could not answer the question");
+      setMessages((prev) => [...prev, {
+        role: "ai",
+        text: data.answer,
+        model: data.model,
+        modelTier: data.modelTier,
+        routingReason: data.routingReason,
+      }]);
     } catch (err) {
       console.error(err);
-      toast.error("Something went wrong");
+      toast.error(err.message || "Something went wrong");
       setMessages((prev) => [
         ...prev,
         { role: "ai", text: "Sorry, something went wrong. Please try again." },
@@ -233,6 +240,12 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
                   }}
                 >
                   {msg.text}
+                  {msg.modelTier && (
+                    <div className={`mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.14em] ${darkMode ? "text-white/35" : "text-black/35"}`}>
+                      <span>Claude {msg.modelTier}</span>
+                      {msg.routingReason && <span>· {msg.routingReason}</span>}
+                    </div>
+                  )}
                 </div>
               </div>
             );

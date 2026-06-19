@@ -100,21 +100,32 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
       </nav>
 
       <div className="p-5">
-        <div
-          className={`rounded-3xl newq px-4 py-4 text-center border ${
-            darkMode
-              ? "bg-white/5 border-white/10"
-              : "bg-black/[0.02] border-black/5"
-          }`}
-        >
-          <p className={`text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>
-            Powered by AI
-          </p>
-          <p className={`mt-2 text-sm font-medium ${darkMode ? "text-white/80" : "text-black/70"}`}>
-            Groq & Transformers
-          </p>
-        </div>
-      </div>
+  <div
+    className={`rounded-3xl newq px-4 py-4 text-center  ${
+      darkMode
+        ? "bg-white/5 border-white/10"
+        : "bg-black/[0.02] border-black/5"
+    }`}
+  >
+    <p
+      className={`text-sm  small  ${
+        darkMode ? "text-white/40" : "text-black/35"
+      }`}
+    >
+      Powered by AI
+    </p>
+
+    <div className="mt-3 flex items-center justify-center gap-3">
+      <img
+        src={darkMode ? "/whiteclaudelogo.svg" : "/blackclaudelogo.svg"}
+        alt="Claude"
+        className="h-7 w-auto"
+      />
+
+     
+    </div>
+  </div>
+</div>
       </aside>
     </>
   );

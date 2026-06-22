@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { DocumentIcon } from "./ui";
+import { API_URL } from "./AuthProvider";
 
 const CHAT_STORAGE_KEY = "raga-dashboard-chat-messages";
 
@@ -54,7 +55,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
     try {
       if (showLoader) setLoadingDocs(true);
       setRefreshingDocs(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/documents");
+      const response = await fetch(`${API_URL}/documents`);
       const data = await response.json();
       setDocuments(data.documents || []);
       setFolders(data.folders || []);
@@ -100,7 +101,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
     try {
       setLoading(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/chat", {
+      const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMsg, documentIds: selectedDocs }),

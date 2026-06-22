@@ -14,6 +14,7 @@ import NotificationDrawer from "./NotificationDrawer";
 import SheetDashboard from "./SheetDashboard";
 import ManageRoles from "./ManageRoles";
 import ActivityLog from "./ActivityLog";
+import WhatsApp from "./WhatsApp";
 
 const menuPaths = {
   dashboard: "/dashboard",
@@ -22,6 +23,7 @@ const menuPaths = {
   automations: "/automations",
   reports: "/reports",
   "activity-log": "/activity-log",
+  whatsapp: "/whatsapp",
   "manage-roles": "/manage-roles",
 };
 
@@ -39,9 +41,12 @@ function ProtectedModuleContent({ moduleId }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const allowedMenus = useMemo(() => {
     return Array.from(new Set([
-      ...(user?.isSuperAdmin ? menus : menus.filter((menu) => menu !== "manage-roles")),
+      ...(user?.isSuperAdmin ? [...menus, "whatsapp"] : menus.filter((menu) => !["manage-roles", "whatsapp"].includes(menu))),
     ])).filter((menu) => !["notifications", "settings"].includes(menu));
   }, [menus, user?.isSuperAdmin]);
+
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -59,7 +64,7 @@ function ProtectedModuleContent({ moduleId }) {
     router.replace(menuPaths[fallback] || "/dashboard");
   }, [allowedMenus, loading, moduleId, router, user]);
 
-  if (!user || (!loading && !allowedMenus.includes(moduleId))) {
+  if (!isMounted || !user || (!loading && !allowedMenus.includes(moduleId))) {
     return (
       <div className={`min-h-dvh ${darkMode ? "bg-[#0f1115]" : "bg-[#f6f6f4]"}`} />
     );
@@ -100,6 +105,7 @@ function ProtectedModuleContent({ moduleId }) {
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}
         {moduleId === "activity-log" && <ActivityLog darkMode={darkMode} />}
+        {moduleId === "whatsapp" && user?.isSuperAdmin && <WhatsApp darkMode={darkMode} />}
         {moduleId === "manage-roles" && <ManageRoles darkMode={darkMode} />}
       </div>
       <NotificationDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} darkMode={darkMode} />

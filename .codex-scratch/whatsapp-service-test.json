@@ -1,0 +1,42 @@
+{
+  "contacts": [
+    {
+      "id": "44fa548d-e0bd-47b3-b163-eb9e1f6925ff",
+      "phone": "919876543210",
+      "name": "Test Contact",
+      "profileName": "Test Contact",
+      "source": "manual",
+      "createdAt": "2026-06-19T11:34:04.940Z",
+      "updatedAt": "2026-06-19T11:34:04.954Z"
+    }
+  ],
+  "groups": [
+    {
+      "id": "85828c88-cc49-4207-b589-baaa69127bc7",
+      "name": "Test Group",
+      "members": [
+        "919876543210"
+      ],
+      "createdAt": "2026-06-19T11:34:04.949Z",
+      "updatedAt": "2026-06-19T11:34:04.949Z"
+    }
+  ],
+  "messages": [
+    {
+      "id": "0f71b643-8835-4d4e-86ca-2c9d609ec094",
+      "createdAt": "2026-06-19T11:34:04.954Z",
+      "updatedAt": "2026-06-19T11:34:04.954Z",
+      "status": "received",
+      "wamid": "wamid.test",
+      "direction": "inbound",
+      "from": "919876543210",
+      "to": "123",
+      "type": "text",
+      "text": "Hello",
+      "mediaId": null,
+      "mediaMimeType": null,
+      "mediaFilename": null,
+      "timestamp": "2026-06-19T09:06:40.000Z"
+    }
+  ]
+}

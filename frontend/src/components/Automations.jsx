@@ -17,8 +17,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { ConfirmModal } from "./ui";
-
-const API_URL = "https://dashboard.nexarrow.eu/api";
+import { API_URL } from "./AuthProvider";
 
 const schedules = {
   hourly: { label: "Every hour", cron: "0 * * * *" },

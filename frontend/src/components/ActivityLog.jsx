@@ -7,6 +7,7 @@ import {
   FileText,
   Loader2,
   Lock,
+  MessageCircleMore,
   Settings,
   Shield,
   UserCog,
@@ -78,6 +79,7 @@ export default function ActivityLog({ darkMode }) {
       automation: { label: "Automation", Icon: Bot, color: darkMode ? "text-cyan-300 bg-cyan-500/10" : "text-cyan-700 bg-cyan-50" },
       notification: { label: "Notification", Icon: Bell, color: darkMode ? "text-amber-300 bg-amber-500/10" : "text-amber-700 bg-amber-50" },
       report: { label: "Report", Icon: Shield, color: darkMode ? "text-fuchsia-300 bg-fuchsia-500/10" : "text-fuchsia-700 bg-fuchsia-50" },
+      whatsapp: { label: "WhatsApp", Icon: MessageCircleMore, color: darkMode ? "text-emerald-300 bg-emerald-500/10" : "text-emerald-700 bg-emerald-50" },
       system: { label: "System", Icon: Settings, color: darkMode ? "text-white/60 bg-white/5" : "text-black/55 bg-black/5" },
     };
     return map[category] || map.system;

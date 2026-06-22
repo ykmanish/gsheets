@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Send, Loader2, Plus, X, FileText, Moon, Sun } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import { API_URL } from "./AuthProvider";
 
 export default function ChatBox() {
   const [file, setFile] = useState(null);
@@ -49,7 +50,7 @@ export default function ChatBox() {
     try {
       setUploading(true);
       setStatus("Uploading...");
-      const response = await fetch("https://dashboard.nexarrow.eu/api/upload", {
+      const response = await fetch(`${API_URL}/upload`, {
         method: "POST",
         body: formData,
       });
@@ -75,7 +76,7 @@ export default function ChatBox() {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`https://dashboard.nexarrow.eu/api/status/${documentId}`);
+        const res = await fetch(`${API_URL}/status/${documentId}`);
         const data = await res.json();
         setStatus(data.stage);
         if (data.ready) {
@@ -109,7 +110,7 @@ export default function ChatBox() {
     setQuestion("");
     try {
       setLoading(true);
-      const response = await fetch("https://dashboard.nexarrow.eu/api/chat", {
+      const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMsg, documentId }),

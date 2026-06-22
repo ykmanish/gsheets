@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Eye, Loader2, MailOpen, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { ConfirmModal } from "./ui";
-
-const API_URL = "https://dashboard.nexarrow.eu/api";
+import { API_URL } from "./AuthProvider";
 
 export default function Notifications({ darkMode }) {
   const [notifications, setNotifications] = useState([]);

@@ -2,7 +2,11 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-export const API_URL = "https://dashboard.nexarrow.eu/api";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || (
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:5000/api"
+    : "https://dashboard.nexarrow.eu/api"
+);
 const AUTH_TOKEN_KEY = "vectordocs_auth_token";
 const AUTH_USER_KEY = "vectordocs_auth_user";
 const AUTH_MENUS_KEY = "vectordocs_auth_menus";
@@ -127,4 +131,3 @@ export function useAuth() {
   if (!context) throw new Error("useAuth must be used inside AuthProvider");
   return context;
 }
-

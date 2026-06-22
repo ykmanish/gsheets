@@ -15,6 +15,7 @@ const crypto = require("crypto");
 const { MongoClient, ObjectId } = require("mongodb");
 
 const { processDocument, processSheetText } = require("./lib/processDocument");
+const { createWhatsAppService } = require("./lib/whatsappService");
 const { callClaude, retrieveRelevantChunks, routeClaudeModel } = require("./lib/claudeRag");
 const adminMiscExpensesArchitecture = require("./sheetArchitectures/adminMiscExpenses");
 const assetPurchaseRequestsArchitecture = require("./sheetArchitectures/assetPurchaseRequests");
@@ -23,12 +24,25 @@ const projectPaymentRequestsArchitecture = require("./sheetArchitectures/project
 const kalhaarPendingTrackerArchitecture = require("./sheetArchitectures/kalhaarPendingTracker");
 const asteriaClientDlArchitecture = require("./sheetArchitectures/asteriaClientDl");
 const iskonBhavnagarClientDlArchitecture = require("./sheetArchitectures/iskonBhavnagarClientDl");
+const kalharClientDlArchitecture = require("./sheetArchitectures/kalharClientDl");
+const aurikaClientDlArchitecture = require("./sheetArchitectures/aurikaClientDl");
+const devsharnamClientDlArchitecture = require("./sheetArchitectures/devsharnamClientDl");
+const empereonClientDlArchitecture = require("./sheetArchitectures/empereonClientDl");
+const harmonyClientDlArchitecture = require("./sheetArchitectures/harmonyClientDl");
+const imperialClientDlArchitecture = require("./sheetArchitectures/imperialClientDl");
+const sheetalClientDlArchitecture = require("./sheetArchitectures/sheetalClientDl");
+const silverwhiteClientDlArchitecture = require("./sheetArchitectures/silverwhiteClientDl");
 
 const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
 dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buffer) => {
+    req.rawBody = Buffer.from(buffer);
+  },
+}));
 app.use((req, res, next) => {
   if (req.url.startsWith("/api/")) req.url = req.url.slice(4);
   next();
@@ -48,6 +62,8 @@ const MENU_ITEMS = [
   { id: "activity-log", label: "Activity Log" },
   { id: "manage-roles", label: "Manage Roles" },
 ];
+const SUPER_ADMIN_MENU_ITEMS = [{ id: "whatsapp", label: "WhatsApp" }];
+const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];
 const PRIVILEGE_ITEMS = [
   { id: "upload_documents", label: "Upload documents" },
   { id: "link_sheets", label: "Link Google Sheets" },
@@ -131,7 +147,7 @@ async function getRole(roleId) {
 async function seedSuperAdmin() {
   const db = authDb;
   const now = new Date();
-  const menus = MENU_ITEMS.map((item) => item.id);
+  const menus = ALL_MENU_ITEMS.map((item) => item.id);
   const privileges = PRIVILEGE_ITEMS.map((item) => item.id);
   const roleResult = await db.collection("roles").findOneAndUpdate(
     { nameLower: "super admin" },
@@ -313,12 +329,117 @@ app.post("/auth/logout", requireAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+const whatsappService = createWhatsAppService({
+  dataFile: path.join(__dirname, "data", "whatsapp.json"),
+  accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
+  phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+  businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
+  appSecret: process.env.WHATSAPP_APP_SECRET,
+  verifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+  graphVersion: process.env.META_GRAPH_API_VERSION || "v23.0",
+});
+
+app.get("/webhooks/whatsapp", (req, res) => {
+  const challenge = whatsappService.verifyWebhook(req.query);
+  if (challenge === null) return res.status(403).send("Webhook verification failed");
+  return res.status(200).send(challenge);
+});
+
+app.post("/webhooks/whatsapp", (req, res) => {
+  try {
+    whatsappService.handleWebhook(req.body, req.rawBody, req.headers["x-hub-signature-256"]);
+    res.sendStatus(200);
+  } catch (error) {
+    console.error("WhatsApp webhook error:", error.message);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
 app.use(async (req, res, next) => {
   if (req.path.startsWith("/auth/")) return next();
   return requireAuth(req, res, next);
 });
 
 app.use(activityLogger);
+
+app.get("/whatsapp/config", requireSuperAdmin, (req, res) => {
+  res.json(whatsappService.config());
+});
+
+app.get("/whatsapp/health", requireSuperAdmin, async (req, res) => {
+  try {
+    res.json(await whatsappService.health());
+  } catch (error) {
+    res.status(error.status || 502).json({ error: error.message, code: error.metaCode || null });
+  }
+});
+
+app.get("/whatsapp/templates", requireSuperAdmin, async (req, res) => {
+  try {
+    res.json({ templates: await whatsappService.templates() });
+  } catch (error) {
+    res.status(error.status || 502).json({ error: error.message });
+  }
+});
+
+app.get("/whatsapp/conversations", requireSuperAdmin, (req, res) => {
+  res.json({ conversations: whatsappService.listConversations(req.query.search) });
+});
+
+app.get("/whatsapp/conversations/:phone/messages", requireSuperAdmin, (req, res) => {
+  res.json({ messages: whatsappService.listMessages(req.params.phone) });
+});
+
+app.post("/whatsapp/messages", requireSuperAdmin, async (req, res) => {
+  try {
+    const message = await whatsappService.sendMessage(req.body || {}, req.authUser);
+    res.json({ success: true, message });
+  } catch (error) {
+    res.status(error.status || 400).json({ error: error.message, code: error.metaCode || null });
+  }
+});
+
+app.get("/whatsapp/contacts", requireSuperAdmin, (req, res) => {
+  res.json({ contacts: whatsappService.listContacts(req.query.search) });
+});
+
+app.post("/whatsapp/contacts", requireSuperAdmin, (req, res) => {
+  try {
+    res.json({ success: true, contact: whatsappService.saveContact(req.body || {}) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/whatsapp/contacts/:id", requireSuperAdmin, (req, res) => {
+  if (!whatsappService.deleteContact(req.params.id)) return res.status(404).json({ error: "Contact not found" });
+  res.json({ success: true });
+});
+
+app.get("/whatsapp/groups", requireSuperAdmin, (req, res) => {
+  res.json({ groups: whatsappService.listGroups() });
+});
+
+app.post("/whatsapp/groups", requireSuperAdmin, (req, res) => {
+  try {
+    res.json({ success: true, group: whatsappService.saveGroup(req.body || {}) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/whatsapp/groups/:id", requireSuperAdmin, (req, res) => {
+  if (!whatsappService.deleteGroup(req.params.id)) return res.status(404).json({ error: "Recipient group not found" });
+  res.json({ success: true });
+});
+
+app.post("/whatsapp/groups/:id/send", requireSuperAdmin, async (req, res) => {
+  try {
+    res.json({ success: true, ...(await whatsappService.sendGroup(req.params.id, req.body || {}, req.authUser)) });
+  } catch (error) {
+    res.status(error.status || 400).json({ error: error.message });
+  }
+});
 
 app.get("/admin/menu-items", requireSuperAdmin, (req, res) => {
   res.json({ menuItems: MENU_ITEMS, privilegeItems: PRIVILEGE_ITEMS });
@@ -378,7 +499,7 @@ app.patch("/admin/roles/:id", requireSuperAdmin, async (req, res) => {
     const allowedPrivileges = privileges.filter((privilege) => PRIVILEGE_ITEMS.some((item) => item.id === privilege));
     const update = {
       description: description || "",
-      menus: role.isSystem ? MENU_ITEMS.map((item) => item.id) : allowedMenus,
+      menus: role.isSystem ? ALL_MENU_ITEMS.map((item) => item.id) : allowedMenus,
       privileges: role.isSystem ? PRIVILEGE_ITEMS.map((item) => item.id) : allowedPrivileges,
       updatedAt: new Date(),
     };
@@ -643,6 +764,7 @@ function getClientIp(req) {
 
 function getActivityCategory(action = "", pathValue = "") {
   const text = `${action} ${pathValue}`.toLowerCase();
+  if (text.includes("whatsapp")) return "whatsapp";
   if (text.includes("document") || text.includes("sheet") || pathValue.startsWith("/upload") || pathValue.startsWith("/drive-documents")) return "document";
   if (text.includes("automation")) return "automation";
   if (text.includes("notification")) return "notification";
@@ -795,6 +917,12 @@ function describeActivity(req) {
   const pathValue = req.path;
   const pathId = pathValue.split("/").filter(Boolean).at(-1);
   if (pathValue === "/chat") return null;
+  if (method === "POST" && pathValue === "/whatsapp/messages") return { action: "Sent WhatsApp message", target: req.body?.to || "Recipient" };
+  if (method === "POST" && /^\/whatsapp\/groups\/[^/]+\/send$/.test(pathValue)) return { action: "Sent WhatsApp broadcast", target: pathValue.split("/")[3] };
+  if (method === "POST" && pathValue === "/whatsapp/contacts") return { action: "Saved WhatsApp contact", target: req.body?.name || req.body?.phone || "Contact" };
+  if (method === "POST" && pathValue === "/whatsapp/groups") return { action: "Created WhatsApp recipient group", target: req.body?.name || "Recipient group" };
+  if (method === "DELETE" && pathValue.startsWith("/whatsapp/contacts/")) return { action: "Deleted WhatsApp contact", target: pathId };
+  if (method === "DELETE" && pathValue.startsWith("/whatsapp/groups/")) return { action: "Deleted WhatsApp recipient group", target: pathId };
   if (method === "POST" && pathValue === "/document-folders") return { action: "Created folder", target: req.body?.name || "Folder" };
   if (method === "PATCH" && pathValue.startsWith("/document-folders/")) return { action: "Updated folder", target: req.body?.name || pathId };
   if (method === "DELETE" && pathValue.startsWith("/document-folders/")) return { action: "Deleted folder", target: pathId };
@@ -1193,7 +1321,8 @@ async function fetchRawSheetValues(sheetId) {
     const result = [];
     for (const sheet of meta.data.sheets || []) {
       const name = sheet.properties.title;
-      const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: name });
+      const safeRange = `'${name.replace(/'/g, "''")}'`;
+      const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: safeRange });
       result.push({ name, values: response.data.values || [] });
     }
     return result;
@@ -1245,6 +1374,22 @@ async function fetchSheetDataset(sheetId) {
       ? kalhaarPendingTrackerArchitecture.prepareSheet(title, values)
       : sheetId === asteriaClientDlArchitecture.SHEET_ID
       ? asteriaClientDlArchitecture.prepareSheet(title, values)
+      : sheetId === kalharClientDlArchitecture.SHEET_ID
+      ? kalharClientDlArchitecture.prepareSheet(title, values)
+      : sheetId === aurikaClientDlArchitecture.SHEET_ID
+      ? aurikaClientDlArchitecture.prepareSheet(title, values)
+      : sheetId === devsharnamClientDlArchitecture.SHEET_ID
+      ? devsharnamClientDlArchitecture.prepareSheet(title, values)
+      : sheetId === harmonyClientDlArchitecture.SHEET_ID
+      ? harmonyClientDlArchitecture.prepareSheet(title, values)
+      : sheetId === imperialClientDlArchitecture.SHEET_ID
+      ? imperialClientDlArchitecture.prepareSheet(title, values)
+      : sheetId === sheetalClientDlArchitecture.SHEET_ID
+      ? sheetalClientDlArchitecture.prepareSheet(title, values)
+      : sheetId === empereonClientDlArchitecture.SHEET_ID
+      ? empereonClientDlArchitecture.prepareSheet(title, values)
+      : sheetId === silverwhiteClientDlArchitecture.SHEET_ID
+      ? silverwhiteClientDlArchitecture.prepareSheet(title, values)
       : sheetId === iskonBhavnagarClientDlArchitecture.SHEET_ID
       ? iskonBhavnagarClientDlArchitecture.prepareSheet(title, values)
       : buildGenericPreparedSheet(values);
@@ -1874,6 +2019,14 @@ const sheetArchitectureProfiles = [
   kalhaarPendingTrackerArchitecture,
   asteriaClientDlArchitecture,
   iskonBhavnagarClientDlArchitecture,
+  kalharClientDlArchitecture,
+  aurikaClientDlArchitecture,
+  devsharnamClientDlArchitecture,
+  empereonClientDlArchitecture,
+  harmonyClientDlArchitecture,
+  imperialClientDlArchitecture,
+  sheetalClientDlArchitecture,
+  silverwhiteClientDlArchitecture,
   adminMiscExpensesArchitecture,
   assetPurchaseRequestsArchitecture,
   directorPaymentRequestsArchitecture,
@@ -1883,6 +2036,14 @@ const sheetArchitectureProfiles = [
 function getSheetProfileDisplayName(sheetId) {
   if (sheetId === kalhaarPendingTrackerArchitecture.SHEET_ID) return "Kalhaar Consolidated Pending Tracker";
   if (sheetId === asteriaClientDlArchitecture.SHEET_ID) return "Asteria Client DL Dashboard";
+  if (sheetId === kalharClientDlArchitecture.SHEET_ID) return "Kalhar Client DL Dashboard";
+  if (sheetId === aurikaClientDlArchitecture.SHEET_ID) return "Aurika Client DL Dashboard";
+  if (sheetId === devsharnamClientDlArchitecture.SHEET_ID) return "Devsharnam Client DL Dashboard";
+  if (sheetId === empereonClientDlArchitecture.SHEET_ID) return "The Empereon Client DL Dashboard";
+  if (sheetId === harmonyClientDlArchitecture.SHEET_ID) return "Harmony Client DL Dashboard";
+  if (sheetId === imperialClientDlArchitecture.SHEET_ID) return "Imperial Park Client DL Dashboard";
+  if (sheetId === sheetalClientDlArchitecture.SHEET_ID) return "Sheetal Gharana Client DL Dashboard";
+  if (sheetId === silverwhiteClientDlArchitecture.SHEET_ID) return "Silver White Client DL Dashboard";
   if (sheetId === iskonBhavnagarClientDlArchitecture.SHEET_ID) return "Iskon Bhavnagar Client DL";
   if (sheetId === adminMiscExpensesArchitecture.SHEET_ID) return "Admin & Misc Expense Requests";
   if (sheetId === assetPurchaseRequestsArchitecture.SHEET_ID) return "Asset Purchase Requests";

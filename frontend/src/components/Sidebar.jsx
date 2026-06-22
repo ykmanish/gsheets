@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, X } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X } from "lucide-react";
 import Image from "next/image";
 
 export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen }) {
@@ -9,6 +9,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "automations", label: "Automation", icon: Workflow },
     { id: "reports", label: "Reports", icon: ChartNoAxesCombined },
     { id: "activity-log", label: "Activity Log", icon: Activity },
+    { id: "whatsapp", label: "WhatsApp", icon: MessageCircleMore },
     { id: "manage-roles", label: "Manage Roles", icon: ShieldCheck },
   ];
   const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id));

@@ -17,6 +17,7 @@ const { MongoClient, ObjectId } = require("mongodb");
 const { processDocument, processSheetText } = require("./lib/processDocument");
 const { createWhatsAppService } = require("./lib/whatsappService");
 const { callClaude, retrieveRelevantChunks, routeClaudeModel } = require("./lib/claudeRag");
+const { registerFormsModule } = require("./lib/formsModule");
 const adminMiscExpensesArchitecture = require("./sheetArchitectures/adminMiscExpenses");
 const assetPurchaseRequestsArchitecture = require("./sheetArchitectures/assetPurchaseRequests");
 const directorPaymentRequestsArchitecture = require("./sheetArchitectures/directorPaymentRequests");
@@ -28,6 +29,7 @@ const kalharClientDlArchitecture = require("./sheetArchitectures/kalharClientDl"
 const aurikaClientDlArchitecture = require("./sheetArchitectures/aurikaClientDl");
 const devsharnamClientDlArchitecture = require("./sheetArchitectures/devsharnamClientDl");
 const empereonClientDlArchitecture = require("./sheetArchitectures/empereonClientDl");
+const kalhaarPendingWorkDlArchitecture = require("./sheetArchitectures/kalhaarPendingWorkDl");
 const harmonyClientDlArchitecture = require("./sheetArchitectures/harmonyClientDl");
 const imperialClientDlArchitecture = require("./sheetArchitectures/imperialClientDl");
 const sheetalClientDlArchitecture = require("./sheetArchitectures/sheetalClientDl");
@@ -56,6 +58,7 @@ const SUPER_ADMIN_PASSWORD = "Admin@9579";
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "documents", label: "Documents" },
+  { id: "forms", label: "Forms" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
@@ -361,6 +364,13 @@ app.use(async (req, res, next) => {
 });
 
 app.use(activityLogger);
+
+registerFormsModule(app, {
+  connectDb: connectAuthDb,
+  google,
+  getGoogleAuth,
+  requireSuperAdmin,
+});
 
 app.get("/whatsapp/config", requireSuperAdmin, (req, res) => {
   res.json(whatsappService.config());
@@ -1002,7 +1012,7 @@ async function getGoogleAuth() {
   return new google.auth.GoogleAuth({
     credentials,
     scopes: [
-      "https://www.googleapis.com/auth/spreadsheets.readonly",
+      "https://www.googleapis.com/auth/spreadsheets",
       "https://www.googleapis.com/auth/drive.readonly",
     ],
   });
@@ -1367,10 +1377,30 @@ async function fetchSheetDataset(sheetId) {
   const sheets = await fetchRawSheetValues(sheetId);
   const result = [];
 
+  // For kalhaarPendingWorkDl, we need cell styles (colors) for stage columns
+  let kalhaarRawSheets = null;
+  if (sheetId === kalhaarPendingWorkDlArchitecture.SHEET_ID) {
+    try {
+      const auth = await getGoogleAuth();
+      const drive = google.drive({ version: "v3", auth });
+      const downloadResponse = await drive.files.get(
+        { fileId: sheetId, alt: "media" },
+        { responseType: "arraybuffer" }
+      );
+      const bytes = Buffer.from(downloadResponse.data);
+      const workbook = XLSX.read(bytes, { type: "buffer", cellStyles: true });
+      kalhaarRawSheets = workbook.Sheets;
+    } catch (err) {
+      console.warn("Could not fetch cell styles for Kalhaar workbook:", err.message);
+    }
+  }
+
   for (const sheet of sheets) {
     const title = sheet.name;
     const values = sheet.values || [];
-    const prepared = sheetId === kalhaarPendingTrackerArchitecture.SHEET_ID
+    const prepared = sheetId === kalhaarPendingWorkDlArchitecture.SHEET_ID
+      ? kalhaarPendingWorkDlArchitecture.prepareSheet(title, values, kalhaarRawSheets ? kalhaarRawSheets[title] : null)
+      : sheetId === kalhaarPendingTrackerArchitecture.SHEET_ID
       ? kalhaarPendingTrackerArchitecture.prepareSheet(title, values)
       : sheetId === asteriaClientDlArchitecture.SHEET_ID
       ? asteriaClientDlArchitecture.prepareSheet(title, values)
@@ -2016,6 +2046,7 @@ function buildDashboardHints(tabs) {
 
 const SHEET_ARCHITECTURE_VERSION = 10;
 const sheetArchitectureProfiles = [
+  kalhaarPendingWorkDlArchitecture,
   kalhaarPendingTrackerArchitecture,
   asteriaClientDlArchitecture,
   iskonBhavnagarClientDlArchitecture,
@@ -2034,6 +2065,7 @@ const sheetArchitectureProfiles = [
 ];
 
 function getSheetProfileDisplayName(sheetId) {
+  if (sheetId === kalhaarPendingWorkDlArchitecture.SHEET_ID) return "Kalhaar Pending Work Tracker";
   if (sheetId === kalhaarPendingTrackerArchitecture.SHEET_ID) return "Kalhaar Consolidated Pending Tracker";
   if (sheetId === asteriaClientDlArchitecture.SHEET_ID) return "Asteria Client DL Dashboard";
   if (sheetId === kalharClientDlArchitecture.SHEET_ID) return "Kalhar Client DL Dashboard";

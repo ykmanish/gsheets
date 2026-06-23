@@ -31,6 +31,7 @@ import ImperialClientDashboard from "./sheetViews/ImperialClientDashboard";
 import SheetalClientDashboard from "./sheetViews/SheetalClientDashboard";
 import SilverWhiteClientDashboard from "./sheetViews/SilverWhiteClientDashboard";
 import IskonBhavnagarDashboard from "./sheetViews/IskonBhavnagarDashboard";
+import KalhaarPendingWorkDashboard from "./sheetViews/KalhaarPendingWorkDashboard";
 import { isWithinDateRange } from "./sheetViews/amountUtils";
 import { API_URL } from "./AuthProvider";
 const CHART_COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899", "#84cc16"];
@@ -231,7 +232,7 @@ export default function SheetDashboard({ darkMode }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setSheetData(data);
-      setActiveTab(["asteria-client-dl", "iskon-bhavnagar-client-dl", "kalhar-client-dl", "aurika-client-dl", "devsharnam-client-dl", "empereon-client-dl", "harmony-client-dl", "imperial-client-dl", "sheetal-client-dl", "silverwhite-client-dl"].includes(data.architecture?.kind) ? "__overview" : data.sheets?.[0]?.name || "");
+      setActiveTab(["asteria-client-dl", "iskon-bhavnagar-client-dl", "kalhar-client-dl", "aurika-client-dl", "devsharnam-client-dl", "empereon-client-dl", "harmony-client-dl", "imperial-client-dl", "sheetal-client-dl", "silverwhite-client-dl", "kalhaarPendingWorkDl"].includes(data.architecture?.kind) ? "__overview" : data.sheets?.[0]?.name || "");
       setDashboardOpen(true);
     } catch (error) {
       toast.error(error.message || "Could not load sheet dashboard");
@@ -483,7 +484,7 @@ export default function SheetDashboard({ darkMode }) {
                     placeholder="Choose sheet dates"
                   />
                 </div>}
-                {!['asteria-client-dl', 'iskon-bhavnagar-client-dl', 'kalhar-client-dl', 'aurika-client-dl', 'devsharnam-client-dl', 'empereon-client-dl', 'harmony-client-dl', 'imperial-client-dl', 'sheetal-client-dl', 'silverwhite-client-dl'].includes(sheetData?.architecture?.kind) && (dateFilters.from || dateFilters.to) && (
+                {!['asteria-client-dl', 'iskon-bhavnagar-client-dl', 'kalhar-client-dl', 'aurika-client-dl', 'devsharnam-client-dl', 'empereon-client-dl', 'harmony-client-dl', 'imperial-client-dl', 'sheetal-client-dl', 'silverwhite-client-dl', 'kalhaarPendingWorkDl'].includes(sheetData?.architecture?.kind) && (dateFilters.from || dateFilters.to) && (
                   <button
                     onClick={() => setDateFilters({ from: "", to: "" })}
                     className={`rounded-full px-3 py-2 text-xs ${darkMode ? "bg-white/5 text-white/65 hover:bg-white/10" : "bg-black/[0.04] text-black/55 hover:bg-black/[0.07]"}`}
@@ -497,7 +498,7 @@ export default function SheetDashboard({ darkMode }) {
                   onChange={setActiveTab}
                   className="w-full min-w-[220px] sm:w-[300px]"
                   options={[
-                    ...(["asteria-client-dl", "iskon-bhavnagar-client-dl", "kalhar-client-dl", "aurika-client-dl", "devsharnam-client-dl", "empereon-client-dl", "harmony-client-dl", "imperial-client-dl", "sheetal-client-dl", "silverwhite-client-dl"].includes(sheetData?.architecture?.kind) ? [{ value: "__overview", label: "Executive overview" }] : []),
+                    ...(["asteria-client-dl", "iskon-bhavnagar-client-dl", "kalhar-client-dl", "aurika-client-dl", "devsharnam-client-dl", "empereon-client-dl", "harmony-client-dl", "imperial-client-dl", "sheetal-client-dl", "silverwhite-client-dl", "kalhaarPendingWorkDl"].includes(sheetData?.architecture?.kind) ? [{ value: "__overview", label: "Executive overview" }] : []),
                     ...(sheetData?.sheets || []).map((sheet) => ({ value: sheet.name, label: sheet.name })),
                   ]}
                 />
@@ -593,6 +594,15 @@ export default function SheetDashboard({ darkMode }) {
                 darkMode={darkMode}
                 currentSheet={currentSheet}
                 sheets={sheetData.sheets || []}
+                overview={activeTab === "__overview"}
+                searchQuery={searchQuery}
+              />
+            ) : sheetData?.architecture?.kind === "kalhaarPendingWorkDl" ? (
+              <KalhaarPendingWorkDashboard
+                darkMode={darkMode}
+                currentSheet={currentSheet}
+                sheets={sheetData.sheets || []}
+                sheetData={sheetData}
                 overview={activeTab === "__overview"}
                 searchQuery={searchQuery}
               />

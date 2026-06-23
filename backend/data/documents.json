@@ -31026,5 +31026,5166 @@
       "displayName": "The Empereon Client Design & Cost Dashboard"
     },
     "architectureSavedAt": "2026-06-20T13:37:50.728Z"
+  },
+  {
+    "id": "1782133193233",
+    "name": "Kalhaar Pending Work Tracker",
+    "type": "sheet",
+    "ownerId": "6a30f59093d1b8cdb26dce38",
+    "ownerName": "Super Admin",
+    "folderId": null,
+    "visibility": "private",
+    "allowedUserIds": [],
+    "accessGrants": [],
+    "sheetId": "1YcFUaOMnWk4HpYEF3VNIvruwR5f0PBNJ",
+    "uploadedAt": "2026-06-22T12:59:53.233Z",
+    "isActive": true,
+    "isReady": true,
+    "chunks": 80,
+    "status": "ready",
+    "lastModifiedTime": null,
+    "lastSyncedAt": "2026-06-22T13:03:13.239Z",
+    "error": null,
+    "sheetArchitecture": {
+      "version": 10,
+      "documentId": "1782133193233",
+      "sheetId": "1YcFUaOMnWk4HpYEF3VNIvruwR5f0PBNJ",
+      "savedAt": "2026-06-22T13:03:15.671Z",
+      "sourceModifiedTime": null,
+      "summary": {
+        "tabCount": 17,
+        "totalRows": 636,
+        "totalColumns": 221,
+        "typeCounts": {
+          "number": 36,
+          "category": 50,
+          "text": 17,
+          "empty": 118
+        },
+        "suggestedViews": [
+          "portfolio-overview",
+          "trade-breakdown",
+          "agency-summary"
+        ],
+        "purpose": "Track all pending balance construction activities at the Kalhaar project site across trades like Carpenter, POP, Paint, Stone, Tiles, Plumbing, Electrical, Polish, Window, Glass, and Furniture, with agency assignments and workflow stage tracking.",
+        "recordName": "Pending work item"
+      },
+      "tabs": [
+        {
+          "name": "Carpenter",
+          "rowCount": 45,
+          "columnCount": 17,
+          "headers": [
+            "Sr. No,",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr. No,",
+              "type": "number",
+              "role": "metric",
+              "filled": 45,
+              "blank": 0,
+              "unique": 45,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 45,
+                "total": 1035,
+                "average": 23
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 44,
+              "blank": 1,
+              "unique": 3,
+              "examples": [
+                "GF",
+                "FF",
+                "SF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 24
+                },
+                {
+                  "value": "FF",
+                  "count": 11
+                },
+                {
+                  "value": "SF",
+                  "count": 9
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 44,
+              "blank": 1,
+              "unique": 21,
+              "examples": [
+                "Passage area",
+                "Living Rm",
+                "Entrance"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 44,
+              "blank": 1,
+              "unique": 29,
+              "examples": [
+                "Partition",
+                "TV unit",
+                "Main Door & Jali Door"
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 44,
+              "blank": 1,
+              "unique": 1,
+              "examples": [
+                "Vinit"
+              ],
+              "topValues": [
+                {
+                  "value": "Vinit",
+                  "count": 44
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 44,
+              "blank": 1,
+              "unique": 2,
+              "examples": [
+                "Jayesh Panchal",
+                "Mukesh"
+              ],
+              "topValues": [
+                {
+                  "value": "Jayesh Panchal",
+                  "count": 36
+                },
+                {
+                  "value": "Mukesh",
+                  "count": 8
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "category",
+              "role": "segment",
+              "filled": 19,
+              "blank": 26,
+              "unique": 8,
+              "examples": [
+                "Veneer Selection Pending",
+                "Moulding & Veneer Pending",
+                "Outer finish and Handle lock Pending"
+              ],
+              "topValues": [
+                {
+                  "value": "Outer finish and Handle lock Pending",
+                  "count": 11
+                },
+                {
+                  "value": "Lock body and handle",
+                  "count": 2
+                },
+                {
+                  "value": "Veneer Selection Pending",
+                  "count": 1
+                },
+                {
+                  "value": "Moulding & Veneer Pending",
+                  "count": 1
+                },
+                {
+                  "value": "Outer finish Materials",
+                  "count": 1
+                },
+                {
+                  "value": "Outer  Materials",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Start Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "End Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 45,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "POP",
+          "rowCount": 25,
+          "columnCount": 17,
+          "headers": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 25,
+              "blank": 0,
+              "unique": 4,
+              "examples": [
+                "GF",
+                "FF",
+                "SF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 10
+                },
+                {
+                  "value": "FF",
+                  "count": 8
+                },
+                {
+                  "value": "SF",
+                  "count": 6
+                },
+                {
+                  "value": "Full area",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 24,
+              "blank": 1,
+              "unique": 18,
+              "examples": [
+                "Living and Dinning",
+                "Passage area",
+                "Living Rm"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 25,
+              "blank": 0,
+              "unique": 20,
+              "examples": [
+                "Perdu light sheet Installation",
+                "Ceiling Partition Touch up",
+                "A/C Grill Cutting"
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 25,
+              "blank": 0,
+              "unique": 1,
+              "examples": [
+                "Vinit"
+              ],
+              "topValues": [
+                {
+                  "value": "Vinit",
+                  "count": 25
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 25,
+              "blank": 0,
+              "unique": 1,
+              "examples": [
+                "Dinesh POP"
+              ],
+              "topValues": [
+                {
+                  "value": "Dinesh POP",
+                  "count": 25
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "category",
+              "role": "segment",
+              "filled": 4,
+              "blank": 21,
+              "unique": 4,
+              "examples": [
+                "W/c and Shower area Balance",
+                "In-between ceiling and marble",
+                "Wardrop"
+              ],
+              "topValues": [
+                {
+                  "value": "W/c and Shower area Balance",
+                  "count": 1
+                },
+                {
+                  "value": "In-between ceiling and marble",
+                  "count": 1
+                },
+                {
+                  "value": "Wardrop",
+                  "count": 1
+                },
+                {
+                  "value": "Extra wiring hole packing",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Start Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "End Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 25,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Sheet1",
+          "rowCount": 0,
+          "columnCount": 0,
+          "headers": [],
+          "columns": [],
+          "primaryLabel": null,
+          "keyMetrics": [],
+          "workflowColumns": [],
+          "segmentColumns": []
+        },
+        {
+          "name": "Sheet1 (2)",
+          "rowCount": 0,
+          "columnCount": 0,
+          "headers": [],
+          "columns": [],
+          "primaryLabel": null,
+          "keyMetrics": [],
+          "workflowColumns": [],
+          "segmentColumns": []
+        },
+        {
+          "name": "Sheet1 (3)",
+          "rowCount": 0,
+          "columnCount": 0,
+          "headers": [],
+          "columns": [],
+          "primaryLabel": null,
+          "keyMetrics": [],
+          "workflowColumns": [],
+          "segmentColumns": []
+        },
+        {
+          "name": "Paint",
+          "rowCount": 60,
+          "columnCount": 17,
+          "headers": [
+            "Sr.No.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.No.",
+              "type": "number",
+              "role": "metric",
+              "filled": 60,
+              "blank": 0,
+              "unique": 60,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 60,
+                "total": 1830,
+                "average": 30.5
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "text",
+              "role": "detail",
+              "filled": 48,
+              "blank": 12,
+              "unique": 14,
+              "examples": [
+                "Terrace",
+                "FF",
+                "SF"
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 44,
+              "blank": 16,
+              "unique": 29,
+              "examples": [
+                "Left Side",
+                "Multi A Rm",
+                "DBR"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "category",
+              "role": "segment",
+              "filled": 48,
+              "blank": 12,
+              "unique": 11,
+              "examples": [
+                "Texture",
+                "Touch up and texture",
+                "Veneer Polish"
+              ],
+              "topValues": [
+                {
+                  "value": "Wall & Ceiling paint",
+                  "count": 19
+                },
+                {
+                  "value": "Texture",
+                  "count": 10
+                },
+                {
+                  "value": "Texture & Paint",
+                  "count": 7
+                },
+                {
+                  "value": "Polish work",
+                  "count": 4
+                },
+                {
+                  "value": "Veneer Polish",
+                  "count": 2
+                },
+                {
+                  "value": "Touch up and texture",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 48,
+              "blank": 12,
+              "unique": 1,
+              "examples": [
+                "Vinit"
+              ],
+              "topValues": [
+                {
+                  "value": "Vinit",
+                  "count": 48
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 48,
+              "blank": 12,
+              "unique": 1,
+              "examples": [
+                "Kalpesh Shukla"
+              ],
+              "topValues": [
+                {
+                  "value": "Kalpesh Shukla",
+                  "count": 48
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "End Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Stone",
+          "rowCount": 60,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 60,
+              "blank": 0,
+              "unique": 60,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 60,
+                "total": 1830,
+                "average": 30.5
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 15,
+              "blank": 45,
+              "unique": 3,
+              "examples": [
+                "GF",
+                "FF",
+                "SF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 10
+                },
+                {
+                  "value": "FF",
+                  "count": 4
+                },
+                {
+                  "value": "SF",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 15,
+              "blank": 45,
+              "unique": 14,
+              "examples": [
+                "Parking Ramp",
+                "Verandah",
+                "Entrance door"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 15,
+              "blank": 45,
+              "unique": 12,
+              "examples": [
+                "Flooring",
+                "Skirting",
+                "Umaro"
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 15,
+              "blank": 45,
+              "unique": 1,
+              "examples": [
+                "Nikhilbhai"
+              ],
+              "topValues": [
+                {
+                  "value": "Nikhilbhai",
+                  "count": 15
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 15,
+              "blank": 45,
+              "unique": 1,
+              "examples": [
+                "dinesh"
+              ],
+              "topValues": [
+                {
+                  "value": "dinesh",
+                  "count": 15
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "End Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Tiles",
+          "rowCount": 60,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 60,
+              "blank": 0,
+              "unique": 60,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 60,
+                "total": 1830,
+                "average": 30.5
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 53,
+              "unique": 3,
+              "examples": [
+                "GF",
+                "SF",
+                "All Area"
+              ],
+              "topValues": [
+                {
+                  "value": "SF",
+                  "count": 5
+                },
+                {
+                  "value": "GF",
+                  "count": 1
+                },
+                {
+                  "value": "All Area",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "category",
+              "role": "segment",
+              "filled": 6,
+              "blank": 54,
+              "unique": 6,
+              "examples": [
+                "Dbalc",
+                "Pantry",
+                "Left Terrace"
+              ],
+              "topValues": [
+                {
+                  "value": "Dbalc",
+                  "count": 1
+                },
+                {
+                  "value": "Pantry",
+                  "count": 1
+                },
+                {
+                  "value": "Left Terrace",
+                  "count": 1
+                },
+                {
+                  "value": "Right Terrace",
+                  "count": 1
+                },
+                {
+                  "value": "Office",
+                  "count": 1
+                },
+                {
+                  "value": "Office Terrace",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 53,
+              "unique": 6,
+              "examples": [
+                "Skirting",
+                "Tiles",
+                "Tiles & skirting"
+              ],
+              "topValues": [
+                {
+                  "value": "Skirting",
+                  "count": 2
+                },
+                {
+                  "value": "Tiles",
+                  "count": 1
+                },
+                {
+                  "value": "Tiles & skirting",
+                  "count": 1
+                },
+                {
+                  "value": "broken Tiles Replace",
+                  "count": 1
+                },
+                {
+                  "value": "Tile",
+                  "count": 1
+                },
+                {
+                  "value": "Epoxy Grouting",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 53,
+              "unique": 1,
+              "examples": [
+                "Nikhilbhai"
+              ],
+              "topValues": [
+                {
+                  "value": "Nikhilbhai",
+                  "count": 7
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 53,
+              "unique": 1,
+              "examples": [
+                "Brijesh"
+              ],
+              "topValues": [
+                {
+                  "value": "Brijesh",
+                  "count": 7
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "category",
+              "role": "segment",
+              "filled": 1,
+              "blank": 59,
+              "unique": 1,
+              "examples": [
+                "Tiles Refitting"
+              ],
+              "topValues": [
+                {
+                  "value": "Tiles Refitting",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Start Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "End Date",
+              "type": "empty",
+              "role": "timeline",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "China Furniture",
+          "rowCount": 62,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 62,
+              "blank": 0,
+              "unique": 62,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 62,
+                "total": 1953,
+                "average": 31.5
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 28,
+              "blank": 34,
+              "unique": 3,
+              "examples": [
+                "GF",
+                "FF",
+                "SF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 15
+                },
+                {
+                  "value": "FF",
+                  "count": 7
+                },
+                {
+                  "value": "SF",
+                  "count": 6
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 28,
+              "blank": 34,
+              "unique": 21,
+              "examples": [
+                "Kitchen",
+                "Dinning area",
+                "Living Rm"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "category",
+              "role": "segment",
+              "filled": 28,
+              "blank": 34,
+              "unique": 2,
+              "examples": [
+                "Moduler Furniture Fitting",
+                "Moduler Furniture Loose"
+              ],
+              "topValues": [
+                {
+                  "value": "Moduler Furniture Loose",
+                  "count": 17
+                },
+                {
+                  "value": "Moduler Furniture Fitting",
+                  "count": 11
+                }
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 62,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 62,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 62,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 62,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 62,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 62,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 28,
+              "blank": 34,
+              "unique": 1,
+              "examples": [
+                "Prakash lohar"
+              ],
+              "topValues": [
+                {
+                  "value": "Prakash lohar",
+                  "count": 28
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 28,
+              "blank": 34,
+              "unique": 1,
+              "examples": [
+                "Dhaval"
+              ],
+              "topValues": [
+                {
+                  "value": "Dhaval",
+                  "count": 28
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 62,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 28,
+              "blank": 34,
+              "unique": 7,
+              "examples": [
+                "3-Jun-26",
+                "5-Jul-26",
+                "17-Jun-26"
+              ],
+              "stats": {
+                "min": 3,
+                "max": 27,
+                "total": 266,
+                "average": 9.5
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 28,
+              "blank": 34,
+              "unique": 8,
+              "examples": [
+                "20-Jun-26",
+                "9-Jul-26",
+                "22-Jun-26"
+              ],
+              "stats": {
+                "min": 3,
+                "max": 30,
+                "total": 328,
+                "average": 11.714285714285714
+              }
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "number",
+              "role": "metric",
+              "filled": 28,
+              "blank": 34,
+              "unique": 8,
+              "examples": [
+                "18",
+                "5",
+                "4"
+              ],
+              "stats": {
+                "min": 4,
+                "max": 18,
+                "total": 180,
+                "average": 6.428571428571429
+              }
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 62,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Indian Furniture",
+          "rowCount": 49,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 49,
+              "blank": 0,
+              "unique": 37,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 37,
+                "total": 781,
+                "average": 15.938775510204081
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 4,
+              "blank": 45,
+              "unique": 1,
+              "examples": [
+                "GF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 4
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "category",
+              "role": "segment",
+              "filled": 4,
+              "blank": 45,
+              "unique": 4,
+              "examples": [
+                "Formal Liv",
+                "Parent's Bed rm",
+                "Parent's Bed Bath"
+              ],
+              "topValues": [
+                {
+                  "value": "Formal Liv",
+                  "count": 1
+                },
+                {
+                  "value": "Parent's Bed rm",
+                  "count": 1
+                },
+                {
+                  "value": "Parent's Bed Bath",
+                  "count": 1
+                },
+                {
+                  "value": "Verandah",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "category",
+              "role": "segment",
+              "filled": 4,
+              "blank": 45,
+              "unique": 1,
+              "examples": [
+                "Moduler Furniture Fitting"
+              ],
+              "topValues": [
+                {
+                  "value": "Moduler Furniture Fitting",
+                  "count": 4
+                }
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 49,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 49,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 49,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 49,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 49,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 49,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 4,
+              "blank": 45,
+              "unique": 1,
+              "examples": [
+                "Prakash lohar"
+              ],
+              "topValues": [
+                {
+                  "value": "Prakash lohar",
+                  "count": 4
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 4,
+              "blank": 45,
+              "unique": 1,
+              "examples": [
+                "Dhaval"
+              ],
+              "topValues": [
+                {
+                  "value": "Dhaval",
+                  "count": 4
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 49,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 4,
+              "blank": 45,
+              "unique": 1,
+              "examples": [
+                "15-Jun-26"
+              ],
+              "stats": {
+                "min": 15,
+                "max": 15,
+                "total": 60,
+                "average": 15
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 4,
+              "blank": 45,
+              "unique": 2,
+              "examples": [
+                "25-Jun-26",
+                "27-Jun-26"
+              ],
+              "stats": {
+                "min": 25,
+                "max": 27,
+                "total": 102,
+                "average": 25.5
+              }
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "number",
+              "role": "metric",
+              "filled": 4,
+              "blank": 45,
+              "unique": 2,
+              "examples": [
+                "11",
+                "13"
+              ],
+              "stats": {
+                "min": 11,
+                "max": 13,
+                "total": 46,
+                "average": 11.5
+              }
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 49,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Fabrication",
+          "rowCount": 56,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 56,
+              "blank": 0,
+              "unique": 37,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 37,
+                "total": 893,
+                "average": 15.946428571428571
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 49,
+              "unique": 3,
+              "examples": [
+                "Terrace",
+                "SF",
+                "GF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 3
+                },
+                {
+                  "value": "Terrace",
+                  "count": 2
+                },
+                {
+                  "value": "SF",
+                  "count": 2
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 49,
+              "unique": 6,
+              "examples": [
+                "Top Terrace",
+                "Landing",
+                "Off EntranceTerrace"
+              ],
+              "topValues": [
+                {
+                  "value": "Top Terrace",
+                  "count": 2
+                },
+                {
+                  "value": "Landing",
+                  "count": 1
+                },
+                {
+                  "value": "Off EntranceTerrace",
+                  "count": 1
+                },
+                {
+                  "value": "Entrance walk way",
+                  "count": 1
+                },
+                {
+                  "value": "Parking",
+                  "count": 1
+                },
+                {
+                  "value": "Wicket Gate",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 49,
+              "unique": 6,
+              "examples": [
+                "Plumbing equipmant cover shed",
+                "Service Lift weather shed",
+                "Outside weather shed"
+              ],
+              "topValues": [
+                {
+                  "value": "Poly Carbonate sheet Shed",
+                  "count": 2
+                },
+                {
+                  "value": "Plumbing equipmant cover shed",
+                  "count": 1
+                },
+                {
+                  "value": "Service Lift weather shed",
+                  "count": 1
+                },
+                {
+                  "value": "Outside weather shed",
+                  "count": 1
+                },
+                {
+                  "value": "Rolling Shutter",
+                  "count": 1
+                },
+                {
+                  "value": "Handle and lock",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 56,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 56,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 56,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 56,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 56,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 56,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 49,
+              "unique": 1,
+              "examples": [
+                "Nikhilbhai"
+              ],
+              "topValues": [
+                {
+                  "value": "Nikhilbhai",
+                  "count": 7
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 56,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 56,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 7,
+              "blank": 49,
+              "unique": 2,
+              "examples": [
+                "20-Jun-26",
+                "25-Jun-26"
+              ],
+              "stats": {
+                "min": 20,
+                "max": 25,
+                "total": 165,
+                "average": 23.571428571428573
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 7,
+              "blank": 49,
+              "unique": 3,
+              "examples": [
+                "25-Jun-26",
+                "26-Jun-26",
+                "28-Jun-26"
+              ],
+              "stats": {
+                "min": 25,
+                "max": 28,
+                "total": 184,
+                "average": 26.285714285714285
+              }
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "number",
+              "role": "metric",
+              "filled": 7,
+              "blank": 49,
+              "unique": 5,
+              "examples": [
+                "6",
+                "1",
+                "2"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 9,
+                "total": 26,
+                "average": 3.7142857142857144
+              }
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 56,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Plumbing",
+          "rowCount": 60,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 60,
+              "blank": 0,
+              "unique": 60,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 60,
+                "total": 1830,
+                "average": 30.5
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 24,
+              "blank": 36,
+              "unique": 5,
+              "examples": [
+                "Terrace",
+                "SF",
+                "FF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 15
+                },
+                {
+                  "value": "SF",
+                  "count": 4
+                },
+                {
+                  "value": "FF",
+                  "count": 3
+                },
+                {
+                  "value": "Terrace",
+                  "count": 1
+                },
+                {
+                  "value": "GF to FF",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 24,
+              "blank": 36,
+              "unique": 21,
+              "examples": [
+                "Top Terrace",
+                "Bath room",
+                "Pantry"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 24,
+              "blank": 36,
+              "unique": 16,
+              "examples": [
+                "Pressure, Softner, heat pump, Water tank.",
+                "Jacuzzi",
+                "CP Fitting Installation"
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 24,
+              "blank": 36,
+              "unique": 1,
+              "examples": [
+                "Nikhilbhai"
+              ],
+              "topValues": [
+                {
+                  "value": "Nikhilbhai",
+                  "count": 24
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 24,
+              "blank": 36,
+              "unique": 1,
+              "examples": [
+                "Ashok"
+              ],
+              "topValues": [
+                {
+                  "value": "Ashok",
+                  "count": 24
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 24,
+              "blank": 36,
+              "unique": 9,
+              "examples": [
+                "1-Jul-26",
+                "20-Jun-26",
+                "25-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 374,
+                "average": 15.583333333333334
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 24,
+              "blank": 36,
+              "unique": 10,
+              "examples": [
+                "8-Jul-26",
+                "27-Jun-26",
+                "28-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 378,
+                "average": 15.75
+              }
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "number",
+              "role": "metric",
+              "filled": 24,
+              "blank": 36,
+              "unique": 6,
+              "examples": [
+                "8",
+                "4",
+                "2"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 8,
+                "total": 58,
+                "average": 2.4166666666666665
+              }
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "electrician",
+          "rowCount": 60,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 60,
+              "blank": 0,
+              "unique": 60,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 60,
+                "total": 1830,
+                "average": 30.5
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 58,
+              "blank": 2,
+              "unique": 10,
+              "examples": [
+                "Parking area",
+                "Out side area",
+                "Compound wall"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 21
+                },
+                {
+                  "value": "FF",
+                  "count": 9
+                },
+                {
+                  "value": "All Floor",
+                  "count": 8
+                },
+                {
+                  "value": "SF",
+                  "count": 7
+                },
+                {
+                  "value": "Out side area",
+                  "count": 5
+                },
+                {
+                  "value": "Parking area",
+                  "count": 4
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 40,
+              "blank": 20,
+              "unique": 37,
+              "examples": [
+                "Store",
+                "gate",
+                "Wicket gate"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 58,
+              "blank": 2,
+              "unique": 35,
+              "examples": [
+                "Light Fixture",
+                "Switch Board",
+                "UGVCL meter"
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 58,
+              "blank": 2,
+              "unique": 1,
+              "examples": [
+                "Vinit"
+              ],
+              "topValues": [
+                {
+                  "value": "Vinit",
+                  "count": 58
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 58,
+              "blank": 2,
+              "unique": 1,
+              "examples": [
+                "Bhavin"
+              ],
+              "topValues": [
+                {
+                  "value": "Bhavin",
+                  "count": 58
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 58,
+              "blank": 2,
+              "unique": 15,
+              "examples": [
+                "25-Jun-26",
+                "26-Jun-26",
+                "27-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 1153,
+                "average": 19.879310344827587
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 58,
+              "blank": 2,
+              "unique": 15,
+              "examples": [
+                "30-Jun-26",
+                "26-Jun-26",
+                "28-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 1171,
+                "average": 20.189655172413794
+              }
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "number",
+              "role": "metric",
+              "filled": 58,
+              "blank": 2,
+              "unique": 4,
+              "examples": [
+                "6",
+                "2",
+                "4"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 6,
+                "total": 76,
+                "average": 1.3103448275862069
+              }
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 60,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Polish work",
+          "rowCount": 33,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 33,
+              "blank": 0,
+              "unique": 30,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 471,
+                "average": 14.272727272727273
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 19,
+              "blank": 14,
+              "unique": 4,
+              "examples": [
+                "GF",
+                "All floor",
+                "FF"
+              ],
+              "topValues": [
+                {
+                  "value": "GF",
+                  "count": 10
+                },
+                {
+                  "value": "FF",
+                  "count": 4
+                },
+                {
+                  "value": "SF",
+                  "count": 3
+                },
+                {
+                  "value": "All floor",
+                  "count": 2
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 18,
+              "blank": 15,
+              "unique": 16,
+              "examples": [
+                "Garden area",
+                "Parent's walk way",
+                "courtyard"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 18,
+              "blank": 15,
+              "unique": 13,
+              "examples": [
+                "Pink Stone",
+                "Granite",
+                "Tiles"
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 18,
+              "blank": 15,
+              "unique": 1,
+              "examples": [
+                "Nikhilbhai"
+              ],
+              "topValues": [
+                {
+                  "value": "Nikhilbhai",
+                  "count": 18
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 18,
+              "blank": 15,
+              "unique": 1,
+              "examples": [
+                "Bhaver lal"
+              ],
+              "topValues": [
+                {
+                  "value": "Bhaver lal",
+                  "count": 18
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 18,
+              "blank": 15,
+              "unique": 15,
+              "examples": [
+                "20-Jun-26",
+                "21-Jun-26",
+                "22-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 353,
+                "average": 19.61111111111111
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 18,
+              "blank": 15,
+              "unique": 15,
+              "examples": [
+                "21-Jun-26",
+                "22-Jun-26",
+                "23-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 341,
+                "average": 18.944444444444443
+              }
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "number",
+              "role": "metric",
+              "filled": 18,
+              "blank": 15,
+              "unique": 1,
+              "examples": [
+                "2"
+              ],
+              "stats": {
+                "min": 2,
+                "max": 2,
+                "total": 36,
+                "average": 2
+              }
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Window",
+          "rowCount": 33,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 33,
+              "blank": 0,
+              "unique": 30,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 471,
+                "average": 14.272727272727273
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 8,
+              "blank": 25,
+              "unique": 3,
+              "examples": [
+                "GF",
+                "FF",
+                "SF"
+              ],
+              "topValues": [
+                {
+                  "value": "SF",
+                  "count": 4
+                },
+                {
+                  "value": "GF",
+                  "count": 3
+                },
+                {
+                  "value": "FF",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 26,
+              "unique": 6,
+              "examples": [
+                "Kitchen",
+                "Parents rm",
+                "M Bath"
+              ],
+              "topValues": [
+                {
+                  "value": "All",
+                  "count": 2
+                },
+                {
+                  "value": "Kitchen",
+                  "count": 1
+                },
+                {
+                  "value": "Parents rm",
+                  "count": 1
+                },
+                {
+                  "value": "M Bath",
+                  "count": 1
+                },
+                {
+                  "value": "Bath rm",
+                  "count": 1
+                },
+                {
+                  "value": "Office",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 26,
+              "unique": 5,
+              "examples": [
+                "Window - 2",
+                "Ventilation",
+                "Ventilaion & Fixed window"
+              ],
+              "topValues": [
+                {
+                  "value": "Window - 2",
+                  "count": 2
+                },
+                {
+                  "value": "Ventilation",
+                  "count": 2
+                },
+                {
+                  "value": "Ventilaion & Fixed window",
+                  "count": 1
+                },
+                {
+                  "value": "window lock system",
+                  "count": 1
+                },
+                {
+                  "value": "Windw Mosqeto net and commisson, hand over",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 26,
+              "unique": 1,
+              "examples": [
+                "Nikhilbhai"
+              ],
+              "topValues": [
+                {
+                  "value": "Nikhilbhai",
+                  "count": 7
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 7,
+              "blank": 26,
+              "unique": 1,
+              "examples": [
+                "Dimore"
+              ],
+              "topValues": [
+                {
+                  "value": "Dimore",
+                  "count": 7
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 7,
+              "blank": 26,
+              "unique": 3,
+              "examples": [
+                "20-Jun-26",
+                "21-Jun-26",
+                "22-Jun-26"
+              ],
+              "stats": {
+                "min": 20,
+                "max": 22,
+                "total": 144,
+                "average": 20.571428571428573
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 7,
+              "blank": 26,
+              "unique": 3,
+              "examples": [
+                "21-Jun-26",
+                "22-Jun-26",
+                "23-Jun-26"
+              ],
+              "stats": {
+                "min": 21,
+                "max": 23,
+                "total": 150,
+                "average": 21.428571428571427
+              }
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "number",
+              "role": "metric",
+              "filled": 7,
+              "blank": 26,
+              "unique": 2,
+              "examples": [
+                "2",
+                "1"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 2,
+                "total": 13,
+                "average": 1.8571428571428572
+              }
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Glass ",
+          "rowCount": 33,
+          "columnCount": 17,
+          "headers": [
+            "Sr.",
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "Site Supervisor",
+            "Agency",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "columns": [
+            {
+              "name": "Sr.",
+              "type": "number",
+              "role": "metric",
+              "filled": 33,
+              "blank": 0,
+              "unique": 30,
+              "examples": [
+                "1",
+                "2",
+                "3"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 471,
+                "average": 14.272727272727273
+              }
+            },
+            {
+              "name": "Floor",
+              "type": "category",
+              "role": "segment",
+              "filled": 20,
+              "blank": 13,
+              "unique": 5,
+              "examples": [
+                "GF",
+                "FF",
+                "SF"
+              ],
+              "topValues": [
+                {
+                  "value": "FF",
+                  "count": 7
+                },
+                {
+                  "value": "GF",
+                  "count": 6
+                },
+                {
+                  "value": "SF",
+                  "count": 3
+                },
+                {
+                  "value": "All Floor",
+                  "count": 3
+                },
+                {
+                  "value": "Office",
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "Room / Area",
+              "type": "text",
+              "role": "detail",
+              "filled": 18,
+              "blank": 15,
+              "unique": 12,
+              "examples": [
+                "Living passage",
+                "Kitchen",
+                "Parent's Bath"
+              ]
+            },
+            {
+              "name": "Activity",
+              "type": "text",
+              "role": "detail",
+              "filled": 19,
+              "blank": 14,
+              "unique": 15,
+              "examples": [
+                "Decorative Glass partiotion",
+                "TV unit Slidding Door",
+                "Slidding Folding"
+              ]
+            },
+            {
+              "name": "Design",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Approval",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Selection",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Procurement",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Execution",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Audit",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Site Supervisor",
+              "type": "category",
+              "role": "segment",
+              "filled": 19,
+              "blank": 14,
+              "unique": 1,
+              "examples": [
+                "Jay Panchal"
+              ],
+              "topValues": [
+                {
+                  "value": "Jay Panchal",
+                  "count": 19
+                }
+              ]
+            },
+            {
+              "name": "Agency",
+              "type": "category",
+              "role": "segment",
+              "filled": 2,
+              "blank": 31,
+              "unique": 1,
+              "examples": [
+                "Asenzo"
+              ],
+              "topValues": [
+                {
+                  "value": "Asenzo",
+                  "count": 2
+                }
+              ]
+            },
+            {
+              "name": "REMARK",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            },
+            {
+              "name": "Start Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 19,
+              "blank": 14,
+              "unique": 12,
+              "examples": [
+                "20-Jun-26",
+                "21-Jun-26",
+                "22-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 466,
+                "average": 24.526315789473685
+              }
+            },
+            {
+              "name": "End Date",
+              "type": "number",
+              "role": "timeline",
+              "filled": 19,
+              "blank": 14,
+              "unique": 12,
+              "examples": [
+                "21-Jun-26",
+                "22-Jun-26",
+                "23-Jun-26"
+              ],
+              "stats": {
+                "min": 1,
+                "max": 30,
+                "total": 335,
+                "average": 17.63157894736842
+              }
+            },
+            {
+              "name": "Duration (Days)",
+              "type": "number",
+              "role": "metric",
+              "filled": 19,
+              "blank": 14,
+              "unique": 1,
+              "examples": [
+                "2"
+              ],
+              "stats": {
+                "min": 2,
+                "max": 2,
+                "total": 38,
+                "average": 2
+              }
+            },
+            {
+              "name": "Remarks",
+              "type": "empty",
+              "role": "detail",
+              "filled": 0,
+              "blank": 33,
+              "unique": 0,
+              "examples": []
+            }
+          ],
+          "primaryLabel": "Activity",
+          "keyMetrics": [
+            "Duration (Days)"
+          ],
+          "workflowColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "segmentColumns": [
+            "Floor",
+            "Room / Area",
+            "Agency",
+            "Site Supervisor"
+          ],
+          "dashboard": {
+            "dateColumn": "Start Date",
+            "entityColumn": "Agency",
+            "ownerColumn": "Site Supervisor",
+            "metricColumns": [
+              "Duration (Days)"
+            ],
+            "statusColumns": [
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit"
+            ],
+            "narrativeColumns": [
+              "Activity",
+              "REMARK",
+              "Floor",
+              "Room / Area",
+              "Remarks"
+            ],
+            "cardTitle": "Activity",
+            "cardSubtitle": "Room / Area",
+            "detailFields": [
+              "Floor",
+              "Room / Area",
+              "Activity",
+              "Agency",
+              "Site Supervisor",
+              "Design",
+              "Approval",
+              "Selection",
+              "Procurement",
+              "Execution",
+              "Audit",
+              "REMARK",
+              "Start Date",
+              "End Date",
+              "Duration (Days)",
+              "Remarks"
+            ],
+            "chartFields": [
+              "Agency",
+              "Site Supervisor",
+              "Floor"
+            ]
+          }
+        },
+        {
+          "name": "Formate",
+          "rowCount": 0,
+          "columnCount": 0,
+          "headers": [],
+          "columns": [],
+          "primaryLabel": null,
+          "keyMetrics": [],
+          "workflowColumns": [],
+          "segmentColumns": []
+        }
+      ],
+      "dashboard": [
+        {
+          "tab": "Carpenter",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "POP",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Sheet1",
+          "dateColumn": null,
+          "entityColumn": null,
+          "ownerColumn": null,
+          "mediaColumns": [],
+          "metricColumns": [],
+          "statusColumns": [],
+          "narrativeColumns": [],
+          "cardTitle": null,
+          "cardSubtitle": null,
+          "detailFields": [],
+          "chartFields": []
+        },
+        {
+          "tab": "Sheet1 (2)",
+          "dateColumn": null,
+          "entityColumn": null,
+          "ownerColumn": null,
+          "mediaColumns": [],
+          "metricColumns": [],
+          "statusColumns": [],
+          "narrativeColumns": [],
+          "cardTitle": null,
+          "cardSubtitle": null,
+          "detailFields": [],
+          "chartFields": []
+        },
+        {
+          "tab": "Sheet1 (3)",
+          "dateColumn": null,
+          "entityColumn": null,
+          "ownerColumn": null,
+          "mediaColumns": [],
+          "metricColumns": [],
+          "statusColumns": [],
+          "narrativeColumns": [],
+          "cardTitle": null,
+          "cardSubtitle": null,
+          "detailFields": [],
+          "chartFields": []
+        },
+        {
+          "tab": "Paint",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Stone",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Tiles",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "China Furniture",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Indian Furniture",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Fabrication",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Plumbing",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "electrician",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Polish work",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Window",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Glass ",
+          "dateColumn": "Start Date",
+          "entityColumn": "Agency",
+          "ownerColumn": "Site Supervisor",
+          "mediaColumns": [],
+          "metricColumns": [
+            "Duration (Days)"
+          ],
+          "statusColumns": [
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit"
+          ],
+          "narrativeColumns": [
+            "Activity",
+            "REMARK",
+            "Floor",
+            "Room / Area",
+            "Remarks"
+          ],
+          "cardTitle": "Activity",
+          "cardSubtitle": "Room / Area",
+          "detailFields": [
+            "Floor",
+            "Room / Area",
+            "Activity",
+            "Agency",
+            "Site Supervisor",
+            "Design",
+            "Approval",
+            "Selection",
+            "Procurement",
+            "Execution",
+            "Audit",
+            "REMARK",
+            "Start Date",
+            "End Date",
+            "Duration (Days)",
+            "Remarks"
+          ],
+          "chartFields": [
+            "Agency",
+            "Site Supervisor",
+            "Floor"
+          ]
+        },
+        {
+          "tab": "Formate",
+          "dateColumn": null,
+          "entityColumn": null,
+          "ownerColumn": null,
+          "mediaColumns": [],
+          "metricColumns": [],
+          "statusColumns": [],
+          "narrativeColumns": [],
+          "cardTitle": null,
+          "cardSubtitle": null,
+          "detailFields": [],
+          "chartFields": []
+        }
+      ],
+      "kind": "kalhaarPendingWorkDl",
+      "displayName": "Kalhaar Pending Work Tracker"
+    },
+    "architectureSavedAt": "2026-06-22T13:03:15.671Z"
   }
 ]

@@ -15,10 +15,12 @@ import SheetDashboard from "./SheetDashboard";
 import ManageRoles from "./ManageRoles";
 import ActivityLog from "./ActivityLog";
 import WhatsApp from "./WhatsApp";
+import Forms from "./Forms";
 
 const menuPaths = {
   dashboard: "/dashboard",
   documents: "/documents",
+  forms: "/forms",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
@@ -101,6 +103,7 @@ function ProtectedModuleContent({ moduleId }) {
         {moduleId === "documents" && (
           <Documents darkMode={darkMode} selectedDocs={selectedDocs} setSelectedDocs={setSelectedDocs} />
         )}
+        {moduleId === "forms" && <Forms darkMode={darkMode} />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}

@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet } from "lucide-react";
 import Image from "next/image";
 
 export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen }) {
@@ -6,6 +6,8 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "documents", label: "Documents", icon: FileText },
     { id: "forms", label: "Forms", icon: ClipboardList },
+    { id: "projects", label: "Projects", icon: Building2 },
+    { id: "project-dmr", label: "DMR", icon: FileSpreadsheet, parent: "projects" },
     { id: "sheet-dashboard", label: "Sheet Dashboard", icon: Sheet },
     { id: "automations", label: "Automation", icon: Workflow },
     { id: "reports", label: "Reports", icon: ChartNoAxesCombined },
@@ -67,12 +69,13 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
         {visibleMenuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeMenu === item.id;
+          const isChild = Boolean(item.parent);
 
           return (
             <button
               key={item.id}
               onClick={() => setActiveMenu(item.id)}
-              className={`w-full newq flex items-center gap-3 rounded-2xl px-4 py-2 text-left transition-all duration-200 ${
+              className={`w-full newq flex items-center gap-3 rounded-2xl py-2 text-left transition-all duration-200 ${isChild ? "ml-8 w-[calc(100%-2rem)] px-3" : "px-4"} ${
                 isActive
                   ? darkMode
                     ? "bg-white/10 text-white -sm  border-white/10"
@@ -83,7 +86,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
               }`}
             >
               <span
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                className={`${isChild ? "h-8 w-8" : "w-9 h-9"} rounded-full flex items-center justify-center transition-all ${
                   isActive
                     ? darkMode
                       ? "bg-[#d8f36a] text-black"

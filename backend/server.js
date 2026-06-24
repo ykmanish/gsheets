@@ -55,10 +55,14 @@ const AUTH_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY
 const SUPER_ADMIN_USERNAME = "AdminUIPL";
 const SUPER_ADMIN_PASSWORD = "Admin@9579";
+const DEFAULT_DMR_SPREADSHEET_ID = process.env.DMR_SPREADSHEET_ID || "19x1_pWpW3l24UIBJNctkqQUZFKvkmQBfgvDzcrTprYQ";
+const DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID = process.env.DMR_TOMORROW_PLAN_SPREADSHEET_ID || "1592O80hnVL7scepUdvi1hX72MyWIfiP61vh-94TmTaw";
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "documents", label: "Documents" },
   { id: "forms", label: "Forms" },
+  { id: "projects", label: "Projects" },
+  { id: "project-dmr", label: "DMR" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
@@ -78,6 +82,7 @@ const PRIVILEGE_ITEMS = [
   { id: "manage_automations", label: "Create and manage automations" },
   { id: "manage_reports", label: "Manage and delete reports" },
   { id: "view_activity_log", label: "View activity log" },
+  { id: "edit_project_dmr", label: "Fill project DMR records" },
 ];
 
 let mongoClient;
@@ -231,6 +236,11 @@ function requireSuperAdmin(req, res, next) {
 function hasPrivilege(req, privilege) {
   if (req?.user?.isSuperAdmin) return true;
   return Boolean(req?.authUser?.privileges?.includes(privilege));
+}
+
+function hasMenuAccess(req, menuId) {
+  if (req?.user?.isSuperAdmin) return true;
+  return Boolean(req?.authUser?.menus?.includes(menuId));
 }
 
 function hasAllDocumentAccess(req) {
@@ -638,9 +648,18 @@ app.delete("/admin/users/:id", requireSuperAdmin, async (req, res) => {
   }
 });
 
-const uploadsDir = path.join(__dirname, "uploads");
-const vectorsDir = path.join(__dirname, "vectors");
-const dataDir = path.join(__dirname, "data");
+const storageRoot = process.env.APP_STORAGE_DIR
+  ? path.resolve(process.env.APP_STORAGE_DIR)
+  : __dirname;
+const uploadsDir = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : path.join(storageRoot, "uploads");
+const vectorsDir = process.env.VECTORS_DIR
+  ? path.resolve(process.env.VECTORS_DIR)
+  : path.join(storageRoot, "vectors");
+const dataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(storageRoot, "data");
 
 [uploadsDir, vectorsDir, dataDir].forEach((dir) => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -652,6 +671,8 @@ const automationsPath = path.join(dataDir, "automations.json");
 const reportsPath = path.join(dataDir, "reports.json");
 const notificationsPath = path.join(dataDir, "notifications.json");
 const activityLogsPath = path.join(dataDir, "activity-logs.json");
+const projectDashboardPath = path.join(dataDir, "project-dashboard.json");
+const dmrHistoryPath = path.join(dataDir, "dmr-history.json");
 
 let documents = [];
 let documentFolders = [];
@@ -659,6 +680,8 @@ let automations = [];
 let reports = [];
 let notifications = [];
 let activityLogs = [];
+let dmrHistory = [];
+let projectDashboardConfig = { projects: [] };
 const scheduledAutomationJobs = new Map();
 
 if (fs.existsSync(documentsPath)) {
@@ -718,12 +741,79 @@ if (fs.existsSync(activityLogsPath)) {
   }
 }
 
+if (fs.existsSync(dmrHistoryPath)) {
+  try {
+    dmrHistory = JSON.parse(fs.readFileSync(dmrHistoryPath, "utf8"));
+  } catch (error) {
+    console.error("Error loading DMR history:", error);
+    dmrHistory = [];
+  }
+}
+
+if (fs.existsSync(projectDashboardPath)) {
+  try {
+    const savedProjectDashboard = JSON.parse(fs.readFileSync(projectDashboardPath, "utf8"));
+    projectDashboardConfig = {
+      projects: Array.isArray(savedProjectDashboard?.projects) ? savedProjectDashboard.projects : [],
+    };
+  } catch (error) {
+    console.error("Error loading project dashboard configuration:", error);
+  }
+}
+
 function saveDocuments() {
   try {
     fs.writeFileSync(documentsPath, JSON.stringify(documents, null, 2));
   } catch (error) {
     console.error("Error saving documents:", error);
   }
+}
+
+function saveProjectDashboardConfig() {
+  try {
+    fs.writeFileSync(projectDashboardPath, JSON.stringify(projectDashboardConfig, null, 2));
+  } catch (error) {
+    console.error("Error saving project dashboard configuration:", error);
+  }
+}
+
+function inspectVectorFile(documentId) {
+  const vectorPath = path.join(vectorsDir, `${documentId}.json`);
+  if (!fs.existsSync(vectorPath)) return { exists: false, valid: false, chunks: 0, vectorPath };
+  try {
+    const records = JSON.parse(fs.readFileSync(vectorPath, "utf8"));
+    const chunks = Array.isArray(records)
+      ? records.filter((record) => Array.isArray(record?.embedding) && record?.text).length
+      : 0;
+    return { exists: true, valid: chunks > 0, chunks, vectorPath };
+  } catch (error) {
+    return { exists: true, valid: false, chunks: 0, vectorPath, error: error.message };
+  }
+}
+
+function reconcileDocumentVector(doc, { persist = false } = {}) {
+  if (!doc?.id) return { exists: false, valid: false, chunks: 0 };
+  const vector = inspectVectorFile(doc.id);
+  let changed = false;
+
+  if (vector.valid && (!doc.isReady || doc.status !== "ready" || doc.chunks !== vector.chunks)) {
+    doc.isReady = true;
+    doc.status = "ready";
+    doc.chunks = vector.chunks;
+    delete doc.error;
+    changed = true;
+    processingStatus[doc.id] = { stage: "Ready", ready: true };
+  } else if (!vector.valid && doc.isReady) {
+    doc.isReady = false;
+    doc.status = doc.type === "sheet" ? "processing" : "failed";
+    doc.error = vector.exists
+      ? `Vector index is invalid${vector.error ? `: ${vector.error}` : ""}`
+      : "Vector index is missing";
+    changed = true;
+  }
+
+  if (changed && persist) saveDocuments();
+  return vector;
 }
 
 function saveDocumentFolders() {
@@ -766,6 +856,14 @@ function saveActivityLogs() {
   }
 }
 
+function saveDmrHistory() {
+  try {
+    fs.writeFileSync(dmrHistoryPath, JSON.stringify(dmrHistory, null, 2));
+  } catch (error) {
+    console.error("Error saving DMR history:", error);
+  }
+}
+
 function getClientIp(req) {
   const forwarded = req?.headers?.["x-forwarded-for"];
   if (forwarded) return String(forwarded).split(",")[0].trim();
@@ -782,6 +880,25 @@ function getActivityCategory(action = "", pathValue = "") {
   if (text.includes("role") || text.includes("user") || pathValue.startsWith("/admin/")) return "admin";
   if (text.includes("login") || text.includes("logout") || pathValue.startsWith("/auth/")) return "auth";
   return "system";
+}
+
+function addDmrHistory(req, entries = []) {
+  const user = req?.authUser || {};
+  const createdAt = new Date().toISOString();
+  const normalized = entries.filter(Boolean).map((entry) => ({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt,
+    userId: user.id || null,
+    username: user.username || "System",
+    displayName: user.displayName || user.username || "System",
+    roleName: user.roleName || null,
+    ...entry,
+  }));
+  if (!normalized.length) return [];
+  dmrHistory.unshift(...normalized);
+  dmrHistory = dmrHistory.slice(0, 3000);
+  saveDmrHistory();
+  return normalized;
 }
 
 function addActivityLog({ req, action, target = null, status = "success", details = null, actor = null }) {
@@ -1373,13 +1490,37 @@ function buildGenericPreparedSheet(values) {
   };
 }
 
-async function fetchSheetDataset(sheetId) {
+const sheetDatasetCache = new Map();
+const SHEET_DATASET_CACHE_TTL_MS = 1000 * 60 * 3;
+
+async function fetchSheetDataset(sheetId, options = {}) {
+  const force = Boolean(options.force);
+  const cached = sheetDatasetCache.get(sheetId);
+  if (!force && cached && Date.now() - cached.createdAt < SHEET_DATASET_CACHE_TTL_MS) {
+    return cached.promise;
+  }
+
+  const datasetPromise = buildSheetDataset(sheetId).catch((error) => {
+    if (sheetDatasetCache.get(sheetId)?.promise === datasetPromise) sheetDatasetCache.delete(sheetId);
+    throw error;
+  });
+  sheetDatasetCache.set(sheetId, { createdAt: Date.now(), promise: datasetPromise });
+  return datasetPromise;
+}
+
+async function buildSheetDataset(sheetId) {
   const sheets = await fetchRawSheetValues(sheetId);
   const result = [];
+  const sourceDocument = documents.find((doc) => doc.type === "sheet" && doc.sheetId === sheetId);
+  const architectureKind = sourceDocument?.sheetArchitecture?.kind || "";
+  const isKalhaarPendingWork = sheetId === kalhaarPendingWorkDlArchitecture.SHEET_ID
+    || architectureKind === kalhaarPendingWorkDlArchitecture.KIND;
+  const isKalhaarPendingTracker = sheetId === kalhaarPendingTrackerArchitecture.SHEET_ID
+    || architectureKind === kalhaarPendingTrackerArchitecture.KIND;
 
   // For kalhaarPendingWorkDl, we need cell styles (colors) for stage columns
   let kalhaarRawSheets = null;
-  if (sheetId === kalhaarPendingWorkDlArchitecture.SHEET_ID) {
+  if (isKalhaarPendingWork) {
     try {
       const auth = await getGoogleAuth();
       const drive = google.drive({ version: "v3", auth });
@@ -1398,9 +1539,9 @@ async function fetchSheetDataset(sheetId) {
   for (const sheet of sheets) {
     const title = sheet.name;
     const values = sheet.values || [];
-    const prepared = sheetId === kalhaarPendingWorkDlArchitecture.SHEET_ID
+    const prepared = isKalhaarPendingWork
       ? kalhaarPendingWorkDlArchitecture.prepareSheet(title, values, kalhaarRawSheets ? kalhaarRawSheets[title] : null)
-      : sheetId === kalhaarPendingTrackerArchitecture.SHEET_ID
+      : isKalhaarPendingTracker
       ? kalhaarPendingTrackerArchitecture.prepareSheet(title, values)
       : sheetId === asteriaClientDlArchitecture.SHEET_ID
       ? asteriaClientDlArchitecture.prepareSheet(title, values)
@@ -1435,6 +1576,986 @@ async function fetchSheetDataset(sheetId) {
   }
 
   return result;
+}
+
+const PROJECT_FIELD_PATTERNS = {
+  project: [/^project$/i, /project.*name/i, /^site$/i, /site.*name/i, /location/i, /property/i],
+  title: [/^activity$/i, /task/i, /work.*description/i, /description/i, /particular/i, /material.*product/i, /item/i, /subject/i, /action/i],
+  status: [/^status$/i, /work.*status/i, /due.*status/i, /stage/i, /state/i, /approval/i, /payment.*status/i],
+  dueDate: [/due.*date/i, /end.*date/i, /finish.*date/i, /target.*date/i, /planned.*date/i, /expected.*date/i, /schedule.*date/i, /deadline/i],
+  startDate: [/start.*date/i, /commence.*date/i, /begin.*date/i],
+  completedDate: [/completed.*date/i, /completion.*date/i, /finished.*date/i, /closed.*date/i, /actual.*date/i],
+  updatedDate: [/updated/i, /modified/i, /timestamp/i, /action.*date/i, /entry.*date/i, /created.*date/i, /^date$/i],
+  owner: [/owner/i, /responsible/i, /assigned/i, /supervisor/i, /manager/i, /agency/i, /contractor/i, /person/i],
+  notes: [/remark/i, /note/i, /comment/i, /issue/i, /blocker/i, /reason/i, /action.*taken/i],
+  agency: [/^agency$/i, /contractor/i, /vendor/i],
+  supervisor: [/supervisor/i, /design.*owner/i, /responsible/i, /assigned/i],
+  trade: [/^trade$/i, /trade.*category/i, /work.*type/i, /discipline/i],
+  floor: [/^floor$/i, /level/i],
+  area: [/room.*area/i, /^area$/i, /location/i, /zone/i],
+  priority: [/priority/i, /severity/i, /urgency/i],
+  pendingStages: [/pending.*stage/i, /stage.*needed/i],
+  attendanceDate: [/attendance.*date/i, /^date$/i, /timestamp/i],
+  attendanceStatus: [/attendance/i, /present/i, /absent/i, /^status$/i],
+};
+
+const PROJECT_WORKFLOW_STAGES = ["Design", "Approval", "Selection", "Procurement", "Execution", "Audit"];
+
+function projectText(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeSpreadsheetId(value = "") {
+  return extractDriveFileId(value) || projectText(value);
+}
+
+function escapeSheetName(name = "") {
+  return `'${String(name).replace(/'/g, "''")}'`;
+}
+
+function columnName(number) {
+  let result = "";
+  let value = Number(number);
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result || "A";
+}
+
+function projectFindColumn(headers, explicit, patterns) {
+  if (explicit && headers.includes(explicit)) return explicit;
+  return headers.find((header) => patterns.some((pattern) => pattern.test(header))) || "";
+}
+
+function projectDateKey(value) {
+  const text = projectText(value);
+  if (!text) return "";
+  const direct = new Date(text);
+  if (!Number.isNaN(direct.getTime())) {
+    const year = direct.getFullYear();
+    const month = String(direct.getMonth() + 1).padStart(2, "0");
+    const day = String(direct.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  const match = text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/);
+  if (!match) return "";
+  const year = match[3].length === 2 ? Number(`20${match[3]}`) : Number(match[3]);
+  const month = Number(match[2]);
+  const day = Number(match[1]);
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) return "";
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function projectCategory(assignment, doc, tab) {
+  if (assignment.category && assignment.category !== "auto") return assignment.category;
+  const text = `${doc.name} ${tab.name} ${(tab.headers || []).join(" ")}`.toLowerCase();
+  if (/attendance|present|absent|manpower|labou?r|workforce/.test(text)) return "attendance";
+  if (/purchase|procurement|vendor|material|inventory|stock|delivery/.test(text)) return "procurement";
+  if (/payment|expense|invoice|amount|cost|budget/.test(text)) return "payment";
+  if (/approval|selection|decision/.test(text)) return "approval";
+  if (/issue|risk|blocker|snag/.test(text)) return "issue";
+  return "work";
+}
+
+function projectStatusFlags(statusValue, notesValue) {
+  const text = `${projectText(statusValue)} ${projectText(notesValue)}`.toLowerCase();
+  return {
+    completed: /\b(done|complete|completed|closed|finished|approved|paid|resolved)\b/.test(text) && !/\b(not complete|incomplete|unpaid|not approved)\b/.test(text),
+    blocked: /\b(blocked|hold|on hold|stuck|dependency|waiting|awaiting|delayed)\b/.test(text),
+    cancelled: /\b(cancelled|canceled|not required|dropped)\b/.test(text),
+  };
+}
+
+function projectStageState(value) {
+  const text = projectText(value).toLowerCase();
+  if (!text) return "unknown";
+  if (/\b(done|complete|completed|closed|finished|approved|yes|paid|resolved)\b/.test(text)) return "done";
+  if (/\b(on hold|hold|blocked|waiting|awaiting|stuck|delayed)\b/.test(text)) return "blocked";
+  if (/\b(in progress|started|working|ongoing|partial)\b/.test(text)) return "in_progress";
+  if (/\b(pending|not started|open|no|required|needed)\b/.test(text)) return "pending";
+  return "unknown";
+}
+
+function projectRecordScore(record) {
+  return Object.values(record.stageStatuses || {}).filter((value) => value !== "unknown").length * 10
+    + [record.trade, record.agency, record.supervisor, record.floor, record.area, record.startDate, record.dueDate]
+      .filter(Boolean).length;
+}
+
+function projectDedupeKey(record) {
+  return [
+    record.trade,
+    record.floor,
+    record.area,
+    record.title,
+    record.agency,
+    record.startDate,
+    record.dueDate,
+  ].map((value) => projectText(value).toLowerCase().replace(/\s+/g, " ")).join("|");
+}
+
+function projectTabsForAssignment(doc, dataset, assignment) {
+  if (assignment.tabs?.length) {
+    return dataset.filter((tab) => assignment.tabs.includes(tab.name) && (tab.rows || []).length);
+  }
+  if (doc.sheetArchitecture?.kind === kalhaarPendingTrackerArchitecture.KIND) {
+    return dataset.filter((tab) => tab.name === "All Tasks");
+  }
+  return dataset.filter((tab) => (tab.headers || []).length && (tab.rows || []).length);
+}
+
+function dmrDateKey(value = new Date()) {
+  return projectDateKey(value) || projectDateKey(new Date());
+}
+
+function dmrTabName(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${String(date.getDate()).padStart(2, "0")} ${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function dmrDateFromTabName(name, fallbackYear = new Date().getFullYear()) {
+  const match = projectText(name).match(/^(\d{1,2})\s+(\d{1,2})(?:\s+(\d{2,4}))?$/);
+  if (!match) return "";
+  const year = match[3] ? (match[3].length === 2 ? Number(`20${match[3]}`) : Number(match[3])) : fallbackYear;
+  const month = Number(match[2]);
+  const day = Number(match[1]);
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) return "";
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function cleanDmrSiteName(value) {
+  return projectText(value).replace(/^\d+\s*[.)-]?\s*/, "").replace(/\s+/g, " ").trim();
+}
+
+function dmrValueNumber(value) {
+  const text = projectText(value).replace(/,/g, "");
+  if (!text) return 0;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function findDmrLabel(values, pattern) {
+  for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
+    const row = values[rowIndex] || [];
+    for (let columnIndex = 0; columnIndex < row.length; columnIndex += 1) {
+      if (pattern.test(projectText(row[columnIndex]))) return { rowIndex, columnIndex };
+    }
+  }
+  return null;
+}
+
+function dmrCell(values, rowIndex, columnIndex) {
+  return projectText(values[rowIndex]?.[columnIndex]);
+}
+
+function dmrProjectMatchesSite(project, dmrConfig, siteName) {
+  const site = cleanDmrSiteName(siteName).toLowerCase();
+  const accepted = [
+    project.name,
+    project.code,
+    project.location,
+    ...(project.aliases || []),
+    ...(dmrConfig?.siteNames || []),
+  ].map((item) => cleanDmrSiteName(item).toLowerCase()).filter(Boolean);
+  if (!accepted.length) return true;
+  return accepted.some((item) => site === item || site.includes(item) || item.includes(site));
+}
+
+function canViewProjectDmr(project, req) {
+  if (req.user?.isSuperAdmin) return true;
+  const dmrConfig = project?.dmr || {};
+  if (!dmrConfig.enabled) return false;
+  const userId = String(req.authUser?.id || req.user?._id || "");
+  const assigned = Array.isArray(dmrConfig.assignedUserIds) ? dmrConfig.assignedUserIds.map(String) : [];
+  const editors = Array.isArray(dmrConfig.editableUserIds) ? dmrConfig.editableUserIds.map(String) : [];
+  return assigned.includes(userId) || editors.includes(userId);
+}
+
+function canEditProjectDmr(project, req) {
+  if (req.user?.isSuperAdmin) return true;
+  if (!hasPrivilege(req, "edit_project_dmr")) return false;
+  const userId = String(req.authUser?.id || req.user?._id || "");
+  const editors = Array.isArray(project?.dmr?.editableUserIds) ? project.dmr.editableUserIds.map(String) : [];
+  const assigned = Array.isArray(project?.dmr?.assignedUserIds) ? project.dmr.assignedUserIds.map(String) : [];
+  return editors.includes(userId) || (!editors.length && assigned.includes(userId));
+}
+
+function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
+  const measureRowIndex = values.findIndex((row) => row.filter((cell) => /^(planned|actual)$/i.test(projectText(cell))).length >= 2);
+  if (measureRowIndex < 1) {
+    return { records: [], sites: [], agencies: [], error: "Could not find Planned / Actual header row in this DMR tab." };
+  }
+  const equipmentLabel = findDmrLabel(values, /equipments?\s+and\s+tools/i);
+  const materialsLabel = findDmrLabel(values, /materials?\s+details/i);
+  const notesLabel = findDmrLabel(values, /notes?\s*[:-]/i);
+  const staffLabel = findDmrLabel(values, /project\s+staff\s+attend/i);
+
+  const siteRowIndex = measureRowIndex - 1;
+  const agencyHeaderRowIndex = Math.max(0, measureRowIndex - 2);
+  const agencyColumnIndex = values[agencyHeaderRowIndex]?.findIndex((cell) => /name\s+of\s+agency/i.test(projectText(cell)));
+  const agencyColumn = agencyColumnIndex >= 0 ? agencyColumnIndex : 2;
+  const siteRow = values[siteRowIndex] || [];
+  const measureRow = values[measureRowIndex] || [];
+  const siteColumns = [];
+  let currentSite = "";
+
+  for (let index = 0; index < Math.max(siteRow.length, measureRow.length); index += 1) {
+    const possibleSite = cleanDmrSiteName(siteRow[index]);
+    if (possibleSite) currentSite = possibleSite;
+    const metric = projectText(measureRow[index]).toLowerCase();
+    if (metric === "planned" || metric === "actual") {
+      const sectionHeader = projectText(values[agencyHeaderRowIndex]?.[index]).toLowerCase();
+      if (/total.*manpower|total.*site|all\s+site/i.test(sectionHeader)) continue;
+      siteColumns.push({ site: currentSite || "Site", metric, columnIndex: index });
+    }
+  }
+
+  const sitePairs = [...siteColumns.reduce((result, item) => {
+    if (!result.has(item.site)) result.set(item.site, { site: item.site, plannedColumnIndex: null, actualColumnIndex: null });
+    const pair = result.get(item.site);
+    if (item.metric === "planned" && pair.plannedColumnIndex === null) pair.plannedColumnIndex = item.columnIndex;
+    if (item.metric === "actual" && pair.actualColumnIndex === null) pair.actualColumnIndex = item.columnIndex;
+    return result;
+  }, new Map()).values()].filter((item) => item.plannedColumnIndex !== null || item.actualColumnIndex !== null);
+
+  const records = [];
+  const agencies = new Set();
+  const manpowerEndRowIndex = equipmentLabel ? equipmentLabel.rowIndex : values.length;
+  for (let rowIndex = measureRowIndex + 1; rowIndex < manpowerEndRowIndex; rowIndex += 1) {
+    const row = values[rowIndex] || [];
+    const agency = projectText(row[agencyColumn]);
+    if (!agency || /total|grand total/i.test(agency)) continue;
+    agencies.add(agency);
+    for (const pair of sitePairs) {
+      const planned = dmrValueNumber(row[pair.plannedColumnIndex]);
+      const actual = dmrValueNumber(row[pair.actualColumnIndex]);
+      records.push({
+        id: `${sheetName}:${rowIndex + 1}:${pair.site}`,
+        date: dateKey,
+        sheetName,
+        rowNumber: rowIndex + 1,
+        agency,
+        site: pair.site,
+        planned,
+        actual,
+        variance: actual - planned,
+        plannedColumn: pair.plannedColumnIndex + 1,
+        actualColumn: pair.actualColumnIndex + 1,
+      });
+    }
+  }
+
+  const equipment = [];
+  if (equipmentLabel) {
+    const stopAt = notesLabel ? notesLabel.rowIndex : Math.min(equipmentLabel.rowIndex + 5, values.length);
+    for (let rowIndex = equipmentLabel.rowIndex + 2; rowIndex < stopAt; rowIndex += 1) {
+      const serial = dmrCell(values, rowIndex, 1);
+      const site = dmrCell(values, rowIndex, 2);
+      const details = dmrCell(values, rowIndex, 3);
+      const quantity = dmrCell(values, rowIndex, 5);
+      if (!serial && !site && !details && !quantity) break;
+      equipment.push({
+        id: `${sheetName}:equipment:${rowIndex + 1}`,
+        rowNumber: rowIndex + 1,
+        site,
+        details,
+        quantity,
+        siteColumn: 3,
+        detailsColumn: 4,
+        quantityColumn: 6,
+      });
+    }
+  }
+
+  const materials = [];
+  if (materialsLabel) {
+    const stopAt = notesLabel ? notesLabel.rowIndex : Math.min(materialsLabel.rowIndex + 5, values.length);
+    for (let rowIndex = materialsLabel.rowIndex + 2; rowIndex < stopAt; rowIndex += 1) {
+      const serial = dmrCell(values, rowIndex, 8);
+      const site = dmrCell(values, rowIndex, 9);
+      const details = dmrCell(values, rowIndex, 12);
+      const unit = dmrCell(values, rowIndex, 14);
+      const quantity = dmrCell(values, rowIndex, 15);
+      if (!serial && !site && !details && !unit && !quantity) break;
+      materials.push({
+        id: `${sheetName}:material:${rowIndex + 1}`,
+        rowNumber: rowIndex + 1,
+        site,
+        details,
+        unit,
+        quantity,
+        siteColumn: 10,
+        detailsColumn: 13,
+        unitColumn: 15,
+        quantityColumn: 16,
+      });
+    }
+  }
+
+  const notes = [];
+  if (notesLabel) {
+    const stopAt = staffLabel ? staffLabel.rowIndex : Math.min(notesLabel.rowIndex + 3, values.length);
+    for (let rowIndex = notesLabel.rowIndex + 1; rowIndex < stopAt; rowIndex += 1) {
+      const serial = dmrCell(values, rowIndex, 1);
+      const note = dmrCell(values, rowIndex, 2);
+      if (!serial && !note) break;
+      notes.push({
+        id: `${sheetName}:note:${rowIndex + 1}`,
+        rowNumber: rowIndex + 1,
+        note,
+        noteColumn: 3,
+      });
+    }
+  }
+
+  const staffAttendance = [];
+  if (staffLabel) {
+    const nameRowIndex = staffLabel.rowIndex + 1;
+    const statusRowIndex = staffLabel.rowIndex + 2;
+    for (let columnIndex = 2; columnIndex < Math.max(values[nameRowIndex]?.length || 0, values[statusRowIndex]?.length || 0); columnIndex += 1) {
+      const name = projectText(values[nameRowIndex]?.[columnIndex]).replace(/^\d+\s*[.)-]?\s*/, "").trim();
+      if (!name) continue;
+      const status = dmrCell(values, statusRowIndex, columnIndex);
+      staffAttendance.push({
+        id: `${sheetName}:staff:${columnIndex + 1}`,
+        name,
+        status,
+        rowNumber: statusRowIndex + 1,
+        statusColumn: columnIndex + 1,
+      });
+    }
+  }
+
+  return {
+    records,
+    equipment,
+    materials,
+    notes,
+    staffAttendance,
+    sites: sitePairs.map((item) => item.site),
+    agencies: [...agencies].sort((a, b) => a.localeCompare(b)),
+    header: { measureRow: measureRowIndex + 1, agencyColumn: agencyColumn + 1 },
+  };
+}
+
+async function getDmrSpreadsheet(spreadsheetId) {
+  const auth = await getGoogleAuth();
+  return google.sheets({ version: "v4", auth });
+}
+
+async function ensureDmrTab(spreadsheetId, dateKey) {
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const tabName = dmrTabName(dateKey);
+  if (!tabName) throw new Error("Invalid DMR date");
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties(sheetId,title,index)",
+  });
+  const existingSheets = metadata.data.sheets || [];
+  const existing = existingSheets.find((sheet) => projectText(sheet.properties?.title) === tabName);
+  if (existing) return { sheetName: tabName, created: false };
+
+  const fallbackYear = Number(dateKey.slice(0, 4)) || new Date().getFullYear();
+  const datedSheets = existingSheets
+    .map((sheet) => ({ sheet, date: dmrDateFromTabName(sheet.properties?.title, fallbackYear) }))
+    .filter((item) => item.date)
+    .sort((a, b) => Math.abs(new Date(`${a.date}T00:00:00`) - new Date(`${dateKey}T00:00:00`)) - Math.abs(new Date(`${b.date}T00:00:00`) - new Date(`${dateKey}T00:00:00`)));
+  const template = datedSheets[0]?.sheet || existingSheets[0];
+  if (!template?.properties?.sheetId && template?.properties?.sheetId !== 0) {
+    throw new Error("No DMR template tab found to create today's sheet.");
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        duplicateSheet: {
+          sourceSheetId: template.properties.sheetId,
+          insertSheetIndex: (template.properties.index || 0) + 1,
+          newSheetName: tabName,
+        },
+      }],
+    },
+  });
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(tabName)}!A1:ZZ300`,
+  });
+  const values = response.data.values || [];
+  const measureRowIndex = values.findIndex((row) => row.filter((cell) => /^(planned|actual)$/i.test(projectText(cell))).length >= 2);
+  const equipmentLabel = findDmrLabel(values, /equipments?\s+and\s+tools/i);
+  const materialsLabel = findDmrLabel(values, /materials?\s+details/i);
+  const notesLabel = findDmrLabel(values, /notes?\s*[:-]/i);
+  const staffLabel = findDmrLabel(values, /project\s+staff\s+attend/i);
+  const clearRanges = [];
+  if (measureRowIndex >= 0) {
+    const manpowerEnd = equipmentLabel ? equipmentLabel.rowIndex : Math.min(measureRowIndex + 40, values.length - 1);
+    clearRanges.push(`${escapeSheetName(tabName)}!D${measureRowIndex + 2}:U${manpowerEnd}`);
+  }
+  if (equipmentLabel) clearRanges.push(`${escapeSheetName(tabName)}!C${equipmentLabel.rowIndex + 3}:F${equipmentLabel.rowIndex + 5}`);
+  if (materialsLabel) clearRanges.push(`${escapeSheetName(tabName)}!J${materialsLabel.rowIndex + 3}:P${materialsLabel.rowIndex + 5}`);
+  if (notesLabel) clearRanges.push(`${escapeSheetName(tabName)}!C${notesLabel.rowIndex + 2}:C${notesLabel.rowIndex + 3}`);
+  if (staffLabel) clearRanges.push(`${escapeSheetName(tabName)}!C${staffLabel.rowIndex + 3}:W${staffLabel.rowIndex + 3}`);
+  await Promise.all(clearRanges.map((range) => sheets.spreadsheets.values.clear({ spreadsheetId, range })));
+  return { sheetName: tabName, created: true };
+}
+
+async function readDmrSheet(spreadsheetId, dateKey, { ensure = false } = {}) {
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const sheetInfo = ensure ? await ensureDmrTab(spreadsheetId, dateKey) : { sheetName: dmrTabName(dateKey), created: false };
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(sheetInfo.sheetName)}!A1:ZZ300`,
+  });
+  const parsed = parseDmrSheetValues({
+    values: response.data.values || [],
+    sheetName: sheetInfo.sheetName,
+    dateKey,
+  });
+  return { ...parsed, sheetName: sheetInfo.sheetName, created: sheetInfo.created };
+}
+
+async function writeDmrRecords(spreadsheetId, dateKey, updates = []) {
+  const { sheetName } = await ensureDmrTab(spreadsheetId, dateKey);
+  const data = [];
+  for (const update of updates) {
+    const rowNumber = Number(update.rowNumber);
+    const plannedColumn = Number(update.plannedColumn);
+    const actualColumn = Number(update.actualColumn);
+    if (!Number.isInteger(rowNumber) || rowNumber < 1) continue;
+    if (Array.isArray(update.cells)) {
+      for (const cell of update.cells) {
+        const column = Number(cell.column);
+        if (!Number.isInteger(column) || column < 1) continue;
+        data.push({
+          range: `${escapeSheetName(sheetName)}!${columnName(column)}${rowNumber}`,
+          values: [[cell.value ?? ""]],
+        });
+      }
+      continue;
+    }
+    if (Number.isInteger(plannedColumn) && plannedColumn > 0) {
+      data.push({
+        range: `${escapeSheetName(sheetName)}!${columnName(plannedColumn)}${rowNumber}`,
+        values: [[update.planned ?? ""]],
+      });
+    }
+    if (Number.isInteger(actualColumn) && actualColumn > 0) {
+      data.push({
+        range: `${escapeSheetName(sheetName)}!${columnName(actualColumn)}${rowNumber}`,
+        values: [[update.actual ?? ""]],
+      });
+    }
+  }
+  if (!data.length) return { updatedCells: 0, sheetName };
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const response = await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: { valueInputOption: "USER_ENTERED", data },
+  });
+  sheetDatasetCache.delete(spreadsheetId);
+  return { updatedCells: response.data.totalUpdatedCells || 0, sheetName };
+}
+
+async function addDmrSectionRow(spreadsheetId, dateKey, section, valuesToWrite = {}) {
+  const normalizedSection = projectText(section).toLowerCase();
+  if (!["equipment", "materials", "notes"].includes(normalizedSection)) {
+    throw new Error("Unsupported DMR section");
+  }
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const { sheetName } = await ensureDmrTab(spreadsheetId, dateKey);
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties(sheetId,title)",
+  });
+  const sheet = (metadata.data.sheets || []).find((item) => projectText(item.properties?.title) === sheetName);
+  if (!sheet?.properties?.sheetId && sheet?.properties?.sheetId !== 0) throw new Error("Could not find DMR sheet tab");
+
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(sheetName)}!A1:ZZ300`,
+  });
+  const values = response.data.values || [];
+  const equipmentLabel = findDmrLabel(values, /equipments?\s+and\s+tools/i);
+  const materialsLabel = findDmrLabel(values, /materials?\s+details/i);
+  const notesLabel = findDmrLabel(values, /notes?\s*[:-]/i);
+  const staffLabel = findDmrLabel(values, /project\s+staff\s+attend/i);
+  let insertBeforeRowIndex = normalizedSection === "notes"
+    ? staffLabel?.rowIndex
+    : notesLabel?.rowIndex;
+  let valueUpdates = [];
+  if (normalizedSection === "equipment" || normalizedSection === "materials") {
+    const startRowIndex = (equipmentLabel || materialsLabel)?.rowIndex + 2;
+    const sectionStop = notesLabel?.rowIndex;
+    if (Number.isInteger(startRowIndex) && Number.isInteger(sectionStop)) {
+      let maxSerial = 0;
+      for (let rowIndex = startRowIndex; rowIndex < sectionStop; rowIndex += 1) {
+        const equipmentSerial = Number(dmrCell(values, rowIndex, 1)) || 0;
+        const materialSerial = Number(dmrCell(values, rowIndex, 8)) || 0;
+        const hasEquipment = Boolean(dmrCell(values, rowIndex, 2) || dmrCell(values, rowIndex, 3) || dmrCell(values, rowIndex, 5) || equipmentSerial);
+        const hasMaterial = Boolean(dmrCell(values, rowIndex, 9) || dmrCell(values, rowIndex, 12) || dmrCell(values, rowIndex, 14) || dmrCell(values, rowIndex, 15) || materialSerial);
+        if (!hasEquipment && !hasMaterial) {
+          insertBeforeRowIndex = rowIndex;
+          break;
+        }
+        maxSerial = Math.max(maxSerial, equipmentSerial, materialSerial);
+      }
+      const nextSerial = maxSerial + 1;
+      valueUpdates = [
+        { range: `${escapeSheetName(sheetName)}!B${insertBeforeRowIndex + 1}`, values: [[nextSerial]] },
+        { range: `${escapeSheetName(sheetName)}!I${insertBeforeRowIndex + 1}`, values: [[nextSerial]] },
+      ];
+      if (normalizedSection === "equipment") {
+        valueUpdates.push(
+          { range: `${escapeSheetName(sheetName)}!C${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.site ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!D${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.details ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!F${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.quantity ?? ""]] },
+        );
+      } else {
+        valueUpdates.push(
+          { range: `${escapeSheetName(sheetName)}!J${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.site ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!M${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.details ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!O${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.unit ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!P${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.quantity ?? ""]] },
+        );
+      }
+    }
+  } else if (normalizedSection === "notes") {
+    const startRowIndex = notesLabel?.rowIndex + 1;
+    const sectionStop = staffLabel?.rowIndex;
+    if (Number.isInteger(startRowIndex) && Number.isInteger(sectionStop)) {
+      let maxSerial = 0;
+      for (let rowIndex = startRowIndex; rowIndex < sectionStop; rowIndex += 1) {
+        const serial = Number(dmrCell(values, rowIndex, 1)) || 0;
+        const note = dmrCell(values, rowIndex, 2);
+        if (!serial && !note) {
+          insertBeforeRowIndex = rowIndex;
+          break;
+        }
+        maxSerial = Math.max(maxSerial, serial);
+      }
+      valueUpdates = [
+        { range: `${escapeSheetName(sheetName)}!B${insertBeforeRowIndex + 1}`, values: [[maxSerial + 1]] },
+        { range: `${escapeSheetName(sheetName)}!C${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.note ?? ""]] },
+      ];
+    }
+  }
+  if (!Number.isInteger(insertBeforeRowIndex) || insertBeforeRowIndex < 1) {
+    throw new Error("Could not locate the section boundary in the DMR sheet");
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        insertDimension: {
+          range: {
+            sheetId: sheet.properties.sheetId,
+            dimension: "ROWS",
+            startIndex: insertBeforeRowIndex,
+            endIndex: insertBeforeRowIndex + 1,
+          },
+          inheritFromBefore: true,
+        },
+      }],
+    },
+  });
+  if (valueUpdates.length) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: { valueInputOption: "USER_ENTERED", data: valueUpdates },
+    });
+  }
+  sheetDatasetCache.delete(spreadsheetId);
+  return { sheetName, section: normalizedSection, insertedRowNumber: insertBeforeRowIndex + 1 };
+}
+
+function dmrSummary(records = []) {
+  const totals = records.reduce((result, record) => {
+    result.planned += Number(record.planned) || 0;
+    result.actual += Number(record.actual) || 0;
+    if (record.planned || record.actual) result.filled += 1;
+    return result;
+  }, { planned: 0, actual: 0, filled: 0, records: records.length, variance: 0, missing: 0 });
+  totals.variance = totals.actual - totals.planned;
+  totals.missing = Math.max(0, records.length - totals.filled);
+  return totals;
+}
+
+function dmrBreakdown(records = [], field) {
+  return [...records.reduce((result, record) => {
+    const label = projectText(record[field]) || "Unassigned";
+    const item = result.get(label) || { label, planned: 0, actual: 0, variance: 0, records: 0, filled: 0 };
+    item.records += 1;
+    item.planned += Number(record.planned) || 0;
+    item.actual += Number(record.actual) || 0;
+    if (record.planned || record.actual) item.filled += 1;
+    item.variance = item.actual - item.planned;
+    result.set(label, item);
+    return result;
+  }, new Map()).values()].sort((a, b) => b.actual - a.actual || a.label.localeCompare(b.label));
+}
+
+function parseGoogleTimestampDate(value) {
+  const text = projectText(value);
+  if (!text) return "";
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (match) {
+    return `${match[3]}-${String(match[1]).padStart(2, "0")}-${String(match[2]).padStart(2, "0")}`;
+  }
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return projectDateKey(parsed);
+  return "";
+}
+
+function tomorrowPlanCategory(header) {
+  const text = projectText(header);
+  const match = text.match(/^manpower\s+(.+?)\s*&\s*planned\s*work/i);
+  return match ? match[1].replace(/\s+/g, " ").trim() : "";
+}
+
+function tomorrowPlanComparableSite(value) {
+  return projectText(value)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\bfarm\s+house\b/g, "farmhouse")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function canonicalizeTomorrowPlanSites(records = []) {
+  const labels = [...new Set(records.map((record) => projectText(record.site)).filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  return records.map((record) => {
+    const comparable = tomorrowPlanComparableSite(record.site);
+    const canonical = labels.find((label) => {
+      const candidate = tomorrowPlanComparableSite(label);
+      return candidate && comparable && candidate !== comparable && (candidate.startsWith(comparable) || comparable.startsWith(candidate));
+    }) || record.site;
+    return { ...record, site: canonical || "Unassigned site" };
+  });
+}
+
+function parseTomorrowPlanCell(value) {
+  const raw = projectText(value).replace(/\s+/g, " ");
+  if (!raw) return { raw: "", plannedManpower: null, work: "" };
+  const numberOnly = raw.match(/^(\d+(?:\.\d+)?)$/);
+  if (numberOnly) {
+    const plannedManpower = Number(numberOnly[1]);
+    return { raw, plannedManpower: Number.isFinite(plannedManpower) ? plannedManpower : null, work: "" };
+  }
+  const patterns = [
+    /^(\d+(?:\.\d+)?)\s*(?:[-_:,]|person|persons?|worker|workers?|labou?r)?\s*(.*)$/i,
+    /(?:total|work\s*person|person|worker|labou?r)\s*[-:=]?\s*(\d+(?:\.\d+)?)\s*,?\s*(.*)$/i,
+    /^(.*?)\s*(?:[-_:,])?\s*(\d+(?:\.\d+)?)\s*(?:person|persons?|worker|workers?|labou?r)\s*$/i,
+  ];
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (!match) continue;
+    const trailingNumberPattern = pattern.source.startsWith("^(.*?)");
+    const plannedManpower = Number(trailingNumberPattern ? match[2] : match[1]);
+    const work = projectText(trailingNumberPattern ? match[1] : match[2] || raw.replace(match[0], ""));
+    return {
+      raw,
+      plannedManpower: Number.isFinite(plannedManpower) ? plannedManpower : null,
+      work: work || (plannedManpower === 0 ? raw.replace(/^0\s*[-_:,]?/i, "").trim() : raw),
+    };
+  }
+  return { raw, plannedManpower: null, work: raw };
+}
+
+function mergeTomorrowPlanRecords(records = []) {
+  const groups = records.reduce((result, record) => {
+    const key = [
+      tomorrowPlanComparableSite(record.site),
+      projectText(record.category).toLowerCase(),
+      projectText(record.submittedBy).toLowerCase(),
+      record.submittedDate || "",
+      record.plannedManpower ?? "text",
+    ].join("|");
+    result.set(key, [...(result.get(key) || []), record]);
+    return result;
+  }, new Map());
+
+  return [...groups.values()].flatMap((group) => {
+    const hasWorkRecord = group.some((record) => Boolean(projectText(record.work)));
+    const filtered = hasWorkRecord ? group.filter((record) => Boolean(projectText(record.work))) : group;
+    const seen = new Set();
+    return filtered.filter((record) => {
+      const key = projectText(record.work || record.raw).toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  });
+}
+
+function summarizeTomorrowPlan(records = []) {
+  return records.reduce((result, record) => {
+    result.records += 1;
+    if (record.plannedManpower !== null && record.plannedManpower !== undefined) {
+      result.plannedManpower += Number(record.plannedManpower) || 0;
+    }
+    if (record.work) result.workItems += 1;
+    result.sites.add(record.site || "Unassigned");
+    result.categories.add(record.category || "General");
+    return result;
+  }, { records: 0, plannedManpower: 0, workItems: 0, sites: new Set(), categories: new Set() });
+}
+
+function tomorrowPlanBreakdown(records = [], field) {
+  return [...records.reduce((result, record) => {
+    const label = projectText(record[field]) || "Unassigned";
+    const item = result.get(label) || { label, records: 0, plannedManpower: 0, workItems: 0 };
+    item.records += 1;
+    item.plannedManpower += Number(record.plannedManpower) || 0;
+    if (record.work) item.workItems += 1;
+    result.set(label, item);
+    return result;
+  }, new Map()).values()].sort((a, b) => b.plannedManpower - a.plannedManpower || b.records - a.records || a.label.localeCompare(b.label));
+}
+
+async function readDmrTomorrowPlan(dateKey) {
+  const spreadsheetId = DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID;
+  if (!spreadsheetId) return null;
+  const targetDate = dmrDateKey(dateKey);
+  const sheets = await fetchRawSheetValues(spreadsheetId);
+  const sheet = sheets.find((item) => /form responses/i.test(item.name)) || sheets[0];
+  const values = sheet?.values || [];
+  const headers = (values[0] || []).map(projectText);
+  const timestampIndex = headers.findIndex((header) => /^timestamp$/i.test(header));
+  const nameIndex = headers.findIndex((header) => /^name$/i.test(header));
+  const siteIndex = headers.findIndex((header) => /site\s*name/i.test(header));
+  const categoryColumns = headers
+    .map((header, index) => ({ header, index, category: tomorrowPlanCategory(header) }))
+    .filter((item) => item.category);
+
+  const allRecords = [];
+  for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    const row = values[rowIndex] || [];
+    const timestamp = dmrCell(values, rowIndex, timestampIndex);
+    const submittedDate = parseGoogleTimestampDate(timestamp);
+    const submittedBy = dmrCell(values, rowIndex, nameIndex);
+    const site = dmrCell(values, rowIndex, siteIndex) || "Unassigned site";
+    for (const column of categoryColumns) {
+      const parsed = parseTomorrowPlanCell(row[column.index]);
+      if (!parsed.raw) continue;
+      allRecords.push({
+        id: `${sheet.name}:${rowIndex + 1}:${column.index + 1}`,
+        rowNumber: rowIndex + 1,
+        columnNumber: column.index + 1,
+        sheetName: sheet.name,
+        timestamp,
+        submittedDate,
+        submittedBy,
+        site,
+        category: column.category,
+        plannedManpower: parsed.plannedManpower,
+        work: parsed.work,
+        raw: parsed.raw,
+      });
+    }
+  }
+
+  const normalizedRecords = mergeTomorrowPlanRecords(canonicalizeTomorrowPlanSites(allRecords));
+  const availableDates = [...new Set(normalizedRecords.map((record) => record.submittedDate).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+  const latestDate = availableDates[0] || targetDate;
+  let selectedDate = targetDate;
+  let records = normalizedRecords.filter((record) => record.submittedDate === targetDate);
+  if (!records.length) {
+    selectedDate = latestDate;
+    records = normalizedRecords.filter((record) => record.submittedDate === latestDate);
+  }
+  const summaryDraft = summarizeTomorrowPlan(records);
+  return {
+    spreadsheetId,
+    sheetName: sheet?.name || "",
+    requestedDate: targetDate,
+    selectedDate,
+    latestDate,
+    availableDates,
+    records,
+    summary: {
+      records: summaryDraft.records,
+      plannedManpower: summaryDraft.plannedManpower,
+      workItems: summaryDraft.workItems,
+      sites: summaryDraft.sites.size,
+      categories: summaryDraft.categories.size,
+    },
+    siteBreakdown: tomorrowPlanBreakdown(records, "site"),
+    categoryBreakdown: tomorrowPlanBreakdown(records, "category"),
+    submitterBreakdown: tomorrowPlanBreakdown(records, "submittedBy"),
+  };
+}
+
+async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
+  const spreadsheetId = DEFAULT_DMR_SPREADSHEET_ID;
+  const date = dmrDateKey(dateKey);
+  if (ensureToday) await ensureDmrTab(spreadsheetId, date);
+  const sheets = await fetchRawSheetValues(spreadsheetId);
+  const parsedTabs = sheets
+    .map((sheet) => {
+      const tabDate = dmrDateFromTabName(sheet.name, Number(date.slice(0, 4)) || new Date().getFullYear());
+      if (!tabDate) return null;
+      const parsed = parseDmrSheetValues({ values: sheet.values || [], sheetName: sheet.name, dateKey: tabDate });
+      return {
+        sheetName: sheet.name,
+        date: tabDate,
+        records: parsed.records || [],
+        equipment: parsed.equipment || [],
+        materials: parsed.materials || [],
+        notes: parsed.notes || [],
+        staffAttendance: parsed.staffAttendance || [],
+        sites: parsed.sites || [],
+        agencies: parsed.agencies || [],
+        error: parsed.error || null,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const today = parsedTabs.find((tab) => tab.date === date) || { sheetName: dmrTabName(date), date, records: [], sites: [], agencies: [] };
+  const allRecords = parsedTabs.flatMap((tab) => tab.records);
+  let tomorrowPlan = null;
+  try {
+    tomorrowPlan = await readDmrTomorrowPlan(date);
+  } catch (error) {
+    console.error("Tomorrow plan read error:", error);
+    tomorrowPlan = {
+      error: error.message,
+      records: [],
+      summary: { records: 0, plannedManpower: 0, workItems: 0, sites: 0, categories: 0 },
+      siteBreakdown: [],
+      categoryBreakdown: [],
+      submitterBreakdown: [],
+    };
+  }
+  const recentTabs = parsedTabs.slice(0, 14).map((tab) => ({
+    date: tab.date,
+    sheetName: tab.sheetName,
+    totals: dmrSummary(tab.records),
+  }));
+
+  return {
+    spreadsheetId,
+    date,
+    sheetName: today.sheetName,
+    today: {
+      records: today.records,
+      equipment: today.equipment || [],
+      materials: today.materials || [],
+      notes: today.notes || [],
+      staffAttendance: today.staffAttendance || [],
+      totals: dmrSummary(today.records),
+      siteBreakdown: dmrBreakdown(today.records, "site"),
+      agencyBreakdown: dmrBreakdown(today.records, "agency"),
+      sites: [...new Set(today.records.map((record) => record.site))],
+      agencies: [...new Set(today.records.map((record) => record.agency))].sort((a, b) => a.localeCompare(b)),
+    },
+    workbook: {
+      sheets: parsedTabs.map((tab) => ({ date: tab.date, sheetName: tab.sheetName, recordCount: tab.records.length })),
+      totals: dmrSummary(allRecords),
+      recentTabs,
+      siteBreakdown: dmrBreakdown(allRecords, "site"),
+      agencyBreakdown: dmrBreakdown(allRecords, "agency"),
+    },
+    tomorrowPlan,
+  };
+}
+
+function projectRowMatches(row, headers, assignment, project) {
+  const projectColumn = projectFindColumn(headers, assignment.mapping?.projectColumn, PROJECT_FIELD_PATTERNS.project);
+  if (!projectColumn) return true;
+  const value = projectText(row[projectColumn]).toLowerCase();
+  if (!value) return false;
+  const accepted = [assignment.projectValue, project.name, ...(project.aliases || [])]
+    .map((item) => projectText(item).toLowerCase())
+    .filter(Boolean);
+  return accepted.some((item) => value === item || value.includes(item) || item.includes(value));
+}
+
+function normalizeProjectRow({ row, headers, assignment, project, doc, tab, category }) {
+  const mapping = assignment.mapping || {};
+  const projectColumn = projectFindColumn(headers, mapping.projectColumn, PROJECT_FIELD_PATTERNS.project);
+  const titleColumn = projectFindColumn(headers, mapping.titleColumn, PROJECT_FIELD_PATTERNS.title);
+  const statusColumn = projectFindColumn(headers, mapping.statusColumn, PROJECT_FIELD_PATTERNS.status);
+  const dueDateColumn = projectFindColumn(headers, mapping.dueDateColumn, PROJECT_FIELD_PATTERNS.dueDate);
+  const startDateColumn = projectFindColumn(headers, mapping.startDateColumn, PROJECT_FIELD_PATTERNS.startDate);
+  const completedDateColumn = projectFindColumn(headers, mapping.completedDateColumn, PROJECT_FIELD_PATTERNS.completedDate);
+  const updatedDateColumn = projectFindColumn(headers, mapping.updatedDateColumn, PROJECT_FIELD_PATTERNS.updatedDate);
+  const ownerColumn = projectFindColumn(headers, mapping.ownerColumn, PROJECT_FIELD_PATTERNS.owner);
+  const notesColumn = projectFindColumn(headers, mapping.notesColumn, PROJECT_FIELD_PATTERNS.notes);
+  const agencyColumn = projectFindColumn(headers, mapping.agencyColumn, PROJECT_FIELD_PATTERNS.agency);
+  const supervisorColumn = projectFindColumn(headers, mapping.supervisorColumn, PROJECT_FIELD_PATTERNS.supervisor);
+  const tradeColumn = projectFindColumn(headers, mapping.tradeColumn, PROJECT_FIELD_PATTERNS.trade);
+  const floorColumn = projectFindColumn(headers, mapping.floorColumn, PROJECT_FIELD_PATTERNS.floor);
+  const areaColumn = projectFindColumn(headers, mapping.areaColumn, PROJECT_FIELD_PATTERNS.area);
+  const priorityColumn = projectFindColumn(headers, mapping.priorityColumn, PROJECT_FIELD_PATTERNS.priority);
+  const pendingStagesColumn = projectFindColumn(headers, mapping.pendingStagesColumn, PROJECT_FIELD_PATTERNS.pendingStages);
+  const stageStatuses = Object.fromEntries(PROJECT_WORKFLOW_STAGES.map((stage) => [
+    stage,
+    projectStageState(row[headers.find((header) => header.toLowerCase() === stage.toLowerCase())]),
+  ]));
+  const knownStages = Object.values(stageStatuses).filter((value) => value !== "unknown");
+  const stagesCompleted = knownStages.filter((value) => value === "done").length;
+  const stagesBlocked = knownStages.filter((value) => value === "blocked").length;
+  const stageComplete = knownStages.length > 0 && stagesCompleted === knownStages.length;
+  const rawStatus = projectText(row[statusColumn]);
+  const notes = projectText(row[notesColumn]);
+  const flags = projectStatusFlags(rawStatus, notes);
+  const fallbackTitleColumn = headers.find((header) => projectText(row[header]) && ![projectColumn, statusColumn, dueDateColumn, completedDateColumn, updatedDateColumn].includes(header));
+  const pendingStages = projectText(row[pendingStagesColumn]);
+  const status = stageComplete ? "Completed" : pendingStages || rawStatus || (knownStages.length ? "Pending" : "");
+  const trade = projectText(row[tradeColumn]) || (
+    doc.sheetArchitecture?.kind === kalhaarPendingWorkDlArchitecture.KIND ? tab.name : ""
+  );
+  const agency = projectText(row[agencyColumn]);
+  const supervisor = projectText(row[supervisorColumn]);
+  const title = projectText(row[titleColumn || fallbackTitleColumn]) || `${category} record`;
+  const startDate = projectDateKey(row[startDateColumn]);
+  const dueDate = projectDateKey(row[dueDateColumn]);
+  const record = {
+    id: `${doc.id}:${tab.name}:${row.__rowIndex}`,
+    projectId: project.id,
+    category,
+    title,
+    status,
+    trade,
+    agency,
+    supervisor,
+    owner: projectText(row[ownerColumn]) || supervisor || agency,
+    floor: projectText(row[floorColumn]),
+    area: projectText(row[areaColumn]),
+    priority: projectText(row[priorityColumn]),
+    pendingStages,
+    notes,
+    startDate,
+    dueDate,
+    completedDate: projectDateKey(row[completedDateColumn]),
+    updatedDate: projectDateKey(row[updatedDateColumn]),
+    completed: stageComplete || flags.completed,
+    blocked: stagesBlocked > 0 || flags.blocked,
+    cancelled: flags.cancelled,
+    stageStatuses,
+    stagesCompleted,
+    stagesTracked: knownStages.length,
+    source: {
+      documentId: doc.id,
+      documentName: doc.name,
+      sheetId: doc.sheetId,
+      tab: tab.name,
+      row: row.__rowIndex,
+    },
+    values: Object.fromEntries(headers.slice(0, 30).map((header) => [header, row[header] ?? ""])),
+  };
+  record.dedupeKey = projectDedupeKey(record);
+  record.searchText = [
+    title, trade, agency, supervisor, record.floor, record.area, status, pendingStages, notes, doc.name, tab.name,
+  ].map(projectText).join(" ").toLowerCase();
+  return record;
 }
 
 async function fetchSheetModifiedTime(sheetId) {
@@ -1478,7 +2599,7 @@ async function syncSheet(documentId, sheetId) {
     );
 
     processingStatus[documentId] = { stage: "Profiling Sheet" };
-    const sheetData = await fetchSheetDataset(sheetId);
+    const sheetData = await fetchSheetDataset(sheetId, { force: true });
     await saveSheetArchitecture(documentId, sheetData);
     processingStatus[documentId] = { stage: "Ready", ready: true };
   } catch (error) {
@@ -1498,14 +2619,37 @@ async function syncSheet(documentId, sheetId) {
   }
 }
 
+setTimeout(async () => {
+  let recovered = 0;
+  for (const doc of documents) {
+    const vector = reconcileDocumentVector(doc);
+    if (vector.valid && doc.isReady) recovered += 1;
+  }
+  if (recovered > 0) saveDocuments();
+  console.log(`Reconciled ${recovered}/${documents.length} document vector indexes`);
+
+  for (const doc of documents.filter((item) => item.type === "sheet" && item.sheetId)) {
+    const vector = inspectVectorFile(doc.id);
+    if (vector.valid) continue;
+    try {
+      console.log(`Rebuilding missing vector index for sheet "${doc.name}"`);
+      await syncSheet(doc.id, doc.sheetId);
+    } catch (error) {
+      console.error(`Startup vector rebuild failed for ${doc.id}:`, error.message);
+    }
+  }
+}, 0);
+
 setInterval(async () => {
-  const sheetDocs = documents.filter((d) => d.type === "sheet" && d.status !== "processing");
+  const sheetDocs = documents.filter((d) => d.type === "sheet");
 
   for (const doc of sheetDocs) {
     try {
+      const vector = inspectVectorFile(doc.id);
+      if (processingStatus[doc.id] && !processingStatus[doc.id].ready && !processingStatus[doc.id].error) continue;
       const currentModifiedTime = await fetchSheetModifiedTime(doc.sheetId);
-      if (currentModifiedTime && currentModifiedTime !== doc.lastModifiedTime) {
-        console.log(`📊 Sheet "${doc.name}" changed — re-syncing...`);
+      if (!vector.valid || (currentModifiedTime && currentModifiedTime !== doc.lastModifiedTime)) {
+        console.log(`📊 Sheet "${doc.name}" needs vector sync — processing...`);
         await syncSheet(doc.id, doc.sheetId);
       }
     } catch (err) {
@@ -2528,12 +3672,11 @@ app.get("/documents", async (req, res) => {
     }));
   const visibleDocuments = filterVisibleDocuments(req);
   const updatedDocuments = visibleDocuments.map((doc) => {
-    const vectorPath = path.join(vectorsDir, `${doc.id}.json`);
-    const vectorExists = fs.existsSync(vectorPath);
+    const vector = reconcileDocumentVector(doc, { persist: true });
     return {
       ...doc,
       allowedUserIds: activeGrantUserIds(doc),
-      isReady: vectorExists && doc.isReady,
+      isReady: vector.valid && doc.isReady,
       isActive: doc.isActive !== undefined ? doc.isActive : true,
     };
   });
@@ -2812,6 +3955,7 @@ app.post("/sheets", requireDocumentContribution("link_sheets", "Link sheets insi
 
     const documentId = Date.now().toString();
     const profileName = getSheetProfileDisplayName(sheetId);
+
     const accessGrants = normalizeAccessGrants(req.body);
     const allowedUserIds = activeGrantUserIds({ accessGrants });
     const visibility = req.body?.visibility || (allowedUserIds.length > 0 ? "selected" : "private");
@@ -2858,7 +4002,8 @@ app.get("/status/:id", (req, res) => {
     return res.status(404).json({ error: "Document not found" });
   }
 
-  const isReady = doc?.isReady || false;
+  const vector = doc ? reconcileDocumentVector(doc, { persist: true }) : { valid: false };
+  const isReady = Boolean(doc?.isReady && vector.valid);
 
   res.json({
     stage: isReady ? "Ready" : (status?.stage || "Processing"),
@@ -3054,6 +4199,658 @@ app.get("/sheets/:id/data", async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+function normalizeProjectInput(body, existing = {}) {
+  const name = projectText(body?.name ?? existing.name);
+  if (!name) throw new Error("Project name is required");
+  const assignments = Array.isArray(body?.assignments ?? existing.assignments)
+    ? (body?.assignments ?? existing.assignments).map((assignment) => ({
+        id: projectText(assignment.id) || crypto.randomUUID(),
+        documentId: projectText(assignment.documentId),
+        tabs: Array.isArray(assignment.tabs) ? assignment.tabs.map(projectText).filter(Boolean) : [],
+        category: projectText(assignment.category) || "auto",
+        projectValue: projectText(assignment.projectValue),
+        mapping: Object.fromEntries(
+          Object.entries(assignment.mapping || {})
+            .map(([key, value]) => [key, projectText(value)])
+            .filter(([, value]) => value)
+        ),
+      })).filter((assignment) => assignment.documentId)
+    : [];
+  const incomingDmr = body?.dmr !== undefined ? body.dmr : existing.dmr;
+  const dmr = {
+    ...(existing.dmr || {}),
+    ...(incomingDmr || {}),
+    enabled: Boolean(incomingDmr?.enabled ?? existing.dmr?.enabled),
+    spreadsheetId: normalizeSpreadsheetId(incomingDmr?.spreadsheetId ?? existing.dmr?.spreadsheetId),
+    siteNames: Array.isArray(incomingDmr?.siteNames ?? existing.dmr?.siteNames)
+      ? (incomingDmr?.siteNames ?? existing.dmr?.siteNames).map(projectText).filter(Boolean)
+      : [],
+    agencyNames: Array.isArray(incomingDmr?.agencyNames ?? existing.dmr?.agencyNames)
+      ? (incomingDmr?.agencyNames ?? existing.dmr?.agencyNames).map(projectText).filter(Boolean)
+      : [],
+    assignedUserIds: Array.isArray(incomingDmr?.assignedUserIds ?? existing.dmr?.assignedUserIds)
+      ? (incomingDmr?.assignedUserIds ?? existing.dmr?.assignedUserIds).map(projectText).filter(Boolean)
+      : [],
+    editableUserIds: Array.isArray(incomingDmr?.editableUserIds ?? existing.dmr?.editableUserIds)
+      ? (incomingDmr?.editableUserIds ?? existing.dmr?.editableUserIds).map(projectText).filter(Boolean)
+      : [],
+  };
+  return {
+    ...existing,
+    name,
+    code: projectText(body?.code ?? existing.code),
+    location: projectText(body?.location ?? existing.location),
+    manager: projectText(body?.manager ?? existing.manager),
+    status: projectText(body?.status ?? existing.status) || "active",
+    aliases: Array.isArray(body?.aliases ?? existing.aliases)
+      ? (body?.aliases ?? existing.aliases).map(projectText).filter(Boolean)
+      : [],
+    assignments,
+    dmr,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+app.get("/project-dashboard/config", requireSuperAdmin, async (req, res) => {
+  const db = await connectAuthDb();
+  const sheetDocs = documents.filter((doc) => doc.type === "sheet" && isDocumentVisible(doc, req));
+  const sheets = [];
+  for (const doc of sheetDocs) {
+    let architecture = doc.sheetArchitecture;
+    if (!architecture?.tabs?.length && doc.isReady) {
+      try {
+        architecture = await saveSheetArchitecture(doc.id, await fetchSheetDataset(doc.sheetId));
+      } catch (error) {
+        console.warn(`Could not prepare mapping metadata for ${doc.name}:`, error.message);
+      }
+    }
+    sheets.push({
+      id: doc.id,
+      name: doc.name,
+      sheetId: doc.sheetId,
+      isReady: Boolean(doc.isReady),
+      status: doc.status,
+      tabs: (architecture?.tabs || []).map((tab) => ({
+        name: tab.name,
+        headers: tab.headers || [],
+        rowCount: tab.rowCount || 0,
+      })),
+    });
+  }
+  const users = await db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1 }).toArray();
+  res.json({
+    projects: projectDashboardConfig.projects,
+    sheets,
+    users: users.map((user) => ({
+      id: String(user._id),
+      displayName: user.displayName || user.username,
+      username: user.username,
+      isSuperAdmin: Boolean(user.isSuperAdmin),
+    })),
+  });
+});
+
+app.post("/project-dashboard/projects", requireSuperAdmin, (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    const project = normalizeProjectInput(req.body, {
+      id: crypto.randomUUID(),
+      createdAt: now,
+      createdBy: req.authUser?.id || null,
+    });
+    projectDashboardConfig.projects.push(project);
+    saveProjectDashboardConfig();
+    res.json({ success: true, project });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.patch("/project-dashboard/projects/:id", requireSuperAdmin, (req, res) => {
+  try {
+    const index = projectDashboardConfig.projects.findIndex((project) => project.id === req.params.id);
+    if (index === -1) return res.status(404).json({ error: "Project not found" });
+    projectDashboardConfig.projects[index] = normalizeProjectInput(req.body, projectDashboardConfig.projects[index]);
+    saveProjectDashboardConfig();
+    res.json({ success: true, project: projectDashboardConfig.projects[index] });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/project-dashboard/projects/:id", requireSuperAdmin, (req, res) => {
+  const before = projectDashboardConfig.projects.length;
+  projectDashboardConfig.projects = projectDashboardConfig.projects.filter((project) => project.id !== req.params.id);
+  if (before === projectDashboardConfig.projects.length) return res.status(404).json({ error: "Project not found" });
+  saveProjectDashboardConfig();
+  res.json({ success: true });
+});
+
+app.get("/dmr-dashboard", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
+      ? String(req.query.date)
+      : projectDateKey(new Date());
+    const dashboard = await readDmrDashboard(date, { ensureToday: true });
+    res.json({
+      ...dashboard,
+      canEdit: hasPrivilege(req, "edit_project_dmr"),
+      canViewHistory: Boolean(req.user?.isSuperAdmin),
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("DMR dashboard error:", error);
+    res.status(500).json({ error: `Could not load DMR dashboard: ${error.message}` });
+  }
+});
+
+function dmrHistoryLabel(record) {
+  if (!record) return "DMR row";
+  if (record.type === "manpower") return `${record.agency} · ${record.site}`;
+  if (record.type === "staff") return record.name || "Staff attendance";
+  if (record.type === "equipment") return record.details || record.site || "Equipment & tools";
+  if (record.type === "material") return record.details || record.site || "Materials";
+  if (record.type === "note") return `Note row ${record.rowNumber}`;
+  return record.label || record.id || "DMR row";
+}
+
+function buildDmrHistoryEntries({ req, date, sheetName, allowed, update }) {
+  const entries = [];
+  const base = {
+    dmrDate: date,
+    sheetName,
+    section: allowed.type,
+    rowNumber: allowed.rowNumber || null,
+    label: dmrHistoryLabel(allowed),
+    site: allowed.site || update.site || null,
+    agency: allowed.agency || null,
+  };
+  const add = (field, fromValue, toValue) => {
+    const before = projectText(fromValue);
+    const after = projectText(toValue);
+    if (before === after) return;
+    entries.push({
+      ...base,
+      action: "updated",
+      field,
+      before,
+      after,
+      submissionId: projectText(update.submissionId) || null,
+    });
+  };
+  if (allowed.type === "equipment") {
+    add("site", allowed.site, update.site);
+    add("details", allowed.details, update.details);
+    add("quantity", allowed.quantity, update.quantity);
+  } else if (allowed.type === "material") {
+    add("site", allowed.site, update.site);
+    add("details", allowed.details, update.details);
+    add("unit", allowed.unit, update.unit);
+    add("quantity", allowed.quantity, update.quantity);
+  } else if (allowed.type === "note") {
+    add("note", allowed.note, update.note);
+  } else if (allowed.type === "staff") {
+    add("attendance", allowed.status, update.status);
+  } else {
+    add("planned", allowed.planned, update.planned);
+    add("actual", allowed.actual, update.actual);
+  }
+  return entries.map((entry) => ({ ...entry, ip: getClientIp(req) }));
+}
+
+app.patch("/dmr-dashboard", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
+    if (!hasPrivilege(req, "edit_project_dmr")) return res.status(403).json({ error: "DMR fill permission required" });
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || ""))
+      ? String(req.body.date)
+      : projectDateKey(new Date());
+    const incomingUpdates = Array.isArray(req.body?.updates) ? req.body.updates : [];
+    const submissionId = projectText(req.body?.submissionId) || `dmr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (!incomingUpdates.length) return res.status(400).json({ error: "No DMR rows were provided" });
+    const today = await readDmrSheet(DEFAULT_DMR_SPREADSHEET_ID, date, { ensure: true });
+    const sectionRecords = [
+      ...(today.records || []).map((record) => ({ ...record, type: "manpower" })),
+      ...(today.equipment || []).map((record) => ({ ...record, type: "equipment" })),
+      ...(today.materials || []).map((record) => ({ ...record, type: "material" })),
+      ...(today.notes || []).map((record) => ({ ...record, type: "note" })),
+      ...(today.staffAttendance || []).map((record) => ({ ...record, type: "staff" })),
+    ];
+    const allowedMap = new Map(sectionRecords.map((record) => [record.id, record]));
+    const historyEntries = [];
+    const updates = incomingUpdates.map((rawUpdate) => {
+      const update = { ...rawUpdate, submissionId };
+      const allowed = allowedMap.get(projectText(update.id));
+      if (!allowed) return null;
+      historyEntries.push(...buildDmrHistoryEntries({ req, date, sheetName: today.sheetName, allowed, update }));
+      if (allowed.type === "equipment") {
+        return {
+          rowNumber: allowed.rowNumber,
+          cells: [
+            { column: allowed.siteColumn, value: update.site },
+            { column: allowed.detailsColumn, value: update.details },
+            { column: allowed.quantityColumn, value: update.quantity },
+          ],
+        };
+      }
+      if (allowed.type === "material") {
+        return {
+          rowNumber: allowed.rowNumber,
+          cells: [
+            { column: allowed.siteColumn, value: update.site },
+            { column: allowed.detailsColumn, value: update.details },
+            { column: allowed.unitColumn, value: update.unit },
+            { column: allowed.quantityColumn, value: update.quantity },
+          ],
+        };
+      }
+      if (allowed.type === "note") {
+        return {
+          rowNumber: allowed.rowNumber,
+          cells: [{ column: allowed.noteColumn, value: update.note }],
+        };
+      }
+      if (allowed.type === "staff") {
+        return {
+          rowNumber: allowed.rowNumber,
+          cells: [{ column: allowed.statusColumn, value: update.status }],
+        };
+      }
+      return {
+        rowNumber: allowed.rowNumber,
+        plannedColumn: allowed.plannedColumn,
+        actualColumn: allowed.actualColumn,
+        planned: update.planned,
+        actual: update.actual,
+      };
+    }).filter(Boolean);
+    if (!updates.length) return res.status(400).json({ error: "No matching DMR rows found for this date" });
+    const result = await writeDmrRecords(DEFAULT_DMR_SPREADSHEET_ID, date, updates);
+    addDmrHistory(req, historyEntries);
+    addActivityLog({
+      req,
+      action: "Updated DMR dashboard",
+      target: result.sheetName,
+      details: { rows: updates.length, updatedCells: result.updatedCells },
+    });
+    res.json({ success: true, ...result, rows: updates.length });
+  } catch (error) {
+    console.error("DMR dashboard update error:", error);
+    res.status(500).json({ error: `Could not save DMR: ${error.message}` });
+  }
+});
+
+app.post("/dmr-dashboard/section-row", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
+    if (!hasPrivilege(req, "edit_project_dmr")) return res.status(403).json({ error: "DMR fill permission required" });
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || ""))
+      ? String(req.body.date)
+      : projectDateKey(new Date());
+    const values = req.body?.values || {};
+    const submissionId = projectText(req.body?.submissionId) || `dmr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const result = await addDmrSectionRow(DEFAULT_DMR_SPREADSHEET_ID, date, req.body?.section, values);
+    addDmrHistory(req, [{
+      submissionId,
+      dmrDate: date,
+      sheetName: result.sheetName,
+      section: result.section,
+      rowNumber: result.insertedRowNumber,
+      action: "added row",
+      field: "row",
+      before: "",
+      after: result.section === "notes"
+        ? projectText(values.note)
+        : [values.site, values.details, values.quantity, values.unit].map(projectText).filter(Boolean).join(" · "),
+      label: result.section === "notes" ? "New note" : (projectText(values.details) || `New ${result.section} row`),
+      site: projectText(values.site) || null,
+      agency: null,
+      ip: getClientIp(req),
+    }]);
+    addActivityLog({
+      req,
+      action: "Added DMR section row",
+      target: result.sheetName,
+      details: { section: result.section, rowNumber: result.insertedRowNumber },
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("DMR add row error:", error);
+    res.status(500).json({ error: `Could not add DMR row: ${error.message}` });
+  }
+});
+
+app.get("/dmr-dashboard/history", requireSuperAdmin, (req, res) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
+    ? String(req.query.date)
+    : "";
+  const section = projectText(req.query.section).toLowerCase();
+  const limit = Math.min(300, Math.max(1, Number(req.query.limit) || 100));
+  let items = dmrHistory;
+  if (date) items = items.filter((entry) => entry.dmrDate === date);
+  if (section) items = items.filter((entry) => projectText(entry.section).toLowerCase() === section);
+  const grouped = [...items.reduce((result, entry) => {
+    const key = projectText(entry.submissionId)
+      || `${entry.createdAt || ""}|${entry.userId || entry.username || ""}|${entry.dmrDate || ""}|${entry.sheetName || ""}`;
+    const current = result.get(key) || {
+      id: key || entry.id,
+      submissionId: entry.submissionId || null,
+      createdAt: entry.createdAt,
+      dmrDate: entry.dmrDate,
+      sheetName: entry.sheetName,
+      userId: entry.userId || null,
+      username: entry.username || "System",
+      displayName: entry.displayName || entry.username || "System",
+      roleName: entry.roleName || null,
+      changes: [],
+    };
+    current.createdAt = current.createdAt && entry.createdAt && current.createdAt > entry.createdAt ? current.createdAt : entry.createdAt || current.createdAt;
+    current.changes.push(entry);
+    result.set(key, current);
+    return result;
+  }, new Map()).values()]
+    .map((group) => ({
+      ...group,
+      changeCount: group.changes.length,
+      sections: [...new Set(group.changes.map((change) => projectText(change.section)).filter(Boolean))],
+      actions: [...new Set(group.changes.map((change) => projectText(change.action)).filter(Boolean))],
+      rowCount: new Set(group.changes.map((change) => change.rowNumber).filter(Boolean)).size,
+    }))
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  res.json({ history: grouped.slice(0, limit), total: grouped.length });
+});
+
+app.get("/project-dashboard/dmr", async (req, res) => {
+  try {
+    const project = projectDashboardConfig.projects.find((item) => item.id === req.query.projectId);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    if (!project.dmr?.enabled || !project.dmr?.spreadsheetId) {
+      return res.status(400).json({ error: "DMR is not configured for this project" });
+    }
+    if (!canViewProjectDmr(project, req)) return res.status(403).json({ error: "DMR access is not assigned to this user" });
+
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
+      ? String(req.query.date)
+      : projectDateKey(new Date());
+    const dmrSheet = await readDmrSheet(project.dmr.spreadsheetId, date, { ensure: true });
+    const allowedAgencyNames = new Set((project.dmr.agencyNames || []).map((item) => projectText(item).toLowerCase()).filter(Boolean));
+    const records = dmrSheet.records.filter((record) => {
+      if (!dmrProjectMatchesSite(project, project.dmr, record.site)) return false;
+      if (allowedAgencyNames.size && !allowedAgencyNames.has(projectText(record.agency).toLowerCase())) return false;
+      return true;
+    });
+    const totals = records.reduce((result, record) => {
+      result.planned += Number(record.planned) || 0;
+      result.actual += Number(record.actual) || 0;
+      if (record.actual || record.planned) result.filled += 1;
+      return result;
+    }, { planned: 0, actual: 0, filled: 0 });
+    totals.variance = totals.actual - totals.planned;
+    totals.records = records.length;
+    totals.missing = Math.max(0, records.length - totals.filled);
+    const agencyBreakdown = [...records.reduce((result, record) => {
+      const current = result.get(record.agency) || { agency: record.agency, planned: 0, actual: 0, variance: 0 };
+      current.planned += Number(record.planned) || 0;
+      current.actual += Number(record.actual) || 0;
+      current.variance = current.actual - current.planned;
+      result.set(record.agency, current);
+      return result;
+    }, new Map()).values()].sort((a, b) => b.actual - a.actual || a.agency.localeCompare(b.agency));
+
+    res.json({
+      projectId: project.id,
+      projectName: project.name,
+      date,
+      sheetName: dmrSheet.sheetName,
+      created: Boolean(dmrSheet.created),
+      canEdit: canEditProjectDmr(project, req),
+      records,
+      totals,
+      agencyBreakdown,
+      sites: [...new Set(records.map((record) => record.site))],
+      agencies: [...new Set(records.map((record) => record.agency))].sort((a, b) => a.localeCompare(b)),
+    });
+  } catch (error) {
+    console.error("Project DMR read error:", error);
+    res.status(500).json({ error: `Could not load DMR: ${error.message}` });
+  }
+});
+
+app.patch("/project-dashboard/dmr", async (req, res) => {
+  try {
+    const project = projectDashboardConfig.projects.find((item) => item.id === req.body?.projectId);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    if (!project.dmr?.enabled || !project.dmr?.spreadsheetId) {
+      return res.status(400).json({ error: "DMR is not configured for this project" });
+    }
+    if (!canEditProjectDmr(project, req)) return res.status(403).json({ error: "DMR edit permission is required" });
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || ""))
+      ? String(req.body.date)
+      : projectDateKey(new Date());
+    const incomingUpdates = Array.isArray(req.body?.updates) ? req.body.updates : [];
+    if (!incomingUpdates.length) return res.status(400).json({ error: "No DMR rows were provided" });
+
+    const dmrSheet = await readDmrSheet(project.dmr.spreadsheetId, date, { ensure: true });
+    const allowedAgencyNames = new Set((project.dmr.agencyNames || []).map((item) => projectText(item).toLowerCase()).filter(Boolean));
+    const allowedRecords = dmrSheet.records.filter((record) => {
+      if (!dmrProjectMatchesSite(project, project.dmr, record.site)) return false;
+      if (allowedAgencyNames.size && !allowedAgencyNames.has(projectText(record.agency).toLowerCase())) return false;
+      return true;
+    });
+    const allowedMap = new Map(allowedRecords.map((record) => [record.id, record]));
+    const updates = incomingUpdates.map((update) => {
+      const allowed = allowedMap.get(projectText(update.id));
+      if (!allowed) return null;
+      return {
+        rowNumber: allowed.rowNumber,
+        plannedColumn: allowed.plannedColumn,
+        actualColumn: allowed.actualColumn,
+        planned: update.planned,
+        actual: update.actual,
+      };
+    }).filter(Boolean);
+    if (!updates.length) return res.status(403).json({ error: "No editable DMR rows matched this project scope" });
+
+    const result = await writeDmrRecords(project.dmr.spreadsheetId, date, updates);
+    addActivityLog({
+      req,
+      action: "Updated project DMR",
+      target: `${project.name} · ${result.sheetName}`,
+      details: { rows: updates.length, updatedCells: result.updatedCells },
+    });
+    res.json({ success: true, ...result, rows: updates.length });
+  } catch (error) {
+    console.error("Project DMR update error:", error);
+    res.status(500).json({ error: `Could not save DMR: ${error.message}` });
+  }
+});
+
+app.get("/project-dashboard", async (req, res) => {
+  try {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
+      ? String(req.query.date)
+      : projectDateKey(new Date());
+    const visibleSheetDocs = new Map(
+      documents
+        .filter((doc) => doc.type === "sheet" && doc.isActive !== false && doc.isReady && isDocumentVisible(doc, req))
+        .map((doc) => [doc.id, doc])
+    );
+    const datasetCache = new Map();
+    const dashboardProjects = [];
+
+    for (const project of projectDashboardConfig.projects.filter((item) => item.status !== "archived")) {
+      const records = [];
+      const sources = [];
+      for (const assignment of project.assignments || []) {
+        const doc = visibleSheetDocs.get(assignment.documentId);
+        if (!doc) {
+          sources.push({ documentId: assignment.documentId, status: "unavailable" });
+          continue;
+        }
+        try {
+          if (!datasetCache.has(doc.id)) datasetCache.set(doc.id, await fetchSheetDataset(doc.sheetId));
+          const dataset = datasetCache.get(doc.id);
+          const tabs = projectTabsForAssignment(doc, dataset, assignment);
+          let sourceRecordCount = 0;
+          for (const tab of tabs) {
+            const category = projectCategory(assignment, doc, tab);
+            for (const row of tab.rows || []) {
+              if (!projectRowMatches(row, tab.headers || [], assignment, project)) continue;
+              const normalizedRecord = normalizeProjectRow({
+                row,
+                headers: tab.headers || [],
+                assignment,
+                project,
+                doc,
+                tab,
+                category,
+              });
+              records.push(normalizedRecord);
+              sourceRecordCount += 1;
+            }
+          }
+          sources.push({
+            documentId: doc.id,
+            documentName: doc.name,
+            status: "ready",
+            recordCount: sourceRecordCount,
+            category: assignment.category || "auto",
+          });
+        } catch (error) {
+          sources.push({ documentId: doc.id, documentName: doc.name, status: "failed", error: error.message });
+        }
+      }
+
+      const deduplicatedRecords = [...records.reduce((result, record) => {
+        const key = record.dedupeKey || record.id;
+        const current = result.get(key);
+        if (!current || projectRecordScore(record) > projectRecordScore(current)) result.set(key, record);
+        return result;
+      }, new Map()).values()];
+      const activeRecords = deduplicatedRecords.filter((record) => !record.cancelled);
+      const completedRecords = activeRecords.filter((record) => record.completed);
+      const dueToday = activeRecords.filter((record) => record.dueDate === date && !record.completed);
+      const startingToday = activeRecords.filter((record) => record.startDate === date && !record.completed);
+      const completedToday = activeRecords.filter((record) => record.completedDate === date || (record.completed && record.updatedDate === date));
+      const actionsToday = activeRecords.filter((record) => record.updatedDate === date || record.completedDate === date);
+      const overdue = activeRecords.filter((record) => record.dueDate && record.dueDate < date && !record.completed);
+      const blocked = activeRecords.filter((record) => record.blocked && !record.completed);
+      const upcoming = activeRecords
+        .filter((record) => record.dueDate && record.dueDate > date && !record.completed)
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+      const attendanceToday = activeRecords.filter((record) => record.category === "attendance" && [record.updatedDate, record.dueDate, record.completedDate].includes(date));
+      const attendancePresent = attendanceToday.filter((record) => /\b(present|yes|p)\b/i.test(record.status || record.notes)).length;
+      const attendanceAbsent = attendanceToday.filter((record) => /\b(absent|no|a|leave)\b/i.test(record.status || record.notes)).length;
+      const categoryCounts = activeRecords.reduce((result, record) => {
+        result[record.category] = (result[record.category] || 0) + 1;
+        return result;
+      }, {});
+      const stageCounts = PROJECT_WORKFLOW_STAGES.reduce((result, stage) => {
+        const key = stage.toLowerCase();
+        const stageRecords = activeRecords.filter((record) => record.stageStatuses?.[stage] && record.stageStatuses[stage] !== "unknown");
+        result[key] = {
+          total: stageRecords.length,
+          done: stageRecords.filter((record) => record.stageStatuses[stage] === "done").length,
+          pending: stageRecords.filter((record) => ["pending", "in_progress", "blocked"].includes(record.stageStatuses[stage])).length,
+          blocked: stageRecords.filter((record) => record.stageStatuses[stage] === "blocked").length,
+        };
+        return result;
+      }, {});
+      const buildBreakdown = (field) => [...activeRecords.reduce((result, record) => {
+        const label = projectText(record[field]) || "Unassigned";
+        const item = result.get(label) || { label, total: 0, pending: 0, overdue: 0, blocked: 0 };
+        item.total += 1;
+        if (!record.completed) item.pending += 1;
+        if (record.dueDate && record.dueDate < date && !record.completed) item.overdue += 1;
+        if (record.blocked && !record.completed) item.blocked += 1;
+        result.set(label, item);
+        return result;
+      }, new Map()).values()].sort((a, b) => b.pending - a.pending || b.total - a.total);
+      const agencyBreakdown = buildBreakdown("agency");
+      const tradeBreakdown = buildBreakdown("trade");
+      const progressBase = activeRecords.filter((record) => record.category !== "attendance");
+      const trackedStageTotal = progressBase.reduce((total, record) => total + record.stagesTracked, 0);
+      const trackedStageDone = progressBase.reduce((total, record) => total + record.stagesCompleted, 0);
+      const progress = trackedStageTotal
+        ? Math.round((trackedStageDone / trackedStageTotal) * 100)
+        : progressBase.length
+        ? Math.round((progressBase.filter((record) => record.completed).length / progressBase.length) * 100)
+        : 0;
+      const take = (items, limit = 100) => items.slice(0, limit);
+
+      dashboardProjects.push({
+        id: project.id,
+        name: project.name,
+        code: project.code,
+        location: project.location,
+        manager: project.manager,
+        status: project.status,
+        date,
+        dmr: {
+          enabled: Boolean(project.dmr?.enabled && project.dmr?.spreadsheetId),
+          canView: Boolean(project.dmr?.enabled && project.dmr?.spreadsheetId && canViewProjectDmr(project, req)),
+          canEdit: Boolean(project.dmr?.enabled && project.dmr?.spreadsheetId && canEditProjectDmr(project, req)),
+        },
+        metrics: {
+          progress,
+          totalRecords: activeRecords.length,
+          completed: completedRecords.length,
+          pending: activeRecords.filter((record) => !record.completed).length,
+          dueToday: dueToday.length,
+          startingToday: startingToday.length,
+          completedToday: completedToday.length,
+          actionsToday: actionsToday.length,
+          overdue: overdue.length,
+          blocked: blocked.length,
+          attendancePresent,
+          attendanceAbsent,
+          agencies: agencyBreakdown.filter((item) => item.label !== "Unassigned").length,
+          trades: tradeBreakdown.filter((item) => item.label !== "Unassigned").length,
+        },
+        stageCounts,
+        agencyBreakdown,
+        tradeBreakdown,
+        categoryCounts,
+        highlights: {
+          dueToday: take(dueToday),
+          startingToday: take(startingToday),
+          completedToday: take(completedToday),
+          actionsToday: take(actionsToday),
+          overdue: take(overdue),
+          blocked: take(blocked),
+          upcoming: take(upcoming, 30),
+        },
+        records: take(activeRecords, 1000),
+        sources,
+        coverage: {
+          hasCompletionDates: activeRecords.some((record) => record.completedDate),
+          hasUpdateDates: activeRecords.some((record) => record.updatedDate),
+          rawRecords: records.length,
+          deduplicatedRecords: activeRecords.length,
+        },
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      date,
+      projects: dashboardProjects,
+      totals: dashboardProjects.reduce((totals, project) => {
+        totals.projects += 1;
+        totals.dueToday += project.metrics.dueToday;
+        totals.completedToday += project.metrics.completedToday;
+        totals.overdue += project.metrics.overdue;
+        totals.blocked += project.metrics.blocked;
+        return totals;
+      }, { projects: 0, dueToday: 0, completedToday: 0, overdue: 0, blocked: 0 }),
+    });
+  } catch (error) {
+    console.error("Project dashboard error:", error);
     res.status(500).json({ error: error.message });
   }
 });

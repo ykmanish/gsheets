@@ -5,10 +5,7 @@ const SHEET_ID = "1YcFUaOMnWk4HpYEF3VNIvruwR5f0PBNJ";
 // Tabs to skip – these are empty templates
 const SKIP_TABS = new Set(["Sheet1", "Sheet1 (2)", "Sheet1 (3)", "Formate"]);
 
-// Stage column letters (in the raw Excel, col F-K after the header row)
-// After we slice off col A, they become indices 4-9 in our 0-based offset array
 const STAGE_NAMES = ["Design", "Approval", "Selection", "Procurement", "Execution", "Audit"];
-const STAGE_OFFSET_INDICES = [4, 5, 6, 7, 8, 9]; // indices in the offset row (after removing col A)
 
 const STANDARD_HEADERS = [
   "Sr. No.",
@@ -130,7 +127,7 @@ function prepareSheet(name, values = [], rawSheet = null) {
       let val = offsetRow[colIdx] !== undefined ? offsetRow[colIdx] : "";
 
       // For stage columns (Design through Audit), inject status from cell color
-      if (rawSheet && STAGE_OFFSET_INDICES.includes(colIdx)) {
+      if (rawSheet && STAGE_NAMES.some((stage) => stage.toLowerCase() === String(headers[colIdx] || "").trim().toLowerCase())) {
         const excelRow = rowIdx + 1; // xlsx is 1-based
         const excelCol = colIdx + 2; // +1 for col A skip, +1 for 1-based
         const cellRef = colLetter(excelCol) + excelRow;

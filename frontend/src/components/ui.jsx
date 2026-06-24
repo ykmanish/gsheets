@@ -363,6 +363,140 @@ export function DateRangePicker({ darkMode, from, to, onChange, placeholder = "C
   );
 }
 
+export function DatePicker({ darkMode, value, onChange, placeholder = "Choose date" }) {
+  const ref = useRef(null);
+  const [open, setOpen] = useState(false);
+  const selectedDate = fromDateInputValue(value);
+  const [monthDate, setMonthDate] = useState(() => selectedDate || new Date());
+  useClickOutside(ref, () => setOpen(false));
+
+  const days = useMemo(() => {
+    const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+    const gridStart = new Date(start);
+    gridStart.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    return Array.from({ length: 42 }, (_, index) => {
+      const day = new Date(gridStart);
+      day.setDate(gridStart.getDate() + index);
+      return day;
+    });
+  }, [monthDate]);
+
+  function selectDay(day) {
+    onChange(toDateInputValue(day));
+    setMonthDate(day);
+    setOpen(false);
+  }
+
+  function selectToday() {
+    const today = new Date();
+    selectDay(today);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={`h-12 w-full min-w-[190px] rounded-2xl border px-4 text-left transition ${
+          darkMode
+            ? "bg-[#15171c] border-white/10 text-white hover:bg-white/10"
+            : "bg-white border-black/10 text-black hover:bg-black/[0.03]"
+        }`}
+      >
+        <span className="flex items-center gap-2 text-sm">
+          <CalendarDays className={`h-4 w-4 ${darkMode ? "text-[#d8f36a]" : "text-indigo-600"}`} />
+          <span className="truncate">{value ? formatDisplayDate(value) : placeholder}</span>
+        </span>
+      </button>
+
+      {open && (
+        <div
+          className={`absolute right-0 top-[calc(100%+10px)] z-50 w-[min(92vw,360px)] rounded-[22px] border p-3 shadow-2xl sm:p-4 ${
+            darkMode ? "bg-[#121317] border-white/10 text-white" : "bg-white border-black/10 text-black"
+          }`}
+        >
+          <div className="rounded-2xl border p-3 shadow-sm sm:p-4 dark:border-white/10">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className={`mb-1 text-sm ${darkMode ? "text-white/70" : "text-black/65"}`}>Selected day</p>
+                <div
+                  className={`flex h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold ${
+                    darkMode
+                      ? "border-[#d8f36a] text-[#d8f36a] ring-2 ring-[#d8f36a]/20"
+                      : "border-indigo-600 text-indigo-700 ring-2 ring-indigo-600/20"
+                  }`}
+                >
+                  <CalendarDays className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{formatDisplayDate(value)}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={selectToday}
+                className={`mt-6 rounded-lg px-3 py-2 text-sm ${darkMode ? "bg-white/5 text-white/75" : "bg-black/[0.04] text-black/75"}`}
+              >
+                Today
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}
+              className="rounded-full px-3 py-2 text-sm"
+            >
+              <ChevronDown className="h-4 w-4 rotate-90" />
+            </button>
+            <p className="text-xl font-semibold">{monthLabel(monthDate)}</p>
+            <button
+              type="button"
+              onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}
+              className="rounded-full px-3 py-2 text-sm"
+            >
+              <ChevronDown className="h-4 w-4 -rotate-90" />
+            </button>
+          </div>
+
+          <div className={`mt-5 grid grid-cols-7 gap-y-2 text-center text-sm ${darkMode ? "text-white/55" : "text-black/55"}`}>
+            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+          <div className="mt-3 grid grid-cols-7 gap-y-2 text-center">
+            {days.map((day) => {
+              const inMonth = day.getMonth() === monthDate.getMonth();
+              const selected = sameDay(day, selectedDate);
+              return (
+                <button
+                  key={day.toISOString()}
+                  type="button"
+                  onClick={() => selectDay(day)}
+                  className={`mx-auto h-9 w-9 rounded-xl text-sm transition sm:h-10 sm:w-10 sm:text-base ${
+                    selected
+                      ? darkMode
+                        ? "bg-[#d8f36a] text-black shadow-lg"
+                        : "bg-indigo-600 text-white shadow-lg"
+                      : inMonth
+                      ? darkMode
+                        ? "text-white hover:bg-white/8"
+                        : "text-black hover:bg-black/[0.04]"
+                      : darkMode
+                      ? "text-white/25"
+                      : "text-black/35"
+                  }`}
+                >
+                  {day.getDate()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DateTimePicker({ darkMode, value, onChange, placeholder = "Choose expiry" }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(null);

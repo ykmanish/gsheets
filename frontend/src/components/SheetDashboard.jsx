@@ -378,7 +378,7 @@ export default function SheetDashboard({ darkMode }) {
           : "linear-gradient(180deg, #f7f6f2 0%, #f3f1ea 100%)",
       }}
     >
-      <div className="h-full min-h-0 flex flex-col max-w-[1500px] mx-auto">
+      <div className="h-full min-h-0 flex flex-col mx-auto">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-6 flex-shrink-0">
           <div>
             <p className={`text-[11px] uppercase tracking-[0.32em] mb-3 ${muted}`}>Adaptive sheet intelligence</p>

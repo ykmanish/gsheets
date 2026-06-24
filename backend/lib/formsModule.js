@@ -1,4 +1,5 @@
 const { ObjectId } = require("mongodb");
+const crypto = require("crypto");
 
 const DEFAULT_FORM = {
   slug: "admin-misc-expense-payment",
@@ -22,12 +23,20 @@ const DEFAULT_FORM = {
   ],
 };
 
-function serializeForm(form) {
-  return {
+function serializeForm(form, viewer = {}) {
+  const serialized = {
     ...form,
     id: String(form._id),
     _id: undefined,
+    shares: undefined,
   };
+  if (viewer.isSuperAdmin) {
+    serialized.accessLinks = (form.shares || []).map((share) => ({
+      userId: String(share.userId),
+      accessKey: share.accessKey,
+    }));
+  }
+  return serialized;
 }
 
 function serializeSubmission(submission) {
@@ -95,8 +104,25 @@ function validateAnswers(form, rawAnswers) {
   return { answers, errors };
 }
 
+function getAccessKey(req) {
+  return String(req.get("x-form-access-key") || req.query?.accessKey || "").trim();
+}
+
 function hasFormAccess(req, form) {
-  return Boolean(req.user?.isSuperAdmin || form.allowedUserIds?.includes(String(req.user?._id)));
+  if (req.user?.isSuperAdmin) return true;
+  const userId = String(req.user?._id);
+  if (!form.allowedUserIds?.includes(userId)) return false;
+  const accessKey = getAccessKey(req);
+  if (!accessKey) return true;
+  return Boolean((form.shares || []).some((share) => String(share.userId) === userId && share.accessKey === accessKey));
+}
+
+function buildShares(allowedUserIds, existingShares = []) {
+  const existingByUser = new Map(existingShares.map((share) => [String(share.userId), share.accessKey]));
+  return allowedUserIds.map((userId) => ({
+    userId,
+    accessKey: existingByUser.get(userId) || crypto.randomBytes(24).toString("base64url"),
+  }));
 }
 
 function buildSheetRow(form, submission) {
@@ -137,9 +163,44 @@ function registerFormsModule(app, { connectDb, google, getGoogleAuth, requireSup
         { $setOnInsert: { ...DEFAULT_FORM, createdAt: now, updatedAt: now, version: 1 } },
         { upsert: true }
       );
+      const formsWithoutShares = await db.collection("forms").find({
+        allowedUserIds: { $exists: true, $ne: [] },
+        $or: [{ shares: { $exists: false } }, { shares: { $size: 0 } }],
+      }).toArray();
+      await Promise.all(formsWithoutShares.map((form) => db.collection("forms").updateOne(
+        { _id: form._id },
+        { $set: { shares: buildShares((form.allowedUserIds || []).map(String)) } }
+      )));
       return db;
     })();
     return setupPromise;
+  }
+
+  async function getWorkbookMetadata(spreadsheetId) {
+    const auth = await getGoogleAuth();
+    const sheets = google.sheets({ version: "v4", auth });
+    const metadata = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: "properties.title,sheets.properties(sheetId,title,index,gridProperties(rowCount,columnCount),sheetType,hidden)",
+    });
+    const workbookSheets = (metadata.data.sheets || [])
+      .map((sheet) => sheet.properties)
+      .filter((properties) => properties?.title)
+      .sort((a, b) => (a.index || 0) - (b.index || 0))
+      .map((properties) => ({
+        sheetId: properties.sheetId,
+        title: properties.title,
+        index: properties.index || 0,
+        rowCount: properties.gridProperties?.rowCount || 0,
+        columnCount: properties.gridProperties?.columnCount || 0,
+        sheetType: properties.sheetType || "GRID",
+        hidden: Boolean(properties.hidden),
+      }));
+    return {
+      spreadsheetId,
+      workbookTitle: metadata.data.properties?.title || "Google Spreadsheet",
+      sheets: workbookSheets,
+    };
   }
 
   async function syncSubmission(form, submission) {
@@ -151,8 +212,11 @@ function registerFormsModule(app, { connectDb, google, getGoogleAuth, requireSup
       const row = buildSheetRow(form, submission);
       const metadata = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties.title" });
       const tabNames = (metadata.data.sheets || []).map((sheet) => sheet.properties?.title).filter(Boolean);
-      const requestedTab = String(form.spreadsheet?.sheetName || "").trim();
-      const sheetName = tabNames.includes(requestedTab) ? requestedTab : tabNames[0];
+      const requestedTab = String(submission.sheetName || form.spreadsheet?.sheetName || "").trim();
+      if (requestedTab && !tabNames.includes(requestedTab)) {
+        throw new Error(`Sheet tab "${requestedTab}" was not found in the connected workbook`);
+      }
+      const sheetName = requestedTab || tabNames[0];
       if (!sheetName) throw new Error("The spreadsheet does not contain a sheet tab");
       const rangeEnd = columnName(row.length);
       const headerResult = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${escapeSheetName(sheetName)}!A1:${rangeEnd}1` });
@@ -183,7 +247,7 @@ function registerFormsModule(app, { connectDb, google, getGoogleAuth, requireSup
       const db = await setup();
       const query = req.user?.isSuperAdmin ? {} : { isActive: true, allowedUserIds: String(req.user._id) };
       const forms = await db.collection("forms").find(query).sort({ department: 1, name: 1 }).toArray();
-      res.json({ forms: forms.map(serializeForm) });
+      res.json({ forms: forms.map((form) => serializeForm(form, { isSuperAdmin: req.user?.isSuperAdmin })) });
     } catch (error) { res.status(500).json({ error: error.message }); }
   });
 
@@ -195,6 +259,94 @@ function registerFormsModule(app, { connectDb, google, getGoogleAuth, requireSup
     } catch (error) { res.status(500).json({ error: error.message }); }
   });
 
+  app.post("/forms/admin/spreadsheet-tabs", requireSuperAdmin, async (req, res) => {
+    try {
+      const spreadsheetId = normalizeSpreadsheetId(req.body?.spreadsheetId);
+      if (!spreadsheetId) return res.status(400).json({ error: "Spreadsheet URL or ID is required" });
+      res.json(await getWorkbookMetadata(spreadsheetId));
+    } catch (error) {
+      res.status(400).json({ error: `Could not read spreadsheet tabs: ${error.message}` });
+    }
+  });
+
+  app.get("/forms/:id/sheets", async (req, res) => {
+    try {
+      const db = await setup();
+      if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid form" });
+      const form = await db.collection("forms").findOne({ _id: new ObjectId(req.params.id) });
+      if (!form || !form.isActive || !hasFormAccess(req, form)) return res.status(403).json({ error: "Form access denied" });
+      const spreadsheetId = normalizeSpreadsheetId(form.spreadsheet?.spreadsheetId);
+      if (!spreadsheetId) return res.status(400).json({ error: "This form does not have a Google workbook connected" });
+      const workbook = await getWorkbookMetadata(spreadsheetId);
+      res.json({ ...workbook, sheets: workbook.sheets.filter((sheet) => !sheet.hidden && sheet.sheetType === "GRID") });
+    } catch (error) {
+      res.status(400).json({ error: `Could not load workbook sheets: ${error.message}` });
+    }
+  });
+
+  app.get("/forms/:id/sheets/:sheetName/rows", async (req, res) => {
+    try {
+      const db = await setup();
+      if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid form" });
+      const form = await db.collection("forms").findOne({ _id: new ObjectId(req.params.id) });
+      if (!form || !form.isActive || !hasFormAccess(req, form)) return res.status(403).json({ error: "Form access denied" });
+      const spreadsheetId = normalizeSpreadsheetId(form.spreadsheet?.spreadsheetId);
+      const sheetName = String(req.params.sheetName || "").trim();
+      if (!spreadsheetId) return res.status(400).json({ error: "This form does not have a Google workbook connected" });
+      const workbook = await getWorkbookMetadata(spreadsheetId);
+      if (!workbook.sheets.some((sheet) => sheet.title === sheetName && !sheet.hidden && sheet.sheetType === "GRID")) {
+        return res.status(404).json({ error: "Sheet was not found in this workbook" });
+      }
+      const auth = await getGoogleAuth();
+      const sheets = google.sheets({ version: "v4", auth });
+      const result = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${escapeSheetName(sheetName)}!A1:ZZ201`,
+        valueRenderOption: "FORMATTED_VALUE",
+      });
+      const values = result.data.values || [];
+      const headers = values[0] || [];
+      const rows = values.slice(1).map((row, index) => ({
+        rowNumber: index + 2,
+        values: headers.map((_, columnIndex) => row[columnIndex] ?? ""),
+      }));
+      res.json({ sheetName, headers, rows });
+    } catch (error) {
+      res.status(400).json({ error: `Could not read sheet data: ${error.message}` });
+    }
+  });
+
+  app.patch("/forms/:id/sheets/:sheetName/rows/:rowNumber", async (req, res) => {
+    try {
+      const db = await setup();
+      if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid form" });
+      const form = await db.collection("forms").findOne({ _id: new ObjectId(req.params.id) });
+      if (!form || !form.isActive || !hasFormAccess(req, form)) return res.status(403).json({ error: "Form access denied" });
+      const spreadsheetId = normalizeSpreadsheetId(form.spreadsheet?.spreadsheetId);
+      const sheetName = String(req.params.sheetName || "").trim();
+      const rowNumber = Number(req.params.rowNumber);
+      const values = Array.isArray(req.body?.values) ? req.body.values.map((value) => value ?? "") : null;
+      if (!spreadsheetId || !Number.isInteger(rowNumber) || rowNumber < 2 || !values?.length || values.length > 702) {
+        return res.status(400).json({ error: "Invalid sheet row" });
+      }
+      const workbook = await getWorkbookMetadata(spreadsheetId);
+      if (!workbook.sheets.some((sheet) => sheet.title === sheetName && !sheet.hidden && sheet.sheetType === "GRID")) {
+        return res.status(404).json({ error: "Sheet was not found in this workbook" });
+      }
+      const auth = await getGoogleAuth();
+      const sheets = google.sheets({ version: "v4", auth });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${escapeSheetName(sheetName)}!A${rowNumber}:${columnName(values.length)}${rowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [values] },
+      });
+      res.json({ success: true, rowNumber, values });
+    } catch (error) {
+      res.status(400).json({ error: `Could not update sheet row: ${error.message}` });
+    }
+  });
+
   app.post("/forms", requireSuperAdmin, async (req, res) => {
     try {
       const db = await setup();
@@ -204,21 +356,23 @@ function registerFormsModule(app, { connectDb, google, getGoogleAuth, requireSup
       if (!name || !department || !fields.length) return res.status(400).json({ error: "Name, department, and at least one field are required" });
       const slugBase = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "form";
       const now = new Date().toISOString();
+      const allowedUserIds = Array.from(new Set((req.body?.allowedUserIds || []).map(String)));
       const document = {
         slug: `${slugBase}-${Date.now()}`,
         name,
         department,
         description: String(req.body?.description || "").trim(),
         fields,
-        allowedUserIds: Array.from(new Set((req.body?.allowedUserIds || []).map(String))),
-        spreadsheet: { spreadsheetId: normalizeSpreadsheetId(req.body?.spreadsheet?.spreadsheetId), sheetName: String(req.body?.spreadsheet?.sheetName || "Form responses 1").trim() },
+        allowedUserIds,
+        shares: buildShares(allowedUserIds),
+        spreadsheet: { spreadsheetId: normalizeSpreadsheetId(req.body?.spreadsheet?.spreadsheetId), sheetName: String(req.body?.spreadsheet?.sheetName || "").trim() },
         isActive: req.body?.isActive !== false,
         version: 1,
         createdAt: now,
         updatedAt: now,
       };
       const result = await db.collection("forms").insertOne(document);
-      res.json({ success: true, form: serializeForm({ ...document, _id: result.insertedId }) });
+      res.json({ success: true, form: serializeForm({ ...document, _id: result.insertedId }, { isSuperAdmin: true }) });
     } catch (error) { res.status(400).json({ error: error.message }); }
   });
 
@@ -232,12 +386,15 @@ function registerFormsModule(app, { connectDb, google, getGoogleAuth, requireSup
       const update = { updatedAt: new Date().toISOString() };
       for (const key of ["name", "department", "description"]) if (req.body?.[key] !== undefined) update[key] = String(req.body[key]).trim();
       if (req.body?.fields !== undefined) { update.fields = cleanFields(req.body.fields); update.version = (existing.version || 1) + 1; }
-      if (req.body?.allowedUserIds !== undefined) update.allowedUserIds = Array.from(new Set(req.body.allowedUserIds.map(String)));
+      if (req.body?.allowedUserIds !== undefined) {
+        update.allowedUserIds = Array.from(new Set(req.body.allowedUserIds.map(String)));
+        update.shares = buildShares(update.allowedUserIds, existing.shares || []);
+      }
       if (req.body?.isActive !== undefined) update.isActive = Boolean(req.body.isActive);
-      if (req.body?.spreadsheet !== undefined) update.spreadsheet = { spreadsheetId: normalizeSpreadsheetId(req.body.spreadsheet.spreadsheetId), sheetName: String(req.body.spreadsheet.sheetName || "Form responses 1").trim() };
+      if (req.body?.spreadsheet !== undefined) update.spreadsheet = { spreadsheetId: normalizeSpreadsheetId(req.body.spreadsheet.spreadsheetId), sheetName: String(req.body.spreadsheet.sheetName || "").trim() };
       await db.collection("forms").updateOne({ _id: formId }, { $set: update });
       const saved = await db.collection("forms").findOne({ _id: formId });
-      res.json({ success: true, form: serializeForm(saved) });
+      res.json({ success: true, form: serializeForm(saved, { isSuperAdmin: true }) });
     } catch (error) { res.status(400).json({ error: error.message }); }
   });
 
@@ -264,11 +421,16 @@ function registerFormsModule(app, { connectDb, google, getGoogleAuth, requireSup
       if (!form || !form.isActive || !hasFormAccess(req, form)) return res.status(403).json({ error: "Form access denied" });
       const validation = validateAnswers(form, req.body?.answers || {});
       if (validation.errors.length) return res.status(400).json({ error: validation.errors[0], errors: validation.errors });
+      const sheetName = String(req.body?.sheetName || "").trim();
+      if (normalizeSpreadsheetId(form.spreadsheet?.spreadsheetId) && !sheetName) {
+        return res.status(400).json({ error: "Choose a workbook sheet before submitting" });
+      }
       const submission = {
         formId,
         formName: form.name,
         formVersion: form.version || 1,
         department: form.department,
+        sheetName,
         answers: validation.answers,
         submittedByUserId: String(req.user._id),
         submittedByName: req.authUser.displayName,

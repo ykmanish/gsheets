@@ -16,11 +16,15 @@ import ManageRoles from "./ManageRoles";
 import ActivityLog from "./ActivityLog";
 import WhatsApp from "./WhatsApp";
 import Forms from "./Forms";
+import ProjectDashboard from "./ProjectDashboard";
+import DmrDashboard from "./DmrDashboard";
 
 const menuPaths = {
   dashboard: "/dashboard",
   documents: "/documents",
   forms: "/forms",
+  projects: "/projects",
+  "project-dmr": "/projects/dmr",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
@@ -48,7 +52,10 @@ function ProtectedModuleContent({ moduleId }) {
   }, [menus, user?.isSuperAdmin]);
 
   const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => setIsMounted(true), []);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setIsMounted(true), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -104,6 +111,8 @@ function ProtectedModuleContent({ moduleId }) {
           <Documents darkMode={darkMode} selectedDocs={selectedDocs} setSelectedDocs={setSelectedDocs} />
         )}
         {moduleId === "forms" && <Forms darkMode={darkMode} />}
+        {moduleId === "projects" && <ProjectDashboard darkMode={darkMode} />}
+        {moduleId === "project-dmr" && <DmrDashboard darkMode={darkMode} />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}

@@ -2251,7 +2251,7 @@ function parseTomorrowPlanCell(value) {
   const patterns = [
     /^(\d+(?:\.\d+)?)\s*(?:[-_:,]|person|persons?|worker|workers?|labou?r)?\s*(.*)$/i,
     /(?:total|work\s*person|person|worker|labou?r)\s*[-:=]?\s*(\d+(?:\.\d+)?)\s*,?\s*(.*)$/i,
-    /^(.*?)\s*(?:[-_:,])?\s*(\d+(?:\.\d+)?)\s*(?:person|persons?|worker|workers?|labou?r)\s*$/i,
+    /^(.*?)\s*(?:[-_:,])?\s*(\d+(?:\.\d+)?)\s*(?:person|persons?|worker|workers?|labou?r|civil|mason|masons|carpenter|carpenters|plumber|plumbers|painter|painters|electrician|electricians|fabricator|fabricators|polisher|polishers|labour|labours|labor|labors)?\s*$/i,
   ];
   for (const pattern of patterns) {
     const match = raw.match(pattern);

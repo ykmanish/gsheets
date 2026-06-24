@@ -68,6 +68,50 @@ function WorkloadBars({ title, items = [], darkMode }) {
   );
 }
 
+function TomorrowSiteBars({ items = [], darkMode }) {
+  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const chartItems = items.slice(0, 8);
+  const max = Math.max(1, ...chartItems.map((item) => Number(item.plannedManpower) || 0));
+  const total = items.reduce((sum, item) => sum + (Number(item.plannedManpower) || 0), 0);
+  return (
+    <section className={`min-w-0 overflow-hidden rounded-[28px] p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.07] bg-white"}`}>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}>Tomorrow plan</p>
+          <h3 className="mt-2 text-xl font-semibold">Site-wise planned manpower</h3>
+          <p className={`mt-2 text-xs ${muted}`}>{total} planned manpower across {items.length} site{items.length === 1 ? "" : "s"}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-[#15a8e0]" />
+          <span className={`text-[11px] ${muted}`}>Planned</span>
+        </div>
+      </div>
+
+      <div className="flex h-64 max-w-full items-end gap-2 overflow-x-auto overflow-y-hidden pb-2">
+        {chartItems.map((item) => {
+          const value = Number(item.plannedManpower) || 0;
+          const plannedHeight = value ? Math.max(8, (value / max) * 100) : 0;
+          return (
+            <div key={item.site} className="flex min-w-[64px] flex-1 flex-col items-center">
+              <div className="mb-2 min-h-9 text-center">
+                <p className={`text-sm font-semibold ${darkMode ? "text-white" : ""}`}>{value}</p>
+                <p className={`text-[10px] ${muted}`}>planned</p>
+              </div>
+              <div className="flex h-36 w-full max-w-[46px] items-end">
+                <div className={`relative h-full w-full overflow-hidden rounded-t-[18px] rounded-b-md ${darkMode ? "bg-[#24262b]" : "bg-[#ece9e2]"}`}>
+                  <div className="absolute bottom-0 left-0 right-0 rounded-t-[18px] bg-[#15a8e0]" style={{ height: `${plannedHeight}%` }} />
+                </div>
+              </div>
+              <p className={`mt-3 line-clamp-2 min-h-8 text-center text-[11px] leading-4 ${muted}`}>{item.site}</p>
+            </div>
+          );
+        })}
+        {!chartItems.length && <p className={`flex flex-1 items-center justify-center py-8 text-center text-sm ${muted}`}>No Tomorrow&apos;s Plan data available yet.</p>}
+      </div>
+    </section>
+  );
+}
+
 export default function DmrDashboard({ darkMode }) {
   const [date, setDate] = useState(() => localDateInputValue());
   const [data, setData] = useState(null);
@@ -177,23 +221,6 @@ export default function DmrDashboard({ darkMode }) {
   const activeTomorrowSite = useMemo(() => {
     return selectedTomorrowSite ? tomorrowPlanSites.find((site) => site.site === selectedTomorrowSite) || null : null;
   }, [selectedTomorrowSite, tomorrowPlanSites]);
-  const tomorrowSiteChart = useMemo(() => {
-    const colors = ["#6f5cff", "#48c6d9", "#ff3d5a", "#ffb000", "#54d39f", "#ff7a2f", "#9b7cff", "#15a8e0"];
-    const total = tomorrowPlanSites.reduce((sum, site) => sum + (Number(site.plannedManpower) || 0), 0);
-    const segments = tomorrowPlanSites.reduce((accumulator, site, index) => {
-      const value = Number(site.plannedManpower) || 0;
-      const start = total ? (accumulator.cursor / total) * 100 : 0;
-      const nextCursor = accumulator.cursor + value;
-      const end = total ? (nextCursor / total) * 100 : 0;
-      return {
-        cursor: nextCursor,
-        items: [...accumulator.items, { ...site, value, color: colors[index % colors.length], start, end, percent: total ? Math.round((value / total) * 100) : 0 }],
-      };
-    }, { cursor: 0, items: [] }).items;
-    const gradient = segments.filter((item) => item.value > 0).map((item) => `${item.color} ${item.start}% ${item.end}%`).join(", ");
-    return { total, segments, gradient: gradient || `${darkMode ? "#24262b" : "#ece9e2"} 0% 100%` };
-  }, [darkMode, tomorrowPlanSites]);
-
   const valueFor = (record, key) => drafts[record.id]?.[key] ?? record[key] ?? "";
   const updateDraft = (record, key, value) => {
     setDrafts((current) => ({
@@ -611,36 +638,7 @@ export default function DmrDashboard({ darkMode }) {
                         </div>
                       </section>
 
-                      <section className={`rounded-[28px]  p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.07] bg-white"}`}>
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold">Manpower by site</p>
-                            <p className={`mt-1 text-xs ${muted}`}>Pie chart view of all planned manpower by site only.</p>
-                          </div>
-                          <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}>{tomorrowSiteChart.total} total</span>
-                        </div>
-                        <div className="mt-5 grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-center">
-                          <div className="relative mx-auto h-44 w-44 rounded-full" style={{ background: `conic-gradient(${tomorrowSiteChart.gradient})` }}>
-                            <div className={`absolute inset-8 grid place-items-center rounded-full ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                              <div className="text-center">
-                                <p className="text-3xl font-semibold">{tomorrowSiteChart.total}</p>
-                                <p className={`text-xs ${muted}`}>planned</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid max-h-48 gap-2 overflow-y-auto pr-1">
-                            {tomorrowSiteChart.segments.map((site) => (
-                              <div key={site.site} className={`flex items-center justify-between gap-3 rounded-2xl px-3 py-2 ${darkMode ? "bg-white/[0.035]" : "bg-black/[0.025]"}`}>
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: site.color }} />
-                                  <span className="truncate text-sm font-medium">{site.site}</span>
-                                </div>
-                                <span className={`shrink-0 text-sm ${muted}`}>{site.value} · {site.percent}%</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </section>
+                      <TomorrowSiteBars items={tomorrowPlanSites} darkMode={darkMode} />
                     </div>
                   ) : (
                     <article className={`rounded-[32px]  p-6 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>

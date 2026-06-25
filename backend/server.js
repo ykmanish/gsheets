@@ -2323,7 +2323,25 @@ function parseGoogleTimestampDate(value) {
   if (!text) return "";
   const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (match) {
-    return `${match[3]}-${String(match[1]).padStart(2, "0")}-${String(match[2]).padStart(2, "0")}`;
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    const year = Number(match[3]);
+    const month = first > 12 ? second : first;
+    const day = first > 12 ? first : second;
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+      year &&
+      month >= 1 &&
+      month <= 12 &&
+      day >= 1 &&
+      day <= 31 &&
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    ) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+    return "";
   }
   const parsed = new Date(text);
   if (!Number.isNaN(parsed.getTime())) return istDateKey(parsed);
@@ -2337,13 +2355,23 @@ function tomorrowPlanCategory(header) {
 }
 
 function tomorrowPlanComparableSite(value) {
-  return projectText(value)
+  const text = projectText(value)
     .toLowerCase()
     .replace(/&/g, "and")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\bfarm\s+house\b/g, "farmhouse")
     .replace(/\s+/g, " ")
     .trim();
+  const compact = text.replace(/\s+/g, "");
+  const siteAliases = {
+    farmhouse: "serenitymeadowsfarmhouse",
+    serenitymeadowsfarm: "serenitymeadowsfarmhouse",
+    serenitymeadowsfarmhouse: "serenitymeadowsfarmhouse",
+    gharana: "gharana",
+    sgharana: "gharana",
+    sheetalgharana: "gharana",
+  };
+  return siteAliases[compact] || text;
 }
 
 function canonicalizeTomorrowPlanSites(records = []) {
@@ -2474,23 +2502,22 @@ async function readDmrTomorrowPlan(dateKey) {
 
     if (timestampIndex < 0 || siteIndex < 0 || !categoryColumns.length) continue;
 
-    const firstResponseRowIndex = values.findIndex((row, index) => index > 0 && parseGoogleTimestampDate(row?.[timestampIndex]));
-    if (firstResponseRowIndex < 0) continue;
-    const sheetSubmittedDate = parseGoogleTimestampDate(values[firstResponseRowIndex]?.[timestampIndex]);
-    const sheetPlanDate = sheetSubmittedDate ? addDaysToDateKey(sheetSubmittedDate, 1) : "";
-    if (!sheetPlanDate) continue;
-
-    planSheets.push({
-      name: sheet.name,
-      date: sheetPlanDate,
-      submittedDate: sheetSubmittedDate,
-      firstResponseRow: firstResponseRowIndex + 1,
-    });
+    const sheetDates = new Map();
 
     for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
       const row = values[rowIndex] || [];
       const timestamp = dmrCell(values, rowIndex, timestampIndex);
       const submittedDate = parseGoogleTimestampDate(timestamp);
+      const rowPlanDate = submittedDate ? addDaysToDateKey(submittedDate, 1) : "";
+      if (!rowPlanDate) continue;
+      if (!sheetDates.has(rowPlanDate)) {
+        sheetDates.set(rowPlanDate, {
+          name: sheet.name,
+          date: rowPlanDate,
+          submittedDate,
+          firstResponseRow: rowIndex + 1,
+        });
+      }
       const submittedBy = dmrCell(values, rowIndex, nameIndex);
       const site = dmrCell(values, rowIndex, siteIndex) || "Unassigned site";
       for (const column of categoryColumns) {
@@ -2503,7 +2530,7 @@ async function readDmrTomorrowPlan(dateKey) {
           sheetName: sheet.name,
           timestamp,
           submittedDate,
-          plannedForDate: sheetPlanDate,
+          plannedForDate: rowPlanDate,
           submittedBy,
           site,
           category: column.category,
@@ -2513,6 +2540,7 @@ async function readDmrTomorrowPlan(dateKey) {
         });
       }
     }
+    planSheets.push(...sheetDates.values());
   }
 
   const normalizedRecords = mergeTomorrowPlanRecords(canonicalizeTomorrowPlanSites(allRecords));

@@ -29,6 +29,40 @@ function localDateInputValue(date = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+function comparablePlanText(value = "") {
+  const text = String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/\bfarm\s+house\b/g, "farmhouse")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const compact = text.replace(/\s+/g, "");
+  const siteAliases = {
+    farmhouse: "serenitymeadowsfarmhouse",
+    serenitymeadowsfarm: "serenitymeadowsfarmhouse",
+    serenitymeadowsfarmhouse: "serenitymeadowsfarmhouse",
+    gharana: "gharana",
+    sgharana: "gharana",
+    sheetalgharana: "gharana",
+  };
+  return siteAliases[compact] || text;
+}
+
+function comparableTradeText(value = "") {
+  const text = comparablePlanText(value);
+  const compact = text.replace(/\s+/g, "");
+  const tradeAliases = {
+    ac: "ac",
+    aircondition: "ac",
+    airconditioning: "ac",
+    airconditioner: "ac",
+    airconditioners: "ac",
+  };
+  if (tradeAliases[compact]) return tradeAliases[compact];
+  return compact;
+}
+
 function WorkloadBars({ title, items = [], darkMode }) {
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const chartItems = items.slice(0, 8);
@@ -172,6 +206,19 @@ export default function DmrDashboard({ darkMode }) {
   }, [load]);
 
   const records = useMemo(() => data?.today?.records || [], [data?.today?.records]);
+  const todayPlanLookup = useMemo(() => {
+    const lookup = new Map();
+    for (const item of data?.todayPlan?.records || []) {
+      const siteKey = comparablePlanText(item.site);
+      const tradeKey = comparableTradeText(item.category);
+      const planned = Number(item.plannedManpower) || 0;
+      if (!siteKey || !tradeKey || planned <= 0) continue;
+      const key = `${siteKey}|${tradeKey}`;
+      lookup.set(key, (lookup.get(key) || 0) + planned);
+    }
+    return lookup;
+  }, [data?.todayPlan?.records]);
+
   const filteredRecords = useMemo(() => {
     const query = agencySearch.trim().toLowerCase();
     return records.filter((record) => {
@@ -239,7 +286,20 @@ export default function DmrDashboard({ darkMode }) {
   const activeTomorrowSite = useMemo(() => {
     return selectedTomorrowSite ? tomorrowPlanSites.find((site) => site.site === selectedTomorrowSite) || null : null;
   }, [selectedTomorrowSite, tomorrowPlanSites]);
-  const valueFor = (record, key) => drafts[record.id]?.[key] ?? record[key] ?? "";
+  const hasDraftKey = (record, key) => Object.prototype.hasOwnProperty.call(drafts[record.id] || {}, key);
+  const autoPlannedForRecord = (record) => {
+    if (!canFillDmr || !todayPlanLookup.size || hasDraftKey(record, "planned") || Number(record.planned) > 0) return "";
+    const key = `${comparablePlanText(record.site)}|${comparableTradeText(record.agency)}`;
+    return todayPlanLookup.get(key) || "";
+  };
+  const hasAutoPlannedDrafts = records.some((record) => autoPlannedForRecord(record));
+  const valueFor = (record, key) => {
+    if (key === "planned") {
+      const autoPlanned = autoPlannedForRecord(record);
+      if (autoPlanned !== "") return autoPlanned;
+    }
+    return drafts[record.id]?.[key] ?? record[key] ?? "";
+  };
   const updateDraft = (record, key, value) => {
     setDrafts((current) => ({
       ...current,
@@ -264,6 +324,7 @@ export default function DmrDashboard({ darkMode }) {
         note: current[record.id]?.note ?? record.note,
         status: current[record.id]?.status ?? record.status,
         [key]: value,
+        ...(key === "planned" ? { _autoPlannedFromTodayPlan: false } : {}),
       },
     }));
   };
@@ -273,6 +334,24 @@ export default function DmrDashboard({ darkMode }) {
       setSaving(true);
       const submissionId = `dmr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const draftValues = Object.values(drafts);
+      for (const record of records) {
+        const autoPlanned = autoPlannedForRecord(record);
+        if (autoPlanned === "") continue;
+        const existingIndex = draftValues.findIndex((item) => item.id === record.id);
+        const autoUpdate = {
+          id: record.id,
+          rowNumber: record.rowNumber,
+          plannedColumn: record.plannedColumn,
+          actualColumn: record.actualColumn,
+          planned: autoPlanned,
+          actual: drafts[record.id]?.actual ?? record.actual,
+        };
+        if (existingIndex >= 0) {
+          draftValues[existingIndex] = { ...draftValues[existingIndex], ...autoUpdate };
+        } else {
+          draftValues.push(autoUpdate);
+        }
+      }
       const newRows = draftValues.filter((item) => String(item.id || "").startsWith("temp:"));
       const existingUpdates = draftValues.filter((item) => !String(item.id || "").startsWith("temp:"));
       for (const row of newRows) {
@@ -1202,7 +1281,13 @@ export default function DmrDashboard({ darkMode }) {
                       <span className="rounded-full bg-black/5 px-2.5 py-1 text-[10px]">Row {record.rowNumber}</span>
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-3">
-                      <label className={`text-[11px] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>Planned<input disabled={!canFillDmr} type="number" value={valueFor(record, "planned")} onChange={(event) => updateDraft(record, "planned", event.target.value)} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-emerald-400/20 bg-emerald-400/10 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`} /></label>
+                      <label className={`text-[11px] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>
+                        <span className="flex items-center justify-between gap-2">
+                          Planned
+                          {autoPlannedForRecord(record) !== "" && <span className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>Auto from plan</span>}
+                        </span>
+                        <input disabled={!canFillDmr} type="number" value={valueFor(record, "planned")} onChange={(event) => updateDraft(record, "planned", event.target.value)} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-emerald-400/20 bg-emerald-400/10 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`} />
+                      </label>
                       <label className={`text-[11px] ${darkMode ? "text-red-300" : "text-red-700"}`}>Actual<input disabled={!canFillDmr} type="number" value={valueFor(record, "actual")} onChange={(event) => updateDraft(record, "actual", event.target.value)} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-red-400/20 bg-red-400/10 text-white" : "border-red-200 bg-red-50 text-red-900"}`} /></label>
                     </div>
                   </article>
@@ -1339,7 +1424,7 @@ export default function DmrDashboard({ darkMode }) {
             </div>
             <div className={`flex items-center justify-end gap-2 border-t px-5 pb-6 pt-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}>
               <button onClick={() => setFillOpen(false)} className={`h-11 rounded-full border px-6 text-sm ${darkMode ? "border-white/10 text-white/60" : "border-black/10 text-black/60"}`}>Cancel</button>
-              <button disabled={!canFillDmr || saving || !Object.keys(drafts).length} onClick={saveDmr} className={`flex h-11 min-w-36 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save to Sheet</button>
+              <button disabled={!canFillDmr || saving || (!Object.keys(drafts).length && !hasAutoPlannedDrafts)} onClick={saveDmr} className={`flex h-11 min-w-36 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save to Sheet</button>
             </div>
           </div>
         </div>

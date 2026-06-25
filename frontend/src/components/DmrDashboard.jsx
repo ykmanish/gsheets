@@ -17,7 +17,16 @@ async function api(path, options = {}) {
 }
 
 function localDateInputValue(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date).reduce((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function WorkloadBars({ title, items = [], darkMode }) {
@@ -68,7 +77,7 @@ function WorkloadBars({ title, items = [], darkMode }) {
   );
 }
 
-function TomorrowSiteBars({ items = [], darkMode }) {
+function TomorrowSiteBars({ items = [], darkMode, title = "Site-wise planned manpower", emptyText = "No plan data available yet." }) {
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const chartItems = items.slice(0, 8);
   const max = Math.max(1, ...chartItems.map((item) => Number(item.plannedManpower) || 0));
@@ -77,8 +86,8 @@ function TomorrowSiteBars({ items = [], darkMode }) {
     <section className={`min-w-0 overflow-hidden rounded-[28px] p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.07] bg-white"}`}>
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}>Tomorrow plan</p>
-          <h3 className="mt-2 text-xl font-semibold">Site-wise planned manpower</h3>
+          <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}>Plan overview</p>
+          <h3 className="mt-2 text-xl font-semibold">{title}</h3>
           <p className={`mt-2 text-xs ${muted}`}>{total} planned manpower across {items.length} site{items.length === 1 ? "" : "s"}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -106,7 +115,7 @@ function TomorrowSiteBars({ items = [], darkMode }) {
             </div>
           );
         })}
-        {!chartItems.length && <p className={`flex flex-1 items-center justify-center py-8 text-center text-sm ${muted}`}>No Tomorrow&apos;s Plan data available yet.</p>}
+        {!chartItems.length && <p className={`flex flex-1 items-center justify-center py-8 text-center text-sm ${muted}`}>{emptyText}</p>}
       </div>
     </section>
   );
@@ -131,11 +140,15 @@ export default function DmrDashboard({ darkMode }) {
   const [historyItems, setHistoryItems] = useState([]);
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [tomorrowPlanOpen, setTomorrowPlanOpen] = useState(false);
+  const [planMode, setPlanMode] = useState(null);
   const [selectedTomorrowSite, setSelectedTomorrowSite] = useState("");
+  const [dmrSheetLink, setDmrSheetLink] = useState("");
+  const [dmrSheetSaving, setDmrSheetSaving] = useState(false);
 
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe5e9] bg-white";
+  const dmrSheetLinked = Boolean(data?.dmrSettings?.linked);
+  const canFillDmr = Boolean(data?.canEdit && dmrSheetLinked);
 
   const load = useCallback(async (quiet = false) => {
     try {
@@ -202,9 +215,14 @@ export default function DmrDashboard({ darkMode }) {
       .sort((a, b) => b.actual - a.actual || b.planned - a.planned || a.site.localeCompare(b.site));
   }, [agencySearch, records, siteFilter]);
 
-  const tomorrowPlan = data?.tomorrowPlan || null;
+  const activePlan = planMode === "today" ? data?.todayPlan || null : data?.tomorrowPlan || null;
+  const activePlanTitle = planMode === "today" ? "Today’s Plan" : "Tomorrow’s Plan";
+  const activePlanHeading = planMode === "today" ? "Today’s manpower & work plan" : "Next day manpower & work plan";
+  const activePlanSummaryText = planMode === "today"
+    ? "Total planned manpower scheduled for the selected DMR date."
+    : "Total planned manpower extracted for the next DMR date.";
   const tomorrowPlanSites = useMemo(() => {
-    const records = tomorrowPlan?.records || [];
+    const records = activePlan?.records || [];
     return [...records.reduce((result, record) => {
       const site = record.site || "Unassigned site";
       const item = result.get(site) || { site, records: [], plannedManpower: 0, categories: new Set(), submitters: new Set() };
@@ -217,7 +235,7 @@ export default function DmrDashboard({ darkMode }) {
     }, new Map()).values()]
       .map((site) => ({ ...site, categories: [...site.categories], submitters: [...site.submitters] }))
       .sort((a, b) => b.plannedManpower - a.plannedManpower || b.records.length - a.records.length || a.site.localeCompare(b.site));
-  }, [tomorrowPlan?.records]);
+  }, [activePlan?.records]);
   const activeTomorrowSite = useMemo(() => {
     return selectedTomorrowSite ? tomorrowPlanSites.find((site) => site.site === selectedTomorrowSite) || null : null;
   }, [selectedTomorrowSite, tomorrowPlanSites]);
@@ -276,6 +294,39 @@ export default function DmrDashboard({ darkMode }) {
       toast.error(error.message || "Could not save DMR");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function linkDmrSheet() {
+    try {
+      setDmrSheetSaving(true);
+      const result = await api("/dmr-dashboard/settings", {
+        method: "PUT",
+        body: JSON.stringify({ spreadsheetId: dmrSheetLink }),
+      });
+      toast.success("DMR sheet linked");
+      setData((current) => current ? { ...current, dmrSettings: result.settings } : current);
+      setDmrSheetLink("");
+      await load(true);
+    } catch (error) {
+      toast.error(error.message || "Could not link DMR sheet");
+    } finally {
+      setDmrSheetSaving(false);
+    }
+  }
+
+  async function unlinkDmrSheet() {
+    if (!window.confirm("Unlink the current DMR sheet? Existing Google Sheet data will not be deleted.")) return;
+    try {
+      setDmrSheetSaving(true);
+      const result = await api("/dmr-dashboard/settings", { method: "DELETE" });
+      toast.success("DMR sheet unlinked");
+      setData((current) => current ? { ...current, dmrSettings: result.settings } : current);
+      await load(true);
+    } catch (error) {
+      toast.error(error.message || "Could not unlink DMR sheet");
+    } finally {
+      setDmrSheetSaving(false);
     }
   }
 
@@ -399,12 +450,28 @@ export default function DmrDashboard({ darkMode }) {
       <div className={`flex min-h-0 flex-1 items-center justify-center px-5 py-10 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f4ef] text-[#171714]"}`}>
         <div className={`w-full max-w-2xl rounded-[30px]  p-7 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.07] bg-white"}`}>
           <div className="flex items-center gap-4">
-            <span className={`flex h-12 w-12 items-center justify-center rounded-full ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}><FileSpreadsheet className="h-5 w-5" /></span>
+            <span className="relative flex h-14 w-14 items-center justify-center">
+              <span className={`absolute inset-0 animate-ping rounded-full opacity-20 ${darkMode ? "bg-[#d8f36a]" : "bg-black"}`} />
+              <span className={`absolute inset-1 animate-pulse rounded-full ${darkMode ? "bg-[#d8f36a]/15" : "bg-black/[0.06]"}`} />
+              <span className={`relative flex h-12 w-12 items-center justify-center rounded-full ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
+                <FileSpreadsheet className="h-5 w-5" />
+              </span>
+            </span>
             <div>
               <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-[#d8f36a]" : "text-[#e76f42]"}`}>DMR workspace</p>
-              <h2 className="mt-2 text-xl font-semibold">Opening today&apos;s live manpower sheet</h2>
+              <h2 className="mt-2 flex flex-wrap items-center gap-2 text-xl font-semibold">
+                Opening today&apos;s live manpower sheet
+                <span className="inline-flex items-center gap-1 pt-1" aria-hidden="true">
+                  <span className={`h-1.5 w-1.5 animate-bounce rounded-full ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`} />
+                  <span className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:120ms] ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`} />
+                  <span className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:240ms] ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`} />
+                </span>
+              </h2>
               <p className={`mt-2 text-sm ${muted}`}>If today&apos;s tab is missing, it will be created automatically from the latest DMR format.</p>
             </div>
+          </div>
+          <div className={`mt-6 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>
+            <div className={`h-full w-1/3 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`} />
           </div>
         </div>
       </div>
@@ -424,7 +491,8 @@ export default function DmrDashboard({ darkMode }) {
             <div className="relative z-20 flex shrink-0 flex-col gap-3 lg:items-end">
               <div className="flex flex-nowrap items-center gap-2">
                 <button onClick={() => { setFillTab("manpower"); setFillOpen(true); }} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-5 text-sm font-medium ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}><CalendarDays className="h-4 w-4" /> Fill DMR</button>
-                <button onClick={() => setTomorrowPlanOpen(true)} className="flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl border border-[#9381ff] bg-[#9381ff] px-5 text-sm font-medium text-white hover:bg-[#8572f5]"><FileSpreadsheet className="h-4 w-4" /> Tomorrow&apos;s Plan</button>
+                <button onClick={() => { setSelectedTomorrowSite(""); setPlanMode("today"); }} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl border px-5 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><FileSpreadsheet className="h-4 w-4" /> Today&apos;s Plan</button>
+                <button onClick={() => { setSelectedTomorrowSite(""); setPlanMode("tomorrow"); }} className="flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl border border-[#9381ff] bg-[#9381ff] px-5 text-sm font-medium text-white hover:bg-[#8572f5]"><FileSpreadsheet className="h-4 w-4" /> Tomorrow&apos;s Plan</button>
               </div>
               <div className="flex flex-nowrap items-center gap-2">
                 <DatePicker darkMode={darkMode} value={date} onChange={setDate} placeholder="Choose DMR date" />
@@ -545,7 +613,7 @@ export default function DmrDashboard({ darkMode }) {
         </section>
       </div>
 
-      {tomorrowPlanOpen && (
+      {planMode && (
         <div className={`fixed inset-0 z-50 flex ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f7f5ef] text-[#171714]"}`}>
           <div className="flex h-screen w-screen flex-col overflow-hidden">
             <div className={`flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}>
@@ -554,29 +622,29 @@ export default function DmrDashboard({ darkMode }) {
                   <FileSpreadsheet className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}>Tomorrow&apos;s Plan</p>
-                  <h3 className="mt-2 truncate text-3xl font-semibold">Next day manpower & work plan</h3>
+                  <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}>{activePlanTitle}</p>
+                  <h3 className="mt-2 truncate text-3xl font-semibold">{activePlanHeading}</h3>
                   <p className={`mt-1 text-sm ${muted}`}>
-                    {tomorrowPlan?.selectedDate || tomorrowPlan?.requestedDate || date} · {tomorrowPlan?.summary?.records || 0} planned work item{tomorrowPlan?.summary?.records === 1 ? "" : "s"}
+                    {activePlan?.selectedDate || activePlan?.requestedDate || date} · {activePlan?.summary?.records || 0} planned work item{activePlan?.summary?.records === 1 ? "" : "s"}
                   </p>
                 </div>
               </div>
-              <button onClick={() => setTomorrowPlanOpen(false)} className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
+              <button onClick={() => { setPlanMode(null); setSelectedTomorrowSite(""); }} className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
-              {tomorrowPlan?.error && (
+              {activePlan?.error && (
                 <div className={`mb-5 rounded-2xl border px-4 py-3 text-sm ${darkMode ? "border-red-400/20 bg-red-400/5 text-red-200" : "border-red-500/20 bg-red-50 text-red-700"}`}>
-                  Could not load Tomorrow&apos;s Plan sheet: {tomorrowPlan.error}
+                  Could not load {activePlanTitle} sheet: {activePlan.error}
                 </div>
               )}
 
               <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <aside className={`rounded-[28px] border p-3 lg:sticky lg:top-0 lg:self-start ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
                   <p className={`px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}>Plan menu</p>
-                  <div role="tablist" aria-label="Tomorrow plan menu" className="space-y-2">
+                  <div role="tablist" aria-label={`${activePlanTitle} menu`} className="space-y-2">
                     <button
                       type="button"
                       role="tab"
@@ -585,7 +653,7 @@ export default function DmrDashboard({ darkMode }) {
                       className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition ${!activeTomorrowSite ? darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white" : darkMode ? "text-white/65 hover:bg-white/5" : "text-black/65 hover:bg-black/[0.04]"}`}
                     >
                       <span className="">Overview</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${!activeTomorrowSite ? "bg-black/10 text-inherit" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}>{tomorrowPlan?.summary?.plannedManpower || 0}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${!activeTomorrowSite ? "bg-black/10 text-inherit" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}>{activePlan?.summary?.plannedManpower || 0}</span>
                     </button>
                     {tomorrowPlanSites.map((site) => {
                       const selected = activeTomorrowSite?.site === site.site;
@@ -612,33 +680,33 @@ export default function DmrDashboard({ darkMode }) {
                       <section className={`rounded-[28px]  p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.07] bg-white"}`}>
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <p className="text-sm font-semibold">Tomorrow manpower summary</p>
+                            <p className="text-sm font-semibold">{activePlanTitle} manpower summary</p>
                             <div className="mt-5 flex flex-wrap items-end gap-x-5 gap-y-2">
-                              <p className="text-6xl font-semibold leading-none">{tomorrowPlan?.summary?.plannedManpower || 0}</p>
+                              <p className="text-6xl font-semibold leading-none">{activePlan?.summary?.plannedManpower || 0}</p>
                               <span className={`mb-2 rounded-full px-3 py-1 text-sm font-semibold ${darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-emerald-50 text-emerald-700"}`}>
-                                {tomorrowPlan?.summary?.sites || 0} active sites
+                                {activePlan?.summary?.sites || 0} active sites
                               </span>
                             </div>
-                            <p className={`mt-3 text-sm ${muted}`}>Total planned manpower extracted from Tomorrow&apos;s Plan form responses.</p>
+                            <p className={`mt-3 text-sm ${muted}`}>{activePlanSummaryText}</p>
                           </div>
                           <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}>Live sheet</span>
                         </div>
                         <div className={`mt-5 h-3 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>
-                          <div className="h-full rounded-full bg-[#54d39f]" style={{ width: `${Math.min(100, Math.max(0, ((tomorrowPlan?.summary?.plannedManpower || 0) / Math.max(1, tomorrowPlan?.summary?.plannedManpower || 1)) * 100))}%` }} />
+                          <div className="h-full rounded-full bg-[#54d39f]" style={{ width: `${Math.min(100, Math.max(0, ((activePlan?.summary?.plannedManpower || 0) / Math.max(1, activePlan?.summary?.plannedManpower || 1)) * 100))}%` }} />
                         </div>
                         <div className={`mt-5 grid grid-cols-2 gap-3 border-t pt-4 text-sm ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
                           <div>
-                            <p className="text-3xl font-semibold">{tomorrowPlan?.summary?.workItems || 0}</p>
+                            <p className="text-3xl font-semibold">{activePlan?.summary?.workItems || 0}</p>
                             <p className={muted}>work items</p>
                           </div>
                           <div>
-                            <p className="text-3xl font-semibold">{tomorrowPlan?.summary?.categories || 0}</p>
+                            <p className="text-3xl font-semibold">{activePlan?.summary?.categories || 0}</p>
                             <p className={muted}>categories</p>
                           </div>
                         </div>
                       </section>
 
-                      <TomorrowSiteBars items={tomorrowPlanSites} darkMode={darkMode} />
+                      <TomorrowSiteBars items={tomorrowPlanSites} darkMode={darkMode} title={`${activePlanTitle} by site`} emptyText={`No ${activePlanTitle.toLowerCase()} data available yet.`} />
                     </div>
                   ) : (
                     <article className={`rounded-[32px]  p-6 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
@@ -1057,7 +1125,51 @@ export default function DmrDashboard({ darkMode }) {
               <button onClick={() => setFillOpen(false)} className={`flex h-10 w-10 items-center justify-center rounded-full border ${darkMode ? "border-white/10" : "border-black/10"}`}><X className="h-4 w-4" /></button>
             </div>
             <div className="min-h-0 overflow-y-auto p-5 sm:p-7">
-              {!data?.canEdit && <div className={`mb-4 rounded-2xl  px-4 py-3 text-xs ${darkMode ? "border-amber-400/20 bg-amber-400/5 text-amber-200/75" : "border-amber-500/20 bg-amber-50 text-amber-800"}`}>You can view DMR, but your role does not have fill permission.</div>}
+              {!dmrSheetLinked && <div className={`mb-4 rounded-2xl  px-4 py-3 text-xs ${darkMode ? "border-amber-400/20 bg-amber-400/5 text-amber-200/75" : "border-amber-500/20 bg-amber-50 text-amber-800"}`}>No DMR sheet is linked yet. Super Admin must link a native Google Sheet before anyone can fill records.</div>}
+              {dmrSheetLinked && !data?.canEdit && <div className={`mb-4 rounded-2xl  px-4 py-3 text-xs ${darkMode ? "border-amber-400/20 bg-amber-400/5 text-amber-200/75" : "border-amber-500/20 bg-amber-50 text-amber-800"}`}>You can view DMR, but your role does not have fill permission.</div>}
+              <section className={`mb-5 rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}>DMR Sheet Link</p>
+                    <h4 className="mt-2 text-lg font-semibold">{data?.dmrSettings?.linked ? "Google Sheet connected" : "No DMR sheet linked"}</h4>
+                    <p className={`mt-1 text-xs ${muted}`}>
+                      {data?.dmrSettings?.linked
+                        ? `Active sheet ID: ${data.dmrSettings.spreadsheetId}`
+                        : data?.canManageDmrSettings
+                          ? "Paste a native Google Sheet link here once. After that, all DMR reads and fills use that sheet."
+                          : "Ask Super Admin to link the DMR Google Sheet before filling records."}
+                    </p>
+                  </div>
+                  {data?.canManageDmrSettings && (
+                    <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+                      <input
+                        value={dmrSheetLink}
+                        onChange={(event) => setDmrSheetLink(event.target.value)}
+                        placeholder="Paste DMR Google Sheet link or ID"
+                        className={`h-11 min-w-0 rounded-2xl border px-4 text-sm outline-none sm:w-80 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-[#fafafa]"}`}
+                      />
+                      <button
+                        type="button"
+                        disabled={dmrSheetSaving || !dmrSheetLink.trim()}
+                        onClick={linkDmrSheet}
+                        className={`h-11 rounded-2xl px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                      >
+                        {dmrSheetSaving ? "Linking…" : data?.dmrSettings?.linked ? "Replace" : "Link"}
+                      </button>
+                      {data?.dmrSettings?.linked && (
+                        <button
+                          type="button"
+                          disabled={dmrSheetSaving}
+                          onClick={unlinkDmrSheet}
+                          className={`h-11 rounded-2xl border px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "border-red-400/25 text-red-200 hover:bg-red-400/10" : "border-red-200 text-red-700 hover:bg-red-50"}`}
+                        >
+                          Unlink
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
 
               <div className={`mb-5 flex gap-2 overflow-x-auto rounded-2xl p-1.5 ${darkMode ? "bg-white/[0.035]" : "bg-[#ebe6dc]"}`}>
                 {[
@@ -1090,8 +1202,8 @@ export default function DmrDashboard({ darkMode }) {
                       <span className="rounded-full bg-black/5 px-2.5 py-1 text-[10px]">Row {record.rowNumber}</span>
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-3">
-                      <label className={`text-[11px] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>Planned<input disabled={!data?.canEdit} type="number" value={valueFor(record, "planned")} onChange={(event) => updateDraft(record, "planned", event.target.value)} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-emerald-400/20 bg-emerald-400/10 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`} /></label>
-                      <label className={`text-[11px] ${darkMode ? "text-red-300" : "text-red-700"}`}>Actual<input disabled={!data?.canEdit} type="number" value={valueFor(record, "actual")} onChange={(event) => updateDraft(record, "actual", event.target.value)} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-red-400/20 bg-red-400/10 text-white" : "border-red-200 bg-red-50 text-red-900"}`} /></label>
+                      <label className={`text-[11px] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>Planned<input disabled={!canFillDmr} type="number" value={valueFor(record, "planned")} onChange={(event) => updateDraft(record, "planned", event.target.value)} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-emerald-400/20 bg-emerald-400/10 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`} /></label>
+                      <label className={`text-[11px] ${darkMode ? "text-red-300" : "text-red-700"}`}>Actual<input disabled={!canFillDmr} type="number" value={valueFor(record, "actual")} onChange={(event) => updateDraft(record, "actual", event.target.value)} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-red-400/20 bg-red-400/10 text-white" : "border-red-200 bg-red-50 text-red-900"}`} /></label>
                     </div>
                   </article>
                 ))}
@@ -1105,7 +1217,7 @@ export default function DmrDashboard({ darkMode }) {
                       <h4 className="text-base font-semibold">Equipments and Tools</h4>
                       <p className={`mt-1 text-xs ${muted}`}>Add tools, machinery, and quantities used today.</p>
                     </div>
-                    <button type="button" disabled={!data?.canEdit || addingRow === "equipment"} onClick={() => addSectionRow("equipment")} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
+                    <button type="button" disabled={!canFillDmr || addingRow === "equipment"} onClick={() => addSectionRow("equipment")} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
                       {addingRow === "equipment" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                       Add row
                     </button>
@@ -1113,9 +1225,9 @@ export default function DmrDashboard({ darkMode }) {
                   <div className="mt-4 space-y-3">
                     {fillEquipmentRows.map((item) => (
                       <div key={item.id} className="grid gap-2 sm:grid-cols-[1fr_1.2fr_.7fr]">
-                        <input disabled={!data?.canEdit} value={valueFor(item, "site")} onChange={(event) => updateDraft(item, "site", event.target.value)} placeholder="Site" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
-                        <input disabled={!data?.canEdit} value={valueFor(item, "details")} onChange={(event) => updateDraft(item, "details", event.target.value)} placeholder="Details" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
-                        <input disabled={!data?.canEdit} value={valueFor(item, "quantity")} onChange={(event) => updateDraft(item, "quantity", event.target.value)} placeholder="Nos/Pair" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                        <input disabled={!canFillDmr} value={valueFor(item, "site")} onChange={(event) => updateDraft(item, "site", event.target.value)} placeholder="Site" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                        <input disabled={!canFillDmr} value={valueFor(item, "details")} onChange={(event) => updateDraft(item, "details", event.target.value)} placeholder="Details" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                        <input disabled={!canFillDmr} value={valueFor(item, "quantity")} onChange={(event) => updateDraft(item, "quantity", event.target.value)} placeholder="Nos/Pair" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
                       </div>
                     ))}
                   </div>
@@ -1127,7 +1239,7 @@ export default function DmrDashboard({ darkMode }) {
                       <h4 className="text-base font-semibold">Materials Details</h4>
                       <p className={`mt-1 text-xs ${muted}`}>Track site-wise material, unit, and quantity.</p>
                     </div>
-                    <button type="button" disabled={!data?.canEdit || addingRow === "materials"} onClick={() => addSectionRow("materials")} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
+                    <button type="button" disabled={!canFillDmr || addingRow === "materials"} onClick={() => addSectionRow("materials")} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
                       {addingRow === "materials" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                       Add row
                     </button>
@@ -1135,10 +1247,10 @@ export default function DmrDashboard({ darkMode }) {
                   <div className="mt-4 space-y-3">
                     {fillMaterialRows.map((item) => (
                       <div key={item.id} className="grid gap-2 sm:grid-cols-[1fr_1.2fr_.55fr_.55fr]">
-                        <input disabled={!data?.canEdit} value={valueFor(item, "site")} onChange={(event) => updateDraft(item, "site", event.target.value)} placeholder="Site" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
-                        <input disabled={!data?.canEdit} value={valueFor(item, "details")} onChange={(event) => updateDraft(item, "details", event.target.value)} placeholder="Details" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
-                        <input disabled={!data?.canEdit} value={valueFor(item, "unit")} onChange={(event) => updateDraft(item, "unit", event.target.value)} placeholder="Unit" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
-                        <input disabled={!data?.canEdit} value={valueFor(item, "quantity")} onChange={(event) => updateDraft(item, "quantity", event.target.value)} placeholder="Qty" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                        <input disabled={!canFillDmr} value={valueFor(item, "site")} onChange={(event) => updateDraft(item, "site", event.target.value)} placeholder="Site" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                        <input disabled={!canFillDmr} value={valueFor(item, "details")} onChange={(event) => updateDraft(item, "details", event.target.value)} placeholder="Details" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                        <input disabled={!canFillDmr} value={valueFor(item, "unit")} onChange={(event) => updateDraft(item, "unit", event.target.value)} placeholder="Unit" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                        <input disabled={!canFillDmr} value={valueFor(item, "quantity")} onChange={(event) => updateDraft(item, "quantity", event.target.value)} placeholder="Qty" className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
                       </div>
                     ))}
                   </div>
@@ -1150,14 +1262,14 @@ export default function DmrDashboard({ darkMode }) {
                       <h4 className="text-base font-semibold">Notes</h4>
                       <p className={`mt-1 text-xs ${muted}`}>Write any site remarks, issues, or next-day reminders.</p>
                     </div>
-                    <button type="button" disabled={!data?.canEdit || addingRow === "notes"} onClick={() => addSectionRow("notes")} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
+                    <button type="button" disabled={!canFillDmr || addingRow === "notes"} onClick={() => addSectionRow("notes")} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
                       {addingRow === "notes" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                       Add row
                     </button>
                   </div>
                   <div className="mt-4 space-y-3">
                     {fillNoteRows.map((item, index) => (
-                      <textarea key={item.id} disabled={!data?.canEdit} value={valueFor(item, "note")} onChange={(event) => updateDraft(item, "note", event.target.value)} placeholder={`Note ${index + 1}`} rows={2} className={`w-full rounded-2xl border px-3 py-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                      <textarea key={item.id} disabled={!canFillDmr} value={valueFor(item, "note")} onChange={(event) => updateDraft(item, "note", event.target.value)} placeholder={`Note ${index + 1}`} rows={2} className={`w-full rounded-2xl border px-3 py-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
                     ))}
                   </div>
                 </section>}
@@ -1209,7 +1321,7 @@ export default function DmrDashboard({ darkMode }) {
                               <button
                                 key={option.value}
                                 type="button"
-                                disabled={!data?.canEdit}
+                                disabled={!canFillDmr}
                                 onClick={() => updateDraft(item, "status", option.value)}
                                 className={`h-9 rounded-xl  px-2 text-[14px]  transition disabled:cursor-not-allowed disabled:opacity-50 ${currentStatus === option.value ? option.active : option.idle}`}
                               >
@@ -1227,7 +1339,7 @@ export default function DmrDashboard({ darkMode }) {
             </div>
             <div className={`flex items-center justify-end gap-2 border-t px-5 pb-6 pt-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}>
               <button onClick={() => setFillOpen(false)} className={`h-11 rounded-full border px-6 text-sm ${darkMode ? "border-white/10 text-white/60" : "border-black/10 text-black/60"}`}>Cancel</button>
-              <button disabled={!data?.canEdit || saving || !Object.keys(drafts).length} onClick={saveDmr} className={`flex h-11 min-w-36 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save to Sheet</button>
+              <button disabled={!canFillDmr || saving || !Object.keys(drafts).length} onClick={saveDmr} className={`flex h-11 min-w-36 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save to Sheet</button>
             </div>
           </div>
         </div>

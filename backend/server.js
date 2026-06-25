@@ -55,7 +55,7 @@ const AUTH_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY
 const SUPER_ADMIN_USERNAME = "AdminUIPL";
 const SUPER_ADMIN_PASSWORD = "Admin@9579";
-const DEFAULT_DMR_SPREADSHEET_ID = process.env.DMR_SPREADSHEET_ID || "19x1_pWpW3l24UIBJNctkqQUZFKvkmQBfgvDzcrTprYQ";
+const DEFAULT_DMR_SPREADSHEET_ID = process.env.DMR_SPREADSHEET_ID || "";
 const DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID = process.env.DMR_TOMORROW_PLAN_SPREADSHEET_ID || "1592O80hnVL7scepUdvi1hX72MyWIfiP61vh-94TmTaw";
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard" },
@@ -673,6 +673,7 @@ const notificationsPath = path.join(dataDir, "notifications.json");
 const activityLogsPath = path.join(dataDir, "activity-logs.json");
 const projectDashboardPath = path.join(dataDir, "project-dashboard.json");
 const dmrHistoryPath = path.join(dataDir, "dmr-history.json");
+const dmrSettingsPath = path.join(dataDir, "dmr-settings.json");
 
 let documents = [];
 let documentFolders = [];
@@ -681,6 +682,13 @@ let reports = [];
 let notifications = [];
 let activityLogs = [];
 let dmrHistory = [];
+let dmrSettings = {
+  spreadsheetId: normalizeSpreadsheetId(DEFAULT_DMR_SPREADSHEET_ID),
+  linkedAt: null,
+  linkedBy: null,
+  unlinkedAt: null,
+  unlinkedBy: null,
+};
 let projectDashboardConfig = { projects: [] };
 const scheduledAutomationJobs = new Map();
 
@@ -747,6 +755,19 @@ if (fs.existsSync(dmrHistoryPath)) {
   } catch (error) {
     console.error("Error loading DMR history:", error);
     dmrHistory = [];
+  }
+}
+
+if (fs.existsSync(dmrSettingsPath)) {
+  try {
+    const savedDmrSettings = JSON.parse(fs.readFileSync(dmrSettingsPath, "utf8"));
+    dmrSettings = {
+      ...dmrSettings,
+      ...(savedDmrSettings || {}),
+      spreadsheetId: normalizeSpreadsheetId(savedDmrSettings?.spreadsheetId),
+    };
+  } catch (error) {
+    console.error("Error loading DMR settings:", error);
   }
 }
 
@@ -862,6 +883,32 @@ function saveDmrHistory() {
   } catch (error) {
     console.error("Error saving DMR history:", error);
   }
+}
+
+function saveDmrSettings() {
+  try {
+    fs.writeFileSync(dmrSettingsPath, JSON.stringify(dmrSettings, null, 2));
+  } catch (error) {
+    console.error("Error saving DMR settings:", error);
+  }
+}
+
+function publicDmrSettings() {
+  const spreadsheetId = normalizeSpreadsheetId(dmrSettings.spreadsheetId);
+  return {
+    linked: Boolean(spreadsheetId),
+    spreadsheetId,
+    linkedAt: dmrSettings.linkedAt || null,
+    linkedBy: dmrSettings.linkedBy || null,
+  };
+}
+
+function getActiveDmrSpreadsheetId() {
+  const spreadsheetId = normalizeSpreadsheetId(dmrSettings.spreadsheetId);
+  if (!spreadsheetId) {
+    throw new Error("No DMR sheet is linked yet. Super Admin can open Fill DMR and link a native Google Sheet.");
+  }
+  return spreadsheetId;
 }
 
 function getClientIp(req) {
@@ -1460,6 +1507,51 @@ async function fetchRawSheetValues(sheetId) {
   }
 }
 
+async function assertNativeGoogleSpreadsheet(spreadsheetId, label = "Sheet") {
+  const auth = await getGoogleAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  try {
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: "properties.title,spreadsheetUrl",
+    });
+    return {
+      id: spreadsheetId,
+      name: response.data?.properties?.title || spreadsheetId,
+      mimeType: "application/vnd.google-apps.spreadsheet",
+      webViewLink: response.data?.spreadsheetUrl || null,
+    };
+  } catch (error) {
+    if (isOfficeSpreadsheetError(error)) {
+      throw new Error(`${label} is an Excel/Office workbook. DMR can read normal sheets, but filling DMR needs creating tabs and writing cells, which Google only supports on native Google Sheets. Open it and use File > Save as Google Sheets, then link the converted /spreadsheets/d/... file.`);
+    }
+    const message = String(error?.message || "");
+    if (!/file not found|not found/i.test(message) && error?.code !== 404) {
+      throw error;
+    }
+  }
+
+  const drive = google.drive({ version: "v3", auth });
+  let response;
+  try {
+    response = await drive.files.get({
+      fileId: spreadsheetId,
+      fields: "id,name,mimeType,webViewLink",
+    });
+  } catch (error) {
+    const message = String(error?.message || "");
+    if (/file not found|not found/i.test(message) || error?.code === 404) {
+      throw new Error(`${label} could not be opened by Google APIs. If it is shared as “Anyone with the link”, make sure it is a native Google Sheet, not an .xlsx Office workbook. If it is already native, share it directly with sheets-dashboard-sa@sheets-dashboard-498607.iam.gserviceaccount.com as Editor.`);
+    }
+    throw error;
+  }
+  const file = response.data || {};
+  if (file.mimeType !== "application/vnd.google-apps.spreadsheet") {
+    throw new Error(`${label} must be a native Google Sheet, but "${file.name || spreadsheetId}" is an Excel/Office workbook. Open it and use File > Save as Google Sheets, then link the converted /spreadsheets/d/... file.`);
+  }
+  return file;
+}
+
 async function fetchSheetText(sheetId) {
   const sheets = await fetchRawSheetValues(sheetId);
 
@@ -1648,6 +1740,31 @@ function projectDateKey(value) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+const IST_TIME_ZONE = "Asia/Kolkata";
+
+function istDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return projectDateKey(new Date());
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: IST_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date).reduce((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function addDaysToDateKey(dateKey, days = 0) {
+  const match = projectText(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + Number(days || 0)));
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
 function projectCategory(assignment, doc, tab) {
   if (assignment.category && assignment.category !== "auto") return assignment.category;
   const text = `${doc.name} ${tab.name} ${(tab.headers || []).join(" ")}`.toLowerCase();
@@ -1707,7 +1824,7 @@ function projectTabsForAssignment(doc, dataset, assignment) {
 }
 
 function dmrDateKey(value = new Date()) {
-  return projectDateKey(value) || projectDateKey(new Date());
+  return projectDateKey(value) || istDateKey(new Date());
 }
 
 function dmrTabName(dateKey) {
@@ -1947,6 +2064,7 @@ async function getDmrSpreadsheet(spreadsheetId) {
 }
 
 async function ensureDmrTab(spreadsheetId, dateKey) {
+  await assertNativeGoogleSpreadsheet(spreadsheetId, "DMR sheet");
   const sheets = await getDmrSpreadsheet(spreadsheetId);
   const tabName = dmrTabName(dateKey);
   if (!tabName) throw new Error("Invalid DMR date");
@@ -2004,6 +2122,7 @@ async function ensureDmrTab(spreadsheetId, dateKey) {
 }
 
 async function readDmrSheet(spreadsheetId, dateKey, { ensure = false } = {}) {
+  if (!ensure) await assertNativeGoogleSpreadsheet(spreadsheetId, "DMR sheet");
   const sheets = await getDmrSpreadsheet(spreadsheetId);
   const sheetInfo = ensure ? await ensureDmrTab(spreadsheetId, dateKey) : { sheetName: dmrTabName(dateKey), created: false };
   const response = await sheets.spreadsheets.values.get({
@@ -2207,7 +2326,7 @@ function parseGoogleTimestampDate(value) {
     return `${match[3]}-${String(match[1]).padStart(2, "0")}-${String(match[2]).padStart(2, "0")}`;
   }
   const parsed = new Date(text);
-  if (!Number.isNaN(parsed.getTime())) return projectDateKey(parsed);
+  if (!Number.isNaN(parsed.getTime())) return istDateKey(parsed);
   return "";
 }
 
@@ -2274,7 +2393,7 @@ function mergeTomorrowPlanRecords(records = []) {
       tomorrowPlanComparableSite(record.site),
       projectText(record.category).toLowerCase(),
       projectText(record.submittedBy).toLowerCase(),
-      record.submittedDate || "",
+      record.plannedForDate || record.submittedDate || "",
       record.plannedManpower ?? "text",
     ].join("|");
     result.set(key, [...(result.get(key) || []), record]);
@@ -2319,65 +2438,98 @@ function tomorrowPlanBreakdown(records = [], field) {
   }, new Map()).values()].sort((a, b) => b.plannedManpower - a.plannedManpower || b.records - a.records || a.label.localeCompare(b.label));
 }
 
+function emptyDmrTomorrowPlan({ date, label, error = "" } = {}) {
+  return {
+    label,
+    error,
+    records: [],
+    requestedDate: date || "",
+    selectedDate: date || "",
+    latestDate: date || "",
+    availableDates: [],
+    summary: { records: 0, plannedManpower: 0, workItems: 0, sites: 0, categories: 0 },
+    siteBreakdown: [],
+    categoryBreakdown: [],
+    submitterBreakdown: [],
+  };
+}
+
 async function readDmrTomorrowPlan(dateKey) {
   const spreadsheetId = DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID;
   if (!spreadsheetId) return null;
   const targetDate = dmrDateKey(dateKey);
   const sheets = await fetchRawSheetValues(spreadsheetId);
-  const sheet = sheets.find((item) => /form responses/i.test(item.name)) || sheets[0];
-  const values = sheet?.values || [];
-  const headers = (values[0] || []).map(projectText);
-  const timestampIndex = headers.findIndex((header) => /^timestamp$/i.test(header));
-  const nameIndex = headers.findIndex((header) => /^name$/i.test(header));
-  const siteIndex = headers.findIndex((header) => /site\s*name/i.test(header));
-  const categoryColumns = headers
-    .map((header, index) => ({ header, index, category: tomorrowPlanCategory(header) }))
-    .filter((item) => item.category);
-
+  const planSheets = [];
   const allRecords = [];
-  for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
-    const row = values[rowIndex] || [];
-    const timestamp = dmrCell(values, rowIndex, timestampIndex);
-    const submittedDate = parseGoogleTimestampDate(timestamp);
-    const submittedBy = dmrCell(values, rowIndex, nameIndex);
-    const site = dmrCell(values, rowIndex, siteIndex) || "Unassigned site";
-    for (const column of categoryColumns) {
-      const parsed = parseTomorrowPlanCell(row[column.index]);
-      if (!parsed.raw) continue;
-      allRecords.push({
-        id: `${sheet.name}:${rowIndex + 1}:${column.index + 1}`,
-        rowNumber: rowIndex + 1,
-        columnNumber: column.index + 1,
-        sheetName: sheet.name,
-        timestamp,
-        submittedDate,
-        submittedBy,
-        site,
-        category: column.category,
-        plannedManpower: parsed.plannedManpower,
-        work: parsed.work,
-        raw: parsed.raw,
-      });
+
+  for (const sheet of sheets) {
+    const values = sheet?.values || [];
+    const headers = (values[0] || []).map(projectText);
+    const timestampIndex = headers.findIndex((header) => /^timestamp$/i.test(header));
+    const nameIndex = headers.findIndex((header) => /^name$/i.test(header));
+    const siteIndex = headers.findIndex((header) => /site\s*name/i.test(header));
+    const categoryColumns = headers
+      .map((header, index) => ({ header, index, category: tomorrowPlanCategory(header) }))
+      .filter((item) => item.category);
+
+    if (timestampIndex < 0 || siteIndex < 0 || !categoryColumns.length) continue;
+
+    const firstResponseRowIndex = values.findIndex((row, index) => index > 0 && parseGoogleTimestampDate(row?.[timestampIndex]));
+    if (firstResponseRowIndex < 0) continue;
+    const sheetSubmittedDate = parseGoogleTimestampDate(values[firstResponseRowIndex]?.[timestampIndex]);
+    const sheetPlanDate = sheetSubmittedDate ? addDaysToDateKey(sheetSubmittedDate, 1) : "";
+    if (!sheetPlanDate) continue;
+
+    planSheets.push({
+      name: sheet.name,
+      date: sheetPlanDate,
+      submittedDate: sheetSubmittedDate,
+      firstResponseRow: firstResponseRowIndex + 1,
+    });
+
+    for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+      const row = values[rowIndex] || [];
+      const timestamp = dmrCell(values, rowIndex, timestampIndex);
+      const submittedDate = parseGoogleTimestampDate(timestamp);
+      const submittedBy = dmrCell(values, rowIndex, nameIndex);
+      const site = dmrCell(values, rowIndex, siteIndex) || "Unassigned site";
+      for (const column of categoryColumns) {
+        const parsed = parseTomorrowPlanCell(row[column.index]);
+        if (!parsed.raw) continue;
+        allRecords.push({
+          id: `${sheet.name}:${rowIndex + 1}:${column.index + 1}`,
+          rowNumber: rowIndex + 1,
+          columnNumber: column.index + 1,
+          sheetName: sheet.name,
+          timestamp,
+          submittedDate,
+          plannedForDate: sheetPlanDate,
+          submittedBy,
+          site,
+          category: column.category,
+          plannedManpower: parsed.plannedManpower,
+          work: parsed.work,
+          raw: parsed.raw,
+        });
+      }
     }
   }
 
   const normalizedRecords = mergeTomorrowPlanRecords(canonicalizeTomorrowPlanSites(allRecords));
-  const availableDates = [...new Set(normalizedRecords.map((record) => record.submittedDate).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+  const availableDates = [...new Set(planSheets.map((sheet) => sheet.date).filter(Boolean))].sort((a, b) => b.localeCompare(a));
   const latestDate = availableDates[0] || targetDate;
-  let selectedDate = targetDate;
-  let records = normalizedRecords.filter((record) => record.submittedDate === targetDate);
-  if (!records.length) {
-    selectedDate = latestDate;
-    records = normalizedRecords.filter((record) => record.submittedDate === latestDate);
-  }
+  const selectedDate = targetDate;
+  const records = normalizedRecords.filter((record) => record.plannedForDate === targetDate);
+  const selectedSheets = planSheets.filter((sheet) => sheet.date === targetDate);
   const summaryDraft = summarizeTomorrowPlan(records);
   return {
     spreadsheetId,
-    sheetName: sheet?.name || "",
+    sheetName: selectedSheets.map((sheet) => sheet.name).join(", ") || "",
     requestedDate: targetDate,
     selectedDate,
     latestDate,
     availableDates,
+    sheets: planSheets,
     records,
     summary: {
       records: summaryDraft.records,
@@ -2393,7 +2545,7 @@ async function readDmrTomorrowPlan(dateKey) {
 }
 
 async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
-  const spreadsheetId = DEFAULT_DMR_SPREADSHEET_ID;
+  const spreadsheetId = getActiveDmrSpreadsheetId();
   const date = dmrDateKey(dateKey);
   if (ensureToday) await ensureDmrTab(spreadsheetId, date);
   const sheets = await fetchRawSheetValues(spreadsheetId);
@@ -2419,19 +2571,20 @@ async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
     .sort((a, b) => b.date.localeCompare(a.date));
   const today = parsedTabs.find((tab) => tab.date === date) || { sheetName: dmrTabName(date), date, records: [], sites: [], agencies: [] };
   const allRecords = parsedTabs.flatMap((tab) => tab.records);
+  let todayPlan = null;
   let tomorrowPlan = null;
   try {
-    tomorrowPlan = await readDmrTomorrowPlan(date);
+    todayPlan = await readDmrTomorrowPlan(date);
+  } catch (error) {
+    console.error("Today plan read error:", error);
+    todayPlan = emptyDmrTomorrowPlan({ date, label: "Today's Plan", error: error.message });
+  }
+  try {
+    const tomorrowDate = addDaysToDateKey(date, 1) || date;
+    tomorrowPlan = await readDmrTomorrowPlan(tomorrowDate);
   } catch (error) {
     console.error("Tomorrow plan read error:", error);
-    tomorrowPlan = {
-      error: error.message,
-      records: [],
-      summary: { records: 0, plannedManpower: 0, workItems: 0, sites: 0, categories: 0 },
-      siteBreakdown: [],
-      categoryBreakdown: [],
-      submitterBreakdown: [],
-    };
+    tomorrowPlan = emptyDmrTomorrowPlan({ date: addDaysToDateKey(date, 1) || date, label: "Tomorrow's Plan", error: error.message });
   }
   const recentTabs = parsedTabs.slice(0, 14).map((tab) => ({
     date: tab.date,
@@ -2462,7 +2615,8 @@ async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
       siteBreakdown: dmrBreakdown(allRecords, "site"),
       agencyBreakdown: dmrBreakdown(allRecords, "agency"),
     },
-    tomorrowPlan,
+    todayPlan: todayPlan ? { ...todayPlan, label: "Today's Plan" } : emptyDmrTomorrowPlan({ date, label: "Today's Plan" }),
+    tomorrowPlan: tomorrowPlan ? { ...tomorrowPlan, label: "Tomorrow's Plan" } : emptyDmrTomorrowPlan({ date: addDaysToDateKey(date, 1) || date, label: "Tomorrow's Plan" }),
   };
 }
 
@@ -4330,17 +4484,102 @@ app.delete("/project-dashboard/projects/:id", requireSuperAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+function emptyDmrDashboard(date) {
+  return {
+    spreadsheetId: "",
+    date,
+    sheetName: dmrTabName(date),
+    today: {
+      records: [],
+      equipment: [],
+      materials: [],
+      notes: [],
+      staffAttendance: [],
+      totals: dmrSummary([]),
+      siteBreakdown: [],
+      agencyBreakdown: [],
+      sites: [],
+      agencies: [],
+    },
+    workbook: {
+      sheets: [],
+      totals: dmrSummary([]),
+      recentTabs: [],
+      siteBreakdown: [],
+      agencyBreakdown: [],
+    },
+    todayPlan: emptyDmrTomorrowPlan({ date, label: "Today's Plan" }),
+    tomorrowPlan: emptyDmrTomorrowPlan({ date: addDaysToDateKey(date, 1) || date, label: "Tomorrow's Plan" }),
+  };
+}
+
+app.get("/dmr-dashboard/settings", (req, res) => {
+  if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
+  res.json({
+    settings: publicDmrSettings(),
+    canManage: Boolean(req.user?.isSuperAdmin),
+  });
+});
+
+app.put("/dmr-dashboard/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const spreadsheetId = normalizeSpreadsheetId(req.body?.spreadsheetId || req.body?.url || req.body?.link);
+    if (!spreadsheetId) return res.status(400).json({ error: "Paste a valid Google Sheet link or spreadsheet ID" });
+    const file = await assertNativeGoogleSpreadsheet(spreadsheetId, "DMR sheet");
+    dmrSettings = {
+      ...dmrSettings,
+      spreadsheetId,
+      linkedAt: new Date().toISOString(),
+      linkedBy: req.authUser?.displayName || req.authUser?.username || "Super Admin",
+      linkedFileName: file.name || null,
+      unlinkedAt: null,
+      unlinkedBy: null,
+    };
+    saveDmrSettings();
+    addActivityLog({
+      req,
+      action: "Linked DMR sheet",
+      target: file.name || spreadsheetId,
+      details: { spreadsheetId },
+    });
+    res.json({ success: true, settings: publicDmrSettings() });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/dmr-dashboard/settings", requireSuperAdmin, (req, res) => {
+  const previousSpreadsheetId = normalizeSpreadsheetId(dmrSettings.spreadsheetId);
+  dmrSettings = {
+    ...dmrSettings,
+    spreadsheetId: "",
+    unlinkedAt: new Date().toISOString(),
+    unlinkedBy: req.authUser?.displayName || req.authUser?.username || "Super Admin",
+  };
+  saveDmrSettings();
+  addActivityLog({
+    req,
+    action: "Unlinked DMR sheet",
+    target: previousSpreadsheetId || "DMR sheet",
+  });
+  res.json({ success: true, settings: publicDmrSettings() });
+});
+
 app.get("/dmr-dashboard", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
       ? String(req.query.date)
-      : projectDateKey(new Date());
-    const dashboard = await readDmrDashboard(date, { ensureToday: true });
+      : istDateKey(new Date());
+    const dashboard = publicDmrSettings().linked
+      ? await readDmrDashboard(date, { ensureToday: true })
+      : emptyDmrDashboard(date);
     res.json({
       ...dashboard,
       canEdit: hasPrivilege(req, "edit_project_dmr"),
       canViewHistory: Boolean(req.user?.isSuperAdmin),
+      canManageDmrSettings: Boolean(req.user?.isSuperAdmin),
+      dmrSettings: publicDmrSettings(),
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
@@ -4409,11 +4648,12 @@ app.patch("/dmr-dashboard", async (req, res) => {
     if (!hasPrivilege(req, "edit_project_dmr")) return res.status(403).json({ error: "DMR fill permission required" });
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || ""))
       ? String(req.body.date)
-      : projectDateKey(new Date());
+      : istDateKey(new Date());
     const incomingUpdates = Array.isArray(req.body?.updates) ? req.body.updates : [];
     const submissionId = projectText(req.body?.submissionId) || `dmr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     if (!incomingUpdates.length) return res.status(400).json({ error: "No DMR rows were provided" });
-    const today = await readDmrSheet(DEFAULT_DMR_SPREADSHEET_ID, date, { ensure: true });
+    const spreadsheetId = getActiveDmrSpreadsheetId();
+    const today = await readDmrSheet(spreadsheetId, date, { ensure: true });
     const sectionRecords = [
       ...(today.records || []).map((record) => ({ ...record, type: "manpower" })),
       ...(today.equipment || []).map((record) => ({ ...record, type: "equipment" })),
@@ -4470,7 +4710,7 @@ app.patch("/dmr-dashboard", async (req, res) => {
       };
     }).filter(Boolean);
     if (!updates.length) return res.status(400).json({ error: "No matching DMR rows found for this date" });
-    const result = await writeDmrRecords(DEFAULT_DMR_SPREADSHEET_ID, date, updates);
+    const result = await writeDmrRecords(spreadsheetId, date, updates);
     addDmrHistory(req, historyEntries);
     addActivityLog({
       req,
@@ -4491,10 +4731,11 @@ app.post("/dmr-dashboard/section-row", async (req, res) => {
     if (!hasPrivilege(req, "edit_project_dmr")) return res.status(403).json({ error: "DMR fill permission required" });
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || ""))
       ? String(req.body.date)
-      : projectDateKey(new Date());
+      : istDateKey(new Date());
     const values = req.body?.values || {};
     const submissionId = projectText(req.body?.submissionId) || `dmr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const result = await addDmrSectionRow(DEFAULT_DMR_SPREADSHEET_ID, date, req.body?.section, values);
+    const spreadsheetId = getActiveDmrSpreadsheetId();
+    const result = await addDmrSectionRow(spreadsheetId, date, req.body?.section, values);
     addDmrHistory(req, [{
       submissionId,
       dmrDate: date,
@@ -4576,7 +4817,7 @@ app.get("/project-dashboard/dmr", async (req, res) => {
 
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
       ? String(req.query.date)
-      : projectDateKey(new Date());
+      : istDateKey(new Date());
     const dmrSheet = await readDmrSheet(project.dmr.spreadsheetId, date, { ensure: true });
     const allowedAgencyNames = new Set((project.dmr.agencyNames || []).map((item) => projectText(item).toLowerCase()).filter(Boolean));
     const records = dmrSheet.records.filter((record) => {
@@ -4631,7 +4872,7 @@ app.patch("/project-dashboard/dmr", async (req, res) => {
     if (!canEditProjectDmr(project, req)) return res.status(403).json({ error: "DMR edit permission is required" });
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || ""))
       ? String(req.body.date)
-      : projectDateKey(new Date());
+      : istDateKey(new Date());
     const incomingUpdates = Array.isArray(req.body?.updates) ? req.body.updates : [];
     if (!incomingUpdates.length) return res.status(400).json({ error: "No DMR rows were provided" });
 
@@ -4674,7 +4915,7 @@ app.get("/project-dashboard", async (req, res) => {
   try {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
       ? String(req.query.date)
-      : projectDateKey(new Date());
+      : istDateKey(new Date());
     const visibleSheetDocs = new Map(
       documents
         .filter((doc) => doc.type === "sheet" && doc.isActive !== false && doc.isReady && isDocumentVisible(doc, req))

@@ -45,7 +45,7 @@ async function api(path, options = {}) {
   return data;
 }
 
-const DEFAULT_DMR_SPREADSHEET_ID = "19x1_pWpW3l24UIBJNctkqQUZFKvkmQBfgvDzcrTprYQ";
+const DEFAULT_DMR_SPREADSHEET_ID = "";
 
 const blankAssignment = () => ({
   id: `assignment_${Date.now()}`,

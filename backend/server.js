@@ -2137,6 +2137,106 @@ async function readDmrSheet(spreadsheetId, dateKey, { ensure = false } = {}) {
   return { ...parsed, sheetName: sheetInfo.sheetName, created: sheetInfo.created };
 }
 
+async function refreshDmrManpowerTotals(spreadsheetId, sheetName) {
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(sheetName)}!A1:ZZ300`,
+  });
+  const values = response.data.values || [];
+  const measureRowIndex = values.findIndex((row) => row.filter((cell) => /^(planned|actual)$/i.test(projectText(cell))).length >= 2);
+  if (measureRowIndex < 1) return 0;
+
+  const equipmentLabel = findDmrLabel(values, /equipments?\s+and\s+tools/i);
+  const totalRowSearchEnd = equipmentLabel ? equipmentLabel.rowIndex : values.length;
+  const totalRowIndex = values.findIndex((row, index) => (
+    index > measureRowIndex &&
+    index < totalRowSearchEnd &&
+    row.some((cell) => /total\s+manpower/i.test(projectText(cell)))
+  ));
+  if (totalRowIndex < 0) return 0;
+
+  const siteRowIndex = measureRowIndex - 1;
+  const groupHeaderRowIndex = Math.max(0, measureRowIndex - 2);
+  const siteRow = values[siteRowIndex] || [];
+  const measureRow = values[measureRowIndex] || [];
+  const sitePairs = [];
+  const totalPair = { plannedColumnIndex: null, actualColumnIndex: null };
+  let currentSite = "";
+
+  for (let index = 0; index < Math.max(siteRow.length, measureRow.length); index += 1) {
+    const possibleSite = cleanDmrSiteName(siteRow[index]);
+    if (possibleSite) currentSite = possibleSite;
+    const metric = projectText(measureRow[index]).toLowerCase();
+    if (metric !== "planned" && metric !== "actual") continue;
+
+    const groupHeader = projectText(values[groupHeaderRowIndex]?.[index]).toLowerCase();
+    const isOverallTotal = /total.*site.*manpower|total\s+all\s+site\s+manpower/i.test(groupHeader);
+    if (isOverallTotal) {
+      if (metric === "planned") totalPair.plannedColumnIndex = index;
+      if (metric === "actual") totalPair.actualColumnIndex = index;
+      continue;
+    }
+
+    const site = currentSite || `Site ${sitePairs.length + 1}`;
+    let pair = sitePairs.find((item) => item.site === site);
+    if (!pair) {
+      pair = { site, plannedColumnIndex: null, actualColumnIndex: null };
+      sitePairs.push(pair);
+    }
+    if (metric === "planned" && pair.plannedColumnIndex === null) pair.plannedColumnIndex = index;
+    if (metric === "actual" && pair.actualColumnIndex === null) pair.actualColumnIndex = index;
+  }
+
+  const startRowNumber = measureRowIndex + 2;
+  const endRowNumber = totalRowIndex;
+  const totalRowNumber = totalRowIndex + 1;
+  if (endRowNumber < startRowNumber) return 0;
+
+  const data = [];
+  const plannedTotalCells = [];
+  const actualTotalCells = [];
+  for (const pair of sitePairs) {
+    if (pair.plannedColumnIndex !== null) {
+      const column = columnName(pair.plannedColumnIndex + 1);
+      plannedTotalCells.push(`${column}${totalRowNumber}`);
+      data.push({
+        range: `${escapeSheetName(sheetName)}!${column}${totalRowNumber}`,
+        values: [[`=SUM(${column}${startRowNumber}:INDEX(${column}:${column},ROW()-1))`]],
+      });
+    }
+    if (pair.actualColumnIndex !== null) {
+      const column = columnName(pair.actualColumnIndex + 1);
+      actualTotalCells.push(`${column}${totalRowNumber}`);
+      data.push({
+        range: `${escapeSheetName(sheetName)}!${column}${totalRowNumber}`,
+        values: [[`=SUM(${column}${startRowNumber}:INDEX(${column}:${column},ROW()-1))`]],
+      });
+    }
+  }
+  if (totalPair.plannedColumnIndex !== null && plannedTotalCells.length) {
+    const column = columnName(totalPair.plannedColumnIndex + 1);
+    data.push({
+      range: `${escapeSheetName(sheetName)}!${column}${totalRowNumber}`,
+      values: [[`=SUM(${plannedTotalCells.join(",")})`]],
+    });
+  }
+  if (totalPair.actualColumnIndex !== null && actualTotalCells.length) {
+    const column = columnName(totalPair.actualColumnIndex + 1);
+    data.push({
+      range: `${escapeSheetName(sheetName)}!${column}${totalRowNumber}`,
+      values: [[`=SUM(${actualTotalCells.join(",")})`]],
+    });
+  }
+
+  if (!data.length) return 0;
+  const result = await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: { valueInputOption: "USER_ENTERED", data },
+  });
+  return result.data.totalUpdatedCells || 0;
+}
+
 async function writeDmrRecords(spreadsheetId, dateKey, updates = []) {
   const { sheetName } = await ensureDmrTab(spreadsheetId, dateKey);
   const data = [];
@@ -2175,8 +2275,9 @@ async function writeDmrRecords(spreadsheetId, dateKey, updates = []) {
     spreadsheetId,
     requestBody: { valueInputOption: "USER_ENTERED", data },
   });
+  const totalUpdatedCells = await refreshDmrManpowerTotals(spreadsheetId, sheetName);
   sheetDatasetCache.delete(spreadsheetId);
-  return { updatedCells: response.data.totalUpdatedCells || 0, sheetName };
+  return { updatedCells: (response.data.totalUpdatedCells || 0) + totalUpdatedCells, sheetName, totalUpdatedCells };
 }
 
 async function addDmrSectionRow(spreadsheetId, dateKey, section, valuesToWrite = {}) {
@@ -2316,6 +2417,23 @@ function dmrBreakdown(records = [], field) {
     result.set(label, item);
     return result;
   }, new Map()).values()].sort((a, b) => b.actual - a.actual || a.label.localeCompare(b.label));
+}
+
+function dmrActualsForPlan(records = []) {
+  const siteBreakdown = [...records.reduce((result, record) => {
+    const site = projectText(record.site) || "Unassigned site";
+    const item = result.get(site) || { site, actual: 0, records: 0 };
+    item.actual += Number(record.actual) || 0;
+    item.records += 1;
+    result.set(site, item);
+    return result;
+  }, new Map()).values()].sort((a, b) => b.actual - a.actual || a.site.localeCompare(b.site));
+
+  return {
+    actualManpower: records.reduce((sum, record) => sum + (Number(record.actual) || 0), 0),
+    records: records.length,
+    siteBreakdown,
+  };
 }
 
 function parseGoogleTimestampDate(value) {
@@ -2599,6 +2717,7 @@ async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
     .sort((a, b) => b.date.localeCompare(a.date));
   const today = parsedTabs.find((tab) => tab.date === date) || { sheetName: dmrTabName(date), date, records: [], sites: [], agencies: [] };
   const allRecords = parsedTabs.flatMap((tab) => tab.records);
+  const actualsForDate = (targetDate) => dmrActualsForPlan(parsedTabs.find((tab) => tab.date === targetDate)?.records || []);
   let todayPlan = null;
   let tomorrowPlan = null;
   try {
@@ -2643,8 +2762,8 @@ async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
       siteBreakdown: dmrBreakdown(allRecords, "site"),
       agencyBreakdown: dmrBreakdown(allRecords, "agency"),
     },
-    todayPlan: todayPlan ? { ...todayPlan, label: "Today's Plan" } : emptyDmrTomorrowPlan({ date, label: "Today's Plan" }),
-    tomorrowPlan: tomorrowPlan ? { ...tomorrowPlan, label: "Tomorrow's Plan" } : emptyDmrTomorrowPlan({ date: addDaysToDateKey(date, 1) || date, label: "Tomorrow's Plan" }),
+    todayPlan: todayPlan ? { ...todayPlan, label: "Today's Plan", actuals: actualsForDate(date) } : { ...emptyDmrTomorrowPlan({ date, label: "Today's Plan" }), actuals: actualsForDate(date) },
+    tomorrowPlan: tomorrowPlan ? { ...tomorrowPlan, label: "Tomorrow's Plan", actuals: actualsForDate(addDaysToDateKey(date, 1) || date) } : { ...emptyDmrTomorrowPlan({ date: addDaysToDateKey(date, 1) || date, label: "Tomorrow's Plan" }), actuals: actualsForDate(addDaysToDateKey(date, 1) || date) },
   };
 }
 

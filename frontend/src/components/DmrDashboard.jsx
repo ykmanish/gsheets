@@ -63,6 +63,23 @@ function comparableTradeText(value = "") {
   return compact;
 }
 
+function planActualStatus(plannedValue, actualValue) {
+  const planned = Number(plannedValue) || 0;
+  const actual = Number(actualValue) || 0;
+  return {
+    planned,
+    actual,
+    variance: actual - planned,
+    ok: actual >= planned,
+  };
+}
+
+function planStatusTone(status, darkMode) {
+  return status.ok
+    ? darkMode ? "bg-emerald-400/10 text-emerald-200 border-emerald-400/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : darkMode ? "bg-red-400/10 text-red-200 border-red-400/20" : "bg-red-50 text-red-700 border-red-200";
+}
+
 function WorkloadBars({ title, items = [], darkMode }) {
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const chartItems = items.slice(0, 8);
@@ -114,35 +131,41 @@ function WorkloadBars({ title, items = [], darkMode }) {
 function TomorrowSiteBars({ items = [], darkMode, title = "Site-wise planned manpower", emptyText = "No plan data available yet." }) {
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const chartItems = items.slice(0, 8);
-  const max = Math.max(1, ...chartItems.map((item) => Number(item.plannedManpower) || 0));
+  const max = Math.max(1, ...chartItems.map((item) => Math.max(Number(item.plannedManpower) || 0, Number(item.actualManpower) || 0)));
   const total = items.reduce((sum, item) => sum + (Number(item.plannedManpower) || 0), 0);
+  const totalActual = items.reduce((sum, item) => sum + (Number(item.actualManpower) || 0), 0);
   return (
     <section className={`min-w-0 overflow-hidden rounded-[28px] p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.07] bg-white"}`}>
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}>Plan overview</p>
           <h3 className="mt-2 text-xl font-semibold">{title}</h3>
-          <p className={`mt-2 text-xs ${muted}`}>{total} planned manpower across {items.length} site{items.length === 1 ? "" : "s"}</p>
+          <p className={`mt-2 text-xs ${muted}`}>{totalActual} actual / {total} planned across {items.length} site{items.length === 1 ? "" : "s"}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-[#15a8e0]" />
-          <span className={`text-[11px] ${muted}`}>Planned</span>
+        <div className={`flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[11px] ${muted}`}>
+          <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#8d939b]" /> Planned</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#54d39f]" /> Actual ok</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-red-500" /> Attention</span>
         </div>
       </div>
 
       <div className="flex h-64 max-w-full items-end gap-2 overflow-x-auto overflow-y-hidden pb-2">
         {chartItems.map((item) => {
           const value = Number(item.plannedManpower) || 0;
+          const actual = Number(item.actualManpower) || 0;
+          const status = planActualStatus(value, actual);
           const plannedHeight = value ? Math.max(8, (value / max) * 100) : 0;
+          const actualHeight = actual ? Math.max(8, (actual / max) * 100) : 0;
           return (
             <div key={item.site} className="flex min-w-[64px] flex-1 flex-col items-center">
               <div className="mb-2 min-h-9 text-center">
-                <p className={`text-sm font-semibold ${darkMode ? "text-white" : ""}`}>{value}</p>
-                <p className={`text-[10px] ${muted}`}>planned</p>
+                <p className={`text-sm font-semibold ${status.ok ? "text-emerald-500" : "text-red-500"}`}>{actual}</p>
+                <p className={`text-[10px] ${muted}`}>/{value}</p>
               </div>
               <div className="flex h-36 w-full max-w-[46px] items-end">
                 <div className={`relative h-full w-full overflow-hidden rounded-t-[18px] rounded-b-md ${darkMode ? "bg-[#24262b]" : "bg-[#ece9e2]"}`}>
-                  <div className="absolute bottom-0 left-0 right-0 rounded-t-[18px] bg-[#15a8e0]" style={{ height: `${plannedHeight}%` }} />
+                  <div className={`absolute bottom-0 left-0 right-0 rounded-t-[18px] ${darkMode ? "bg-white/20" : "bg-[#8d939b]/25"}`} style={{ height: `${plannedHeight}%` }} />
+                  <div className={`absolute bottom-0 left-1 right-1 rounded-t-[14px] ${status.ok ? "bg-[#54d39f]" : "bg-red-500"}`} style={{ height: `${actualHeight}%` }} />
                 </div>
               </div>
               <p className={`mt-3 line-clamp-2 min-h-8 text-center text-[11px] leading-4 ${muted}`}>{item.site}</p>
@@ -152,6 +175,125 @@ function TomorrowSiteBars({ items = [], darkMode, title = "Site-wise planned man
         {!chartItems.length && <p className={`flex flex-1 items-center justify-center py-8 text-center text-sm ${muted}`}>{emptyText}</p>}
       </div>
     </section>
+  );
+}
+
+function PlanCeoView({ activePlan, activePlanTitle, activeTomorrowSite, tomorrowPlanSites = [], darkMode }) {
+  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const line = darkMode ? "border-white/10" : "border-black/[0.07]";
+  const head = darkMode ? "bg-white/[0.04] text-white/55" : "bg-black/[0.035] text-black/55";
+  const rowHover = darkMode ? "hover:bg-white/[0.035]" : "hover:bg-black/[0.025]";
+  const totalPlanned = activeTomorrowSite?.plannedManpower ?? activePlan?.summary?.plannedManpower ?? 0;
+  const totalActual = activeTomorrowSite?.actualManpower ?? activePlan?.actuals?.actualManpower ?? 0;
+  const totalStatus = planActualStatus(totalPlanned, totalActual);
+  const detailRecords = (activeTomorrowSite?.records || activePlan?.records || []).slice().sort((a, b) => {
+    const peopleA = a.plannedManpower !== null && a.plannedManpower !== undefined ? Number(a.plannedManpower) || 0 : -1;
+    const peopleB = b.plannedManpower !== null && b.plannedManpower !== undefined ? Number(b.plannedManpower) || 0 : -1;
+    return peopleB - peopleA || String(a.site || "").localeCompare(String(b.site || "")) || String(a.category || "").localeCompare(String(b.category || ""));
+  });
+  const visibleSites = activeTomorrowSite ? [activeTomorrowSite] : tomorrowPlanSites;
+  const attentionCount = visibleSites.filter((site) => !planActualStatus(site.plannedManpower, site.actualManpower).ok).length;
+
+  return (
+    <div className="space-y-4 transition-all duration-300 ease-out">
+      <section className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>
+        <div className={`grid gap-px ${darkMode ? "bg-white/10" : "bg-black/[0.06]"} sm:grid-cols-4`}>
+          {[
+            ["Planned", totalPlanned],
+            ["Actual", totalActual],
+            ["Variance", `${totalStatus.variance >= 0 ? "+" : ""}${totalStatus.variance}`],
+            ["Needs attention", attentionCount],
+          ].map(([label, value]) => (
+            <div key={label} className={`px-5 py-4 ${darkMode ? "bg-[#111216]" : "bg-white"}`}>
+              <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}>{label}</p>
+              <p className="mt-1 text-3xl font-semibold leading-none">{value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {!activeTomorrowSite && (
+        <section className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>
+          <div className="flex items-center justify-between gap-3 px-5 py-4">
+            <div>
+              <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}>CEO summary</p>
+              <h4 className="mt-1 text-lg font-semibold">{activePlanTitle} by site</h4>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}>{visibleSites.length} rows</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[920px] text-left text-sm">
+              <thead className={head}>
+                <tr>
+                  {["Site", "Planned", "Actual", "Variance", "Status", "Work items", "Submitters"].map((header) => (
+                    <th key={header} className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em]">{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleSites.map((site) => {
+                  const status = planActualStatus(site.plannedManpower, site.actualManpower);
+                  return (
+                    <tr key={site.site} className={`border-t ${line} ${rowHover}`}>
+                      <td className="max-w-[240px] px-5 py-3 font-semibold">{site.site}</td>
+                      <td className="px-5 py-3 text-xl font-semibold">{status.planned}</td>
+                      <td className={`px-5 py-3 text-xl font-semibold ${status.ok ? "text-emerald-600" : "text-red-600"}`}>{status.actual}</td>
+                      <td className={`px-5 py-3 font-semibold ${status.ok ? "text-emerald-600" : "text-red-600"}`}>{status.variance >= 0 ? "+" : ""}{status.variance}</td>
+                      <td className="px-5 py-3">
+                        <span className={`inline-flex rounded-full  px-3 py-1 text-xs ${planStatusTone(status, darkMode)}`}>
+                          {status.ok ? "On track" : "Needs attention"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">{site.records.length}</td>
+                      <td className={`max-w-[240px] truncate px-5 py-3 ${muted}`}>{site.submitters.join(", ") || "Unknown"}</td>
+                    </tr>
+                  );
+                })}
+                {!visibleSites.length && (
+                  <tr><td colSpan={7} className={`px-5 py-8 text-center ${muted}`}>No plan data available.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      <section className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <div>
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}>Work plan</p>
+            <h4 className="mt-1 text-lg font-semibold">{activeTomorrowSite?.site || "All sites"}</h4>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>{detailRecords.length} items</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1060px] text-left text-sm">
+            <thead className={head}>
+              <tr>
+                {["Site", "Trade", "People", "Work planned", "By", "Timestamp"].map((header) => (
+                  <th key={header} className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em]">{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {detailRecords.map((record) => (
+                <tr key={record.id} className={`border-t align-top ${line} ${rowHover}`}>
+                  <td className="max-w-[200px] px-5 py-3 font-semibold">{record.site || "Unassigned"}</td>
+                  <td className="px-5 py-3">{record.category || "General"}</td>
+                  <td className="px-5 py-3 text-lg font-semibold">{record.plannedManpower ?? "-"}</td>
+                  <td className="max-w-[420px] px-5 py-3 leading-6">{record.work || record.raw || "No work note added."}</td>
+                  <td className={`max-w-[160px] px-5 py-3 ${muted}`}>{record.submittedBy || "Unknown"}</td>
+                  <td className={`whitespace-nowrap px-5 py-3 ${muted}`}>{record.timestamp || record.submittedDate || "-"}</td>
+                </tr>
+              ))}
+              {!detailRecords.length && (
+                <tr><td colSpan={6} className={`px-5 py-8 text-center ${muted}`}>No work items available.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -175,6 +317,7 @@ export default function DmrDashboard({ darkMode }) {
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
   const [planMode, setPlanMode] = useState(null);
+  const [ceoPlanView, setCeoPlanView] = useState(false);
   const [selectedTomorrowSite, setSelectedTomorrowSite] = useState("");
   const [dmrSheetLink, setDmrSheetLink] = useState("");
   const [dmrSheetSaving, setDmrSheetSaving] = useState(false);
@@ -270,9 +413,10 @@ export default function DmrDashboard({ darkMode }) {
     : "Total planned manpower extracted for the next DMR date.";
   const tomorrowPlanSites = useMemo(() => {
     const records = activePlan?.records || [];
+    const actualBySite = new Map((activePlan?.actuals?.siteBreakdown || []).map((item) => [comparablePlanText(item.site), Number(item.actual) || 0]));
     return [...records.reduce((result, record) => {
       const site = record.site || "Unassigned site";
-      const item = result.get(site) || { site, records: [], plannedManpower: 0, categories: new Set(), submitters: new Set() };
+      const item = result.get(site) || { site, records: [], plannedManpower: 0, actualManpower: 0, variance: 0, categories: new Set(), submitters: new Set() };
       item.records.push(record);
       item.plannedManpower += Number(record.plannedManpower) || 0;
       if (record.category) item.categories.add(record.category);
@@ -280,12 +424,27 @@ export default function DmrDashboard({ darkMode }) {
       result.set(site, item);
       return result;
     }, new Map()).values()]
-      .map((site) => ({ ...site, categories: [...site.categories], submitters: [...site.submitters] }))
-      .sort((a, b) => b.plannedManpower - a.plannedManpower || b.records.length - a.records.length || a.site.localeCompare(b.site));
-  }, [activePlan?.records]);
+      .map((site) => {
+        const actualManpower = actualBySite.get(comparablePlanText(site.site)) || 0;
+        return {
+          ...site,
+          actualManpower,
+          variance: actualManpower - site.plannedManpower,
+          categories: [...site.categories],
+          submitters: [...site.submitters],
+        };
+      })
+      .sort((a, b) => {
+        const statusA = planActualStatus(a.plannedManpower, a.actualManpower);
+        const statusB = planActualStatus(b.plannedManpower, b.actualManpower);
+        return Number(statusA.ok) - Number(statusB.ok) || b.plannedManpower - a.plannedManpower || b.records.length - a.records.length || a.site.localeCompare(b.site);
+      });
+  }, [activePlan?.actuals?.siteBreakdown, activePlan?.records]);
   const activeTomorrowSite = useMemo(() => {
     return selectedTomorrowSite ? tomorrowPlanSites.find((site) => site.site === selectedTomorrowSite) || null : null;
   }, [selectedTomorrowSite, tomorrowPlanSites]);
+  const activePlanStatus = planActualStatus(activePlan?.summary?.plannedManpower || 0, activePlan?.actuals?.actualManpower || 0);
+  const attentionPlanSites = tomorrowPlanSites.filter((site) => !planActualStatus(site.plannedManpower, site.actualManpower).ok);
   const hasDraftKey = (record, key) => Object.prototype.hasOwnProperty.call(drafts[record.id] || {}, key);
   const autoPlannedForRecord = (record) => {
     if (!canFillDmr || !todayPlanLookup.size || hasDraftKey(record, "planned") || Number(record.planned) > 0) return "";
@@ -708,9 +867,18 @@ export default function DmrDashboard({ darkMode }) {
                   </p>
                 </div>
               </div>
-              <button onClick={() => { setPlanMode(null); setSelectedTomorrowSite(""); }} className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCeoPlanView((value) => !value)}
+                  className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-all duration-300 ${ceoPlanView ? darkMode ? "border-[#d8f36a] bg-[#d8f36a] text-black shadow-lg shadow-[#d8f36a]/10" : "border-[#171714] bg-[#171714] text-white shadow-lg shadow-black/10" : darkMode ? "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/10" : "border-black/10 bg-white text-black/65 hover:bg-black/[0.03]"}`}
+                >
+                  CEO&apos;s View
+                </button>
+                <button onClick={() => { setPlanMode(null); setSelectedTomorrowSite(""); }} className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
@@ -753,17 +921,32 @@ export default function DmrDashboard({ darkMode }) {
                   </div>
                 </aside>
 
-                <div className="min-w-0">
-                  {!activeTomorrowSite ? (
+                <div className="min-w-0 transition-all duration-300 ease-out">
+                  {ceoPlanView ? (
+                    <PlanCeoView
+                      activePlan={activePlan}
+                      activePlanTitle={activePlanTitle}
+                      activeTomorrowSite={activeTomorrowSite}
+                      tomorrowPlanSites={tomorrowPlanSites}
+                      darkMode={darkMode}
+                    />
+                  ) : !activeTomorrowSite ? (
                     <div className="grid gap-4 xl:grid-cols-2">
                       <section className={`rounded-[28px]  p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.07] bg-white"}`}>
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <p className="text-sm font-semibold">{activePlanTitle} manpower summary</p>
-                            <div className="mt-5 flex flex-wrap items-end gap-x-5 gap-y-2">
-                              <p className="text-6xl font-semibold leading-none">{activePlan?.summary?.plannedManpower || 0}</p>
-                              <span className={`mb-2 rounded-full px-3 py-1 text-sm font-semibold ${darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-emerald-50 text-emerald-700"}`}>
-                                {activePlan?.summary?.sites || 0} active sites
+                            <div className="mt-5 flex flex-wrap items-end gap-x-6 gap-y-3">
+                              <div>
+                                <p className="text-6xl font-semibold leading-none">{activePlanStatus.planned}</p>
+                                <p className={`mt-1 text-xs ${muted}`}>planned</p>
+                              </div>
+                              <div>
+                                <p className={`text-5xl font-semibold leading-none ${activePlanStatus.ok ? "text-emerald-500" : "text-red-500"}`}>{activePlanStatus.actual}</p>
+                                <p className={`mt-1 text-xs ${muted}`}>actual</p>
+                              </div>
+                              <span className={`mb-2 rounded-full border px-3 py-1 text-sm font-semibold ${planStatusTone(activePlanStatus, darkMode)}`}>
+                                {activePlanStatus.ok ? "On track" : "Needs attention"}
                               </span>
                             </div>
                             <p className={`mt-3 text-sm ${muted}`}>{activePlanSummaryText}</p>
@@ -771,16 +954,42 @@ export default function DmrDashboard({ darkMode }) {
                           <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}>Live sheet</span>
                         </div>
                         <div className={`mt-5 h-3 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>
-                          <div className="h-full rounded-full bg-[#54d39f]" style={{ width: `${Math.min(100, Math.max(0, ((activePlan?.summary?.plannedManpower || 0) / Math.max(1, activePlan?.summary?.plannedManpower || 1)) * 100))}%` }} />
+                          <div className={`h-full rounded-full ${activePlanStatus.ok ? "bg-[#54d39f]" : "bg-red-500"}`} style={{ width: `${Math.min(100, Math.max(4, (activePlanStatus.actual / Math.max(1, activePlanStatus.planned)) * 100))}%` }} />
                         </div>
-                        <div className={`mt-5 grid grid-cols-2 gap-3 border-t pt-4 text-sm ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
+                        <div className={`mt-5 grid grid-cols-3 gap-3 border-t pt-4 text-sm ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
                           <div>
-                            <p className="text-3xl font-semibold">{activePlan?.summary?.workItems || 0}</p>
-                            <p className={muted}>work items</p>
+                            <p className={`text-3xl font-semibold ${activePlanStatus.ok ? "text-emerald-500" : "text-red-500"}`}>{activePlanStatus.variance >= 0 ? "+" : ""}{activePlanStatus.variance}</p>
+                            <p className={muted}>variance</p>
                           </div>
                           <div>
-                            <p className="text-3xl font-semibold">{activePlan?.summary?.categories || 0}</p>
-                            <p className={muted}>categories</p>
+                            <p className="text-3xl font-semibold">{activePlan?.summary?.sites || 0}</p>
+                            <p className={muted}>sites</p>
+                          </div>
+                          <div>
+                            <p className={`text-3xl font-semibold ${attentionPlanSites.length ? "text-red-500" : "text-emerald-500"}`}>{attentionPlanSites.length}</p>
+                            <p className={muted}>attention</p>
+                          </div>
+                        </div>
+                        <div className={`mt-4 rounded-2xl  p-4 ${attentionPlanSites.length ? darkMode ? "border-red-400/20 bg-red-400/5" : "border-red-200 bg-red-50" : darkMode ? "border-emerald-400/20 bg-emerald-400/5" : "border-emerald-200 bg-emerald-50"}`}>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className={`text-sm font-semibold ${attentionPlanSites.length ? darkMode ? "text-red-200" : "text-red-700" : darkMode ? "text-emerald-200" : "text-emerald-700"}`}>
+                              What needs attention
+                            </p>
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${attentionPlanSites.length ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}>
+                              {attentionPlanSites.length ? `${attentionPlanSites.length} site${attentionPlanSites.length === 1 ? "" : "s"}` : "Clear"}
+                            </span>
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            {(attentionPlanSites.length ? attentionPlanSites.slice(0, 4) : tomorrowPlanSites.slice(0, 3)).map((site) => {
+                              const status = planActualStatus(site.plannedManpower, site.actualManpower);
+                              return (
+                                <div key={site.site} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm ${darkMode ? "bg-black/15" : "bg-white/70"}`}>
+                                  <span className="truncate font-medium">{site.site}</span>
+                                  <span className={`shrink-0 font-semibold ${status.ok ? "text-emerald-600" : "text-red-600"}`}>{status.actual}/{status.planned}</span>
+                                </div>
+                              );
+                            })}
+                            {!tomorrowPlanSites.length && <p className={`text-sm ${muted}`}>No plan sites available yet.</p>}
                           </div>
                         </div>
                       </section>
@@ -795,9 +1004,9 @@ export default function DmrDashboard({ darkMode }) {
                           <h4 className="mt-2 text-3xl font-semibold">{activeTomorrowSite.site}</h4>
                           <p className={`mt-2 text-sm ${muted}`}>{activeTomorrowSite.submitters.join(", ") || "No submitter"} · {activeTomorrowSite.categories.length} trade categor{activeTomorrowSite.categories.length === 1 ? "y" : "ies"}</p>
                         </div>
-                        <div className={`rounded-[24px] px-5 py-4 text-right ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
-                          <p className="text-4xl font-semibold leading-none">{activeTomorrowSite.plannedManpower}</p>
-                          <p className="mt-1 text-xs opacity-70">planned manpower</p>
+                        <div className={`rounded-[24px] border px-5 py-4 text-right ${planStatusTone(planActualStatus(activeTomorrowSite.plannedManpower, activeTomorrowSite.actualManpower), darkMode)}`}>
+                          <p className="text-4xl font-semibold leading-none">{activeTomorrowSite.actualManpower}/{activeTomorrowSite.plannedManpower}</p>
+                          <p className="mt-1 text-xs opacity-70">actual / planned</p>
                         </div>
                       </div>
 

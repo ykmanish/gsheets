@@ -445,6 +445,7 @@ export default function DmrDashboard({ darkMode }) {
   }, [selectedTomorrowSite, tomorrowPlanSites]);
   const activePlanStatus = planActualStatus(activePlan?.summary?.plannedManpower || 0, activePlan?.actuals?.actualManpower || 0);
   const attentionPlanSites = tomorrowPlanSites.filter((site) => !planActualStatus(site.plannedManpower, site.actualManpower).ok);
+  const activePlanTimeliness = activePlan?.timelinessBySubmitter || [];
   const hasDraftKey = (record, key) => Object.prototype.hasOwnProperty.call(drafts[record.id] || {}, key);
   const autoPlannedForRecord = (record) => {
     if (!canFillDmr || !todayPlanLookup.size || hasDraftKey(record, "planned") || Number(record.planned) > 0) return "";
@@ -992,6 +993,36 @@ export default function DmrDashboard({ darkMode }) {
                             {!tomorrowPlanSites.length && <p className={`text-sm ${muted}`}>No plan sites available yet.</p>}
                           </div>
                         </div>
+                        {planMode === "tomorrow" && (
+                          <div className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-white/[0.035]" : "bg-black/[0.025]"}`}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold">Submission timing</p>
+                                <p className={`mt-1 text-xs ${muted}`}>Cutoff: 11:30 AM IST</p>
+                              </div>
+                              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${!activePlanTimeliness.length ? darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55" : activePlanTimeliness.some((item) => item.status === "delayed") ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}>
+                                {!activePlanTimeliness.length ? "No submissions" : activePlanTimeliness.some((item) => item.status === "delayed") ? "Delayed found" : "On time"}
+                              </span>
+                            </div>
+                            <div className="mt-3 space-y-2">
+                              {activePlanTimeliness.map((item) => {
+                                const delayed = item.status === "delayed";
+                                return (
+                                  <div key={item.name} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm ${darkMode ? "bg-black/15" : "bg-white/75"}`}>
+                                    <div className="min-w-0">
+                                      <p className="truncate font-medium">{item.name}</p>
+                                      <p className={`mt-0.5 truncate text-[11px] ${muted}`}>{item.records} entr{item.records === 1 ? "y" : "ies"}{item.lastSubmittedAt ? ` · ${item.lastSubmittedAt}` : ""}</p>
+                                    </div>
+                                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${delayed ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}>
+                                      {delayed ? "Delayed" : "On time"}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {!activePlanTimeliness.length && <p className={`text-sm ${muted}`}>No submissions found yet.</p>}
+                            </div>
+                          </div>
+                        )}
                       </section>
 
                       <TomorrowSiteBars items={tomorrowPlanSites} darkMode={darkMode} title={`${activePlanTitle} by site`} emptyText={`No ${activePlanTitle.toLowerCase()} data available yet.`} />

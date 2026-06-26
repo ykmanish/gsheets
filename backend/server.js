@@ -57,12 +57,14 @@ const SUPER_ADMIN_USERNAME = "AdminUIPL";
 const SUPER_ADMIN_PASSWORD = "Admin@9579";
 const DEFAULT_DMR_SPREADSHEET_ID = process.env.DMR_SPREADSHEET_ID || "";
 const DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID = process.env.DMR_TOMORROW_PLAN_SPREADSHEET_ID || "1592O80hnVL7scepUdvi1hX72MyWIfiP61vh-94TmTaw";
+const DEFAULT_MRN_SPREADSHEET_ID = process.env.MRN_SPREADSHEET_ID || "1Vfjgihl1Cf4Xe9SdBDoJWQHxaEGkn8c2KhH6qN92BJw";
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "documents", label: "Documents" },
   { id: "forms", label: "Forms" },
   { id: "projects", label: "Projects" },
   { id: "project-dmr", label: "DMR" },
+  { id: "project-mrn", label: "MRN" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
@@ -83,6 +85,7 @@ const PRIVILEGE_ITEMS = [
   { id: "manage_reports", label: "Manage and delete reports" },
   { id: "view_activity_log", label: "View activity log" },
   { id: "edit_project_dmr", label: "Fill project DMR records" },
+  { id: "edit_project_mrn", label: "Add MRN records" },
 ];
 
 let mongoClient;
@@ -674,6 +677,7 @@ const activityLogsPath = path.join(dataDir, "activity-logs.json");
 const projectDashboardPath = path.join(dataDir, "project-dashboard.json");
 const dmrHistoryPath = path.join(dataDir, "dmr-history.json");
 const dmrSettingsPath = path.join(dataDir, "dmr-settings.json");
+const mrnSettingsPath = path.join(dataDir, "mrn-settings.json");
 
 let documents = [];
 let documentFolders = [];
@@ -688,6 +692,12 @@ let dmrSettings = {
   linkedBy: null,
   unlinkedAt: null,
   unlinkedBy: null,
+};
+let mrnSettings = {
+  spreadsheetId: normalizeSpreadsheetId(DEFAULT_MRN_SPREADSHEET_ID),
+  driveFolderId: "",
+  linkedAt: null,
+  linkedBy: null,
 };
 let projectDashboardConfig = { projects: [] };
 const scheduledAutomationJobs = new Map();
@@ -768,6 +778,20 @@ if (fs.existsSync(dmrSettingsPath)) {
     };
   } catch (error) {
     console.error("Error loading DMR settings:", error);
+  }
+}
+
+if (fs.existsSync(mrnSettingsPath)) {
+  try {
+    const savedMrnSettings = JSON.parse(fs.readFileSync(mrnSettingsPath, "utf8"));
+    mrnSettings = {
+      ...mrnSettings,
+      ...(savedMrnSettings || {}),
+      spreadsheetId: normalizeSpreadsheetId(savedMrnSettings?.spreadsheetId),
+      driveFolderId: extractDriveFileId(savedMrnSettings?.driveFolderId || savedMrnSettings?.driveFolderLink || "") || "",
+    };
+  } catch (error) {
+    console.error("Error loading MRN settings:", error);
   }
 }
 
@@ -893,6 +917,14 @@ function saveDmrSettings() {
   }
 }
 
+function saveMrnSettings() {
+  try {
+    fs.writeFileSync(mrnSettingsPath, JSON.stringify(mrnSettings, null, 2));
+  } catch (error) {
+    console.error("Error saving MRN settings:", error);
+  }
+}
+
 function publicDmrSettings() {
   const spreadsheetId = normalizeSpreadsheetId(dmrSettings.spreadsheetId);
   return {
@@ -908,6 +940,25 @@ function getActiveDmrSpreadsheetId() {
   if (!spreadsheetId) {
     throw new Error("No DMR sheet is linked yet. Super Admin can open Fill DMR and link a native Google Sheet.");
   }
+  return spreadsheetId;
+}
+
+function publicMrnSettings() {
+  const spreadsheetId = normalizeSpreadsheetId(mrnSettings.spreadsheetId);
+  const driveFolderId = extractDriveFileId(mrnSettings.driveFolderId || "") || "";
+  return {
+    linked: Boolean(spreadsheetId),
+    driveLinked: Boolean(driveFolderId),
+    spreadsheetId,
+    driveFolderId,
+    linkedAt: mrnSettings.linkedAt || null,
+    linkedBy: mrnSettings.linkedBy || null,
+  };
+}
+
+function getActiveMrnSpreadsheetId() {
+  const spreadsheetId = normalizeSpreadsheetId(mrnSettings.spreadsheetId);
+  if (!spreadsheetId) throw new Error("No MRN sheet is linked yet.");
   return spreadsheetId;
 }
 
@@ -1177,7 +1228,7 @@ async function getGoogleAuth() {
     credentials,
     scopes: [
       "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive.readonly",
+      "https://www.googleapis.com/auth/drive",
     ],
   });
 }
@@ -1191,6 +1242,9 @@ function extractDriveFileId(value = "") {
 
   const documentPathMatch = text.match(/\/(?:document|spreadsheets|presentation)\/d\/([a-zA-Z0-9_-]+)/);
   if (documentPathMatch) return documentPathMatch[1];
+
+  const folderPathMatch = text.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (folderPathMatch) return folderPathMatch[1];
 
   try {
     const url = new URL(text);
@@ -2466,6 +2520,63 @@ function parseGoogleTimestampDate(value) {
   return "";
 }
 
+function parseGoogleTimestampParts(value) {
+  const text = projectText(value);
+  if (!text) return null;
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?)?/i);
+  if (!match) {
+    const parsed = new Date(text);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return {
+      dateKey: istDateKey(parsed),
+      minutes: parsed.getHours() * 60 + parsed.getMinutes(),
+    };
+  }
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  const year = Number(match[3]);
+  const month = first > 12 ? second : first;
+  const day = first > 12 ? first : second;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    !year ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  let hour = match[4] !== undefined ? Number(match[4]) : null;
+  const minute = match[5] !== undefined ? Number(match[5]) : 0;
+  const meridiem = projectText(match[7]).toUpperCase();
+  if (hour !== null && meridiem) {
+    if (meridiem === "PM" && hour < 12) hour += 12;
+    if (meridiem === "AM" && hour === 12) hour = 0;
+  }
+  return {
+    dateKey: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    minutes: hour === null || minute < 0 || minute > 59 ? null : (hour * 60) + minute,
+  };
+}
+
+function tomorrowPlanTimeliness(records = []) {
+  return [...records.reduce((result, record) => {
+    const name = projectText(record.submittedBy) || "Unknown";
+    const item = result.get(name) || { name, records: 0, onTime: 0, delayed: 0, status: "on-time", lastSubmittedAt: "" };
+    item.records += 1;
+    if (record.timeliness === "on-time") item.onTime += 1;
+    else item.delayed += 1;
+    item.status = item.delayed ? "delayed" : "on-time";
+    if (record.timestamp) item.lastSubmittedAt = record.timestamp;
+    result.set(name, item);
+    return result;
+  }, new Map()).values()].sort((a, b) => Number(b.status === "delayed") - Number(a.status === "delayed") || a.name.localeCompare(b.name));
+}
+
 function tomorrowPlanCategory(header) {
   const text = projectText(header);
   const match = text.match(/^manpower\s+(.+?)\s*&\s*planned\s*work/i);
@@ -2597,6 +2708,7 @@ function emptyDmrTomorrowPlan({ date, label, error = "" } = {}) {
     siteBreakdown: [],
     categoryBreakdown: [],
     submitterBreakdown: [],
+    timelinessBySubmitter: [],
   };
 }
 
@@ -2626,6 +2738,7 @@ async function readDmrTomorrowPlan(dateKey) {
       const row = values[rowIndex] || [];
       const timestamp = dmrCell(values, rowIndex, timestampIndex);
       const submittedDate = parseGoogleTimestampDate(timestamp);
+      const submittedAt = parseGoogleTimestampParts(timestamp);
       const rowPlanDate = submittedDate ? addDaysToDateKey(submittedDate, 1) : "";
       if (!rowPlanDate) continue;
       if (!sheetDates.has(rowPlanDate)) {
@@ -2648,6 +2761,8 @@ async function readDmrTomorrowPlan(dateKey) {
           sheetName: sheet.name,
           timestamp,
           submittedDate,
+          submissionMinutes: submittedAt?.minutes,
+          timeliness: submittedAt?.minutes !== null && submittedAt?.minutes !== undefined && submittedAt.minutes <= 690 ? "on-time" : "delayed",
           plannedForDate: rowPlanDate,
           submittedBy,
           site,
@@ -2687,6 +2802,7 @@ async function readDmrTomorrowPlan(dateKey) {
     siteBreakdown: tomorrowPlanBreakdown(records, "site"),
     categoryBreakdown: tomorrowPlanBreakdown(records, "category"),
     submitterBreakdown: tomorrowPlanBreakdown(records, "submittedBy"),
+    timelinessBySubmitter: tomorrowPlanTimeliness(records),
   };
 }
 
@@ -4631,6 +4747,288 @@ app.delete("/project-dashboard/projects/:id", requireSuperAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+const MRN_SHEET_NAME = "MRN Form";
+const MRN_HEADERS = [
+  "MRN No",
+  "Timestamp",
+  "Name of Project & Site Address",
+  "Material Request Date",
+  "By when Material is Required",
+  "Material Requirement",
+  "Issued by ",
+  "Lead Time (Usual time to get Material )",
+  "Upload Photo of MRN",
+  "Email address",
+  "Upload Photo of Quotation",
+  "Quotation Amount  ",
+];
+
+function normalizeHeaderKey(value = "") {
+  return projectText(value).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function parseMrnDate(value) {
+  const key = projectDateKey(value);
+  if (key) return key;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : istDateKey(parsed);
+}
+
+function formatMrnTimestamp(date = new Date()) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: IST_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date).replace(",", "");
+}
+
+function nextMrnNumber(records = []) {
+  const max = records.reduce((highest, record) => {
+    const match = projectText(record.mrnNo).match(/MRN\s*0*(\d+)/i);
+    return match ? Math.max(highest, Number(match[1]) || 0) : highest;
+  }, 0);
+  return `MRN${String(max + 1).padStart(2, "0")}`;
+}
+
+function mapMrnRows(values = []) {
+  const rawHeaders = values[0] || [];
+  const headers = rawHeaders.map((header, index) => projectText(header) || (index === 0 ? "MRN No" : ""));
+  const headerMap = new Map(headers.map((header, index) => [normalizeHeaderKey(header), index]));
+  const valueAt = (row, names = []) => {
+    for (const name of names) {
+      const index = headerMap.get(normalizeHeaderKey(name));
+      if (index !== undefined) return projectText(row[index]);
+    }
+    return "";
+  };
+  const records = [];
+  for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    const row = values[rowIndex] || [];
+    const mrnNo = valueAt(row, ["MRN No"]);
+    const timestamp = valueAt(row, ["Timestamp"]);
+    const project = valueAt(row, ["Name of Project & Site Address"]);
+    const material = valueAt(row, ["Material Requirement"]);
+    if (!mrnNo && !timestamp && !project && !material) continue;
+    const requestDate = valueAt(row, ["Material Request Date"]);
+    const requiredDate = valueAt(row, ["By when Material is Required"]);
+    records.push({
+      id: `${mrnNo || "MRN"}:${rowIndex + 1}`,
+      rowNumber: rowIndex + 1,
+      mrnNo,
+      timestamp,
+      lastEdited: timestamp,
+      date: parseMrnDate(requestDate || timestamp),
+      project,
+      materialRequestDate: requestDate,
+      requiredDate,
+      materialRequirement: material,
+      issuedBy: valueAt(row, ["Issued by", "Issued by "]),
+      leadTime: valueAt(row, ["Lead Time (Usual time to get Material )", "Lead Time"]),
+      mrnPhoto: valueAt(row, ["Upload Photo of MRN"]),
+      emailAddress: valueAt(row, ["Email Address", "Email address"]),
+      quotationPhoto: valueAt(row, ["Upload Photo of Quotation", "Upload photo of Quatation"]),
+      quotationAmount: valueAt(row, ["Quotation Amount"]),
+      assignTo: valueAt(row, ["Assign To"]),
+      status: valueAt(row, ["Status"]),
+      krishnaPrnStatusUpdated: valueAt(row, ["Krishna PRN Status Updated"]),
+      vendorName: valueAt(row, ["Vendor Name"]),
+      invoiceDate: valueAt(row, ["Invoice Date"]),
+      remark: valueAt(row, ["Remark"]),
+    });
+  }
+  return { headers, records };
+}
+
+async function readMrnDashboard({ startDate, endDate, all = false } = {}) {
+  const spreadsheetId = getActiveMrnSpreadsheetId();
+  await assertNativeGoogleSpreadsheet(spreadsheetId, "MRN sheet");
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(MRN_SHEET_NAME)}!A1:Z10000`,
+  });
+  const { records } = mapMrnRows(response.data.values || []);
+  const today = istDateKey(new Date());
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(String(startDate || "")) ? String(startDate) : addDaysToDateKey(today, -6);
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(String(endDate || "")) ? String(endDate) : today;
+  const filtered = records
+    .filter((record) => all || !record.date || (record.date >= start && record.date <= end))
+    .sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.rowNumber - a.rowNumber);
+  const summarizeMrnRecords = (items = []) => {
+    const byStatus = items.reduce((result, record) => {
+      const status = projectText(record.status) || "Open";
+      result[status] = (result[status] || 0) + 1;
+      return result;
+    }, {});
+    return {
+      total: items.length,
+      open: items.filter((record) => !/delivered|closed|complete/i.test(record.status)).length,
+      delivered: items.filter((record) => /delivered|closed|complete/i.test(record.status)).length,
+      quotationAmount: items.reduce((sum, record) => sum + (Number(String(record.quotationAmount).replace(/,/g, "")) || 0), 0),
+      byStatus,
+    };
+  };
+  const sortedAllRecords = [...records].sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.rowNumber - a.rowNumber);
+  const byStatus = filtered.reduce((result, record) => {
+    const status = projectText(record.status) || "Open";
+    result[status] = (result[status] || 0) + 1;
+    return result;
+  }, {});
+  return {
+    spreadsheetId,
+    sheetName: MRN_SHEET_NAME,
+    startDate: start,
+    endDate: end,
+    all,
+    records: filtered,
+    summary: {
+      total: filtered.length,
+      open: filtered.filter((record) => !/delivered|closed|complete/i.test(record.status)).length,
+      delivered: filtered.filter((record) => /delivered|closed|complete/i.test(record.status)).length,
+      quotationAmount: filtered.reduce((sum, record) => sum + (Number(String(record.quotationAmount).replace(/,/g, "")) || 0), 0),
+      byStatus,
+    },
+    allSummary: summarizeMrnRecords(sortedAllRecords),
+  };
+}
+
+async function assertDriveFolder(folderId) {
+  const id = extractDriveFileId(folderId);
+  if (!id) throw new Error("Paste a valid Google Drive folder link or ID");
+  const auth = await getGoogleAuth();
+  const drive = google.drive({ version: "v3", auth });
+  const response = await drive.files.get({
+    fileId: id,
+    fields: "id,name,mimeType,webViewLink",
+    supportsAllDrives: true,
+  });
+  if (response.data.mimeType !== "application/vnd.google-apps.folder") {
+    throw new Error("Drive link must point to a folder");
+  }
+  return response.data;
+}
+
+async function uploadMrnFileToDrive(file, label) {
+  const folderId = extractDriveFileId(mrnSettings.driveFolderId || "");
+  if (!file || !file.path) return "";
+  if (!folderId) throw new Error("Link an MRN Drive folder before uploading files.");
+  const auth = await getGoogleAuth();
+  const drive = google.drive({ version: "v3", auth });
+  const safeName = safeFileName(`${label}-${Date.now()}-${file.originalname || "upload"}`);
+  const response = await drive.files.create({
+    requestBody: { name: safeName, parents: [folderId] },
+    media: { mimeType: file.mimetype || "application/octet-stream", body: fs.createReadStream(file.path) },
+    fields: "id,name,webViewLink",
+    supportsAllDrives: true,
+  });
+  return response.data.webViewLink || `https://drive.google.com/open?id=${response.data.id}`;
+}
+
+async function appendMrnRecord(values = {}, files = {}) {
+  const spreadsheetId = getActiveMrnSpreadsheetId();
+  await assertNativeGoogleSpreadsheet(spreadsheetId, "MRN sheet");
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const existing = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(MRN_SHEET_NAME)}!A1:Z10000`,
+  });
+  const parsed = mapMrnRows(existing.data.values || []);
+  const mrnNo = nextMrnNumber(parsed.records);
+  const mrnPhoto = await uploadMrnFileToDrive(files.mrnPhoto?.[0], mrnNo);
+  const quotationPhoto = await uploadMrnFileToDrive(files.quotationPhoto?.[0], `${mrnNo}-quotation`);
+  const row = [
+    formatMrnTimestamp(new Date()),
+    projectText(values.projectSite),
+    projectText(values.materialRequestDate),
+    projectText(values.requiredDate),
+    projectText(values.materialRequirement),
+    projectText(values.issuedBy),
+    projectText(values.leadTime),
+    mrnPhoto,
+    projectText(values.emailAddress),
+    quotationPhoto,
+    projectText(values.quotationAmount),
+    quotationPhoto,
+    projectText(values.assignTo),
+    projectText(values.status),
+    projectText(values.krishnaPrnStatusUpdated),
+    projectText(values.vendorName),
+    projectText(values.invoiceDate),
+    projectText(values.remark),
+  ];
+  const appendResponse = await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${escapeSheetName(MRN_SHEET_NAME)}!B:S`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [row] },
+  });
+  const updatedRange = appendResponse.data?.updates?.updatedRange || "";
+  const appendedRow = Number(updatedRange.match(/![A-Z]+(\d+):/)?.[1]);
+  if (appendedRow >= 2) {
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `${escapeSheetName(MRN_SHEET_NAME)}!A${appendedRow}`,
+    }).catch(() => {});
+  }
+  sheetDatasetCache.delete(spreadsheetId);
+  return { mrnNo, row };
+}
+
+async function updateMrnRecord(rowNumber, values = {}, files = {}) {
+  const spreadsheetId = getActiveMrnSpreadsheetId();
+  await assertNativeGoogleSpreadsheet(spreadsheetId, "MRN sheet");
+  const numericRow = Number(rowNumber);
+  if (!Number.isInteger(numericRow) || numericRow < 2) throw new Error("Valid MRN row number is required");
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const existing = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(MRN_SHEET_NAME)}!A${numericRow}:S${numericRow}`,
+  });
+  const current = existing.data.values?.[0] || [];
+  if (!projectText(current[0])) throw new Error("MRN row was not found");
+  const mrnNo = projectText(current[0]);
+  const mrnPhoto = files.mrnPhoto?.[0]
+    ? await uploadMrnFileToDrive(files.mrnPhoto?.[0], mrnNo)
+    : projectText(current[8]);
+  const quotationPhoto = files.quotationPhoto?.[0]
+    ? await uploadMrnFileToDrive(files.quotationPhoto?.[0], `${mrnNo}-quotation`)
+    : projectText(current[10]) || projectText(current[12]);
+  const row = [
+    formatMrnTimestamp(new Date()),
+    projectText(values.projectSite),
+    projectText(values.materialRequestDate),
+    projectText(values.requiredDate),
+    projectText(values.materialRequirement),
+    projectText(values.issuedBy),
+    projectText(values.leadTime),
+    mrnPhoto,
+    projectText(values.emailAddress),
+    quotationPhoto,
+    projectText(values.quotationAmount),
+    quotationPhoto,
+    projectText(values.assignTo),
+    projectText(values.status),
+    projectText(values.krishnaPrnStatusUpdated),
+    projectText(values.vendorName),
+    projectText(values.invoiceDate),
+    projectText(values.remark),
+  ];
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${escapeSheetName(MRN_SHEET_NAME)}!B${numericRow}:S${numericRow}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [row] },
+  });
+  sheetDatasetCache.delete(spreadsheetId);
+  return { mrnNo, row, rowNumber: numericRow, lastEdited: row[0] };
+}
+
 function emptyDmrDashboard(date) {
   return {
     spreadsheetId: "",
@@ -4710,6 +5108,147 @@ app.delete("/dmr-dashboard/settings", requireSuperAdmin, (req, res) => {
     target: previousSpreadsheetId || "DMR sheet",
   });
   res.json({ success: true, settings: publicDmrSettings() });
+});
+
+app.get("/mrn-dashboard/settings", (req, res) => {
+  if (!hasMenuAccess(req, "project-mrn")) return res.status(403).json({ error: "MRN module access required" });
+  res.json({
+    settings: publicMrnSettings(),
+    canManage: Boolean(req.user?.isSuperAdmin),
+  });
+});
+
+app.put("/mrn-dashboard/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const spreadsheetId = normalizeSpreadsheetId(req.body?.spreadsheetId || req.body?.sheetUrl || req.body?.url || req.body?.link) || normalizeSpreadsheetId(mrnSettings.spreadsheetId);
+    if (!spreadsheetId) return res.status(400).json({ error: "Paste a valid MRN Google Sheet link or spreadsheet ID" });
+    const file = await assertNativeGoogleSpreadsheet(spreadsheetId, "MRN sheet");
+    let folder = null;
+    const driveFolderId = extractDriveFileId(req.body?.driveFolderId || req.body?.driveFolderLink || req.body?.folderUrl || "");
+    if (driveFolderId) folder = await assertDriveFolder(driveFolderId);
+    mrnSettings = {
+      ...mrnSettings,
+      spreadsheetId,
+      driveFolderId: driveFolderId || mrnSettings.driveFolderId || "",
+      linkedAt: new Date().toISOString(),
+      linkedBy: req.authUser?.displayName || req.authUser?.username || "Super Admin",
+      linkedFileName: file.name || null,
+      linkedFolderName: folder?.name || mrnSettings.linkedFolderName || null,
+    };
+    saveMrnSettings();
+    addActivityLog({
+      req,
+      action: "Linked MRN sheet",
+      target: file.name || spreadsheetId,
+      details: { spreadsheetId, driveFolderId: mrnSettings.driveFolderId },
+    });
+    res.json({ success: true, settings: publicMrnSettings() });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/mrn-dashboard/settings", requireSuperAdmin, (req, res) => {
+  const previousSpreadsheetId = normalizeSpreadsheetId(mrnSettings.spreadsheetId);
+  mrnSettings = {
+    ...mrnSettings,
+    spreadsheetId: "",
+    driveFolderId: "",
+    unlinkedAt: new Date().toISOString(),
+    unlinkedBy: req.authUser?.displayName || req.authUser?.username || "Super Admin",
+  };
+  saveMrnSettings();
+  addActivityLog({ req, action: "Unlinked MRN sheet", target: previousSpreadsheetId || "MRN sheet" });
+  res.json({ success: true, settings: publicMrnSettings() });
+});
+
+app.get("/mrn-dashboard", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-mrn")) return res.status(403).json({ error: "MRN module access required" });
+    const dashboard = publicMrnSettings().linked
+      ? await readMrnDashboard({ startDate: req.query.startDate, endDate: req.query.endDate, all: String(req.query.all || "") === "true" })
+      : {
+          spreadsheetId: "",
+          sheetName: MRN_SHEET_NAME,
+          startDate: addDaysToDateKey(istDateKey(new Date()), -6),
+          endDate: istDateKey(new Date()),
+          records: [],
+          summary: { total: 0, open: 0, delivered: 0, quotationAmount: 0, byStatus: {} },
+          allSummary: { total: 0, open: 0, delivered: 0, quotationAmount: 0, byStatus: {} },
+        };
+    res.json({
+      ...dashboard,
+      canEdit: hasPrivilege(req, "edit_project_mrn"),
+      canManageMrnSettings: Boolean(req.user?.isSuperAdmin),
+      mrnSettings: publicMrnSettings(),
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("MRN dashboard error:", error);
+    res.status(500).json({ error: `Could not load MRN dashboard: ${error.message}` });
+  }
+});
+
+app.post("/mrn-dashboard", upload.fields([
+  { name: "mrnPhoto", maxCount: 1 },
+  { name: "quotationPhoto", maxCount: 1 },
+]), async (req, res) => {
+  const uploadedFiles = Object.values(req.files || {}).flat();
+  try {
+    if (!hasMenuAccess(req, "project-mrn")) return res.status(403).json({ error: "MRN module access required" });
+    if (!hasPrivilege(req, "edit_project_mrn")) return res.status(403).json({ error: "MRN add permission required" });
+    const required = ["projectSite", "materialRequestDate", "requiredDate", "materialRequirement"];
+    const missing = required.filter((field) => !projectText(req.body?.[field]));
+    if (missing.length) return res.status(400).json({ error: `Missing required fields: ${missing.join(", ")}` });
+    const result = await appendMrnRecord(req.body || {}, req.files || {});
+    addActivityLog({
+      req,
+      action: "Added MRN",
+      target: result.mrnNo,
+      details: { projectSite: req.body?.projectSite, materialRequirement: req.body?.materialRequirement },
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("MRN add error:", error);
+    res.status(500).json({ error: `Could not add MRN: ${error.message}` });
+  } finally {
+    for (const file of uploadedFiles) {
+      if (file?.path && fs.existsSync(file.path)) {
+        try { fs.unlinkSync(file.path); } catch {}
+      }
+    }
+  }
+});
+
+app.put("/mrn-dashboard/:rowNumber", upload.fields([
+  { name: "mrnPhoto", maxCount: 1 },
+  { name: "quotationPhoto", maxCount: 1 },
+]), async (req, res) => {
+  const uploadedFiles = Object.values(req.files || {}).flat();
+  try {
+    if (!hasMenuAccess(req, "project-mrn")) return res.status(403).json({ error: "MRN module access required" });
+    if (!hasPrivilege(req, "edit_project_mrn")) return res.status(403).json({ error: "MRN edit permission required" });
+    const required = ["projectSite", "materialRequestDate", "requiredDate", "materialRequirement"];
+    const missing = required.filter((field) => !projectText(req.body?.[field]));
+    if (missing.length) return res.status(400).json({ error: `Missing required fields: ${missing.join(", ")}` });
+    const result = await updateMrnRecord(req.params.rowNumber, req.body || {}, req.files || {});
+    addActivityLog({
+      req,
+      action: "Edited MRN",
+      target: result.mrnNo,
+      details: { rowNumber: result.rowNumber, projectSite: req.body?.projectSite },
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("MRN edit error:", error);
+    res.status(500).json({ error: `Could not edit MRN: ${error.message}` });
+  } finally {
+    for (const file of uploadedFiles) {
+      if (file?.path && fs.existsSync(file.path)) {
+        try { fs.unlinkSync(file.path); } catch {}
+      }
+    }
+  }
 });
 
 app.get("/dmr-dashboard", async (req, res) => {

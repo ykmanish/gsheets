@@ -18,6 +18,7 @@ import WhatsApp from "./WhatsApp";
 import Forms from "./Forms";
 import ProjectDashboard from "./ProjectDashboard";
 import DmrDashboard from "./DmrDashboard";
+import MrnDashboard from "./MrnDashboard";
 
 const menuPaths = {
   dashboard: "/dashboard",
@@ -25,6 +26,7 @@ const menuPaths = {
   forms: "/forms",
   projects: "/projects",
   "project-dmr": "/projects/dmr",
+  "project-mrn": "/projects/mrn",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
@@ -47,7 +49,7 @@ function ProtectedModuleContent({ moduleId }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const allowedMenus = useMemo(() => {
     return Array.from(new Set([
-      ...(user?.isSuperAdmin ? [...menus, "whatsapp"] : menus.filter((menu) => !["manage-roles", "whatsapp"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "whatsapp"] : menus.filter((menu) => !["manage-roles", "whatsapp"].includes(menu))),
     ])).filter((menu) => !["notifications", "settings"].includes(menu));
   }, [menus, user?.isSuperAdmin]);
 
@@ -85,7 +87,7 @@ function ProtectedModuleContent({ moduleId }) {
   };
 
   return (
-    <div className={`flex newq min-h-dvh md:h-screen ${darkMode ? "dark" : ""}`}>
+    <div className={`flex newq min-h-dvh md:h-screen ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#f6f6f4]"}`}>
       <Toaster position="top-center" />
       <Sidebar
         activeMenu={moduleId}
@@ -113,6 +115,7 @@ function ProtectedModuleContent({ moduleId }) {
         {moduleId === "forms" && <Forms darkMode={darkMode} />}
         {moduleId === "projects" && <ProjectDashboard darkMode={darkMode} />}
         {moduleId === "project-dmr" && <DmrDashboard darkMode={darkMode} />}
+        {moduleId === "project-mrn" && <MrnDashboard darkMode={darkMode} />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}

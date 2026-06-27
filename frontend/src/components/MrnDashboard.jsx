@@ -415,12 +415,12 @@ export default function MrnDashboard({ darkMode }) {
 
   return (
     <main className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-7 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f7f5ef] text-[#171714]"}`}>
-      <div className={`mb-6 rounded-[34px] p-6 sm:p-8 lg:p-10 ${heroPanel}`}>
+      <div className={`mb-6 rounded-[34px] p-6 sm:p-8 lg:p-6 ${heroPanel}`}>
         <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium ${darkMode ? "bg-white/5 text-white/65" : "bg-white/80 text-black/60"}`}><FileSpreadsheet className="h-3.5 w-3.5" /> Projects · MRN</span>
-            <h1 className="mt-7 max-w-3xl text-4xl font-semibold small tracking-tight sm:text-5xl">Material requests, made simple.</h1>
-            <p className={`mt-4 max-w-2xl text-base leading-7 ${muted}`}>Track MRNs from the linked sheet, review quotations and files in one clean view, and add new material requests without opening spreadsheet cells.</p>
+            <h1 className="mt-4 max-w-3xl text-4xl font-semibold small tracking-tight sm:text-4xl">Material requests, made simple.</h1>
+            <p className={`mt-2 max-w-2xl text-sm ${muted}`}>Track MRNs from the linked sheet, review quotations and files in one clean view, and add new material requests without opening spreadsheet cells.</p>
           </div>
           <div className="flex w-fit flex-col gap-3 xl:items-end xl:pb-3">
             <button disabled={!canEdit || !settings.linked} onClick={openAddMrn} className="flex h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-3xl  bg-[#000000] px-5 text-sm  text-white hover:bg-[#8572f5] disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" /> Add MRN</button>

@@ -351,6 +351,7 @@ export default function DmrDashboard({ darkMode }) {
   const [selectedTomorrowSite, setSelectedTomorrowSite] = useState("");
   const [dmrSheetLink, setDmrSheetLink] = useState("");
   const [dmrSheetSaving, setDmrSheetSaving] = useState(false);
+  const [dmrSheetOpen, setDmrSheetOpen] = useState(false);
 
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe5e9] bg-white";
@@ -400,6 +401,18 @@ export default function DmrDashboard({ darkMode }) {
       return true;
     });
   }, [agencySearch, records, siteFilter]);
+  const fillSiteOptions = useMemo(() => {
+    const sites = data?.today?.sites || [];
+    const counts = records.reduce((result, record) => {
+      const key = record.site || "Unassigned site";
+      result.set(key, (result.get(key) || 0) + 1);
+      return result;
+    }, new Map());
+    return [
+      { value: "all", label: "All sites", count: records.length },
+      ...sites.map((site) => ({ value: site, label: site, count: counts.get(site) || 0 })),
+    ];
+  }, [data?.today?.sites, records]);
 
   const projectManpowerCards = useMemo(() => {
     const query = agencySearch.trim().toLowerCase();
@@ -1467,60 +1480,20 @@ export default function DmrDashboard({ darkMode }) {
       )}
 
       {fillOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#171714]/60 p-4 backdrop-blur-md sm:p-7">
-          <div className={`flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[30px] border ${darkMode ? "border-white/10 bg-[#151612] text-white" : "border-black/10 bg-[#faf9f5] text-[#171714]"}`}>
-            <div className={`flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}>
-              <div><p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-[#d8f36a]" : "text-[#e76f42]"}`}>Fill DMR</p><h3 className="mt-1 text-2xl font-semibold">{data?.sheetName || "Today"} entries</h3><p className={`mt-1 text-sm ${muted}`}>Fill one section at a time. Changes from all tabs save together.</p></div>
-              <button onClick={() => setFillOpen(false)} className={`flex h-10 w-10 items-center justify-center rounded-full border ${darkMode ? "border-white/10" : "border-black/10"}`}><X className="h-4 w-4" /></button>
+        <div className="fixed inset-0 z-50 bg-[#171714]/60 backdrop-blur-md">
+          <div className={`flex h-screen w-screen flex-col overflow-hidden ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#faf9f5] text-[#171714]"}`}>
+            <div className={`flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}>
+              <div><p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-[#d8f36a]" : "text-[#e76f42]"}`}>Fill DMR</p><h3 className="mt-1 text-2xl font-semibold">{data?.sheetName || "Today"} entries</h3><p className={`mt-1 text-sm ${muted}`}>Pick a site from the left, then fill planned and actual manpower trade-wise.</p></div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button onClick={() => setDmrSheetOpen(true)} className={`flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-white/5 text-white/70 hover:bg-white/10" : "border-black/10 bg-white text-black/65 hover:bg-black/[0.04]"}`}><FileSpreadsheet className="h-4 w-4" /> Sheet link</button>
+                <button onClick={() => setFillOpen(false)} className={`flex h-10 w-10 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}><X className="h-4 w-4" /></button>
+              </div>
             </div>
-            <div className="min-h-0 overflow-y-auto p-5 sm:p-7">
+            <div className="min-h-0 flex-1 overflow-hidden p-4 sm:p-5">
               {!dmrSheetLinked && <div className={`mb-4 rounded-2xl  px-4 py-3 text-xs ${darkMode ? "border-amber-400/20 bg-amber-400/5 text-amber-200/75" : "border-amber-500/20 bg-amber-50 text-amber-800"}`}>No DMR sheet is linked yet. Super Admin must link a native Google Sheet before anyone can fill records.</div>}
               {dmrSheetLinked && !data?.canEdit && <div className={`mb-4 rounded-2xl  px-4 py-3 text-xs ${darkMode ? "border-amber-400/20 bg-amber-400/5 text-amber-200/75" : "border-amber-500/20 bg-amber-50 text-amber-800"}`}>You can view DMR, but your role does not have fill permission.</div>}
-              <section className={`mb-5 rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}>DMR Sheet Link</p>
-                    <h4 className="mt-2 text-lg font-semibold">{data?.dmrSettings?.linked ? "Google Sheet connected" : "No DMR sheet linked"}</h4>
-                    <p className={`mt-1 text-xs ${muted}`}>
-                      {data?.dmrSettings?.linked
-                        ? `Active sheet ID: ${data.dmrSettings.spreadsheetId}`
-                        : data?.canManageDmrSettings
-                          ? "Paste a native Google Sheet link here once. After that, all DMR reads and fills use that sheet."
-                          : "Ask Super Admin to link the DMR Google Sheet before filling records."}
-                    </p>
-                  </div>
-                  {data?.canManageDmrSettings && (
-                    <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-                      <input
-                        value={dmrSheetLink}
-                        onChange={(event) => setDmrSheetLink(event.target.value)}
-                        placeholder="Paste DMR Google Sheet link or ID"
-                        className={`h-11 min-w-0 rounded-2xl border px-4 text-sm outline-none sm:w-80 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-[#fafafa]"}`}
-                      />
-                      <button
-                        type="button"
-                        disabled={dmrSheetSaving || !dmrSheetLink.trim()}
-                        onClick={linkDmrSheet}
-                        className={`h-11 rounded-2xl px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
-                      >
-                        {dmrSheetSaving ? "Linking…" : data?.dmrSettings?.linked ? "Replace" : "Link"}
-                      </button>
-                      {data?.dmrSettings?.linked && (
-                        <button
-                          type="button"
-                          disabled={dmrSheetSaving}
-                          onClick={unlinkDmrSheet}
-                          className={`h-11 rounded-2xl border px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "border-red-400/25 text-red-200 hover:bg-red-400/10" : "border-red-200 text-red-700 hover:bg-red-50"}`}
-                        >
-                          Unlink
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </section>
 
-              <div className={`mb-5 flex gap-2 overflow-x-auto rounded-2xl p-1.5 ${darkMode ? "bg-white/[0.035]" : "bg-[#ebe6dc]"}`}>
+              <div className={`mb-3 flex gap-2 overflow-x-auto rounded-2xl p-1.5 ${darkMode ? "bg-white/[0.035]" : "bg-[#ebe6dc]"}`}>
                 {[
                   ["manpower", "Manpower", filteredRecords.length],
                   ["attendance", "Attendance", data?.today?.staffAttendance?.length || 0],
@@ -1536,36 +1509,62 @@ export default function DmrDashboard({ darkMode }) {
               </div>
 
               {fillTab === "manpower" && <>
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row">
-                <SelectMenu darkMode={darkMode} value={siteFilter} onChange={setSiteFilter} options={[{ value: "all", label: "All sites" }, ...(data?.today?.sites || []).map((site) => ({ value: site, label: site }))]} />
-                <label className="relative block flex-1">
-                  <Filter className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-                  <input value={agencySearch} onChange={(event) => setAgencySearch(event.target.value)} placeholder="Search agency/trade…" className={`h-12 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`} />
-                </label>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {filteredRecords.map((record) => (
-                  <article key={record.id} className={`rounded-[22px]  p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.07] bg-white"}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0"><p className="truncate text-base font-semibold">{record.agency}</p><p className={`mt-1 text-xs ${muted}`}>{record.site}</p></div>
-                      <span className="rounded-full bg-black/5 px-2.5 py-1 text-[10px]">Row {record.rowNumber}</span>
+              <div className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+                <aside className={`min-h-0 overflow-hidden rounded-[22px] border ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
+                  <div className={`border-b p-3 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}>Sites</p>
+                    <p className="mt-1 text-lg font-semibold">{siteFilter === "all" ? "All sites" : siteFilter}</p>
+                  </div>
+                  <div className="max-h-[calc(100vh-330px)] space-y-1 overflow-y-auto p-2 pb-20">
+                    {fillSiteOptions.map((site) => {
+                      const selected = siteFilter === site.value;
+                      return (
+                        <button
+                          key={site.value}
+                          type="button"
+                          onClick={() => setSiteFilter(site.value)}
+                          className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-left text-sm transition ${selected ? darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white" : darkMode ? "text-white/65 hover:bg-white/5" : "text-black/65 hover:bg-black/[0.04]"}`}
+                        >
+                          <span className="truncate font-medium">{site.label}</span>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${selected ? "bg-black/10 text-inherit" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}>{site.count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </aside>
+                <section className="min-h-0">
+                  <label className="relative mb-3 block">
+                    <Filter className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+                    <input value={agencySearch} onChange={(event) => setAgencySearch(event.target.value)} placeholder="Search trade / agency in selected site..." className={`h-12 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`} />
+                  </label>
+                  <div className="max-h-[calc(100vh-330px)] overflow-y-auto pb-24 pr-1">
+                    <div className="grid gap-3 xl:grid-cols-3 2xl:grid-cols-4">
+                      {filteredRecords.map((record) => (
+                        <article key={record.id} className={`rounded-[22px] p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.07] bg-white"}`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0"><p className="truncate text-lg font-semibold">{record.agency}</p><p className={`mt-1 text-xs ${muted}`}>{record.site}</p></div>
+                            <span className="rounded-full bg-black/5 px-2.5 py-1 text-[10px]">Row {record.rowNumber}</span>
+                          </div>
+                          <div className="mt-4 grid grid-cols-2 gap-3">
+                            <label className={`text-[11px] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>
+                              <span className="flex items-center justify-between gap-2">
+                                Planned
+                                {autoPlannedForRecord(record) !== "" && <span className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>Auto</span>}
+                              </span>
+                              <input disabled={!canFillDmr} type="number" value={valueFor(record, "planned")} onChange={(event) => updateDraft(record, "planned", event.target.value)} className={`mt-2 h-12 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-emerald-400/20 bg-emerald-400/10 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`} />
+                            </label>
+                            <label className={`text-[11px] ${darkMode ? "text-red-300" : "text-red-700"}`}>Actual<input disabled={!canFillDmr} type="number" value={valueFor(record, "actual")} onChange={(event) => updateDraft(record, "actual", event.target.value)} className={`mt-2 h-12 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-red-400/20 bg-red-400/10 text-white" : "border-red-200 bg-red-50 text-red-900"}`} /></label>
+                          </div>
+                        </article>
+                      ))}
+                      {!filteredRecords.length && <div className={`rounded-[24px] border px-4 py-10 text-center text-sm xl:col-span-3 2xl:col-span-4 ${darkMode ? "border-white/10 bg-white/[0.025] text-white/45" : "border-black/[0.06] bg-white text-black/45"}`}>No manpower rows found for this site or search.</div>}
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      <label className={`text-[11px] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>
-                        <span className="flex items-center justify-between gap-2">
-                          Planned
-                          {autoPlannedForRecord(record) !== "" && <span className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>Auto from plan</span>}
-                        </span>
-                        <input disabled={!canFillDmr} type="number" value={valueFor(record, "planned")} onChange={(event) => updateDraft(record, "planned", event.target.value)} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-emerald-400/20 bg-emerald-400/10 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`} />
-                      </label>
-                      <label className={`text-[11px] ${darkMode ? "text-red-300" : "text-red-700"}`}>Actual<input disabled={!canFillDmr} type="number" value={valueFor(record, "actual")} onChange={(event) => updateDraft(record, "actual", event.target.value)} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-red-400/20 bg-red-400/10 text-white" : "border-red-200 bg-red-50 text-red-900"}`} /></label>
-                    </div>
-                  </article>
-                ))}
+                  </div>
+                </section>
               </div>
               </>}
 
-              <div className="mt-7">
+              <div className={fillTab === "manpower" ? "mt-0" : "mt-4 max-h-[calc(100vh-260px)] min-h-0 overflow-y-auto pb-24 pr-1"}>
                 {fillTab === "equipment" && <section className={`rounded-[24px]  p-4 ${panel}`}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -1640,7 +1639,7 @@ export default function DmrDashboard({ darkMode }) {
                       <span className="rounded-full bg-red-500/10 px-3 py-1.5 text-red-700">{fillAttendanceSummary.absent} Absent</span>
                     </div>
                   </div>
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {(data?.today?.staffAttendance || []).map((item) => {
                       const currentStatus = String(valueFor(item, "status") || "").trim().toUpperCase();
                       const statusMeta = currentStatus === "P"
@@ -1656,7 +1655,7 @@ export default function DmrDashboard({ darkMode }) {
                         { value: "L", label: "Leave", active: "bg-orange-500 text-white border-orange-500", idle: darkMode ? "border-orange-400/25 bg-orange-400/10 text-orange-200 hover:bg-orange-400/15" : "border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100" },
                       ];
                       return (
-                        <article key={item.id} className={`flex min-h-52 flex-col rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>
+                        <article key={item.id} className={`flex min-h-48 flex-col rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${darkMode ? "bg-white/5" : "bg-black/[0.04]"}`}>
                               <span className="text-sm font-semibold">{(item.name || "?").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
@@ -1692,10 +1691,58 @@ export default function DmrDashboard({ darkMode }) {
                 </section>}
               </div>
             </div>
-            <div className={`flex items-center justify-end gap-2 border-t px-5 pb-6 pt-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}>
+            <div className={`flex shrink-0 items-center justify-end gap-2 border-t px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}>
               <button onClick={() => setFillOpen(false)} className={`h-11 rounded-full border px-6 text-sm ${darkMode ? "border-white/10 text-white/60" : "border-black/10 text-black/60"}`}>Cancel</button>
               <button disabled={!canFillDmr || saving || (!Object.keys(drafts).length && !hasAutoPlannedDrafts)} onClick={saveDmr} className={`flex h-11 min-w-36 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save to Sheet</button>
             </div>
+            {dmrSheetOpen && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#171714]/45 p-4 backdrop-blur-sm">
+                <section className={`w-full max-w-2xl rounded-[28px] border p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)] ${darkMode ? "border-white/10 bg-[#151612] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}>DMR Sheet Link</p>
+                      <h4 className="mt-2 text-xl font-semibold">{data?.dmrSettings?.linked ? "Google Sheet connected" : "No DMR sheet linked"}</h4>
+                      <p className={`mt-1 text-xs ${muted}`}>
+                        {data?.dmrSettings?.linked
+                          ? `Active sheet ID: ${data.dmrSettings.spreadsheetId}`
+                          : data?.canManageDmrSettings
+                            ? "Paste a native Google Sheet link here once. After that, all DMR reads and fills use that sheet."
+                            : "Ask Super Admin to link the DMR Google Sheet before filling records."}
+                      </p>
+                    </div>
+                    <button onClick={() => setDmrSheetOpen(false)} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}><X className="h-4 w-4" /></button>
+                  </div>
+                  {data?.canManageDmrSettings && (
+                    <div className="mt-6 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+                      <input
+                        value={dmrSheetLink}
+                        onChange={(event) => setDmrSheetLink(event.target.value)}
+                        placeholder="Paste DMR Google Sheet link or ID"
+                        className={`h-12 min-w-0 rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-[#fafafa]"}`}
+                      />
+                      <button
+                        type="button"
+                        disabled={dmrSheetSaving || !dmrSheetLink.trim()}
+                        onClick={linkDmrSheet}
+                        className={`h-12 rounded-2xl px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                      >
+                        {dmrSheetSaving ? "Linking..." : data?.dmrSettings?.linked ? "Replace" : "Link"}
+                      </button>
+                      {data?.dmrSettings?.linked && (
+                        <button
+                          type="button"
+                          disabled={dmrSheetSaving}
+                          onClick={unlinkDmrSheet}
+                          className={`h-12 rounded-2xl border px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "border-red-400/25 text-red-200 hover:bg-red-400/10" : "border-red-200 text-red-700 hover:bg-red-50"}`}
+                        >
+                          Unlink
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -193,6 +193,27 @@ function PlanCeoView({ activePlan, activePlanTitle, activeTomorrowSite, tomorrow
   });
   const visibleSites = activeTomorrowSite ? [activeTomorrowSite] : tomorrowPlanSites;
   const attentionCount = visibleSites.filter((site) => !planActualStatus(site.plannedManpower, site.actualManpower).ok).length;
+  const siteColumns = (visibleSites.length ? visibleSites.map((site) => site.site) : Array.from(new Set(detailRecords.map((record) => record.site || "Unassigned")))).filter(Boolean);
+  const actualByTradeSite = new Map((activePlan?.actuals?.tradeSiteBreakdown || []).map((item) => [
+    `${comparablePlanText(item.site)}|${comparableTradeText(item.trade)}`,
+    Number(item.actual) || 0,
+  ]));
+  const tradeRows = Array.from(detailRecords.reduce((map, record) => {
+    const trade = record.category || "General";
+    const site = record.site || "Unassigned";
+    const item = map.get(trade) || { trade, totalPeople: 0, totalItems: 0, cells: new Map() };
+    const cell = item.cells.get(site) || { people: 0, items: 0, works: [] };
+    const people = Number(record.plannedManpower) || 0;
+    cell.people += people;
+    cell.items += 1;
+    if (record.work || record.raw) cell.works.push(record.work || record.raw);
+    item.totalPeople += people;
+    item.totalItems += 1;
+    item.cells.set(site, cell);
+    map.set(trade, item);
+    return map;
+  }, new Map()).values()).sort((a, b) => b.totalPeople - a.totalPeople || a.trade.localeCompare(b.trade));
+  const tradeActualTotal = (trade) => siteColumns.reduce((sum, site) => sum + (actualByTradeSite.get(`${comparablePlanText(site)}|${comparableTradeText(trade)}`) || 0), 0);
 
   return (
     <div className="space-y-4 transition-all duration-300 ease-out">
@@ -212,51 +233,60 @@ function PlanCeoView({ activePlan, activePlanTitle, activeTomorrowSite, tomorrow
         </div>
       </section>
 
-      {!activeTomorrowSite && (
-        <section className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>
-          <div className="flex items-center justify-between gap-3 px-5 py-4">
-            <div>
-              <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}>CEO summary</p>
-              <h4 className="mt-1 text-lg font-semibold">{activePlanTitle} by site</h4>
-            </div>
-            <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}>{visibleSites.length} rows</span>
+      <section className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <p className={`text-[9px] font-semibold uppercase tracking-[0.18em] ${muted}`}>CEO summary</p>
+            <h4 className="mt-1 text-base font-semibold">{activePlanTitle} trade by site</h4>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-sm">
-              <thead className={head}>
-                <tr>
-                  {["Site", "Planned", "Actual", "Variance", "Status", "Work items", "Submitters"].map((header) => (
-                    <th key={header} className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em]">{header}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {visibleSites.map((site) => {
-                  const status = planActualStatus(site.plannedManpower, site.actualManpower);
-                  return (
-                    <tr key={site.site} className={`border-t ${line} ${rowHover}`}>
-                      <td className="max-w-[240px] px-5 py-3 font-semibold">{site.site}</td>
-                      <td className="px-5 py-3 text-xl font-semibold">{status.planned}</td>
-                      <td className={`px-5 py-3 text-xl font-semibold ${status.ok ? "text-emerald-600" : "text-red-600"}`}>{status.actual}</td>
-                      <td className={`px-5 py-3 font-semibold ${status.ok ? "text-emerald-600" : "text-red-600"}`}>{status.variance >= 0 ? "+" : ""}{status.variance}</td>
-                      <td className="px-5 py-3">
-                        <span className={`inline-flex rounded-full  px-3 py-1 text-xs ${planStatusTone(status, darkMode)}`}>
-                          {status.ok ? "On track" : "Needs attention"}
-                        </span>
+          <span className={`rounded-full px-2.5 py-1 text-[11px] ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}>{siteColumns.length} sites · {tradeRows.length} trades</span>
+        </div>
+        <div className="max-h-[58vh] overflow-auto px-3 pb-3">
+          <table className="w-full min-w-[700px] border-separate border-spacing-0 text-left text-xs">
+            <thead className={head}>
+              <tr>
+                <th className={`sticky left-0 top-0 z-30 min-w-[120px] border-b px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] ${line} ${darkMode ? "bg-[#191b20]" : "bg-[#f4f3ef]"}`}>Trade</th>
+                {siteColumns.map((site) => (
+                  <th key={site} className={`sticky top-0 z-20 min-w-[112px] max-w-[150px] whitespace-normal break-words border-b px-2.5 py-2 text-[10px] font-semibold uppercase leading-4 tracking-[0.12em] ${line} ${darkMode ? "bg-[#191b20]" : "bg-[#f4f3ef]"}`}>{site}</th>
+                ))}
+                <th className={`sticky top-0 z-20 min-w-[90px] border-b px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] ${line} ${darkMode ? "bg-[#191b20]" : "bg-[#f4f3ef]"}`}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tradeRows.map((trade) => (
+                <tr key={trade.trade} className={rowHover}>
+                  <td className={`sticky left-0 z-10 border-b px-2.5 py-2 font-semibold ${line} ${darkMode ? "bg-[#111216]" : "bg-white"}`}>{trade.trade}</td>
+                  {siteColumns.map((site) => {
+                    const cell = trade.cells.get(site);
+                    const actual = actualByTradeSite.get(`${comparablePlanText(site)}|${comparableTradeText(trade.trade)}`) || 0;
+                    return (
+                      <td key={`${trade.trade}-${site}`} className={`border-b px-2.5 py-2 align-middle ${line}`}>
+                        {cell ? (
+                          <div className="flex items-baseline gap-1.5">
+                            <p className="text-base font-semibold leading-none">{cell.people}<span className={muted}>/</span><span className="text-red-600">{actual}</span></p>
+                            <p className={`text-[10px] ${muted}`}>{cell.items}i</p>
+                          </div>
+                        ) : (
+                          <span className={muted}>-</span>
+                        )}
                       </td>
-                      <td className="px-5 py-3">{site.records.length}</td>
-                      <td className={`max-w-[240px] truncate px-5 py-3 ${muted}`}>{site.submitters.join(", ") || "Unknown"}</td>
-                    </tr>
-                  );
-                })}
-                {!visibleSites.length && (
-                  <tr><td colSpan={7} className={`px-5 py-8 text-center ${muted}`}>No plan data available.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+                    );
+                  })}
+                  <td className={`border-b px-2.5 py-2 align-middle ${line}`}>
+                    <div className="flex items-baseline gap-1.5">
+                      <p className="text-base font-semibold leading-none">{trade.totalPeople}<span className={muted}>/</span><span className="text-red-600">{tradeActualTotal(trade.trade)}</span></p>
+                      <p className={`text-[10px] ${muted}`}>{trade.totalItems}i</p>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!tradeRows.length && (
+                <tr><td colSpan={siteColumns.length + 2} className={`px-4 py-8 text-center ${muted}`}>No trade and site plan data available.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <section className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>
         <div className="flex items-center justify-between gap-3 px-5 py-4">

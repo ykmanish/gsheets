@@ -116,6 +116,7 @@ export function SelectMenu({ darkMode, value, options, onChange, disabled = fals
 function toDateInputValue(date) {
   if (!date) return "";
   const normalized = new Date(date);
+  if (Number.isNaN(normalized.getTime())) return "";
   normalized.setMinutes(normalized.getMinutes() - normalized.getTimezoneOffset());
   return normalized.toISOString().slice(0, 10);
 }
@@ -123,12 +124,15 @@ function toDateInputValue(date) {
 function fromDateInputValue(value) {
   if (!value) return null;
   const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day);
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function formatDisplayDate(value) {
   if (!value) return "Select date";
-  return fromDateInputValue(value).toLocaleDateString(undefined, {
+  const date = fromDateInputValue(value);
+  if (!date) return "Select date";
+  return date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",

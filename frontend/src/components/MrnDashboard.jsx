@@ -169,7 +169,8 @@ function DetailItem({ darkMode, icon: Icon, label, value }) {
 }
 
 function FileButton({ darkMode, href, label }) {
-  if (!href) {
+  const validHref = /^https?:\/\//i.test(String(href || "").trim()) ? String(href).trim() : "";
+  if (!validHref) {
     return (
       <span className={`flex h-12 items-center justify-center rounded-2xl text-sm ${darkMode ? "bg-white/[0.035] text-white/35" : "bg-white text-black/35"}`}>
         {label} not added
@@ -178,7 +179,7 @@ function FileButton({ darkMode, href, label }) {
   }
   return (
     <a
-      href={href}
+      href={validHref}
       target="_blank"
       rel="noreferrer"
       className={`flex h-12 items-center justify-center gap-2 rounded-2xl text-sm font-medium transition ${darkMode ? "bg-[#d8f36a] text-black hover:bg-[#cdea5e]" : "bg-[#171714] text-white hover:bg-black/80"}`}
@@ -353,12 +354,19 @@ export default function MrnDashboard({ darkMode }) {
       const path = editingMrn?.rowNumber ? `/mrn-dashboard/${editingMrn.rowNumber}` : "/mrn-dashboard";
       const result = await api(path, { method: editingMrn ? "PUT" : "POST", body });
       toast.success(`${result.mrnNo} ${editingMrn ? "updated" : "added"}`);
+      const savedRequestDate = normalizedForm.materialRequestDate || localDateKey();
       setForm(emptyForm());
       setMaterialDraft("");
       setEditingMrn(null);
       setAddOpen(false);
       setAllData(null);
-      await load(true);
+      setQuery("");
+      if (savedRequestDate && (savedRequestDate < startDate || savedRequestDate > endDate)) {
+        setStartDate(savedRequestDate < startDate ? savedRequestDate : startDate);
+        setEndDate(savedRequestDate > endDate ? savedRequestDate : endDate);
+      } else {
+        await load(true);
+      }
     } catch (error) {
       toast.error(error.message || "Could not add MRN");
     } finally {
@@ -368,8 +376,33 @@ export default function MrnDashboard({ darkMode }) {
 
   if (loading) {
     return (
-      <main className={`flex min-h-0 flex-1 items-center justify-center ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f7f5ef] text-[#171714]"}`}>
-        <div className="flex items-center gap-3 text-sm"><Loader2 className="h-5 w-5 animate-spin" /> Loading MRN dashboard</div>
+      <main className={`flex min-h-0 flex-1 items-center justify-center px-5 py-10 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f4ef] text-[#171714]"}`}>
+        <div className={`w-full max-w-2xl rounded-[30px] p-7 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.07] bg-white"}`}>
+          <div className="flex items-center gap-4">
+            <span className="relative flex h-14 w-14 items-center justify-center">
+              <span className={`absolute inset-0 animate-ping rounded-full opacity-20 ${darkMode ? "bg-[#d8f36a]" : "bg-black"}`} />
+              <span className={`absolute inset-1 animate-pulse rounded-full ${darkMode ? "bg-[#d8f36a]/15" : "bg-black/[0.06]"}`} />
+              <span className={`relative flex h-12 w-12 items-center justify-center rounded-full ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
+                <FileSpreadsheet className="h-5 w-5" />
+              </span>
+            </span>
+            <div>
+              <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-[#d8f36a]" : "text-[#e76f42]"}`}>MRN workspace</p>
+              <h2 className="mt-2 flex flex-wrap items-center gap-2 text-xl font-semibold">
+                Opening live material request sheet
+                <span className="inline-flex items-center gap-1 pt-1" aria-hidden="true">
+                  <span className={`h-1.5 w-1.5 animate-bounce rounded-full ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`} />
+                  <span className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:120ms] ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`} />
+                  <span className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:240ms] ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`} />
+                </span>
+              </h2>
+              <p className={`mt-2 text-sm ${muted}`}>Loading linked MRNs, quotations, and uploaded files from the latest sheet data.</p>
+            </div>
+          </div>
+          <div className={`mt-6 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>
+            <div className={`h-full w-1/3 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`} />
+          </div>
+        </div>
       </main>
     );
   }
@@ -383,17 +416,17 @@ export default function MrnDashboard({ darkMode }) {
   return (
     <main className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-7 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f7f5ef] text-[#171714]"}`}>
       <div className={`mb-6 rounded-[34px] p-6 sm:p-8 lg:p-10 ${heroPanel}`}>
-        <div className="flex flex-col gap-7 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium ${darkMode ? "bg-white/5 text-white/65" : "bg-white/80 text-black/60"}`}><FileSpreadsheet className="h-3.5 w-3.5" /> Projects · MRN</span>
             <h1 className="mt-7 max-w-3xl text-4xl font-semibold small tracking-tight sm:text-5xl">Material requests, made simple.</h1>
             <p className={`mt-4 max-w-2xl text-base leading-7 ${muted}`}>Track MRNs from the linked sheet, review quotations and files in one clean view, and add new material requests without opening spreadsheet cells.</p>
           </div>
-          <div className="flex w-fit flex-col gap-3 xl:items-end">
-            <button disabled={!canEdit || !settings.linked} onClick={openAddMrn} className="flex h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-[#9381ff] bg-[#9381ff] px-5 text-sm font-medium text-white hover:bg-[#8572f5] disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" /> Add MRN</button>
+          <div className="flex w-fit flex-col gap-3 xl:items-end xl:pb-3">
+            <button disabled={!canEdit || !settings.linked} onClick={openAddMrn} className="flex h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-3xl  bg-[#000000] px-5 text-sm  text-white hover:bg-[#8572f5] disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" /> Add MRN</button>
             <div className="grid grid-cols-2 gap-3">
-              {canManage && <button onClick={() => setSettingsOpen(true)} className={`flex h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><Settings className="h-4 w-4" /> Links</button>}
-              <button onClick={() => { setAllData(null); void load(true); }} className={`flex h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"} ${canManage ? "" : "col-span-2"}`}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh</button>
+              {canManage && <button onClick={() => setSettingsOpen(true)} className={`flex h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-3xl border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><Settings className="h-4 w-4" /> Links</button>}
+              <button onClick={() => { setAllData(null); void load(true); }} className={`flex h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-3xl border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"} ${canManage ? "" : "col-span-2"}`}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh</button>
             </div>
           </div>
         </div>

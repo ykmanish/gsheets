@@ -2482,11 +2482,22 @@ function dmrActualsForPlan(records = []) {
     result.set(site, item);
     return result;
   }, new Map()).values()].sort((a, b) => b.actual - a.actual || a.site.localeCompare(b.site));
+  const tradeSiteBreakdown = [...records.reduce((result, record) => {
+    const site = projectText(record.site) || "Unassigned site";
+    const trade = projectText(record.agency) || "General";
+    const key = `${site}||${trade}`;
+    const item = result.get(key) || { site, trade, actual: 0, records: 0 };
+    item.actual += Number(record.actual) || 0;
+    item.records += 1;
+    result.set(key, item);
+    return result;
+  }, new Map()).values()].sort((a, b) => a.site.localeCompare(b.site) || a.trade.localeCompare(b.trade));
 
   return {
     actualManpower: records.reduce((sum, record) => sum + (Number(record.actual) || 0), 0),
     records: records.length,
     siteBreakdown,
+    tradeSiteBreakdown,
   };
 }
 
@@ -4761,10 +4772,143 @@ const MRN_HEADERS = [
   "Email address",
   "Upload Photo of Quotation",
   "Quotation Amount  ",
+  "Upload photo of Quotation",
+  "Assign To",
+  "Status",
+  "Krishna PRN Status Updated",
+  "Vendor Name",
+  "Invoice Date",
+  "Remark",
 ];
+
+const MRN_FIELD_HEADERS = {
+  mrnNo: ["MRN No"],
+  timestamp: ["Timestamp"],
+  projectSite: ["Name of Project & Site Address"],
+  materialRequestDate: ["Material Request Date"],
+  requiredDate: ["By when Material is Required"],
+  materialRequirement: ["Material Requirement"],
+  issuedBy: ["Issued by", "Issued by "],
+  leadTime: ["Lead Time (Usual time to get Material )", "Lead Time"],
+  mrnPhoto: ["Upload Photo of MRN"],
+  emailAddress: ["Email Address", "Email address"],
+  quotationPhoto: ["Upload Photo of Quotation", "Upload photo of Quatation"],
+  quotationAmount: ["Quotation Amount", "Quotation Amount  "],
+  assignTo: ["Assign To"],
+  status: ["Status"],
+  krishnaPrnStatusUpdated: ["Krishna PRN Status Updated"],
+  vendorName: ["Vendor Name"],
+  invoiceDate: ["Invoice Date"],
+  remark: ["Remark"],
+};
 
 function normalizeHeaderKey(value = "") {
   return projectText(value).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function mrnFieldForHeader(header = "") {
+  const key = normalizeHeaderKey(header);
+  for (const [field, aliases] of Object.entries(MRN_FIELD_HEADERS)) {
+    if (aliases.some((alias) => normalizeHeaderKey(alias) === key)) return field;
+  }
+  return "";
+}
+
+function isEmailLike(value = "") {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(projectText(value));
+}
+
+function isUrlLike(value = "") {
+  return /^https?:\/\//i.test(projectText(value));
+}
+
+function isAmountLike(value = "") {
+  const text = projectText(value).replace(/,/g, "");
+  return text !== "" && /^₹?\s*\d+(\.\d+)?$/.test(text);
+}
+
+function buildMrnSheetRow(headers = [], values = {}, existingRow = []) {
+  const normalizedHeaders = normalizeMrnHeaders(headers);
+  const width = Math.max(normalizedHeaders.length, MRN_HEADERS.length);
+  return Array.from({ length: width }, (_, index) => {
+    const field = mrnFieldForHeader(normalizedHeaders[index] || MRN_HEADERS[index] || "");
+    if (!field) return projectText(existingRow[index]);
+    return projectText(values[field]);
+  });
+}
+
+function normalizeMrnHeaders(rawHeaders = []) {
+  const headers = rawHeaders.map((header, index) => projectText(header) || (index === 0 ? "MRN No" : ""));
+  const firstHeader = normalizeHeaderKey(headers[0] || "");
+  if (firstHeader === normalizeHeaderKey("Timestamp")) return ["MRN No", ...headers];
+  return headers;
+}
+
+function normalizeMrnRow(row = [], headers = []) {
+  const firstHeader = normalizeHeaderKey(headers[0] || "");
+  if (firstHeader !== normalizeHeaderKey("MRN No")) return row;
+  const firstCell = projectText(row[0]);
+  if (!firstCell || /^MRN\s*0*\d+$/i.test(firstCell)) return row;
+  return ["", ...row];
+}
+
+async function clearManualMrnSerialObstructions(sheets, spreadsheetId) {
+  const response = await sheets.spreadsheets.get({
+    spreadsheetId,
+    ranges: [`${escapeSheetName(MRN_SHEET_NAME)}!A2:A10000`],
+    includeGridData: true,
+    fields: "sheets(data(startRow,rowData(values(userEnteredValue))))",
+  });
+  const grid = response.data.sheets?.[0]?.data?.[0];
+  const formulaCell = grid?.rowData?.[0]?.values?.[0]?.userEnteredValue?.formulaValue || "";
+  if (!/ARRAYFORMULA/i.test(formulaCell)) return 0;
+  const startRow = Number(grid?.startRow || 1);
+  const ranges = [];
+  (grid?.rowData || []).forEach((rowData, index) => {
+    const rowNumber = startRow + index + 1;
+    const value = rowData.values?.[0]?.userEnteredValue;
+    if (rowNumber > 2 && value) ranges.push(`${escapeSheetName(MRN_SHEET_NAME)}!A${rowNumber}`);
+  });
+  if (!ranges.length) return 0;
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId,
+    requestBody: { ranges },
+  });
+  return ranges.length;
+}
+
+function lastMrnDataRow(values = []) {
+  for (let index = values.length - 1; index >= 1; index -= 1) {
+    const row = values[index] || [];
+    if (row.slice(1).some((value) => projectText(value))) return index + 1;
+  }
+  return 1;
+}
+
+async function repairShiftedMrnRows(sheets, spreadsheetId, values = []) {
+  const updates = [];
+  for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    const row = values[rowIndex] || [];
+    const rowNumber = rowIndex + 1;
+    const hasMrn = /^MRN\s*0*\d+$/i.test(projectText(row[0]));
+    const shiftedLeft = hasMrn && !parseMrnDate(row[1]) && parseMrnDate(row[2]) && parseMrnDate(row[3]);
+    if (!shiftedLeft) continue;
+    const corrected = [formatMrnTimestamp(new Date()), ...row.slice(1, MRN_HEADERS.length - 1)];
+    while (corrected.length < MRN_HEADERS.length - 1) corrected.push("");
+    updates.push({
+      range: `${escapeSheetName(MRN_SHEET_NAME)}!B${rowNumber}:S${rowNumber}`,
+      values: [corrected],
+    });
+  }
+  if (!updates.length) return 0;
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      valueInputOption: "USER_ENTERED",
+      data: updates,
+    },
+  });
+  return updates.length;
 }
 
 function parseMrnDate(value) {
@@ -4797,48 +4941,82 @@ function nextMrnNumber(records = []) {
 
 function mapMrnRows(values = []) {
   const rawHeaders = values[0] || [];
-  const headers = rawHeaders.map((header, index) => projectText(header) || (index === 0 ? "MRN No" : ""));
-  const headerMap = new Map(headers.map((header, index) => [normalizeHeaderKey(header), index]));
+  const headers = normalizeMrnHeaders(rawHeaders);
+  const headerMap = headers.reduce((map, header, index) => {
+    const key = normalizeHeaderKey(header);
+    if (!key) return map;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(index);
+    return map;
+  }, new Map());
   const valueAt = (row, names = []) => {
     for (const name of names) {
-      const index = headerMap.get(normalizeHeaderKey(name));
-      if (index !== undefined) return projectText(row[index]);
+      const indices = headerMap.get(normalizeHeaderKey(name)) || [];
+      for (const index of indices) {
+        const value = projectText(row[index]);
+        if (value) return value;
+      }
     }
     return "";
   };
   const records = [];
   for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
-    const row = values[rowIndex] || [];
-    const mrnNo = valueAt(row, ["MRN No"]);
+    const row = normalizeMrnRow(values[rowIndex] || [], headers);
+    const sheetMrnNo = valueAt(row, ["MRN No"]);
     const timestamp = valueAt(row, ["Timestamp"]);
     const project = valueAt(row, ["Name of Project & Site Address"]);
     const material = valueAt(row, ["Material Requirement"]);
-    if (!mrnNo && !timestamp && !project && !material) continue;
+    if (!sheetMrnNo && !timestamp && !project && !material) continue;
+    const mrnNo = sheetMrnNo || `MRN${String(rowIndex).padStart(2, "0")}`;
     const requestDate = valueAt(row, ["Material Request Date"]);
     const requiredDate = valueAt(row, ["By when Material is Required"]);
+    let mrnPhoto = valueAt(row, ["Upload Photo of MRN"]);
+    let emailAddress = valueAt(row, ["Email Address", "Email address"]);
+    let quotationPhoto = valueAt(row, ["Upload Photo of Quotation", "Upload photo of Quatation"]);
+    let quotationAmount = valueAt(row, ["Quotation Amount"]);
+    let assignTo = valueAt(row, ["Assign To"]);
+    let status = valueAt(row, ["Status"]);
+    let krishnaPrnStatusUpdated = valueAt(row, ["Krishna PRN Status Updated"]);
+    let vendorName = valueAt(row, ["Vendor Name"]);
+    let invoiceDate = valueAt(row, ["Invoice Date"]);
+    let remark = valueAt(row, ["Remark"]);
+    if (isEmailLike(mrnPhoto) && isUrlLike(emailAddress)) {
+      [mrnPhoto, emailAddress] = [emailAddress, mrnPhoto];
+    }
+    if (isAmountLike(quotationPhoto) && isUrlLike(quotationAmount)) {
+      [quotationPhoto, quotationAmount] = [quotationAmount, quotationPhoto];
+    }
+    if (isUrlLike(assignTo) && assignTo === quotationPhoto) {
+      assignTo = status;
+      status = krishnaPrnStatusUpdated;
+      krishnaPrnStatusUpdated = vendorName;
+      vendorName = invoiceDate;
+      invoiceDate = remark;
+      remark = projectText(row[18]) || "";
+    }
     records.push({
       id: `${mrnNo || "MRN"}:${rowIndex + 1}`,
       rowNumber: rowIndex + 1,
       mrnNo,
       timestamp,
       lastEdited: timestamp,
-      date: parseMrnDate(requestDate || timestamp),
+      date: parseMrnDate(timestamp || requestDate),
       project,
       materialRequestDate: requestDate,
       requiredDate,
       materialRequirement: material,
       issuedBy: valueAt(row, ["Issued by", "Issued by "]),
       leadTime: valueAt(row, ["Lead Time (Usual time to get Material )", "Lead Time"]),
-      mrnPhoto: valueAt(row, ["Upload Photo of MRN"]),
-      emailAddress: valueAt(row, ["Email Address", "Email address"]),
-      quotationPhoto: valueAt(row, ["Upload Photo of Quotation", "Upload photo of Quatation"]),
-      quotationAmount: valueAt(row, ["Quotation Amount"]),
-      assignTo: valueAt(row, ["Assign To"]),
-      status: valueAt(row, ["Status"]),
-      krishnaPrnStatusUpdated: valueAt(row, ["Krishna PRN Status Updated"]),
-      vendorName: valueAt(row, ["Vendor Name"]),
-      invoiceDate: valueAt(row, ["Invoice Date"]),
-      remark: valueAt(row, ["Remark"]),
+      mrnPhoto,
+      emailAddress,
+      quotationPhoto,
+      quotationAmount,
+      assignTo,
+      status,
+      krishnaPrnStatusUpdated,
+      vendorName,
+      invoiceDate,
+      remark,
     });
   }
   return { headers, records };
@@ -4848,17 +5026,37 @@ async function readMrnDashboard({ startDate, endDate, all = false } = {}) {
   const spreadsheetId = getActiveMrnSpreadsheetId();
   await assertNativeGoogleSpreadsheet(spreadsheetId, "MRN sheet");
   const sheets = await getDmrSpreadsheet(spreadsheetId);
-  const response = await sheets.spreadsheets.values.get({
+  let response = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${escapeSheetName(MRN_SHEET_NAME)}!A1:Z10000`,
   });
+  const clearedSerialObstructions = await clearManualMrnSerialObstructions(sheets, spreadsheetId).catch((error) => {
+    console.error("Could not clear MRN serial obstructions:", error);
+    return 0;
+  });
+  if (clearedSerialObstructions) {
+    response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${escapeSheetName(MRN_SHEET_NAME)}!A1:Z10000`,
+    });
+  }
+  const repairedRows = await repairShiftedMrnRows(sheets, spreadsheetId, response.data.values || []).catch((error) => {
+    console.error("Could not repair shifted MRN rows:", error);
+    return 0;
+  });
+  if (repairedRows) {
+    response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${escapeSheetName(MRN_SHEET_NAME)}!A1:Z10000`,
+    });
+  }
   const { records } = mapMrnRows(response.data.values || []);
   const today = istDateKey(new Date());
   const start = /^\d{4}-\d{2}-\d{2}$/.test(String(startDate || "")) ? String(startDate) : addDaysToDateKey(today, -6);
   const end = /^\d{4}-\d{2}-\d{2}$/.test(String(endDate || "")) ? String(endDate) : today;
   const filtered = records
     .filter((record) => all || !record.date || (record.date >= start && record.date <= end))
-    .sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.rowNumber - a.rowNumber);
+    .sort((a, b) => b.rowNumber - a.rowNumber || (b.date || "").localeCompare(a.date || ""));
   const summarizeMrnRecords = (items = []) => {
     const byStatus = items.reduce((result, record) => {
       const status = projectText(record.status) || "Open";
@@ -4873,7 +5071,7 @@ async function readMrnDashboard({ startDate, endDate, all = false } = {}) {
       byStatus,
     };
   };
-  const sortedAllRecords = [...records].sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.rowNumber - a.rowNumber);
+  const sortedAllRecords = [...records].sort((a, b) => b.rowNumber - a.rowNumber || (b.date || "").localeCompare(a.date || ""));
   const byStatus = filtered.reduce((result, record) => {
     const status = projectText(record.status) || "Open";
     result[status] = (result[status] || 0) + 1;
@@ -4937,45 +5135,27 @@ async function appendMrnRecord(values = {}, files = {}) {
     spreadsheetId,
     range: `${escapeSheetName(MRN_SHEET_NAME)}!A1:Z10000`,
   });
+  await clearManualMrnSerialObstructions(sheets, spreadsheetId).catch((error) => {
+    console.error("Could not clear MRN serial obstructions:", error);
+  });
   const parsed = mapMrnRows(existing.data.values || []);
   const mrnNo = nextMrnNumber(parsed.records);
   const mrnPhoto = await uploadMrnFileToDrive(files.mrnPhoto?.[0], mrnNo);
   const quotationPhoto = await uploadMrnFileToDrive(files.quotationPhoto?.[0], `${mrnNo}-quotation`);
-  const row = [
-    formatMrnTimestamp(new Date()),
-    projectText(values.projectSite),
-    projectText(values.materialRequestDate),
-    projectText(values.requiredDate),
-    projectText(values.materialRequirement),
-    projectText(values.issuedBy),
-    projectText(values.leadTime),
+  const row = buildMrnSheetRow(parsed.headers, {
+    ...values,
+    mrnNo,
+    timestamp: formatMrnTimestamp(new Date()),
     mrnPhoto,
-    projectText(values.emailAddress),
     quotationPhoto,
-    projectText(values.quotationAmount),
-    quotationPhoto,
-    projectText(values.assignTo),
-    projectText(values.status),
-    projectText(values.krishnaPrnStatusUpdated),
-    projectText(values.vendorName),
-    projectText(values.invoiceDate),
-    projectText(values.remark),
-  ];
-  const appendResponse = await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: `${escapeSheetName(MRN_SHEET_NAME)}!B:S`,
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [row] },
   });
-  const updatedRange = appendResponse.data?.updates?.updatedRange || "";
-  const appendedRow = Number(updatedRange.match(/![A-Z]+(\d+):/)?.[1]);
-  if (appendedRow >= 2) {
-    await sheets.spreadsheets.values.clear({
-      spreadsheetId,
-      range: `${escapeSheetName(MRN_SHEET_NAME)}!A${appendedRow}`,
-    }).catch(() => {});
-  }
+  const nextRow = lastMrnDataRow(existing.data.values || []) + 1;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${escapeSheetName(MRN_SHEET_NAME)}!B${nextRow}:S${nextRow}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [row.slice(1)] },
+  });
   sheetDatasetCache.delete(spreadsheetId);
   return { mrnNo, row };
 }
@@ -4988,45 +5168,51 @@ async function updateMrnRecord(rowNumber, values = {}, files = {}) {
   const sheets = await getDmrSpreadsheet(spreadsheetId);
   const existing = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${escapeSheetName(MRN_SHEET_NAME)}!A${numericRow}:S${numericRow}`,
+    range: `${escapeSheetName(MRN_SHEET_NAME)}!A1:Z${numericRow}`,
   });
-  const current = existing.data.values?.[0] || [];
-  if (!projectText(current[0])) throw new Error("MRN row was not found");
-  const mrnNo = projectText(current[0]);
+  const parsed = mapMrnRows(existing.data.values || []);
+  const current = normalizeMrnRow(existing.data.values?.[numericRow - 1] || [], parsed.headers);
+  const currentRecord = parsed.records.find((record) => record.rowNumber === numericRow) || {};
+  if (!currentRecord.mrnNo && !projectText(current[1]) && !projectText(current[2]) && !projectText(current[5])) throw new Error("MRN row was not found");
+  const mrnNo = currentRecord.mrnNo || `MRN${String(numericRow - 1).padStart(2, "0")}`;
+  const headerMap = (parsed.headers || []).reduce((map, header, index) => {
+    const key = normalizeHeaderKey(header);
+    if (!key) return map;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(index);
+    return map;
+  }, new Map());
+  const currentValue = (names = []) => {
+    for (const name of names) {
+      const indices = headerMap.get(normalizeHeaderKey(name)) || [];
+      for (const index of indices) {
+        const value = projectText(current[index]);
+        if (value) return value;
+      }
+    }
+    return "";
+  };
   const mrnPhoto = files.mrnPhoto?.[0]
     ? await uploadMrnFileToDrive(files.mrnPhoto?.[0], mrnNo)
-    : projectText(current[8]);
+    : currentRecord.mrnPhoto || currentValue(MRN_FIELD_HEADERS.mrnPhoto);
   const quotationPhoto = files.quotationPhoto?.[0]
     ? await uploadMrnFileToDrive(files.quotationPhoto?.[0], `${mrnNo}-quotation`)
-    : projectText(current[10]) || projectText(current[12]);
-  const row = [
-    formatMrnTimestamp(new Date()),
-    projectText(values.projectSite),
-    projectText(values.materialRequestDate),
-    projectText(values.requiredDate),
-    projectText(values.materialRequirement),
-    projectText(values.issuedBy),
-    projectText(values.leadTime),
+    : currentRecord.quotationPhoto || currentValue(MRN_FIELD_HEADERS.quotationPhoto);
+  const row = buildMrnSheetRow(parsed.headers, {
+    ...values,
+    mrnNo,
+    timestamp: formatMrnTimestamp(new Date()),
     mrnPhoto,
-    projectText(values.emailAddress),
     quotationPhoto,
-    projectText(values.quotationAmount),
-    quotationPhoto,
-    projectText(values.assignTo),
-    projectText(values.status),
-    projectText(values.krishnaPrnStatusUpdated),
-    projectText(values.vendorName),
-    projectText(values.invoiceDate),
-    projectText(values.remark),
-  ];
+  }, current);
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${escapeSheetName(MRN_SHEET_NAME)}!B${numericRow}:S${numericRow}`,
+    range: `${escapeSheetName(MRN_SHEET_NAME)}!B${numericRow}:${columnName(row.length)}${numericRow}`,
     valueInputOption: "USER_ENTERED",
-    requestBody: { values: [row] },
+    requestBody: { values: [row.slice(1)] },
   });
   sheetDatasetCache.delete(spreadsheetId);
-  return { mrnNo, row, rowNumber: numericRow, lastEdited: row[0] };
+  return { mrnNo, row, rowNumber: numericRow, lastEdited: row[1] };
 }
 
 function emptyDmrDashboard(date) {

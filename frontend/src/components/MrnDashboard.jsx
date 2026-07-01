@@ -276,7 +276,7 @@ export default function MrnDashboard({ darkMode }) {
       setSavingSettings(true);
       const result = await api("/mrn-dashboard/settings", {
         method: "PUT",
-        body: JSON.stringify({ spreadsheetId: sheetLink, driveFolderId: folderLink }),
+        body: JSON.stringify({ spreadsheetId: sheetLink.trim(), driveFolderId: folderLink.trim() }),
       });
       setData((current) => current ? { ...current, mrnSettings: result.settings } : current);
       setAllData(null);
@@ -675,9 +675,10 @@ export default function MrnDashboard({ darkMode }) {
                   <span className={`flex items-center gap-3 text-sm font-medium ${muted}`}>
                     <Image src="/drive.svg" alt="Google Drive" width={22} height={22} className="h-[22px] w-[22px]" />
                     Drive folder
-                    <span className={`rounded-full px-3 py-1 text-xs ${folderLink.trim() || settings.driveFolderId ? "bg-emerald-500/10 text-emerald-500" : darkMode ? "bg-white/[0.06] text-white/55" : "bg-black/[0.04] text-black/55"}`}>{folderLink.trim() || settings.driveFolderId ? "Connected" : "Optional"}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs ${folderLink.trim() || settings.driveFolderId ? "bg-emerald-500/10 text-emerald-500" : darkMode ? "bg-white/[0.06] text-white/55" : "bg-black/[0.04] text-black/55"}`}>{folderLink.trim() || settings.driveFolderId ? "Connected" : "Shared Drive required"}</span>
                   </span>
-                  <input value={folderLink} onChange={(event) => setFolderLink(event.target.value)} placeholder={settings.driveFolderId || "Paste Google Drive folder link or ID"} className={`h-14 w-full rounded-2xl  px-4 text-sm outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:border-[#d8f36a]/45" : "border-black/10 bg-[#f7f7f5] text-black placeholder:text-black/35 focus:border-black/25"}`} />
+                  <input value={folderLink} onChange={(event) => setFolderLink(event.target.value)} placeholder={settings.driveFolderId || "Paste Shared Drive folder link or ID"} className={`h-14 w-full rounded-2xl  px-4 text-sm outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:border-[#d8f36a]/45" : "border-black/10 bg-[#f7f7f5] text-black placeholder:text-black/35 focus:border-black/25"}`} />
+                  <span className={`text-xs ${muted}`}>Uploads require a folder inside a Google Shared Drive shared with the service account.</span>
                 </label>
               </div>
 
@@ -686,7 +687,7 @@ export default function MrnDashboard({ darkMode }) {
                   <span className={`mt-0.5 grid h-10 w-10 place-items-center rounded-full ${darkMode ? "bg-[#d8f36a]/12 text-[#d8f36a]" : "bg-[#f0eee8] text-black"}`}><UserRound className="h-4 w-4" /></span>
                   <div>
                     <p className="text-sm font-semibold">System note</p>
-                    <p className={`mt-1 text-sm leading-6 ${muted}`}>MRN records will be pulled from the sheet. Uploaded MRN and quotation files will be stored in the linked Drive folder.</p>
+                    <p className={`mt-1 text-sm leading-6 ${muted}`}>MRN records will be pulled from the sheet. Uploaded MRN and quotation files must be stored in a linked Shared Drive folder.</p>
                   </div>
                 </div>
               </div>

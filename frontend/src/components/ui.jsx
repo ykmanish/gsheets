@@ -401,7 +401,7 @@ export function DatePicker({ darkMode, value, onChange, placeholder = "Choose da
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`h-12 w-full min-w-[190px] rounded-2xl border px-4 text-left transition ${
+        className={`h-12 w-full min-w-[190px] rounded-3xl border px-4 text-left transition ${
           darkMode
             ? "bg-[#15171c] border-white/10 text-white hover:bg-white/10"
             : "bg-white border-black/10 text-black hover:bg-black/[0.03]"

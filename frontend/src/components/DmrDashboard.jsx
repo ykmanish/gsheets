@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, FileSpreadsheet, Filter, History, Loader2, Plus, RefreshCw, Save, Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { DatePicker, SelectMenu } from "./ui";
+import { DatePicker, SelectMenu, useClickOutside } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -28,6 +28,40 @@ function localDateInputValue(date = new Date()) {
   }, {});
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
+
+function addDaysInput(value, days) {
+  const date = new Date(`${value || localDateInputValue()}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return localDateInputValue(date);
+}
+
+function dateInputToDate(value) {
+  const date = new Date(`${value || localDateInputValue()}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function sameCalendarDay(first, second) {
+  return Boolean(first && second && first.getFullYear() === second.getFullYear() && first.getMonth() === second.getMonth() && first.getDate() === second.getDate());
+}
+
+function reportDateLabel(value) {
+  return dateInputToDate(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function reportMonthLabel(date) {
+  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+const DMR_REPORT_SECTION_OPTIONS = [
+  { id: "siteManpower", label: "Site wise manpower" },
+  { id: "agencyManpower", label: "Agency wise manpower" },
+  { id: "tradeSiteManpower", label: "Trade by site" },
+  { id: "dailyProgress", label: "Daily progress" },
+  { id: "attendance", label: "Attendance" },
+  { id: "equipment", label: "Equipment & tools" },
+  { id: "materials", label: "Materials" },
+  { id: "notes", label: "Notes" },
+];
 
 function comparablePlanText(value = "") {
   const text = String(value || "")
@@ -173,6 +207,405 @@ function TomorrowSiteBars({ items = [], darkMode, title = "Site-wise planned man
           );
         })}
         {!chartItems.length && <p className={`flex flex-1 items-center justify-center py-8 text-center text-sm ${muted}`}>{emptyText}</p>}
+      </div>
+    </section>
+  );
+}
+
+function ReportDateRangePicker({ darkMode, startValue, endValue, onStartChange, onEndChange }) {
+  const ref = useRef(null);
+  const buttonRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [selecting, setSelecting] = useState("start");
+  const [monthDate, setMonthDate] = useState(() => dateInputToDate(endValue || startValue));
+  const [panelStyle, setPanelStyle] = useState({});
+  const startDate = dateInputToDate(startValue);
+  const endDate = dateInputToDate(endValue);
+  useClickOutside(ref, () => setOpen(false));
+
+  const days = useMemo(() => {
+    const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+    const gridStart = new Date(start);
+    gridStart.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    return Array.from({ length: 42 }, (_, index) => {
+      const day = new Date(gridStart);
+      day.setDate(gridStart.getDate() + index);
+      return day;
+    });
+  }, [monthDate]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function placePanel() {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.min(430, window.innerWidth - 32);
+      const left = Math.min(Math.max(16, rect.left), window.innerWidth - width - 16);
+      const belowTop = rect.bottom + 10;
+      const aboveTop = Math.max(16, rect.top - 430);
+      const top = window.innerHeight - belowTop < 390 ? aboveTop : belowTop;
+      setPanelStyle({ left, top, width });
+    }
+    placePanel();
+    window.addEventListener("resize", placePanel);
+    window.addEventListener("scroll", placePanel, true);
+    return () => {
+      window.removeEventListener("resize", placePanel);
+      window.removeEventListener("scroll", placePanel, true);
+    };
+  }, [open]);
+
+  function openPicker(mode) {
+    setSelecting(mode);
+    setMonthDate(dateInputToDate(mode === "start" ? startValue : endValue));
+    setOpen(true);
+  }
+
+  function selectDay(day) {
+    const value = localDateInputValue(day);
+    if (selecting === "start") {
+      onStartChange(value);
+      if (!endValue || value > endValue) onEndChange(value);
+      setSelecting("end");
+      return;
+    }
+    if (value < startValue) {
+      onStartChange(value);
+      onEndChange(startValue);
+    } else {
+      onEndChange(value);
+    }
+    setOpen(false);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => openPicker("start")}
+        className={`flex h-12 w-full min-w-[300px] items-center gap-3 rounded-3xl border px-4 text-left transition ${
+          darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"
+        }`}
+      >
+        <CalendarDays className={`h-4 w-4 shrink-0 ${darkMode ? "text-[#d8f36a]" : "text-indigo-600"}`} />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{reportDateLabel(startValue)} - {reportDateLabel(endValue)}</span>
+      </button>
+
+      {open && (
+        <div
+          style={panelStyle}
+          className={`fixed z-[80] max-h-[min(76vh,430px)] overflow-y-auto rounded-[24px] border p-4 shadow-2xl ${
+            darkMode ? "border-white/10 bg-[#121317] text-white" : "border-black/10 bg-white text-black"
+          }`}
+        >
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              ["start", "Start", startValue],
+              ["end", "End", endValue],
+            ].map(([mode, label, value]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => openPicker(mode)}
+                className={`rounded-2xl border px-3 py-2 text-left text-sm ${
+                  selecting === mode
+                    ? darkMode ? "border-[#d8f36a] bg-[#d8f36a]/10 text-[#d8f36a]" : "border-indigo-600 bg-indigo-50 text-indigo-700"
+                    : darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-black/[0.025]"
+                }`}
+              >
+                <span className={`block text-[10px] uppercase tracking-[0.18em] ${darkMode ? "text-white/45" : "text-black/45"}`}>{label}</span>
+                <span className="mt-1 block font-semibold">{reportDateLabel(value)}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between">
+            <button type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))} className="rounded-full px-3 py-2 text-sm">{"<"}</button>
+            <p className="text-lg font-semibold">{reportMonthLabel(monthDate)}</p>
+            <button type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))} className="rounded-full px-3 py-2 text-sm">{">"}</button>
+          </div>
+
+          <div className={`mt-4 grid grid-cols-7 gap-y-2 text-center text-xs ${darkMode ? "text-white/55" : "text-black/55"}`}>
+            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((label) => <span key={label}>{label}</span>)}
+          </div>
+          <div className="mt-2 grid grid-cols-7 gap-y-1 text-center">
+            {days.map((day) => {
+              const value = localDateInputValue(day);
+              const inMonth = day.getMonth() === monthDate.getMonth();
+              const selected = sameCalendarDay(day, startDate) || sameCalendarDay(day, endDate);
+              const inRange = value > startValue && value < endValue;
+              return (
+                <button
+                  key={day.toISOString()}
+                  type="button"
+                  onClick={() => selectDay(day)}
+                  className={`mx-auto h-9 w-9 rounded-xl text-sm transition ${
+                    selected
+                      ? darkMode ? "bg-[#d8f36a] text-black shadow-lg" : "bg-indigo-600 text-white shadow-lg"
+                      : inRange
+                      ? darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-indigo-50 text-indigo-700"
+                      : inMonth
+                      ? darkMode ? "text-white hover:bg-white/10" : "text-black hover:bg-black/[0.04]"
+                      : darkMode ? "text-white/25" : "text-black/35"
+                  }`}
+                >
+                  {day.getDate()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportTable({ title, headers = [], rows = [], darkMode, muted, subtitle = "", actions = null, columnClasses = [] }) {
+  return (
+    <section className={`overflow-hidden rounded-[26px] border ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
+      <div className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h4 className="text-lg font-semibold">{title}</h4>
+          {subtitle && <p className={`mt-1 text-xs ${muted}`}>{subtitle}</p>}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          {actions}
+          <span className={`w-fit rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}>{rows.length} rows</span>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className={`w-full min-w-[760px] text-left text-sm ${columnClasses.length ? "table-fixed" : ""}`}>
+          <thead className={darkMode ? "bg-white/[0.04] text-white/55" : "bg-black/[0.035] text-black/55"}>
+            <tr>
+              {headers.map((header, headerIndex) => <th key={header} className={`px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] ${columnClasses[headerIndex] || ""}`}>{header}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex} className={`border-t ${darkMode ? "border-white/10 hover:bg-white/[0.035]" : "border-black/[0.06] hover:bg-black/[0.025]"}`}>
+                {row.map((cell, cellIndex) => <td key={cellIndex} className={`px-5 py-3 align-top ${cellIndex === 0 ? "font-semibold" : ""} ${columnClasses[cellIndex] || ""}`}>{cell}</td>)}
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={headers.length} className={`px-5 py-8 text-center ${muted}`}>No data available.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ReportPlannedValue({ value }) {
+  return <span className="font-semibold text-black">{value}</span>;
+}
+
+function ReportActualValue({ planned, actual }) {
+  const plannedValue = Number(planned) || 0;
+  const actualValue = Number(actual) || 0;
+  const ok = actualValue >= plannedValue;
+  return <span className={`font-semibold ${ok ? "text-emerald-600" : "text-red-600"}`}>{actual}</span>;
+}
+
+function TradeSiteMatrix({ rows = [], dates = [], darkMode, muted, search, onSearch }) {
+  const scrollRef = useRef(null);
+  const [scrolled, setScrolled] = useState(false);
+  const query = search.trim().toLowerCase();
+  const grouped = rows.reduce((result, item) => {
+    if (item.rowType === "average") return result;
+    const site = String(item.site || "Unassigned site");
+    const trade = String(item.trade || "General");
+    if (query && !site.toLowerCase().includes(query) && !trade.toLowerCase().includes(query)) return result;
+    const key = `${site}||${trade}`;
+    const current = result.get(key) || { site, trade, values: new Map() };
+    current.values.set(item.date, item);
+    result.set(key, current);
+    return result;
+  }, new Map());
+  const matrixRows = [...grouped.values()];
+
+  return (
+    <section className={`overflow-hidden rounded-[26px] border ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
+      <div className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h4 className="text-lg font-semibold">Trade by site manpower</h4>
+          <p className={`mt-1 text-xs ${muted}`}>{matrixRows.length} rows</p>
+        </div>
+        <div className="relative w-full sm:w-80">
+          <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+          <input
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="Search site or trade..."
+            className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+          />
+        </div>
+      </div>
+      <div
+        ref={scrollRef}
+        onScroll={(event) => setScrolled(event.currentTarget.scrollLeft > 2)}
+        className="relative overflow-x-auto"
+      >
+        {scrolled && <div className="pointer-events-none sticky left-[340px] top-0 z-40 float-left h-0 w-0"><span className="absolute top-0 block h-[10000px] w-6 bg-gradient-to-r from-black/18 to-transparent" /></div>}
+        <table className="w-full min-w-[980px] table-fixed border-separate border-spacing-0 text-left text-sm">
+          <thead className={darkMode ? "bg-white/[0.04] text-white/55" : "bg-black/[0.035] text-black/55"}>
+            <tr>
+              <th className={`sticky left-0 z-30 w-[170px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-[#f5f4f0]"}`}>Site</th>
+              <th className={`sticky left-[170px] z-30 w-[170px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-[#f5f4f0]"}`}>Trade</th>
+              {dates.map((date) => (
+                <th key={date} className={`w-[130px] border-b px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>{date}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {matrixRows.map((row) => (
+              <tr key={`${row.site}-${row.trade}`} className={darkMode ? "hover:bg-white/[0.035]" : "hover:bg-black/[0.025]"}>
+                <td className={`sticky left-0 z-20 w-[170px] border-b px-5 py-3 align-top font-semibold ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>{row.site}</td>
+                <td className={`sticky left-[170px] z-20 w-[170px] border-b px-5 py-3 align-top ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}>{row.trade}</td>
+                {dates.map((date) => {
+                  const item = row.values.get(date) || { planned: 0, actual: 0 };
+                  return (
+                    <td key={date} className={`w-[130px] border-b px-4 py-3 align-top ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
+                      <span className="font-semibold text-black">{item.planned}</span>
+                      <span className={muted}>/</span>
+                      <ReportActualValue planned={item.planned} actual={item.actual} />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            {!matrixRows.length && <tr><td colSpan={dates.length + 2} className={`px-5 py-8 text-center ${muted}`}>No trade/site data found.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ReportComparisonBars({ title, subtitle, items = [], darkMode, labelKey = "label", limit = 10 }) {
+  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const chartItems = items
+    .filter((item) => Number(item.planned) || Number(item.actual))
+    .slice(0, limit);
+  const max = Math.max(1, ...chartItems.map((item) => Math.max(Number(item.planned) || 0, Number(item.actual) || 0)));
+  return (
+    <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h4 className="text-lg font-semibold">{title}</h4>
+          {subtitle && <p className={`mt-1 text-xs ${muted}`}>{subtitle}</p>}
+        </div>
+        <div className={`flex gap-3 text-[11px] ${muted}`}>
+          <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-black" /> Planned</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-emerald-500" /> Actual ok</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-red-500" /> Short</span>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {chartItems.map((item) => {
+          const planned = Number(item.planned) || 0;
+          const actual = Number(item.actual) || 0;
+          const ok = actual >= planned;
+          return (
+            <div key={`${item[labelKey]}-${item.trade || ""}`} className="grid gap-2 lg:grid-cols-[180px_1fr_86px] lg:items-center">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{item[labelKey]}</p>
+                {item.trade && <p className={`truncate text-[11px] ${muted}`}>{item.trade}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <div className={`h-2.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>
+                  <div className="h-full rounded-full bg-black" style={{ width: `${Math.max(2, (planned / max) * 100)}%` }} />
+                </div>
+                <div className={`h-2.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>
+                  <div className={`h-full rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"}`} style={{ width: `${actual ? Math.max(2, (actual / max) * 100) : 0}%` }} />
+                </div>
+              </div>
+              <div className="text-right text-sm">
+                <span className="font-semibold text-black">{planned}</span>
+                <span className={muted}> / </span>
+                <span className={`font-semibold ${ok ? "text-emerald-600" : "text-red-600"}`}>{actual}</span>
+              </div>
+            </div>
+          );
+        })}
+        {!chartItems.length && <p className={`py-8 text-center text-sm ${muted}`}>No chart data available for this report.</p>}
+      </div>
+    </section>
+  );
+}
+
+function ReportDailyTrend({ items = [], darkMode }) {
+  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const chartItems = items || [];
+  const max = Math.max(1, ...chartItems.map((item) => Math.max(Number(item.planned) || 0, Number(item.actual) || 0)));
+  return (
+    <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h4 className="text-lg font-semibold">Daily planned vs actual</h4>
+          <p className={`mt-1 text-xs ${muted}`}>Each date in the selected range, including dates with no data.</p>
+        </div>
+        <div className={`flex gap-3 text-[11px] ${muted}`}>
+          <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-black" /> Planned</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#15a8e0]" /> Actual</span>
+        </div>
+      </div>
+      <div className="flex h-64 max-w-full items-end gap-3 overflow-x-auto pb-2">
+        {chartItems.map((item) => {
+          const planned = Number(item.planned) || 0;
+          const actual = Number(item.actual) || 0;
+          const plannedHeight = planned ? Math.max(8, (planned / max) * 100) : 0;
+          const actualHeight = actual ? Math.max(8, (actual / max) * 100) : 0;
+          return (
+            <div key={item.date} className="flex min-w-[58px] flex-1 flex-col items-center">
+              <div className="mb-2 text-center">
+                <p className={`text-xs font-semibold ${actual >= planned ? "text-emerald-600" : "text-red-600"}`}>{actual}</p>
+                <p className={`text-[10px] ${muted}`}>/{planned}</p>
+              </div>
+              <div className="flex h-36 w-full max-w-[44px] items-end">
+                <div className={`relative h-full w-full overflow-hidden rounded-t-[18px] rounded-b-md ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>
+                  <div className="absolute bottom-0 left-0 right-0 rounded-t-[18px] bg-black/35" style={{ height: `${plannedHeight}%` }} />
+                  <div className="absolute bottom-0 left-1 right-1 rounded-t-[14px] bg-[#15a8e0]" style={{ height: `${actualHeight}%` }} />
+                </div>
+              </div>
+              <p className={`mt-3 text-center text-[10px] leading-4 ${muted}`}>{item.date.slice(5)}</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ReportTradeHeatmap({ items = [], darkMode }) {
+  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const chartItems = items.filter((item) => Number(item.planned) || Number(item.actual)).slice(0, 24);
+  return (
+    <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
+      <div className="mb-5">
+        <h4 className="text-lg font-semibold">Trade by site attention map</h4>
+        <p className={`mt-1 text-xs ${muted}`}>Top site/trade combinations by planned manpower.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {chartItems.map((item) => {
+          const planned = Number(item.planned) || 0;
+          const actual = Number(item.actual) || 0;
+          const progress = planned ? Math.min(100, Math.round((actual / planned) * 100)) : actual ? 100 : 0;
+          const ok = actual >= planned;
+          return (
+            <div key={`${item.site}-${item.trade}`} className={`rounded-[18px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/[0.06] bg-[#f7f5ef]"}`}>
+              <p className="truncate text-sm font-semibold">{item.site}</p>
+              <p className={`mt-1 truncate text-xs ${muted}`}>{item.trade}</p>
+              <div className="mt-4 flex items-end justify-between gap-3">
+                <p className="text-2xl font-semibold text-black">{planned}</p>
+                <p className={`text-2xl font-semibold ${ok ? "text-emerald-600" : "text-red-600"}`}>{actual}</p>
+              </div>
+              <div className={`mt-3 h-2 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.08]"}`}>
+                <div className={`h-full rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"}`} style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          );
+        })}
+        {!chartItems.length && <p className={`py-8 text-center text-sm sm:col-span-2 xl:col-span-4 ${muted}`}>No trade/site chart data available.</p>}
       </div>
     </section>
   );
@@ -352,6 +785,13 @@ export default function DmrDashboard({ darkMode }) {
   const [dmrSheetLink, setDmrSheetLink] = useState("");
   const [dmrSheetSaving, setDmrSheetSaving] = useState(false);
   const [dmrSheetOpen, setDmrSheetOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportData, setReportData] = useState(null);
+  const [reportStartDate, setReportStartDate] = useState(() => addDaysInput(localDateInputValue(), -6));
+  const [reportEndDate, setReportEndDate] = useState(() => localDateInputValue());
+  const [reportSections, setReportSections] = useState(() => DMR_REPORT_SECTION_OPTIONS.map((option) => option.id));
+  const [reportTradeSearch, setReportTradeSearch] = useState("");
 
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe5e9] bg-white";
@@ -646,6 +1086,39 @@ export default function DmrDashboard({ darkMode }) {
     }
   }
 
+  function setReportPreset(preset) {
+    const today = localDateInputValue();
+    if (preset === "weekly") {
+      setReportStartDate(addDaysInput(today, -6));
+      setReportEndDate(today);
+    } else if (preset === "monthly") {
+      setReportStartDate(today.slice(0, 8) + "01");
+      setReportEndDate(today);
+    } else if (preset === "selectedWeek") {
+      setReportStartDate(addDaysInput(date, -6));
+      setReportEndDate(date);
+    }
+  }
+
+  function toggleReportSection(sectionId) {
+    setReportSections((current) => current.includes(sectionId)
+      ? current.filter((item) => item !== sectionId)
+      : [...current, sectionId]);
+  }
+
+  async function generateDmrReport() {
+    try {
+      setReportLoading(true);
+      const sections = (reportSections.length ? reportSections : DMR_REPORT_SECTION_OPTIONS.map((option) => option.id)).join(",");
+      const result = await api(`/dmr-dashboard/report?startDate=${encodeURIComponent(reportStartDate)}&endDate=${encodeURIComponent(reportEndDate)}&sections=${encodeURIComponent(sections)}`);
+      setReportData(result);
+    } catch (error) {
+      toast.error(error.message || "Could not generate DMR report");
+    } finally {
+      setReportLoading(false);
+    }
+  }
+
   function openHistory() {
     setHistoryOpen(true);
     void loadHistory();
@@ -772,14 +1245,15 @@ export default function DmrDashboard({ darkMode }) {
             </div>
             <div className="relative z-20 flex shrink-0 flex-col gap-3 lg:items-end">
               <div className="flex flex-nowrap items-center gap-2">
-                <button onClick={() => { setFillTab("manpower"); setFillOpen(true); }} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-5 text-sm font-medium ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}><CalendarDays className="h-4 w-4" /> Fill DMR</button>
-                <button onClick={() => { setSelectedTomorrowSite(""); setPlanMode("today"); }} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl border px-5 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><FileSpreadsheet className="h-4 w-4" /> Today&apos;s Plan</button>
-                <button onClick={() => { setSelectedTomorrowSite(""); setPlanMode("tomorrow"); }} className="flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl border border-[#9381ff] bg-[#9381ff] px-5 text-sm font-medium text-white hover:bg-[#8572f5]"><FileSpreadsheet className="h-4 w-4" /> Tomorrow&apos;s Plan</button>
+                <button onClick={() => { setFillTab("manpower"); setFillOpen(true); }} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-3xl px-5 text-sm font-medium ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}><CalendarDays className="h-4 w-4" /> Fill DMR</button>
+                <button onClick={() => setReportOpen(true)} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-3xl border px-5 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><FileSpreadsheet className="h-4 w-4" /> CEO Report</button>
+                <button onClick={() => { setSelectedTomorrowSite(""); setPlanMode("today"); }} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-3xl border px-5 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><FileSpreadsheet className="h-4 w-4" /> Today&apos;s Plan</button>
+                <button onClick={() => { setSelectedTomorrowSite(""); setPlanMode("tomorrow"); }} className="flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-3xl border border-[#9381ff] bg-[#9381ff] px-5 text-sm font-medium text-white hover:bg-[#8572f5]"><FileSpreadsheet className="h-4 w-4" /> Tomorrow&apos;s Plan</button>
               </div>
               <div className="flex flex-nowrap items-center gap-2">
                 <DatePicker darkMode={darkMode} value={date} onChange={setDate} placeholder="Choose DMR date" />
-                <button onClick={() => load(true)} disabled={refreshing} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh</button>
-                {data?.canViewHistory && <button onClick={openHistory} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><History className="h-4 w-4" /> History</button>}
+                <button onClick={() => load(true)} disabled={refreshing} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-3xl border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh</button>
+                {data?.canViewHistory && <button onClick={openHistory} className={`flex h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-3xl border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}><History className="h-4 w-4" /> History</button>}
               </div>
             </div>
           </div>
@@ -1135,6 +1609,160 @@ export default function DmrDashboard({ darkMode }) {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reportOpen && (
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-[#171714]/60 p-0 backdrop-blur-md">
+          <div className={`flex h-screen w-screen flex-col overflow-hidden border ${darkMode ? "border-white/10 bg-[#111216] text-white" : "border-black/10 bg-[#faf9f5] text-[#171714]"}`}>
+            <div className={`flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}>
+              <div className="min-w-0">
+                <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-[#d8f36a]" : "text-[#e76f42]"}`}>CEO report</p>
+                <h3 className="mt-2 text-3xl small text-black font-semibold">DMR performance report</h3>
+                <p className={`mt-1 text-sm ${muted}`}>Generate custom date reports with planned, actual, progress, attendance, and site/agency views.</p>
+              </div>
+              <button onClick={() => setReportOpen(false)} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="min-h-0 overflow-y-auto p-5 sm:p-7">
+              <section className={`rounded-[26px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
+                <div className="grid gap-4 xl:grid-cols-[1fr_1.15fr_auto] xl:items-end">
+                  <div>
+                    <p className={`mb-2 text-xs font-semibold ${muted}`}>Quick range</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        ["weekly", "This week"],
+                        ["selectedWeek", "Selected date week"],
+                        ["monthly", "This month"],
+                      ].map(([value, label]) => (
+                        <button key={value} type="button" onClick={() => setReportPreset(value)} className={`h-10 rounded-full border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-[#f7f5ef] hover:bg-black/[0.04]"}`}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className={`mb-2 text-xs font-semibold ${muted}`}>Date range</p>
+                    <ReportDateRangePicker
+                      darkMode={darkMode}
+                      startValue={reportStartDate}
+                      endValue={reportEndDate}
+                      onStartChange={setReportStartDate}
+                      onEndChange={setReportEndDate}
+                    />
+                  </div>
+                  <button onClick={generateDmrReport} disabled={reportLoading} className={`flex h-12 min-w-40 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
+                    {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                    Generate
+                  </button>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {DMR_REPORT_SECTION_OPTIONS.map((option) => {
+                    const selected = reportSections.includes(option.id);
+                    return (
+                      <button key={option.id} type="button" onClick={() => toggleReportSection(option.id)} className={`rounded-full border px-3 py-1.5 text-xs font-medium ${selected ? darkMode ? "border-[#d8f36a]/40 bg-[#d8f36a]/15 text-[#d8f36a]" : "border-black bg-black text-white" : darkMode ? "border-white/10 text-white/50" : "border-black/10 text-black/55"}`}>
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {reportData && (
+                <div className="mt-5 space-y-5">
+                  <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}>{reportData.startDate} to {reportData.endDate}</p>
+                          <h4 className="mt-2 text-2xl font-semibold">Executive summary</h4>
+                          <p className={`mt-1 text-sm ${muted}`}>{reportData.summary.datesWithData} active date{reportData.summary.datesWithData === 1 ? "" : "s"} from {reportData.requestedDates} requested date{reportData.requestedDates === 1 ? "" : "s"}.</p>
+                        </div>
+                        <div className={`rounded-[22px] px-5 py-4 text-right ${reportData.summary.progress >= 90 ? "bg-emerald-500/10 text-emerald-700" : reportData.summary.progress >= 60 ? "bg-amber-500/10 text-amber-700" : "bg-red-500/10 text-red-700"}`}>
+                          <p className="text-4xl font-semibold leading-none">{reportData.summary.progress}%</p>
+                          <p className="mt-1 text-xs">overall progress</p>
+                        </div>
+                      </div>
+                      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        {[
+                          ["Planned", <ReportPlannedValue key="summary-planned" value={reportData.summary.planned} />],
+                          ["Actual", <ReportActualValue key="summary-actual" planned={reportData.summary.planned} actual={reportData.summary.actual} />],
+                          ["Variance", `${reportData.summary.variance >= 0 ? "+" : ""}${reportData.summary.variance}`],
+                          ["Attendance", `${reportData.summary.attendance.present}/${reportData.summary.attendance.total}`],
+                          ["Sites", reportData.summary.sites],
+                          ["Agencies", reportData.summary.agencies],
+                          ["Equipment", reportData.summary.equipment],
+                          ["Materials", reportData.summary.materials],
+                        ].map(([label, value]) => (
+                          <div key={label} className={`rounded-[20px] p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f5ef]"}`}>
+                            <p className="text-2xl font-semibold">{value}</p>
+                            <p className={`mt-1 text-xs ${muted}`}>{label}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {reportData.summary.datesWithoutData?.length > 0 && (
+                        <div className={`mt-4 rounded-[18px] border px-4 py-3 text-sm ${darkMode ? "border-amber-400/20 bg-amber-400/10 text-amber-100" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                          No data was provided for: {reportData.summary.datesWithoutData.join(", ")}
+                        </div>
+                      )}
+                  </section>
+
+                  <div className="grid gap-5 xl:grid-cols-2">
+                    <ReportDailyTrend items={reportData.dailyProgress || []} darkMode={darkMode} />
+                    <ReportComparisonBars
+                      title="Site manpower chart"
+                      subtitle="Planned from plan sheet, actual from filled DMR sheet."
+                      items={reportData.siteManpower || []}
+                      darkMode={darkMode}
+                      limit={12}
+                    />
+                  </div>
+
+                  {reportData.dailyProgress?.length > 0 && (
+                    <ReportTable title="Daily progress" headers={["Date", "Planned", "Actual", "Progress", "Present", "Absent", "Status"]} rows={reportData.dailyProgress.map((item) => [item.date, <ReportPlannedValue key={`${item.date}-planned`} value={item.planned} />, <ReportActualValue key={`${item.date}-actual`} planned={item.planned} actual={item.actual} />, `${item.progress}%`, item.attendance.present, item.attendance.absent, item.status])} darkMode={darkMode} muted={muted} />
+                  )}
+                  {reportData.attendance?.byDate?.length > 0 && (
+                    <ReportTable
+                      title="Attendance"
+                      headers={["Date", "Present", "Absent", "Leave", "Pending"]}
+                      rows={reportData.attendance.byDate.map((item) => [
+                        item.date,
+                        `${item.present.length}/${item.total}${item.present.length ? ` - ${item.present.join(", ")}` : ""}`,
+                        `${item.absent.length}/${item.total}${item.absent.length ? ` - ${item.absent.join(", ")}` : ""}`,
+                        `${item.leave.length}/${item.total}${item.leave.length ? ` - ${item.leave.join(", ")}` : ""}`,
+                        `${item.pending.length}/${item.total}${item.pending.length ? ` - ${item.pending.join(", ")}` : ""}`,
+                      ])}
+                      darkMode={darkMode}
+                      muted={muted}
+                      columnClasses={["w-[120px]", "w-[28%]", "w-[28%]", "w-[96px]", "w-[28%]"]}
+                    />
+                  )}
+                  {reportData.tradeSiteManpowerByDate?.length > 0 && (
+                    <TradeSiteMatrix
+                      rows={reportData.tradeSiteManpowerByDate}
+                      dates={reportData.dateKeys || reportData.availableDates || []}
+                      darkMode={darkMode}
+                      muted={muted}
+                      search={reportTradeSearch}
+                      onSearch={setReportTradeSearch}
+                    />
+                  )}
+                  {reportData.siteManpower?.length > 0 && (
+                    <ReportTable title="Site wise manpower" headers={["Site", "Planned", "Actual", "Variance", "Progress"]} rows={reportData.siteManpower.slice(0, 20).map((item) => [item.label, <ReportPlannedValue key={`${item.label}-planned`} value={item.planned} />, <ReportActualValue key={`${item.label}-actual`} planned={item.planned} actual={item.actual} />, `${item.variance >= 0 ? "+" : ""}${item.variance}`, `${item.progress}%`])} darkMode={darkMode} muted={muted} />
+                  )}
+                  {reportData.agencyManpower?.length > 0 && (
+                    <ReportTable title="Agency wise manpower" headers={["Agency", "Planned", "Actual", "Variance", "Progress"]} rows={reportData.agencyManpower.slice(0, 20).map((item) => [item.label, <ReportPlannedValue key={`${item.label}-planned`} value={item.planned} />, <ReportActualValue key={`${item.label}-actual`} planned={item.planned} actual={item.actual} />, `${item.variance >= 0 ? "+" : ""}${item.variance}`, `${item.progress}%`])} darkMode={darkMode} muted={muted} />
+                  )}
+                  {reportData.equipment?.length > 0 && (
+                    <ReportTable title="Equipment & tools" headers={["Date", "Site", "Details", "Qty"]} rows={reportData.equipment.slice(0, 30).map((item) => [item.date, item.site || "-", item.details || "-", item.quantity || "-"])} darkMode={darkMode} muted={muted} />
+                  )}
+                  {reportData.materials?.length > 0 && (
+                    <ReportTable title="Materials" headers={["Date", "Site", "Details", "Unit", "Qty"]} rows={reportData.materials.slice(0, 30).map((item) => [item.date, item.site || "-", item.details || "-", item.unit || "-", item.quantity || "-"])} darkMode={darkMode} muted={muted} />
+                  )}
+                  {reportData.notes?.length > 0 && (
+                    <ReportTable title="Notes" headers={["Date", "Note"]} rows={reportData.notes.slice(0, 30).map((item) => [item.date, item.note || "-"])} darkMode={darkMode} muted={muted} />
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1234,7 +1234,7 @@ async function getGoogleAuth() {
 }
 
 function extractDriveFileId(value = "") {
-  const text = String(value).trim();
+  const text = String(value).trim().replace(/\s+/g, "");
   if (!text) return null;
 
   const filePathMatch = text.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
@@ -1243,7 +1243,7 @@ function extractDriveFileId(value = "") {
   const documentPathMatch = text.match(/\/(?:document|spreadsheets|presentation)\/d\/([a-zA-Z0-9_-]+)/);
   if (documentPathMatch) return documentPathMatch[1];
 
-  const folderPathMatch = text.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  const folderPathMatch = text.match(/\/folders\/([a-zA-Z0-9_-]+)/) || text.match(/[?&]folders=([a-zA-Z0-9_-]+)/);
   if (folderPathMatch) return folderPathMatch[1];
 
   try {
@@ -1254,7 +1254,7 @@ function extractDriveFileId(value = "") {
     // Raw Drive IDs are accepted below.
   }
 
-  return /^[a-zA-Z0-9_-]{20,}$/.test(text) ? text : null;
+  return /^[a-zA-Z0-9_-]{10,}$/.test(text) ? text : null;
 }
 
 function getDriveLinkType(value = "") {
@@ -2614,6 +2614,24 @@ function tomorrowPlanComparableSite(value) {
   return siteAliases[compact] || text;
 }
 
+function tomorrowPlanComparableTrade(value) {
+  const text = projectText(value)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const compact = text.replace(/\s+/g, "");
+  const tradeAliases = {
+    ac: "ac",
+    aircondition: "ac",
+    airconditioning: "ac",
+    airconditioner: "ac",
+    airconditioners: "ac",
+  };
+  return tradeAliases[compact] || compact;
+}
+
 function canonicalizeTomorrowPlanSites(records = []) {
   const labels = [...new Set(records.map((record) => projectText(record.site)).filter(Boolean))]
     .sort((a, b) => b.length - a.length);
@@ -2817,6 +2835,98 @@ async function readDmrTomorrowPlan(dateKey) {
   };
 }
 
+async function readDmrTomorrowPlansForDates(dateKeys = []) {
+  const spreadsheetId = DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID;
+  const targetDates = new Set(dateKeys.map(dmrDateKey).filter(Boolean));
+  const result = new Map();
+  if (!spreadsheetId || !targetDates.size) return result;
+
+  const sheets = await fetchRawSheetValues(spreadsheetId);
+  const planSheets = [];
+  const allRecords = [];
+
+  for (const sheet of sheets) {
+    const values = sheet?.values || [];
+    const headers = (values[0] || []).map(projectText);
+    const timestampIndex = headers.findIndex((header) => /^timestamp$/i.test(header));
+    const nameIndex = headers.findIndex((header) => /^name$/i.test(header));
+    const siteIndex = headers.findIndex((header) => /site\s*name/i.test(header));
+    const categoryColumns = headers
+      .map((header, index) => ({ header, index, category: tomorrowPlanCategory(header) }))
+      .filter((item) => item.category);
+
+    if (timestampIndex < 0 || siteIndex < 0 || !categoryColumns.length) continue;
+
+    const sheetDates = new Map();
+    for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+      const row = values[rowIndex] || [];
+      const timestamp = dmrCell(values, rowIndex, timestampIndex);
+      const submittedDate = parseGoogleTimestampDate(timestamp);
+      const submittedAt = parseGoogleTimestampParts(timestamp);
+      const rowPlanDate = submittedDate ? addDaysToDateKey(submittedDate, 1) : "";
+      if (!rowPlanDate || !targetDates.has(rowPlanDate)) continue;
+      if (!sheetDates.has(rowPlanDate)) {
+        sheetDates.set(rowPlanDate, {
+          name: sheet.name,
+          date: rowPlanDate,
+          submittedDate,
+          firstResponseRow: rowIndex + 1,
+        });
+      }
+      const submittedBy = dmrCell(values, rowIndex, nameIndex);
+      const site = dmrCell(values, rowIndex, siteIndex) || "Unassigned site";
+      for (const column of categoryColumns) {
+        const parsed = parseTomorrowPlanCell(row[column.index]);
+        if (!parsed.raw) continue;
+        allRecords.push({
+          id: `${sheet.name}:${rowIndex + 1}:${column.index + 1}`,
+          rowNumber: rowIndex + 1,
+          columnNumber: column.index + 1,
+          sheetName: sheet.name,
+          timestamp,
+          submittedDate,
+          submissionMinutes: submittedAt?.minutes,
+          timeliness: submittedAt?.minutes !== null && submittedAt?.minutes !== undefined && submittedAt.minutes <= 690 ? "on-time" : "delayed",
+          plannedForDate: rowPlanDate,
+          submittedBy,
+          site,
+          category: column.category,
+          plannedManpower: parsed.plannedManpower,
+          work: parsed.work,
+          raw: parsed.raw,
+        });
+      }
+    }
+    planSheets.push(...sheetDates.values());
+  }
+
+  const normalizedRecords = mergeTomorrowPlanRecords(canonicalizeTomorrowPlanSites(allRecords));
+  for (const date of targetDates) {
+    const records = normalizedRecords.filter((record) => record.plannedForDate === date);
+    const selectedSheets = planSheets.filter((sheet) => sheet.date === date);
+    const summaryDraft = summarizeTomorrowPlan(records);
+    result.set(date, {
+      spreadsheetId,
+      sheetName: selectedSheets.map((sheet) => sheet.name).join(", ") || "",
+      requestedDate: date,
+      selectedDate: date,
+      records,
+      summary: {
+        records: summaryDraft.records,
+        plannedManpower: summaryDraft.plannedManpower,
+        workItems: summaryDraft.workItems,
+        sites: summaryDraft.sites.size,
+        categories: summaryDraft.categories.size,
+      },
+      siteBreakdown: tomorrowPlanBreakdown(records, "site"),
+      categoryBreakdown: tomorrowPlanBreakdown(records, "category"),
+      submitterBreakdown: tomorrowPlanBreakdown(records, "submittedBy"),
+      timelinessBySubmitter: tomorrowPlanTimeliness(records),
+    });
+  }
+  return result;
+}
+
 async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
   const spreadsheetId = getActiveDmrSpreadsheetId();
   const date = dmrDateKey(dateKey);
@@ -2891,6 +3001,314 @@ async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
     },
     todayPlan: todayPlan ? { ...todayPlan, label: "Today's Plan", actuals: actualsForDate(date) } : { ...emptyDmrTomorrowPlan({ date, label: "Today's Plan" }), actuals: actualsForDate(date) },
     tomorrowPlan: tomorrowPlan ? { ...tomorrowPlan, label: "Tomorrow's Plan", actuals: actualsForDate(addDaysToDateKey(date, 1) || date) } : { ...emptyDmrTomorrowPlan({ date: addDaysToDateKey(date, 1) || date, label: "Tomorrow's Plan" }), actuals: actualsForDate(addDaysToDateKey(date, 1) || date) },
+  };
+}
+
+function dmrDateRange(startDate, endDate) {
+  const start = dmrDateKey(startDate);
+  const end = dmrDateKey(endDate);
+  if (!start || !end || start > end) throw new Error("Choose a valid report date range");
+  const dates = [];
+  for (let cursor = start; cursor && cursor <= end && dates.length < 370; cursor = addDaysToDateKey(cursor, 1)) {
+    dates.push(cursor);
+  }
+  return { start, end, dates };
+}
+
+function sumDmrBreakdown(records = [], field) {
+  return dmrBreakdown(records, field).map((item) => ({
+    ...item,
+    progress: item.planned ? Math.round((item.actual / item.planned) * 100) : item.actual ? 100 : 0,
+  }));
+}
+
+function dmrReportProgress(planned, actual) {
+  const plannedValue = Number(planned) || 0;
+  const actualValue = Number(actual) || 0;
+  return plannedValue ? Math.round((actualValue / plannedValue) * 100) : actualValue ? 100 : 0;
+}
+
+function dmrReportVariance(planned, actual) {
+  return (Number(actual) || 0) - (Number(planned) || 0);
+}
+
+async function buildDmrReport({ startDate, endDate, sections = [] } = {}) {
+  const spreadsheetId = getActiveDmrSpreadsheetId();
+  const { start, end, dates } = dmrDateRange(startDate, endDate);
+  const selectedSections = new Set(sections.length ? sections : ["summary", "siteManpower", "agencyManpower", "tradeSiteManpower", "attendance", "equipment", "materials", "notes", "dailyProgress"]);
+  const sheets = await fetchRawSheetValues(spreadsheetId);
+  const planMap = await readDmrTomorrowPlansForDates(dates);
+  const parsedTabs = sheets
+    .map((sheet) => {
+      const tabDate = dmrDateFromTabName(sheet.name, Number(start.slice(0, 4)) || new Date().getFullYear());
+      if (!tabDate || tabDate < start || tabDate > end) return null;
+      const parsed = parseDmrSheetValues({ values: sheet.values || [], sheetName: sheet.name, dateKey: tabDate });
+      return { ...parsed, sheetName: sheet.name, date: tabDate };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const allRecords = parsedTabs.flatMap((tab) => (tab.records || []).map((record) => ({ ...record, date: tab.date, sheetName: tab.sheetName })));
+  const allEquipment = parsedTabs.flatMap((tab) => (tab.equipment || []).filter((item) => item.site || item.details || item.quantity).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
+  const allMaterials = parsedTabs.flatMap((tab) => (tab.materials || []).filter((item) => item.site || item.details || item.unit || item.quantity).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
+  const allNotes = parsedTabs.flatMap((tab) => (tab.notes || []).filter((item) => item.note).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
+  const allAttendance = parsedTabs.flatMap((tab) => (tab.staffAttendance || []).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
+  const actualsByDate = new Map(parsedTabs.map((tab) => [tab.date, dmrActualsForPlan(tab.records || [])]));
+  const plannedTotal = dates.reduce((sum, date) => sum + (Number(planMap.get(date)?.summary?.plannedManpower) || 0), 0);
+  const actualTotal = dates.reduce((sum, date) => sum + (Number(actualsByDate.get(date)?.actualManpower) || 0), 0);
+  const totals = {
+    planned: plannedTotal,
+    actual: actualTotal,
+    variance: dmrReportVariance(plannedTotal, actualTotal),
+    records: allRecords.length,
+    filled: allRecords.filter((record) => Number(record.actual) || Number(record.planned)).length,
+    missing: 0,
+  };
+  const progress = dmrReportProgress(totals.planned, totals.actual);
+  const attendanceSummary = allAttendance.reduce((result, item) => {
+    const status = projectText(item.status).toLowerCase();
+    if (status === "p") result.present += 1;
+    else if (status === "a") result.absent += 1;
+    else if (status === "l") result.leave += 1;
+    else result.pending += 1;
+    result.total += 1;
+    return result;
+  }, { total: 0, present: 0, absent: 0, leave: 0, pending: 0 });
+  const attendanceByDate = [...allAttendance.reduce((result, item) => {
+    const date = item.date || "No date";
+    const current = result.get(date) || { date, present: [], absent: [], leave: [], pending: [], total: 0 };
+    const name = projectText(item.name) || "Unnamed";
+    const status = projectText(item.status).toLowerCase();
+    if (status === "p") current.present.push(name);
+    else if (status === "a") current.absent.push(name);
+    else if (status === "l") current.leave.push(name);
+    else current.pending.push(name);
+    current.total += 1;
+    result.set(date, current);
+    return result;
+  }, new Map()).values()].sort((a, b) => a.date.localeCompare(b.date));
+  const dailyProgress = dates.map((date) => {
+    const tab = parsedTabs.find((item) => item.date === date);
+    const plan = planMap.get(date);
+    const actuals = actualsByDate.get(date) || dmrActualsForPlan([]);
+    const dayPlanned = Number(plan?.summary?.plannedManpower) || 0;
+    const dayActual = Number(actuals.actualManpower) || 0;
+    return {
+      date,
+      sheetName: [plan?.sheetName, tab?.sheetName].filter(Boolean).join(" / "),
+      planned: dayPlanned,
+      actual: dayActual,
+      variance: dmrReportVariance(dayPlanned, dayActual),
+      progress: dmrReportProgress(dayPlanned, dayActual),
+      records: plan?.summary?.records || 0,
+      hasData: Boolean(dayPlanned || dayActual || plan?.summary?.records || tab),
+      status: dayPlanned || dayActual || plan?.summary?.records || tab ? "Data available" : "No data provided for this date",
+      attendance: (tab?.staffAttendance || []).reduce((result, item) => {
+        const status = projectText(item.status).toLowerCase();
+        if (status === "p") result.present += 1;
+        else if (status === "a") result.absent += 1;
+        else if (status === "l") result.leave += 1;
+        else result.pending += 1;
+        return result;
+      }, { present: 0, absent: 0, leave: 0, pending: 0 }),
+    };
+  });
+  const siteManpower = [...dates.reduce((result, date) => {
+    const plan = planMap.get(date);
+    const actuals = actualsByDate.get(date) || dmrActualsForPlan([]);
+    for (const item of plan?.siteBreakdown || []) {
+      const key = tomorrowPlanComparableSite(item.label);
+      const current = result.get(key) || { label: item.label || "Unassigned site", planned: 0, actual: 0, variance: 0, progress: 0, records: 0 };
+      current.planned += Number(item.plannedManpower) || 0;
+      current.records += Number(item.records) || 0;
+      if (!current.label || current.label === "Unassigned site") current.label = item.label;
+      result.set(key, current);
+    }
+    for (const item of actuals.siteBreakdown || []) {
+      const key = tomorrowPlanComparableSite(item.site);
+      const current = result.get(key) || { label: item.site || "Unassigned site", planned: 0, actual: 0, variance: 0, progress: 0, records: 0 };
+      current.actual += Number(item.actual) || 0;
+      result.set(key, current);
+    }
+    return result;
+  }, new Map()).values()]
+    .map((item) => ({ ...item, variance: dmrReportVariance(item.planned, item.actual), progress: dmrReportProgress(item.planned, item.actual) }))
+    .sort((a, b) => b.planned - a.planned || b.actual - a.actual || a.label.localeCompare(b.label));
+  const agencyManpower = [...dates.reduce((result, date) => {
+    const plan = planMap.get(date);
+    for (const item of plan?.categoryBreakdown || []) {
+      const label = item.label || "General";
+      const key = projectText(label).toLowerCase();
+      const current = result.get(key) || { label, planned: 0, actual: 0, variance: 0, progress: 0, records: 0 };
+      current.planned += Number(item.plannedManpower) || 0;
+      current.records += Number(item.records) || 0;
+      result.set(key, current);
+    }
+    return result;
+  }, new Map()).values()];
+  for (const item of dmrBreakdown(allRecords, "agency")) {
+    const key = projectText(item.label).toLowerCase();
+    const current = agencyManpower.find((agency) => projectText(agency.label).toLowerCase() === key);
+    if (current) current.actual += Number(item.actual) || 0;
+    else agencyManpower.push({ label: item.label, planned: 0, actual: Number(item.actual) || 0, variance: 0, progress: 0, records: 0 });
+  }
+  const finalAgencyManpower = agencyManpower
+    .map((item) => ({ ...item, variance: dmrReportVariance(item.planned, item.actual), progress: dmrReportProgress(item.planned, item.actual) }))
+    .sort((a, b) => b.planned - a.planned || b.actual - a.actual || a.label.localeCompare(b.label));
+  const reportSiteLabels = new Map();
+  const reportTradeLabels = new Map();
+  for (const tab of parsedTabs) {
+    for (const site of tab.sites || []) {
+      const label = projectText(site) || "Unassigned site";
+      reportSiteLabels.set(tomorrowPlanComparableSite(label), label);
+    }
+    for (const trade of tab.agencies || []) {
+      const label = projectText(trade) || "General";
+      reportTradeLabels.set(tomorrowPlanComparableTrade(label), label);
+    }
+  }
+  for (const date of dates) {
+    const plan = planMap.get(date);
+    const actuals = actualsByDate.get(date) || dmrActualsForPlan([]);
+    for (const item of plan?.siteBreakdown || []) {
+      const label = projectText(item.label) || "Unassigned site";
+      reportSiteLabels.set(tomorrowPlanComparableSite(label), label);
+    }
+    for (const item of actuals.siteBreakdown || []) {
+      const label = projectText(item.site) || "Unassigned site";
+      reportSiteLabels.set(tomorrowPlanComparableSite(label), label);
+    }
+    for (const item of plan?.categoryBreakdown || []) {
+      const label = projectText(item.label) || "General";
+      reportTradeLabels.set(tomorrowPlanComparableTrade(label), label);
+    }
+    for (const item of actuals.tradeSiteBreakdown || []) {
+      const label = projectText(item.trade) || "General";
+      reportTradeLabels.set(tomorrowPlanComparableTrade(label), label);
+    }
+  }
+  const tradeSiteManpowerMap = new Map();
+  for (const [siteKey, site] of reportSiteLabels.entries()) {
+    for (const [tradeKey, trade] of reportTradeLabels.entries()) {
+      tradeSiteManpowerMap.set(`${siteKey}|${tradeKey}`, { site, trade, planned: 0, actual: 0, variance: 0, progress: 0, rows: 0 });
+    }
+  }
+  dates.reduce((result, date) => {
+    const plan = planMap.get(date);
+    const actuals = actualsByDate.get(date) || dmrActualsForPlan([]);
+    for (const record of plan?.records || []) {
+      const site = projectText(record.site) || "Unassigned site";
+      const trade = projectText(record.category) || "General";
+      const key = `${tomorrowPlanComparableSite(site)}|${tomorrowPlanComparableTrade(trade)}`;
+      const current = result.get(key) || { site, trade, planned: 0, actual: 0, variance: 0, progress: 0, rows: 0 };
+      current.planned += Number(record.plannedManpower) || 0;
+      current.rows += 1;
+      result.set(key, current);
+    }
+    for (const item of actuals.tradeSiteBreakdown || []) {
+      const site = projectText(item.site) || "Unassigned site";
+      const trade = projectText(item.trade) || "General";
+      const key = `${tomorrowPlanComparableSite(site)}|${tomorrowPlanComparableTrade(trade)}`;
+      const current = result.get(key) || { site, trade, planned: 0, actual: 0, variance: 0, progress: 0, rows: 0 };
+      current.actual += Number(item.actual) || 0;
+      result.set(key, current);
+    }
+    return result;
+  }, tradeSiteManpowerMap);
+  const tradeSiteManpower = [...tradeSiteManpowerMap.values()]
+    .map((item) => ({ ...item, variance: dmrReportVariance(item.planned, item.actual), progress: dmrReportProgress(item.planned, item.actual) }))
+    .sort((a, b) => a.site.localeCompare(b.site) || b.planned - a.planned || b.actual - a.actual || a.trade.localeCompare(b.trade));
+  const tradeSiteManpowerByDateMap = new Map();
+  for (const [siteKey, site] of reportSiteLabels.entries()) {
+    for (const [tradeKey, trade] of reportTradeLabels.entries()) {
+      for (const date of dates) {
+        tradeSiteManpowerByDateMap.set(`${siteKey}|${tradeKey}|${date}`, { site, trade, date, planned: 0, actual: 0, variance: 0, progress: 0 });
+      }
+    }
+  }
+  for (const date of dates) {
+    const plan = planMap.get(date);
+    const actuals = actualsByDate.get(date) || dmrActualsForPlan([]);
+    for (const record of plan?.records || []) {
+      const site = projectText(record.site) || "Unassigned site";
+      const trade = projectText(record.category) || "General";
+      const key = `${tomorrowPlanComparableSite(site)}|${tomorrowPlanComparableTrade(trade)}|${date}`;
+      const current = tradeSiteManpowerByDateMap.get(key) || { site, trade, date, planned: 0, actual: 0, variance: 0, progress: 0 };
+      current.planned += Number(record.plannedManpower) || 0;
+      tradeSiteManpowerByDateMap.set(key, current);
+    }
+    for (const item of actuals.tradeSiteBreakdown || []) {
+      const site = projectText(item.site) || "Unassigned site";
+      const trade = projectText(item.trade) || "General";
+      const key = `${tomorrowPlanComparableSite(site)}|${tomorrowPlanComparableTrade(trade)}|${date}`;
+      const current = tradeSiteManpowerByDateMap.get(key) || { site, trade, date, planned: 0, actual: 0, variance: 0, progress: 0 };
+      current.actual += Number(item.actual) || 0;
+      tradeSiteManpowerByDateMap.set(key, current);
+    }
+  }
+  const tradeSiteManpowerByDate = [];
+  const sortedTradeSiteKeys = [...tradeSiteManpowerMap.keys()].sort((a, b) => {
+    const first = tradeSiteManpowerMap.get(a);
+    const second = tradeSiteManpowerMap.get(b);
+    return first.site.localeCompare(second.site) || first.trade.localeCompare(second.trade);
+  });
+  for (const key of sortedTradeSiteKeys) {
+    const [siteKey, tradeKey] = key.split("|");
+    const total = tradeSiteManpowerMap.get(key) || { site: reportSiteLabels.get(siteKey) || "Unassigned site", trade: reportTradeLabels.get(tradeKey) || "General", planned: 0, actual: 0 };
+    for (const date of dates) {
+      const row = tradeSiteManpowerByDateMap.get(`${siteKey}|${tradeKey}|${date}`) || { site: total.site, trade: total.trade, date, planned: 0, actual: 0 };
+      tradeSiteManpowerByDate.push({
+        ...row,
+        variance: dmrReportVariance(row.planned, row.actual),
+        progress: dmrReportProgress(row.planned, row.actual),
+        rowType: "date",
+      });
+    }
+    const averagePlanned = dates.length ? Number((total.planned / dates.length).toFixed(1)) : 0;
+    const averageActual = dates.length ? Number((total.actual / dates.length).toFixed(1)) : 0;
+    tradeSiteManpowerByDate.push({
+      site: total.site,
+      trade: total.trade,
+      date: "Average",
+      planned: averagePlanned,
+      actual: averageActual,
+      variance: Number((averageActual - averagePlanned).toFixed(1)),
+      progress: dmrReportProgress(averagePlanned, averageActual),
+      rowType: "average",
+    });
+  }
+  const siteLabels = new Set([...siteManpower.map((item) => item.label), ...allRecords.map((record) => record.site)].filter(Boolean));
+  const agencyLabels = new Set([...finalAgencyManpower.map((item) => item.label), ...allRecords.map((record) => record.agency)].filter(Boolean));
+
+  return {
+    startDate: start,
+    endDate: end,
+    requestedDates: dates.length,
+    dateKeys: dates,
+    availableDates: parsedTabs.map((tab) => tab.date),
+    generatedAt: new Date().toISOString(),
+    sections: [...selectedSections],
+    summary: {
+      ...totals,
+      progress,
+      datesWithData: dailyProgress.filter((item) => item.hasData).length,
+      datesWithoutData: dailyProgress.filter((item) => !item.hasData).map((item) => item.date),
+      sites: siteLabels.size,
+      agencies: agencyLabels.size,
+      equipment: allEquipment.length,
+      materials: allMaterials.length,
+      notes: allNotes.length,
+      attendance: attendanceSummary,
+    },
+    siteManpower: selectedSections.has("siteManpower") ? siteManpower : [],
+    agencyManpower: selectedSections.has("agencyManpower") ? finalAgencyManpower : [],
+    tradeSiteManpower: selectedSections.has("tradeSiteManpower") ? tradeSiteManpower : [],
+    tradeSiteManpowerByDate: selectedSections.has("tradeSiteManpower") ? tradeSiteManpowerByDate : [],
+    dailyProgress: selectedSections.has("dailyProgress") ? dailyProgress : [],
+    attendance: selectedSections.has("attendance") ? { summary: attendanceSummary, rows: allAttendance, byDate: attendanceByDate } : { summary: attendanceSummary, rows: [], byDate: [] },
+    equipment: selectedSections.has("equipment") ? allEquipment : [],
+    materials: selectedSections.has("materials") ? allMaterials : [],
+    notes: selectedSections.has("notes") ? allNotes : [],
   };
 }
 
@@ -5100,11 +5518,20 @@ async function assertDriveFolder(folderId) {
   if (!id) throw new Error("Paste a valid Google Drive folder link or ID");
   const auth = await getGoogleAuth();
   const drive = google.drive({ version: "v3", auth });
-  const response = await drive.files.get({
-    fileId: id,
-    fields: "id,name,mimeType,webViewLink",
-    supportsAllDrives: true,
-  });
+  let response;
+  try {
+    response = await drive.files.get({
+      fileId: id,
+      fields: "id,name,mimeType,webViewLink,driveId",
+      supportsAllDrives: true,
+    });
+  } catch (error) {
+    const status = error?.code || error?.response?.status;
+    if (status === 403 || status === 404) {
+      throw new Error("The service account cannot access this Drive folder. Share the folder or Shared Drive with the service account email, then save again.");
+    }
+    throw error;
+  }
   if (response.data.mimeType !== "application/vnd.google-apps.folder") {
     throw new Error("Drive link must point to a folder");
   }
@@ -5118,13 +5545,21 @@ async function uploadMrnFileToDrive(file, label) {
   const auth = await getGoogleAuth();
   const drive = google.drive({ version: "v3", auth });
   const safeName = safeFileName(`${label}-${Date.now()}-${file.originalname || "upload"}`);
-  const response = await drive.files.create({
-    requestBody: { name: safeName, parents: [folderId] },
-    media: { mimeType: file.mimetype || "application/octet-stream", body: fs.createReadStream(file.path) },
-    fields: "id,name,webViewLink",
-    supportsAllDrives: true,
-  });
-  return response.data.webViewLink || `https://drive.google.com/open?id=${response.data.id}`;
+  try {
+    const response = await drive.files.create({
+      requestBody: { name: safeName, parents: [folderId] },
+      media: { mimeType: file.mimetype || "application/octet-stream", body: fs.createReadStream(file.path) },
+      fields: "id,name,webViewLink",
+      supportsAllDrives: true,
+    });
+    return response.data.webViewLink || `https://drive.google.com/open?id=${response.data.id}`;
+  } catch (error) {
+    const message = String(error?.message || "");
+    if (/storage quota|Service Accounts do not have storage quota/i.test(message)) {
+      throw new Error("MRN files must upload to a Google Shared Drive folder. Move/link the MRN upload folder inside a Shared Drive and share it with the service account.");
+    }
+    throw error;
+  }
 }
 
 async function appendMrnRecord(values = {}, files = {}) {
@@ -5457,6 +5892,25 @@ app.get("/dmr-dashboard", async (req, res) => {
   } catch (error) {
     console.error("DMR dashboard error:", error);
     res.status(500).json({ error: `Could not load DMR dashboard: ${error.message}` });
+  }
+});
+
+app.get("/dmr-dashboard/report", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
+    if (!publicDmrSettings().linked) return res.status(400).json({ error: "DMR sheet is not linked" });
+    const today = istDateKey(new Date());
+    const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.startDate || "")) ? String(req.query.startDate) : addDaysToDateKey(today, -6);
+    const endDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.endDate || "")) ? String(req.query.endDate) : today;
+    const sections = String(req.query.sections || "")
+      .split(",")
+      .map((section) => projectText(section))
+      .filter(Boolean);
+    const report = await buildDmrReport({ startDate, endDate, sections });
+    res.json(report);
+  } catch (error) {
+    console.error("DMR report error:", error);
+    res.status(500).json({ error: `Could not generate DMR report: ${error.message}` });
   }
 });
 

@@ -68,6 +68,7 @@ const MENU_ITEMS = [
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
+  { id: "employee-daily-report", label: "Employee Daily Report" },
   { id: "activity-log", label: "Activity Log" },
   { id: "manage-roles", label: "Manage Roles" },
 ];
@@ -83,6 +84,7 @@ const PRIVILEGE_ITEMS = [
   { id: "toggle_documents", label: "Enable or disable documents" },
   { id: "manage_automations", label: "Create and manage automations" },
   { id: "manage_reports", label: "Manage and delete reports" },
+  { id: "view_employee_daily_reports", label: "View all employee daily reports" },
   { id: "view_activity_log", label: "View activity log" },
   { id: "edit_project_dmr", label: "Fill project DMR records" },
   { id: "edit_project_mrn", label: "Add MRN records" },
@@ -100,6 +102,8 @@ async function connectAuthDb() {
   await authDb.collection("roles").createIndex({ nameLower: 1 }, { unique: true });
   await authDb.collection("sessions").createIndex({ tokenHash: 1 }, { unique: true });
   await authDb.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await authDb.collection("employeeDailyReports").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
+  await authDb.collection("employeeDailyReports").createIndex({ reportDate: -1, submittedAt: -1 });
   await seedSuperAdmin();
   return authDb;
 }
@@ -383,6 +387,210 @@ registerFormsModule(app, {
   google,
   getGoogleAuth,
   requireSuperAdmin,
+});
+
+const EMPLOYEE_REPORT_OPTIONS = {
+  departments: ["Design", "Execution", "Procurement", "Coordination", "Site Supervision", "Vendor Management", "Human Resource", "Administration", "Accounts", "Social Media"],
+  taskTypes: ["System Designing", "Drawing", "Render", "BoQ", "Material Approval", "Site Work", "Purchase Order", "Installation", "Client Approval", "Quotation", "Negotiation", "Recruitment", "Interview", "Induction", "Salary Processing", "Documentation", "Performance Meeting", "Market Survey", "Event Planning", "Delivery List", "Client Meeting", "IT Solution", "Data Entry", "OutOfOffice Work", "Site Visit", "Vendor Meeting", "PaymentProcessing", "PRN Supportive", "Audit", "Record Filing", "Legal Work", "System Training", "System Implementation", "Material Inspection", "Dispatch", "Packing/Forwarding", "Pre-Production", "Post-Production", "Over-a-Call", "Campaign", "Content Creation", "Other"],
+  taskStatuses: ["In Progress", "Completed", "Work Halt", "Work Suspended", "Work Cancelled", "Other"],
+  involvements: ["Client", "Vendor", "Team", "Other"],
+};
+
+function canViewEmployeeDailyReports(req) {
+  return Boolean(req.user?.isSuperAdmin || hasPrivilege(req, "view_employee_daily_reports"));
+}
+
+function employeeReportDateRange() {
+  const dates = [];
+  const today = istDateKey(new Date());
+  const year = today.slice(0, 4);
+  let date = `${year}-01-01`;
+  const end = `${year}-12-31`;
+  while (date && date <= end) {
+    dates.push(date);
+    date = addDaysToDateKey(date, 1);
+  }
+  return dates;
+}
+
+function sanitizeEmployeeTaskItems(items = []) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    category: projectText(item?.category),
+    description: projectText(item?.description),
+  })).filter((item) => item.category && item.description).slice(0, 30);
+}
+
+function sanitizeEmployeeTaskCategories(categories = []) {
+  if (!Array.isArray(categories)) return [];
+  const seen = new Set();
+  return categories.map((category) => projectText(category)).filter((category) => {
+    const key = category.toLowerCase();
+    if (!category || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 80);
+}
+
+function taskItemsToText(items = []) {
+  return items.map((item) => `${item.category}: ${item.description}`).join("\n");
+}
+
+function sanitizeEmployeeReport(report) {
+  if (!report) return null;
+  const taskItems = sanitizeEmployeeTaskItems(report.taskItems);
+  const waitingTaskItems = sanitizeEmployeeTaskItems(report.waitingTaskItems);
+  return {
+    id: String(report._id),
+    userId: String(report.userId),
+    employeeName: report.employeeName || "",
+    department: report.department || "",
+    reportDate: report.reportDate || "",
+    submittedAt: report.submittedAt,
+    client: report.client || "",
+    site: report.site || "",
+    taskType: report.taskType || "",
+    taskDescription: report.taskDescription || taskItemsToText(taskItems),
+    taskItems,
+    taskStatus: report.taskStatus || "",
+    involvement: report.involvement || "",
+    waitingTaskDescription: report.waitingTaskDescription || taskItemsToText(waitingTaskItems),
+    waitingTaskItems,
+    tomorrowPlanTick: Boolean(report.tomorrowPlanTick),
+    note: report.note || "",
+  };
+}
+
+async function buildEmployeeReportDashboard(req, query = {}) {
+  const db = await connectAuthDb();
+  const isAdmin = canViewEmployeeDailyReports(req);
+  const userId = String(req.authUser.id);
+  const search = projectText(query.search).toLowerCase();
+  const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateFrom || "")) ? String(query.dateFrom) : "";
+  const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateTo || "")) ? String(query.dateTo) : "";
+  const filter = isAdmin ? {} : { userId };
+  if (dateFrom || dateTo) {
+    filter.reportDate = {};
+    if (dateFrom) filter.reportDate.$gte = dateFrom;
+    if (dateTo) filter.reportDate.$lte = dateTo;
+  }
+  if (search) {
+    filter.$or = [
+      { employeeName: { $regex: search, $options: "i" } },
+      { department: { $regex: search, $options: "i" } },
+      { client: { $regex: search, $options: "i" } },
+      { site: { $regex: search, $options: "i" } },
+      { taskType: { $regex: search, $options: "i" } },
+      { taskStatus: { $regex: search, $options: "i" } },
+      { "taskItems.category": { $regex: search, $options: "i" } },
+      { "taskItems.description": { $regex: search, $options: "i" } },
+      { "waitingTaskItems.category": { $regex: search, $options: "i" } },
+      { "waitingTaskItems.description": { $regex: search, $options: "i" } },
+    ];
+  }
+  const reports = await db.collection("employeeDailyReports").find(filter).sort({ reportDate: -1, submittedAt: -1 }).limit(500).toArray();
+  const today = istDateKey(new Date());
+  const todaySubmitted = Boolean(await db.collection("employeeDailyReports").findOne({ userId, reportDate: today }));
+  const dates = employeeReportDateRange();
+  const heatmapFilter = isAdmin ? { reportDate: { $gte: dates[0], $lte: dates[dates.length - 1] } } : { userId, reportDate: { $gte: dates[0], $lte: dates[dates.length - 1] } };
+  const heatmapReports = await db.collection("employeeDailyReports").find(heatmapFilter, { projection: { userId: 1, employeeName: 1, reportDate: 1 } }).toArray();
+  const users = isAdmin
+    ? [...heatmapReports.reduce((result, report) => {
+      const id = String(report.userId);
+      if (!result.has(id)) result.set(id, { userId: id, employeeName: report.employeeName || "Employee" });
+      return result;
+    }, new Map()).values()]
+    : [{ userId, employeeName: req.authUser.displayName || req.authUser.username || "You" }];
+  const heatmap = users.map((user) => {
+    const submitted = new Set(heatmapReports.filter((report) => String(report.userId) === user.userId).map((report) => report.reportDate));
+    return {
+      ...user,
+      days: dates.map((date) => ({ date, submitted: submitted.has(date) })),
+    };
+  });
+  return {
+    isAdmin,
+    today,
+    todaySubmitted,
+    profile: { department: req.user.department || "", taskCategories: sanitizeEmployeeTaskCategories(req.user.employeeTaskCategories || []) },
+    options: EMPLOYEE_REPORT_OPTIONS,
+    reports: reports.map(sanitizeEmployeeReport),
+    heatmap,
+  };
+}
+
+app.get("/employee-daily-report", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    res.json(await buildEmployeeReportDashboard(req, req.query || {}));
+  } catch (error) {
+    console.error("Employee daily report load error:", error);
+    res.status(500).json({ error: "Could not load employee daily reports" });
+  }
+});
+
+app.post("/employee-daily-report", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    const db = await connectAuthDb();
+    const today = istDateKey(new Date());
+    const userId = String(req.authUser.id);
+    const body = req.body || {};
+    const department = projectText(body.department || req.user.department);
+    if (!department) return res.status(400).json({ error: "Department is required for your first report" });
+    const taskItems = sanitizeEmployeeTaskItems(body.taskItems);
+    const waitingTaskItems = sanitizeEmployeeTaskItems(body.waitingTaskItems);
+    const required = ["client", "site", "taskType", "taskStatus", "involvement"];
+    for (const field of required) {
+      if (!projectText(body[field])) return res.status(400).json({ error: `${field} is required` });
+    }
+    if (!taskItems.length) return res.status(400).json({ error: "Add at least one completed task with category and description" });
+    const now = new Date();
+    const nextCategories = sanitizeEmployeeTaskCategories([...(req.user.employeeTaskCategories || []), ...taskItems.map((item) => item.category), ...waitingTaskItems.map((item) => item.category)]);
+    const report = {
+      _id: new ObjectId(),
+      userId,
+      employeeName: req.authUser.displayName || req.authUser.username || "Employee",
+      department,
+      reportDate: today,
+      submittedAt: now,
+      client: projectText(body.client),
+      site: projectText(body.site),
+      taskType: projectText(body.taskType),
+      taskItems,
+      taskDescription: taskItemsToText(taskItems),
+      taskStatus: projectText(body.taskStatus),
+      involvement: projectText(body.involvement),
+      waitingTaskItems,
+      waitingTaskDescription: taskItemsToText(waitingTaskItems),
+      tomorrowPlanTick: Boolean(body.tomorrowPlanTick),
+      note: projectText(body.note),
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.collection("employeeDailyReports").insertOne(report);
+    const userSet = { employeeTaskCategories: nextCategories, updatedAt: now };
+    if (!req.user.department || req.user.department !== department) userSet.department = department;
+    await db.collection("users").updateOne({ _id: req.user._id }, { $set: userSet });
+    res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }) });
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ error: "Today's report is already submitted" });
+    console.error("Employee daily report submit error:", error);
+    res.status(500).json({ error: "Could not submit daily report" });
+  }
+});
+
+app.put("/employee-daily-report/categories", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    const categories = sanitizeEmployeeTaskCategories(req.body?.categories || []);
+    const db = await connectAuthDb();
+    await db.collection("users").updateOne({ _id: req.user._id }, { $set: { employeeTaskCategories: categories, updatedAt: new Date() } });
+    res.json({ success: true, categories });
+  } catch (error) {
+    console.error("Employee task categories update error:", error);
+    res.status(500).json({ error: "Could not update task categories" });
+  }
 });
 
 app.get("/whatsapp/config", requireSuperAdmin, (req, res) => {

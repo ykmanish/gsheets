@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck } from "lucide-react";
 import Image from "next/image";
 
 export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen }) {
@@ -13,6 +13,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "sheet-dashboard", label: "Sheet Dashboard", icon: Sheet },
     { id: "automations", label: "Automation", icon: Workflow },
     { id: "reports", label: "Reports", icon: ChartNoAxesCombined },
+    { id: "employee-daily-report", label: "Employee Daily Report", icon: CalendarCheck },
     { id: "activity-log", label: "Activity Log", icon: Activity },
     { id: "whatsapp", label: "WhatsApp", icon: MessageCircleMore },
     { id: "manage-roles", label: "Manage Roles", icon: ShieldCheck },

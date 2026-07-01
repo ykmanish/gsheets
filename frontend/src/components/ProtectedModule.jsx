@@ -19,6 +19,7 @@ import Forms from "./Forms";
 import ProjectDashboard from "./ProjectDashboard";
 import DmrDashboard from "./DmrDashboard";
 import MrnDashboard from "./MrnDashboard";
+import EmployeeDailyReport from "./EmployeeDailyReport";
 
 const menuPaths = {
   dashboard: "/dashboard",
@@ -30,6 +31,7 @@ const menuPaths = {
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
+  "employee-daily-report": "/employee-daily-report",
   "activity-log": "/activity-log",
   whatsapp: "/whatsapp",
   "manage-roles": "/manage-roles",
@@ -119,6 +121,7 @@ function ProtectedModuleContent({ moduleId }) {
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}
+        {moduleId === "employee-daily-report" && <EmployeeDailyReport darkMode={darkMode} />}
         {moduleId === "activity-log" && <ActivityLog darkMode={darkMode} />}
         {moduleId === "whatsapp" && user?.isSuperAdmin && <WhatsApp darkMode={darkMode} />}
         {moduleId === "manage-roles" && <ManageRoles darkMode={darkMode} />}

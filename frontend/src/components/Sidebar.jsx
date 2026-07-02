@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Image from "next/image";
 
-export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen }) {
+export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen, collapsed = false, setCollapsed }) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "documents", label: "Documents", icon: FileText },
@@ -16,11 +16,32 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "employee-daily-report", label: "Employee Daily Report", icon: CalendarCheck },
     { id: "activity-log", label: "Activity Log", icon: Activity },
     { id: "whatsapp", label: "WhatsApp", icon: MessageCircleMore },
-    { id: "manage-roles", label: "Manage Roles", icon: ShieldCheck },
+    { id: "access-management", label: "Access Control", icon: ShieldCheck },
+    { id: "manage-roles", label: "Manage Role", icon: ShieldCheck, parent: "access-management" },
+    { id: "manage-users", label: "Manage User", icon: Users, parent: "access-management" },
   ];
   const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn"].includes(item.id) && allowedMenus.includes(item.id));
-  const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id) || (item.id === "projects" && projectSubMenu.length));
-  const [openGroups, setOpenGroups] = useState(() => ({ projects: projectSubMenu.some((item) => item.id === activeMenu) }));
+  const accessSubMenu = menuItems.filter((item) => item.parent === "access-management" && allowedMenus.includes(item.id));
+  const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id) || (item.id === "projects" && projectSubMenu.length) || (item.id === "access-management" && accessSubMenu.length));
+  const [openGroups, setOpenGroups] = useState(() => ({
+    projects: projectSubMenu.some((item) => item.id === activeMenu),
+    access: accessSubMenu.some((item) => item.id === activeMenu),
+  }));
+  const navRef = useRef(null);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const nav = navRef.current;
+      const activeItem = nav?.querySelector(`[data-sidebar-menu="${activeMenu}"]`);
+      if (!nav || !activeItem) return;
+      const navRect = nav.getBoundingClientRect();
+      const itemRect = activeItem.getBoundingClientRect();
+      const targetTop = nav.scrollTop + itemRect.top - navRect.top - (nav.clientHeight - itemRect.height) / 2;
+      nav.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+    }, 360);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeMenu]);
   const shell = darkMode
     ? "border-white/10 bg-[#101114]"
     : "border-black/[0.06] bg-white";
@@ -62,7 +83,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
         onClick={() => setMobileOpen?.(false)}
       />
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 transform flex-col overflow-hidden border-r transition-transform duration-300 md:static md:z-auto md:h-screen md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 transform flex-col overflow-hidden border-r transition-[width,transform] duration-500 ease-in-out md:static md:z-auto md:h-screen md:translate-x-0 ${collapsed ? "md:w-[88px]" : "md:w-72"} ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } ${shell}`}
         style={{
@@ -70,14 +91,14 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
             '"Google Sans", "Product Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
       >
-      <div className={`border-b border-dashed px-5 py-5 ${divider}`}>
-        <div className="flex items-center gap-3">
+      <div className={`border-b border-dashed px-5 py-5 transition-all duration-300 ${collapsed ? "md:px-4" : ""} ${divider}`}>
+        <div className={`flex items-center gap-3 transition-all duration-500 ${collapsed ? "md:flex-col md:gap-2" : ""}`}>
           <div
-            className={`flex h-10 w-10 items-center justify-center rounded-2xl ${darkMode ? "bg-white/5" : "bg-white"}`}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-all duration-500 ${darkMode ? "bg-white/5" : "bg-white"}`}
           >
             <Image src="/logo.png" alt="Logo" width={34} height={34} className="h-8 w-8" />
           </div>
-          <div className="min-w-0">
+          <div className={`min-w-0 transition-all duration-200 ${collapsed ? "md:hidden" : ""}`}>
             <h1
               className={`truncate text-[20px] small font-semibold leading-none ${
                 darkMode ? "text-white" : "text-black"
@@ -95,13 +116,23 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           >
             <X className="h-5 w-5" />
           </button>
+          <button
+            type="button"
+            onClick={() => setCollapsed?.(!collapsed)}
+            className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 md:flex ${collapsed ? "md:ml-0" : "ml-auto"} ${darkMode ? "text-white/65 hover:bg-white/10" : "text-black/55 hover:bg-black/5"}`}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+          </button>
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-3">
+      <nav ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-3 transition-all duration-500 ${collapsed ? "md:px-2" : ""}`}>
         <div className={`space-y-1.5 border-b border-dashed pb-3 ${divider}`}>
         {visibleMenuItems.map((item) => {
           if (item.parent === "projects") return null;
+          if (item.parent === "access-management") return null;
           if (item.id === "projects" && projectSubMenu.length) {
             const isOpen = Boolean(openGroups.projects);
             const childActive = projectSubMenu.some((child) => child.id === activeMenu);
@@ -115,11 +146,11 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                   <span className={iconClass({ parentActive: childActive })}>
                     <Building2 className="h-4.5 w-4.5" />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[15px]">Projects</span>
-                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
+                  <span className={`min-w-0 flex-1 truncate text-[15px] ${collapsed ? "md:hidden" : ""}`}>Projects</span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${collapsed ? "md:hidden" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
                 </button>
 
-                <div className={`grid transition-all duration-300 ease-out ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:hidden" : ""} ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                   <div className="min-h-0 overflow-hidden">
                     <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
                       <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
@@ -129,6 +160,54 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                         return (
                           <button
                             key={child.id}
+                            data-sidebar-menu={child.id}
+                            type="button"
+                            onClick={() => setActiveMenu(child.id)}
+                            className={itemClass({ active, child: true })}
+                          >
+                            <span className={`absolute left-0 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                            <span className={iconClass({ active, child: true })}>
+                              <ChildIcon className="h-4 w-4" />
+                            </span>
+                            <span className="max-w-full truncate text-[14px]">{child.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          if (item.id === "access-management" && accessSubMenu.length) {
+            const isOpen = Boolean(openGroups.access);
+            const childActive = accessSubMenu.some((child) => child.id === activeMenu);
+            return (
+              <div key="access-group" className="overflow-hidden rounded-[22px] transition-all duration-300">
+                <button
+                  type="button"
+                  onClick={() => setOpenGroups((current) => ({ ...current, access: !current.access }))}
+                  className={itemClass({ parentActive: childActive })}
+                >
+                  <span className={iconClass({ parentActive: childActive })}>
+                    <ShieldCheck className="h-4.5 w-4.5" />
+                  </span>
+                  <span className={`min-w-0 flex-1 truncate text-[15px] ${collapsed ? "md:hidden" : ""}`}>Access Control</span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${collapsed ? "md:hidden" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
+                </button>
+
+                <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:hidden" : ""} ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                  <div className="min-h-0 overflow-hidden">
+                    <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
+                      <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                      {accessSubMenu.map((child) => {
+                        const ChildIcon = child.icon;
+                        const active = activeMenu === child.id;
+                        return (
+                          <button
+                            key={child.id}
+                            data-sidebar-menu={child.id}
                             type="button"
                             onClick={() => setActiveMenu(child.id)}
                             className={itemClass({ active, child: true })}
@@ -154,20 +233,21 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           return (
             <button
               key={item.id}
+              data-sidebar-menu={item.id}
               onClick={() => setActiveMenu(item.id)}
               className={itemClass({ active: isActive })}
             >
               <span className={iconClass({ active: isActive })}>
                 <Icon className="w-4.5 h-4.5" />
               </span>
-              <span className="max-w-full truncate text-[15px]">{item.label}</span>
+              <span className={`max-w-full truncate text-[15px] ${collapsed ? "md:hidden" : ""}`}>{item.label}</span>
             </button>
           );
         })}
         </div>
       </nav>
 
-      <div className={`border-t border-dashed p-4 ${divider}`}>
+      <div className={`border-t border-dashed p-4 ${collapsed ? "md:hidden" : ""} ${divider}`}>
   <div
     className={`rounded-[22px] px-4 py-4 text-center  ${
       darkMode

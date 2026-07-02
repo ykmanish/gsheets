@@ -35,6 +35,7 @@ const menuPaths = {
   "activity-log": "/activity-log",
   whatsapp: "/whatsapp",
   "manage-roles": "/manage-roles",
+  "manage-users": "/manage-users",
 };
 
 function ProtectedModuleContent({ moduleId }) {
@@ -48,10 +49,14 @@ function ProtectedModuleContent({ moduleId }) {
   });
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("uipl_docs_sidebar_collapsed") === "true";
+  });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const allowedMenus = useMemo(() => {
     return Array.from(new Set([
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "whatsapp"] : menus.filter((menu) => !["manage-roles", "whatsapp"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "whatsapp", "manage-users"] : menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp"].includes(menu))),
     ])).filter((menu) => !["notifications", "settings"].includes(menu));
   }, [menus, user?.isSuperAdmin]);
 
@@ -69,6 +74,10 @@ function ProtectedModuleContent({ moduleId }) {
     if (!user?.id) return;
     window.localStorage.setItem(`uipl_docs_theme_${user.id}`, darkMode ? "dark" : "light");
   }, [darkMode, user?.id]);
+
+  useEffect(() => {
+    window.localStorage.setItem("uipl_docs_sidebar_collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (loading || !user) return;
@@ -98,6 +107,8 @@ function ProtectedModuleContent({ moduleId }) {
         allowedMenus={allowedMenus}
         mobileOpen={sidebarOpen}
         setMobileOpen={setSidebarOpen}
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
       />
       <div className="flex-1 newq flex min-w-0 flex-col overflow-hidden">
         <Navbar
@@ -124,7 +135,8 @@ function ProtectedModuleContent({ moduleId }) {
         {moduleId === "employee-daily-report" && <EmployeeDailyReport darkMode={darkMode} />}
         {moduleId === "activity-log" && <ActivityLog darkMode={darkMode} />}
         {moduleId === "whatsapp" && user?.isSuperAdmin && <WhatsApp darkMode={darkMode} />}
-        {moduleId === "manage-roles" && <ManageRoles darkMode={darkMode} />}
+        {moduleId === "manage-roles" && <ManageRoles darkMode={darkMode} mode="roles" />}
+        {moduleId === "manage-users" && <ManageRoles darkMode={darkMode} mode="users" />}
       </div>
       <NotificationDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} darkMode={darkMode} />
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
@@ -53,16 +53,40 @@ export function ThemeSwitch({ darkMode, onToggle }) {
 
 export function SelectMenu({ darkMode, value, options, onChange, disabled = false, placeholder = "Select an option", className = "" }) {
   const [open, setOpen] = useState(false);
+  const [opensUpward, setOpensUpward] = useState(false);
   const ref = useRef(null);
   useClickOutside(ref, () => setOpen(false));
   const selected = options.find((option) => option.value === value);
+
+  const updatePlacement = useCallback(() => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    const estimatedMenuHeight = Math.min(options.length * 44 + 20, 276);
+    const spaceBelow = window.innerHeight - rect.bottom - 16;
+    const spaceAbove = rect.top - 16;
+    setOpensUpward(spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow);
+  }, [options.length]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [open, updatePlacement]);
 
   return (
     <div ref={ref} className={`relative min-w-0 ${className}`}>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          updatePlacement();
+          setOpen((current) => !current);
+        }}
         className={`h-12 w-full rounded-2xl border px-4 flex items-center justify-between gap-3 text-left transition disabled:opacity-60 ${
           darkMode
             ? "bg-[#15171c] border-white/10 text-white hover:bg-white/10"
@@ -77,7 +101,7 @@ export function SelectMenu({ darkMode, value, options, onChange, disabled = fals
 
       {open && !disabled && (
         <div
-          className={`absolute left-0 right-0 top-[calc(100%+8px)] z-40 rounded-2xl border p-2 shadow-xl ${
+          className={`absolute left-0 right-0 z-40 rounded-2xl border p-2 shadow-xl ${opensUpward ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"} ${
             darkMode ? "bg-[#181a20] border-white/10" : "bg-white border-black/5"
           }`}
         >

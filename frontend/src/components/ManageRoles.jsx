@@ -7,9 +7,12 @@ import {
   Edit3,
   Eye,
   EyeOff,
+  FileText,
   KeyRound,
   Loader2,
+  MoreHorizontal,
   Plus,
+  Search,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -115,8 +118,9 @@ function Badge({ darkMode, children, tone = "default" }) {
   return <span className={`inline-flex rounded-full px-3 py-1 text-xs ${tones[tone]}`}>{children}</span>;
 }
 
-export default function ManageRoles({ darkMode }) {
-  const [activeTab, setActiveTab] = useState("roles");
+export default function ManageRoles({ darkMode, mode = "roles" }) {
+  const activeTab = mode === "users" ? "users" : "roles";
+  const isRolesMode = activeTab === "roles";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -132,9 +136,21 @@ export default function ManageRoles({ darkMode }) {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [detailModal, setDetailModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const roleMap = useMemo(() => new Map(roles.map((role) => [role.id, role])), [roles]);
   const roleOptions = roles.map((role) => ({ value: role.id, label: role.name }));
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredRoles = roles.filter((role) => !normalizedSearch || [
+    role.name,
+    role.description,
+    ...(role.menus || []).map((id) => menuItems.find((item) => item.id === id)?.label || id),
+  ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch)));
+  const filteredUsers = users.filter((user) => {
+    const role = roleMap.get(user.roleId);
+    return !normalizedSearch || [user.displayName, user.username, role?.name, user.blacklisted ? "blacklisted" : "active"]
+      .some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
+  });
 
   useEffect(() => {
     void loadAdminData();
@@ -278,7 +294,6 @@ export default function ManageRoles({ darkMode }) {
   }
 
   const muted = darkMode ? "text-white/45" : "text-black/45";
-  const tablePanel = darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/5 bg-white";
 
   if (loading) {
     return (
@@ -289,92 +304,114 @@ export default function ManageRoles({ darkMode }) {
   }
 
   return (
-    <div className={`flex flex-1 min-h-0 flex-col overflow-hidden px-4 py-4 sm:px-6 lg:px-8 lg:py-8 ${darkMode ? "bg-[#0c0d10]" : "bg-[#f5f4ef]"}`}>
-      <div className={`flex min-h-0 flex-1 flex-col rounded-[24px] border p-4 sm:p-6 lg:rounded-[30px] ${darkMode ? "border-white/10 bg-white/[0.02]" : "border-black/5 bg-white/70"}`}>
-        <div className="mb-5 flex shrink-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <>
+    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f4f5f8] text-[#171714]"}`}>
+      <section className={`relative mb-5 overflow-hidden rounded-[30px] p-6 sm:p-8 ${darkMode ? "border-white/10 bg-[#202328]" : "border-black/[0.06] bg-[#fbfbfd]"}`}>
+        {!darkMode && (
+          <>
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(17,17,17,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(17,17,17,0.035)_1px,transparent_1px)] bg-[size:72px_72px]" />
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white via-white/80 to-transparent" />
+            <span className="absolute -left-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#f4f5f8]" />
+            <span className="absolute -right-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#f4f5f8]" />
+          </>
+        )}
+        <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div>
-            <p className={`mb-2 text-[11px] uppercase tracking-[0.3em] ${muted}`}>Access administration</p>
-            <h2 className={`text-2xl font-semibold small sm:text-3xl ${darkMode ? "text-white" : "text-black"}`}>Roles and users</h2>
-            <p className={`mt-2 text-sm ${muted}`}>Assign modules, action permissions, roles, and account controls.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/[0.06] bg-white text-black/70 shadow-[0_10px_24px_rgba(31,35,40,0.08)]"}`}>
+                <ShieldCheck className="h-4 w-4" /> Access administration
+              </span>
+              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/[0.04] bg-[#fff1a8] text-black/70 shadow-[0_8px_18px_rgba(31,35,40,0.08)]"}`}>
+                {isRolesMode ? `${roles.length} roles` : `${users.length} users`}
+              </span>
+              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/[0.04] bg-[#d5f3f0] text-black/70 shadow-[0_8px_18px_rgba(31,35,40,0.08)]"}`}>
+                {isRolesMode ? `${menuItems.length} modules` : `${users.filter((user) => !user.blacklisted).length} active`}
+              </span>
+            </div>
+            <h1 className={`mt-5 max-w-4xl text-4xl small font-black leading-[0.96] tracking-tight sm:text-4xl ${darkMode ? "text-white" : "text-[#161616]"}`}>
+              {isRolesMode ? "Role permissions, made simple." : "User access, made simple."}
+            </h1>
+            <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>
+              {isRolesMode ? "Create roles, assign modules, and control action permissions in one clean workspace." : "Create users, assign roles, reset passwords, and manage account status in one clean workspace."}
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={activeTab === "roles" ? openCreateRole : () => setUserModalOpen(true)}
-            className={`flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}
-          >
-            {activeTab === "roles" ? <Plus className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-            {activeTab === "roles" ? "Add Role" : "Add User"}
-          </button>
-        </div>
-
-        <div className={`mb-5 grid w-full max-w-md shrink-0 grid-cols-2 rounded-2xl p-1 ${darkMode ? "bg-white/5" : "bg-black/[0.04]"}`}>
-          {[
-            ["roles", ShieldCheck, "Manage Roles", roles.length],
-            ["users", Users, "Manage Users", users.length],
-          ].map(([value, Icon, label, count]) => (
+          <div className="flex flex-wrap gap-3 lg:justify-end">
             <button
-              key={value}
               type="button"
-              onClick={() => setActiveTab(value)}
-              className={`flex h-11 items-center justify-center gap-2 rounded-xl text-sm transition ${
-                activeTab === value
-                  ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"
-                  : darkMode ? "text-white/55" : "text-black/55"
-              }`}
+              onClick={isRolesMode ? openCreateRole : () => setUserModalOpen(true)}
+              className={`flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm shadow-[0_14px_28px_rgba(31,35,40,0.16)] transition active:scale-[0.98] ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}
             >
-              <Icon className="h-4 w-4" />
-              {label}
-              <span className="text-xs opacity-65">{count}</span>
+              {isRolesMode ? <Plus className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+              {isRolesMode ? "Add role" : "Add user"}
             </button>
-          ))}
+          </div>
         </div>
+      </section>
 
-        <div className={`min-h-0 flex-1 overflow-hidden rounded-[24px] border ${tablePanel}`}>
-          <div className="h-full overflow-auto">
+      <section className={`overflow-hidden rounded-[30px] border p-5 sm:p-7 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white"}`}>
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-2xl small font-semibold">{isRolesMode ? "Role records" : "User records"}</h2>
+            <p className={`mt-1 text-sm ${muted}`}>{isRolesMode ? "Module and permission access list." : "Role assignment and account status list."}</p>
+          </div>
+          <label className={`flex h-12 w-full items-center gap-3 rounded-2xl border px-4 lg:w-[360px] ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
+            <Search className={`h-4 w-4 shrink-0 ${muted}`} />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={isRolesMode ? "Search role, module..." : "Search user, role, status..."}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-current placeholder:opacity-40"
+            />
+          </label>
+        </div>
+        <div className="overflow-x-auto pt-3">
             {activeTab === "roles" ? (
-              <table className="w-full min-w-[900px] text-left">
-                <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                  <tr className={darkMode ? "border-b border-white/10" : "border-b border-black/5"}>
-                    {["Role", "Description", "Modules", "Permissions", "Users", "Actions"].map((heading) => (
-                      <th key={heading} className={`px-5 py-4 text-[11px] font-medium uppercase tracking-[0.2em] ${muted}`}>{heading}</th>
+              <table className="w-full min-w-[960px] border-separate border-spacing-y-2 text-left">
+                <thead className={darkMode ? "bg-[#15171c]" : "bg-white"}>
+                  <tr>
+                    {["Name", "Description", "Modules", "Permissions", "Users", "Actions"].map((heading) => (
+                      <th key={heading} className={`px-4 py-3 text-[11px] font-semibold ${muted}`}>{heading}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {roles.map((role) => {
+                  {filteredRoles.map((role) => {
                     const userCount = users.filter((user) => user.roleId === role.id).length;
                     return (
-                      <tr key={role.id} className={`transition ${darkMode ? "border-b border-white/5 hover:bg-white/[0.03]" : "border-b border-black/5 hover:bg-black/[0.02]"}`}>
-                        <td className="px-5 py-4">
+                      <tr key={role.id} className={`transition ${darkMode ? "bg-white/[0.035] hover:bg-white/[0.06]" : "bg-[#f8f9fc] hover:bg-[#f3f5f9]"}`}>
+                        <td className="rounded-l-xl px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-black/[0.04] text-black/60"}`}>
-                              <ShieldCheck className="h-4 w-4" />
+                            <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-white text-slate-500"}`}>
+                              <FileText className="h-4 w-4" />
                             </span>
                             <div>
-                              <p className={`text-sm  ${darkMode ? "text-white" : "text-black"}`}>{role.name}</p>
-                              {role.isSystem && <p className={`mt-1 text-xs ${muted}`}>System role</p>}
+                              <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>{role.name}</p>
+                              <p className={`mt-0.5 text-xs ${muted}`}>{role.isSystem ? "System role" : "Custom role"}</p>
                             </div>
                           </div>
                         </td>
-                        <td className={`max-w-[260px] px-5 py-4 text-sm ${muted}`}><span className="block truncate">{role.description || "No description"}</span></td>
-                        <td className="px-5 py-4"><Badge darkMode={darkMode} tone="accent">{role.menus?.length || 0} modules</Badge></td>
-                        <td className="px-5 py-4"><Badge darkMode={darkMode}>{role.privileges?.length || 0} permissions</Badge></td>
-                        <td className={`px-5 py-4 text-sm ${muted}`}>{userCount}</td>
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setDetailModal({ type: "role", item: role })} className={`flex h-9 items-center gap-2 rounded-full px-3 text-xs ${darkMode ? "bg-white/5 text-white/70" : "bg-black/[0.04] text-black/65"}`}>
-                              <Eye className="h-3.5 w-3.5" /> Details
+                        <td className={`max-w-[280px] px-4 py-3 text-sm ${muted}`}><span className="block truncate">{role.description || "No description"}</span></td>
+                        <td className="px-4 py-3"><Badge darkMode={darkMode} tone="accent">{role.menus?.length || 0} modules</Badge></td>
+                        <td className="px-4 py-3"><Badge darkMode={darkMode}>{role.privileges?.length || 0} permissions</Badge></td>
+                        <td className={`px-4 py-3 text-sm font-medium ${darkMode ? "text-white/80" : "text-slate-700"}`}>{userCount}</td>
+                        <td className="rounded-r-xl px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => setDetailModal({ type: "role", item: role })} className={`flex h-9 items-center rounded-lg border px-4 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/5 text-white/75" : "border-slate-200 bg-white text-slate-700"}`}>
+                              View
                             </button>
                             {!role.isSystem && (
-                              <button onClick={() => openEditRole(role)} className={`flex h-9 w-9 items-center justify-center rounded-full ${darkMode ? "hover:bg-white/10 text-white/60" : "hover:bg-black/5 text-black/55"}`} title="Edit role">
+                              <button onClick={() => openEditRole(role)} className={`flex h-9 w-9 items-center justify-center rounded-lg ${darkMode ? "bg-white/5 text-white/60 hover:bg-white/10" : "bg-white text-slate-500 hover:bg-slate-100"}`} title="Edit role">
                                 <Edit3 className="h-4 w-4" />
                               </button>
                             )}
                             {!role.isSystem && (
-                              <button onClick={() => setDeleteConfirm({ type: "role", item: role })} className="flex h-9 w-9 items-center justify-center rounded-full text-red-500 hover:bg-red-500/10" title="Delete role">
+                              <button onClick={() => setDeleteConfirm({ type: "role", item: role })} className="flex h-9 w-9 items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10" title="Delete role">
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             )}
+                            <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${darkMode ? "text-white/45" : "text-slate-400"}`}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </span>
                           </div>
                         </td>
                       </tr>
@@ -383,24 +420,31 @@ export default function ManageRoles({ darkMode }) {
                 </tbody>
               </table>
             ) : (
-              <table className="w-full min-w-[940px] text-left">
-                <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                  <tr className={darkMode ? "border-b border-white/10" : "border-b border-black/5"}>
-                    {["User", "Role", "Status", "Modules", "Permissions", "Actions"].map((heading) => (
-                      <th key={heading} className={`px-5 py-4 text-[11px] font-medium uppercase tracking-[0.2em] ${muted}`}>{heading}</th>
+              <table className="w-full min-w-[980px] border-separate border-spacing-y-2 text-left">
+                <thead className={darkMode ? "bg-[#15171c]" : "bg-white"}>
+                  <tr>
+                    {["Name", "Role", "Status", "Modules", "Permissions", "Actions"].map((heading) => (
+                      <th key={heading} className={`px-4 py-3 text-[11px] font-semibold ${muted}`}>{heading}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user) => {
+                  {filteredUsers.map((user) => {
                     const role = roleMap.get(user.roleId);
                     return (
-                      <tr key={user.id} className={`transition ${darkMode ? "border-b border-white/5 hover:bg-white/[0.03]" : "border-b border-black/5 hover:bg-black/[0.02]"}`}>
-                        <td className="px-5 py-4">
-                          <p className={`text-sm  ${darkMode ? "text-white" : "text-black"}`}>{user.displayName}</p>
-                          <p className={`mt-1 text-xs ${muted}`}>{user.username}</p>
+                      <tr key={user.id} className={`transition ${darkMode ? "bg-white/[0.035] hover:bg-white/[0.06]" : "bg-[#f8f9fc] hover:bg-[#f3f5f9]"}`}>
+                        <td className="rounded-l-xl px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <span className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-cyan-100 text-cyan-700"}`}>
+                              {(user.displayName || user.username || "U").slice(0, 1).toUpperCase()}
+                            </span>
+                            <div>
+                              <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>{user.displayName}</p>
+                              <p className={`mt-0.5 text-xs ${muted}`}>{user.username}</p>
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-4 py-3">
                           <SelectMenu
                             darkMode={darkMode}
                             value={user.roleId || ""}
@@ -410,27 +454,30 @@ export default function ManageRoles({ darkMode }) {
                             className="w-[180px]"
                           />
                         </td>
-                        <td className="px-5 py-4"><Badge darkMode={darkMode} tone={user.blacklisted ? "danger" : "success"}>{user.blacklisted ? "Blacklisted" : "Active"}</Badge></td>
-                        <td className={`px-5 py-4 text-sm ${muted}`}>{role?.menus?.length || 0}</td>
-                        <td className={`px-5 py-4 text-sm ${muted}`}>{role?.privileges?.length || 0}</td>
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setDetailModal({ type: "user", item: user })} className={`flex h-9 items-center gap-2 rounded-full px-3 text-xs ${darkMode ? "bg-white/5 text-white/70" : "bg-black/[0.04] text-black/65"}`}>
-                              <Eye className="h-3.5 w-3.5" /> Details
+                        <td className="px-4 py-3"><Badge darkMode={darkMode} tone={user.blacklisted ? "danger" : "success"}>{user.blacklisted ? "Blacklisted" : "Active"}</Badge></td>
+                        <td className={`px-4 py-3 text-sm font-medium ${darkMode ? "text-white/80" : "text-slate-700"}`}>{role?.menus?.length || 0}</td>
+                        <td className={`px-4 py-3 text-sm font-medium ${darkMode ? "text-white/80" : "text-slate-700"}`}>{role?.privileges?.length || 0}</td>
+                        <td className="rounded-r-xl px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => setDetailModal({ type: "user", item: user })} className={`flex h-9 items-center rounded-lg border px-4 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/5 text-white/75" : "border-slate-200 bg-white text-slate-700"}`}>
+                              View
                             </button>
-                            <button onClick={() => openPasswordModal(user)} className={`flex h-9 w-9 items-center justify-center rounded-full ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`} title="Reset password">
+                            <button onClick={() => openPasswordModal(user)} className={`flex h-9 w-9 items-center justify-center rounded-lg ${darkMode ? "bg-[#d8f36a] text-black" : "bg-white text-slate-600 hover:bg-slate-100"}`} title="Reset password">
                               <KeyRound className="h-4 w-4" />
                             </button>
                             {!user.isSuperAdmin && (
-                              <button onClick={() => updateUser(user.id, { blacklisted: !user.blacklisted })} className={`flex h-9 w-9 items-center justify-center rounded-full ${user.blacklisted ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`} title={user.blacklisted ? "Unblock user" : "Blacklist user"}>
+                              <button onClick={() => updateUser(user.id, { blacklisted: !user.blacklisted })} className={`flex h-9 w-9 items-center justify-center rounded-lg ${user.blacklisted ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`} title={user.blacklisted ? "Unblock user" : "Blacklist user"}>
                                 {user.blacklisted ? <Check className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
                               </button>
                             )}
                             {!user.isSuperAdmin && (
-                              <button onClick={() => setDeleteConfirm({ type: "user", item: user })} className="flex h-9 w-9 items-center justify-center rounded-full text-red-500 hover:bg-red-500/10" title="Delete user">
+                              <button onClick={() => setDeleteConfirm({ type: "user", item: user })} className="flex h-9 w-9 items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10" title="Delete user">
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             )}
+                            <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${darkMode ? "text-white/45" : "text-slate-400"}`}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </span>
                           </div>
                         </td>
                       </tr>
@@ -440,29 +487,54 @@ export default function ManageRoles({ darkMode }) {
               </table>
             )}
           </div>
-        </div>
-      </div>
+      </section>
+    </main>
 
       {roleModalOpen && (
         <Modal darkMode={darkMode} title={roleForm.id ? "Edit role" : "Add role"} eyebrow="Role configuration" onClose={() => setRoleModalOpen(false)} maxWidth="max-w-3xl">
           <form onSubmit={saveRole} className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FieldInput darkMode={darkMode} value={roleForm.name} onChange={(event) => setRoleForm((current) => ({ ...current, name: event.target.value }))} placeholder="Role name" required />
-              <FieldInput darkMode={darkMode} value={roleForm.description} onChange={(event) => setRoleForm((current) => ({ ...current, description: event.target.value }))} placeholder="Description" />
+            <div className={`flex items-center gap-4 border-b border-dashed pb-5 ${darkMode ? "border-white/15" : "border-black/15"}`}>
+              <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-dashed ${darkMode ? "border-white/20 bg-white/5 text-[#d8f36a]" : "border-slate-300 bg-slate-50 text-slate-500"}`}>
+                <ShieldCheck className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="text-base font-semibold">Configure workspace access</p>
+                <p className={`mt-1 text-sm ${muted}`}>Name the role, then choose which modules and actions its users can access.</p>
+              </div>
             </div>
-            <div>
-              <p className={`mb-3 text-[11px] uppercase tracking-[0.22em] ${muted}`}>Visible modules</p>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-2">
+                <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${muted}`}>Role name</span>
+                <FieldInput darkMode={darkMode} value={roleForm.name} onChange={(event) => setRoleForm((current) => ({ ...current, name: event.target.value }))} placeholder="Enter role name" required />
+              </label>
+              <label className="space-y-2">
+                <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${muted}`}>Description</span>
+                <FieldInput darkMode={darkMode} value={roleForm.description} onChange={(event) => setRoleForm((current) => ({ ...current, description: event.target.value }))} placeholder="Describe this role" />
+              </label>
+            </div>
+
+            <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f6f8]"}`}>
+              <div className="mb-4">
+                <p className="text-sm font-semibold">Visible modules</p>
+                <p className={`mt-1 text-xs ${muted}`}>Choose the pages this role can open from the sidebar.</p>
+              </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {menuItems.map((menu) => <PermissionButton key={menu.id} darkMode={darkMode} active={roleForm.menus.includes(menu.id)} label={menu.label} onClick={() => toggleRoleField("menus", menu.id)} />)}
               </div>
             </div>
-            <div>
-              <p className={`mb-3 text-[11px] uppercase tracking-[0.22em] ${muted}`}>Action permissions</p>
+
+            <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f6f8]"}`}>
+              <div className="mb-4">
+                <p className="text-sm font-semibold">Action permissions</p>
+                <p className={`mt-1 text-xs ${muted}`}>Control what users assigned to this role can change or manage.</p>
+              </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {privilegeItems.map((privilege) => <PermissionButton key={privilege.id} darkMode={darkMode} active={roleForm.privileges.includes(privilege.id)} label={privilege.label} onClick={() => toggleRoleField("privileges", privilege.id)} />)}
               </div>
             </div>
-            <button disabled={saving} className={`flex h-12 w-full items-center justify-center gap-2 rounded-full disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
+
+            <button disabled={saving} className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.99] disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#1f2c3a] text-white"}`}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
               {roleForm.id ? "Save role" : "Create role"}
             </button>
@@ -471,13 +543,43 @@ export default function ManageRoles({ darkMode }) {
       )}
 
       {userModalOpen && (
-        <Modal darkMode={darkMode} title="Add user" eyebrow="User account" onClose={() => setUserModalOpen(false)}>
-          <form onSubmit={createUser} className="grid gap-3 sm:grid-cols-2">
-            <FieldInput darkMode={darkMode} value={userForm.username} onChange={(event) => setUserForm((current) => ({ ...current, username: event.target.value }))} placeholder="Username" required />
-            <FieldInput darkMode={darkMode} value={userForm.displayName} onChange={(event) => setUserForm((current) => ({ ...current, displayName: event.target.value }))} placeholder="Display name" />
-            <PasswordInput darkMode={darkMode} value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} placeholder="Password" required />
-            <SelectMenu darkMode={darkMode} value={userForm.roleId} options={roleOptions} onChange={(roleId) => setUserForm((current) => ({ ...current, roleId }))} />
-            <button disabled={saving} className={`flex h-12 items-center justify-center gap-2 rounded-full sm:col-span-2 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
+        <Modal darkMode={darkMode} title="Invite a new user" eyebrow="Access control" onClose={() => setUserModalOpen(false)} maxWidth="max-w-xl">
+          <form onSubmit={createUser} className="space-y-5">
+            <div className={`flex items-center gap-4 border-b border-dashed pb-5 ${darkMode ? "border-white/15" : "border-black/15"}`}>
+              <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-dashed ${darkMode ? "border-white/20 bg-white/5 text-[#d8f36a]" : "border-slate-300 bg-slate-50 text-slate-500"}`}>
+                <UserPlus className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="text-base font-semibold">Create their workspace account</p>
+                <p className={`mt-1 text-sm ${muted}`}>Add their login details and choose the access role they should receive.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-2">
+                <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${muted}`}>Username</span>
+                <FieldInput darkMode={darkMode} value={userForm.username} onChange={(event) => setUserForm((current) => ({ ...current, username: event.target.value }))} placeholder="Enter username" required />
+              </label>
+              <label className="space-y-2">
+                <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${muted}`}>Display name</span>
+                <FieldInput darkMode={darkMode} value={userForm.displayName} onChange={(event) => setUserForm((current) => ({ ...current, displayName: event.target.value }))} placeholder="Enter full name" />
+              </label>
+            </div>
+
+            <label className="block space-y-2">
+              <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${muted}`}>Temporary password</span>
+              <PasswordInput darkMode={darkMode} value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} placeholder="Create a password" required />
+            </label>
+
+            <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f6f8]"}`}>
+              <div className="mb-3">
+                <p className="text-sm font-semibold">Assign role</p>
+                <p className={`mt-1 text-xs ${muted}`}>The role controls visible modules and available actions.</p>
+              </div>
+              <SelectMenu darkMode={darkMode} value={userForm.roleId} options={roleOptions} onChange={(roleId) => setUserForm((current) => ({ ...current, roleId }))} />
+            </div>
+
+            <button disabled={saving} className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.99] disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#1f2c3a] text-white"}`}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Add user
             </button>
           </form>
@@ -540,6 +642,6 @@ export default function ManageRoles({ darkMode }) {
         onCancel={() => setDeleteConfirm(null)}
         onConfirm={performDelete}
       />
-    </div>
+    </>
   );
 }

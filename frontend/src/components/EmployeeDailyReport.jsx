@@ -773,33 +773,31 @@ export default function EmployeeDailyReport({ darkMode }) {
   const initialLoading = loading && !data;
 
   return (
-    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#e4f2f0] text-[#171714]"}`}>
-      <section className={`relative mb-5 overflow-hidden rounded-[28px] border p-6 sm:p-7 ${darkMode ? "border-white/10 bg-[#202328]" : "border-black/10 bg-[#fbf4e6] shadow-[8px_8px_0_rgba(0,0,0,0.12)]"}`}>
+    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f4f5f8] text-[#171714]"}`}>
+      <section className={`relative mb-5 overflow-hidden rounded-[30px]  p-6 sm:p-8 ${darkMode ? "border-white/10 bg-[#202328]" : "border-black/[0.06] bg-[#fbfbfd] "}`}>
           {!darkMode && (
             <>
-              <span className="absolute -left-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#e4f2f0]" />
-              <span className="absolute -right-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#e4f2f0]" />
-              {/* <span className="absolute left-1/2 top-4 hidden -translate-x-1/2 rounded-full border border-black/15 bg-[#f7ec9a] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] shadow-[3px_3px_0_rgba(0,0,0,0.16)] rotate-3 md:inline-flex">
-                work log
-              </span> */}
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(17,17,17,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(17,17,17,0.035)_1px,transparent_1px)] bg-[size:72px_72px]" />
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white via-white/80 to-transparent" />
+              <span className="absolute -left-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#f4f5f8]" />
+              <span className="absolute -right-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#f4f5f8]" />
             </>
           )}
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold shadow-[3px_3px_0_rgba(0,0,0,0.14)] ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/15 bg-[#d5f3f0] text-black/70 -rotate-1"}`}>
+                <span className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/[0.06] bg-white text-black/70 shadow-[0_10px_24px_rgba(31,35,40,0.08)]"}`}>
                   <CalendarCheck className="h-4 w-4" /> Employee Daily Report
                 </span>
-                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/10 bg-[#f7ec9a] text-black/70 shadow-[2px_2px_0_rgba(0,0,0,0.12)]"}`}>
+                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/[0.04] bg-[#fff1a8] text-black/70 shadow-[0_8px_18px_rgba(31,35,40,0.08)]"}`}>
                   {initialLoading ? <ThreeDotLoader /> : data?.profile?.department || "Department not set"}
                 </span>
-                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/10 bg-[#f8b9d4] text-black/70 shadow-[2px_2px_0_rgba(0,0,0,0.12)]"}`}>
+                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/[0.04] bg-[#f7bdd7] text-black/70 shadow-[0_8px_18px_rgba(31,35,40,0.08)]"}`}>
                   <CalendarCheck className="h-3.5 w-3.5" /> {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Today filled" : "Today pending"}
                 </span>
               </div>
-              <h1 className={`mt-4 max-w-4xl text-4xl small font-black leading-[0.95] tracking-tight sm:text-4xl ${darkMode ? "text-white" : "text-[#171714]"}`}>Daily work reports, made simple.</h1>
-              <div className={`my-3 h-1 w-full max-w-xl border-t border-dashed ${darkMode ? "border-white/20" : "border-black/20"}`} />
-              <p className={`max-w-3xl text-sm font-medium leading-6 ${darkMode ? "text-white/65" : "text-black/70"}`}>Submit today&apos;s work progress, review previous entries, and track reporting consistency in one clean workspace.</p>
+              <h1 className={`mt-5 max-w-4xl text-4xl small font-black  leading-[0.96] tracking-tight sm:text-4xl ${darkMode ? "text-white" : "text-[#161616]"}`}>Daily work reports, made simple.</h1>
+              <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>Submit today&apos;s work progress, review previous entries, and track reporting consistency in one clean workspace.</p>
             </div>
             <div className="flex flex-col gap-3 lg:items-end">
               <div className="flex flex-wrap gap-3 lg:justify-end">
@@ -807,12 +805,12 @@ export default function EmployeeDailyReport({ darkMode }) {
                   type="button"
                   onClick={() => setSheetOpen(true)}
                   disabled={initialLoading}
-                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#d5f3f0] text-black"}`}
+                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm  shadow-[0_12px_26px_rgba(31,35,40,0.10)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/[0.06] bg-white text-black"}`}
                 >
                   <FileText className="h-4 w-4" /> {data?.profile?.sheetLinked ? "Sheet settings" : "Link sheet"}
                 </button>
                 {data?.isAdmin && (
-                  <button onClick={() => setTodayStatusOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f8b9d4] text-black"}`}>
+                  <button onClick={() => setTodayStatusOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm  shadow-[0_12px_26px_rgba(31,35,40,0.10)] transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/[0.06] bg-white text-black"}`}>
                     <CalendarCheck className="h-4 w-4" /> Today status
                   </button>
                 )}
@@ -821,18 +819,18 @@ export default function EmployeeDailyReport({ darkMode }) {
                 <button
                   disabled={initialLoading || data?.todaySubmitted || !data?.profile?.sheetLinked}
                   onClick={openForm}
-                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.18)] transition active:translate-x-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a] text-black" : "border-black bg-[#171714] text-white"}`}
+                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl  px-5 text-sm  shadow-[0_14px_28px_rgba(31,35,40,0.16)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a] text-black" : "border-black bg-[#9381ff] text-white"}`}
                 >
                   {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
                   {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Today's report filled" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
                 </button>
                 {!data?.isAdmin && (
-                  <button onClick={() => setHeatmapOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f8b9d4] text-black"}`}>
+                  <button onClick={() => setHeatmapOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm shadow-[0_12px_26px_rgba(31,35,40,0.10)] transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/[0.06] bg-white text-black"}`}>
                     <CalendarCheck className="h-4 w-4" /> My activity
                   </button>
                 )}
                 {data?.isAdmin && (
-                  <button onClick={() => setReportOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f7ec9a] text-black"}`}>
+                  <button onClick={() => setReportOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm  shadow-[0_12px_26px_rgba(31,35,40,0.10)] transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/[0.06] bg-white text-black"}`}>
                     <FileText className="h-4 w-4" /> Generate report
                   </button>
                 )}

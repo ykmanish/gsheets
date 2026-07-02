@@ -71,6 +71,7 @@ const MENU_ITEMS = [
   { id: "employee-daily-report", label: "Employee Daily Report" },
   { id: "activity-log", label: "Activity Log" },
   { id: "manage-roles", label: "Manage Roles" },
+  { id: "manage-users", label: "Manage Users" },
 ];
 const SUPER_ADMIN_MENU_ITEMS = [{ id: "whatsapp", label: "WhatsApp" }];
 const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];

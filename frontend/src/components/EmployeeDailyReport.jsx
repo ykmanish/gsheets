@@ -690,7 +690,8 @@ export default function EmployeeDailyReport({ darkMode }) {
         },
       } : current);
       toast.success("Daily report sheet linked");
-      await load();
+      setSheetSaving(false);
+      void load();
     } catch (error) {
       toast.error(error.message || "Could not link sheet");
     } finally {
@@ -815,7 +816,7 @@ export default function EmployeeDailyReport({ darkMode }) {
             </div>
           ) : (
             <div className={`mt-5 rounded-[24px] border p-3 ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-black/10 bg-white/65"}`}>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
                 <div className="min-w-0 flex-1">
                   <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Linked Google Sheet</p>
                   <input

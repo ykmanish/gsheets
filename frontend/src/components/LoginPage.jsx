@@ -86,7 +86,7 @@ export default function LoginPage() {
   }
   
   const backgroundImage= {
-    backgroundImage: "url('/loginbg.png')",
+    backgroundImage: "url('https://assets.lummi.ai/assets/QmWyKXxWZdtwBj9REXhGRG17Py5pvn34iuCnSjbiVX1Rz1?auto=format&w=1500')",
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",

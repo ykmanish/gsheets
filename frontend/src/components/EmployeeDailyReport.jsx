@@ -813,7 +813,7 @@ export default function EmployeeDailyReport({ darkMode }) {
             <div className={`mt-5 flex min-h-[92px] items-center justify-center rounded-[24px] border p-3 ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-black/10 bg-white/65"}`}>
               <ThreeDotLoader className={darkMode ? "text-white/60" : "text-black/55"} />
             </div>
-          ) : !data?.isAdmin && (
+          ) : (
             <div className={`mt-5 rounded-[24px] border p-3 ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-black/10 bg-white/65"}`}>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                 <div className="min-w-0 flex-1">

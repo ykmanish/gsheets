@@ -861,7 +861,7 @@ export default function EmployeeDailyReport({ darkMode }) {
           <table className="w-full min-w-[1040px] border-separate border-spacing-y-3 text-left text-sm">
             <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
               <tr>
-                {["Sl No:", "Employee", "Date", "Time filled", "Department", "Task type", "Status", "Actions"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}
+                {["Sl No:", "Employee", "Time filled", "Department", "Task type", "Status", "Actions"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -878,7 +878,6 @@ export default function EmployeeDailyReport({ darkMode }) {
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-4 font-medium">{report.reportDate}</td>
                   <td className="px-5 py-4">{displayDateTime(report.submittedAt)}</td>
                   <td className="px-5 py-4">{report.department}</td>
                   <td className="px-5 py-4">{report.taskType}</td>

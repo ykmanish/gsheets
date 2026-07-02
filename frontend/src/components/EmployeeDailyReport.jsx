@@ -92,12 +92,12 @@ const emptyForm = {
   site: "",
   taskType: "",
   taskTypeOther: "",
-  taskItems: [{ category: "", description: "" }],
+  taskItems: [{ category: "", categoryOther: "", description: "" }],
   taskStatus: "",
   taskStatusOther: "",
   involvement: "",
   involvementOther: "",
-  waitingTaskItems: [{ category: "", description: "" }],
+  waitingTaskItems: [{ category: "", categoryOther: "", description: "" }],
   tomorrowPlanTick: false,
   note: "",
 };
@@ -177,10 +177,10 @@ function TaskRowsEditor({ title, rows, categories, onRowsChange, required = fals
     onRowsChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
   function addRow() {
-    onRowsChange([...rows, { category: "", description: "" }]);
+    onRowsChange([...rows, { category: "", categoryOther: "", description: "" }]);
   }
   function removeRow(index) {
-    onRowsChange(rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [{ category: "", description: "" }]);
+    onRowsChange(rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [{ category: "", categoryOther: "", description: "" }]);
   }
   return (
     <div className="md:col-span-2">
@@ -197,10 +197,19 @@ function TaskRowsEditor({ title, rows, categories, onRowsChange, required = fals
                   darkMode={false}
                   value={row.category}
                   onChange={(value) => updateRow(index, { category: value })}
-                  options={categories}
+                  options={categories.filter((category) => category !== "Other")}
                   placeholder="Choose category"
-                  allowOther={false}
+                  allowOther
                 />
+                {row.category === "__other" && (
+                  <input
+                    required={required && index === 0}
+                    value={row.categoryOther || ""}
+                    onChange={(event) => updateRow(index, { categoryOther: event.target.value })}
+                    placeholder="Enter category"
+                    className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none"
+                  />
+                )}
                 {required && index === 0 && !row.category && <input tabIndex={-1} autoComplete="off" className="pointer-events-none h-0 w-0 opacity-0" required value="" onChange={() => {}} />}
               </div>
               <div>
@@ -237,8 +246,8 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode }) {
             <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
               <tr>
                 <th className="w-16 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em]">Sr No:</th>
-                <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Task Category</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Description</th>
+                <th className="w-48 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Task Category</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Description</th>
               </tr>
             </thead>
             <tbody>
@@ -246,11 +255,11 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode }) {
                 <tr key={`${item.category}-${index}`} className={darkMode ? "bg-white/[0.045]" : "bg-white"}>
                   <td className="rounded-l-2xl px-4 py-3 font-semibold">{index + 1}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex max-w-full whitespace-normal rounded-full px-3 py-1 text-xs font-semibold leading-4 ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#e8f5eb] text-[#145b39]"}`}>
+                    <span className={`inline-flex max-w-[160px] whitespace-normal rounded-full px-3 py-1 text-xs font-semibold leading-4 ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#e8f5eb] text-[#145b39]"}`}>
                       {item.category || "-"}
                     </span>
                   </td>
-                  <td className="whitespace-pre-wrap break-words rounded-r-2xl px-4 py-3 leading-6">{item.description || "-"}</td>
+                  <td className="whitespace-pre-wrap break-words rounded-r-2xl px-5 py-3 leading-6">{item.description || "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -621,6 +630,8 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [todayStatusOpen, setTodayStatusOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
@@ -668,8 +679,8 @@ export default function EmployeeDailyReport({ darkMode }) {
     }
     setForm({
       ...emptyForm,
-      taskItems: [{ category: "", description: "" }],
-      waitingTaskItems: [{ category: "", description: "" }],
+      taskItems: [{ category: "", categoryOther: "", description: "" }],
+      waitingTaskItems: [{ category: "", categoryOther: "", description: "" }],
       department: data?.profile?.department || "",
     });
     setFormOpen(true);
@@ -704,8 +715,8 @@ export default function EmployeeDailyReport({ darkMode }) {
     if (submitting) return;
     try {
       setSubmitting(true);
-      const taskItems = (form.taskItems || []).map((item) => ({ category: item.category.trim(), description: item.description.trim() })).filter((item) => item.category && item.description);
-      const waitingTaskItems = (form.waitingTaskItems || []).map((item) => ({ category: item.category.trim(), description: item.description.trim() })).filter((item) => item.category && item.description);
+      const taskItems = (form.taskItems || []).map((item) => ({ category: fieldValue(item.category, item.categoryOther).trim(), description: item.description.trim() })).filter((item) => item.category && item.description);
+      const waitingTaskItems = (form.waitingTaskItems || []).map((item) => ({ category: fieldValue(item.category, item.categoryOther).trim(), description: item.description.trim() })).filter((item) => item.category && item.description);
       const payload = {
         ...form,
         department: fieldValue(form.department, form.departmentOther),
@@ -758,6 +769,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const reports = data?.reports || [];
   const options = data?.options || { departments: [], taskTypes: [], taskStatuses: [], involvements: [] };
   const reportUsers = data?.reportUsers || [];
+  const todaySubmissionStatus = data?.todaySubmissionStatus || [];
   const initialLoading = loading && !data;
 
   return (
@@ -789,55 +801,49 @@ export default function EmployeeDailyReport({ darkMode }) {
               <div className={`my-3 h-1 w-full max-w-xl border-t border-dashed ${darkMode ? "border-white/20" : "border-black/20"}`} />
               <p className={`max-w-3xl text-sm font-medium leading-6 ${darkMode ? "text-white/65" : "text-black/70"}`}>Submit today&apos;s work progress, review previous entries, and track reporting consistency in one clean workspace.</p>
             </div>
-            <div className="flex flex-wrap gap-3 lg:justify-end">
-            <button
-              disabled={initialLoading || data?.todaySubmitted || !data?.profile?.sheetLinked}
-              onClick={openForm}
-              className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.18)] transition active:translate-x-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a] text-black" : "border-black bg-[#171714] text-white"}`}
-            >
-              {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
-              {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Today's report filled" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
-            </button>
-            {!data?.isAdmin && (
-              <button onClick={() => setHeatmapOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f8b9d4] text-black"}`}>
-                <CalendarCheck className="h-4 w-4" /> My activity
-              </button>
-            )}
-            {data?.isAdmin && (
-              <button onClick={() => setReportOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f7ec9a] text-black"}`}>
-                <FileText className="h-4 w-4" /> Generate report
-              </button>
-            )}
+            <div className="flex flex-col gap-3 lg:items-end">
+              <div className="flex flex-wrap gap-3 lg:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSheetOpen(true)}
+                  disabled={initialLoading}
+                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#d5f3f0] text-black"}`}
+                >
+                  <FileText className="h-4 w-4" /> {data?.profile?.sheetLinked ? "Sheet settings" : "Link sheet"}
+                </button>
+                {data?.isAdmin && (
+                  <button onClick={() => setTodayStatusOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f8b9d4] text-black"}`}>
+                    <CalendarCheck className="h-4 w-4" /> Today status
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-3 lg:justify-end">
+                <button
+                  disabled={initialLoading || data?.todaySubmitted || !data?.profile?.sheetLinked}
+                  onClick={openForm}
+                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.18)] transition active:translate-x-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a] text-black" : "border-black bg-[#171714] text-white"}`}
+                >
+                  {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
+                  {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Today's report filled" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
+                </button>
+                {!data?.isAdmin && (
+                  <button onClick={() => setHeatmapOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f8b9d4] text-black"}`}>
+                    <CalendarCheck className="h-4 w-4" /> My activity
+                  </button>
+                )}
+                {data?.isAdmin && (
+                  <button onClick={() => setReportOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f7ec9a] text-black"}`}>
+                    <FileText className="h-4 w-4" /> Generate report
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           {initialLoading ? (
             <div className={`mt-5 flex min-h-[92px] items-center justify-center rounded-[24px] border p-3 ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-black/10 bg-white/65"}`}>
               <ThreeDotLoader className={darkMode ? "text-white/60" : "text-black/55"} />
             </div>
-          ) : (
-            <div className={`mt-5 rounded-[24px] border p-3 ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-black/10 bg-white/65"}`}>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                <div className="min-w-0 flex-1">
-                  <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Linked Google Sheet</p>
-                  <input
-                    value={sheetInput}
-                    onChange={(event) => setSheetInput(event.target.value)}
-                    placeholder="Paste your daily report Google Sheet link"
-                    className={`mt-2 h-11 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-black/20 text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={saveSheetLink}
-                  disabled={sheetSaving || !sheetInput.trim()}
-                  className={`h-11 rounded-2xl px-5 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
-                >
-                  {sheetSaving ? "Linking..." : data?.profile?.sheetLinked ? "Update sheet" : "Link sheet"}
-                </button>
-              </div>
-              <p className={`mt-2 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Reports are saved into this sheet and dashboard data is read back from it.</p>
-            </div>
-          )}
+          ) : null}
        </section>
 
       <section className={`mt-5 overflow-hidden rounded-[28px] border ${panel}`}>
@@ -865,7 +871,7 @@ export default function EmployeeDailyReport({ darkMode }) {
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={8} className={`px-5 py-10 text-center ${muted}`}>Loading reports...</td></tr>}
+              {loading && <tr><td colSpan={7} className={`px-5 py-10 text-center ${muted}`}>Loading reports...</td></tr>}
               {!loading && reports.map((report, index) => (
                 <tr key={report.id} className={darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]"}>
                   <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
@@ -889,11 +895,92 @@ export default function EmployeeDailyReport({ darkMode }) {
                   </td>
                 </tr>
               ))}
-              {!loading && !reports.length && <tr><td colSpan={8} className={`px-5 py-10 text-center ${muted}`}>No reports found.</td></tr>}
+              {!loading && !reports.length && <tr><td colSpan={7} className={`px-5 py-10 text-center ${muted}`}>No reports found.</td></tr>}
             </tbody>
           </table>
         </div>
       </section>
+
+      {sheetOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#2f2a22]/65 p-4 backdrop-blur-md">
+          <div className={`w-full max-w-3xl rounded-[28px] border p-5 shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#f4f1ea] text-[#171714]"}`}>
+            <div className={`mb-4 flex items-center justify-between rounded-[22px] px-5 py-4 text-white ${darkMode ? "bg-[#202328]" : "bg-[#2d2a22]"}`}>
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-white/10"><FileText className="h-5 w-5" /></span>
+                <div>
+                  <p className="text-xs text-white/55">Employee daily report</p>
+                  <h3 className="text-lg font-semibold">Google Sheet settings</h3>
+                </div>
+              </div>
+              <button onClick={() => setSheetOpen(false)} className="grid h-10 w-10 place-items-center rounded-full bg-white/10"><X className="h-4 w-4" /></button>
+            </div>
+            <div className={`rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
+              <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${muted}`}>Linked Google Sheet</p>
+              <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+                <input
+                  value={sheetInput}
+                  onChange={(event) => setSheetInput(event.target.value)}
+                  placeholder="Paste your daily report Google Sheet link"
+                  className={`h-12 min-w-0 flex-1 rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-black/20 text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+                />
+                <button
+                  type="button"
+                  onClick={saveSheetLink}
+                  disabled={sheetSaving || !sheetInput.trim()}
+                  className={`h-12 rounded-2xl px-6 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                >
+                  {sheetSaving ? "Linking..." : data?.profile?.sheetLinked ? "Update sheet" : "Link sheet"}
+                </button>
+              </div>
+              <p className={`mt-3 text-xs ${muted}`}>Reports are saved into this sheet and dashboard data is read back from it.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {todayStatusOpen && data?.isAdmin && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#2f2a22]/65 p-4 backdrop-blur-md">
+          <div className={`flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border p-5 shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#f4f1ea] text-[#171714]"}`}>
+            <div className={`mb-4 flex shrink-0 items-center justify-between rounded-[22px] px-5 py-4 text-white ${darkMode ? "bg-[#202328]" : "bg-[#2d2a22]"}`}>
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-white/10"><CalendarCheck className="h-5 w-5" /></span>
+                <div>
+                  <p className="text-xs text-white/55">Today&apos;s report status</p>
+                  <h3 className="text-lg font-semibold">{data?.today || todayInput()}</h3>
+                </div>
+              </div>
+              <button onClick={() => setTodayStatusOpen(false)} className="grid h-10 w-10 place-items-center rounded-full bg-white/10"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="overflow-auto">
+              <table className="w-full min-w-[820px] border-separate border-spacing-y-3 text-left text-sm">
+                <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
+                  <tr>{["Sl No:", "Employee", "Department", "Time filled", "Task type", "Status"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {todaySubmissionStatus.map((item, index) => (
+                    <tr key={item.userId} className={darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]"}>
+                      <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <span className={`grid h-10 w-10 place-items-center rounded-full text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-[#d5f3f0] text-[#145b39]"}`}>{(item.employeeName || "E").slice(0, 1).toUpperCase()}</span>
+                          <p className="font-semibold">{item.employeeName}</p>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">{item.department || "-"}</td>
+                      <td className="px-5 py-4">{item.submitted ? displayDateTime(item.submittedAt) : "-"}</td>
+                      <td className="px-5 py-4">{item.taskType || "-"}</td>
+                      <td className="rounded-r-2xl px-5 py-4">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${item.submitted ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{item.submitted ? "Submitted" : "Not submitted"}</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {!todaySubmissionStatus.length && <tr><td colSpan={6} className={`px-5 py-10 text-center ${muted}`}>No employees found.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {formOpen && (
         <div className="fixed inset-0 z-50 bg-[#2f2a22]/65 backdrop-blur-md">

@@ -660,7 +660,7 @@ function PlanCeoView({ activePlan, activePlanTitle, activeTomorrowSite, tomorrow
           ].map(([label, value]) => (
             <div key={label} className={`px-5 py-4 ${darkMode ? "bg-[#111216]" : "bg-white"}`}>
               <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}>{label}</p>
-              <p className="mt-1 text-3xl font-semibold leading-none">{value}</p>
+              <p className={`mt-1 text-3xl font-semibold leading-none ${label === "Actual" ? totalStatus.ok ? "text-emerald-600" : "text-red-600" : ""}`}>{value}</p>
             </div>
           ))}
         </div>
@@ -692,11 +692,12 @@ function PlanCeoView({ activePlan, activePlanTitle, activeTomorrowSite, tomorrow
                   {siteColumns.map((site) => {
                     const cell = trade.cells.get(site);
                     const actual = actualByTradeSite.get(`${comparablePlanText(site)}|${comparableTradeText(trade.trade)}`) || 0;
+                    const actualOk = actual >= (Number(cell?.people) || 0);
                     return (
                       <td key={`${trade.trade}-${site}`} className={`border-b px-2.5 py-2 align-middle ${line}`}>
                         {cell ? (
                           <div className="flex items-baseline gap-1.5">
-                            <p className="text-base font-semibold leading-none">{cell.people}<span className={muted}>/</span><span className="text-red-600">{actual}</span></p>
+                            <p className="text-base font-semibold leading-none">{cell.people}<span className={muted}>/</span><span className={actualOk ? "text-emerald-600" : "text-red-600"}>{actual}</span></p>
                             <p className={`text-[10px] ${muted}`}>{cell.items}i</p>
                           </div>
                         ) : (
@@ -707,7 +708,11 @@ function PlanCeoView({ activePlan, activePlanTitle, activeTomorrowSite, tomorrow
                   })}
                   <td className={`border-b px-2.5 py-2 align-middle ${line}`}>
                     <div className="flex items-baseline gap-1.5">
-                      <p className="text-base font-semibold leading-none">{trade.totalPeople}<span className={muted}>/</span><span className="text-red-600">{tradeActualTotal(trade.trade)}</span></p>
+                      {(() => {
+                        const actualTotal = tradeActualTotal(trade.trade);
+                        const actualOk = actualTotal >= (Number(trade.totalPeople) || 0);
+                        return <p className="text-base font-semibold leading-none">{trade.totalPeople}<span className={muted}>/</span><span className={actualOk ? "text-emerald-600" : "text-red-600"}>{actualTotal}</span></p>;
+                      })()}
                       <p className={`text-[10px] ${muted}`}>{trade.totalItems}i</p>
                     </div>
                   </td>

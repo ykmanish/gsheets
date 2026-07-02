@@ -395,6 +395,8 @@ const EMPLOYEE_REPORT_OPTIONS = {
   taskStatuses: ["In Progress", "Completed", "Work Halt", "Work Suspended", "Work Cancelled", "Other"],
   involvements: ["Client", "Vendor", "Team", "Other"],
 };
+const EMPLOYEE_REPORT_APP_TAB = "_AppData";
+const EMPLOYEE_REPORT_APP_HEADERS = ["Report ID", "User ID", "Employee", "Department", "Report Date", "Submitted At", "Client", "Site", "Task Type", "Task Status", "Involvement", "Tomorrow Plan", "Note", "Task Items JSON", "Waiting Items JSON"];
 
 function canViewEmployeeDailyReports(req) {
   return Boolean(req.user?.isSuperAdmin || hasPrivilege(req, "view_employee_daily_reports"));
@@ -436,12 +438,32 @@ function taskItemsToText(items = []) {
   return items.map((item) => `${item.category}: ${item.description}`).join("\n");
 }
 
+function incrementEmployeeReportBucket(map, key, patch = {}) {
+  const label = projectText(key) || "Not set";
+  const current = map.get(label) || { label, reports: 0, completedTasks: 0, waitingTasks: 0, employees: new Set() };
+  current.reports += Number(patch.reports || 0);
+  current.completedTasks += Number(patch.completedTasks || 0);
+  current.waitingTasks += Number(patch.waitingTasks || 0);
+  if (patch.employeeName) current.employees.add(projectText(patch.employeeName));
+  map.set(label, current);
+}
+
+function serializeEmployeeReportBucket(bucket) {
+  return {
+    label: bucket.label,
+    reports: bucket.reports,
+    completedTasks: bucket.completedTasks,
+    waitingTasks: bucket.waitingTasks,
+    employees: bucket.employees.size,
+  };
+}
+
 function sanitizeEmployeeReport(report) {
   if (!report) return null;
   const taskItems = sanitizeEmployeeTaskItems(report.taskItems);
   const waitingTaskItems = sanitizeEmployeeTaskItems(report.waitingTaskItems);
   return {
-    id: String(report._id),
+    id: String(report._id || report.id || report.reportId || `${report.userId || "employee"}-${report.reportDate || ""}-${report.submittedAt || ""}`),
     userId: String(report.userId),
     employeeName: report.employeeName || "",
     department: report.department || "",
@@ -461,6 +483,380 @@ function sanitizeEmployeeReport(report) {
   };
 }
 
+function extractSpreadsheetId(value = "") {
+  const id = extractDriveFileId(value);
+  if (!id) return null;
+  return id;
+}
+
+function employeeSheetUrl(spreadsheetId = "") {
+  return spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` : "";
+}
+
+async function getEmployeeSpreadsheetMeta(spreadsheetId) {
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const response = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "properties.title,sheets.properties(sheetId,title,sheetType,hidden)",
+  });
+  const tabs = (response.data.sheets || [])
+    .map((sheet) => sheet.properties)
+    .filter((sheet) => sheet?.sheetType === "GRID" && !sheet.hidden && sheet.title !== EMPLOYEE_REPORT_APP_TAB);
+  if (!tabs.length) throw new Error("No visible sheet tab found");
+  return { title: response.data.properties?.title || "Employee report sheet", tabName: tabs[0].title || "Sheet1", tabId: tabs[0].sheetId };
+}
+
+function parseEmployeeJsonItems(value) {
+  try {
+    const parsed = JSON.parse(projectText(value) || "[]");
+    return sanitizeEmployeeTaskItems(parsed);
+  } catch {
+    return [];
+  }
+}
+
+function employeeReportsFromAppRows({ rows = [], user }) {
+  return rows.map((row, index) => {
+    const reportId = projectText(row[0]) || `${user?._id || "employee"}-${projectText(row[4])}-${index}`;
+    const taskItems = parseEmployeeJsonItems(row[13]);
+    const waitingTaskItems = parseEmployeeJsonItems(row[14]);
+    return {
+      _id: reportId,
+      reportId,
+      userId: String(row[1] || user?._id || ""),
+      employeeName: projectText(row[2]) || user?.displayName || user?.username || "Employee",
+      department: projectText(row[3]) || user?.department || "",
+      reportDate: projectText(row[4]),
+      submittedAt: projectText(row[5]) ? new Date(projectText(row[5])) : null,
+      client: projectText(row[6]),
+      site: projectText(row[7]),
+      taskType: projectText(row[8]),
+      taskStatus: projectText(row[9]),
+      involvement: projectText(row[10]),
+      tomorrowPlanTick: ["true", "yes", "y", "1", "checked", "tick"].includes(projectText(row[11]).toLowerCase()),
+      note: projectText(row[12]),
+      taskItems,
+      taskDescription: taskItemsToText(taskItems),
+      waitingTaskItems,
+      waitingTaskDescription: taskItemsToText(waitingTaskItems),
+    };
+  }).filter((report) => report.reportDate || report.submittedAt);
+}
+
+async function ensureEmployeeAppDataTab(sheets, spreadsheetId, create = true) {
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties(sheetId,title,hidden,sheetType)",
+  });
+  const existing = (metadata.data.sheets || []).find((sheet) => sheet.properties?.title === EMPLOYEE_REPORT_APP_TAB);
+  if (existing) return existing.properties;
+  if (!create) return null;
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          addSheet: {
+            properties: {
+              title: EMPLOYEE_REPORT_APP_TAB,
+              hidden: true,
+              gridProperties: { rowCount: 1000, columnCount: EMPLOYEE_REPORT_APP_HEADERS.length },
+            },
+          },
+        },
+      ],
+    },
+  });
+  const created = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties(sheetId,title,hidden,sheetType)",
+  });
+  const tab = (created.data.sheets || []).find((sheet) => sheet.properties?.title === EMPLOYEE_REPORT_APP_TAB)?.properties;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A1:O1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [EMPLOYEE_REPORT_APP_HEADERS] },
+  });
+  return tab;
+}
+
+function findEmployeeTemplateColumns(values = []) {
+  const fallback = {
+    reportDate: null,
+    client: 2,
+    site: 3,
+    taskType: 4,
+    taskDescription: 5,
+    taskStatus: 8,
+    involvement: 9,
+    waitingSerial: 11,
+    waitingDescription: 12,
+    tomorrowTick: 13,
+    note: 14,
+  };
+  const headers = [];
+  values.slice(0, 6).forEach((row, rowIndex) => {
+    (row || []).forEach((cell, columnIndex) => {
+      const text = projectText(cell).toLowerCase();
+      if (text) headers.push({ text, rowIndex, column: columnIndex + 1 });
+    });
+  });
+  const findHeader = (matcher) => headers.find((header) => matcher(header.text))?.column;
+  const waitingMarker = headers.find((header) => /tasks?\s+in\s+waiting|tomorrow/.test(header.text) && header.column > 6)?.column || 10;
+  const afterWaiting = (matcher) => headers.find((header) => header.column >= waitingMarker && matcher(header.text))?.column;
+  const waitingDescription = afterWaiting((text) => /task\s*description/.test(text)) || fallback.waitingDescription;
+  const detectedTomorrowTick = afterWaiting((text) => /tick|tomorrow/.test(text));
+  const detectedNote = afterWaiting((text) => /note/.test(text)) || fallback.note;
+  const tomorrowTick = detectedTomorrowTick && detectedTomorrowTick !== waitingDescription
+    ? detectedTomorrowTick
+    : detectedNote > waitingDescription + 1
+      ? detectedNote - 1
+      : waitingDescription + 1;
+  return {
+    reportDate: findHeader((text) => /^date$|^dated$|report\s*date/.test(text)) || fallback.reportDate,
+    client: findHeader((text) => /^client$/.test(text)) || fallback.client,
+    site: findHeader((text) => /^site$/.test(text)) || fallback.site,
+    taskType: findHeader((text) => /^task\s*type$/.test(text)) || fallback.taskType,
+    taskDescription: headers.find((header) => header.column < waitingMarker && /task\s*description/.test(header.text))?.column || fallback.taskDescription,
+    taskStatus: findHeader((text) => /^task\s*status$/.test(text)) || fallback.taskStatus,
+    involvement: findHeader((text) => /^involvement$/.test(text)) || fallback.involvement,
+    waitingSerial: afterWaiting((text) => /sr\.?\s*no/.test(text)) || fallback.waitingSerial,
+    waitingDescription,
+    tomorrowTick,
+    note: detectedNote,
+  };
+}
+
+function findNextEmployeeTemplateRow(values = [], columns = findEmployeeTemplateColumns(values)) {
+  const contentColumns = [
+    columns.client,
+    columns.site,
+    columns.reportDate,
+    columns.taskType,
+    columns.taskDescription,
+    columns.taskStatus,
+    columns.involvement,
+    columns.waitingDescription,
+    columns.tomorrowTick,
+    columns.note,
+  ].filter(Boolean).map((column) => column - 1);
+  for (let index = 2; index < Math.max(values.length, 300); index += 1) {
+    const row = values[index] || [];
+    const hasVisibleData = contentColumns.some((columnIndex) => projectText(row[columnIndex]));
+    if (!hasVisibleData) return index + 1;
+  }
+  return Math.max(values.length + 1, 3);
+}
+
+async function repairEmployeeSerialFormulas(sheets, spreadsheetId, tabName, maxRows = 300) {
+  const rowCount = Math.max(2, maxRows);
+  const serialFormulas = [];
+  const waitingSerialFormulas = [];
+  for (let rowNumber = 2; rowNumber <= rowCount; rowNumber += 1) {
+    serialFormulas.push([`=IF(COUNTA(B${rowNumber}:I${rowNumber})=0,"",IFERROR(MAX($A$1:A${rowNumber - 1}),0)+1)`]);
+    waitingSerialFormulas.push([`=IF(COUNTA(L${rowNumber}:N${rowNumber})=0,"",IFERROR(MAX($K$1:K${rowNumber - 1}),0)+1)`]);
+  }
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      valueInputOption: "USER_ENTERED",
+      data: [
+        { range: `${escapeSheetName(tabName)}!A2:A${rowCount}`, values: serialFormulas },
+        { range: `${escapeSheetName(tabName)}!K2:K${rowCount}`, values: waitingSerialFormulas },
+      ],
+    },
+  });
+}
+
+function employeeReportFromSheetRows({ rows = [], user, spreadsheetId }) {
+  const reports = new Map();
+  rows.forEach((row, rowIndex) => {
+    const reportDate = projectText(row[12]);
+    const submittedAt = projectText(row[13]);
+    const reportId = projectText(row[16]) || `${spreadsheetId || user?._id || "sheet"}-${reportDate}-${submittedAt}-${rowIndex}`;
+    if (!reportDate && !submittedAt) return;
+    const existing = reports.get(reportId) || {
+      _id: reportId,
+      reportId,
+      userId: String(row[17] || user?._id || ""),
+      employeeName: projectText(row[14]) || user?.displayName || user?.username || "Employee",
+      department: projectText(row[15]) || user?.department || "",
+      reportDate,
+      submittedAt: submittedAt ? new Date(submittedAt) : null,
+      client: projectText(row[1]),
+      site: projectText(row[2]),
+      taskType: projectText(row[3]),
+      taskStatus: projectText(row[5]),
+      involvement: projectText(row[6]),
+      taskItems: [],
+      waitingTaskItems: [],
+      tomorrowPlanTick: false,
+      note: projectText(row[11]),
+    };
+    const taskCategory = projectText(row[3]);
+    const taskDescription = projectText(row[4]);
+    if (taskCategory && taskDescription && !existing.taskItems.some((item) => item.category === taskCategory && item.description === taskDescription)) {
+      existing.taskItems.push({ category: taskCategory, description: taskDescription });
+    }
+    const waitingDescription = projectText(row[9]);
+    if (waitingDescription && !existing.waitingTaskItems.some((item) => item.description === waitingDescription)) {
+      existing.waitingTaskItems.push({ category: "Waiting / tomorrow plan", description: waitingDescription });
+    }
+    existing.tomorrowPlanTick = existing.tomorrowPlanTick || ["true", "yes", "y", "1", "checked", "tick"].includes(projectText(row[10]).toLowerCase());
+    if (!existing.note) existing.note = projectText(row[11]);
+    reports.set(reportId, existing);
+  });
+  return [...reports.values()].map((report) => ({
+    ...report,
+    taskDescription: taskItemsToText(report.taskItems),
+    waitingTaskDescription: taskItemsToText(report.waitingTaskItems),
+  }));
+}
+
+async function readEmployeeSheetReportsForUser(user) {
+  const spreadsheetId = user?.employeeDailySpreadsheetId;
+  if (!spreadsheetId) return [];
+  const meta = await getEmployeeSpreadsheetMeta(spreadsheetId);
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const serialResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(meta.tabName)}!A1:N300`,
+  }).catch(() => ({ data: { values: [] } }));
+  const serialValues = serialResponse.data.values || [];
+  const hasBrokenSerials = serialValues.some((row) => projectText(row[0]) === "#REF!" || projectText(row[10]) === "#REF!");
+  if (hasBrokenSerials) {
+    await repairEmployeeSerialFormulas(sheets, spreadsheetId, meta.tabName, 300).catch((error) => {
+      console.warn("Employee serial formula repair skipped:", error.message);
+    });
+  }
+  const appTab = await ensureEmployeeAppDataTab(sheets, spreadsheetId, false);
+  if (appTab) {
+    const appResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A2:O10000`,
+    });
+    const appReports = employeeReportsFromAppRows({ rows: appResponse.data.values || [], user });
+    if (appReports.length) return appReports;
+  }
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(meta.tabName)}!A1:R10000`,
+  });
+  return employeeReportFromSheetRows({ rows: response.data.values || [], user, spreadsheetId });
+}
+
+async function readEmployeeReportsForUsers(users = []) {
+  const results = await Promise.allSettled(users.map((user) => readEmployeeSheetReportsForUser(user)));
+  return results.flatMap((result, index) => {
+    if (result.status === "fulfilled") return result.value;
+    console.warn("Employee sheet read skipped:", users[index]?.username || users[index]?._id, result.reason?.message || result.reason);
+    return [];
+  });
+}
+
+function filterEmployeeReports(reports = [], { search = "", dateFrom = "", dateTo = "", userIds = [] } = {}) {
+  const needle = projectText(search).toLowerCase();
+  const selected = new Set((userIds || []).map(String).filter(Boolean));
+  return reports.filter((report) => {
+    if (selected.size && !selected.has(String(report.userId))) return false;
+    if (dateFrom && report.reportDate < dateFrom) return false;
+    if (dateTo && report.reportDate > dateTo) return false;
+    if (!needle) return true;
+    return [
+      report.employeeName,
+      report.department,
+      report.client,
+      report.site,
+      report.taskType,
+      report.taskStatus,
+      report.involvement,
+      ...sanitizeEmployeeTaskItems(report.taskItems).flatMap((item) => [item.category, item.description]),
+      ...sanitizeEmployeeTaskItems(report.waitingTaskItems).flatMap((item) => [item.category, item.description]),
+    ].some((value) => projectText(value).toLowerCase().includes(needle));
+  });
+}
+
+async function appendEmployeeReportToSheet({ user, report, taskItems, waitingTaskItems }) {
+  const spreadsheetId = user?.employeeDailySpreadsheetId;
+  if (!spreadsheetId) throw new Error("Link your Google Sheet before submitting today's report");
+  const meta = await getEmployeeSpreadsheetMeta(spreadsheetId);
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  await ensureEmployeeAppDataTab(sheets, spreadsheetId, true);
+  const appExisting = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A2:O10000`,
+  });
+  const alreadySubmittedFromApp = employeeReportsFromAppRows({ rows: appExisting.data.values || [], user }).some((item) => item.reportDate === report.reportDate);
+  if (alreadySubmittedFromApp) {
+    const duplicate = new Error("Today's report is already submitted");
+    duplicate.code = "EMPLOYEE_REPORT_EXISTS";
+    throw duplicate;
+  }
+  const existing = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(meta.tabName)}!A1:R10000`,
+  });
+  const values = existing.data.values || [];
+  await repairEmployeeSerialFormulas(sheets, spreadsheetId, meta.tabName, Math.max(values.length + 20, 300));
+  const columns = findEmployeeTemplateColumns(values);
+  const startRow = findNextEmployeeTemplateRow(values, columns);
+  const rowCount = Math.max(taskItems.length, waitingTaskItems.length, 1);
+  const data = [];
+  Array.from({ length: rowCount }, (_, index) => {
+    const task = taskItems[index] || {};
+    const waiting = waitingTaskItems[index] || {};
+    const rowNumber = startRow + index;
+    [
+      [columns.client, report.client],
+      [columns.site, report.site],
+      [columns.reportDate, report.reportDate],
+      [columns.taskType, task.category || report.taskType],
+      [columns.taskDescription, task.description || ""],
+      [columns.taskStatus, report.taskStatus],
+      [columns.involvement, report.involvement],
+      [columns.waitingDescription, waiting.description || ""],
+      [columns.tomorrowTick, report.tomorrowPlanTick ? "TRUE" : ""],
+      [columns.note, index === 0 ? report.note : ""],
+    ].forEach(([column, value]) => {
+      if (!column) return;
+      data.push({
+        range: `${escapeSheetName(meta.tabName)}!${columnName(column)}${rowNumber}`,
+        values: [[value]],
+      });
+    });
+  });
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: { valueInputOption: "USER_ENTERED", data },
+  });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A:O`,
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [[
+        report.reportId,
+        report.userId,
+        report.employeeName,
+        report.department,
+        report.reportDate,
+        report.submittedAt.toISOString(),
+        report.client,
+        report.site,
+        report.taskType,
+        report.taskStatus,
+        report.involvement,
+        report.tomorrowPlanTick ? "TRUE" : "FALSE",
+        report.note,
+        JSON.stringify(taskItems),
+        JSON.stringify(waitingTaskItems),
+      ]],
+    },
+  });
+}
+
 async function buildEmployeeReportDashboard(req, query = {}) {
   const db = await connectAuthDb();
   const isAdmin = canViewEmployeeDailyReports(req);
@@ -468,39 +864,19 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const search = projectText(query.search).toLowerCase();
   const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateFrom || "")) ? String(query.dateFrom) : "";
   const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateTo || "")) ? String(query.dateTo) : "";
-  const filter = isAdmin ? {} : { userId };
-  if (dateFrom || dateTo) {
-    filter.reportDate = {};
-    if (dateFrom) filter.reportDate.$gte = dateFrom;
-    if (dateTo) filter.reportDate.$lte = dateTo;
-  }
-  if (search) {
-    filter.$or = [
-      { employeeName: { $regex: search, $options: "i" } },
-      { department: { $regex: search, $options: "i" } },
-      { client: { $regex: search, $options: "i" } },
-      { site: { $regex: search, $options: "i" } },
-      { taskType: { $regex: search, $options: "i" } },
-      { taskStatus: { $regex: search, $options: "i" } },
-      { "taskItems.category": { $regex: search, $options: "i" } },
-      { "taskItems.description": { $regex: search, $options: "i" } },
-      { "waitingTaskItems.category": { $regex: search, $options: "i" } },
-      { "waitingTaskItems.description": { $regex: search, $options: "i" } },
-    ];
-  }
-  const reports = await db.collection("employeeDailyReports").find(filter).sort({ reportDate: -1, submittedAt: -1 }).limit(500).toArray();
+  const linkedUsers = isAdmin
+    ? await db.collection("users").find({ employeeDailySpreadsheetId: { $exists: true, $ne: "" } }).limit(500).toArray()
+    : [req.user];
+  const allSheetReports = await readEmployeeReportsForUsers(linkedUsers);
+  const reports = filterEmployeeReports(allSheetReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] })
+    .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
+    .slice(0, 500);
   const today = istDateKey(new Date());
-  const todaySubmitted = Boolean(await db.collection("employeeDailyReports").findOne({ userId, reportDate: today }));
+  const ownReports = isAdmin ? await readEmployeeSheetReportsForUser(req.user) : allSheetReports;
+  const todaySubmitted = ownReports.some((report) => String(report.userId) === userId && report.reportDate === today);
   const dates = employeeReportDateRange();
-  const heatmapFilter = isAdmin ? { reportDate: { $gte: dates[0], $lte: dates[dates.length - 1] } } : { userId, reportDate: { $gte: dates[0], $lte: dates[dates.length - 1] } };
-  const heatmapReports = await db.collection("employeeDailyReports").find(heatmapFilter, { projection: { userId: 1, employeeName: 1, reportDate: 1 } }).toArray();
-  const users = isAdmin
-    ? [...heatmapReports.reduce((result, report) => {
-      const id = String(report.userId);
-      if (!result.has(id)) result.set(id, { userId: id, employeeName: report.employeeName || "Employee" });
-      return result;
-    }, new Map()).values()]
-    : [{ userId, employeeName: req.authUser.displayName || req.authUser.username || "You" }];
+  const heatmapReports = filterEmployeeReports(isAdmin ? allSheetReports : ownReports, { dateFrom: dates[0], dateTo: dates[dates.length - 1], userIds: isAdmin ? [] : [userId] });
+  const users = [{ userId, employeeName: req.authUser.displayName || req.authUser.username || "You" }];
   const heatmap = users.map((user) => {
     const submitted = new Set(heatmapReports.filter((report) => String(report.userId) === user.userId).map((report) => report.reportDate));
     return {
@@ -508,12 +884,22 @@ async function buildEmployeeReportDashboard(req, query = {}) {
       days: dates.map((date) => ({ date, submitted: submitted.has(date) })),
     };
   });
+  const reportUsers = isAdmin
+    ? linkedUsers.map((user) => ({ _id: String(user._id), employeeName: user.displayName || user.username || "Employee", department: user.department || "" }))
+    : [];
   return {
     isAdmin,
     today,
     todaySubmitted,
-    profile: { department: req.user.department || "", taskCategories: sanitizeEmployeeTaskCategories(req.user.employeeTaskCategories || []) },
+    profile: {
+      department: req.user.department || "",
+      taskCategories: sanitizeEmployeeTaskCategories(req.user.employeeTaskCategories || []),
+      sheetLinked: Boolean(req.user.employeeDailySpreadsheetId),
+      sheetId: req.user.employeeDailySpreadsheetId || "",
+      sheetUrl: employeeSheetUrl(req.user.employeeDailySpreadsheetId || ""),
+    },
     options: EMPLOYEE_REPORT_OPTIONS,
+    reportUsers: reportUsers.map((user) => ({ userId: String(user._id), employeeName: user.employeeName || "Employee", department: user.department || "" })),
     reports: reports.map(sanitizeEmployeeReport),
     heatmap,
   };
@@ -526,6 +912,31 @@ app.get("/employee-daily-report", async (req, res) => {
   } catch (error) {
     console.error("Employee daily report load error:", error);
     res.status(500).json({ error: "Could not load employee daily reports" });
+  }
+});
+
+app.put("/employee-daily-report/sheet", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    const spreadsheetId = extractSpreadsheetId(req.body?.spreadsheet || req.body?.spreadsheetId || req.body?.sheetUrl);
+    if (!spreadsheetId) return res.status(400).json({ error: "Paste a valid Google Sheet link or ID" });
+    const meta = await getEmployeeSpreadsheetMeta(spreadsheetId);
+    const db = await connectAuthDb();
+    await db.collection("users").updateOne(
+      { _id: req.user._id },
+      {
+        $set: {
+          employeeDailySpreadsheetId: spreadsheetId,
+          employeeDailySheetName: meta.title,
+          employeeDailySheetTab: meta.tabName,
+          updatedAt: new Date(),
+        },
+      }
+    );
+    res.json({ success: true, sheetId: spreadsheetId, sheetUrl: employeeSheetUrl(spreadsheetId), sheetName: meta.title, tabName: meta.tabName });
+  } catch (error) {
+    console.error("Employee daily sheet link error:", error);
+    res.status(400).json({ error: `Could not link sheet: ${error.message}` });
   }
 });
 
@@ -546,9 +957,9 @@ app.post("/employee-daily-report", async (req, res) => {
     }
     if (!taskItems.length) return res.status(400).json({ error: "Add at least one completed task with category and description" });
     const now = new Date();
-    const nextCategories = sanitizeEmployeeTaskCategories([...(req.user.employeeTaskCategories || []), ...taskItems.map((item) => item.category), ...waitingTaskItems.map((item) => item.category)]);
     const report = {
       _id: new ObjectId(),
+      reportId: new ObjectId().toString(),
       userId,
       employeeName: req.authUser.displayName || req.authUser.username || "Employee",
       department,
@@ -568,15 +979,78 @@ app.post("/employee-daily-report", async (req, res) => {
       createdAt: now,
       updatedAt: now,
     };
-    await db.collection("employeeDailyReports").insertOne(report);
-    const userSet = { employeeTaskCategories: nextCategories, updatedAt: now };
+    await appendEmployeeReportToSheet({ user: req.user, report, taskItems, waitingTaskItems });
+    const userSet = { updatedAt: now };
     if (!req.user.department || req.user.department !== department) userSet.department = department;
     await db.collection("users").updateOne({ _id: req.user._id }, { $set: userSet });
     res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }) });
   } catch (error) {
-    if (error.code === 11000) return res.status(409).json({ error: "Today's report is already submitted" });
+    if (error.code === 11000 || error.code === "EMPLOYEE_REPORT_EXISTS") return res.status(409).json({ error: "Today's report is already submitted" });
+    if (/link your google sheet|could not open|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
     console.error("Employee daily report submit error:", error);
     res.status(500).json({ error: "Could not submit daily report" });
+  }
+});
+
+app.get("/employee-daily-report/report", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    const db = await connectAuthDb();
+    const today = istDateKey(new Date());
+    const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateFrom || "")) ? String(req.query.dateFrom) : today;
+    const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateTo || "")) ? String(req.query.dateTo) : dateFrom;
+    const from = dateFrom <= dateTo ? dateFrom : dateTo;
+    const to = dateFrom <= dateTo ? dateTo : dateFrom;
+    const selectedUserIds = projectText(req.query.userIds).split(",").map((item) => item.trim()).filter(Boolean).slice(0, 100);
+    const userFilter = { employeeDailySpreadsheetId: { $exists: true, $ne: "" } };
+    const selectedObjectIds = selectedUserIds.filter((id) => /^[a-f\d]{24}$/i.test(id)).map((id) => new ObjectId(id));
+    if (selectedObjectIds.length) userFilter._id = { $in: selectedObjectIds };
+    const linkedUsers = await db.collection("users").find(userFilter).limit(500).toArray();
+    const reports = filterEmployeeReports(await readEmployeeReportsForUsers(linkedUsers), { dateFrom: from, dateTo: to, userIds: selectedUserIds })
+      .sort((a, b) => String(a.reportDate).localeCompare(String(b.reportDate)) || String(a.employeeName).localeCompare(String(b.employeeName)))
+      .slice(0, 5000);
+    const dates = [];
+    for (let date = from; date && date <= to; date = addDaysToDateKey(date, 1)) dates.push(date);
+    const employees = new Set();
+    const departments = new Map();
+    const taskTypes = new Map();
+    const categories = new Map();
+    const dailyMap = new Map(dates.map((date) => [date, { date, reports: 0, completedTasks: 0, waitingTasks: 0, employees: new Set() }]));
+    let completedTasks = 0;
+    let waitingTasks = 0;
+    reports.forEach((report) => {
+      const taskItems = sanitizeEmployeeTaskItems(report.taskItems);
+      const waitingItems = sanitizeEmployeeTaskItems(report.waitingTaskItems);
+      const employeeName = report.employeeName || "Employee";
+      employees.add(employeeName);
+      completedTasks += taskItems.length || (projectText(report.taskDescription) ? 1 : 0);
+      waitingTasks += waitingItems.length || (projectText(report.waitingTaskDescription) ? 1 : 0);
+      const completedCount = taskItems.length || (projectText(report.taskDescription) ? 1 : 0);
+      const waitingCount = waitingItems.length || (projectText(report.waitingTaskDescription) ? 1 : 0);
+      incrementEmployeeReportBucket(departments, report.department, { reports: 1, completedTasks: completedCount, waitingTasks: waitingCount, employeeName });
+      incrementEmployeeReportBucket(taskTypes, report.taskType, { reports: 1, completedTasks: completedCount, waitingTasks: waitingCount, employeeName });
+      taskItems.forEach((item) => incrementEmployeeReportBucket(categories, item.category, { completedTasks: 1, employeeName }));
+      waitingItems.forEach((item) => incrementEmployeeReportBucket(categories, item.category, { waitingTasks: 1, employeeName }));
+      const daily = dailyMap.get(report.reportDate) || { date: report.reportDate, reports: 0, completedTasks: 0, waitingTasks: 0, employees: new Set() };
+      daily.reports += 1;
+      daily.completedTasks += completedCount;
+      daily.waitingTasks += waitingCount;
+      daily.employees.add(employeeName);
+      dailyMap.set(report.reportDate, daily);
+    });
+    res.json({
+      range: { from, to },
+      selectedUserIds,
+      summary: { reports: reports.length, employees: employees.size, completedTasks, waitingTasks, departments: departments.size, categories: categories.size },
+      daily: [...dailyMap.values()].map((item) => ({ date: item.date, reports: item.reports, employees: item.employees.size, completedTasks: item.completedTasks, waitingTasks: item.waitingTasks })),
+      departments: [...departments.values()].map(serializeEmployeeReportBucket).sort((a, b) => b.reports - a.reports),
+      taskTypes: [...taskTypes.values()].map(serializeEmployeeReportBucket).sort((a, b) => b.reports - a.reports),
+      categories: [...categories.values()].map(serializeEmployeeReportBucket).sort((a, b) => (b.completedTasks + b.waitingTasks) - (a.completedTasks + a.waitingTasks)),
+      reports: reports.map(sanitizeEmployeeReport),
+    });
+  } catch (error) {
+    console.error("Employee daily report generation error:", error);
+    res.status(500).json({ error: "Could not generate employee daily report" });
   }
 });
 
@@ -2856,21 +3330,30 @@ function canonicalizeTomorrowPlanSites(records = []) {
 function parseTomorrowPlanCell(value) {
   const raw = projectText(value).replace(/\s+/g, " ");
   if (!raw) return { raw: "", plannedManpower: null, work: "" };
+  const hasDateText = /\b(?:planned|plan|dated|date|created|updated|submitted)\s+(?:on|for|at)?\b/i.test(raw);
+  const hasDateValue = /\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}\b|\b\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2}\b/i.test(raw);
+  if (hasDateText && hasDateValue) return { raw: "", plannedManpower: null, work: "" };
   const numberOnly = raw.match(/^(\d+(?:\.\d+)?)$/);
   if (numberOnly) {
     const plannedManpower = Number(numberOnly[1]);
+    if (Number.isInteger(plannedManpower) && plannedManpower >= 1900 && plannedManpower <= 2100) {
+      return { raw: "", plannedManpower: null, work: "" };
+    }
     return { raw, plannedManpower: Number.isFinite(plannedManpower) ? plannedManpower : null, work: "" };
   }
   const patterns = [
     /^(\d+(?:\.\d+)?)\s*(?:[-_:,]|person|persons?|worker|workers?|labou?r)?\s*(.*)$/i,
     /(?:total|work\s*person|person|worker|labou?r)\s*[-:=]?\s*(\d+(?:\.\d+)?)\s*,?\s*(.*)$/i,
-    /^(.*?)\s*(?:[-_:,])?\s*(\d+(?:\.\d+)?)\s*(?:person|persons?|worker|workers?|labou?r|civil|mason|masons|carpenter|carpenters|plumber|plumbers|painter|painters|electrician|electricians|fabricator|fabricators|polisher|polishers|labour|labours|labor|labors)?\s*$/i,
+    /^(.*?)\s*(?:[-_:,])?\s*(\d+(?:\.\d+)?)\s*(?:person|persons?|worker|workers?|labou?r|civil|mason|masons|carpenter|carpenters|plumber|plumbers|painter|painters|electrician|electricians|fabricator|fabricators|polisher|polishers|labour|labours|labor|labors)?\s*[,.;:]?\s*$/i,
   ];
   for (const pattern of patterns) {
     const match = raw.match(pattern);
     if (!match) continue;
     const trailingNumberPattern = pattern.source.startsWith("^(.*?)");
     const plannedManpower = Number(trailingNumberPattern ? match[2] : match[1]);
+    if (Number.isInteger(plannedManpower) && plannedManpower >= 1900 && plannedManpower <= 2100 && (hasDateText || hasDateValue)) {
+      return { raw: "", plannedManpower: null, work: "" };
+    }
     const work = projectText(trailingNumberPattern ? match[1] : match[2] || raw.replace(match[0], ""));
     return {
       raw,

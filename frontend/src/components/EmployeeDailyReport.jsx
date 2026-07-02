@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarCheck, Check, CheckCircle2, Clock3, Eye, FileText, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { CalendarCheck, Check, CheckCircle2, Clock3, Eye, FileText, Plus, Search, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 import { useClickOutside } from "./ui";
@@ -106,6 +106,20 @@ function fieldValue(value, other) {
   return value === "__other" ? other : value;
 }
 
+function ThreeDotLoader({ className = "" }) {
+  return (
+    <span className={`inline-flex items-center gap-1 ${className}`} aria-label="Loading">
+      {[0, 1, 2].map((index) => (
+        <span
+          key={index}
+          className="h-1.5 w-1.5 animate-bounce rounded-full bg-current"
+          style={{ animationDelay: `${index * 120}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function SearchableSelect({ darkMode, value, onChange, options = [], placeholder, allowOther = true }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
@@ -158,62 +172,7 @@ function SearchableSelect({ darkMode, value, onChange, options = [], placeholder
   );
 }
 
-function CategoryManager({ categories = [], onSave }) {
-  const [draft, setDraft] = useState("");
-  const [editing, setEditing] = useState("");
-  const [editValue, setEditValue] = useState("");
-
-  function save(nextCategories) {
-    onSave(nextCategories);
-    setDraft("");
-    setEditing("");
-    setEditValue("");
-  }
-
-  function addCategory() {
-    const value = draft.trim();
-    if (!value) return;
-    const exists = categories.some((category) => category.toLowerCase() === value.toLowerCase());
-    if (!exists) save([...categories, value]);
-    else setDraft("");
-  }
-
-  return (
-    <div className="rounded-[22px] border border-black/10 bg-[#f7f5ef] p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Task categories</p>
-          <p className="mt-1 text-xs text-black/45">Saved only for you.</p>
-        </div>
-      </div>
-      <div className="flex gap-2">
-        <input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCategory(); } }} placeholder="Add category" className="h-10 min-w-0 flex-1 rounded-2xl border border-black/10 bg-white px-3 text-sm outline-none" />
-        <button type="button" onClick={addCategory} className="h-10 rounded-2xl bg-[#171714] px-4 text-sm font-semibold text-white">Add</button>
-      </div>
-      <div className="mt-3 flex max-h-32 flex-wrap gap-2 overflow-y-auto">
-        {categories.map((category) => (
-          <div key={category} className="flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-semibold text-black/70">
-            {editing === category ? (
-              <input value={editValue} onChange={(event) => setEditValue(event.target.value)} className="h-7 w-28 rounded-full border border-black/10 px-2 outline-none" autoFocus />
-            ) : (
-              <span className="px-1">{category}</span>
-            )}
-            {editing === category ? (
-              <button type="button" onClick={() => { const value = editValue.trim(); if (value) save(categories.map((item) => (item === category ? value : item))); }} className="grid h-7 w-7 place-items-center rounded-full bg-[#d8f36a] text-black"><Check className="h-3.5 w-3.5" /></button>
-            ) : (
-              <button type="button" onClick={() => { setEditing(category); setEditValue(category); }} className="grid h-7 w-7 place-items-center rounded-full hover:bg-black/[0.05]"><Pencil className="h-3 w-3" /></button>
-            )}
-            <button type="button" onClick={() => save(categories.filter((item) => item !== category))} className="grid h-7 w-7 place-items-center rounded-full text-red-600 hover:bg-red-50"><Trash2 className="h-3 w-3" /></button>
-          </div>
-        ))}
-        {!categories.length && <p className="text-xs text-black/45">No categories yet. Add one or type directly in a task row.</p>}
-      </div>
-    </div>
-  );
-}
-
 function TaskRowsEditor({ title, rows, categories, onRowsChange, required = false }) {
-  const listId = `employee-task-categories-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   function updateRow(index, patch) {
     onRowsChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
@@ -234,14 +193,15 @@ function TaskRowsEditor({ title, rows, categories, onRowsChange, required = fals
             <div className="grid gap-3 lg:grid-cols-[260px_1fr_auto]">
               <div>
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Category</p>
-                <input
-                  required={required && index === 0}
-                  list={listId}
+                <SearchableSelect
+                  darkMode={false}
                   value={row.category}
-                  onChange={(event) => updateRow(index, { category: event.target.value })}
-                  placeholder="Choose or type category"
-                  className="h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none"
+                  onChange={(value) => updateRow(index, { category: value })}
+                  options={categories}
+                  placeholder="Choose category"
+                  allowOther={false}
                 />
+                {required && index === 0 && !row.category && <input tabIndex={-1} autoComplete="off" className="pointer-events-none h-0 w-0 opacity-0" required value="" onChange={() => {}} />}
               </div>
               <div>
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Description</p>
@@ -262,9 +222,6 @@ function TaskRowsEditor({ title, rows, categories, onRowsChange, required = fals
       <div className="mt-3 flex justify-center">
         <button type="button" onClick={addRow} className="inline-flex h-10 items-center gap-2 rounded-full bg-[#171714] px-4 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Add task</button>
       </div>
-      <datalist id={listId}>
-        {categories.map((category) => <option key={category} value={category} />)}
-      </datalist>
     </div>
   );
 }
@@ -275,16 +232,112 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode }) {
     <div className={`rounded-[22px] p-5 md:col-span-2 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
       <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>{title}</p>
       {visibleItems.length ? (
-        <div className="mt-3 space-y-3">
-          {visibleItems.map((item, index) => (
-            <div key={`${item.category}-${index}`} className={`rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-black/10" : "border-black/5 bg-white"}`}>
-              <p className={`text-xs font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-[#d8f36a]" : "text-[#145b39]"}`}>{item.category || "Task"}</p>
-              <p className="mt-2 whitespace-pre-wrap text-base leading-7">{item.description || "-"}</p>
-            </div>
-          ))}
+        <div className="mt-3">
+          <table className="w-full table-fixed border-separate border-spacing-y-2 text-left text-sm">
+            <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
+              <tr>
+                <th className="w-16 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em]">Sr No:</th>
+                <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Task Category</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleItems.map((item, index) => (
+                <tr key={`${item.category}-${index}`} className={darkMode ? "bg-white/[0.045]" : "bg-white"}>
+                  <td className="rounded-l-2xl px-4 py-3 font-semibold">{index + 1}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex max-w-full whitespace-normal rounded-full px-3 py-1 text-xs font-semibold leading-4 ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#e8f5eb] text-[#145b39]"}`}>
+                      {item.category || "-"}
+                    </span>
+                  </td>
+                  <td className="whitespace-pre-wrap break-words rounded-r-2xl px-4 py-3 leading-6">{item.description || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <p className="mt-3 whitespace-pre-wrap text-base leading-7">{fallback || "-"}</p>
+      )}
+    </div>
+  );
+}
+
+function EmployeeReportTable({ title, headers, rows, darkMode }) {
+  return (
+    <section className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}>
+      <div className="flex items-center justify-between gap-3 p-4">
+        <h4 className="text-lg font-semibold">{title}</h4>
+        <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/10 text-white/55" : "bg-black/[0.04] text-black/55"}`}>{rows.length} rows</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className={darkMode ? "bg-white/[0.05] text-white/50" : "bg-black/[0.035] text-black/50"}>
+            <tr>{headers.map((header) => <th key={header} className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">{header}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={index} className={`border-t ${darkMode ? "border-white/10" : "border-black/5"}`}>
+                {row.map((cell, cellIndex) => <td key={cellIndex} className="px-4 py-3">{cell}</td>)}
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={headers.length} className="px-4 py-8 text-center opacity-55">No data for this range.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function EmployeeUserMultiSelect({ darkMode, users = [], selectedIds = [], onChange }) {
+  const ref = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  useClickOutside(ref, () => setOpen(false));
+  const selected = new Set(selectedIds);
+  const filtered = users.filter((user) => `${user.employeeName} ${user.department}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const label = selectedIds.length ? `${selectedIds.length} employee${selectedIds.length === 1 ? "" : "s"}` : "All employees";
+
+  function toggleUser(userId) {
+    onChange(selected.has(userId) ? selectedIds.filter((id) => id !== userId) : [...selectedIds, userId]);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={`flex h-11 min-w-[220px] items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
+      >
+        <span className="truncate">{label}</span>
+        <Search className="h-4 w-4 opacity-45" />
+      </button>
+      {open && (
+        <div className={`absolute right-0 top-[calc(100%+10px)] z-[80] w-[min(92vw,360px)] rounded-[22px] border p-3 shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
+          <div className="mb-2 flex gap-2">
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee..." className={`h-10 min-w-0 flex-1 rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+            <button type="button" onClick={() => onChange([])} className={`h-10 rounded-2xl px-3 text-xs font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>All</button>
+          </div>
+          <div className="max-h-72 overflow-y-auto">
+            {filtered.map((user) => (
+              <button
+                key={user.userId}
+                type="button"
+                onClick={() => toggleUser(user.userId)}
+                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm ${selected.has(user.userId) ? darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#145b39]/10 text-[#145b39]" : darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.04]"}`}
+              >
+                <span className={`grid h-5 w-5 place-items-center rounded-md border ${selected.has(user.userId) ? "border-[#145b39] bg-[#145b39] text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
+                  {selected.has(user.userId) && <Check className="h-3.5 w-3.5" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold">{user.employeeName}</span>
+                  <span className="block truncate text-xs opacity-55">{user.department || "No department"}</span>
+                </span>
+              </button>
+            ))}
+            {!filtered.length && <p className="px-3 py-6 text-center text-sm opacity-55">No employees found.</p>}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -568,11 +621,19 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportData, setReportData] = useState(null);
+  const [reportFrom, setReportFrom] = useState(() => addDaysInput(todayInput(), -6));
+  const [reportTo, setReportTo] = useState(() => todayInput());
+  const [reportUserIds, setReportUserIds] = useState([]);
   const [heatmapOpen, setHeatmapOpen] = useState(false);
   const [confettiActive, setConfettiActive] = useState(false);
   const [detail, setDetail] = useState(null);
   const [form, setForm] = useState(emptyForm);
-  const [categorySaving, setCategorySaving] = useState(false);
+  const [sheetInput, setSheetInput] = useState("");
+  const [sheetSaving, setSheetSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white";
   const softPanel = darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white";
@@ -586,6 +647,7 @@ export default function EmployeeDailyReport({ darkMode }) {
       if (dateTo) params.set("dateTo", dateTo);
       const result = await api(`/employee-daily-report?${params.toString()}`);
       setData(result);
+      setSheetInput(result.profile?.sheetUrl || "");
       setForm((current) => ({ ...current, department: current.department || result.profile?.department || "" }));
     } catch (error) {
       toast.error(error.message || "Could not load daily reports");
@@ -600,6 +662,10 @@ export default function EmployeeDailyReport({ darkMode }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openForm() {
+    if (!data?.profile?.sheetLinked) {
+      toast.error("Link your Google Sheet before filling today's report");
+      return;
+    }
     setForm({
       ...emptyForm,
       taskItems: [{ category: "", description: "" }],
@@ -609,21 +675,34 @@ export default function EmployeeDailyReport({ darkMode }) {
     setFormOpen(true);
   }
 
-  async function saveCategories(categories) {
+  async function saveSheetLink() {
     try {
-      setCategorySaving(true);
-      const result = await api("/employee-daily-report/categories", { method: "PUT", body: JSON.stringify({ categories }) });
-      setData((current) => current ? { ...current, profile: { ...current.profile, taskCategories: result.categories || [] } } : current);
+      setSheetSaving(true);
+      const result = await api("/employee-daily-report/sheet", { method: "PUT", body: JSON.stringify({ spreadsheet: sheetInput }) });
+      setSheetInput(result.sheetUrl || sheetInput);
+      setData((current) => current ? {
+        ...current,
+        profile: {
+          ...current.profile,
+          sheetLinked: true,
+          sheetId: result.sheetId || current.profile?.sheetId || "",
+          sheetUrl: result.sheetUrl || sheetInput,
+        },
+      } : current);
+      toast.success("Daily report sheet linked");
+      await load();
     } catch (error) {
-      toast.error(error.message || "Could not save categories");
+      toast.error(error.message || "Could not link sheet");
     } finally {
-      setCategorySaving(false);
+      setSheetSaving(false);
     }
   }
 
   async function submitReport(event) {
     event.preventDefault();
+    if (submitting) return;
     try {
+      setSubmitting(true);
       const taskItems = (form.taskItems || []).map((item) => ({ category: item.category.trim(), description: item.description.trim() })).filter((item) => item.category && item.description);
       const waitingTaskItems = (form.waitingTaskItems || []).map((item) => ({ category: item.category.trim(), description: item.description.trim() })).filter((item) => item.category && item.description);
       const payload = {
@@ -642,52 +721,128 @@ export default function EmployeeDailyReport({ darkMode }) {
       await load();
     } catch (error) {
       toast.error(error.message || "Could not submit report");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function setReportPreset(preset) {
+    const today = todayInput();
+    if (preset === "daily") {
+      setReportFrom(today);
+      setReportTo(today);
+    } else if (preset === "weekly") {
+      setReportFrom(addDaysInput(today, -6));
+      setReportTo(today);
+    } else if (preset === "monthly") {
+      setReportFrom(today.slice(0, 8) + "01");
+      setReportTo(today);
+    }
+  }
+
+  async function generateEmployeeReport() {
+    try {
+      setReportLoading(true);
+      const params = new URLSearchParams({ dateFrom: reportFrom || todayInput(), dateTo: reportTo || reportFrom || todayInput() });
+      if (reportUserIds.length) params.set("userIds", reportUserIds.join(","));
+      const result = await api(`/employee-daily-report/report?${params.toString()}`);
+      setReportData(result);
+    } catch (error) {
+      toast.error(error.message || "Could not generate report");
+    } finally {
+      setReportLoading(false);
     }
   }
 
   const reports = data?.reports || [];
   const options = data?.options || { departments: [], taskTypes: [], taskStatuses: [], involvements: [] };
-  const taskCategories = data?.profile?.taskCategories || [];
+  const reportUsers = data?.reportUsers || [];
+  const initialLoading = loading && !data;
 
   return (
-    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "text-white" : "bg-[#f4f1ea] text-[#171714]"}`}>
-      <section className={`mb-6 rounded-[34px] p-6 sm:p-10 ${darkMode ? "bg-[#16181d]" : "bg-[#145b39]"}`}>
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div>
-            <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs ${darkMode ? "bg-white/7 text-white/70" : "bg-white text-black/60"}`}>
-              <CalendarCheck className="h-4 w-4" /> Employee Daily Report
-            </span>
-            <h1 className="mt-3 max-w-3xl text-4xl text-white  font-semibold small leading-tight sm:text-4xl">Daily work reports, made simple.</h1>
-            <p className={`mt-4 max-w-3xl text-zinc-50 text-sm leading-6 ${muted}`}>Submit today&apos;s work progress, review previous entries, and track reporting consistency in one clean workspace.</p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#e4f2f0] text-[#171714]"}`}>
+      <section className={`relative mb-5 overflow-hidden rounded-[28px] border p-6 sm:p-7 ${darkMode ? "border-white/10 bg-[#202328]" : "border-black/10 bg-[#fbf4e6] shadow-[8px_8px_0_rgba(0,0,0,0.12)]"}`}>
+          {!darkMode && (
+            <>
+              <span className="absolute -left-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#e4f2f0]" />
+              <span className="absolute -right-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#e4f2f0]" />
+              {/* <span className="absolute left-1/2 top-4 hidden -translate-x-1/2 rounded-full border border-black/15 bg-[#f7ec9a] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] shadow-[3px_3px_0_rgba(0,0,0,0.16)] rotate-3 md:inline-flex">
+                work log
+              </span> */}
+            </>
+          )}
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold shadow-[3px_3px_0_rgba(0,0,0,0.14)] ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/15 bg-[#d5f3f0] text-black/70 -rotate-1"}`}>
+                  <CalendarCheck className="h-4 w-4" /> Employee Daily Report
+                </span>
+                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/10 bg-[#f7ec9a] text-black/70 shadow-[2px_2px_0_rgba(0,0,0,0.12)]"}`}>
+                  {initialLoading ? <ThreeDotLoader /> : data?.profile?.department || "Department not set"}
+                </span>
+                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-black/10 bg-[#f8b9d4] text-black/70 shadow-[2px_2px_0_rgba(0,0,0,0.12)]"}`}>
+                  <CalendarCheck className="h-3.5 w-3.5" /> {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Today filled" : "Today pending"}
+                </span>
+              </div>
+              <h1 className={`mt-4 max-w-4xl text-4xl small font-black leading-[0.95] tracking-tight sm:text-4xl ${darkMode ? "text-white" : "text-[#171714]"}`}>Daily work reports, made simple.</h1>
+              <div className={`my-3 h-1 w-full max-w-xl border-t border-dashed ${darkMode ? "border-white/20" : "border-black/20"}`} />
+              <p className={`max-w-3xl text-sm font-medium leading-6 ${darkMode ? "text-white/65" : "text-black/70"}`}>Submit today&apos;s work progress, review previous entries, and track reporting consistency in one clean workspace.</p>
+            </div>
+            <div className="flex flex-wrap gap-3 lg:justify-end">
             <button
-              disabled={data?.todaySubmitted}
+              disabled={initialLoading || data?.todaySubmitted || !data?.profile?.sheetLinked}
               onClick={openForm}
-              className={`flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+              className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.18)] transition active:translate-x-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a] text-black" : "border-black bg-[#171714] text-white"}`}
             >
-              {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {data?.todaySubmitted ? "Today's report filled" : "Fill today's report"}
+              {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
+              {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Today's report filled" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
             </button>
             {!data?.isAdmin && (
-              <button onClick={() => setHeatmapOpen(true)} className="flex h-12 items-center justify-center gap-2 rounded-3xl bg-white px-5 text-sm font-semibold text-[#145b39]">
+              <button onClick={() => setHeatmapOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f8b9d4] text-black"}`}>
                 <CalendarCheck className="h-4 w-4" /> My activity
               </button>
             )}
+            {data?.isAdmin && (
+              <button onClick={() => setReportOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-black shadow-[4px_4px_0_rgba(0,0,0,0.14)] transition active:translate-x-0.5 active:translate-y-0.5 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/10 bg-[#f7ec9a] text-black"}`}>
+                <FileText className="h-4 w-4" /> Generate report
+              </button>
+            )}
+            </div>
           </div>
-        </div>
-      </section>
-
-      <div className="mb-5 grid gap-4 md:grid-cols-3">
-        <div className={`rounded-[24px] border p-5 ${softPanel}`}><span className={`grid h-11 w-11 place-items-center rounded-full ${darkMode ? "bg-white/7" : "bg-[#f3f0e8]"}`}><FileText className="h-4 w-4" /></span><p className="mt-5 text-3xl font-semibold">{reports.length}</p><p className={`mt-1 text-xs ${muted}`}>Visible reports</p></div>
-        <div className={`rounded-[24px] border p-5 ${softPanel}`}><span className={`grid h-11 w-11 place-items-center rounded-full ${data?.todaySubmitted ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-700"}`}><CalendarCheck className="h-4 w-4" /></span><p className="mt-5 text-3xl font-semibold">{data?.todaySubmitted ? "Done" : "Pending"}</p><p className={`mt-1 text-xs ${muted}`}>Today status</p></div>
-        <div className={`rounded-[24px] border p-5 ${softPanel}`}><span className={`grid h-11 w-11 place-items-center rounded-full ${darkMode ? "bg-white/7" : "bg-[#f3f0e8]"}`}><Clock3 className="h-4 w-4" /></span><p className="mt-5 truncate text-3xl font-semibold">{data?.profile?.department || "Not set"}</p><p className={`mt-1 text-xs ${muted}`}>Department</p></div>
-      </div>
+          {initialLoading ? (
+            <div className={`mt-5 flex min-h-[92px] items-center justify-center rounded-[24px] border p-3 ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-black/10 bg-white/65"}`}>
+              <ThreeDotLoader className={darkMode ? "text-white/60" : "text-black/55"} />
+            </div>
+          ) : !data?.isAdmin && (
+            <div className={`mt-5 rounded-[24px] border p-3 ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-black/10 bg-white/65"}`}>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                <div className="min-w-0 flex-1">
+                  <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Linked Google Sheet</p>
+                  <input
+                    value={sheetInput}
+                    onChange={(event) => setSheetInput(event.target.value)}
+                    placeholder="Paste your daily report Google Sheet link"
+                    className={`mt-2 h-11 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-black/20 text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={saveSheetLink}
+                  disabled={sheetSaving || !sheetInput.trim()}
+                  className={`h-11 rounded-2xl px-5 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                >
+                  {sheetSaving ? "Linking..." : data?.profile?.sheetLinked ? "Update sheet" : "Link sheet"}
+                </button>
+              </div>
+              <p className={`mt-2 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Reports are saved into this sheet and dashboard data is read back from it.</p>
+            </div>
+          )}
+       </section>
 
       <section className={`mt-5 overflow-hidden rounded-[28px] border ${panel}`}>
         <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">{data?.isAdmin ? "Submitted employee reports" : "My filled reports"}</h2>
+            <h2 className="text-2xl small font-semibold">{data?.isAdmin ? "Submitted employee reports" : "My filled reports"}</h2>
             <p className={`mt-1 text-sm ${muted}`}>Read-only report history.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -701,29 +856,40 @@ export default function EmployeeDailyReport({ darkMode }) {
             <button onClick={load} className={`h-11 rounded-2xl px-4 text-sm font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>Apply</button>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] text-left text-sm">
-            <thead className={darkMode ? "bg-white/[0.04] text-white/55" : "bg-black/[0.035] text-black/55"}>
+        <div className="overflow-x-auto px-3 pb-4">
+          <table className="w-full min-w-[1040px] border-separate border-spacing-y-3 text-left text-sm">
+            <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
               <tr>
-                {["Date", "Time filled", "Employee", "Department", "Client", "Site", "Task type", "Status", "Action"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em]">{header}</th>)}
+                {["Sl No:", "Employee", "Date", "Time filled", "Department", "Task type", "Status", "Actions"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={9} className={`px-5 py-10 text-center ${muted}`}>Loading reports...</td></tr>}
-              {!loading && reports.map((report) => (
-                <tr key={report.id} className={`border-t ${darkMode ? "border-white/10 hover:bg-white/[0.035]" : "border-black/[0.06] hover:bg-black/[0.025]"}`}>
-                  <td className="px-5 py-4 font-semibold">{report.reportDate}</td>
+              {loading && <tr><td colSpan={8} className={`px-5 py-10 text-center ${muted}`}>Loading reports...</td></tr>}
+              {!loading && reports.map((report, index) => (
+                <tr key={report.id} className={darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]"}>
+                  <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <span className={`grid h-10 w-10 place-items-center rounded-full text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-[#d5f3f0] text-[#145b39]"}`}>{(report.employeeName || "E").slice(0, 1).toUpperCase()}</span>
+                      <div>
+                        <p className="font-semibold">{report.employeeName}</p>
+                        <p className={`text-xs ${muted}`}>{report.client || "-"} · {report.site || "-"}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 font-medium">{report.reportDate}</td>
                   <td className="px-5 py-4">{displayDateTime(report.submittedAt)}</td>
-                  <td className="px-5 py-4">{report.employeeName}</td>
                   <td className="px-5 py-4">{report.department}</td>
-                  <td className="px-5 py-4">{report.client}</td>
-                  <td className="px-5 py-4">{report.site}</td>
                   <td className="px-5 py-4">{report.taskType}</td>
-                  <td className="px-5 py-4">{report.taskStatus}</td>
-                  <td className="px-5 py-4"><button onClick={() => setDetail(report)} className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs font-semibold ${darkMode ? "bg-white/5" : "bg-black/[0.04]"}`}><Eye className="h-4 w-4" /> View detail</button></td>
+                  <td className="px-5 py-4">
+                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${/complete/i.test(report.taskStatus || "") ? "bg-emerald-50 text-emerald-700" : darkMode ? "bg-amber-500/10 text-amber-200" : "bg-amber-50 text-amber-700"}`}>{report.taskStatus}</span>
+                  </td>
+                  <td className="rounded-r-2xl px-5 py-4">
+                    <button onClick={() => setDetail(report)} className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-blue-600  hover:bg-blue-50"}`} title="View detail"><Eye className="h-4 w-4" /></button>
+                  </td>
                 </tr>
               ))}
-              {!loading && !reports.length && <tr><td colSpan={9} className={`px-5 py-10 text-center ${muted}`}>No reports found.</td></tr>}
+              {!loading && !reports.length && <tr><td colSpan={8} className={`px-5 py-10 text-center ${muted}`}>No reports found.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -755,14 +921,10 @@ export default function EmployeeDailyReport({ darkMode }) {
                     <div className="rounded-2xl border border-white/15 p-4"><p className="text-xs text-white/55">Department</p><p className="mt-1 font-semibold">{data?.profile?.department || "Required once"}</p></div>
                     <div className="rounded-2xl border border-white/15 p-4"><p className="text-xs text-white/55">Status</p><p className="mt-1 font-semibold">{data?.todaySubmitted ? "Already filled" : "Ready to submit"}</p></div>
                   </div>
-                  <div className="mt-4 rounded-[22px] bg-white p-3 text-[#171714]">
-                    <CategoryManager categories={taskCategories} onSave={saveCategories} />
-                    {categorySaving && <p className="mt-2 text-xs text-black/45">Saving categories...</p>}
-                  </div>
                 </div>
                 <div className="flex shrink-0 gap-3 border-t border-white/10 p-6">
                   <button type="button" onClick={() => setFormOpen(false)} className="h-11 flex-1 rounded-full bg-white text-sm font-semibold text-[#145b39]">Cancel</button>
-                  <button className="h-11 flex-1 rounded-full bg-[#d8f36a] text-sm font-semibold text-black">Submit</button>
+                  <button disabled={submitting} className="h-11 flex-1 rounded-full bg-[#d8f36a] text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60">{submitting ? "Submitting..." : "Submit"}</button>
                 </div>
               </aside>
 
@@ -807,14 +969,14 @@ export default function EmployeeDailyReport({ darkMode }) {
                   <TaskRowsEditor
                     title="Task description"
                     rows={form.taskItems}
-                    categories={taskCategories}
+                    categories={options.taskTypes}
                     required
                     onRowsChange={(rows) => setForm((current) => ({ ...current, taskItems: rows }))}
                   />
                   <TaskRowsEditor
                     title="Tasks in waiting / tomorrow plan"
                     rows={form.waitingTaskItems}
-                    categories={taskCategories}
+                    categories={options.taskTypes}
                     onRowsChange={(rows) => setForm((current) => ({ ...current, waitingTaskItems: rows }))}
                   />
                   <div className="md:col-span-2"><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Note</label><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} rows={3} placeholder="Any extra note..." className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none" /></div>
@@ -825,9 +987,108 @@ export default function EmployeeDailyReport({ darkMode }) {
         </div>
       )}
 
+      {reportOpen && data?.isAdmin && (
+        <div className="fixed inset-0 z-50 bg-[#2f2a22]/65 backdrop-blur-md">
+          <div className={`flex h-screen w-screen flex-col overflow-hidden p-4 shadow-2xl ${darkMode ? "bg-[#101216] text-white" : "bg-[#f4f1ea] text-[#171714]"}`}>
+            <div className={`mb-4 flex shrink-0 items-center justify-between rounded-[22px] px-5 py-4 text-white ${darkMode ? "bg-[#191b20]" : "bg-[#2d2a22]"}`}>
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-white/10"><FileText className="h-5 w-5" /></span>
+                <div>
+                  <p className="text-xs text-white/55">Employee daily report</p>
+                  <h3 className="text-lg font-semibold">Admin report generator</h3>
+                </div>
+              </div>
+              <button onClick={() => setReportOpen(false)} className="grid h-10 w-10 place-items-center rounded-full bg-white/10"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className={`mb-4 shrink-0 rounded-[26px] border p-4 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${muted}`}>Report range</p>
+                  <h4 className="mt-2 text-2xl font-semibold">Generate employee work summary</h4>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  {[
+                    ["daily", "Today"],
+                    ["weekly", "This week"],
+                    ["monthly", "This month"],
+                  ].map(([value, label]) => (
+                    <button key={value} type="button" onClick={() => setReportPreset(value)} className={`h-11 rounded-2xl border px-4 text-sm font-semibold ${darkMode ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-[#f7f5ef] hover:bg-black/[0.04]"}`}>{label}</button>
+                  ))}
+                  <EmployeeUserMultiSelect darkMode={darkMode} users={reportUsers} selectedIds={reportUserIds} onChange={setReportUserIds} />
+                  <EmployeeDateRangePicker darkMode={darkMode} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo} />
+                  <button onClick={generateEmployeeReport} disabled={reportLoading} className={`h-11 rounded-2xl px-5 text-sm font-semibold disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>{reportLoading ? "Generating..." : "Generate"}</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {!reportData ? (
+                <div className={`grid min-h-[360px] place-items-center rounded-[28px] border ${darkMode ? "border-white/10 bg-[#171a20] text-white/55" : "border-black/10 bg-white text-black/55"}`}>
+                  Choose daily, weekly, monthly, or a custom date range, then click Generate.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <section className={`rounded-[28px] border p-5 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${muted}`}>{reportData.range.from} to {reportData.range.to}</p>
+                        <h4 className="mt-2 text-2xl font-semibold">Executive summary</h4>
+                        <p className={`mt-1 text-sm ${muted}`}>{reportData.selectedUserIds?.length ? `${reportData.selectedUserIds.length} selected employee${reportData.selectedUserIds.length === 1 ? "" : "s"}` : "All employees"}</p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#eef7df] text-[#17643f]"}`}>Generated</span>
+                    </div>
+                    <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                      {[
+                        ["Reports", reportData.summary.reports],
+                        ["Employees", reportData.summary.employees],
+                        ["Completed tasks", reportData.summary.completedTasks],
+                        ["Waiting tasks", reportData.summary.waitingTasks],
+                        ["Departments", reportData.summary.departments],
+                        ["Categories", reportData.summary.categories],
+                      ].map(([label, value]) => (
+                        <div key={label} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
+                          <p className={`text-xs ${muted}`}>{label}</p>
+                          <p className="mt-2 text-2xl font-semibold">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <EmployeeReportTable
+                    title="Daily submissions"
+                    headers={["Date", "Reports", "Employees", "Completed tasks", "Waiting tasks"]}
+                    rows={(reportData.daily || []).map((item) => [item.date, item.reports, item.employees, item.completedTasks, item.waitingTasks])}
+                    darkMode={darkMode}
+                  />
+                  <EmployeeReportTable
+                    title="Department wise summary"
+                    headers={["Department", "Reports", "Employees", "Completed tasks", "Waiting tasks"]}
+                    rows={(reportData.departments || []).map((item) => [item.label, item.reports, item.employees, item.completedTasks, item.waitingTasks])}
+                    darkMode={darkMode}
+                  />
+                  <EmployeeReportTable
+                    title="Task category summary"
+                    headers={["Task category", "Employees", "Completed tasks", "Waiting tasks"]}
+                    rows={(reportData.categories || []).map((item) => [item.label, item.employees, item.completedTasks, item.waitingTasks])}
+                    darkMode={darkMode}
+                  />
+                  <EmployeeReportTable
+                    title="Submitted reports"
+                    headers={["Date", "Employee", "Department", "Client", "Site", "Task type", "Status"]}
+                    rows={(reportData.reports || []).map((item) => [item.reportDate, item.employeeName, item.department, item.client, item.site, item.taskType, item.taskStatus])}
+                    darkMode={darkMode}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2f2a22]/65 p-4 backdrop-blur-md">
-          <div className={`flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[30px] p-4 shadow-2xl ${darkMode ? "bg-[#101216] text-white" : "bg-[#f4f1ea] text-[#171714]"}`}>
+        <div className="fixed inset-0 z-50 bg-[#2f2a22]/65 backdrop-blur-md">
+          <div className={`flex h-screen w-screen flex-col overflow-hidden p-4 shadow-2xl ${darkMode ? "bg-[#101216] text-white" : "bg-[#f4f1ea] text-[#171714]"}`}>
             <div className={`mb-4 flex items-center justify-between rounded-[22px] px-5 py-4 text-white ${darkMode ? "bg-[#191b20]" : "bg-[#2d2a22]"}`}>
               <div className="flex items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-full bg-white/10"><Eye className="h-5 w-5" /></span>
@@ -855,28 +1116,28 @@ export default function EmployeeDailyReport({ darkMode }) {
               </aside>
 
               <div className={`min-h-0 overflow-y-auto rounded-[26px] p-6 pb-10 shadow-sm ${darkMode ? "bg-[#171a20]" : "bg-white"}`}>
-                <div className="mb-6 flex items-start justify-between gap-4">
+                <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div>
                     <p className={`text-xs uppercase tracking-[0.18em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Work progress</p>
-                    <h4 className="mt-2 text-2xl font-semibold">Daily report summary</h4>
+                    <h4 className="mt-2 text-2xl small font-semibold">Daily report summary</h4>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#eef7df] text-[#17643f]"}`}>Read-only</span>
+                  <div className="flex flex-wrap gap-2 xl:justify-end">
+                    {[
+                      ["Client", detail.client],
+                      ["Site", detail.site],
+                      ["Task Type", detail.taskType],
+                      ["Involvement", detail.involvement],
+                    ].map(([label, value]) => (
+                      <span key={label} className={`inline-flex items-center gap-2 rounded-full  px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/[0.06] text-white/75" : "border-black/10 bg-[#f7f5ef] text-black/70"}`}>
+                        <span className={darkMode ? "text-white/40" : "text-black/45"}>{label}</span>
+                        <span className="max-w-[180px] truncate text-sm text-current">{value || "-"}</span>
+                      </span>
+                    ))}
+                    <span className={`inline-flex items-center rounded-full px-3 py-2 text-xs font-semibold ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#eef7df] text-[#17643f]"}`}>Read-only</span>
+                  </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  {[
-                    ["Department", detail.department],
-                    ["Client", detail.client],
-                    ["Site", detail.site],
-                    ["Task Type", detail.taskType],
-                    ["Task Status", detail.taskStatus],
-                    ["Involvement", detail.involvement],
-                  ].map(([label, value]) => (
-                    <div key={label} className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
-                      <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>{label}</p>
-                      <p className="mt-2 text-lg font-semibold">{value || "-"}</p>
-                    </div>
-                  ))}
                   <TaskItemsDisplay title="Task description" items={detail.taskItems} fallback={detail.taskDescription} darkMode={darkMode} />
                   <TaskItemsDisplay title="Waiting / tomorrow plan" items={detail.waitingTaskItems} fallback={detail.waitingTaskDescription} darkMode={darkMode} />
                   <div className={`rounded-[22px] p-5 md:col-span-2 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>

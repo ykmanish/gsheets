@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, FileSpreadsheet, Filter, History, Loader2, Plus, RefreshCw, Save, Search, X } from "lucide-react";
+import { CalendarDays, Download, FileSpreadsheet, Filter, History, Loader2, Plus, RefreshCw, Save, Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 import { DatePicker, SelectMenu, useClickOutside } from "./ui";
@@ -792,6 +792,7 @@ export default function DmrDashboard({ darkMode }) {
   const [dmrSheetOpen, setDmrSheetOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
+  const [reportPdfLoading, setReportPdfLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [reportStartDate, setReportStartDate] = useState(() => addDaysInput(localDateInputValue(), -6));
   const [reportEndDate, setReportEndDate] = useState(() => localDateInputValue());
@@ -1121,6 +1122,32 @@ export default function DmrDashboard({ darkMode }) {
       toast.error(error.message || "Could not generate DMR report");
     } finally {
       setReportLoading(false);
+    }
+  }
+
+  async function downloadDmrReportPdf() {
+    const pdfDate = date || localDateInputValue();
+    try {
+      setReportPdfLoading(true);
+      const response = await fetch(`${API_URL}/dmr-dashboard/report/pdf?date=${encodeURIComponent(pdfDate)}&force=1`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Could not download DMR PDF");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `dmr-ceo-report-${pdfDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("DMR PDF downloaded");
+    } catch (error) {
+      toast.error(error.message || "Could not download DMR PDF");
+    } finally {
+      setReportPdfLoading(false);
     }
   }
 
@@ -1656,10 +1683,16 @@ export default function DmrDashboard({ darkMode }) {
                       onEndChange={setReportEndDate}
                     />
                   </div>
-                  <button onClick={generateDmrReport} disabled={reportLoading} className={`flex h-12 min-w-40 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
-                    {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-                    Generate
-                  </button>
+                  <div className="flex flex-col gap-2 sm:flex-row xl:flex-col">
+                    <button onClick={generateDmrReport} disabled={reportLoading} className={`flex h-12 min-w-40 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
+                      {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                      Generate
+                    </button>
+                    <button onClick={downloadDmrReportPdf} disabled={reportPdfLoading} className={`flex h-12 min-w-40 items-center justify-center gap-2 rounded-2xl border px-5 text-sm font-semibold disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/5 text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}>
+                      {reportPdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                      Download day PDF
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {DMR_REPORT_SECTION_OPTIONS.map((option) => {

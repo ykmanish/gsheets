@@ -10,6 +10,7 @@ const cron = require("node-cron");
 const nodemailer = require("nodemailer");
 const { google } = require("googleapis");
 const XLSX = require("xlsx");
+const PDFDocument = require("pdfkit");
 const { pipeline } = require("@xenova/transformers");
 const crypto = require("crypto");
 const { MongoClient, ObjectId } = require("mongodb");
@@ -1477,7 +1478,9 @@ const activityLogsPath = path.join(dataDir, "activity-logs.json");
 const projectDashboardPath = path.join(dataDir, "project-dashboard.json");
 const dmrHistoryPath = path.join(dataDir, "dmr-history.json");
 const dmrSettingsPath = path.join(dataDir, "dmr-settings.json");
+const dmrPdfDir = path.join(dataDir, "dmr-pdfs");
 const mrnSettingsPath = path.join(dataDir, "mrn-settings.json");
+if (!fs.existsSync(dmrPdfDir)) fs.mkdirSync(dmrPdfDir, { recursive: true });
 
 let documents = [];
 let documentFolders = [];
@@ -4121,6 +4124,310 @@ async function buildDmrReport({ startDate, endDate, sections = [] } = {}) {
   };
 }
 
+function dmrPdfDateLabel(value) {
+  const date = new Date(`${dmrDateKey(value) || istDateKey(new Date())}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return projectText(value) || "-";
+  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+}
+
+function dmrPdfSafe(value, fallback = "-") {
+  const text = projectText(value);
+  return text || fallback;
+}
+
+function dmrPdfFilename(dateKey) {
+  return `dmr-ceo-report-${dmrDateKey(dateKey) || istDateKey(new Date())}.pdf`;
+}
+
+function dmrPdfPath(dateKey) {
+  return path.join(dmrPdfDir, dmrPdfFilename(dateKey));
+}
+
+function dmrPdfStatusColor(planned, actual) {
+  const plannedValue = Number(planned) || 0;
+  const actualValue = Number(actual) || 0;
+  if (!plannedValue && !actualValue) return "#8f8f88";
+  return actualValue >= plannedValue ? "#0f9f6e" : "#ef3038";
+}
+
+function dmrPdfAddPageIfNeeded(doc, neededHeight = 80) {
+  if (doc.y + neededHeight > doc.page.height - doc.page.margins.bottom) {
+    doc.addPage();
+  }
+}
+
+function dmrPdfCanAddPage(doc) {
+  return doc.bufferedPageRange().count < 2;
+}
+
+function dmrPdfAddPageIfNeededLimited(doc, neededHeight = 80) {
+  if (doc.y + neededHeight <= doc.page.height - doc.page.margins.bottom) return true;
+  if (!dmrPdfCanAddPage(doc)) return false;
+  doc.addPage();
+  return true;
+}
+
+function dmrPdfPill(doc, text, x, y, options = {}) {
+  const width = options.width || Math.max(72, doc.widthOfString(text) + 22);
+  const height = options.height || 24;
+  doc.save();
+  doc.roundedRect(x, y, width, height, height / 2).fill(options.fill || "#f3f1eb");
+  doc.fillColor(options.color || "#171714").fontSize(options.fontSize || 9).font("Helvetica-Bold");
+  doc.text(text, x + 11, y + 7, { width: width - 22, lineBreak: false });
+  doc.restore();
+  return width;
+}
+
+function dmrPdfTextRow(doc, columns, y, options = {}) {
+  const fill = options.fill || null;
+  const height = options.height || 34;
+  if (fill) {
+    doc.save();
+    doc.roundedRect(doc.page.margins.left, y, doc.page.width - doc.page.margins.left - doc.page.margins.right, height, 12).fill(fill);
+    doc.restore();
+  }
+  columns.forEach((column) => {
+    doc.fillColor(column.color || options.color || "#171714").font(column.bold ? "Helvetica-Bold" : "Helvetica").fontSize(column.size || options.size || 9);
+    doc.text(column.text, column.x, y + (column.top || 10), { width: column.width, lineGap: 1 });
+  });
+}
+
+function dmrPdfSectionTitle(doc, title, subtitle) {
+  dmrPdfAddPageIfNeeded(doc, 90);
+  doc.moveDown(1);
+  doc.fillColor("#171714").font("Helvetica-Bold").fontSize(15).text(title);
+  if (subtitle) {
+    doc.moveDown(0.25);
+    doc.fillColor("#807d76").font("Helvetica").fontSize(9).text(subtitle);
+  }
+  doc.moveDown(0.8);
+}
+
+function dmrPdfDrawDailyHeader(doc, dateKey) {
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const top = doc.y;
+  doc.rect(doc.page.margins.left, top, pageWidth, 56).fill("#ffffff").stroke("#ece8df");
+  doc.fillColor("#7b7f89").font("Helvetica-Bold").fontSize(7).text("CEO SUMMARY", doc.page.margins.left + 14, top + 10, { characterSpacing: 1.8 });
+  doc.fillColor("#171714").font("Helvetica-Bold").fontSize(17).text("Daily DMR report", doc.page.margins.left + 14, top + 26);
+  dmrPdfPill(doc, dmrPdfDateLabel(dateKey), doc.page.width - doc.page.margins.right - 142, top + 17, { width: 124, height: 22, fill: "#f4f3ef", color: "#5e625f" });
+  doc.y = top + 72;
+}
+
+function dmrPdfDrawSummary(doc, report, dateKey) {
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const top = doc.y;
+  doc.roundedRect(doc.page.margins.left, top, pageWidth, 132, 22).fill("#f7f4ec");
+  doc.fillColor("#e76f42").font("Helvetica-Bold").fontSize(8).text("CEO DAILY DMR", doc.page.margins.left + 22, top + 22, { characterSpacing: 2 });
+  doc.fillColor("#171714").font("Helvetica-Bold").fontSize(25).text("Daily manpower performance", doc.page.margins.left + 22, top + 42);
+  doc.fillColor("#807d76").font("Helvetica").fontSize(10).text(`Report date: ${dmrPdfDateLabel(dateKey)} - Generated ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`, doc.page.margins.left + 22, top + 76);
+  const scoreColor = dmrPdfStatusColor(report.summary.planned, report.summary.actual);
+  doc.roundedRect(doc.page.width - doc.page.margins.right - 146, top + 24, 124, 76, 20).fill(report.summary.actual >= report.summary.planned ? "#e8fbf4" : "#fff0f0");
+  doc.fillColor(scoreColor).font("Helvetica-Bold").fontSize(28).text(`${report.summary.progress}%`, doc.page.width - doc.page.margins.right - 126, top + 38, { width: 84, align: "center" });
+  doc.fillColor(scoreColor).font("Helvetica").fontSize(8).text("overall progress", doc.page.width - doc.page.margins.right - 126, top + 70, { width: 84, align: "center" });
+  doc.y = top + 150;
+
+  const metrics = [
+    ["Planned", report.summary.planned, "#171714"],
+    ["Actual", report.summary.actual, dmrPdfStatusColor(report.summary.planned, report.summary.actual)],
+    ["Variance", `${report.summary.variance >= 0 ? "+" : ""}${report.summary.variance}`, report.summary.variance >= 0 ? "#0f9f6e" : "#ef3038"],
+    ["Attendance", `${report.summary.attendance.present}/${report.summary.attendance.total}`, "#171714"],
+  ];
+  const gap = 12;
+  const cardWidth = (pageWidth - gap * (metrics.length - 1)) / metrics.length;
+  const y = doc.y;
+  metrics.forEach(([label, value, color], index) => {
+    const x = doc.page.margins.left + index * (cardWidth + gap);
+    doc.roundedRect(x, y, cardWidth, 66, 16).fill("#ffffff").stroke("#eee9df");
+    doc.fillColor(color).font("Helvetica-Bold").fontSize(19).text(String(value), x + 15, y + 14, { width: cardWidth - 30 });
+    doc.fillColor("#807d76").font("Helvetica").fontSize(8).text(label, x + 15, y + 42, { width: cardWidth - 30 });
+  });
+  doc.y = y + 82;
+}
+
+function dmrPdfPageTitle(doc, title, subtitle) {
+  doc.fillColor("#171714").font("Helvetica-Bold").fontSize(18).text(title, doc.page.margins.left, doc.y, { align: "left" });
+  if (subtitle) {
+    doc.moveDown(0.25);
+    doc.fillColor("#807d76").font("Helvetica").fontSize(9).text(subtitle, doc.page.margins.left, doc.y, { align: "left" });
+  }
+  doc.moveDown(0.8);
+}
+
+function dmrPdfDrawAttendance(doc, attendance) {
+  const item = attendance?.byDate?.[0] || { present: [], absent: [], leave: [], pending: [], total: 0 };
+  dmrPdfPageTitle(doc, "Attendance", "Consolidated staff attendance for the selected DMR day.");
+  const left = doc.page.margins.left;
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const columns = [
+    { label: "Present", names: item.present || [], color: "#0f9f6e" },
+    { label: "Absent", names: item.absent || [], color: "#ef3038" },
+    { label: "Leave", names: item.leave || [], color: "#b66a00" },
+    { label: "Pending", names: item.pending || [], color: "#75716a" },
+  ];
+  const columnWidth = pageWidth / columns.length;
+  let y = doc.y;
+  doc.rect(left, y, pageWidth, 34).fill("#f3f1eb");
+  columns.forEach((column, index) => {
+    doc.fillColor("#5e6a7f").font("Helvetica-Bold").fontSize(10).text(column.label.toUpperCase(), left + index * columnWidth + 12, y + 12, { width: columnWidth - 24, height: 12 });
+  });
+  y += 34;
+  const bodyHeight = 128;
+  columns.forEach((column, index) => {
+    const x = left + index * columnWidth;
+    const names = column.names.join(", ") || "-";
+    doc.rect(x, y, columnWidth, bodyHeight).fill(index % 2 ? "#ffffff" : "#faf9f5").stroke("#ece8df");
+    doc.fillColor(column.color).font("Helvetica-Bold").fontSize(20).text(`${column.names.length}/${item.total || 0}`, x + 12, y + 14, { width: columnWidth - 24, height: 24 });
+    doc.fillColor("#171714").font("Helvetica").fontSize(10).text(names, x + 12, y + 48, { width: columnWidth - 24, height: 64, ellipsis: true, lineGap: 2 });
+  });
+  doc.y = y + bodyHeight + 10;
+}
+
+function dmrPdfDrawTradeSite(doc, report) {
+  const entries = (report.tradeSiteManpowerByDate || [])
+    .filter((item) => item.rowType !== "average")
+    .filter((item) => (Number(item.planned) || 0) || (Number(item.actual) || 0));
+
+  dmrPdfPageTitle(doc, "Trade by site", "Consolidated planned/actual manpower. Blank cells have no data.");
+  if (!entries.length) {
+    doc.roundedRect(doc.page.margins.left, doc.y, doc.page.width - doc.page.margins.left - doc.page.margins.right, 52, 14).fill("#f7f4ec");
+    doc.fillColor("#807d76").font("Helvetica").fontSize(10).text("No trade by site manpower was provided for this date.", doc.page.margins.left + 16, doc.y + 18);
+    doc.y += 66;
+    return;
+  }
+
+  const left = doc.page.margins.left;
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const tradeWidth = 118;
+  const totalWidth = 60;
+  const siteTotals = new Map();
+  const tradeTotals = new Map();
+  const matrix = new Map();
+  for (const item of entries) {
+    const site = dmrPdfSafe(item.site, "Unassigned site");
+    const trade = dmrPdfSafe(item.trade, "General");
+    const planned = Number(item.planned) || 0;
+    const actual = Number(item.actual) || 0;
+    const siteCurrent = siteTotals.get(site) || { site, planned: 0, actual: 0 };
+    siteCurrent.planned += planned;
+    siteCurrent.actual += actual;
+    siteTotals.set(site, siteCurrent);
+    const tradeCurrent = tradeTotals.get(trade) || { trade, planned: 0, actual: 0 };
+    tradeCurrent.planned += planned;
+    tradeCurrent.actual += actual;
+    tradeTotals.set(trade, tradeCurrent);
+    matrix.set(`${trade}|${site}`, { planned, actual });
+  }
+  const sites = [...siteTotals.values()]
+    .sort((a, b) => (b.planned + b.actual) - (a.planned + a.actual) || a.site.localeCompare(b.site))
+    .slice(0, 8)
+    .map((item) => item.site);
+  const trades = [...tradeTotals.values()]
+    .filter((item) => item.planned || item.actual)
+    .sort((a, b) => (b.planned + b.actual) - (a.planned + a.actual) || a.trade.localeCompare(b.trade))
+    .map((item) => item.trade);
+  const siteWidth = Math.max(56, (pageWidth - tradeWidth - totalWidth) / Math.max(1, sites.length));
+  let y = doc.y;
+  const bottom = doc.page.height - doc.page.margins.bottom;
+
+  function drawMatrixHeader() {
+    doc.rect(left, y, pageWidth, 28).fill("#f3f1eb");
+    doc.fillColor("#5e6a7f").font("Helvetica-Bold").fontSize(8).text("TRADE", left + 9, y + 10, { width: tradeWidth - 16, height: 12 });
+    sites.forEach((site, index) => {
+      doc.fillColor("#5e6a7f").font("Helvetica-Bold").fontSize(site.length > 16 ? 5.4 : 6.6).text(site.toUpperCase(), left + tradeWidth + index * siteWidth + 3, y + 6, { width: siteWidth - 6, height: 18, align: "center" });
+    });
+    doc.fillColor("#5e6a7f").font("Helvetica-Bold").fontSize(8).text("TOTAL", left + tradeWidth + sites.length * siteWidth + 4, y + 10, { width: totalWidth - 8, height: 12, align: "center" });
+    y += 28;
+    doc.y = y;
+  }
+
+  function drawPair(x, yValue, width, planned, actual) {
+    if (!planned && !actual) {
+      doc.fillColor("#9b9b94").font("Helvetica").fontSize(8).text("-", x, yValue, { width, height: 9, align: "center" });
+      return;
+    }
+    const color = dmrPdfStatusColor(planned, actual);
+    const plannedText = String(planned);
+    const slashText = "/";
+    const actualText = String(actual);
+    const totalTextWidth = doc.font("Helvetica-Bold").fontSize(8.7).widthOfString(plannedText) + doc.widthOfString(slashText) + doc.widthOfString(actualText);
+    let cursor = x + Math.max(0, (width - totalTextWidth) / 2);
+    doc.fillColor("#171714").font("Helvetica-Bold").fontSize(8.7).text(plannedText, cursor, yValue, { lineBreak: false });
+    cursor += doc.widthOfString(plannedText);
+    doc.fillColor("#171714").text(slashText, cursor, yValue, { lineBreak: false });
+    cursor += doc.widthOfString(slashText);
+    doc.fillColor(color).text(actualText, cursor, yValue, { lineBreak: false });
+  }
+
+  drawMatrixHeader();
+  const rowHeight = Math.max(16, Math.min(22, Math.floor((bottom - y - 20) / Math.max(1, trades.length))));
+  const maxRows = Math.max(1, Math.floor((bottom - y - 22) / rowHeight));
+  const visibleTrades = trades.slice(0, maxRows);
+  const hiddenRows = Math.max(0, trades.length - visibleTrades.length);
+  visibleTrades.forEach((trade, index) => {
+    doc.rect(left, y, pageWidth, rowHeight).fill(index % 2 ? "#ffffff" : "#faf9f5").stroke("#ece8df");
+    doc.fillColor("#171714").font("Helvetica-Bold").fontSize(8.4).text(trade, left + 9, y + Math.max(5, Math.floor((rowHeight - 9) / 2)), { width: tradeWidth - 16, height: 10, ellipsis: true });
+    let totalPlanned = 0;
+    let totalActual = 0;
+    sites.forEach((site, siteIndex) => {
+      const cell = matrix.get(`${trade}|${site}`) || { planned: 0, actual: 0 };
+      totalPlanned += Number(cell.planned) || 0;
+      totalActual += Number(cell.actual) || 0;
+      drawPair(left + tradeWidth + siteIndex * siteWidth, y + Math.max(5, Math.floor((rowHeight - 9) / 2)), siteWidth, Number(cell.planned) || 0, Number(cell.actual) || 0);
+    });
+    drawPair(left + tradeWidth + sites.length * siteWidth, y + Math.max(5, Math.floor((rowHeight - 9) / 2)), totalWidth, totalPlanned, totalActual);
+    y += rowHeight;
+    doc.y = y;
+  });
+  if (hiddenRows > 0 && doc.y + 20 <= doc.page.height - doc.page.margins.bottom) {
+    doc.fillColor("#807d76").font("Helvetica").fontSize(8).text(`${hiddenRows} more trade row${hiddenRows === 1 ? "" : "s"} hidden to keep the PDF within 2 pages.`, left, doc.y + 8);
+  }
+}
+
+function generateDmrDailyPdfBuffer(report, dateKey) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: "A4",
+      layout: "landscape",
+      margin: 32,
+      bufferPages: true,
+      info: {
+        Title: `DMR CEO Report ${dateKey}`,
+        Author: "UIPL Docs",
+        Subject: "Daily DMR performance report",
+      },
+    });
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    dmrPdfDrawDailyHeader(doc, dateKey);
+    dmrPdfDrawTradeSite(doc, report);
+    doc.addPage();
+    dmrPdfDrawDailyHeader(doc, dateKey);
+    dmrPdfDrawAttendance(doc, report.attendance);
+    const footer = `UIPL Docs - DMR CEO report - ${dmrPdfDateLabel(dateKey)}`;
+    const pageRange = doc.bufferedPageRange();
+    for (let index = pageRange.start; index < pageRange.start + pageRange.count; index += 1) {
+      doc.switchToPage(index);
+      doc.fillColor("#aaa59e").fontSize(7).text(footer, doc.page.margins.left, doc.page.height - 22, { align: "center" });
+    }
+    doc.end();
+  });
+}
+
+async function buildDmrDailyPdf(dateKey, { save = false } = {}) {
+  const date = dmrDateKey(dateKey) || istDateKey(new Date());
+  const report = await buildDmrReport({
+    startDate: date,
+    endDate: date,
+    sections: ["summary", "attendance", "tradeSiteManpower", "dailyProgress"],
+  });
+  const buffer = await generateDmrDailyPdfBuffer(report, date);
+  if (save) fs.writeFileSync(dmrPdfPath(date), buffer);
+  return { date, report, buffer };
+}
+
 function projectRowMatches(row, headers, assignment, project) {
   const projectColumn = projectFindColumn(headers, assignment.mapping?.projectColumn, PROJECT_FIELD_PATTERNS.project);
   if (!projectColumn) return true;
@@ -6723,6 +7030,29 @@ app.get("/dmr-dashboard/report", async (req, res) => {
   }
 });
 
+app.get("/dmr-dashboard/report/pdf", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
+    if (!publicDmrSettings().linked) return res.status(400).json({ error: "DMR sheet is not linked" });
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : istDateKey(new Date());
+    const cachedPath = dmrPdfPath(date);
+    const useCache = ["1", "true", "yes"].includes(String(req.query.cache || "").toLowerCase());
+    let buffer;
+    if (useCache && fs.existsSync(cachedPath)) {
+      buffer = fs.readFileSync(cachedPath);
+    } else {
+      ({ buffer } = await buildDmrDailyPdf(date, { save: true }));
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${dmrPdfFilename(date)}"`);
+    res.setHeader("Content-Length", buffer.length);
+    res.send(buffer);
+  } catch (error) {
+    console.error("DMR PDF report error:", error);
+    res.status(500).json({ error: `Could not generate DMR PDF: ${error.message}` });
+  }
+});
+
 function dmrHistoryLabel(record) {
   if (!record) return "DMR row";
   if (record.type === "manpower") return `${record.agency} · ${record.site}`;
@@ -7518,6 +7848,17 @@ app.post("/chat", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+
+cron.schedule("0 12 * * *", async () => {
+  try {
+    if (!publicDmrSettings().linked) return;
+    const date = istDateKey(new Date());
+    await buildDmrDailyPdf(date, { save: true });
+    console.log(`Generated scheduled DMR CEO PDF for ${date}`);
+  } catch (error) {
+    console.error("Scheduled DMR PDF generation error:", error);
+  }
+}, { timezone: "Asia/Kolkata" });
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

@@ -4167,12 +4167,29 @@ function dmrPdfAddPageIfNeededLimited(doc, neededHeight = 80) {
   return true;
 }
 
+const dmrPdfFonts = {
+  regular: "Helvetica",
+  bold: "Helvetica-Bold",
+};
+
+function registerDmrPdfFonts(doc) {
+  const geistFontPath = path.join(__dirname, "..", "frontend", "src", "app", "font", "satre.ttf");
+  if (!fs.existsSync(geistFontPath)) return;
+  try {
+    doc.registerFont("DmrGeist", geistFontPath);
+    dmrPdfFonts.regular = "DmrGeist";
+    dmrPdfFonts.bold = "DmrGeist";
+  } catch (error) {
+    console.warn("Could not register DMR PDF font:", error.message);
+  }
+}
+
 function dmrPdfPill(doc, text, x, y, options = {}) {
   const width = options.width || Math.max(72, doc.widthOfString(text) + 22);
   const height = options.height || 24;
   doc.save();
   doc.roundedRect(x, y, width, height, height / 2).fill(options.fill || "#f3f1eb");
-  doc.fillColor(options.color || "#171714").fontSize(options.fontSize || 9).font("Helvetica-Bold");
+  doc.fillColor(options.color || "#171714").fontSize(options.fontSize || 9).font(dmrPdfFonts.bold);
   doc.text(text, x + 11, y + 7, { width: width - 22, lineBreak: false });
   doc.restore();
   return width;
@@ -4187,7 +4204,7 @@ function dmrPdfTextRow(doc, columns, y, options = {}) {
     doc.restore();
   }
   columns.forEach((column) => {
-    doc.fillColor(column.color || options.color || "#171714").font(column.bold ? "Helvetica-Bold" : "Helvetica").fontSize(column.size || options.size || 9);
+    doc.fillColor(column.color || options.color || "#171714").font(column.bold ? dmrPdfFonts.bold : dmrPdfFonts.regular).fontSize(column.size || options.size || 9);
     doc.text(column.text, column.x, y + (column.top || 10), { width: column.width, lineGap: 1 });
   });
 }
@@ -4206,11 +4223,22 @@ function dmrPdfSectionTitle(doc, title, subtitle) {
 function dmrPdfDrawDailyHeader(doc, dateKey) {
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const top = doc.y;
-  doc.rect(doc.page.margins.left, top, pageWidth, 56).fill("#ffffff").stroke("#ece8df");
-  doc.fillColor("#7b7f89").font("Helvetica-Bold").fontSize(7).text("CEO SUMMARY", doc.page.margins.left + 14, top + 10, { characterSpacing: 1.8 });
-  doc.fillColor("#171714").font("Helvetica-Bold").fontSize(17).text("Daily DMR report", doc.page.margins.left + 14, top + 26);
-  dmrPdfPill(doc, dmrPdfDateLabel(dateKey), doc.page.width - doc.page.margins.right - 142, top + 17, { width: 124, height: 22, fill: "#f4f3ef", color: "#5e625f" });
-  doc.y = top + 72;
+  const left = doc.page.margins.left;
+  const generatedAt = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  doc.rect(left, top, pageWidth, 58).fill("#ffffff").stroke("#ece8df");
+  doc.fillColor("#7b7f89").font(dmrPdfFonts.bold).fontSize(7).text("CEO SUMMARY", left, top + 9, { characterSpacing: 1.8 });
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(17).text("Daily DMR report", left, top + 25, { lineBreak: false });
+  const titleWidth = doc.widthOfString("Daily DMR report");
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(15).text(dmrPdfDateLabel(dateKey), left + titleWidth + 18, top + 27, { lineBreak: false });
+  doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(8).text(`Generated: ${generatedAt}`, left, top + 48, { width: pageWidth, lineBreak: false });
+  doc.y = top + 74;
 }
 
 function dmrPdfDrawSummary(doc, report, dateKey) {
@@ -4245,10 +4273,10 @@ function dmrPdfDrawSummary(doc, report, dateKey) {
 }
 
 function dmrPdfPageTitle(doc, title, subtitle) {
-  doc.fillColor("#171714").font("Helvetica-Bold").fontSize(18).text(title, doc.page.margins.left, doc.y, { align: "left" });
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(18).text(title, doc.page.margins.left, doc.y, { align: "left" });
   if (subtitle) {
     doc.moveDown(0.25);
-    doc.fillColor("#807d76").font("Helvetica").fontSize(9).text(subtitle, doc.page.margins.left, doc.y, { align: "left" });
+    doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(9).text(subtitle, doc.page.margins.left, doc.y, { align: "left" });
   }
   doc.moveDown(0.8);
 }
@@ -4268,7 +4296,7 @@ function dmrPdfDrawAttendance(doc, attendance) {
   let y = doc.y;
   doc.rect(left, y, pageWidth, 34).fill("#f3f1eb");
   columns.forEach((column, index) => {
-    doc.fillColor("#5e6a7f").font("Helvetica-Bold").fontSize(10).text(column.label.toUpperCase(), left + index * columnWidth + 12, y + 12, { width: columnWidth - 24, height: 12 });
+    doc.fillColor("#5e6a7f").font(dmrPdfFonts.bold).fontSize(10).text(column.label.toUpperCase(), left + index * columnWidth + 12, y + 12, { width: columnWidth - 24, height: 12 });
   });
   y += 34;
   const bodyHeight = 128;
@@ -4276,8 +4304,8 @@ function dmrPdfDrawAttendance(doc, attendance) {
     const x = left + index * columnWidth;
     const names = column.names.join(", ") || "-";
     doc.rect(x, y, columnWidth, bodyHeight).fill(index % 2 ? "#ffffff" : "#faf9f5").stroke("#ece8df");
-    doc.fillColor(column.color).font("Helvetica-Bold").fontSize(20).text(`${column.names.length}/${item.total || 0}`, x + 12, y + 14, { width: columnWidth - 24, height: 24 });
-    doc.fillColor("#171714").font("Helvetica").fontSize(10).text(names, x + 12, y + 48, { width: columnWidth - 24, height: 64, ellipsis: true, lineGap: 2 });
+    doc.fillColor(column.color).font(dmrPdfFonts.bold).fontSize(20).text(`${column.names.length}/${item.total || 0}`, x + 12, y + 14, { width: columnWidth - 24, height: 24 });
+    doc.fillColor("#171714").font(dmrPdfFonts.regular).fontSize(10).text(names, x + 12, y + 48, { width: columnWidth - 24, height: 64, ellipsis: true, lineGap: 2 });
   });
   doc.y = y + bodyHeight + 10;
 }
@@ -4287,16 +4315,36 @@ function dmrPdfDrawTradeSite(doc, report) {
     .filter((item) => item.rowType !== "average")
     .filter((item) => (Number(item.planned) || 0) || (Number(item.actual) || 0));
 
-  dmrPdfPageTitle(doc, "Trade by site", "Consolidated planned/actual manpower. Blank cells have no data.");
+  const left = doc.page.margins.left;
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const summaryPlanned = entries.reduce((sum, item) => sum + (Number(item.planned) || 0), 0);
+  const summaryActual = entries.reduce((sum, item) => sum + (Number(item.actual) || 0), 0);
+  const titleTop = doc.y;
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(18).text("Trade by site", left, titleTop, { align: "left" });
+  doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(9).text("Consolidated planned/actual manpower. Blank cells have no data.", left, titleTop + 27, { align: "left" });
+  const kpiX = left + pageWidth - 172;
+  const kpiColor = dmrPdfStatusColor(summaryPlanned, summaryActual);
+  doc.fillColor("#7b7f89").font(dmrPdfFonts.bold).fontSize(7).text("PLANNED / ACTUAL", kpiX, titleTop + 1, { width: 172, align: "right", characterSpacing: 1.2 });
+  const plannedText = String(summaryPlanned);
+  const slashText = "/";
+  const actualText = String(summaryActual);
+  doc.font(dmrPdfFonts.bold).fontSize(24);
+  const totalTextWidth = doc.widthOfString(plannedText) + doc.widthOfString(slashText) + doc.widthOfString(actualText);
+  let summaryCursor = kpiX + 172 - totalTextWidth;
+  doc.fillColor("#171714").text(plannedText, summaryCursor, titleTop + 16, { lineBreak: false });
+  summaryCursor += doc.widthOfString(plannedText);
+  doc.fillColor("#171714").text(slashText, summaryCursor, titleTop + 16, { lineBreak: false });
+  summaryCursor += doc.widthOfString(slashText);
+  doc.fillColor(kpiColor).text(actualText, summaryCursor, titleTop + 16, { lineBreak: false });
+  doc.y = titleTop + 58;
+
   if (!entries.length) {
     doc.roundedRect(doc.page.margins.left, doc.y, doc.page.width - doc.page.margins.left - doc.page.margins.right, 52, 14).fill("#f7f4ec");
-    doc.fillColor("#807d76").font("Helvetica").fontSize(10).text("No trade by site manpower was provided for this date.", doc.page.margins.left + 16, doc.y + 18);
+    doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(10).text("No trade by site manpower was provided for this date.", doc.page.margins.left + 16, doc.y + 18);
     doc.y += 66;
     return;
   }
 
-  const left = doc.page.margins.left;
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const tradeWidth = 118;
   const totalWidth = 60;
   const siteTotals = new Map();
@@ -4331,27 +4379,27 @@ function dmrPdfDrawTradeSite(doc, report) {
 
   function drawMatrixHeader() {
     doc.rect(left, y, pageWidth, 28).fill("#f3f1eb");
-    doc.fillColor("#5e6a7f").font("Helvetica-Bold").fontSize(8).text("TRADE", left + 9, y + 10, { width: tradeWidth - 16, height: 12 });
+    doc.fillColor("#5e6a7f").font(dmrPdfFonts.bold).fontSize(8).text("TRADE", left + 9, y + 10, { width: tradeWidth - 16, height: 12 });
     sites.forEach((site, index) => {
-      doc.fillColor("#5e6a7f").font("Helvetica-Bold").fontSize(site.length > 16 ? 5.4 : 6.6).text(site.toUpperCase(), left + tradeWidth + index * siteWidth + 3, y + 6, { width: siteWidth - 6, height: 18, align: "center" });
+      doc.fillColor("#5e6a7f").font(dmrPdfFonts.bold).fontSize(site.length > 16 ? 5.4 : 6.6).text(site.toUpperCase(), left + tradeWidth + index * siteWidth + 3, y + 6, { width: siteWidth - 6, height: 18, align: "center" });
     });
-    doc.fillColor("#5e6a7f").font("Helvetica-Bold").fontSize(8).text("TOTAL", left + tradeWidth + sites.length * siteWidth + 4, y + 10, { width: totalWidth - 8, height: 12, align: "center" });
+    doc.fillColor("#5e6a7f").font(dmrPdfFonts.bold).fontSize(8).text("TOTAL", left + tradeWidth + sites.length * siteWidth + 4, y + 10, { width: totalWidth - 8, height: 12, align: "center" });
     y += 28;
     doc.y = y;
   }
 
   function drawPair(x, yValue, width, planned, actual) {
     if (!planned && !actual) {
-      doc.fillColor("#9b9b94").font("Helvetica").fontSize(8).text("-", x, yValue, { width, height: 9, align: "center" });
+      doc.fillColor("#9b9b94").font(dmrPdfFonts.regular).fontSize(8).text("-", x, yValue, { width, height: 9, align: "center" });
       return;
     }
     const color = dmrPdfStatusColor(planned, actual);
     const plannedText = String(planned);
     const slashText = "/";
     const actualText = String(actual);
-    const totalTextWidth = doc.font("Helvetica-Bold").fontSize(8.7).widthOfString(plannedText) + doc.widthOfString(slashText) + doc.widthOfString(actualText);
+    const totalTextWidth = doc.font(dmrPdfFonts.bold).fontSize(8.7).widthOfString(plannedText) + doc.widthOfString(slashText) + doc.widthOfString(actualText);
     let cursor = x + Math.max(0, (width - totalTextWidth) / 2);
-    doc.fillColor("#171714").font("Helvetica-Bold").fontSize(8.7).text(plannedText, cursor, yValue, { lineBreak: false });
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(8.7).text(plannedText, cursor, yValue, { lineBreak: false });
     cursor += doc.widthOfString(plannedText);
     doc.fillColor("#171714").text(slashText, cursor, yValue, { lineBreak: false });
     cursor += doc.widthOfString(slashText);
@@ -4365,7 +4413,7 @@ function dmrPdfDrawTradeSite(doc, report) {
   const hiddenRows = Math.max(0, trades.length - visibleTrades.length);
   visibleTrades.forEach((trade, index) => {
     doc.rect(left, y, pageWidth, rowHeight).fill(index % 2 ? "#ffffff" : "#faf9f5").stroke("#ece8df");
-    doc.fillColor("#171714").font("Helvetica-Bold").fontSize(8.4).text(trade, left + 9, y + Math.max(5, Math.floor((rowHeight - 9) / 2)), { width: tradeWidth - 16, height: 10, ellipsis: true });
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(8.4).text(trade, left + 9, y + Math.max(5, Math.floor((rowHeight - 9) / 2)), { width: tradeWidth - 16, height: 10, ellipsis: true });
     let totalPlanned = 0;
     let totalActual = 0;
     sites.forEach((site, siteIndex) => {
@@ -4379,7 +4427,7 @@ function dmrPdfDrawTradeSite(doc, report) {
     doc.y = y;
   });
   if (hiddenRows > 0 && doc.y + 20 <= doc.page.height - doc.page.margins.bottom) {
-    doc.fillColor("#807d76").font("Helvetica").fontSize(8).text(`${hiddenRows} more trade row${hiddenRows === 1 ? "" : "s"} hidden to keep the PDF within 2 pages.`, left, doc.y + 8);
+    doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(8).text(`${hiddenRows} more trade row${hiddenRows === 1 ? "" : "s"} hidden to keep the PDF within 2 pages.`, left, doc.y + 8);
   }
 }
 
@@ -4401,17 +4449,12 @@ function generateDmrDailyPdfBuffer(report, dateKey) {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
+    registerDmrPdfFonts(doc);
     dmrPdfDrawDailyHeader(doc, dateKey);
     dmrPdfDrawTradeSite(doc, report);
     doc.addPage();
     dmrPdfDrawDailyHeader(doc, dateKey);
     dmrPdfDrawAttendance(doc, report.attendance);
-    const footer = `UIPL Docs - DMR CEO report - ${dmrPdfDateLabel(dateKey)}`;
-    const pageRange = doc.bufferedPageRange();
-    for (let index = pageRange.start; index < pageRange.start + pageRange.count; index += 1) {
-      doc.switchToPage(index);
-      doc.fillColor("#aaa59e").fontSize(7).text(footer, doc.page.margins.left, doc.page.height - 22, { align: "center" });
-    }
     doc.end();
   });
 }

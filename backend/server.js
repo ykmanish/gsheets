@@ -4407,8 +4407,9 @@ function dmrPdfDrawTradeSite(doc, report) {
   }
 
   drawMatrixHeader();
-  const rowHeight = Math.max(16, Math.min(22, Math.floor((bottom - y - 20) / Math.max(1, trades.length))));
-  const maxRows = Math.max(1, Math.floor((bottom - y - 22) / rowHeight));
+  const totalRowHeight = 20;
+  const rowHeight = Math.max(14, Math.min(20, Math.floor((bottom - y - totalRowHeight - 20) / Math.max(1, trades.length))));
+  const maxRows = Math.max(1, Math.floor((bottom - y - totalRowHeight - 22) / rowHeight));
   const visibleTrades = trades.slice(0, maxRows);
   const hiddenRows = Math.max(0, trades.length - visibleTrades.length);
   visibleTrades.forEach((trade, index) => {
@@ -4426,6 +4427,23 @@ function dmrPdfDrawTradeSite(doc, report) {
     y += rowHeight;
     doc.y = y;
   });
+  if (y + totalRowHeight <= bottom) {
+    doc.rect(left, y, pageWidth, totalRowHeight).fill("#f3f1eb").stroke("#e4ded3");
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(8.8).text("TOTAL", left + 9, y + 6, { width: tradeWidth - 16, height: 10 });
+    let grandPlanned = 0;
+    let grandActual = 0;
+    sites.forEach((site, siteIndex) => {
+      const siteTotal = siteTotals.get(site) || { planned: 0, actual: 0 };
+      const planned = Number(siteTotal.planned) || 0;
+      const actual = Number(siteTotal.actual) || 0;
+      grandPlanned += planned;
+      grandActual += actual;
+      drawPair(left + tradeWidth + siteIndex * siteWidth, y + 6, siteWidth, planned, actual);
+    });
+    drawPair(left + tradeWidth + sites.length * siteWidth, y + 6, totalWidth, grandPlanned, grandActual);
+    y += totalRowHeight;
+    doc.y = y;
+  }
   if (hiddenRows > 0 && doc.y + 20 <= doc.page.height - doc.page.margins.bottom) {
     doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(8).text(`${hiddenRows} more trade row${hiddenRows === 1 ? "" : "s"} hidden to keep the PDF within 2 pages.`, left, doc.y + 8);
   }

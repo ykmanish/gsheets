@@ -1418,6 +1418,24 @@ export default function DmrDashboard({ darkMode }) {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {planMode === "today" && (
+                  <button
+                    type="button"
+                    onClick={downloadDmrReportPdf}
+                    disabled={reportPdfLoading}
+                    className={`relative flex h-11 items-center gap-2 overflow-hidden rounded-full px-4 text-sm font-semibold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      darkMode
+                        ? "bg-gradient-to-r from-[#6af3a8] via-[#7df0c5] to-[#6af3a8] text-black shadow-lg shadow-[#d8f36a]/15 hover:scale-[1.02]"
+                        : "bg-gradient-to-r from-[#6aff9e] via-[#7df0c5] to-[#6af3a8] text-[#171714] shadow-lg shadow-emerald-200/60 hover:scale-[1.02]"
+                    }`}
+                  >
+                    <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/45 to-transparent transition-transform duration-700 hover:translate-x-full" />
+                    <span className="relative inline-flex items-center gap-2">
+                      {reportPdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4 " />}
+                      Download Today's PDF
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setCeoPlanView((value) => !value)}
@@ -1687,10 +1705,6 @@ export default function DmrDashboard({ darkMode }) {
                     <button onClick={generateDmrReport} disabled={reportLoading} className={`flex h-12 min-w-40 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>
                       {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
                       Generate
-                    </button>
-                    <button onClick={downloadDmrReportPdf} disabled={reportPdfLoading} className={`flex h-12 min-w-40 items-center justify-center gap-2 rounded-2xl border px-5 text-sm font-semibold disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/5 text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-black/[0.03]"}`}>
-                      {reportPdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                      Download day PDF
                     </button>
                   </div>
                 </div>

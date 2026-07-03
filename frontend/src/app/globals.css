@@ -1,6 +1,169 @@
 @import "tailwindcss";
 @variant dark (&:where(.dark, .dark *));
 
+.app-sidebar {
+  min-width: 0;
+  overflow: visible;
+}
+
+@media (min-width: 768px) {
+  .app-sidebar {
+    width: 248px;
+    flex: 0 0 248px;
+    transition:
+      width 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      flex-basis 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: width, flex-basis;
+  }
+
+  .app-sidebar-collapsed {
+    width: 72px;
+    flex-basis: 72px;
+  }
+}
+
+.dmr-report-shell {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  max-width: 1120px;
+  border-radius: 0;
+  transition:
+    top 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    right 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    bottom 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-width 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 420ms ease;
+  will-change: top, right, bottom, width, max-width, border-radius;
+}
+
+@media (min-width: 640px) {
+  .dmr-report-shell {
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: min(90vw, 1120px);
+    border: 1px solid;
+    border-radius: 28px;
+  }
+}
+
+.dmr-report-shell-expanded {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  max-width: 100vw;
+  border-radius: 0;
+}
+
+.employee-report-drawer input:not([type="checkbox"]),
+.employee-report-drawer textarea {
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.employee-report-drawer input:not([type="checkbox"]):focus,
+.employee-report-drawer textarea:focus {
+  border-color: #69c832;
+  box-shadow: 0 0 0 3px rgba(137, 237, 63, 0.12);
+}
+
+.employee-report-shell {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  max-width: 1080px;
+  border-radius: 0;
+  transition:
+    top 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    right 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    bottom 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-width 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 420ms ease;
+  will-change: top, right, bottom, width, max-width, border-radius;
+}
+
+@media (min-width: 640px) {
+  .employee-report-shell {
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: min(90vw, 1080px);
+    border: 1px solid;
+    border-radius: 18px;
+  }
+}
+
+.employee-report-shell-expanded {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  max-width: 100vw;
+  border-radius: 0;
+}
+
+@media (min-width: 640px) {
+  .employee-settings-shell { width: min(82vw, 720px); max-width: 720px; }
+  .employee-status-shell { width: min(88vw, 1000px); max-width: 1000px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .employee-report-shell { transition-duration: 1ms; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dmr-report-shell { transition-duration: 1ms; }
+}
+
+@keyframes mrn-drawer-in {
+  from { transform: translateX(105%); opacity: 0.75; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes mrn-drawer-out {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(105%); opacity: 0.75; }
+}
+
+@keyframes mrn-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mrn-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="mrn-drawer-"], [class*="mrn-backdrop-"] { animation-duration: 1ms !important; }
+}
+
+.mrn-form-drawer input:not([type="file"]),
+.mrn-form-drawer textarea {
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  border-radius: 12px;
+  background: #fafbf8;
+}
+
+.mrn-form-drawer input:not([type="file"]):focus,
+.mrn-form-drawer textarea:focus {
+  border-color: #69c832;
+  box-shadow: 0 0 0 3px rgba(137, 237, 63, 0.13);
+}
+
+.dark .mrn-form-drawer input:not([type="file"]),
+.dark .mrn-form-drawer textarea {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+}
+
 
 /* Hide scrollbar for Chrome, Safari, and Edge */
 ::-webkit-scrollbar {

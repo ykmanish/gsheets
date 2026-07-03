@@ -58,7 +58,7 @@ export default function Navbar({ darkMode, setDarkMode, user, onLogout, onMenuCl
       className={`px-4 py-4 sm:px-6 lg:px-8 lg:py-5 newq flex items-center justify-between gap-4 transition-all duration-300 ${
         darkMode
           ? "bg-[#0f1115] border-b border-white/10"
-          : "bg-white border-b border-black/5"
+          : "bg-[#f8faf9] border-b lg:border-b-0 border-[#dfe7e4]"
       }`}
       
     >
@@ -66,14 +66,14 @@ export default function Navbar({ darkMode, setDarkMode, user, onLogout, onMenuCl
         <button
           onClick={onMenuClick}
           className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full md:hidden ${
-            darkMode ? "bg-white/5 text-white hover:bg-white/10" : "bg-black/[0.04] text-black hover:bg-black/[0.07]"
+            darkMode ? "bg-white/5 text-white hover:bg-white/10" : "border border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"
           }`}
         >
           <Menu className="h-5 w-5" />
         </button>
         <div className="min-w-0">
           <h2
-            className={`truncate py-1 text-lg small font-semibold leading-none sm:text-2xl ${
+            className={`truncate py-1 text-lg small font-semibold leading-none sm:text-[22px] ${
               darkMode ? "text-white" : "text-black"
             }`}
           >
@@ -91,7 +91,7 @@ export default function Navbar({ darkMode, setDarkMode, user, onLogout, onMenuCl
         <button
           onClick={onNotificationsClick}
           className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-all duration-300 sm:h-11 sm:w-11 ${
-            darkMode ? "bg-white/10 text-white/80 hover:bg-white/15 border border-white/10" : "bg-white text-black/75 hover:bg-black/5 border border-black/5"
+            darkMode ? "bg-white/10 text-white/80 hover:bg-white/15 border border-white/10" : "bg-white text-slate-700 hover:bg-[#f1f7f4] border border-[#dfe7e4]"
           }`}
           title="Notifications"
         >
@@ -112,10 +112,10 @@ export default function Navbar({ darkMode, setDarkMode, user, onLogout, onMenuCl
             className={`h-10 rounded-full pl-1.5 pr-2 flex items-center gap-2 transition-all duration-300 sm:h-11 sm:pl-2 sm:pr-4 sm:gap-3 -sm ${
               darkMode
                 ? "bg-white/10 text-white/80 hover:bg-white/15 border border-white/10"
-                : "bg-white text-black/75 hover:bg-black/5 border border-black/5"
+                : "bg-white text-slate-700 hover:bg-[#f1f7f4] border border-[#dfe7e4]"
             }`}
           >
-            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
+            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}>
               {initials || <User className="w-4 h-4" />}
             </span>
             <span className="hidden md:block text-left">

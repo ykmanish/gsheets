@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import Image from "next/image";
 
 export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen, collapsed = false, setCollapsed }) {
@@ -27,7 +27,18 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     projects: projectSubMenu.some((item) => item.id === activeMenu),
     access: accessSubMenu.some((item) => item.id === activeMenu),
   }));
+  const [menuSearch, setMenuSearch] = useState("");
   const navRef = useRef(null);
+  const searchTerm = menuSearch.trim().toLowerCase();
+  const filteredProjectSubMenu = projectSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
+  const filteredAccessSubMenu = accessSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
+  const filteredMenuItems = visibleMenuItems.filter((item) => {
+    if (!searchTerm) return true;
+    if (item.label.toLowerCase().includes(searchTerm)) return true;
+    if (item.id === "projects") return filteredProjectSubMenu.length > 0;
+    if (item.id === "access-management") return filteredAccessSubMenu.length > 0;
+    return false;
+  });
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -44,36 +55,35 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
   }, [activeMenu]);
   const shell = darkMode
     ? "border-white/10 bg-[#101114]"
-    : "border-black/[0.06] bg-white";
-  const divider = darkMode ? "border-white/10" : "border-black/[0.08]";
-  const muted = darkMode ? "text-white/38" : "text-black/38";
+    : "border-[#e7eaee] bg-white";
+  const muted = darkMode ? "text-white/38" : "text-slate-400";
 
-  const itemClass = ({ active = false, child = false, parentActive = false } = {}) => `w-full newq flex items-center gap-3 rounded-2xl py-2 text-left transition-all duration-300 ${child ? "px-3" : "px-4"} ${
+  const itemClass = ({ active = false, child = false, parentActive = false } = {}) => `w-full newq flex h-10 items-center gap-3 rounded-[14px] text-left transition-all duration-300 ${child ? "px-3" : "px-3"} ${
     parentActive
       ? darkMode
         ? "bg-white/[0.07] text-white/80"
-        : "bg-black/[0.055] text-black/75"
+        : "bg-[#a8f0cf] text-[#163f32]"
       : active
       ? darkMode
         ? "bg-white/10 text-white"
-        : "bg-black/[0.075] text-black"
+        : "bg-[#a8f0cf] text-[#163f32]"
       : darkMode
       ? "text-white/58 hover:bg-white/5 hover:text-white"
-      : "text-black/58 hover:bg-black/[0.045] hover:text-black"
+      : "text-slate-600 hover:bg-[#f3f6f8] hover:text-slate-950"
   }`;
 
-  const iconClass = ({ active = false, child = false, parentActive = false } = {}) => `${child ? "h-8 w-8" : "h-9 w-9"} rounded-full flex items-center justify-center transition-all duration-300 ${
+  const iconClass = ({ active = false, child = false, parentActive = false } = {}) => `${child ? "h-7 w-7" : "h-7 w-7"} flex items-center justify-center transition-all duration-200 ${
     parentActive
       ? darkMode
         ? "bg-white/10 text-white/70"
-        : "bg-white text-black/70"
+        : "text-[#163f32]"
       : active
       ? darkMode
         ? "bg-[#d8f36a] text-black"
-        : "bg-white text-black"
+        : "text-[#163f32]"
       : darkMode
-      ? "bg-white/5"
-      : "bg-black/[0.035]"
+      ? "text-white/55"
+      : "text-slate-500"
   }`;
 
   return (
@@ -83,7 +93,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
         onClick={() => setMobileOpen?.(false)}
       />
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 transform flex-col overflow-hidden border-r transition-[width,transform] duration-500 ease-in-out md:static md:z-auto md:h-screen md:translate-x-0 ${collapsed ? "md:w-[88px]" : "md:w-72"} ${
+        className={`app-sidebar fixed inset-y-0 left-0 z-50 flex w-[248px] transform flex-col dark:border-r lg:border-r-0 md:static md:z-auto md:h-screen md:translate-x-0 ${collapsed ? "app-sidebar-collapsed" : ""} ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } ${shell}`}
         style={{
@@ -91,189 +101,164 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
             '"Google Sans", "Product Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
       >
-      <div className={`border-b border-dashed px-5 py-5 transition-all duration-300 ${collapsed ? "md:px-4" : ""} ${divider}`}>
-        <div className={`flex items-center gap-3 transition-all duration-500 ${collapsed ? "md:flex-col md:gap-2" : ""}`}>
-          <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-all duration-500 ${darkMode ? "bg-white/5" : "bg-white"}`}
-          >
-            <Image src="/logo.png" alt="Logo" width={34} height={34} className="h-8 w-8" />
-          </div>
-          <div className={`min-w-0 transition-all duration-200 ${collapsed ? "md:hidden" : ""}`}>
-            <h1
-              className={`truncate text-[20px] small font-semibold leading-none ${
-                darkMode ? "text-white" : "text-black"
-              }`}
+        <div className={`relative px-4 pb-2 pt-4 transition-all duration-300 ${collapsed ? "md:px-3" : ""}`}>
+          <div className="flex items-center gap-3 transition-all duration-500">
+            <div
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all duration-500 `}
             >
-              UIPL Docs
-            </h1>
-            <p className={`mt-1 text-[11px] ${muted}`}>
-              AI document workspace
-            </p>
-          </div>
-          <button
-            onClick={() => setMobileOpen?.(false)}
-            className={`ml-auto flex h-10 w-10 items-center justify-center rounded-full md:hidden ${darkMode ? "hover:bg-white/5 text-white/70" : "hover:bg-black/5 text-black/60"}`}
-          >
-            <X className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setCollapsed?.(!collapsed)}
-            className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 md:flex ${collapsed ? "md:ml-0" : "ml-auto"} ${darkMode ? "text-white/65 hover:bg-white/10" : "text-black/55 hover:bg-black/5"}`}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-          </button>
-        </div>
-      </div>
-
-      <nav ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-3 transition-all duration-500 ${collapsed ? "md:px-2" : ""}`}>
-        <div className={`space-y-1.5 border-b border-dashed pb-3 ${divider}`}>
-        {visibleMenuItems.map((item) => {
-          if (item.parent === "projects") return null;
-          if (item.parent === "access-management") return null;
-          if (item.id === "projects" && projectSubMenu.length) {
-            const isOpen = Boolean(openGroups.projects);
-            const childActive = projectSubMenu.some((child) => child.id === activeMenu);
-            return (
-              <div key="projects-group" className="overflow-hidden rounded-[22px] transition-all duration-300">
-                <button
-                  type="button"
-                  onClick={() => setOpenGroups((current) => ({ ...current, projects: !current.projects }))}
-                  className={itemClass({ parentActive: childActive })}
-                >
-                  <span className={iconClass({ parentActive: childActive })}>
-                    <Building2 className="h-4.5 w-4.5" />
-                  </span>
-                  <span className={`min-w-0 flex-1 truncate text-[15px] ${collapsed ? "md:hidden" : ""}`}>Projects</span>
-                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${collapsed ? "md:hidden" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
-                </button>
-
-                <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:hidden" : ""} ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                  <div className="min-h-0 overflow-hidden">
-                    <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
-                      <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                      {projectSubMenu.map((child) => {
-                        const ChildIcon = child.icon;
-                        const active = activeMenu === child.id;
-                        return (
-                          <button
-                            key={child.id}
-                            data-sidebar-menu={child.id}
-                            type="button"
-                            onClick={() => setActiveMenu(child.id)}
-                            className={itemClass({ active, child: true })}
-                          >
-                            <span className={`absolute left-0 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                            <span className={iconClass({ active, child: true })}>
-                              <ChildIcon className="h-4 w-4" />
-                            </span>
-                            <span className="max-w-full truncate text-[14px]">{child.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          if (item.id === "access-management" && accessSubMenu.length) {
-            const isOpen = Boolean(openGroups.access);
-            const childActive = accessSubMenu.some((child) => child.id === activeMenu);
-            return (
-              <div key="access-group" className="overflow-hidden rounded-[22px] transition-all duration-300">
-                <button
-                  type="button"
-                  onClick={() => setOpenGroups((current) => ({ ...current, access: !current.access }))}
-                  className={itemClass({ parentActive: childActive })}
-                >
-                  <span className={iconClass({ parentActive: childActive })}>
-                    <ShieldCheck className="h-4.5 w-4.5" />
-                  </span>
-                  <span className={`min-w-0 flex-1 truncate text-[15px] ${collapsed ? "md:hidden" : ""}`}>Access Control</span>
-                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${collapsed ? "md:hidden" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
-                </button>
-
-                <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:hidden" : ""} ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                  <div className="min-h-0 overflow-hidden">
-                    <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
-                      <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                      {accessSubMenu.map((child) => {
-                        const ChildIcon = child.icon;
-                        const active = activeMenu === child.id;
-                        return (
-                          <button
-                            key={child.id}
-                            data-sidebar-menu={child.id}
-                            type="button"
-                            onClick={() => setActiveMenu(child.id)}
-                            className={itemClass({ active, child: true })}
-                          >
-                            <span className={`absolute left-0 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                            <span className={iconClass({ active, child: true })}>
-                              <ChildIcon className="h-4 w-4" />
-                            </span>
-                            <span className="max-w-full truncate text-[14px]">{child.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          const Icon = item.icon;
-          const isActive = activeMenu === item.id;
-
-          return (
+              <Image src="/logo.png" alt="Logo" width={26} height={26} className="h-8 w-8 rounded-md" />
+            </div>
+            <div className={`min-w-0 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-300 ease-out ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[150px] opacity-100"}`}>
+              <h1
+                className={`truncate text-[22px] small font-bold leading-none ${
+                  darkMode ? "text-white" : "text-black"
+                }`}
+              >
+                UIPL Docs
+              </h1>
+            </div>
             <button
-              key={item.id}
-              data-sidebar-menu={item.id}
-              onClick={() => setActiveMenu(item.id)}
-              className={itemClass({ active: isActive })}
+              onClick={() => setMobileOpen?.(false)}
+              className={`ml-auto flex h-10 w-10 items-center justify-center rounded-full md:hidden ${darkMode ? "hover:bg-white/5 text-white/70" : "hover:bg-black/5 text-black/60"}`}
             >
-              <span className={iconClass({ active: isActive })}>
-                <Icon className="w-4.5 h-4.5" />
-              </span>
-              <span className={`max-w-full truncate text-[15px] ${collapsed ? "md:hidden" : ""}`}>{item.label}</span>
+              <X className="h-5 w-5" />
             </button>
-          );
-        })}
+            <button
+              type="button"
+              onClick={() => setCollapsed?.(!collapsed)}
+              className={`absolute -right-3.5 top-4 z-[60] hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-sm transition-[background-color,color,transform] duration-300 hover:scale-105 md:flex ${darkMode ? "border-white/10 bg-[#17181c] text-white/65 hover:bg-[#22242a]" : "border-[#dfe4e8] bg-white text-slate-500 hover:bg-[#f3f6f8]"}`}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </button>
+          </div>
+          <div className={`relative newq overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out ${collapsed ? "md:mt-0 md:max-h-0 md:opacity-0" : "mt-4 max-h-10 opacity-100"}`}>
+            <Search className={`absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${muted}`} />
+            <input value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} placeholder="Global Search" className={`h-10 w-full rounded-xl border-0 pl-9 pr-3 text-sm outline-none ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35" : "bg-[#f1f4f8] text-slate-800 placeholder:text-slate-400"}`} />
+          </div>
         </div>
-      </nav>
 
-      <div className={`border-t border-dashed p-4 ${collapsed ? "md:hidden" : ""} ${divider}`}>
-  <div
-    className={`rounded-[22px] px-4 py-4 text-center  ${
-      darkMode
-        ? "bg-white/[0.035]"
-        : "bg-white"
-    }`}
-  >
-    <p
-      className={`text-xs small ${muted}`}
-    >
-      Powered by AI
-    </p>
+        <nav ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-2 transition-all duration-500 ${collapsed ? "md:px-2" : ""}`}>
+          <p className={`overflow-hidden px-3 newq text-[9px] font-bold uppercase tracking-[0.14em] transition-[max-height,opacity,margin] duration-300 ${muted} ${collapsed ? "md:mb-0 md:max-h-0 md:opacity-0" : "mb-2 max-h-5 opacity-100"}`}>Workspace</p>
+          <div className="space-y-1">
+          {filteredMenuItems.map((item) => {
+            if (item.parent === "projects") return null;
+            if (item.parent === "access-management") return null;
+            if (item.id === "projects" && projectSubMenu.length) {
+              const isOpen = Boolean(openGroups.projects);
+              const childActive = projectSubMenu.some((child) => child.id === activeMenu);
+              return (
+                <div key="projects-group" className="overflow-hidden rounded-[22px] transition-all duration-300">
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroups((current) => ({ ...current, projects: !current.projects }))}
+                    className={itemClass({ parentActive: childActive })}
+                  >
+                    <span className={iconClass({ parentActive: childActive })}>
+                      <Building2 className="h-4.5 w-4.5" />
+                    </span>
+                    <span className={`min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`}>Projects</span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
+                  </button>
 
-    <div className="mt-3 flex items-center justify-center gap-3">
-      <Image
-        src={darkMode ? "/whiteclaudelogo.svg" : "/blackclaudelogo.svg"}
-        alt="Claude"
-        width={92}
-        height={28}
-        className="h-7 w-auto"
-      />
+                  <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:grid-rows-[0fr] md:opacity-0" : isOpen || searchTerm ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                    <div className="min-h-0 overflow-hidden">
+                      <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
+                        <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                        {(searchTerm ? filteredProjectSubMenu : projectSubMenu).map((child) => {
+                          const ChildIcon = child.icon;
+                          const active = activeMenu === child.id;
+                          return (
+                            <button
+                              key={child.id}
+                              data-sidebar-menu={child.id}
+                              type="button"
+                              onClick={() => setActiveMenu(child.id)}
+                              className={itemClass({ active, child: true })}
+                            >
+                              <span className={`absolute left-0 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                              <span className={iconClass({ active, child: true })}>
+                                <ChildIcon className="h-4 w-4" />
+                              </span>
+                              <span className="max-w-full truncate text-[13px]">{child.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
 
-     
-    </div>
-  </div>
-</div>
+            if (item.id === "access-management" && accessSubMenu.length) {
+              const isOpen = Boolean(openGroups.access);
+              const childActive = accessSubMenu.some((child) => child.id === activeMenu);
+              return (
+                <div key="access-group" className="overflow-hidden rounded-[22px] transition-all duration-300">
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroups((current) => ({ ...current, access: !current.access }))}
+                    className={itemClass({ parentActive: childActive })}
+                  >
+                    <span className={iconClass({ parentActive: childActive })}>
+                      <ShieldCheck className="h-4.5 w-4.5" />
+                    </span>
+                    <span className={`min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`}>Access Control</span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
+                  </button>
+
+                  <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:grid-rows-[0fr] md:opacity-0" : isOpen || searchTerm ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                    <div className="min-h-0 overflow-hidden">
+                      <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
+                        <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                        {(searchTerm ? filteredAccessSubMenu : accessSubMenu).map((child) => {
+                          const ChildIcon = child.icon;
+                          const active = activeMenu === child.id;
+                          return (
+                            <button
+                              key={child.id}
+                              data-sidebar-menu={child.id}
+                              type="button"
+                              onClick={() => setActiveMenu(child.id)}
+                              className={itemClass({ active, child: true })}
+                            >
+                              <span className={`absolute left-0 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                              <span className={iconClass({ active, child: true })}>
+                                <ChildIcon className="h-4 w-4" />
+                              </span>
+                              <span className="max-w-full truncate text-[12px]">{child.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            const Icon = item.icon;
+            const isActive = activeMenu === item.id;
+
+            return (
+              <button
+                key={item.id}
+                data-sidebar-menu={item.id}
+                onClick={() => setActiveMenu(item.id)}
+                className={itemClass({ active: isActive })}
+              >
+                <span className={iconClass({ active: isActive })}>
+                  <Icon className="w-4.5 h-4.5" />
+                </span>
+                <span className={`overflow-hidden whitespace-nowrap text-[13px] transition-[max-width,opacity,transform] duration-300 ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[160px] opacity-100"}`}>{item.label}</span>
+              </button>
+            );
+          })}
+          </div>
+        </nav>
+
       </aside>
     </>
   );

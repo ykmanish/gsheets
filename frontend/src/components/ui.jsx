@@ -394,9 +394,42 @@ export function DateRangePicker({ darkMode, from, to, onChange, placeholder = "C
 export function DatePicker({ darkMode, value, onChange, placeholder = "Choose date" }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
+  const [popoverStyle, setPopoverStyle] = useState({ top: 0, left: 0, maxHeight: 380 });
   const selectedDate = fromDateInputValue(value);
   const [monthDate, setMonthDate] = useState(() => selectedDate || new Date());
   useClickOutside(ref, () => setOpen(false));
+
+  const positionPopover = useCallback(() => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const gap = 8;
+    const margin = 8;
+    const width = Math.min(300, viewportWidth - margin * 2);
+    const desiredHeight = 370;
+    const spaceBelow = viewportHeight - rect.bottom - gap - margin;
+    const spaceAbove = rect.top - gap - margin;
+    const opensBelow = spaceBelow >= Math.min(desiredHeight, spaceAbove);
+    const maxHeight = Math.max(240, Math.min(desiredHeight, opensBelow ? spaceBelow : spaceAbove));
+    const top = opensBelow
+      ? Math.min(rect.bottom + gap, viewportHeight - maxHeight - margin)
+      : Math.max(margin, rect.top - maxHeight - gap);
+    const preferredLeft = rect.left;
+    const left = Math.max(margin, Math.min(preferredLeft, viewportWidth - width - margin));
+    setPopoverStyle({ top, left, width, maxHeight });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    positionPopover();
+    window.addEventListener("resize", positionPopover);
+    window.addEventListener("scroll", positionPopover, true);
+    return () => {
+      window.removeEventListener("resize", positionPopover);
+      window.removeEventListener("scroll", positionPopover, true);
+    };
+  }, [open, positionPopover]);
 
   const days = useMemo(() => {
     const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
@@ -425,33 +458,34 @@ export function DatePicker({ darkMode, value, onChange, placeholder = "Choose da
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`h-12 w-full min-w-[190px] rounded-3xl border px-4 text-left transition ${
+        className={`h-10 w-full min-w-[150px] rounded-xl border px-3 text-left transition ${
           darkMode
             ? "bg-[#15171c] border-white/10 text-white hover:bg-white/10"
             : "bg-white border-black/10 text-black hover:bg-black/[0.03]"
         }`}
       >
         <span className="flex items-center gap-2 text-sm">
-          <CalendarDays className={`h-4 w-4 ${darkMode ? "text-[#d8f36a]" : "text-indigo-600"}`} />
+          <CalendarDays className={`h-3.5 w-3.5 ${darkMode ? "text-[#89ed3f]" : "text-[#4b9b16]"}`} />
           <span className="truncate">{value ? formatDisplayDate(value) : placeholder}</span>
         </span>
       </button>
 
       {open && (
         <div
-          className={`absolute right-0 top-[calc(100%+10px)] z-50 w-[min(92vw,360px)] rounded-[22px] border p-3 shadow-2xl sm:p-4 ${
+          style={popoverStyle}
+          className={`fixed z-[100] overflow-y-auto rounded-2xl border p-3 shadow-[0_18px_60px_rgba(0,0,0,0.2)] ${
             darkMode ? "bg-[#121317] border-white/10 text-white" : "bg-white border-black/10 text-black"
           }`}
         >
-          <div className="rounded-2xl border p-3 shadow-sm sm:p-4 dark:border-white/10">
+          <div className="rounded-xl border p-2.5 dark:border-white/10">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className={`mb-1 text-sm ${darkMode ? "text-white/70" : "text-black/65"}`}>Selected day</p>
+                <p className={`mb-1 text-[10px] font-semibold uppercase tracking-wide ${darkMode ? "text-white/55" : "text-black/45"}`}>Selected day</p>
                 <div
-                  className={`flex h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold ${
+                  className={`flex h-9 items-center gap-2 rounded-lg border px-2.5 text-xs font-semibold ${
                     darkMode
-                      ? "border-[#d8f36a] text-[#d8f36a] ring-2 ring-[#d8f36a]/20"
-                      : "border-indigo-600 text-indigo-700 ring-2 ring-indigo-600/20"
+                      ? "border-[#89ed3f] text-[#89ed3f]"
+                      : "border-[#69c832] text-[#4b9b16]"
                   }`}
                 >
                   <CalendarDays className="h-4 w-4 flex-shrink-0" />
@@ -461,37 +495,37 @@ export function DatePicker({ darkMode, value, onChange, placeholder = "Choose da
               <button
                 type="button"
                 onClick={selectToday}
-                className={`mt-6 rounded-lg px-3 py-2 text-sm ${darkMode ? "bg-white/5 text-white/75" : "bg-black/[0.04] text-black/75"}`}
+                className={`mt-4 rounded-lg px-2.5 py-2 text-xs font-semibold ${darkMode ? "bg-white/5 text-white/75" : "bg-[#f3f5ef] text-black/65"}`}
               >
                 Today
               </button>
             </div>
           </div>
 
-          <div className="mt-5 flex items-center justify-between">
+          <div className="mt-3 flex items-center justify-between">
             <button
               type="button"
               onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}
-              className="rounded-full px-3 py-2 text-sm"
+              className="rounded-full p-2 text-sm"
             >
               <ChevronDown className="h-4 w-4 rotate-90" />
             </button>
-            <p className="text-xl font-semibold">{monthLabel(monthDate)}</p>
+            <p className="text-base font-bold">{monthLabel(monthDate)}</p>
             <button
               type="button"
               onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}
-              className="rounded-full px-3 py-2 text-sm"
+              className="rounded-full p-2 text-sm"
             >
               <ChevronDown className="h-4 w-4 -rotate-90" />
             </button>
           </div>
 
-          <div className={`mt-5 grid grid-cols-7 gap-y-2 text-center text-sm ${darkMode ? "text-white/55" : "text-black/55"}`}>
+          <div className={`mt-2 grid grid-cols-7 text-center text-[11px] font-semibold ${darkMode ? "text-white/45" : "text-black/45"}`}>
             {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((label) => (
               <span key={label}>{label}</span>
             ))}
           </div>
-          <div className="mt-3 grid grid-cols-7 gap-y-2 text-center">
+          <div className="mt-1.5 grid grid-cols-7 gap-y-1 text-center">
             {days.map((day) => {
               const inMonth = day.getMonth() === monthDate.getMonth();
               const selected = sameDay(day, selectedDate);
@@ -500,11 +534,11 @@ export function DatePicker({ darkMode, value, onChange, placeholder = "Choose da
                   key={day.toISOString()}
                   type="button"
                   onClick={() => selectDay(day)}
-                  className={`mx-auto h-9 w-9 rounded-xl text-sm transition sm:h-10 sm:w-10 sm:text-base ${
+                  className={`mx-auto h-8 w-8 rounded-lg text-xs transition ${
                     selected
                       ? darkMode
-                        ? "bg-[#d8f36a] text-black shadow-lg"
-                        : "bg-indigo-600 text-white shadow-lg"
+                        ? "bg-[#89ed3f] text-black shadow-sm"
+                        : "bg-[#89ed3f] text-black shadow-sm"
                       : inMonth
                       ? darkMode
                         ? "text-white hover:bg-white/8"

@@ -1,8 +1,12 @@
 import { useCallback, useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import {
   Send,
   Loader2,
   FileText,
+  CalendarDays,
+  ClipboardCheck,
+  MessageCircle,
   RefreshCw,
   Eye,
   X,
@@ -194,6 +198,22 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
     toast.success("Chat cleared");
   };
 
+  const quickLinks = [
+    
+    {
+      label: "Check Daily Man Power",
+      helper: "Open DMR planned vs actuals",
+      icon: CalendarDays,
+      href: "/projects/dmr",
+    },
+    {
+      label: "Employee Report",
+      helper: "Review daily employee updates",
+      icon: ClipboardCheck,
+      href: "/employee-daily-report",
+    },
+  ];
+
   const activeDocuments = documents.filter((doc) => doc.isReady && doc.isActive);
   const activeDocumentCount = activeDocuments.filter((d) => selectedDocs.includes(d.id)).length;
   const totalReadyDocuments = activeDocuments.length;
@@ -221,39 +241,76 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
   return (
     <div
-      className="flex-1 newq flex min-h-0 flex-col overflow-hidden lg:flex-row"
-      style={{
-        background: darkMode
-          ? "linear-gradient(180deg, #111318 0%, #0c0d10 100%)"
-          : "linear-gradient(180deg, #f7f6f2 0%, #f3f1ea 100%)",
-      }}
+      className={`flex-1 newq flex min-h-0 flex-col overflow-hidden transition-colors duration-300 lg:flex-row ${
+        darkMode
+          ? "bg-[#0c0d10] text-white"
+          : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"
+      }`}
     >
       {/* ── Chat Area ── */}
       <div className="flex-1 flex min-h-[58vh] flex-col overflow-hidden lg:min-h-0">
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 space-y-4 sm:px-6 lg:px-8 lg:py-8">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center gap-5 py-16">
+            <div className="flex min-h-full items-center justify-center py-3 sm:py-5">
               <div
-                className="w-18 h-18 rounded-[28px] flex items-center justify-center"
-                style={{ background: darkMode ? "#1b1d22" : "#ffffff" }}
+                className={`w-full max-w-5xl rounded-[28px]  p-5 text-center -[0_18px_55px_rgba(15,23,42,0.07)] sm:p-6 lg:p-7 ${
+                  darkMode ? "border-white/10 bg-[#151612]" : "border-[#dfe7e4] bg-white"
+                }`}
               >
-                <FileText className="w-8 h-8" style={{ color: darkMode ? "#d8f36a" : "#111111" }} />
-              </div>
+                <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full -inner sm:h-16 sm:w-16 ${
+                  darkMode ? "bg-white/5 text-[#d8f36a] -black/20" : "bg-[#f2f6e8] text-[#171714] -white/60"
+                }`}>
+                  <FileText className="h-7 w-7 sm:h-8 sm:w-8" />
+                </div>
 
-              <div>
-                <p className={`text-[11px] uppercase tracking-[0.32em] mb-3 ${darkMode ? "text-white/40" : "text-black/35"}`}>
-                  Ask anything
-                </p>
-                <h2 className={`text-2xl small font-semibold sm:text-3xl md:text-4xl ${darkMode ? "text-white" : "text-black"}`}>
-                  Chat with your documents
-                </h2>
-                <p className={`text-sm mt-4 max-w-xl ${darkMode ? "text-white/55" : "text-black/45"}`}>
-                  {totalReadyDocuments === 0
-                    ? "No documents ready. Go to Documents to upload files or add a Google Sheet."
-                    : selectedDocs.length === 0
-                    ? "No documents selected. Go to Documents and enable at least one document."
-                    : `Querying ${activeDocumentCount} of ${totalReadyDocuments} source(s). Ask anything!`}
-                </p>
+                <div className="mt-4">
+                  <p className={`text-[10px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-[#8c948f]"}`}>
+                    Ask anything
+                  </p>
+                  <h2 className={`mt-2 text-3xl small font-semibold leading-tight tracking-tight sm:text-4xl ${darkMode ? "text-white" : "text-[#171714]"}`}>
+                    Chat with your documents
+                  </h2>
+                  <p className={`mx-auto mt-3 max-w-2xl text-sm leading-6 ${darkMode ? "text-white/55" : "text-[#8c948f]"}`}>
+                    {totalReadyDocuments === 0
+                      ? "No documents ready. Go to Documents to upload files or add a Google Sheet."
+                      : selectedDocs.length === 0
+                      ? "No documents selected. Go to Documents and enable at least one document."
+                      : `Querying ${activeDocumentCount} of ${totalReadyDocuments} source(s). Ask anything!`}
+                  </p>
+                </div>
+
+                <div className="mt-5 max-w-xl mx-auto grid gap-3 sm:grid-cols-2">
+                  {quickLinks.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <Link
+                        key={link.label}
+                        href={link.href}
+                        className={`group flex min-h-[72px] border-2 border-dotted items-center gap-3 rounded-[22px]  p-3 text-left transition duration-300 hover:-translate-y-0.5 ${
+                          link.primary
+                            ? "border-[#89ed3f] bg-[#89ed3f] text-[#171714] -[0_18px_40px_rgba(137,237,63,0.22)]"
+                            : darkMode
+                            ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.07]"
+                            : "border-[#dfe7e4]  text-[#173b2e] hover:border-[#9fe8ca] bg-[#fbfff7]"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+                            link.primary ? "bg-white/35 text-[#171714]" : "bg-[#f7faf8] text-[#89ed3f]"
+                          }`}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className={`block text-md tracking-wide small font-semibold ${darkMode ? "text-white" : "text-[#171714]"}`}>{link.label}</span>
+                          <span className={`mt-1 block text-xs leading-5 ${link.primary ? "text-[#294018]/75" : darkMode ? "text-white/45" : "text-[#8c948f]"}`}>
+                            {link.helper}
+                          </span>
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
@@ -397,8 +454,8 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
 
       {/* ── Sidebar ── */}
       <div
-        className={`w-full border-t px-4 py-5 overflow-y-auto lg:w-80 lg:border-l lg:border-t-0 lg:px-6 lg:py-6 ${
-          darkMode ? "bg-[#0c0d10] border-white/10" : "bg-[#fbfaf7] border-black/5"
+        className={`w-full border-t px-4 py-5 overflow-y-auto lg:w-80 lg:border-l lg:border-t-0 lg:px-5 lg:py-8 ${
+          darkMode ? "bg-[#0c0d10] border-white/10" : "bg-[#f8fbf9] border-[#dfe7e4]"
         }`}
       >
         {/* <div className="flex items-center justify-between mb-4">
@@ -468,17 +525,17 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
         </div> */}
 
         <div className="mb-4 flex items-center justify-between gap-3">
-          <p className={`text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>
+          <p className={`text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-[#8c948f]"}`}>
             Active Sources
           </p>
-          <span className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/5 text-white/45" : "bg-black/5 text-black/45"}`}>
+          <span className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/5 text-white/45" : "bg-[#f1f5f2] text-[#8c948f]"}`}>
             {filteredActiveSources.length}
           </span>
         </div>
 
         <div
           className={`mb-4 flex items-center gap-2 rounded-2xl border px-3 py-2.5 ${
-            darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/5 bg-white"
+            darkMode ? "border-white/10 bg-white/[0.03]" : "border-[#e4ebe7] bg-white"
           }`}
         >
           <Search className={`h-4 w-4 flex-shrink-0 ${darkMode ? "text-white/35" : "text-black/35"}`} />
@@ -521,7 +578,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
             groupedActiveSources.map((group) => (
               <section key={group.name}>
                 <div className={`mb-2 flex items-center justify-between text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
-                  <span className="max-w-[210px] truncate uppercase tracking-[0.18em]">{group.name}</span>
+                  <span className="max-w-[185px] truncate uppercase tracking-[0.18em]">{group.name}</span>
                   <span>{group.docs.length}</span>
                 </div>
                 <div className="space-y-2">
@@ -530,8 +587,8 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
                       key={doc.id}
                       type="button"
                       onClick={() => setViewDocument(doc)}
-                      className={`flex w-full items-center justify-between rounded-2xl p-3 text-left transition ${
-                        darkMode ? "bg-white/[0.03] border-white/10 hover:bg-white/[0.06]" : "bg-white border-black/5 hover:bg-black/[0.02]"
+                      className={`flex w-full items-center justify-between rounded-[22px] border p-3 text-left transition ${
+                        darkMode ? "bg-white/[0.03] border-white/10 hover:bg-white/[0.06]" : "border-[#edf1ee] bg-white -[0_12px_35px_rgba(15,23,42,0.04)] hover:border-[#bfeeda] hover:bg-[#f8fbf9]"
                       }`}
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3">

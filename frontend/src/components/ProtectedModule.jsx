@@ -88,7 +88,7 @@ function ProtectedModuleContent({ moduleId }) {
 
   if (!isMounted || !user || (!loading && !allowedMenus.includes(moduleId))) {
     return (
-      <div className={`min-h-dvh ${darkMode ? "bg-[#0f1115]" : "bg-[#f6f6f4]"}`} />
+      <div className={`min-h-dvh ${darkMode ? "bg-[#0f1115]" : "bg-[#eef3f2]"}`} />
     );
   }
 
@@ -98,7 +98,7 @@ function ProtectedModuleContent({ moduleId }) {
   };
 
   return (
-    <div className={`flex newq min-h-dvh md:h-screen ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#f6f6f4]"}`}>
+    <div className={`flex newq min-h-dvh md:h-screen ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#eef3f2]"}`}>
       <Toaster position="top-center" />
       <Sidebar
         activeMenu={moduleId}

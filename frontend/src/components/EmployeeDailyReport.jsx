@@ -305,6 +305,23 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = 
   );
 }
 
+function reportStatusSummary(report) {
+  const statuses = [...new Set((Array.isArray(report?.taskItems) ? report.taskItems : [])
+    .map((item) => String(item?.status || "").trim())
+    .filter(Boolean))];
+  if (statuses.length > 1) return "Mixed";
+  return statuses[0] || report?.taskStatus || "-";
+}
+
+function reportStatusClass(status, darkMode) {
+  const value = String(status || "").toLowerCase();
+  if (value === "mixed") return darkMode ? "bg-sky-400/15 text-sky-200" : "bg-sky-50 text-sky-700";
+  if (value.includes("complete")) return "bg-emerald-50 text-emerald-700";
+  if (value.includes("halt") || value.includes("suspend") || value.includes("cancel")) return "bg-red-50 text-red-700";
+  if (!status || status === "-") return darkMode ? "bg-white/10 text-white/55" : "bg-slate-100 text-slate-500";
+  return darkMode ? "bg-amber-500/10 text-amber-200" : "bg-amber-50 text-amber-700";
+}
+
 function EmployeeReportTable({ title, headers, rows, darkMode }) {
   return (
     <section className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}>
@@ -667,6 +684,8 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [formExpanded, setFormExpanded] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [todayStatusOpen, setTodayStatusOpen] = useState(false);
+  const [todayStatusSearch, setTodayStatusSearch] = useState("");
+  const [todayStatusFilter, setTodayStatusFilter] = useState("all");
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
@@ -875,6 +894,18 @@ export default function EmployeeDailyReport({ darkMode }) {
   const options = data?.options || { departments: [], taskTypes: [], taskStatuses: [], involvements: [] };
   const reportUsers = data?.reportUsers || [];
   const todaySubmissionStatus = data?.todaySubmissionStatus || [];
+  const filteredTodayStatus = todaySubmissionStatus.filter((item) => {
+    const query = todayStatusSearch.trim().toLowerCase();
+    const matchesSearch = !query || [item.employeeName, item.department].some((value) => String(value || "").toLowerCase().includes(query));
+    const matchesFilter = todayStatusFilter === "all" || (todayStatusFilter === "submitted" ? item.submitted : !item.submitted);
+    return matchesSearch && matchesFilter;
+  });
+  const todayStatusCounts = todaySubmissionStatus.reduce((result, item) => {
+    result.total += 1;
+    if (item.submitted) result.submitted += 1;
+    else result.pending += 1;
+    return result;
+  }, { total: 0, submitted: 0, pending: 0 });
   const initialLoading = loading && !data;
 
   return (
@@ -976,38 +1007,40 @@ export default function EmployeeDailyReport({ darkMode }) {
           </div>
         </div>
         <div className="overflow-x-auto px-3 pb-4">
-          <table className="w-full min-w-[1040px] border-separate border-spacing-y-3 text-left text-sm">
+          <table className="w-full min-w-[900px] border-separate border-spacing-y-3 text-left text-sm">
             <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
               <tr>
-                {["Sl No:", "Employee", "Time filled", "Department", "Task type", "Status", "Actions"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}
+                {["Sl No:", "Employee", "Time filled", "Department", "Status", "Actions"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={7} className={`px-5 py-10 text-center ${muted}`}>Loading reports...</td></tr>}
-              {!loading && reports.map((report, index) => (
-                <tr key={report.id} className={darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]"}>
-                  <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <span className={`grid h-10 w-10 place-items-center rounded-full text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-[#d5f3f0] text-[#145b39]"}`}>{(report.employeeName || "E").slice(0, 1).toUpperCase()}</span>
-                      <div>
-                        <p className="font-semibold">{report.employeeName}</p>
-                        <p className={`text-xs ${muted}`}>{report.reportDate || "-"}</p>
+              {loading && <tr><td colSpan={6} className={`px-5 py-10 text-center ${muted}`}>Loading reports...</td></tr>}
+              {!loading && reports.map((report, index) => {
+                const statusSummary = reportStatusSummary(report);
+                return (
+                  <tr key={report.id} className={darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]"}>
+                    <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <span className={`grid h-10 w-10 place-items-center rounded-full text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-[#d5f3f0] text-[#145b39]"}`}>{(report.employeeName || "E").slice(0, 1).toUpperCase()}</span>
+                        <div>
+                          <p className="font-semibold">{report.employeeName}</p>
+                          <p className={`text-xs ${muted}`}>{report.reportDate || "-"}</p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4">{displayDateTime(report.submittedAt)}</td>
-                  <td className="px-5 py-4">{report.department}</td>
-                  <td className="px-5 py-4">{report.taskType}</td>
-                  <td className="px-5 py-4">
-                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${/complete/i.test(report.taskStatus || "") ? "bg-emerald-50 text-emerald-700" : darkMode ? "bg-amber-500/10 text-amber-200" : "bg-amber-50 text-amber-700"}`}>{report.taskStatus}</span>
-                  </td>
-                  <td className="rounded-r-2xl px-5 py-4">
-                    <button onClick={() => { setDetailClosing(false); setDetailExpanded(false); setDetail(report); }} className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-blue-600  hover:bg-blue-50"}`} title="View detail"><Eye className="h-4 w-4" /></button>
-                  </td>
-                </tr>
-              ))}
-              {!loading && !reports.length && <tr><td colSpan={7} className={`px-5 py-10 text-center ${muted}`}>No reports found.</td></tr>}
+                    </td>
+                    <td className="px-5 py-4">{displayDateTime(report.submittedAt)}</td>
+                    <td className="px-5 py-4">{report.department}</td>
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${reportStatusClass(statusSummary, darkMode)}`}>{statusSummary}</span>
+                    </td>
+                    <td className="rounded-r-2xl px-5 py-4">
+                      <button onClick={() => { setDetailClosing(false); setDetailExpanded(false); setDetail(report); }} className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-blue-600  hover:bg-blue-50"}`} title="View detail"><Eye className="h-4 w-4" /></button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && !reports.length && <tr><td colSpan={6} className={`px-5 py-10 text-center ${muted}`}>No reports found.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1049,34 +1082,69 @@ export default function EmployeeDailyReport({ darkMode }) {
       {todayStatusOpen && data?.isAdmin && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setTodayStatusOpen(false); }}>
           <div className={`employee-report-shell employee-status-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}><span>Today status · {data?.today || todayInput()}</span><button onClick={() => setTodayStatusOpen(false)} className="font-semibold text-[#4b9b16]">Close</button></div>
+            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}><span><b>Today&apos;s status</b> · {data?.today || todayInput()}</span><button onClick={() => setTodayStatusOpen(false)} className="font-semibold text-[#4b9b16]">Close</button></div>
             <div className={`min-h-0 flex-1 overflow-auto p-5 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-            <div className={`overflow-auto rounded-2xl  ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
-              <table className="w-full min-w-[820px] border-separate border-spacing-y-3 text-left text-sm">
-                <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
-                  <tr>{["Sl No:", "Employee", "Department", "Time filled", "Task type", "Status"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {todaySubmissionStatus.map((item, index) => (
-                    <tr key={item.userId} className={darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]"}>
-                      <td className=" px-5 py-4 font-semibold">{index + 1}</td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <span className={`grid h-10 w-10 place-items-center rounded-full text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-[#d5f3f0] text-[#145b39]"}`}>{(item.employeeName || "E").slice(0, 1).toUpperCase()}</span>
-                          <p className="font-semibold">{item.employeeName}</p>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">{item.department || "-"}</td>
-                      <td className="px-5 py-4">{item.submitted ? displayDateTime(item.submittedAt) : "-"}</td>
-                      <td className="px-5 py-4">{item.taskType || "-"}</td>
-                      <td className="rounded-r-2xl px-5 py-4">
-                        <span className={`rounded-full px-3 py-1 text-xs  ${item.submitted ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{item.submitted ? "Submitted" : "Not submitted"}</span>
-                      </td>
-                    </tr>
-                  ))}
-                  {!todaySubmissionStatus.length && <tr><td colSpan={6} className={`px-5 py-10 text-center ${muted}`}>No employees found.</td></tr>}
-                </tbody>
-              </table>
+            <div className={`rounded-[26px] p-4 sm:p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#4b9b16]">Employee attendance</p>
+                  <h3 className="mt-1 small text-2xl font-bold">Today&apos;s submission status</h3>
+                  <p className={`mt-1 text-sm ${muted}`}>{todayStatusCounts.submitted} submitted · {todayStatusCounts.pending} not submitted · {todayStatusCounts.total} total</p>
+                </div>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                  <div className="relative">
+                    <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+                    <input
+                      value={todayStatusSearch}
+                      onChange={(event) => setTodayStatusSearch(event.target.value)}
+                      placeholder="Search employee or department..."
+                      className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none lg:w-72 ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-[#f8faf7] text-black placeholder:text-black/35"}`}
+                    />
+                  </div>
+                  <div className={`flex rounded-2xl p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f1f4ef]"}`}>
+                    {[
+                      ["all", "All", todayStatusCounts.total],
+                      ["submitted", "Submitted", todayStatusCounts.submitted],
+                      ["pending", "Not submitted", todayStatusCounts.pending],
+                    ].map(([value, label, count]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setTodayStatusFilter(value)}
+                        className={`h-9 rounded-xl px-3 text-xs  transition ${todayStatusFilter === value ? "bg-[#89ed3f] text-black shadow-sm" : darkMode ? "text-white/60 hover:bg-white/10" : "text-black/55 hover:bg-white"}`}
+                      >
+                        {label} <span className="ml-1 opacity-60">{count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 overflow-auto">
+                <table className="w-full min-w-[760px] border-separate border-spacing-y-3 text-left text-sm">
+                  <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
+                    <tr>{["Sl No:", "Employee", "Department", "Time filled", "Status"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {filteredTodayStatus.map((item, index) => (
+                      <tr key={item.userId} className={darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]"}>
+                        <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <span className={`grid h-10 w-10 place-items-center rounded-full text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-[#d5f3f0] text-[#145b39]"}`}>{(item.employeeName || "E").slice(0, 1).toUpperCase()}</span>
+                            <p className="font-semibold">{item.employeeName}</p>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">{item.department || "-"}</td>
+                        <td className="px-5 py-4">{item.submitted ? displayDateTime(item.submittedAt) : "-"}</td>
+                        <td className="rounded-r-2xl px-5 py-4">
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${item.submitted ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{item.submitted ? "Submitted" : "Not submitted"}</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {!filteredTodayStatus.length && <tr><td colSpan={5} className={`px-5 py-10 text-center ${muted}`}>No employees match this filter.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
             </div>
             </div>
           </div>

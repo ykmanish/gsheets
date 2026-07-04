@@ -9,13 +9,16 @@ import {
   Clock3,
   ExternalLink,
   Eye,
+  FileText,
   FileSpreadsheet,
+  History,
   IndianRupee,
   Loader2,
+  Maximize2,
+  Minimize2,
   PackageCheck,
   Pencil,
   Plus,
-  Printer,
   RefreshCw,
   Save,
   Search,
@@ -283,6 +286,10 @@ export default function MrnDashboard({ darkMode }) {
   const [saving, setSaving] = useState(false);
   const [selectedMrn, setSelectedMrn] = useState(null);
   const [drawerClosing, setDrawerClosing] = useState(false);
+  const [mrnDrawerExpanded, setMrnDrawerExpanded] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [mrnHistory, setMrnHistory] = useState([]);
   const [nowMs] = useState(() => Date.now());
 
   const muted = darkMode ? "text-white/45" : "text-black/48";
@@ -340,7 +347,25 @@ export default function MrnDashboard({ darkMode }) {
     window.setTimeout(() => {
       setSelectedMrn(null);
       setDrawerClosing(false);
+      setMrnDrawerExpanded(false);
+      setHistoryOpen(false);
+      setMrnHistory([]);
     }, 280);
+  }, []);
+
+  const openMrnHistory = useCallback(async (row) => {
+    if (!row?.mrnNo) return;
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const result = await api(`/mrn-dashboard/${encodeURIComponent(row.mrnNo)}/history`);
+      setMrnHistory(result.history || []);
+    } catch (error) {
+      toast.error(error.message || "Could not load MRN history");
+      setMrnHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -578,6 +603,7 @@ export default function MrnDashboard({ darkMode }) {
 
   const settings = data?.mrnSettings || {};
   const canManage = Boolean(data?.canManageMrnSettings);
+  const canViewMrnHistory = Boolean(data?.canViewMrnHistory);
   const canEdit = Boolean(data?.canEdit);
   const summary = data?.allSummary || data?.summary || {};
   const totalMrns = summary.total || 0;
@@ -908,7 +934,7 @@ export default function MrnDashboard({ darkMode }) {
               role="presentation"
             >
               <aside
-                className={`absolute inset-y-0 right-0 flex h-full w-full max-w-[1080px] flex-col overflow-hidden border-l -[-24px_0_80px_rgba(0,0,0,0.22)] sm:inset-y-3 sm:right-3 sm:h-[calc(100%-1.5rem)] sm:w-[min(88vw,1080px)] sm:rounded-[18px] sm:border ${drawerClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.08] bg-white text-[#171714]"}`}
+                className={`mrn-detail-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${mrnDrawerExpanded ? "mrn-detail-shell-expanded" : ""} ${drawerClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}
                 role="dialog"
                 aria-modal="true"
                 aria-label={`${selectedMrn.mrnNo || "MRN"} details`}
@@ -921,12 +947,28 @@ export default function MrnDashboard({ darkMode }) {
                     details
                   </span>
                   <div className="flex items-center gap-2">
+                    {canViewMrnHistory && (
+                      <button
+                        onClick={() => openMrnHistory(selectedMrn)}
+                        className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f7ef] text-[#3f7d16] hover:bg-[#eafbdc]"}`}
+                      >
+                        <History className="h-3.5 w-3.5" />
+                        Version History
+                      </button>
+                    )}
                     <button
                       onClick={() => printMrnDetail(selectedMrn)}
-                      className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                      className="flex h-8 items-center gap-1.5 rounded-full bg-red-500 px-3 font-semibold text-white shadow-[0_10px_24px_rgba(239,68,68,0.22)] transition hover:bg-red-600"
                     >
-                      <Printer className="h-3.5 w-3.5" />
+                      <FileText className="h-3.5 w-3.5" />
                       Print PDF
+                    </button>
+                    <button
+                      onClick={() => setMrnDrawerExpanded((current) => !current)}
+                      className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#eafbdc] text-[#3f7d16] hover:bg-[#ddf8c9]"}`}
+                    >
+                      {mrnDrawerExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                      {mrnDrawerExpanded ? "Restore" : "Expand"}
                     </button>
                     <button
                       onClick={closeMrnDrawer}
@@ -952,7 +994,7 @@ export default function MrnDashboard({ darkMode }) {
                     <p className={`mt-4 text-xs ${muted}`}>
                       Request #{selectedMrn.mrnNo || "-"}
                     </p>
-                    <h2 className="mt-1 text-2xl font-bold small text-black">
+                    <h2 className="mt-1 text-2xl font-bold small dark:text-white text-black">
                       {selectedMrn.project || "Project / site not added"}
                     </h2>
                     <p className={`mt-2 text-xs leading-5 ${muted}`}>
@@ -1279,6 +1321,114 @@ export default function MrnDashboard({ darkMode }) {
                     </div>
                   </section>
                 </div>
+
+                {historyOpen && (
+                  <div
+                    className="absolute inset-0 z-20 flex justify-end bg-black/25 backdrop-blur-[1px]"
+                    onMouseDown={(event) => {
+                      if (event.target === event.currentTarget) setHistoryOpen(false);
+                    }}
+                  >
+                    <section
+                      className={`h-full w-full max-w-[520px] overflow-y-auto border-l p-5 shadow-[-18px_0_60px_rgba(0,0,0,0.18)] animate-[mrn-drawer-in_320ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#fbfcf8] text-[#171714]"}`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${muted}`}>
+                            Super Admin
+                          </p>
+                          <h3 className="mt-2 text-2xl font-bold small">
+                            Version history
+                          </h3>
+                          <p className={`mt-1 text-sm ${muted}`}>
+                            {selectedMrn.mrnNo || "MRN"} · tracked changes from now onward.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setHistoryOpen(false)}
+                          className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-white text-black/55 hover:bg-black/[0.04]"}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <div className="mt-5">
+                        {historyLoading ? (
+                          <div className={`rounded-3xl border p-8 text-center ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
+                            <Loader2 className="mx-auto h-5 w-5 animate-spin text-[#4b9b16]" />
+                            <p className={`mt-3 text-sm ${muted}`}>Loading versions…</p>
+                          </div>
+                        ) : mrnHistory.length ? (
+                          <div className="space-y-3">
+                            {mrnHistory.map((entry) => (
+                              <article
+                                key={entry.id}
+                                className={`rounded-3xl border p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <span className="inline-flex rounded-full bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#3f7d16]">
+                                      Version {entry.version || "-"}
+                                    </span>
+                                    <h4 className="mt-2 text-sm font-bold">
+                                      {entry.action === "added" ? "MRN created" : "MRN updated"}
+                                    </h4>
+                                    <p className={`mt-1 text-xs ${muted}`}>
+                                      By {entry.actor || "System"} · {entry.createdAt ? new Date(entry.createdAt).toLocaleString("en-IN") : "-"}
+                                    </p>
+                                  </div>
+                                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${entry.action === "added" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                    {entry.action || "changed"}
+                                  </span>
+                                </div>
+
+                                {entry.changes?.length ? (
+                                  <div className="mt-4 space-y-2">
+                                    {entry.changes.map((change) => (
+                                      <div
+                                        key={`${entry.id}-${change.key}`}
+                                        className={`rounded-2xl p-3 text-xs ${darkMode ? "bg-black/20" : "bg-[#f5f7f2]"}`}
+                                      >
+                                        <p className="font-semibold">{change.label}</p>
+                                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                          <div>
+                                            <span className={muted}>Before</span>
+                                            <p className="mt-1 break-words">{change.before || "Blank"}</p>
+                                          </div>
+                                          <div>
+                                            <span className={muted}>After</span>
+                                            <p className="mt-1 break-words text-[#3f7d16]">{change.after || "Blank"}</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className={`mt-4 rounded-2xl p-3 text-xs ${darkMode ? "bg-black/20 text-white/55" : "bg-[#f5f7f2] text-black/55"}`}>
+                                    Initial saved version. Future edits will show field-by-field changes here.
+                                  </div>
+                                )}
+                              </article>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={`rounded-3xl border p-6 ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
+                            <p className="text-sm font-semibold">No stored versions yet.</p>
+                            <p className={`mt-2 text-sm leading-6 ${muted}`}>
+                              History tracking is active now. The next MRN add/edit will create a version entry with changed fields.
+                            </p>
+                            <div className={`mt-4 rounded-2xl p-4 text-xs ${darkMode ? "bg-black/20" : "bg-[#f5f7f2]"}`}>
+                              <p className="font-semibold">Current snapshot</p>
+                              <p className={`mt-1 ${muted}`}>
+                                {selectedMrn.project || "Project not added"} · {selectedMrn.status || "Open"} · {items.length} material item{items.length === 1 ? "" : "s"}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                )}
               </aside>
             </div>
           );

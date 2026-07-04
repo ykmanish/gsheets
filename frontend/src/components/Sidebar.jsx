@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut } from "lucide-react";
 import Image from "next/image";
 
-export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen, collapsed = false, setCollapsed }) {
+export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen, collapsed = false, setCollapsed, user, onLogout }) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "documents", label: "Documents", icon: FileText },
@@ -28,7 +28,9 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     access: accessSubMenu.some((item) => item.id === activeMenu),
   }));
   const [menuSearch, setMenuSearch] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
   const navRef = useRef(null);
+  const profileRef = useRef(null);
   const searchTerm = menuSearch.trim().toLowerCase();
   const filteredProjectSubMenu = projectSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
   const filteredAccessSubMenu = accessSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
@@ -57,6 +59,13 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     ? "border-white/10 bg-[#101114]"
     : "border-[#e7eaee] bg-white";
   const muted = darkMode ? "text-white/38" : "text-slate-400";
+  const displayName = user?.displayName || user?.username || "User";
+  const initials = displayName
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   const itemClass = ({ active = false, child = false, parentActive = false } = {}) => `w-full newq flex h-10 items-center gap-3 rounded-[14px] text-left transition-all duration-300 ${child ? "px-3" : "px-3"} ${
     parentActive
@@ -149,7 +158,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
               const isOpen = Boolean(openGroups.projects);
               const childActive = projectSubMenu.some((child) => child.id === activeMenu);
               return (
-                <div key="projects-group" className="overflow-hidden rounded-[22px] transition-all duration-300">
+                <div key="projects-group" className="transition-all duration-300">
                   <button
                     type="button"
                     onClick={() => setOpenGroups((current) => ({ ...current, projects: !current.projects }))}
@@ -196,7 +205,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
               const isOpen = Boolean(openGroups.access);
               const childActive = accessSubMenu.some((child) => child.id === activeMenu);
               return (
-                <div key="access-group" className="overflow-hidden rounded-[22px] transition-all duration-300">
+                <div key="access-group" className="transition-all duration-300">
                   <button
                     type="button"
                     onClick={() => setOpenGroups((current) => ({ ...current, access: !current.access }))}
@@ -258,6 +267,41 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           })}
           </div>
         </nav>
+
+        <div ref={profileRef} className={`relative newq shrink-0 px-3 pb-4 pt-3 transition-all duration-500 ${collapsed ? "md:px-2" : ""}`}>
+          <div
+            className={`absolute bottom-[calc(100%+10px)] left-3 right-3 z-[70] origin-bottom rounded-[22px] p-2 shadow-[0_24px_70px_rgba(15,23,42,0.22)] ring-1 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${profileOpen ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-3 scale-95 opacity-0"} ${darkMode ? "bg-[#17181d] text-white ring-white/10" : "bg-white text-[#171714] ring-black/5"}`}
+          >
+            <div className={`rounded-2xl px-3 py-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f7f2]"}`}>
+              <p className="truncate text-sm font-semibold">{displayName}</p>
+              <p className={`mt-1 truncate text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{user?.username || user?.roleName || "UIPL user"}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="mt-2 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 transition hover:bg-red-500/10"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setProfileOpen((open) => !open)}
+            className={`flex h-14 w-full items-center gap-3 rounded-[18px] px-3 text-left shadow-sm ring-1 transition-all duration-300 hover:-translate-y-0.5 ${darkMode ? "bg-white/[0.045] text-white ring-white/10 hover:bg-white/[0.075]" : "bg-white text-[#171714] ring-black/5 hover:bg-[#f8fbf9]"}`}
+            aria-expanded={profileOpen}
+          >
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}>
+              {initials}
+            </span>
+            <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-300 ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[145px] opacity-100"}`}>
+              <span className="block truncate text-sm font-semibold">{displayName}</span>
+              <span className={`block truncate text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{user?.roleName || user?.username || "User"}</span>
+            </span>
+            <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${profileOpen ? "rotate-180" : ""} ${collapsed ? "md:w-0 md:opacity-0" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
+          </button>
+        </div>
 
       </aside>
     </>

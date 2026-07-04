@@ -109,13 +109,14 @@ function ProtectedModuleContent({ moduleId }) {
         setMobileOpen={setSidebarOpen}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
+        user={user}
+        onLogout={logout}
       />
       <div className="flex-1 newq flex min-w-0 flex-col overflow-hidden">
         <Navbar
           darkMode={darkMode}
           setDarkMode={setDarkMode}
           user={user}
-          onLogout={logout}
           onMenuClick={() => setSidebarOpen(true)}
           onNotificationsClick={() => setNotificationsOpen(true)}
         />

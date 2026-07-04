@@ -377,6 +377,10 @@ app.post("/webhooks/whatsapp", (req, res) => {
   }
 });
 
+app.get("/health", (req, res) => {
+  res.json({ ok: true, status: "connected", timestamp: new Date().toISOString() });
+});
+
 app.use(async (req, res, next) => {
   if (req.path.startsWith("/auth/")) return next();
   return requireAuth(req, res, next);
@@ -393,12 +397,44 @@ registerFormsModule(app, {
 
 const EMPLOYEE_REPORT_OPTIONS = {
   departments: ["Design", "Execution", "Procurement", "Coordination", "Site Supervision", "Vendor Management", "Human Resource", "Administration", "Accounts", "Social Media"],
+  sites: ["Kalhaar", "Paramdham", "Asteria", "Imperial", "Serenity Meadows Farmhouse", "Silver White", "Devsharnam", "Gharana"],
   taskTypes: ["System Designing", "Drawing", "Render", "BoQ", "Material Approval", "Site Work", "Purchase Order", "Installation", "Client Approval", "Quotation", "Negotiation", "Recruitment", "Interview", "Induction", "Salary Processing", "Documentation", "Performance Meeting", "Market Survey", "Event Planning", "Delivery List", "Client Meeting", "IT Solution", "Data Entry", "OutOfOffice Work", "Site Visit", "Vendor Meeting", "PaymentProcessing", "PRN Supportive", "Audit", "Record Filing", "Legal Work", "System Training", "System Implementation", "Material Inspection", "Dispatch", "Packing/Forwarding", "Pre-Production", "Post-Production", "Over-a-Call", "Campaign", "Content Creation", "Other"],
   taskStatuses: ["In Progress", "Completed", "Work Halt", "Work Suspended", "Work Cancelled", "Other"],
   involvements: ["Client", "Vendor", "Team", "Other"],
 };
 const EMPLOYEE_REPORT_APP_TAB = "_AppData";
 const EMPLOYEE_REPORT_APP_HEADERS = ["Report ID", "User ID", "Employee", "Department", "Report Date", "Submitted At", "Client", "Site", "Task Type", "Task Status", "Involvement", "Tomorrow Plan", "Note", "Task Items JSON", "Waiting Items JSON"];
+const employeeMetaCache = new Map();
+const employeeReportCache = new Map();
+const EMPLOYEE_META_CACHE_MS = 5 * 60 * 1000;
+const EMPLOYEE_REPORT_CACHE_MS = 60 * 1000;
+
+function cachedEmployeeValue(cache, key, ttl, loader) {
+  const now = Date.now();
+  const existing = cache.get(key);
+  if (existing && existing.expiresAt > now) return existing.promise;
+  const promise = Promise.resolve().then(loader).catch((error) => {
+    cache.delete(key);
+    throw error;
+  });
+  cache.set(key, { expiresAt: now + ttl, promise });
+  return promise;
+}
+
+function hasFreshEmployeeCache(cache, key) {
+  const entry = cache.get(key);
+  return Boolean(entry && entry.expiresAt > Date.now());
+}
+
+function isGoogleSheetsQuotaError(error) {
+  return Number(error?.code || error?.status || error?.response?.status) === 429 || /quota exceeded|resource_exhausted|too many requests/i.test(error?.message || error?.cause?.message || "");
+}
+
+function employeeSheetErrorMessage(error, fallback = "Could not read employee report sheet") {
+  return isGoogleSheetsQuotaError(error)
+    ? "Google Sheets is temporarily busy. Cached report data is being used; please retry in about a minute."
+    : error?.message || fallback;
+}
 
 function canViewEmployeeDailyReports(req) {
   return Boolean(req.user?.isSuperAdmin || hasPrivilege(req, "view_employee_daily_reports"));
@@ -420,7 +456,9 @@ function employeeReportDateRange() {
 function sanitizeEmployeeTaskItems(items = []) {
   if (!Array.isArray(items)) return [];
   return items.map((item) => ({
+    site: projectText(item?.site),
     category: projectText(item?.category),
+    status: projectText(item?.status),
     description: projectText(item?.description),
   })).filter((item) => item.category && item.description).slice(0, 30);
 }
@@ -437,7 +475,7 @@ function sanitizeEmployeeTaskCategories(categories = []) {
 }
 
 function taskItemsToText(items = []) {
-  return items.map((item) => `${item.category}: ${item.description}`).join("\n");
+  return items.map((item) => `${item.site ? `${item.site} · ` : ""}${item.category}${item.status ? ` [${item.status}]` : ""}: ${item.description}`).join("\n");
 }
 
 function incrementEmployeeReportBucket(map, key, patch = {}) {
@@ -496,18 +534,21 @@ function employeeSheetUrl(spreadsheetId = "") {
 }
 
 async function getEmployeeSpreadsheetMeta(spreadsheetId, preferredTabName = "") {
-  const sheets = await getDmrSpreadsheet(spreadsheetId);
-  const response = await sheets.spreadsheets.get({
-    spreadsheetId,
-    fields: "properties.title,sheets.properties(sheetId,title,sheetType,hidden)",
+  const key = `${spreadsheetId}:${preferredTabName || ""}`;
+  return cachedEmployeeValue(employeeMetaCache, key, EMPLOYEE_META_CACHE_MS, async () => {
+    const sheets = await getDmrSpreadsheet(spreadsheetId);
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: "properties.title,sheets.properties(sheetId,title,sheetType,hidden)",
+    }, { retry: false });
+    const tabs = (response.data.sheets || [])
+      .map((sheet) => sheet.properties)
+      .filter((sheet) => sheet?.sheetType === "GRID" && !sheet.hidden && sheet.title !== EMPLOYEE_REPORT_APP_TAB);
+    if (!tabs.length) throw new Error("No visible sheet tab found");
+    const preferred = tabs.find((tab) => preferredTabName && tab.title === preferredTabName);
+    const tab = preferred || tabs[0];
+    return { title: response.data.properties?.title || "Employee report sheet", tabName: tab.title || "Sheet1", tabId: tab.sheetId };
   });
-  const tabs = (response.data.sheets || [])
-    .map((sheet) => sheet.properties)
-    .filter((sheet) => sheet?.sheetType === "GRID" && !sheet.hidden && sheet.title !== EMPLOYEE_REPORT_APP_TAB);
-  if (!tabs.length) throw new Error("No visible sheet tab found");
-  const preferred = tabs.find((tab) => preferredTabName && tab.title === preferredTabName);
-  const tab = preferred || tabs[0];
-  return { title: response.data.properties?.title || "Employee report sheet", tabName: tab.title || "Sheet1", tabId: tab.sheetId };
 }
 
 function employeeDailyTabName(reportDate = "") {
@@ -520,7 +561,7 @@ async function ensureEmployeeDailySheetTab(sheets, spreadsheetId, templateMeta, 
   const metadata = await sheets.spreadsheets.get({
     spreadsheetId,
     fields: "sheets.properties(sheetId,title,sheetType,hidden)",
-  });
+  }, { retry: false });
   const visibleTabs = (metadata.data.sheets || [])
     .map((sheet) => sheet.properties)
     .filter((sheet) => sheet?.sheetType === "GRID" && !sheet.hidden);
@@ -590,7 +631,7 @@ async function ensureEmployeeAppDataTab(sheets, spreadsheetId, create = true) {
   const metadata = await sheets.spreadsheets.get({
     spreadsheetId,
     fields: "sheets.properties(sheetId,title,hidden,sheetType)",
-  });
+  }, { retry: false });
   const existing = (metadata.data.sheets || []).find((sheet) => sheet.properties?.title === EMPLOYEE_REPORT_APP_TAB);
   if (existing) return existing.properties;
   if (!create) return null;
@@ -742,11 +783,11 @@ function employeeReportFromSheetRows({ rows = [], user, spreadsheetId }) {
     const taskCategory = projectText(row[3]);
     const taskDescription = projectText(row[4]);
     if (taskCategory && taskDescription && !existing.taskItems.some((item) => item.category === taskCategory && item.description === taskDescription)) {
-      existing.taskItems.push({ category: taskCategory, description: taskDescription });
+      existing.taskItems.push({ site: projectText(row[2]), category: taskCategory, status: projectText(row[5]), description: taskDescription });
     }
     const waitingDescription = projectText(row[9]);
     if (waitingDescription && !existing.waitingTaskItems.some((item) => item.description === waitingDescription)) {
-      existing.waitingTaskItems.push({ category: "Waiting / tomorrow plan", description: waitingDescription });
+      existing.waitingTaskItems.push({ site: projectText(row[2]), category: "Waiting / tomorrow plan", description: waitingDescription });
     }
     existing.tomorrowPlanTick = existing.tomorrowPlanTick || ["true", "yes", "y", "1", "checked", "tick"].includes(projectText(row[10]).toLowerCase());
     if (!existing.note) existing.note = projectText(row[11]);
@@ -759,7 +800,7 @@ function employeeReportFromSheetRows({ rows = [], user, spreadsheetId }) {
   }));
 }
 
-async function readEmployeeSheetReportsForUser(user) {
+async function readEmployeeSheetReportsForUserUncached(user) {
   const spreadsheetId = user?.employeeDailySpreadsheetId;
   if (!spreadsheetId) return [];
   const meta = await getEmployeeSpreadsheetMeta(spreadsheetId, user?.employeeDailySheetTab);
@@ -791,13 +832,92 @@ async function readEmployeeSheetReportsForUser(user) {
   return employeeReportFromSheetRows({ rows: response.data.values || [], user, spreadsheetId });
 }
 
+function employeeReportCacheKey(user) {
+  return `${user?.employeeDailySpreadsheetId || ""}:${String(user?._id || user?.id || "")}`;
+}
+
+function invalidateEmployeeSheetCache(user) {
+  employeeReportCache.delete(employeeReportCacheKey(user));
+  const spreadsheetId = user?.employeeDailySpreadsheetId || "";
+  for (const key of employeeMetaCache.keys()) {
+    if (key.startsWith(`${spreadsheetId}:`)) employeeMetaCache.delete(key);
+  }
+}
+
+async function readEmployeeSheetReportsForUser(user) {
+  const key = employeeReportCacheKey(user);
+  if (!user?.employeeDailySpreadsheetId) return [];
+  return cachedEmployeeValue(employeeReportCache, key, EMPLOYEE_REPORT_CACHE_MS, () => readEmployeeSheetReportsForUserUncached(user));
+}
+
 async function readEmployeeReportsForUsers(users = []) {
-  const results = await Promise.allSettled(users.map((user) => readEmployeeSheetReportsForUser(user)));
-  return results.flatMap((result, index) => {
-    if (result.status === "fulfilled") return result.value;
-    console.warn("Employee sheet read skipped:", users[index]?.username || users[index]?._id, result.reason?.message || result.reason);
-    return [];
-  });
+  const reports = [];
+  let freshReads = 0;
+  const maxFreshReads = 10;
+  for (let index = 0; index < users.length; index += 4) {
+    const batch = users.slice(index, index + 4).filter((user) => {
+      const cached = hasFreshEmployeeCache(employeeReportCache, employeeReportCacheKey(user));
+      if (cached) return true;
+      if (freshReads >= maxFreshReads) return false;
+      freshReads += 1;
+      return true;
+    });
+    const results = await Promise.allSettled(batch.map((user) => readEmployeeSheetReportsForUser(user)));
+    results.forEach((result, resultIndex) => {
+      if (result.status === "fulfilled") reports.push(...result.value);
+      else console.warn("Employee sheet read skipped:", batch[resultIndex]?.username || batch[resultIndex]?._id, employeeSheetErrorMessage(result.reason));
+    });
+  }
+  return reports;
+}
+
+function employeeReportCacheDocument(report) {
+  const sanitized = sanitizeEmployeeReport(report);
+  return {
+    ...sanitized,
+    reportId: projectText(report?.reportId || sanitized?.id),
+    userId: String(report?.userId || sanitized?.userId || ""),
+    reportDate: projectText(report?.reportDate || sanitized?.reportDate),
+    submittedAt: report?.submittedAt ? new Date(report.submittedAt) : null,
+    cachedAt: new Date(),
+  };
+}
+
+async function cacheEmployeeReports(db, reports = []) {
+  const valid = reports.map(employeeReportCacheDocument).filter((report) => report.userId && report.reportDate);
+  if (!valid.length) return;
+  await db.collection("employeeDailyReports").bulkWrite(valid.map((report) => ({
+    updateOne: {
+      filter: { userId: report.userId, reportDate: report.reportDate },
+      update: { $set: report },
+      upsert: true,
+    },
+  })), { ordered: false });
+}
+
+async function getCachedEmployeeReportsForUsers(db, users = []) {
+  const userIds = users.map((user) => String(user?._id || user?.id || "")).filter(Boolean);
+  if (!userIds.length) return [];
+  const pendingHydration = users.filter((user) => user?.employeeDailySpreadsheetId && !user?.employeeReportCacheHydratedAt).slice(0, 10);
+  for (let index = 0; index < pendingHydration.length; index += 3) {
+    const batch = pendingHydration.slice(index, index + 3);
+    const results = await Promise.allSettled(batch.map((user) => readEmployeeSheetReportsForUser(user)));
+    for (let resultIndex = 0; resultIndex < results.length; resultIndex += 1) {
+      const result = results[resultIndex];
+      const user = batch[resultIndex];
+      if (result.status !== "fulfilled") {
+        console.warn("Employee cache hydration skipped:", user?.username || user?._id, employeeSheetErrorMessage(result.reason));
+        continue;
+      }
+      await cacheEmployeeReports(db, result.value);
+      await db.collection("users").updateOne({ _id: user._id }, { $set: { employeeReportCacheHydratedAt: new Date() } });
+    }
+  }
+  return db.collection("employeeDailyReports")
+    .find({ userId: { $in: userIds } })
+    .sort({ reportDate: -1, submittedAt: -1 })
+    .limit(20000)
+    .toArray();
 }
 
 function filterEmployeeReports(reports = [], { search = "", dateFrom = "", dateTo = "", userIds = [] } = {}) {
@@ -904,12 +1024,12 @@ async function appendEmployeeReportToSheet({ user, report, taskItems, waitingTas
     const rowNumber = startRow + index;
     [
       ...(index === 0 && columns.reportDateCell ? [[columns.reportDateCell, report.reportDate]] : []),
-      [columns.client, report.client],
-      [columns.site, report.site],
+      [columns.client, ""],
+      [columns.site, task.site || waiting.site || ""],
       [columns.reportDate, report.reportDate],
       [columns.taskType, task.category || report.taskType],
       [columns.taskDescription, task.description || ""],
-      [columns.taskStatus, report.taskStatus],
+      [columns.taskStatus, task.status || report.taskStatus],
       [columns.involvement, report.involvement],
       [columns.waitingDescription, waiting.description || ""],
       [columns.tomorrowTick, report.tomorrowPlanTick ? "TRUE" : ""],
@@ -958,6 +1078,96 @@ async function appendEmployeeReportToSheet({ user, report, taskItems, waitingTas
       ]],
     },
   });
+  invalidateEmployeeSheetCache(user);
+}
+
+async function updateEmployeeReportInSheet({ user, report, taskItems, waitingTaskItems }) {
+  const spreadsheetId = user?.employeeDailySpreadsheetId;
+  if (!spreadsheetId) throw new Error("Link your Google Sheet before updating today's report");
+  const meta = await getEmployeeSpreadsheetMeta(spreadsheetId, user?.employeeDailySheetTab);
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  await ensureEmployeeAppDataTab(sheets, spreadsheetId, true);
+  const appResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A2:O10000`,
+  });
+  const appRows = appResponse.data.values || [];
+  const appRowIndex = appRows.findIndex((row) => String(row[1] || "") === String(report.userId) && projectText(row[4]) === report.reportDate);
+  if (appRowIndex < 0) {
+    const missing = new Error("Today's submitted report could not be found");
+    missing.code = "EMPLOYEE_REPORT_NOT_FOUND";
+    throw missing;
+  }
+  const existingReportId = projectText(appRows[appRowIndex][0]) || report.reportId;
+  const appValues = [[
+    existingReportId,
+    report.userId,
+    report.employeeName,
+    report.department,
+    report.reportDate,
+    report.submittedAt.toISOString(),
+    "",
+    report.site,
+    report.taskType,
+    report.taskStatus,
+    report.involvement,
+    report.tomorrowPlanTick ? "TRUE" : "FALSE",
+    report.note,
+    JSON.stringify(taskItems),
+    JSON.stringify(waitingTaskItems),
+  ]];
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A${appRowIndex + 2}:O${appRowIndex + 2}`,
+    valueInputOption: "RAW",
+    requestBody: { values: appValues },
+  });
+
+  const dailyTab = await ensureEmployeeDailySheetTab(sheets, spreadsheetId, meta, report.reportDate);
+  const existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000` });
+  const values = existing.data.values || [];
+  const columns = findEmployeeTemplateColumns(values);
+  const occupiedRows = values.map((row, index) => ({ row, rowNumber: index + 1 })).filter(({ row, rowNumber }) => rowNumber > 1 && (
+    projectText(row[(columns.reportDate || 0) - 1]) === report.reportDate ||
+    projectText(row[(columns.taskDescription || 0) - 1]) ||
+    projectText(row[(columns.waitingDescription || 0) - 1])
+  ));
+  const startRow = occupiedRows[0]?.rowNumber || findNextEmployeeTemplateRow(values, columns);
+  const rowCount = Math.max(taskItems.length, waitingTaskItems.length, 1);
+  const clearThrough = Math.max(startRow + rowCount - 1, occupiedRows.at(-1)?.rowNumber || startRow);
+  const clearRanges = [columns.client, columns.site, columns.reportDate, columns.taskType, columns.taskDescription, columns.taskStatus, columns.involvement, columns.waitingDescription, columns.tomorrowTick, columns.note]
+    .filter(Boolean)
+    .map((column) => `${escapeSheetName(dailyTab.tabName)}!${columnName(column)}${startRow}:${columnName(column)}${clearThrough}`);
+  if (clearRanges.length) await sheets.spreadsheets.values.batchClear({ spreadsheetId, requestBody: { ranges: clearRanges } });
+  await allowEmployeeTaskTypeValuesOnRows(sheets, spreadsheetId, dailyTab.tabId, columns, startRow, rowCount, taskItems);
+  const data = [];
+  Array.from({ length: rowCount }, (_, index) => {
+    const task = taskItems[index] || {};
+    const waiting = waitingTaskItems[index] || {};
+    const rowNumber = startRow + index;
+    [
+      ...(index === 0 && columns.reportDateCell ? [[columns.reportDateCell, report.reportDate]] : []),
+      [columns.client, ""],
+      [columns.site, task.site || waiting.site || ""],
+      [columns.reportDate, report.reportDate],
+      [columns.taskType, task.category || report.taskType],
+      [columns.taskDescription, task.description || ""],
+      [columns.taskStatus, task.status || report.taskStatus],
+      [columns.involvement, report.involvement],
+      [columns.waitingDescription, waiting.description || ""],
+      [columns.tomorrowTick, report.tomorrowPlanTick ? "TRUE" : ""],
+      [columns.note, index === 0 ? report.note : ""],
+    ].forEach(([column, value]) => {
+      if (!column) return;
+      const range = typeof column === "object"
+        ? `${escapeSheetName(dailyTab.tabName)}!${columnName(column.column)}${column.row}`
+        : `${escapeSheetName(dailyTab.tabName)}!${columnName(column)}${rowNumber}`;
+      data.push({ range, values: [[value]] });
+    });
+  });
+  await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: "USER_ENTERED", data } });
+  invalidateEmployeeSheetCache(user);
+  return existingReportId;
 }
 
 async function buildEmployeeReportDashboard(req, query = {}) {
@@ -970,15 +1180,22 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const linkedUsers = isAdmin
     ? await db.collection("users").find({ employeeDailySpreadsheetId: { $exists: true, $ne: "" } }).limit(500).toArray()
     : [req.user];
-  const allSheetReports = await readEmployeeReportsForUsers(linkedUsers);
-  const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(allSheetReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] }))
+  const allCachedReports = await getCachedEmployeeReportsForUsers(db, linkedUsers);
+  const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(allCachedReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] }))
     .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
     .slice(0, 500);
   const today = istDateKey(new Date());
-  const ownReports = isAdmin ? await readEmployeeSheetReportsForUser(req.user) : allSheetReports;
-  const todaySubmitted = ownReports.some((report) => String(report.userId) === userId && report.reportDate === today);
+  const ownReports = allCachedReports.filter((report) => String(report.userId) === userId);
+  const todayReport = ownReports.find((report) => String(report.userId) === userId && report.reportDate === today) || null;
+  const todaySubmitted = Boolean(todayReport);
+  const carriedForwardTasks = [];
+  const siteOptions = [...new Set([...EMPLOYEE_REPORT_OPTIONS.sites, ...allCachedReports.flatMap((report) => [
+    report.site,
+    ...sanitizeEmployeeTaskItems(report.taskItems).map((item) => item.site),
+    ...sanitizeEmployeeTaskItems(report.waitingTaskItems).map((item) => item.site),
+  ])].map(projectText).filter(Boolean))];
   const dates = employeeReportDateRange();
-  const heatmapReports = filterEmployeeReports(isAdmin ? allSheetReports : ownReports, { dateFrom: dates[0], dateTo: dates[dates.length - 1], userIds: isAdmin ? [] : [userId] });
+  const heatmapReports = filterEmployeeReports(isAdmin ? allCachedReports : ownReports, { dateFrom: dates[0], dateTo: dates[dates.length - 1], userIds: isAdmin ? [] : [userId] });
   const users = [{ userId, employeeName: req.authUser.displayName || req.authUser.username || "You" }];
   const heatmap = users.map((user) => {
     const submitted = new Set(heatmapReports.filter((report) => String(report.userId) === user.userId).map((report) => report.reportDate));
@@ -993,7 +1210,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const todaySubmissionStatus = isAdmin
     ? linkedUsers.map((user) => {
       const linkedUserId = String(user._id);
-      const submitted = allSheetReports.find((report) => String(report.userId) === linkedUserId && report.reportDate === today);
+      const submitted = allCachedReports.find((report) => String(report.userId) === linkedUserId && report.reportDate === today);
       return {
         userId: linkedUserId,
         employeeName: user.displayName || user.username || "Employee",
@@ -1009,6 +1226,10 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     isAdmin,
     today,
     todaySubmitted,
+    todayReport: sanitizeEmployeeReport(todayReport),
+    carriedForwardTasks,
+    carriedForwardFrom: "",
+    currentUserId: userId,
     profile: {
       department: req.user.department || "",
       taskCategories: sanitizeEmployeeTaskCategories(req.user.employeeTaskCategories || []),
@@ -1016,7 +1237,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
       sheetId: req.user.employeeDailySpreadsheetId || "",
       sheetUrl: employeeSheetUrl(req.user.employeeDailySpreadsheetId || ""),
     },
-    options: EMPLOYEE_REPORT_OPTIONS,
+    options: { ...EMPLOYEE_REPORT_OPTIONS, sites: siteOptions },
     reportUsers: reportUsers.map((user) => ({ userId: String(user._id), employeeName: user.employeeName || "Employee", department: user.department || "" })),
     todaySubmissionStatus,
     reports: reports.map(sanitizeEmployeeReport),
@@ -1029,8 +1250,41 @@ app.get("/employee-daily-report", async (req, res) => {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
     res.json(await buildEmployeeReportDashboard(req, req.query || {}));
   } catch (error) {
-    console.error("Employee daily report load error:", error);
-    res.status(500).json({ error: "Could not load employee daily reports" });
+    console.error("Employee daily report load error:", employeeSheetErrorMessage(error));
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: employeeSheetErrorMessage(error, "Could not load employee daily reports") });
+  }
+});
+
+app.post("/employee-daily-report/refresh-today", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    const spreadsheetId = req.user?.employeeDailySpreadsheetId;
+    if (!spreadsheetId) return res.status(400).json({ error: "Link your Google Sheet before refreshing" });
+    const db = await connectAuthDb();
+    const today = istDateKey(new Date());
+    const userId = String(req.authUser.id);
+    const sheets = await getDmrSpreadsheet(spreadsheetId);
+    const appTab = await ensureEmployeeAppDataTab(sheets, spreadsheetId, false);
+    let currentReport = null;
+    if (appTab) {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A2:O10000`,
+      }, { retry: false });
+      currentReport = employeeReportsFromAppRows({ rows: response.data.values || [], user: req.user })
+        .find((report) => String(report.userId) === userId && report.reportDate === today) || null;
+    }
+    await db.collection("employeeDailyReports").deleteOne({ userId, reportDate: today });
+    if (currentReport) await cacheEmployeeReports(db, [currentReport]);
+    employeeReportCache.delete(employeeReportCacheKey(req.user));
+    await db.collection("users").updateOne(
+      { _id: req.user._id },
+      { $set: { employeeReportCacheHydratedAt: new Date(), updatedAt: new Date() } },
+    );
+    res.json({ success: true, reportFound: Boolean(currentReport), report: sanitizeEmployeeReport(currentReport) });
+  } catch (error) {
+    console.error("Employee today refresh error:", employeeSheetErrorMessage(error));
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: employeeSheetErrorMessage(error, "Could not refresh today's report") });
   }
 });
 
@@ -1050,12 +1304,14 @@ app.put("/employee-daily-report/sheet", async (req, res) => {
           employeeDailySheetTab: meta.tabName,
           updatedAt: new Date(),
         },
+        $unset: { employeeReportCacheHydratedAt: "" },
       }
     );
+    await db.collection("employeeDailyReports").deleteMany({ userId: String(req.authUser.id) });
     res.json({ success: true, sheetId: spreadsheetId, sheetUrl: employeeSheetUrl(spreadsheetId), sheetName: meta.title, tabName: meta.tabName });
   } catch (error) {
-    console.error("Employee daily sheet link error:", error);
-    res.status(400).json({ error: `Could not link sheet: ${error.message}` });
+    console.error("Employee daily sheet link error:", employeeSheetErrorMessage(error));
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 400).json({ error: employeeSheetErrorMessage(error, `Could not link sheet: ${error.message}`) });
   }
 });
 
@@ -1070,11 +1326,13 @@ app.post("/employee-daily-report", async (req, res) => {
     if (!department) return res.status(400).json({ error: "Department is required for your first report" });
     const taskItems = sanitizeEmployeeTaskItems(body.taskItems);
     const waitingTaskItems = sanitizeEmployeeTaskItems(body.waitingTaskItems);
-    const required = ["client", "site", "taskType", "taskStatus", "involvement"];
+    const required = ["involvement"];
     for (const field of required) {
       if (!projectText(body[field])) return res.status(400).json({ error: `${field} is required` });
     }
-    if (!taskItems.length) return res.status(400).json({ error: "Add at least one completed task with category and description" });
+    if (!taskItems.length) return res.status(400).json({ error: "Add at least one completed task with site, category, status and description" });
+    if (taskItems.some((item) => !item.site) || waitingTaskItems.some((item) => !item.site)) return res.status(400).json({ error: "Choose a site for every task" });
+    if (taskItems.some((item) => !item.status)) return res.status(400).json({ error: "Choose a status for every today task" });
     const now = new Date();
     const report = {
       _id: new ObjectId(),
@@ -1084,12 +1342,12 @@ app.post("/employee-daily-report", async (req, res) => {
       department,
       reportDate: today,
       submittedAt: now,
-      client: projectText(body.client),
-      site: projectText(body.site),
-      taskType: projectText(body.taskType),
+      client: "",
+      site: taskItems[0]?.site || waitingTaskItems[0]?.site || "",
+      taskType: taskItems[0]?.category || "",
       taskItems,
       taskDescription: taskItemsToText(taskItems),
-      taskStatus: projectText(body.taskStatus),
+      taskStatus: taskItems[0]?.status || "",
       involvement: projectText(body.involvement),
       waitingTaskItems,
       waitingTaskDescription: taskItemsToText(waitingTaskItems),
@@ -1099,15 +1357,71 @@ app.post("/employee-daily-report", async (req, res) => {
       updatedAt: now,
     };
     await appendEmployeeReportToSheet({ user: req.user, report, taskItems, waitingTaskItems });
+    await cacheEmployeeReports(db, [report]);
     const userSet = { updatedAt: now };
+    userSet.employeeReportCacheHydratedAt = now;
     if (!req.user.department || req.user.department !== department) userSet.department = department;
     await db.collection("users").updateOne({ _id: req.user._id }, { $set: userSet });
     res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }) });
   } catch (error) {
     if (error.code === 11000 || error.code === "EMPLOYEE_REPORT_EXISTS") return res.status(409).json({ error: "Today's report is already submitted" });
     if (/link your google sheet|could not open|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
-    console.error("Employee daily report submit error:", error);
-    res.status(500).json({ error: "Could not submit daily report" });
+    console.error("Employee daily report submit error:", employeeSheetErrorMessage(error));
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: employeeSheetErrorMessage(error, "Could not submit daily report") });
+  }
+});
+
+app.put("/employee-daily-report", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    const db = await connectAuthDb();
+    const today = istDateKey(new Date());
+    const userId = String(req.authUser.id);
+    const body = req.body || {};
+    if (body.reportDate && projectText(body.reportDate) !== today) return res.status(403).json({ error: "Only the current date report can be edited" });
+    const department = projectText(body.department || req.user.department);
+    if (!department) return res.status(400).json({ error: "Department is required" });
+    const taskItems = sanitizeEmployeeTaskItems(body.taskItems);
+    const waitingTaskItems = sanitizeEmployeeTaskItems(body.waitingTaskItems);
+    for (const field of ["involvement"]) {
+      if (!projectText(body[field])) return res.status(400).json({ error: `${field} is required` });
+    }
+    if (!taskItems.length) return res.status(400).json({ error: "Add at least one completed task with site, category and description" });
+    if (taskItems.some((item) => !item.site) || waitingTaskItems.some((item) => !item.site)) return res.status(400).json({ error: "Choose a site for every task" });
+    if (taskItems.some((item) => !item.status)) return res.status(400).json({ error: "Choose a status for every today task" });
+    const now = new Date();
+    const report = {
+      reportId: projectText(body.id || body.reportId),
+      userId,
+      employeeName: req.authUser.displayName || req.authUser.username || "Employee",
+      department,
+      reportDate: today,
+      submittedAt: now,
+      client: "",
+      site: taskItems[0]?.site || waitingTaskItems[0]?.site || "",
+      taskType: taskItems[0]?.category || "",
+      taskItems,
+      taskDescription: taskItemsToText(taskItems),
+      taskStatus: taskItems[0]?.status || "",
+      involvement: projectText(body.involvement),
+      waitingTaskItems,
+      waitingTaskDescription: taskItemsToText(waitingTaskItems),
+      tomorrowPlanTick: Boolean(body.tomorrowPlanTick),
+      note: projectText(body.note),
+      updatedAt: now,
+    };
+    report.reportId = await updateEmployeeReportInSheet({ user: req.user, report, taskItems, waitingTaskItems });
+    await cacheEmployeeReports(db, [report]);
+    const userSet = { updatedAt: now };
+    userSet.employeeReportCacheHydratedAt = now;
+    if (!req.user.department || req.user.department !== department) userSet.department = department;
+    await db.collection("users").updateOne({ _id: req.user._id }, { $set: userSet });
+    res.json({ success: true, report: sanitizeEmployeeReport(report) });
+  } catch (error) {
+    if (error.code === "EMPLOYEE_REPORT_NOT_FOUND") return res.status(404).json({ error: error.message });
+    if (/link your google sheet|could not open|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
+    console.error("Employee daily report update error:", employeeSheetErrorMessage(error));
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: employeeSheetErrorMessage(error, "Could not update today's daily report") });
   }
 });
 
@@ -1125,7 +1439,7 @@ app.get("/employee-daily-report/report", async (req, res) => {
     const selectedObjectIds = selectedUserIds.filter((id) => /^[a-f\d]{24}$/i.test(id)).map((id) => new ObjectId(id));
     if (selectedObjectIds.length) userFilter._id = { $in: selectedObjectIds };
     const linkedUsers = await db.collection("users").find(userFilter).limit(500).toArray();
-    const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(await readEmployeeReportsForUsers(linkedUsers), { dateFrom: from, dateTo: to, userIds: selectedUserIds }))
+    const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(await getCachedEmployeeReportsForUsers(db, linkedUsers), { dateFrom: from, dateTo: to, userIds: selectedUserIds }))
       .sort((a, b) => String(a.reportDate).localeCompare(String(b.reportDate)) || String(a.employeeName).localeCompare(String(b.employeeName)))
       .slice(0, 5000);
     const dates = [];
@@ -1477,6 +1791,7 @@ const notificationsPath = path.join(dataDir, "notifications.json");
 const activityLogsPath = path.join(dataDir, "activity-logs.json");
 const projectDashboardPath = path.join(dataDir, "project-dashboard.json");
 const dmrHistoryPath = path.join(dataDir, "dmr-history.json");
+const mrnHistoryPath = path.join(dataDir, "mrn-history.json");
 const dmrSettingsPath = path.join(dataDir, "dmr-settings.json");
 const dmrPdfDir = path.join(dataDir, "dmr-pdfs");
 const mrnSettingsPath = path.join(dataDir, "mrn-settings.json");
@@ -1489,6 +1804,7 @@ let reports = [];
 let notifications = [];
 let activityLogs = [];
 let dmrHistory = [];
+let mrnHistory = [];
 let dmrSettings = {
   spreadsheetId: normalizeSpreadsheetId(DEFAULT_DMR_SPREADSHEET_ID),
   linkedAt: null,
@@ -1568,6 +1884,15 @@ if (fs.existsSync(dmrHistoryPath)) {
   } catch (error) {
     console.error("Error loading DMR history:", error);
     dmrHistory = [];
+  }
+}
+
+if (fs.existsSync(mrnHistoryPath)) {
+  try {
+    mrnHistory = JSON.parse(fs.readFileSync(mrnHistoryPath, "utf8"));
+  } catch (error) {
+    console.error("Error loading MRN history:", error);
+    mrnHistory = [];
   }
 }
 
@@ -1709,6 +2034,14 @@ function saveDmrHistory() {
     fs.writeFileSync(dmrHistoryPath, JSON.stringify(dmrHistory, null, 2));
   } catch (error) {
     console.error("Error saving DMR history:", error);
+  }
+}
+
+function saveMrnHistory() {
+  try {
+    fs.writeFileSync(mrnHistoryPath, JSON.stringify(mrnHistory, null, 2));
+  } catch (error) {
+    console.error("Error saving MRN history:", error);
   }
 }
 
@@ -6409,6 +6742,11 @@ function mrnFieldForHeader(header = "") {
   return "";
 }
 
+function normalizedMrnNumber(value = "") {
+  const match = projectText(value).match(/^mrn\s*0*(\d+)$/i);
+  return match ? `mrn${Number(match[1])}` : "";
+}
+
 function isEmailLike(value = "") {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(projectText(value));
 }
@@ -6690,6 +7028,82 @@ async function readMrnDashboard({ startDate, endDate, all = false } = {}) {
   };
 }
 
+const MRN_HISTORY_FIELDS = [
+  ["project", "Project / site"],
+  ["materialRequestDate", "Request date"],
+  ["requiredDate", "Required by"],
+  ["materialRequirement", "Material requirement"],
+  ["issuedBy", "Issued by"],
+  ["leadTime", "Lead time"],
+  ["mrnPhoto", "MRN file"],
+  ["emailAddress", "Email address"],
+  ["quotationPhoto", "Quotation file"],
+  ["quotationAmount", "Quotation amount"],
+  ["assignTo", "Assigned to"],
+  ["status", "Status"],
+  ["krishnaPrnStatusUpdated", "PRN status"],
+  ["vendorName", "Vendor"],
+  ["invoiceDate", "Invoice date"],
+  ["remark", "Remark"],
+];
+
+function mrnSnapshotFromSheetRow(headers = [], row = [], rowNumber = null) {
+  const record = mapMrnRows([headers, row]).records?.[0] || {};
+  return {
+    rowNumber,
+    mrnNo: record.mrnNo || projectText(row[0]),
+    project: record.project || "",
+    materialRequestDate: record.materialRequestDate || "",
+    requiredDate: record.requiredDate || "",
+    materialRequirement: record.materialRequirement || "",
+    issuedBy: record.issuedBy || "",
+    leadTime: record.leadTime || "",
+    mrnPhoto: record.mrnPhoto || "",
+    emailAddress: record.emailAddress || "",
+    quotationPhoto: record.quotationPhoto || "",
+    quotationAmount: record.quotationAmount || "",
+    assignTo: record.assignTo || "",
+    status: record.status || "",
+    krishnaPrnStatusUpdated: record.krishnaPrnStatusUpdated || "",
+    vendorName: record.vendorName || "",
+    invoiceDate: record.invoiceDate || "",
+    remark: record.remark || "",
+  };
+}
+
+function mrnHistoryChanges(before = {}, after = {}) {
+  return MRN_HISTORY_FIELDS
+    .map(([key, label]) => ({
+      key,
+      label,
+      before: projectText(before?.[key]),
+      after: projectText(after?.[key]),
+    }))
+    .filter((change) => change.before !== change.after);
+}
+
+function addMrnHistoryEntry(req, { action, mrnNo, rowNumber, before = null, after = null }) {
+  const normalized = projectText(mrnNo || after?.mrnNo || before?.mrnNo);
+  if (!normalized) return;
+  const existingCount = mrnHistory.filter((entry) => projectText(entry.mrnNo).toLowerCase() === normalized.toLowerCase()).length;
+  const entry = {
+    id: `mrn-history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    mrnNo: normalized,
+    rowNumber: rowNumber || after?.rowNumber || before?.rowNumber || null,
+    version: existingCount + 1,
+    action,
+    createdAt: new Date().toISOString(),
+    actor: req.authUser?.displayName || req.authUser?.username || "System",
+    username: req.authUser?.username || null,
+    before,
+    after,
+    changes: action === "added" ? [] : mrnHistoryChanges(before, after),
+  };
+  mrnHistory.unshift(entry);
+  mrnHistory = mrnHistory.slice(0, 2000);
+  saveMrnHistory();
+}
+
 async function assertDriveFolder(folderId) {
   const id = extractDriveFileId(folderId);
   if (!id) throw new Error("Paste a valid Google Drive folder link or ID");
@@ -6769,7 +7183,7 @@ async function appendMrnRecord(values = {}, files = {}) {
     requestBody: { values: [row.slice(1)] },
   });
   sheetDatasetCache.delete(spreadsheetId);
-  return { mrnNo, row };
+  return { mrnNo, row, rowNumber: nextRow, snapshot: mrnSnapshotFromSheetRow(parsed.headers, row, nextRow) };
 }
 
 async function updateMrnRecord(rowNumber, values = {}, files = {}) {
@@ -6817,6 +7231,27 @@ async function updateMrnRecord(rowNumber, values = {}, files = {}) {
     mrnPhoto,
     quotationPhoto,
   }, current);
+  const beforeSnapshot = {
+    rowNumber: numericRow,
+    mrnNo,
+    project: currentRecord.project || "",
+    materialRequestDate: currentRecord.materialRequestDate || "",
+    requiredDate: currentRecord.requiredDate || "",
+    materialRequirement: currentRecord.materialRequirement || "",
+    issuedBy: currentRecord.issuedBy || "",
+    leadTime: currentRecord.leadTime || "",
+    mrnPhoto: currentRecord.mrnPhoto || "",
+    emailAddress: currentRecord.emailAddress || "",
+    quotationPhoto: currentRecord.quotationPhoto || "",
+    quotationAmount: currentRecord.quotationAmount || "",
+    assignTo: currentRecord.assignTo || "",
+    status: currentRecord.status || "",
+    krishnaPrnStatusUpdated: currentRecord.krishnaPrnStatusUpdated || "",
+    vendorName: currentRecord.vendorName || "",
+    invoiceDate: currentRecord.invoiceDate || "",
+    remark: currentRecord.remark || "",
+  };
+  const afterSnapshot = mrnSnapshotFromSheetRow(parsed.headers, row, numericRow);
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `${escapeSheetName(MRN_SHEET_NAME)}!B${numericRow}:${columnName(row.length)}${numericRow}`,
@@ -6824,7 +7259,7 @@ async function updateMrnRecord(rowNumber, values = {}, files = {}) {
     requestBody: { values: [row.slice(1)] },
   });
   sheetDatasetCache.delete(spreadsheetId);
-  return { mrnNo, row, rowNumber: numericRow, lastEdited: row[1] };
+  return { mrnNo, row, rowNumber: numericRow, lastEdited: row[1], before: beforeSnapshot, after: afterSnapshot };
 }
 
 function emptyDmrDashboard(date) {
@@ -6977,6 +7412,7 @@ app.get("/mrn-dashboard", async (req, res) => {
     res.json({
       ...dashboard,
       canEdit: hasPrivilege(req, "edit_project_mrn"),
+      canViewMrnHistory: Boolean(req.user?.isSuperAdmin),
       canManageMrnSettings: Boolean(req.user?.isSuperAdmin),
       mrnSettings: publicMrnSettings(),
       generatedAt: new Date().toISOString(),
@@ -6985,6 +7421,20 @@ app.get("/mrn-dashboard", async (req, res) => {
     console.error("MRN dashboard error:", error);
     res.status(500).json({ error: `Could not load MRN dashboard: ${error.message}` });
   }
+});
+
+app.get("/mrn-dashboard/:mrnNo/history", requireSuperAdmin, (req, res) => {
+  const mrnNo = projectText(req.params.mrnNo);
+  const normalized = normalizedMrnNumber(mrnNo);
+  const history = mrnHistory
+    .filter((entry) => {
+      const entryMrn = projectText(entry.mrnNo);
+      return normalized
+        ? normalizedMrnNumber(entryMrn) === normalized
+        : entryMrn.toLowerCase() === mrnNo.toLowerCase();
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  res.json({ history, total: history.length });
 });
 
 app.post("/mrn-dashboard", upload.fields([
@@ -6999,6 +7449,12 @@ app.post("/mrn-dashboard", upload.fields([
     const missing = required.filter((field) => !projectText(req.body?.[field]));
     if (missing.length) return res.status(400).json({ error: `Missing required fields: ${missing.join(", ")}` });
     const result = await appendMrnRecord(req.body || {}, req.files || {});
+    addMrnHistoryEntry(req, {
+      action: "added",
+      mrnNo: result.mrnNo,
+      rowNumber: result.rowNumber,
+      after: result.snapshot,
+    });
     addActivityLog({
       req,
       action: "Added MRN",
@@ -7030,6 +7486,13 @@ app.put("/mrn-dashboard/:rowNumber", upload.fields([
     const missing = required.filter((field) => !projectText(req.body?.[field]));
     if (missing.length) return res.status(400).json({ error: `Missing required fields: ${missing.join(", ")}` });
     const result = await updateMrnRecord(req.params.rowNumber, req.body || {}, req.files || {});
+    addMrnHistoryEntry(req, {
+      action: "edited",
+      mrnNo: result.mrnNo,
+      rowNumber: result.rowNumber,
+      before: result.before,
+      after: result.after,
+    });
     addActivityLog({
       req,
       action: "Edited MRN",

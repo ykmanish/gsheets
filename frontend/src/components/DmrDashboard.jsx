@@ -2468,11 +2468,11 @@ export default function DmrDashboard({ darkMode }) {
         <div
           className={`fixed inset-0 z-50 flex ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f7f5ef] text-[#171714]"}`}
         >
-          <div className="flex h-screen w-screen flex-col overflow-hidden">
+          <div className="flex h-[100dvh] w-screen flex-col overflow-hidden">
             <div
-              className={`flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex flex-col gap-4 border-b px-4 py-4 sm:px-7 sm:py-5 md:flex-row md:items-start md:justify-between ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
             >
-              <div className="flex min-w-0 items-start gap-4">
+              <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                 <span
                   className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-[#ebe6dc] text-[#171714]"}`}
                 >
@@ -2484,7 +2484,7 @@ export default function DmrDashboard({ darkMode }) {
                   >
                     {activePlanTitle}
                   </p>
-                  <h3 className="mt-2 truncate text-3xl font-semibold">
+                  <h3 className="mt-1 text-2xl font-semibold leading-tight sm:mt-2 sm:text-3xl">
                     {activePlanHeading}
                   </h3>
                   <p className={`mt-1 text-sm ${muted}`}>
@@ -2496,13 +2496,13 @@ export default function DmrDashboard({ darkMode }) {
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:shrink-0 md:justify-end">
                 {planMode === "today" && (
                   <button
                     type="button"
                     onClick={downloadDmrReportPdf}
                     disabled={reportPdfLoading}
-                    className={`relative flex h-11 items-center gap-2 overflow-hidden rounded-full px-4 text-sm font-semibold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`relative flex h-11 flex-1 items-center justify-center gap-2 overflow-hidden rounded-full px-3 text-xs font-semibold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none sm:px-4 sm:text-sm ${
                       darkMode
                         ? "bg-gradient-to-r from-[#6af3a8] via-[#7df0c5] to-[#6af3a8] text-black shadow-lg shadow-[#d8f36a]/15 hover:scale-[1.02]"
                         : "bg-gradient-to-r from-[#6aff9e] via-[#7df0c5] to-[#6af3a8] text-[#171714] shadow-lg shadow-emerald-200/60 hover:scale-[1.02]"
@@ -2522,7 +2522,7 @@ export default function DmrDashboard({ darkMode }) {
                 <button
                   type="button"
                   onClick={() => setCeoPlanView((value) => !value)}
-                  className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-all duration-300 ${ceoPlanView ? (darkMode ? "border-[#d8f36a] bg-[#d8f36a] text-black shadow-lg shadow-[#d8f36a]/10" : "border-[#171714] bg-[#171714] text-white shadow-lg shadow-black/10") : darkMode ? "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/10" : "border-black/10 bg-white text-black/65 hover:bg-black/[0.03]"}`}
+                  className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-full border px-3 text-xs font-medium transition-all duration-300 sm:flex-none sm:px-4 sm:text-sm ${ceoPlanView ? (darkMode ? "border-[#d8f36a] bg-[#d8f36a] text-black shadow-lg shadow-[#d8f36a]/10" : "border-[#171714] bg-[#171714] text-white shadow-lg shadow-black/10") : darkMode ? "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/10" : "border-black/10 bg-white text-black/65 hover:bg-black/[0.03]"}`}
                 >
                   CEO&apos;s View
                 </button>
@@ -2538,7 +2538,7 @@ export default function DmrDashboard({ darkMode }) {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-7">
               {activePlan?.error && (
                 <div
                   className={`mb-5 rounded-2xl border px-4 py-3 text-sm ${darkMode ? "border-red-400/20 bg-red-400/5 text-red-200" : "border-red-500/20 bg-red-50 text-red-700"}`}
@@ -2976,7 +2976,7 @@ export default function DmrDashboard({ darkMode }) {
           }}
         >
           <div
-            className={`dmr-report-shell absolute flex flex-col overflow-hidden border-l shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${reportExpanded ? "dmr-report-shell-expanded" : ""} ${reportClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#111216] text-white" : "border-black/[0.08] bg-white text-[#171714]"}`}
+            className={`dmr-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${reportExpanded ? "dmr-report-shell-expanded" : ""} ${reportClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}
             role="dialog"
             aria-modal="true"
             aria-label="DMR performance report"
@@ -4154,10 +4154,10 @@ export default function DmrDashboard({ darkMode }) {
       {fillOpen && (
         <div className="fixed inset-0 z-50 bg-[#171714]/60 backdrop-blur-md">
           <div
-            className={`flex h-screen w-screen flex-col overflow-hidden ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#faf9f5] text-[#171714]"}`}
+            className={`flex h-[100dvh] w-screen flex-col overflow-hidden ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#faf9f5] text-[#171714]"}`}
           >
             <div
-              className={`flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
             >
               <div>
                 <p
@@ -4168,7 +4168,7 @@ export default function DmrDashboard({ darkMode }) {
                 <h3 className="mt-1 text-2xl font-semibold">
                   {data?.sheetName || "Today"} entries
                 </h3>
-                <p className={`mt-1 text-sm ${muted}`}>
+                <p className={`mt-1 hidden text-sm sm:block ${muted}`}>
                   Pick a site from the left, then fill planned and actual
                   manpower trade-wise.
                 </p>
@@ -4176,7 +4176,7 @@ export default function DmrDashboard({ darkMode }) {
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   onClick={() => setDmrSheetOpen(true)}
-                  className={`flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${darkMode ? "border-white/10 bg-white/5 text-white/70 hover:bg-white/10" : "border-black/10 bg-white text-black/65 hover:bg-black/[0.04]"}`}
+                    className={`flex h-10 items-center gap-2 rounded-full border px-3 text-xs font-medium sm:px-4 sm:text-sm ${darkMode ? "border-white/10 bg-white/5 text-white/70 hover:bg-white/10" : "border-black/10 bg-white text-black/65 hover:bg-black/[0.04]"}`}
                 >
                   <FileSpreadsheet className="h-4 w-4" /> Sheet link
                 </button>
@@ -4188,7 +4188,7 @@ export default function DmrDashboard({ darkMode }) {
                 </button>
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-hidden p-4 sm:p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 lg:overflow-hidden">
               {!dmrSheetLinked && (
                 <div
                   className={`mb-4 rounded-2xl  px-4 py-3 text-xs ${darkMode ? "border-amber-400/20 bg-amber-400/5 text-amber-200/75" : "border-amber-500/20 bg-amber-50 text-amber-800"}`}
@@ -4253,7 +4253,7 @@ export default function DmrDashboard({ darkMode }) {
                           {siteFilter === "all" ? "All sites" : siteFilter}
                         </p>
                       </div>
-                      <div className="max-h-[calc(100vh-330px)] space-y-1 overflow-y-auto p-2 pb-20">
+                      <div className="max-h-64 space-y-1 overflow-y-auto p-2 lg:max-h-[calc(100dvh-330px)] lg:pb-20">
                         {fillSiteOptions.map((site) => {
                           const selected = siteFilter === site.value;
                           return (
@@ -4290,7 +4290,7 @@ export default function DmrDashboard({ darkMode }) {
                           className={`h-12 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
                         />
                       </label>
-                      <div className="max-h-[calc(100vh-330px)] overflow-y-auto pb-24 pr-1">
+                      <div className="overflow-visible pb-6 pr-1 lg:max-h-[calc(100dvh-330px)] lg:overflow-y-auto lg:pb-24">
                         <div className="grid gap-3 xl:grid-cols-3 2xl:grid-cols-4">
                           {filteredRecords.map((record) => (
                             <article
@@ -4705,11 +4705,11 @@ export default function DmrDashboard({ darkMode }) {
               </div>
             </div>
             <div
-              className={`flex shrink-0 items-center justify-end gap-2 border-t px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex shrink-0 items-center justify-end gap-2 border-t px-3 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
             >
               <button
                 onClick={() => setFillOpen(false)}
-                className={`h-11 rounded-full border px-6 text-sm ${darkMode ? "border-white/10 text-white/60" : "border-black/10 text-black/60"}`}
+                className={`h-11 rounded-full border px-5 text-sm ${darkMode ? "border-white/10 text-white/60" : "border-black/10 text-black/60"}`}
               >
                 Cancel
               </button>
@@ -4720,7 +4720,7 @@ export default function DmrDashboard({ darkMode }) {
                   (!Object.keys(drafts).length && !hasAutoPlannedDrafts)
                 }
                 onClick={saveDmr}
-                className={`flex h-11 min-w-36 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-36 sm:flex-none sm:px-6 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

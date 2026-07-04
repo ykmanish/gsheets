@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarCheck, Check, CheckCircle2, Clock3, Eye, FileText, Maximize2, Minimize2, Plus, Search, Trash2, X } from "lucide-react";
+import { CalendarCheck, Check, CheckCircle2, Clock3, Eye, FileText, Maximize2, Minimize2, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 import { useClickOutside } from "./ui";
@@ -88,17 +88,11 @@ function buildMonthGrid(monthDate) {
 
 const emptyForm = {
   department: "",
-  client: "",
-  site: "",
-  taskType: "",
-  taskTypeOther: "",
-  taskItems: [{ category: "", categoryOther: "", description: "" }],
-  taskStatus: "",
-  taskStatusOther: "",
+  taskItems: [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", description: "" }],
   involvement: "",
   involvementOther: "",
-  waitingTaskItems: [{ category: "", categoryOther: "", description: "" }],
-  tomorrowPlanTick: false,
+  waitingTaskItems: [{ site: "", category: "", categoryOther: "", description: "" }],
+  tomorrowPlanTick: true,
   note: "",
 };
 
@@ -172,15 +166,15 @@ function SearchableSelect({ darkMode, value, onChange, options = [], placeholder
   );
 }
 
-function TaskRowsEditor({ title, rows, categories, onRowsChange, required = false }) {
+function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], showStatus = false, onRowsChange, required = false }) {
   function updateRow(index, patch) {
     onRowsChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
   function addRow() {
-    onRowsChange([...rows, { category: "", categoryOther: "", description: "" }]);
+    onRowsChange([...rows, { site: "", category: "", categoryOther: "", status: "", statusOther: "", description: "" }]);
   }
   function removeRow(index) {
-    onRowsChange(rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [{ category: "", categoryOther: "", description: "" }]);
+    onRowsChange(rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", description: "" }]);
   }
   return (
     <div className="md:col-span-2">
@@ -190,8 +184,31 @@ function TaskRowsEditor({ title, rows, categories, onRowsChange, required = fals
       <div className="space-y-3">
         {rows.map((row, index) => (
           <div key={index} className="rounded-[22px] border border-black/10 bg-[#f8f7f3] p-3">
-            <div className="grid gap-3 lg:grid-cols-[260px_1fr_auto]">
-              <div>
+            <div className={`grid gap-3 ${showStatus ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
+              <div className="order-1">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Site</p>
+                <SearchableSelect
+                  darkMode={false}
+                  value={row.site}
+                  onChange={(value) => updateRow(index, { site: value })}
+                  options={sites}
+                  placeholder="Choose site"
+                  allowOther
+                />
+                {row.site === "__other" && (
+                  <input required value={row.siteOther || ""} onChange={(event) => updateRow(index, { siteOther: event.target.value })} placeholder="Enter site" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none" />
+                )}
+                {required && index === 0 && !row.site && <input tabIndex={-1} autoComplete="off" className="pointer-events-none h-0 w-0 opacity-0" required value="" onChange={() => {}} />}
+              </div>
+              {showStatus && (
+                <div className="order-3">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Task status</p>
+                  <SearchableSelect darkMode={false} value={row.status} onChange={(value) => updateRow(index, { status: value })} options={statuses.filter((status) => status !== "Other")} placeholder="Choose task status" allowOther />
+                  {row.status === "__other" && <input required={required} value={row.statusOther || ""} onChange={(event) => updateRow(index, { statusOther: event.target.value })} placeholder="Enter task status" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none" />}
+                  {required && index === 0 && !row.status && <input tabIndex={-1} autoComplete="off" className="pointer-events-none h-0 w-0 opacity-0" required value="" onChange={() => {}} />}
+                </div>
+              )}
+              <div className="order-2">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Category</p>
                 <SearchableSelect
                   darkMode={false}
@@ -212,7 +229,7 @@ function TaskRowsEditor({ title, rows, categories, onRowsChange, required = fals
                 )}
                 {required && index === 0 && !row.category && <input tabIndex={-1} autoComplete="off" className="pointer-events-none h-0 w-0 opacity-0" required value="" onChange={() => {}} />}
               </div>
-              <div>
+              <div className="order-4 lg:col-span-full">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Description</p>
                 <textarea
                   required={required && index === 0}
@@ -223,7 +240,7 @@ function TaskRowsEditor({ title, rows, categories, onRowsChange, required = fals
                   className="min-h-12 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none"
                 />
               </div>
-              <button type="button" onClick={() => removeRow(index)} className="mt-6 grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-red-600 hover:bg-red-100"><Trash2 className="h-4 w-4" /></button>
+              <div className="order-5 flex justify-end lg:col-span-full"><button type="button" onClick={() => removeRow(index)} className="grid h-10 w-10 place-items-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100"><Trash2 className="h-4 w-4" /></button></div>
             </div>
           </div>
         ))}
@@ -235,18 +252,32 @@ function TaskRowsEditor({ title, rows, categories, onRowsChange, required = fals
   );
 }
 
-function TaskItemsDisplay({ title, items = [], fallback, darkMode }) {
+function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = false }) {
   const visibleItems = Array.isArray(items) ? items.filter((item) => item.category || item.description) : [];
   return (
-    <div className={`rounded-[22px] p-5 md:col-span-2 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
+    <div className={`rounded-[22px] p-3 sm:p-5 md:col-span-2 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
       <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>{title}</p>
       {visibleItems.length ? (
         <div className="mt-3">
-          <table className="w-full table-fixed border-separate border-spacing-y-2 text-left text-sm">
+          <div className="space-y-3 md:hidden">
+            {visibleItems.map((item, index) => (
+              <article key={`mobile-${item.category}-${index}`} className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Site</p><p className="mt-1 font-semibold break-words">{item.site || "-"}</p></div>
+                  <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Category</p><p className="mt-1 font-semibold break-words">{item.category || "-"}</p></div>
+                  {showStatus && <div className="col-span-2"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Status</p><p className="mt-1 font-semibold">{item.status || "-"}</p></div>}
+                  <div className="col-span-2 border-t border-black/[0.06] pt-3 dark:border-white/10"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Description</p><p className="mt-2 whitespace-pre-wrap break-words leading-6">{item.description || "-"}</p></div>
+                </div>
+              </article>
+            ))}
+          </div>
+          <table className="hidden w-full table-fixed border-separate border-spacing-y-2 text-left text-sm md:table">
             <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
               <tr>
                 <th className="w-16 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em]">Sr No:</th>
+                <th className="w-40 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Site</th>
                 <th className="w-48 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Task Category</th>
+                {showStatus && <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Status</th>}
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Description</th>
               </tr>
             </thead>
@@ -254,11 +285,13 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode }) {
               {visibleItems.map((item, index) => (
                 <tr key={`${item.category}-${index}`} className={darkMode ? "bg-white/[0.045]" : "bg-white"}>
                   <td className="rounded-l-2xl px-4 py-3 font-semibold">{index + 1}</td>
+                  <td className="px-4 py-3 font-medium">{item.site || "-"}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex max-w-[160px] whitespace-normal rounded-full px-3 py-1 text-xs font-semibold leading-4 ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#e8f5eb] text-[#145b39]"}`}>
                       {item.category || "-"}
                     </span>
                   </td>
+                  {showStatus && <td className="px-4 py-3">{item.status || "-"}</td>}
                   <td className="whitespace-pre-wrap break-words rounded-r-2xl px-5 py-3 leading-6">{item.description || "-"}</td>
                 </tr>
               ))}
@@ -688,9 +721,11 @@ export default function EmployeeDailyReport({ darkMode }) {
     };
   }, [closeDetailDrawer, detail]);
   const [form, setForm] = useState(emptyForm);
+  const [editingReport, setEditingReport] = useState(false);
   const [sheetInput, setSheetInput] = useState("");
   const [sheetSaving, setSheetSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshingToday, setRefreshingToday] = useState(false);
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe7e4] bg-white";
   const softPanel = darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white";
@@ -725,11 +760,16 @@ export default function EmployeeDailyReport({ darkMode }) {
     }
     setFormClosing(false);
     setFormExpanded(false);
+    const todayReport = data?.todayReport;
+    setEditingReport(Boolean(todayReport));
     setForm({
       ...emptyForm,
-      taskItems: [{ category: "", categoryOther: "", description: "" }],
-      waitingTaskItems: [{ category: "", categoryOther: "", description: "" }],
-      department: data?.profile?.department || "",
+      ...(todayReport || {}),
+      tomorrowPlanTick: true,
+      taskItems: todayReport?.taskItems?.length ? todayReport.taskItems.map((item) => ({ ...item, status: item.status || todayReport.taskStatus || "" })) : [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", description: "" }],
+      waitingTaskItems: todayReport?.waitingTaskItems?.length ? todayReport.waitingTaskItems : [{ site: "", category: "", categoryOther: "", description: "" }],
+      department: todayReport?.department || data?.profile?.department || "",
+      carriedForwardFrom: "",
     });
     setFormOpen(true);
   }
@@ -763,19 +803,22 @@ export default function EmployeeDailyReport({ darkMode }) {
     if (submitting) return;
     try {
       setSubmitting(true);
-      const taskItems = (form.taskItems || []).map((item) => ({ category: fieldValue(item.category, item.categoryOther).trim(), description: item.description.trim() })).filter((item) => item.category && item.description);
-      const waitingTaskItems = (form.waitingTaskItems || []).map((item) => ({ category: fieldValue(item.category, item.categoryOther).trim(), description: item.description.trim() })).filter((item) => item.category && item.description);
+      const missingTaskSite = [...(form.taskItems || []), ...(form.waitingTaskItems || [])].some((item) => (item.category || item.categoryOther || item.description) && !fieldValue(item.site, item.siteOther).trim());
+      if (missingTaskSite) throw new Error("Choose a site for every task");
+      const missingTaskStatus = (form.taskItems || []).some((item) => (item.category || item.categoryOther || item.description) && !fieldValue(item.status, item.statusOther).trim());
+      if (missingTaskStatus) throw new Error("Choose a status for every today task");
+      const taskItems = (form.taskItems || []).map((item) => ({ site: fieldValue(item.site, item.siteOther).trim(), category: fieldValue(item.category, item.categoryOther).trim(), status: fieldValue(item.status, item.statusOther).trim(), description: item.description.trim() })).filter((item) => item.site && item.category && item.status && item.description);
+      const waitingTaskItems = (form.waitingTaskItems || []).map((item) => ({ site: fieldValue(item.site, item.siteOther).trim(), category: fieldValue(item.category, item.categoryOther).trim(), description: item.description.trim() })).filter((item) => item.site && item.category && item.description);
       const payload = {
         ...form,
+        tomorrowPlanTick: true,
         department: fieldValue(form.department, form.departmentOther),
-        taskType: fieldValue(form.taskType, form.taskTypeOther),
-        taskStatus: fieldValue(form.taskStatus, form.taskStatusOther),
         involvement: fieldValue(form.involvement, form.involvementOther),
         taskItems,
         waitingTaskItems,
       };
-      await api("/employee-daily-report", { method: "POST", body: JSON.stringify(payload) });
-      toast.success("Daily report submitted");
+      await api("/employee-daily-report", { method: editingReport ? "PUT" : "POST", body: JSON.stringify(payload) });
+      toast.success(editingReport ? "Today’s report updated" : "Daily report submitted");
       setConfettiActive(true);
       closeFormDrawer();
       await load();
@@ -783,6 +826,20 @@ export default function EmployeeDailyReport({ darkMode }) {
       toast.error(error.message || "Could not submit report");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function refreshTodayReport() {
+    if (refreshingToday) return;
+    try {
+      setRefreshingToday(true);
+      const result = await api("/employee-daily-report/refresh-today", { method: "POST" });
+      toast.success(result.reportFound ? "Today’s report cache refreshed" : "Today’s deleted report was removed from the dashboard");
+      await load();
+    } catch (error) {
+      toast.error(error.message || "Could not refresh today’s report");
+    } finally {
+      setRefreshingToday(false);
     }
   }
 
@@ -865,12 +922,21 @@ export default function EmployeeDailyReport({ darkMode }) {
               </div>
               <div className="flex flex-wrap gap-3 lg:justify-end">
                 <button
-                  disabled={initialLoading || data?.todaySubmitted || !data?.profile?.sheetLinked}
+                  disabled={initialLoading || !data?.profile?.sheetLinked}
                   onClick={openForm}
                   className={`flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}
                 >
                   {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
-                  {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Today's report filled" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
+                  {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Edit today's report" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
+                </button>
+                <button
+                  type="button"
+                  disabled={initialLoading || refreshingToday || !data?.profile?.sheetLinked}
+                  onClick={refreshTodayReport}
+                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshingToday ? "animate-spin" : ""}`} />
+                  {refreshingToday ? "Refreshing..." : "Refresh today"}
                 </button>
                 {!data?.isAdmin && (
                   <button onClick={() => setHeatmapOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
@@ -896,7 +962,7 @@ export default function EmployeeDailyReport({ darkMode }) {
         <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-2xl small font-semibold">{data?.isAdmin ? "Submitted employee reports" : "My filled reports"}</h2>
-            <p className={`mt-1 text-sm ${muted}`}>Read-only report history.</p>
+            <p className={`mt-1 text-sm ${muted}`}>Today can be updated; previous dates are read-only.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             {data?.isAdmin && (
@@ -926,7 +992,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                       <span className={`grid h-10 w-10 place-items-center rounded-full text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-[#d5f3f0] text-[#145b39]"}`}>{(report.employeeName || "E").slice(0, 1).toUpperCase()}</span>
                       <div>
                         <p className="font-semibold">{report.employeeName}</p>
-                        <p className={`text-xs ${muted}`}>{report.client || "-"} · {report.site || "-"}</p>
+                        <p className={`text-xs ${muted}`}>{report.reportDate || "-"}</p>
                       </div>
                     </div>
                   </td>
@@ -949,7 +1015,7 @@ export default function EmployeeDailyReport({ darkMode }) {
 
       {sheetOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheetOpen(false); }}>
-          <div className={`employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden border-l shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.08] bg-white text-[#171714]"}`}>
+          <div className={`employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
             <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}><span><b>Employee daily report</b> · Sheet settings</span><button onClick={() => setSheetOpen(false)} className="font-semibold text-[#4b9b16]">Close</button></div>
             <div className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
             <div className={`rounded-2xl  p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
@@ -982,7 +1048,7 @@ export default function EmployeeDailyReport({ darkMode }) {
 
       {todayStatusOpen && data?.isAdmin && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setTodayStatusOpen(false); }}>
-          <div className={`employee-report-shell employee-status-shell absolute flex flex-col overflow-hidden border-l shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.08] bg-white text-[#171714]"}`}>
+          <div className={`employee-report-shell employee-status-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
             <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}><span>Today status · {data?.today || todayInput()}</span><button onClick={() => setTodayStatusOpen(false)} className="font-semibold text-[#4b9b16]">Close</button></div>
             <div className={`min-h-0 flex-1 overflow-auto p-5 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
             <div className={`overflow-auto rounded-2xl  ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
@@ -1019,7 +1085,7 @@ export default function EmployeeDailyReport({ darkMode }) {
 
       {formOpen && (
         <div className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] ${formClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeFormDrawer(); }}>
-          <form onSubmit={submitReport} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden border-l shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${formExpanded ? "employee-report-shell-expanded" : ""} ${formClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#111216] text-white" : "border-black/[0.08] bg-white text-[#171714]"}`}>
+          <form onSubmit={submitReport} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${formExpanded ? "employee-report-shell-expanded" : ""} ${formClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
             <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
               <span><b>Daily work progress</b> · {todayInput()}</span>
               <div className="flex items-center gap-2">
@@ -1037,7 +1103,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                   <div>
                     <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">DAILY REPORT</span>
                     <h4 className={`mt-4 text-2xl small text-black dark:text-white font-bold leading-tight ${darkMode ? "text-white" : "text-black"}`}>What did you work on today?</h4>
-                    <p className={`mt-3 text-xs leading-5 ${darkMode ? "text-white/55" : "text-black/50"}`}>Keep the update clear and complete. Once submitted, today&apos;s report becomes read-only.</p>
+                    <p className={`mt-3 text-xs leading-5 ${darkMode ? "text-white/55" : "text-black/50"}`}>Keep the update clear and complete. Today&apos;s report stays editable until the date changes.</p>
                   </div>
                   <div className="mt-8 space-y-3">
                     <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Department</p><p className="mt-1 text-sm font-bold">{data?.profile?.department || "Required once"}</p></div>
@@ -1046,7 +1112,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                 </div>
                 <div className={`flex shrink-0 gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
                   <button type="button" onClick={closeFormDrawer} className={`h-11 flex-1 rounded-full border text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
-                  <button disabled={submitting} className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">{submitting ? "Submitting..." : "Submit"}</button>
+                  <button disabled={submitting} className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">{submitting ? "Saving..." : editingReport ? "Update" : "Submit"}</button>
                 </div>
               </aside>
 
@@ -1057,7 +1123,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Task entry</p>
                     <h4 className={`mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-black"}`}>Fill today&apos;s report</h4>
                   </div>
-                  <span className="rounded-md bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold text-[#4b9b16]">READ-ONLY AFTER SUBMIT</span>
+                  <span className="rounded-md bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold text-[#4b9b16]">EDITABLE TODAY</span>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -1068,31 +1134,14 @@ export default function EmployeeDailyReport({ darkMode }) {
                       {form.department === "__other" && <input required value={form.departmentOther || ""} onChange={(event) => setForm((current) => ({ ...current, departmentOther: event.target.value }))} placeholder="Enter department" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 outline-none" />}
                     </div>
                   )}
-                  {["client", "site"].map((field) => (
-                    <div key={field}>
-                      <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">{field === "client" ? "Client" : "Site"}</label>
-                      <input required value={form[field]} onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))} placeholder={field === "client" ? "Enter client" : "Enter site"} className="h-12 w-full rounded-2xl border border-black/10 bg-white px-4 outline-none" />
-                    </div>
-                  ))}
-                  <div><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Task Type</label><SearchableSelect darkMode={false} value={form.taskType} onChange={(value) => setForm((current) => ({ ...current, taskType: value }))} options={options.taskTypes} placeholder="Choose task type" />{form.taskType === "__other" && <input required value={form.taskTypeOther} onChange={(event) => setForm((current) => ({ ...current, taskTypeOther: event.target.value }))} placeholder="Enter task type" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 outline-none" />}</div>
-                  <div><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Task Status</label><SearchableSelect darkMode={false} value={form.taskStatus} onChange={(value) => setForm((current) => ({ ...current, taskStatus: value }))} options={options.taskStatuses} placeholder="Choose task status" />{form.taskStatus === "__other" && <input required value={form.taskStatusOther} onChange={(event) => setForm((current) => ({ ...current, taskStatusOther: event.target.value }))} placeholder="Enter task status" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 outline-none" />}</div>
                   <div><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Involvement</label><SearchableSelect darkMode={false} value={form.involvement} onChange={(value) => setForm((current) => ({ ...current, involvement: value }))} options={options.involvements} placeholder="Choose involvement" />{form.involvement === "__other" && <input required value={form.involvementOther} onChange={(event) => setForm((current) => ({ ...current, involvementOther: event.target.value }))} placeholder="Enter involvement" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 outline-none" />}</div>
-                  <label className="flex h-12 w-full cursor-pointer select-none items-center gap-3 self-end rounded-2xl border border-black/10 bg-[#f8f7f3] px-4 text-sm transition duration-200 hover:border-[#145b39]/25 hover:bg-[#f3f8ed] active:scale-[0.99]">
-                    <input
-                      type="checkbox"
-                      checked={form.tomorrowPlanTick}
-                      onChange={(event) => setForm((current) => ({ ...current, tomorrowPlanTick: event.target.checked }))}
-                      className="peer sr-only"
-                    />
-                    <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-xl border shadow-sm transition duration-200 peer-active:scale-95 ${form.tomorrowPlanTick ? "scale-105 border-[#145b39] bg-[#145b39]" : "border-black/15 bg-white"}`}>
-                      <Check className={`h-4 w-4 text-white transition duration-200 ${form.tomorrowPlanTick ? "scale-100 opacity-100" : "scale-50 opacity-0"}`} />
-                    </span>
-                    <span className="font-medium text-black/80">Tick for tomorrow&apos;s plan</span>
-                  </label>
                   <TaskRowsEditor
                     title="Task description"
                     rows={form.taskItems}
                     categories={options.taskTypes}
+                    sites={options.sites || []}
+                    statuses={options.taskStatuses}
+                    showStatus
                     required
                     onRowsChange={(rows) => setForm((current) => ({ ...current, taskItems: rows }))}
                   />
@@ -1100,6 +1149,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     title="Tasks in waiting / tomorrow plan"
                     rows={form.waitingTaskItems}
                     categories={options.taskTypes}
+                    sites={options.sites || []}
                     onRowsChange={(rows) => setForm((current) => ({ ...current, waitingTaskItems: rows }))}
                   />
                   <div className="md:col-span-2"><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Note</label><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} rows={3} placeholder="Any extra note..." className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none" /></div>
@@ -1113,7 +1163,7 @@ export default function EmployeeDailyReport({ darkMode }) {
 
       {reportOpen && data?.isAdmin && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setReportOpen(false); }}>
-          <div className={`employee-report-shell absolute flex flex-col overflow-hidden border-l shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#101216] text-white" : "border-black/[0.08] bg-white text-[#171714]"}`}>
+          <div className={`employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#101216] text-white" : "bg-white text-[#171714]"}`}>
             <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}><span><b>Employee daily report</b> · Generate report</span><button onClick={() => setReportOpen(false)} className="font-semibold text-[#4b9b16]">Close</button></div>
 
             <div className={`min-h-0 flex-1 overflow-y-auto p-5 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
@@ -1206,29 +1256,32 @@ export default function EmployeeDailyReport({ darkMode }) {
 
       {detail && (
         <div className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] ${detailClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetailDrawer(); }}>
-          <div className={`employee-report-shell absolute flex flex-col overflow-hidden border-l shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${detailExpanded ? "employee-report-shell-expanded" : ""} ${detailClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#101216] text-white" : "border-black/[0.08] bg-white text-[#171714]"}`}>
+          <div className={`employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${detailExpanded ? "employee-report-shell-expanded" : ""} ${detailClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#101216] text-white" : "bg-white text-[#171714]"}`}>
             <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <span><b>Read-only report detail</b> · {detail.reportDate}</span>
+              <span><b>{detail.reportDate === data?.today && detail.userId === data?.currentUserId ? "Editable report detail" : "Read-only report detail"}</b> · {detail.reportDate}</span>
               <div className="flex items-center gap-2">
+                {detail.reportDate === data?.today && detail.userId === data?.currentUserId && (
+                  <button type="button" onClick={() => { closeDetailDrawer(); window.setTimeout(openForm, 300); }} className="flex h-8 items-center rounded-full bg-[#89ed3f] px-3 text-xs font-bold text-black">Edit report</button>
+                )}
                 <button onClick={() => setDetailExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={detailExpanded ? "Restore drawer size" : "Expand report to full screen"}>{detailExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}<span className="hidden sm:inline">{detailExpanded ? "Restore" : "Expand"}</span></button>
                 <button onClick={closeDetailDrawer} className="px-1 font-semibold text-[#4b9b16]">Close</button>
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[270px_minmax(0,1fr)]">
-              <aside className={`flex min-h-0 flex-col border-b p-6 md:border-b-0  ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
+            <div className={`${detailExpanded ? "grid md:grid-cols-[270px_minmax(0,1fr)]" : "block"} min-h-0 flex-1 overflow-hidden`}>
+              {detailExpanded && <aside className={`hidden min-h-0 flex-col border-b p-6 md:flex md:border-b-0 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
                 <div>
                   <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px]  text-[#4b9b16]">SUBMITTED BY</span>
                   <h4 className="mt-4 text-2xl font-bold small text-black dark:text-white leading-tight">{detail.employeeName || "Employee"}</h4>
                   <p className={`mt-2 text-xs ${darkMode ? "text-white/50" : "text-black/50"}`}>{displayDateTime(detail.submittedAt)}</p>
                 </div>
                 <div className="mt-8 space-y-3">
-                  {[["Department", detail.department || "-"], ["Status", detail.taskStatus || "-"], ["Tomorrow plan", detail.tomorrowPlanTick ? "Ticked" : "Not ticked"]].map(([label, value]) => <div key={label} className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/40" : "text-black/40"}`}>{label}</p><p className="mt-1 text-sm font-bold">{value}</p></div>)}
+                  {[["Department", detail.department || "-"], ["Status", detail.taskStatus || "-"]].map(([label, value]) => <div key={label} className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/40" : "text-black/40"}`}>{label}</p><p className="mt-1 text-sm font-bold">{value}</p></div>)}
                 </div>
                 <button onClick={closeDetailDrawer} className={`mt-auto h-11 rounded-full border text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Close</button>
-              </aside>
+              </aside>}
 
-              <div className={`min-h-0 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}><div className={`rounded-3xl  p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/[0.08] bg-white"}`}>
+              <div className={`h-full min-h-0 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}><div className={`rounded-3xl p-4 sm:p-6 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/[0.08] bg-white"}`}>
                 <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div>
                     <p className={`text-xs uppercase tracking-[0.18em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Work progress</p>
@@ -1236,8 +1289,6 @@ export default function EmployeeDailyReport({ darkMode }) {
                   </div>
                   <div className="flex flex-wrap gap-2 xl:justify-end">
                     {[
-                      ["Client", detail.client],
-                      ["Site", detail.site],
                       ["Task Type", detail.taskType],
                       ["Involvement", detail.involvement],
                     ].map(([label, value]) => (
@@ -1251,7 +1302,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <TaskItemsDisplay title="Task description" items={detail.taskItems} fallback={detail.taskDescription} darkMode={darkMode} />
+                  <TaskItemsDisplay title="Task description" items={detail.taskItems} fallback={detail.taskDescription} darkMode={darkMode} showStatus />
                   <TaskItemsDisplay title="Waiting / tomorrow plan" items={detail.waitingTaskItems} fallback={detail.waitingTaskDescription} darkMode={darkMode} />
                   <div className={`rounded-[22px] p-5 md:col-span-2 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
                     <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>Note</p>

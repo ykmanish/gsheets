@@ -836,8 +836,6 @@ export default function EmployeeDailyReport({ darkMode }) {
   const userStorageId = data?.currentUserId || "me";
   const draftStoragePrefix = `employee-daily-report-draft:${userStorageId}:${todayInput()}`;
   const draftStorageKey = activeDraftKey || `${draftStoragePrefix}:new`;
-  const prefsStorageKey = `employee-daily-report-prefs:${userStorageId}`;
-  const prefsLoadedRef = useRef(false);
 
   async function load() {
     try {
@@ -849,14 +847,12 @@ export default function EmployeeDailyReport({ darkMode }) {
       const result = await api(`/employee-daily-report?${params.toString()}`);
       setData(result);
       setSheetInput(result.profile?.sheetUrl || "");
-      const preferenceKey = `employee-daily-report-prefs:${result.currentUserId || "me"}`;
-      const storedPrefs = safeJsonParse(window.localStorage.getItem(preferenceKey), null);
+      const storedPrefs = result.profile?.taskPreferences || {};
       setCustomPrefs({
         useCustomOnly: Boolean(storedPrefs?.useCustomOnly),
         sites: uniqueClean(storedPrefs?.sites || []),
         categories: uniqueClean(storedPrefs?.categories || []),
       });
-      prefsLoadedRef.current = true;
       setForm((current) => ({ ...current, department: current.department || result.profile?.department || "" }));
     } catch (error) {
       toast.error(error.message || "Could not load daily reports");
@@ -869,11 +865,6 @@ export default function EmployeeDailyReport({ darkMode }) {
     const timeoutId = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(timeoutId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!data?.currentUserId || !prefsLoadedRef.current) return;
-    window.localStorage.setItem(prefsStorageKey, JSON.stringify(customPrefs));
-  }, [customPrefs, data?.currentUserId, prefsStorageKey]);
 
   useEffect(() => {
     if (!formOpen || draftChoiceOpen || submitting || !draftStorageKey) return undefined;
@@ -942,23 +933,38 @@ export default function EmployeeDailyReport({ darkMode }) {
     setPendingDraft(null);
   }
 
+  function saveCustomPreferences(nextPrefs, options = {}) {
+    const normalized = {
+      useCustomOnly: Boolean(nextPrefs.useCustomOnly),
+      sites: uniqueClean(nextPrefs.sites || []),
+      categories: uniqueClean(nextPrefs.categories || []),
+    };
+    setCustomPrefs(normalized);
+    void api("/employee-daily-report/preferences", { method: "PUT", body: JSON.stringify(normalized) })
+      .then((result) => {
+        if (result.preferences) setCustomPrefs({
+          useCustomOnly: Boolean(result.preferences.useCustomOnly),
+          sites: uniqueClean(result.preferences.sites || []),
+          categories: uniqueClean(result.preferences.categories || []),
+        });
+        if (options.toast) toast.success("Task options saved");
+      })
+      .catch((error) => toast.error(error.message || "Could not save task options"));
+  }
+
   function addCustomOption(type) {
     const rawValue = type === "site" ? customSiteInput : customCategoryInput;
     const value = rawValue.trim();
     if (!value) return;
-    setCustomPrefs((current) => ({
-      ...current,
-      [type === "site" ? "sites" : "categories"]: uniqueClean([...(current[type === "site" ? "sites" : "categories"] || []), value]),
-    }));
+    const key = type === "site" ? "sites" : "categories";
+    saveCustomPreferences({ ...customPrefs, [key]: uniqueClean([...(customPrefs[key] || []), value]) }, { toast: true });
     if (type === "site") setCustomSiteInput("");
     else setCustomCategoryInput("");
   }
 
   function removeCustomOption(type, value) {
-    setCustomPrefs((current) => ({
-      ...current,
-      [type === "site" ? "sites" : "categories"]: (current[type === "site" ? "sites" : "categories"] || []).filter((item) => item !== value),
-    }));
+    const key = type === "site" ? "sites" : "categories";
+    saveCustomPreferences({ ...customPrefs, [key]: (customPrefs[key] || []).filter((item) => item !== value) });
   }
 
   async function saveSheetLink() {
@@ -1383,7 +1389,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setCustomPrefs((current) => ({ ...current, useCustomOnly: !current.useCustomOnly }))}
+                        onClick={() => saveCustomPreferences({ ...customPrefs, useCustomOnly: !customPrefs.useCustomOnly })}
                         className={`h-10 rounded-full px-4 text-sm font-bold transition ${customPrefs.useCustomOnly ? "bg-[#89ed3f] text-black" : "bg-white text-black/60"}`}
                       >
                         {customPrefs.useCustomOnly ? "Using my options" : "Use all options"}

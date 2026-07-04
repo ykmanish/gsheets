@@ -474,6 +474,14 @@ function sanitizeEmployeeTaskCategories(categories = []) {
   }).slice(0, 80);
 }
 
+function sanitizeEmployeeTaskPreferences(input = {}) {
+  return {
+    useCustomOnly: Boolean(input.useCustomOnly),
+    sites: sanitizeEmployeeTaskCategories(input.sites || []),
+    categories: sanitizeEmployeeTaskCategories(input.categories || []),
+  };
+}
+
 function taskItemsToText(items = []) {
   return items.map((item) => `${item.site ? `${item.site} · ` : ""}${item.category}${item.status ? ` [${item.status}]` : ""}: ${item.description}`).join("\n");
 }
@@ -1270,6 +1278,11 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     profile: {
       department: req.user.department || "",
       taskCategories: sanitizeEmployeeTaskCategories(req.user.employeeTaskCategories || []),
+      taskPreferences: sanitizeEmployeeTaskPreferences(req.user.employeeTaskPreferences || {
+        useCustomOnly: false,
+        sites: req.user.employeeTaskSites || [],
+        categories: req.user.employeeTaskCategories || [],
+      }),
       sheetLinked: Boolean(req.user.employeeDailySpreadsheetId),
       sheetId: req.user.employeeDailySpreadsheetId || "",
       sheetUrl: employeeSheetUrl(req.user.employeeDailySpreadsheetId || ""),
@@ -1524,16 +1537,26 @@ app.get("/employee-daily-report/report", async (req, res) => {
   }
 });
 
-app.put("/employee-daily-report/categories", async (req, res) => {
+app.put("/employee-daily-report/preferences", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
-    const categories = sanitizeEmployeeTaskCategories(req.body?.categories || []);
+    const preferences = sanitizeEmployeeTaskPreferences(req.body || {});
     const db = await connectAuthDb();
-    await db.collection("users").updateOne({ _id: req.user._id }, { $set: { employeeTaskCategories: categories, updatedAt: new Date() } });
-    res.json({ success: true, categories });
+    await db.collection("users").updateOne(
+      { _id: req.user._id },
+      {
+        $set: {
+          employeeTaskPreferences: preferences,
+          employeeTaskSites: preferences.sites,
+          employeeTaskCategories: preferences.categories,
+          updatedAt: new Date(),
+        },
+      }
+    );
+    res.json({ success: true, preferences });
   } catch (error) {
-    console.error("Employee task categories update error:", error);
-    res.status(500).json({ error: "Could not update task categories" });
+    console.error("Employee task preferences update error:", error);
+    res.status(500).json({ error: "Could not update task preferences" });
   }
 });
 

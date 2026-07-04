@@ -100,6 +100,23 @@ function fieldValue(value, other) {
   return value === "__other" ? other : value;
 }
 
+function uniqueClean(values = []) {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
+function safeJsonParse(value, fallback = null) {
+  try {
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function formatDraftTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 function ThreeDotLoader({ className = "" }) {
   return (
     <span className={`inline-flex items-center gap-1 ${className}`} aria-label="Loading">
@@ -748,6 +765,18 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [detail, setDetail] = useState(null);
   const [detailClosing, setDetailClosing] = useState(false);
   const [detailExpanded, setDetailExpanded] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [editingReport, setEditingReport] = useState(false);
+  const [draftChoiceOpen, setDraftChoiceOpen] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState(null);
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
+  const [customPrefs, setCustomPrefs] = useState({ useCustomOnly: false, sites: [], categories: [] });
+  const [customSiteInput, setCustomSiteInput] = useState("");
+  const [customCategoryInput, setCustomCategoryInput] = useState("");
+  const [sheetInput, setSheetInput] = useState("");
+  const [sheetSaving, setSheetSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [refreshingToday, setRefreshingToday] = useState(false);
 
   const closeFormDrawer = useCallback(() => {
     setFormClosing(true);
@@ -755,6 +784,8 @@ export default function EmployeeDailyReport({ darkMode }) {
       setFormOpen(false);
       setFormClosing(false);
       setFormExpanded(false);
+      setDraftChoiceOpen(false);
+      setPendingDraft(null);
     }, 280);
   }, []);
 
@@ -790,15 +821,13 @@ export default function EmployeeDailyReport({ darkMode }) {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [closeDetailDrawer, detail]);
-  const [form, setForm] = useState(emptyForm);
-  const [editingReport, setEditingReport] = useState(false);
-  const [sheetInput, setSheetInput] = useState("");
-  const [sheetSaving, setSheetSaving] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [refreshingToday, setRefreshingToday] = useState(false);
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe7e4] bg-white";
   const softPanel = darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white";
+  const userStorageId = data?.currentUserId || "me";
+  const draftStorageKey = `employee-daily-report-draft:${userStorageId}:${todayInput()}`;
+  const prefsStorageKey = `employee-daily-report-prefs:${userStorageId}`;
+  const prefsLoadedRef = useRef(false);
 
   async function load() {
     try {
@@ -810,6 +839,14 @@ export default function EmployeeDailyReport({ darkMode }) {
       const result = await api(`/employee-daily-report?${params.toString()}`);
       setData(result);
       setSheetInput(result.profile?.sheetUrl || "");
+      const preferenceKey = `employee-daily-report-prefs:${result.currentUserId || "me"}`;
+      const storedPrefs = safeJsonParse(window.localStorage.getItem(preferenceKey), null);
+      setCustomPrefs({
+        useCustomOnly: Boolean(storedPrefs?.useCustomOnly),
+        sites: uniqueClean(storedPrefs?.sites || []),
+        categories: uniqueClean(storedPrefs?.categories || []),
+      });
+      prefsLoadedRef.current = true;
       setForm((current) => ({ ...current, department: current.department || result.profile?.department || "" }));
     } catch (error) {
       toast.error(error.message || "Could not load daily reports");
@@ -823,6 +860,21 @@ export default function EmployeeDailyReport({ darkMode }) {
     return () => window.clearTimeout(timeoutId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!data?.currentUserId || !prefsLoadedRef.current) return;
+    window.localStorage.setItem(prefsStorageKey, JSON.stringify(customPrefs));
+  }, [customPrefs, data?.currentUserId, prefsStorageKey]);
+
+  useEffect(() => {
+    if (!formOpen || draftChoiceOpen || submitting || editingReport) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      const savedAt = new Date().toISOString();
+      window.localStorage.setItem(draftStorageKey, JSON.stringify({ form, savedAt }));
+      setLastDraftSavedAt(savedAt);
+    }, 450);
+    return () => window.clearTimeout(timeoutId);
+  }, [draftChoiceOpen, draftStorageKey, editingReport, form, formOpen, submitting]);
+
   function openForm() {
     if (!data?.profile?.sheetLinked) {
       toast.error("Link your Google Sheet before filling today's report");
@@ -832,7 +884,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     setFormExpanded(false);
     const todayReport = data?.todayReport;
     setEditingReport(Boolean(todayReport));
-    setForm({
+    const baseForm = {
       ...emptyForm,
       ...(todayReport || {}),
       tomorrowPlanTick: true,
@@ -840,8 +892,54 @@ export default function EmployeeDailyReport({ darkMode }) {
       waitingTaskItems: todayReport?.waitingTaskItems?.length ? todayReport.waitingTaskItems : [{ site: "", category: "", categoryOther: "", description: "" }],
       department: todayReport?.department || data?.profile?.department || "",
       carriedForwardFrom: "",
-    });
+    };
+    const storedDraft = !todayReport ? safeJsonParse(window.localStorage.getItem(draftStorageKey), null) : null;
+    setForm(baseForm);
+    setLastDraftSavedAt(storedDraft?.savedAt || "");
+    if (storedDraft?.form) {
+      setPendingDraft({ ...storedDraft, baseForm });
+      setDraftChoiceOpen(true);
+    } else {
+      setPendingDraft(null);
+      setDraftChoiceOpen(false);
+    }
     setFormOpen(true);
+  }
+
+  function continueDraft() {
+    if (pendingDraft?.form) {
+      setForm({ ...emptyForm, ...pendingDraft.form, tomorrowPlanTick: true });
+      setLastDraftSavedAt(pendingDraft.savedAt || "");
+    }
+    setDraftChoiceOpen(false);
+    setPendingDraft(null);
+  }
+
+  function startFreshDraft() {
+    window.localStorage.removeItem(draftStorageKey);
+    setForm(pendingDraft?.baseForm || { ...emptyForm, department: data?.profile?.department || "", tomorrowPlanTick: true });
+    setLastDraftSavedAt("");
+    setDraftChoiceOpen(false);
+    setPendingDraft(null);
+  }
+
+  function addCustomOption(type) {
+    const rawValue = type === "site" ? customSiteInput : customCategoryInput;
+    const value = rawValue.trim();
+    if (!value) return;
+    setCustomPrefs((current) => ({
+      ...current,
+      [type === "site" ? "sites" : "categories"]: uniqueClean([...(current[type === "site" ? "sites" : "categories"] || []), value]),
+    }));
+    if (type === "site") setCustomSiteInput("");
+    else setCustomCategoryInput("");
+  }
+
+  function removeCustomOption(type, value) {
+    setCustomPrefs((current) => ({
+      ...current,
+      [type === "site" ? "sites" : "categories"]: (current[type === "site" ? "sites" : "categories"] || []).filter((item) => item !== value),
+    }));
   }
 
   async function saveSheetLink() {
@@ -888,6 +986,8 @@ export default function EmployeeDailyReport({ darkMode }) {
         waitingTaskItems,
       };
       await api("/employee-daily-report", { method: editingReport ? "PUT" : "POST", body: JSON.stringify(payload) });
+      window.localStorage.removeItem(draftStorageKey);
+      setLastDraftSavedAt("");
       toast.success(editingReport ? "Today’s report updated" : "Daily report submitted");
       setConfettiActive(true);
       closeFormDrawer();
@@ -943,6 +1043,8 @@ export default function EmployeeDailyReport({ darkMode }) {
 
   const reports = data?.reports || [];
   const options = data?.options || { departments: [], taskTypes: [], taskStatuses: [], involvements: [] };
+  const formSites = customPrefs.useCustomOnly ? customPrefs.sites : uniqueClean([...(options.sites || []), ...customPrefs.sites]);
+  const formCategories = customPrefs.useCustomOnly ? customPrefs.categories : uniqueClean([...(options.taskTypes || []), ...customPrefs.categories]);
   const reportUsers = data?.reportUsers || [];
   const todaySubmissionStatus = data?.todaySubmissionStatus || [];
   const filteredTodayStatus = todaySubmissionStatus.filter((item) => {
@@ -1221,12 +1323,11 @@ export default function EmployeeDailyReport({ darkMode }) {
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
                   <div>
                     <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">DAILY REPORT</span>
-                    <h4 className={`mt-4 text-2xl small text-black dark:text-white font-bold leading-tight ${darkMode ? "text-white" : "text-black"}`}>What did you work on today?</h4>
-                    <p className={`mt-3 text-xs leading-5 ${darkMode ? "text-white/55" : "text-black/50"}`}>Keep the update clear and complete. Today&apos;s report stays editable until the date changes.</p>
                   </div>
                   <div className="mt-8 space-y-3">
                     <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Department</p><p className="mt-1 text-sm font-bold">{data?.profile?.department || "Required once"}</p></div>
                     <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Status</p><p className="mt-1 text-sm font-bold text-[#4b9b16]">{data?.todaySubmitted ? "Already filled" : "Ready to submit"}</p></div>
+                    <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Draft</p><p className="mt-1 text-sm font-bold">{lastDraftSavedAt ? `Saved ${formatDraftTime(lastDraftSavedAt)}` : "Autosave ready"}</p></div>
                   </div>
                 </div>
                 <div className={`flex shrink-0 gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
@@ -1241,6 +1342,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Task entry</p>
                     <h4 className={`mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-black"}`}>Fill today&apos;s report</h4>
+                    <p className={`mt-1 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{lastDraftSavedAt ? `Draft autosaved at ${formatDraftTime(lastDraftSavedAt)}` : "Draft autosaves as you type"}</p>
                   </div>
                   <span className="rounded-md bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold text-[#4b9b16]">EDITABLE TODAY</span>
                 </div>
@@ -1254,11 +1356,50 @@ export default function EmployeeDailyReport({ darkMode }) {
                     </div>
                   )}
                   <div><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Involvement</label><SearchableSelect darkMode={false} value={form.involvement} onChange={(value) => setForm((current) => ({ ...current, involvement: value }))} options={options.involvements} placeholder="Choose involvement" />{form.involvement === "__other" && <input required value={form.involvementOther} onChange={(event) => setForm((current) => ({ ...current, involvementOther: event.target.value }))} placeholder="Enter involvement" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 outline-none" />}</div>
+                  <div className="md:col-span-2 rounded-[22px] border border-black/10 bg-[#f8f7f3] p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-black/55">My saved task options</p>
+                        <p className="mt-1 text-xs text-black/45">Save your own sites/categories. Turn on custom-only to show only your saved list in dropdowns.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCustomPrefs((current) => ({ ...current, useCustomOnly: !current.useCustomOnly }))}
+                        className={`h-10 rounded-full px-4 text-sm font-bold transition ${customPrefs.useCustomOnly ? "bg-[#89ed3f] text-black" : "bg-white text-black/60"}`}
+                      >
+                        {customPrefs.useCustomOnly ? "Using my options" : "Use all options"}
+                      </button>
+                    </div>
+                    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">Custom sites</label>
+                        <div className="flex gap-2">
+                          <input value={customSiteInput} onChange={(event) => setCustomSiteInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("site"); } }} placeholder="Add site name" className="h-11 min-w-0 flex-1 rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none" />
+                          <button type="button" onClick={() => addCustomOption("site")} className="h-11 rounded-2xl bg-black px-4 text-sm font-bold text-white">Save</button>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {customPrefs.sites.map((site) => <button key={site} type="button" onClick={() => removeCustomOption("site", site)} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black/70 hover:bg-red-50 hover:text-red-600">{site} ×</button>)}
+                          {!customPrefs.sites.length && <span className="text-xs text-black/40">No custom sites saved yet.</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">Custom categories</label>
+                        <div className="flex gap-2">
+                          <input value={customCategoryInput} onChange={(event) => setCustomCategoryInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("category"); } }} placeholder="Add category name" className="h-11 min-w-0 flex-1 rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none" />
+                          <button type="button" onClick={() => addCustomOption("category")} className="h-11 rounded-2xl bg-black px-4 text-sm font-bold text-white">Save</button>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {customPrefs.categories.map((category) => <button key={category} type="button" onClick={() => removeCustomOption("category", category)} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black/70 hover:bg-red-50 hover:text-red-600">{category} ×</button>)}
+                          {!customPrefs.categories.length && <span className="text-xs text-black/40">No custom categories saved yet.</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   <TaskRowsEditor
                     title="Task description"
                     rows={form.taskItems}
-                    categories={options.taskTypes}
-                    sites={options.sites || []}
+                    categories={formCategories}
+                    sites={formSites}
                     statuses={options.taskStatuses}
                     showStatus
                     required
@@ -1267,8 +1408,8 @@ export default function EmployeeDailyReport({ darkMode }) {
                   <TaskRowsEditor
                     title="Tasks in waiting / tomorrow plan"
                     rows={form.waitingTaskItems}
-                    categories={options.taskTypes}
-                    sites={options.sites || []}
+                    categories={formCategories}
+                    sites={formSites}
                     onRowsChange={(rows) => setForm((current) => ({ ...current, waitingTaskItems: rows }))}
                   />
                   <div className="md:col-span-2"><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Note</label><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} rows={3} placeholder="Any extra note..." className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none" /></div>
@@ -1277,6 +1418,21 @@ export default function EmployeeDailyReport({ darkMode }) {
               </div>
             </div>
           </form>
+          {draftChoiceOpen && (
+            <div className="absolute inset-0 z-[60] grid place-items-center bg-black/20 p-4">
+              <div className={`w-full max-w-md rounded-[28px] p-5 shadow-2xl ${darkMode ? "bg-[#181a20] text-white" : "bg-white text-black"}`} onMouseDown={(event) => event.stopPropagation()}>
+                <span className="rounded-md bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#4b9b16]">Draft detected</span>
+                <h3 className="mt-4 text-2xl font-bold">Continue your saved report?</h3>
+                <p className={`mt-2 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
+                  A local draft was saved{pendingDraft?.savedAt ? ` at ${formatDraftTime(pendingDraft.savedAt)}` : ""}. Continue from it or start a fresh report for today.
+                </p>
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                  <button type="button" onClick={continueDraft} className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-bold text-black">Continue draft</button>
+                  <button type="button" onClick={startFreshDraft} className={`h-11 flex-1 rounded-full border text-sm font-bold ${darkMode ? "border-white/15 text-white" : "border-black/15 text-black"}`}>Start new</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

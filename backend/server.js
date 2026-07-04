@@ -1099,6 +1099,8 @@ async function updateEmployeeReportInSheet({ user, report, taskItems, waitingTas
     throw missing;
   }
   const existingReportId = projectText(appRows[appRowIndex][0]) || report.reportId;
+  const previousTaskItems = parseEmployeeJsonItems(appRows[appRowIndex][13]);
+  const previousWaitingTaskItems = parseEmployeeJsonItems(appRows[appRowIndex][14]);
   const appValues = [[
     existingReportId,
     report.userId,
@@ -1127,14 +1129,49 @@ async function updateEmployeeReportInSheet({ user, report, taskItems, waitingTas
   const existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000` });
   const values = existing.data.values || [];
   const columns = findEmployeeTemplateColumns(values);
-  const occupiedRows = values.map((row, index) => ({ row, rowNumber: index + 1 })).filter(({ row, rowNumber }) => rowNumber > 1 && (
-    projectText(row[(columns.reportDate || 0) - 1]) === report.reportDate ||
-    projectText(row[(columns.taskDescription || 0) - 1]) ||
-    projectText(row[(columns.waitingDescription || 0) - 1])
-  ));
-  const startRow = occupiedRows[0]?.rowNumber || findNextEmployeeTemplateRow(values, columns);
+  const previousRowCount = Math.max(previousTaskItems.length, previousWaitingTaskItems.length, 1);
+  const previousRowMatches = values.map((row, index) => ({ row, rowNumber: index + 1 })).filter(({ row, rowNumber }) => {
+    if (rowNumber <= 1) return false;
+    const site = projectText(row[(columns.site || 0) - 1]);
+    const category = projectText(row[(columns.taskType || 0) - 1]);
+    const description = projectText(row[(columns.taskDescription || 0) - 1]);
+    const status = projectText(row[(columns.taskStatus || 0) - 1]);
+    const waitingDescription = projectText(row[(columns.waitingDescription || 0) - 1]);
+    return previousTaskItems.some((item) => (
+      projectText(item.description) === description &&
+      (!projectText(item.category) || projectText(item.category) === category) &&
+      (!projectText(item.site) || projectText(item.site) === site) &&
+      (!projectText(item.status) || projectText(item.status) === status)
+    )) || previousWaitingTaskItems.some((item) => (
+      projectText(item.description) === waitingDescription &&
+      (!projectText(item.site) || projectText(item.site) === site)
+    ));
+  });
+  const matchedStartRow = previousRowMatches[0]?.rowNumber || null;
+  const startRow = matchedStartRow || findNextEmployeeTemplateRow(values, columns);
   const rowCount = Math.max(taskItems.length, waitingTaskItems.length, 1);
-  const clearThrough = Math.max(startRow + rowCount - 1, occupiedRows.at(-1)?.rowNumber || startRow);
+  if (matchedStartRow && rowCount > previousRowCount) {
+    const rowsToInsert = rowCount - previousRowCount;
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          insertDimension: {
+            range: {
+              sheetId: dailyTab.tabId,
+              dimension: "ROWS",
+              startIndex: startRow - 1 + previousRowCount,
+              endIndex: startRow - 1 + previousRowCount + rowsToInsert,
+            },
+            inheritFromBefore: true,
+          },
+        }],
+      },
+    }).catch((error) => {
+      console.warn("Employee report row insert skipped:", error.message);
+    });
+  }
+  const clearThrough = Math.max(startRow + rowCount - 1, startRow + previousRowCount - 1, previousRowMatches.at(-1)?.rowNumber || startRow);
   const clearRanges = [columns.client, columns.site, columns.reportDate, columns.taskType, columns.taskDescription, columns.taskStatus, columns.involvement, columns.waitingDescription, columns.tomorrowTick, columns.note]
     .filter(Boolean)
     .map((column) => `${escapeSheetName(dailyTab.tabName)}!${columnName(column)}${startRow}:${columnName(column)}${clearThrough}`);

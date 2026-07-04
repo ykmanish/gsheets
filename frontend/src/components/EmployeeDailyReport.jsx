@@ -117,6 +117,13 @@ function formatDraftTime(value) {
   return new Date(value).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+function hasEmployeeDraftContent(form = {}) {
+  const hasText = [form.involvement, form.involvementOther, form.note].some((value) => String(value || "").trim());
+  const hasRows = [...(Array.isArray(form.taskItems) ? form.taskItems : []), ...(Array.isArray(form.waitingTaskItems) ? form.waitingTaskItems : [])]
+    .some((item) => [item?.site, item?.siteOther, item?.category, item?.categoryOther, item?.status, item?.statusOther, item?.description].some((value) => String(value || "").trim()));
+  return Boolean(hasText || hasRows);
+}
+
 function ThreeDotLoader({ className = "" }) {
   return (
     <span className={`inline-flex items-center gap-1 ${className}`} aria-label="Loading">
@@ -767,6 +774,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [detailExpanded, setDetailExpanded] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingReport, setEditingReport] = useState(false);
+  const [activeDraftKey, setActiveDraftKey] = useState("");
   const [draftChoiceOpen, setDraftChoiceOpen] = useState(false);
   const [pendingDraft, setPendingDraft] = useState(null);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
@@ -786,6 +794,7 @@ export default function EmployeeDailyReport({ darkMode }) {
       setFormExpanded(false);
       setDraftChoiceOpen(false);
       setPendingDraft(null);
+      setActiveDraftKey("");
     }, 280);
   }, []);
 
@@ -825,7 +834,8 @@ export default function EmployeeDailyReport({ darkMode }) {
   const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe7e4] bg-white";
   const softPanel = darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white";
   const userStorageId = data?.currentUserId || "me";
-  const draftStorageKey = `employee-daily-report-draft:${userStorageId}:${todayInput()}`;
+  const draftStoragePrefix = `employee-daily-report-draft:${userStorageId}:${todayInput()}`;
+  const draftStorageKey = activeDraftKey || `${draftStoragePrefix}:new`;
   const prefsStorageKey = `employee-daily-report-prefs:${userStorageId}`;
   const prefsLoadedRef = useRef(false);
 
@@ -866,14 +876,19 @@ export default function EmployeeDailyReport({ darkMode }) {
   }, [customPrefs, data?.currentUserId, prefsStorageKey]);
 
   useEffect(() => {
-    if (!formOpen || draftChoiceOpen || submitting || editingReport) return undefined;
+    if (!formOpen || draftChoiceOpen || submitting || !draftStorageKey) return undefined;
     const timeoutId = window.setTimeout(() => {
+      if (!hasEmployeeDraftContent(form)) {
+        window.localStorage.removeItem(draftStorageKey);
+        setLastDraftSavedAt("");
+        return;
+      }
       const savedAt = new Date().toISOString();
       window.localStorage.setItem(draftStorageKey, JSON.stringify({ form, savedAt }));
       setLastDraftSavedAt(savedAt);
     }, 450);
     return () => window.clearTimeout(timeoutId);
-  }, [draftChoiceOpen, draftStorageKey, editingReport, form, formOpen, submitting]);
+  }, [draftChoiceOpen, draftStorageKey, form, formOpen, submitting]);
 
   function openForm() {
     if (!data?.profile?.sheetLinked) {
@@ -884,6 +899,8 @@ export default function EmployeeDailyReport({ darkMode }) {
     setFormExpanded(false);
     const todayReport = data?.todayReport;
     setEditingReport(Boolean(todayReport));
+    const nextDraftKey = `${draftStoragePrefix}:${todayReport?.id ? `edit:${todayReport.id}` : "new"}`;
+    setActiveDraftKey(nextDraftKey);
     const baseForm = {
       ...emptyForm,
       ...(todayReport || {}),
@@ -893,11 +910,13 @@ export default function EmployeeDailyReport({ darkMode }) {
       department: todayReport?.department || data?.profile?.department || "",
       carriedForwardFrom: "",
     };
-    const storedDraft = !todayReport ? safeJsonParse(window.localStorage.getItem(draftStorageKey), null) : null;
+    const storedDraft = safeJsonParse(window.localStorage.getItem(nextDraftKey), null);
+    const usableDraft = storedDraft?.form && hasEmployeeDraftContent(storedDraft.form) ? storedDraft : null;
+    if (storedDraft && !usableDraft) window.localStorage.removeItem(nextDraftKey);
     setForm(baseForm);
-    setLastDraftSavedAt(storedDraft?.savedAt || "");
-    if (storedDraft?.form) {
-      setPendingDraft({ ...storedDraft, baseForm });
+    setLastDraftSavedAt(usableDraft?.savedAt || "");
+    if (usableDraft?.form) {
+      setPendingDraft({ ...usableDraft, baseForm });
       setDraftChoiceOpen(true);
     } else {
       setPendingDraft(null);
@@ -986,7 +1005,7 @@ export default function EmployeeDailyReport({ darkMode }) {
         waitingTaskItems,
       };
       await api("/employee-daily-report", { method: editingReport ? "PUT" : "POST", body: JSON.stringify(payload) });
-      window.localStorage.removeItem(draftStorageKey);
+      if (draftStorageKey) window.localStorage.removeItem(draftStorageKey);
       setLastDraftSavedAt("");
       toast.success(editingReport ? "Today’s report updated" : "Daily report submitted");
       setConfettiActive(true);

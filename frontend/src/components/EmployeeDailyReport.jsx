@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarCheck, Check, CheckCircle2, Clock3, Eye, FileText, Maximize2, Minimize2, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Eye, FileText, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 import { useClickOutside } from "./ui";
@@ -114,21 +114,65 @@ function ThreeDotLoader({ className = "" }) {
   );
 }
 
-function SearchableSelect({ darkMode, value, onChange, options = [], placeholder, allowOther = true }) {
+function taskStatusMeta(status, darkMode = false) {
+  const value = String(status || "").toLowerCase();
+  if (value.includes("complete")) return {
+    Icon: CheckCircle2,
+    selected: darkMode ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100" : "border-emerald-200 bg-emerald-50 text-emerald-700",
+    option: darkMode ? "text-emerald-100 hover:bg-emerald-400/10" : "text-emerald-700 hover:bg-emerald-50",
+    active: "bg-emerald-500 text-white",
+    dot: "bg-emerald-500",
+  };
+  if (value.includes("halt")) return {
+    Icon: PauseCircle,
+    selected: darkMode ? "border-amber-400/20 bg-amber-400/10 text-amber-100" : "border-amber-200 bg-amber-50 text-amber-700",
+    option: darkMode ? "text-amber-100 hover:bg-amber-400/10" : "text-amber-700 hover:bg-amber-50",
+    active: "bg-amber-500 text-white",
+    dot: "bg-amber-500",
+  };
+  if (value.includes("suspend")) return {
+    Icon: AlertTriangle,
+    selected: darkMode ? "border-orange-400/20 bg-orange-400/10 text-orange-100" : "border-orange-200 bg-orange-50 text-orange-700",
+    option: darkMode ? "text-orange-100 hover:bg-orange-400/10" : "text-orange-700 hover:bg-orange-50",
+    active: "bg-orange-500 text-white",
+    dot: "bg-orange-500",
+  };
+  if (value.includes("cancel")) return {
+    Icon: Ban,
+    selected: darkMode ? "border-red-400/20 bg-red-400/10 text-red-100" : "border-red-200 bg-red-50 text-red-700",
+    option: darkMode ? "text-red-100 hover:bg-red-400/10" : "text-red-700 hover:bg-red-50",
+    active: "bg-red-500 text-white",
+    dot: "bg-red-500",
+  };
+  return {
+    Icon: Clock3,
+    selected: darkMode ? "border-sky-400/20 bg-sky-400/10 text-sky-100" : "border-sky-200 bg-sky-50 text-sky-700",
+    option: darkMode ? "text-sky-100 hover:bg-sky-400/10" : "text-sky-700 hover:bg-sky-50",
+    active: "bg-[#171714] text-white",
+    dot: "bg-sky-500",
+  };
+}
+
+function SearchableSelect({ darkMode, value, onChange, options = [], placeholder, allowOther = true, variant = "default" }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   useClickOutside(ref, () => setOpen(false));
   const selectedLabel = value === "__other" ? "Other" : value;
   const filtered = options.filter((option) => option.toLowerCase().includes(query.trim().toLowerCase()));
+  const selectedStatus = variant === "status" && selectedLabel ? taskStatusMeta(selectedLabel, darkMode) : null;
+  const SelectedIcon = selectedStatus?.Icon;
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`flex h-12 w-full items-center justify-between rounded-2xl border px-4 text-left text-sm ${darkMode ? "border-white/10 bg-white/[0.035] text-white" : "border-black/10 bg-white text-black"}`}
+        className={`flex h-12 w-full items-center justify-between rounded-2xl border px-4 text-left text-sm transition ${selectedStatus ? selectedStatus.selected : darkMode ? "border-white/10 bg-white/[0.035] text-white" : "border-black/10 bg-white text-black"}`}
       >
-        <span className={selectedLabel ? "" : darkMode ? "text-white/35" : "text-black/35"}>{selectedLabel || placeholder}</span>
+        <span className={`flex min-w-0 items-center gap-2 ${selectedLabel ? "" : darkMode ? "text-white/35" : "text-black/35"}`}>
+          {SelectedIcon && <SelectedIcon className="h-4 w-4 shrink-0" />}
+          <span className="truncate">{selectedLabel || placeholder}</span>
+        </span>
         <Search className="h-4 w-4 opacity-45" />
       </button>
       {open && (
@@ -140,23 +184,30 @@ function SearchableSelect({ darkMode, value, onChange, options = [], placeholder
             className={`mb-2 h-10 w-full rounded-xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white"}`}
           />
           <div className="max-h-56 overflow-y-auto">
-            {filtered.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => { onChange(option); setOpen(false); setQuery(""); }}
-                className={`block w-full rounded-xl px-3 py-2 text-left text-sm ${option === value ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
-              >
-                {option}
-              </button>
-            ))}
+            {filtered.map((option) => {
+              const meta = variant === "status" ? taskStatusMeta(option, darkMode) : null;
+              const OptionIcon = meta?.Icon;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => { onChange(option); setOpen(false); setQuery(""); }}
+                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${option === value ? meta?.active || (darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white") : meta?.option || (darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]")}`}
+                >
+                  {OptionIcon ? <OptionIcon className="h-4 w-4 shrink-0" /> : null}
+                  {!OptionIcon && variant === "status" ? <span className={`h-2 w-2 rounded-full ${meta?.dot || "bg-slate-400"}`} /> : null}
+                  <span>{option}</span>
+                </button>
+              );
+            })}
             {allowOther && (
               <button
                 type="button"
                 onClick={() => { onChange("__other"); setOpen(false); setQuery(""); }}
-                className={`block w-full rounded-xl px-3 py-2 text-left text-sm ${value === "__other" ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
+                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${value === "__other" ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
               >
-                Other
+                {variant === "status" && <span className="grid h-4 w-4 place-items-center rounded-full bg-slate-200 text-[10px] text-slate-700">+</span>}
+                <span>Other</span>
               </button>
             )}
           </div>
@@ -203,7 +254,7 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], sh
               {showStatus && (
                 <div className="order-3">
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Task status</p>
-                  <SearchableSelect darkMode={false} value={row.status} onChange={(value) => updateRow(index, { status: value })} options={statuses.filter((status) => status !== "Other")} placeholder="Choose task status" allowOther />
+                  <SearchableSelect darkMode={false} value={row.status} onChange={(value) => updateRow(index, { status: value })} options={statuses.filter((status) => status !== "Other")} placeholder="Choose task status" allowOther variant="status" />
                   {row.status === "__other" && <input required={required} value={row.statusOther || ""} onChange={(event) => updateRow(index, { statusOther: event.target.value })} placeholder="Enter task status" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none" />}
                   {required && index === 0 && !row.status && <input tabIndex={-1} autoComplete="off" className="pointer-events-none h-0 w-0 opacity-0" required value="" onChange={() => {}} />}
                 </div>

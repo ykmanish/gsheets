@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Eye, FileText, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Eye, FileText, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 import { useClickOutside } from "./ui";
@@ -88,10 +88,8 @@ function buildMonthGrid(monthDate) {
 
 const emptyForm = {
   department: "",
-  taskItems: [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", description: "" }],
-  involvement: "",
-  involvementOther: "",
-  waitingTaskItems: [{ site: "", category: "", categoryOther: "", description: "" }],
+  taskItems: [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementOther: "", description: "" }],
+  waitingTaskItems: [{ site: "", category: "", categoryOther: "", involvement: "", involvementOther: "", description: "" }],
   tomorrowPlanTick: true,
   note: "",
 };
@@ -118,9 +116,9 @@ function formatDraftTime(value) {
 }
 
 function hasEmployeeDraftContent(form = {}) {
-  const hasText = [form.involvement, form.involvementOther, form.note].some((value) => String(value || "").trim());
+  const hasText = [form.note].some((value) => String(value || "").trim());
   const hasRows = [...(Array.isArray(form.taskItems) ? form.taskItems : []), ...(Array.isArray(form.waitingTaskItems) ? form.waitingTaskItems : [])]
-    .some((item) => [item?.site, item?.siteOther, item?.category, item?.categoryOther, item?.status, item?.statusOther, item?.description].some((value) => String(value || "").trim()));
+    .some((item) => [item?.site, item?.siteOther, item?.category, item?.categoryOther, item?.status, item?.statusOther, item?.involvement, item?.involvementOther, item?.description].some((value) => String(value || "").trim()));
   return Boolean(hasText || hasRows);
 }
 
@@ -241,93 +239,168 @@ function SearchableSelect({ darkMode, value, onChange, options = [], placeholder
   );
 }
 
-function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], showStatus = false, onRowsChange, required = false }) {
+function taskNumberTone(index, darkMode = false) {
+  void index;
+  return darkMode ? "bg-[#89ed3f] text-black shadow-[#89ed3f]/15" : "bg-[#89ed3f] text-black shadow-[#89ed3f]/20";
+}
+
+function taskRowValue(row, field) {
+  if (field === "site") return row.site === "__other" ? row.siteOther : row.site;
+  if (field === "category") return row.category === "__other" ? row.categoryOther : row.category;
+  if (field === "status") return row.status === "__other" ? row.statusOther : row.status;
+  if (field === "involvement") return row.involvement === "__other" ? row.involvementOther : row.involvement;
+  return "";
+}
+
+function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], involvements = [], showStatus = false, showInvolvement = false, onRowsChange, required = false, darkMode = false }) {
+  const [expandedIndex, setExpandedIndex] = useState(0);
+  const activeExpandedIndex = Math.min(expandedIndex, Math.max(0, rows.length - 1));
+
   function updateRow(index, patch) {
     onRowsChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
   function addRow() {
-    onRowsChange([...rows, { site: "", category: "", categoryOther: "", status: "", statusOther: "", description: "" }]);
+    setExpandedIndex(rows.length);
+    onRowsChange([...rows, { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementOther: "", description: "" }]);
+  }
+  function duplicateRow(index) {
+    const source = rows[index] || {};
+    setExpandedIndex(rows.length);
+    onRowsChange([
+      ...rows,
+      {
+        site: source.site || "",
+        siteOther: source.siteOther || "",
+        category: source.category || "",
+        categoryOther: source.categoryOther || "",
+        status: source.status || "",
+        statusOther: source.statusOther || "",
+        involvement: source.involvement || "",
+        involvementOther: source.involvementOther || "",
+        description: "",
+      },
+    ]);
   }
   function removeRow(index) {
-    onRowsChange(rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", description: "" }]);
+    setExpandedIndex((current) => Math.max(0, current > index ? current - 1 : Math.min(current, rows.length - 2)));
+    onRowsChange(rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementOther: "", description: "" }]);
   }
+
+  const summaryPill = darkMode ? "bg-white/[0.055] text-white/80" : "bg-white text-black/70";
+  const summaryMuted = darkMode ? "text-white/40" : "text-black/40";
+  const expandedGridClass = showStatus && showInvolvement
+    ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+    : showStatus || showInvolvement
+      ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+      : "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]";
+
   return (
     <div className="md:col-span-2">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">{title}</label>
+        <label className={`block text-xs font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/60" : "text-black/55"}`}>{title}</label>
       </div>
       <div className="space-y-3">
-        {rows.map((row, index) => (
-          <div key={index} className="rounded-[22px] border border-black/10 bg-[#f8f7f3] p-3">
-            <div className={`grid gap-3 ${showStatus ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
-              <div className="order-1">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Site</p>
-                <SearchableSelect
-                  darkMode={false}
-                  value={row.site}
-                  onChange={(value) => updateRow(index, { site: value })}
-                  options={sites}
-                  placeholder="Choose site"
-                  allowOther
-                />
-                {row.site === "__other" && (
-                  <input required value={row.siteOther || ""} onChange={(event) => updateRow(index, { siteOther: event.target.value })} placeholder="Enter site" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none" />
-                )}
-                {required && index === 0 && !row.site && <input tabIndex={-1} autoComplete="off" className="pointer-events-none h-0 w-0 opacity-0" required value="" onChange={() => {}} />}
-              </div>
-              {showStatus && (
-                <div className="order-3">
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Task status</p>
-                  <SearchableSelect darkMode={false} value={row.status} onChange={(value) => updateRow(index, { status: value })} options={statuses.filter((status) => status !== "Other")} placeholder="Choose task status" allowOther variant="status" />
-                  {row.status === "__other" && <input required={required} value={row.statusOther || ""} onChange={(event) => updateRow(index, { statusOther: event.target.value })} placeholder="Enter task status" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none" />}
-                  {required && index === 0 && !row.status && <input tabIndex={-1} autoComplete="off" className="pointer-events-none h-0 w-0 opacity-0" required value="" onChange={() => {}} />}
+        {rows.map((row, index) => {
+          const collapsed = rows.length > 1 && activeExpandedIndex !== index;
+          return (
+            <div
+              key={index}
+              role={collapsed ? "button" : undefined}
+              tabIndex={collapsed ? 0 : undefined}
+              onClick={() => { if (collapsed) setExpandedIndex(index); }}
+              onKeyDown={(event) => { if (collapsed && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setExpandedIndex(index); } }}
+              className={`rounded-[22px] p-3 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? "cursor-pointer hover:-translate-y-0.5" : ""} ${darkMode ? "border-white/10 bg-[#1c1f24]" : "border-black/10 bg-[#f8f7f3]"}`}
+            >
+              {collapsed ? (
+                <div className={`grid items-center gap-3 ${expandedGridClass} animate-[mrn-drawer-in_260ms_cubic-bezier(0.22,1,0.36,1)]`}>
+                  {[
+                    ["Site", taskRowValue(row, "site")],
+                    ["Category", taskRowValue(row, "category")],
+                    ...(showInvolvement ? [["Involvement", taskRowValue(row, "involvement")]] : []),
+                    ...(showStatus ? [["Task status", taskRowValue(row, "status")]] : []),
+                  ].map(([label, value]) => {
+                    const statusMeta = label === "Task status" && value ? taskStatusMeta(value, darkMode) : null;
+                    const StatusIcon = statusMeta?.Icon;
+                    return (
+                    <div key={label} className={`min-w-0 rounded-2xl  px-4 py-3 ${statusMeta ? statusMeta.selected : `border-transparent ${summaryPill}`}`}>
+                      <p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${summaryMuted}`}>{label}</p>
+                      <p className="mt-1 flex items-center gap-2 truncate text-sm font-semibold">
+                        {StatusIcon ? <StatusIcon className="h-4 w-4 shrink-0" /> : null}
+                        <span className="truncate">{value || "Not selected"}</span>
+                      </p>
+                    </div>
+                    );
+                  })}
+                  <div className="flex items-center justify-end gap-3">
+                    <span className={`inline-flex h-12 min-w-11 items-center justify-center rounded-2xl px-4 text-sm font-black shadow-lg ${taskNumberTone(index, darkMode)}`}>
+                      Task {index + 1}
+                    </span>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); duplicateRow(index); }} className={`grid h-12 w-12 place-items-center rounded-xl transition ${darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/55 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} title="Duplicate task"><Copy className="h-4 w-4" /></button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); removeRow(index); }} className={`grid h-12 w-12 place-items-center rounded-xl ${darkMode ? "bg-red-500/10 text-red-300 hover:bg-red-500/15" : "bg-red-50 text-red-600 hover:bg-red-100"}`}><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                </div>
+              ) : (
+                <div className={`grid gap-3 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${expandedGridClass}`}>
+                  <div className="order-1">
+                    <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Site</p>
+                    <SearchableSelect darkMode={darkMode} value={row.site} onChange={(value) => updateRow(index, { site: value })} options={sites} placeholder="Choose site" allowOther />
+                    {row.site === "__other" && (
+                      <input required value={row.siteOther || ""} onChange={(event) => updateRow(index, { siteOther: event.target.value })} placeholder="Enter site" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                    )}
+                    {required && index === 0 && !row.site && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
+                  </div>
+                  {showStatus && (
+                    <div className="order-4">
+                      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Task status</p>
+                      <SearchableSelect darkMode={darkMode} value={row.status} onChange={(value) => updateRow(index, { status: value })} options={statuses.filter((status) => status !== "Other")} placeholder="Choose task status" allowOther variant="status" />
+                      {row.status === "__other" && <input required={required} value={row.statusOther || ""} onChange={(event) => updateRow(index, { statusOther: event.target.value })} placeholder="Enter task status" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />}
+                      {required && index === 0 && !row.status && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
+                    </div>
+                  )}
+                  {showInvolvement && (
+                    <div className="order-3">
+                      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Involvement</p>
+                      <SearchableSelect darkMode={darkMode} value={row.involvement} onChange={(value) => updateRow(index, { involvement: value })} options={involvements.filter((item) => item !== "Other")} placeholder="Choose involvement" allowOther />
+                      {row.involvement === "__other" && <input required={required} value={row.involvementOther || ""} onChange={(event) => updateRow(index, { involvementOther: event.target.value })} placeholder="Enter involvement" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />}
+                      {required && index === 0 && !row.involvement && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
+                    </div>
+                  )}
+                  <div className="order-2">
+                    <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Category</p>
+                    <SearchableSelect darkMode={darkMode} value={row.category} onChange={(value) => updateRow(index, { category: value })} options={categories.filter((category) => category !== "Other")} placeholder="Choose category" allowOther />
+                    {row.category === "__other" && (
+                      <input required={required && index === 0} value={row.categoryOther || ""} onChange={(event) => updateRow(index, { categoryOther: event.target.value })} placeholder="Enter category" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                    )}
+                    {required && index === 0 && !row.category && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
+                  </div>
+                  <div className="order-6 lg:col-span-full">
+                    <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Description</p>
+                    <textarea required={required && index === 0} value={row.description} onChange={(event) => updateRow(index, { description: event.target.value })} rows={2} placeholder="Describe this task..." className={`min-h-12 w-full rounded-2xl border px-4 py-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                  </div>
+                  <div className="order-5 flex flex-col lg:self-start">
+                    <p className="mb-2 select-none text-[10px] font-semibold uppercase tracking-[0.12em] opacity-0">Actions</p>
+                    <div className="flex h-12 items-center justify-end gap-3">
+                      <span className={`inline-flex h-12 min-w-11 items-center justify-center rounded-2xl px-4 text-sm font-black shadow-lg ${taskNumberTone(index, darkMode)}`}>
+                        Task {index + 1}
+                      </span>
+                      <button type="button" onClick={() => duplicateRow(index)} className={`grid h-12 w-12 place-items-center rounded-xl transition ${darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/55 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} title="Duplicate task"><Copy className="h-4 w-4" /></button>
+                      <button type="button" onClick={() => removeRow(index)} className={`grid h-12 w-12 place-items-center rounded-xl ${darkMode ? "bg-red-500/10 text-red-300 hover:bg-red-500/15" : "bg-red-50 text-red-600 hover:bg-red-100"}`}><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  </div>
                 </div>
               )}
-              <div className="order-2">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Category</p>
-                <SearchableSelect
-                  darkMode={false}
-                  value={row.category}
-                  onChange={(value) => updateRow(index, { category: value })}
-                  options={categories.filter((category) => category !== "Other")}
-                  placeholder="Choose category"
-                  allowOther
-                />
-                {row.category === "__other" && (
-                  <input
-                    required={required && index === 0}
-                    value={row.categoryOther || ""}
-                    onChange={(event) => updateRow(index, { categoryOther: event.target.value })}
-                    placeholder="Enter category"
-                    className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none"
-                  />
-                )}
-                {required && index === 0 && !row.category && <input tabIndex={-1} autoComplete="off" className="pointer-events-none h-0 w-0 opacity-0" required value="" onChange={() => {}} />}
-              </div>
-              <div className="order-4 lg:col-span-full">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black/45">Description</p>
-                <textarea
-                  required={required && index === 0}
-                  value={row.description}
-                  onChange={(event) => updateRow(index, { description: event.target.value })}
-                  rows={2}
-                  placeholder="Describe this task..."
-                  className="min-h-12 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none"
-                />
-              </div>
-              <div className="order-5 flex justify-end lg:col-span-full"><button type="button" onClick={() => removeRow(index)} className="grid h-10 w-10 place-items-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100"><Trash2 className="h-4 w-4" /></button></div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="mt-3 flex justify-center">
-        <button type="button" onClick={addRow} className="inline-flex h-10 items-center gap-2 rounded-full bg-[#171714] px-4 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Add task</button>
+        <button type="button" onClick={addRow} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold ${darkMode ? "bg-[#89ed3f] text-black hover:bg-[#7dde35]" : "bg-[#171714] text-white"}`}><Plus className="h-4 w-4" /> Add task</button>
       </div>
     </div>
   );
 }
 
-function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = false }) {
+function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = false, showInvolvement = false }) {
   const visibleItems = Array.isArray(items) ? items.filter((item) => item.category || item.description) : [];
   return (
     <div className={`rounded-[22px] p-3 sm:p-5 md:col-span-2 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
@@ -340,6 +413,7 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = 
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Site</p><p className="mt-1 font-semibold break-words">{item.site || "-"}</p></div>
                   <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Category</p><p className="mt-1 font-semibold break-words">{item.category || "-"}</p></div>
+                  {showInvolvement && <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Involvement</p><p className="mt-1 font-semibold break-words">{item.involvement || "-"}</p></div>}
                   {showStatus && <div className="col-span-2"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Status</p><p className="mt-1 font-semibold">{item.status || "-"}</p></div>}
                   <div className="col-span-2 border-t border-black/[0.06] pt-3 dark:border-white/10"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Description</p><p className="mt-2 whitespace-pre-wrap break-words leading-6">{item.description || "-"}</p></div>
                 </div>
@@ -353,6 +427,7 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = 
                 <th className="w-40 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Site</th>
                 <th className="w-48 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Task Category</th>
                 {showStatus && <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Status</th>}
+                {showInvolvement && <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Involvement</th>}
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Description</th>
               </tr>
             </thead>
@@ -367,6 +442,7 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = 
                     </span>
                   </td>
                   {showStatus && <td className="px-4 py-3">{item.status || "-"}</td>}
+                  {showInvolvement && <td className="px-4 py-3">{item.involvement || "-"}</td>}
                   <td className="whitespace-pre-wrap break-words rounded-r-2xl px-5 py-3 leading-6">{item.description || "-"}</td>
                 </tr>
               ))}
@@ -779,6 +855,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [pendingDraft, setPendingDraft] = useState(null);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
   const [customPrefs, setCustomPrefs] = useState({ useCustomOnly: false, sites: [], categories: [] });
+  const [customOptionsOpen, setCustomOptionsOpen] = useState(false);
   const [customSiteInput, setCustomSiteInput] = useState("");
   const [customCategoryInput, setCustomCategoryInput] = useState("");
   const [sheetInput, setSheetInput] = useState("");
@@ -848,11 +925,13 @@ export default function EmployeeDailyReport({ darkMode }) {
       setData(result);
       setSheetInput(result.profile?.sheetUrl || "");
       const storedPrefs = result.profile?.taskPreferences || {};
-      setCustomPrefs({
+      const normalizedPrefs = {
         useCustomOnly: Boolean(storedPrefs?.useCustomOnly),
         sites: uniqueClean(storedPrefs?.sites || []),
         categories: uniqueClean(storedPrefs?.categories || []),
-      });
+      };
+      setCustomPrefs(normalizedPrefs);
+      setCustomOptionsOpen(!(normalizedPrefs.sites.length || normalizedPrefs.categories.length));
       setForm((current) => ({ ...current, department: current.department || result.profile?.department || "" }));
     } catch (error) {
       toast.error(error.message || "Could not load daily reports");
@@ -896,8 +975,8 @@ export default function EmployeeDailyReport({ darkMode }) {
       ...emptyForm,
       ...(todayReport || {}),
       tomorrowPlanTick: true,
-      taskItems: todayReport?.taskItems?.length ? todayReport.taskItems.map((item) => ({ ...item, status: item.status || todayReport.taskStatus || "" })) : [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", description: "" }],
-      waitingTaskItems: todayReport?.waitingTaskItems?.length ? todayReport.waitingTaskItems : [{ site: "", category: "", categoryOther: "", description: "" }],
+      taskItems: todayReport?.taskItems?.length ? todayReport.taskItems.map((item) => ({ ...item, status: item.status || todayReport.taskStatus || "", involvement: item.involvement || todayReport.involvement || "" })) : [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementOther: "", description: "" }],
+      waitingTaskItems: todayReport?.waitingTaskItems?.length ? todayReport.waitingTaskItems.map((item) => ({ ...item, involvement: item.involvement || todayReport.involvement || "" })) : [{ site: "", category: "", categoryOther: "", involvement: "", involvementOther: "", description: "" }],
       department: todayReport?.department || data?.profile?.department || "",
       carriedForwardFrom: "",
     };
@@ -958,6 +1037,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     if (!value) return;
     const key = type === "site" ? "sites" : "categories";
     saveCustomPreferences({ ...customPrefs, [key]: uniqueClean([...(customPrefs[key] || []), value]) }, { toast: true });
+    setCustomOptionsOpen(true);
     if (type === "site") setCustomSiteInput("");
     else setCustomCategoryInput("");
   }
@@ -965,6 +1045,12 @@ export default function EmployeeDailyReport({ darkMode }) {
   function removeCustomOption(type, value) {
     const key = type === "site" ? "sites" : "categories";
     saveCustomPreferences({ ...customPrefs, [key]: (customPrefs[key] || []).filter((item) => item !== value) });
+    setCustomOptionsOpen(true);
+  }
+
+  function clearCustomOptions() {
+    saveCustomPreferences({ ...customPrefs, sites: [], categories: [], useCustomOnly: false }, { toast: true });
+    setCustomOptionsOpen(true);
   }
 
   async function saveSheetLink() {
@@ -1000,13 +1086,15 @@ export default function EmployeeDailyReport({ darkMode }) {
       if (missingTaskSite) throw new Error("Choose a site for every task");
       const missingTaskStatus = (form.taskItems || []).some((item) => (item.category || item.categoryOther || item.description) && !fieldValue(item.status, item.statusOther).trim());
       if (missingTaskStatus) throw new Error("Choose a status for every today task");
-      const taskItems = (form.taskItems || []).map((item) => ({ site: fieldValue(item.site, item.siteOther).trim(), category: fieldValue(item.category, item.categoryOther).trim(), status: fieldValue(item.status, item.statusOther).trim(), description: item.description.trim() })).filter((item) => item.site && item.category && item.status && item.description);
-      const waitingTaskItems = (form.waitingTaskItems || []).map((item) => ({ site: fieldValue(item.site, item.siteOther).trim(), category: fieldValue(item.category, item.categoryOther).trim(), description: item.description.trim() })).filter((item) => item.site && item.category && item.description);
+      const missingTaskInvolvement = [...(form.taskItems || []), ...(form.waitingTaskItems || [])].some((item) => (item.category || item.categoryOther || item.description) && !fieldValue(item.involvement, item.involvementOther).trim());
+      if (missingTaskInvolvement) throw new Error("Choose involvement for every task");
+      const taskItems = (form.taskItems || []).map((item) => ({ site: fieldValue(item.site, item.siteOther).trim(), category: fieldValue(item.category, item.categoryOther).trim(), status: fieldValue(item.status, item.statusOther).trim(), involvement: fieldValue(item.involvement, item.involvementOther).trim(), description: item.description.trim() })).filter((item) => item.site && item.category && item.status && item.involvement && item.description);
+      const waitingTaskItems = (form.waitingTaskItems || []).map((item) => ({ site: fieldValue(item.site, item.siteOther).trim(), category: fieldValue(item.category, item.categoryOther).trim(), involvement: fieldValue(item.involvement, item.involvementOther).trim(), description: item.description.trim() })).filter((item) => item.site && item.category && item.involvement && item.description);
       const payload = {
         ...form,
         tomorrowPlanTick: true,
         department: fieldValue(form.department, form.departmentOther),
-        involvement: fieldValue(form.involvement, form.involvementOther),
+        involvement: taskItems[0]?.involvement || waitingTaskItems[0]?.involvement || "",
         taskItems,
         waitingTaskItems,
       };
@@ -1070,6 +1158,10 @@ export default function EmployeeDailyReport({ darkMode }) {
   const options = data?.options || { departments: [], taskTypes: [], taskStatuses: [], involvements: [] };
   const formSites = customPrefs.useCustomOnly ? customPrefs.sites : uniqueClean([...(options.sites || []), ...customPrefs.sites]);
   const formCategories = customPrefs.useCustomOnly ? customPrefs.categories : uniqueClean([...(options.taskTypes || []), ...customPrefs.categories]);
+  const hasCustomPreferences = Boolean(customPrefs.sites.length || customPrefs.categories.length);
+  const customOptionsVisible = customOptionsOpen || !hasCustomPreferences;
+  const sidebarSitesPreview = customPrefs.sites.slice(0, 3);
+  const sidebarCategoriesPreview = customPrefs.categories.slice(0, 3);
   const reportUsers = data?.reportUsers || [];
   const todaySubmissionStatus = data?.todaySubmissionStatus || [];
   const filteredTodayStatus = todaySubmissionStatus.filter((item) => {
@@ -1353,6 +1445,44 @@ export default function EmployeeDailyReport({ darkMode }) {
                     <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Department</p><p className="mt-1 text-sm font-bold">{data?.profile?.department || "Required once"}</p></div>
                     <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Status</p><p className="mt-1 text-sm font-bold text-[#4b9b16]">{data?.todaySubmitted ? "Already filled" : "Ready to submit"}</p></div>
                     <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Draft</p><p className="mt-1 text-sm font-bold">{lastDraftSavedAt ? `Saved ${formatDraftTime(lastDraftSavedAt)}` : "Autosave ready"}</p></div>
+                    <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Saved options</p>
+                          <p className={`mt-1 text-sm font-bold ${hasCustomPreferences ? "" : darkMode ? "text-white/55" : "text-black/50"}`}>
+                            {hasCustomPreferences ? `${customPrefs.sites.length} sites · ${customPrefs.categories.length} categories` : "No saved options"}
+                          </p>
+                        </div>
+                        {hasCustomPreferences && (
+                          <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-wide ${customPrefs.useCustomOnly ? "bg-[#89ed3f] text-black" : darkMode ? "bg-white/10 text-white/55" : "bg-white text-black/45"}`}>
+                            {customPrefs.useCustomOnly ? "Mine" : "All"}
+                          </span>
+                        )}
+                      </div>
+                      {hasCustomPreferences && (
+                        <div className="mt-3 space-y-2">
+                          {sidebarSitesPreview.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {sidebarSitesPreview.map((site) => <span key={site} className={`rounded-full px-2 py-1 text-[10px] font-semibold ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-black/60"}`}>{site}</span>)}
+                              {customPrefs.sites.length > sidebarSitesPreview.length && <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${darkMode ? "bg-white/10 text-white/45" : "bg-white text-black/40"}`}>+{customPrefs.sites.length - sidebarSitesPreview.length}</span>}
+                            </div>
+                          )}
+                          {sidebarCategoriesPreview.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {sidebarCategoriesPreview.map((category) => <span key={category} className={`rounded-full px-2 py-1 text-[10px] font-semibold ${darkMode ? "bg-[#89ed3f]/15 text-[#b7ff82]" : "bg-[#eafbdc] text-[#4b9b16]"}`}>{category}</span>)}
+                              {customPrefs.categories.length > sidebarCategoriesPreview.length && <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${darkMode ? "bg-white/10 text-white/45" : "bg-white text-black/40"}`}>+{customPrefs.categories.length - sidebarCategoriesPreview.length}</span>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setCustomOptionsOpen(true)}
+                        className={`mt-3 h-9 w-full rounded-full text-xs font-bold transition ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-black/65 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                      >
+                        {hasCustomPreferences ? "Manage options" : "Add options"}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className={`flex shrink-0 gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
@@ -1375,69 +1505,90 @@ export default function EmployeeDailyReport({ darkMode }) {
                 <div className="grid gap-4 md:grid-cols-2">
                   {!data?.profile?.department && (
                     <div className="md:col-span-2">
-                      <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Department</label>
-                      <SearchableSelect darkMode={false} value={form.department} onChange={(value) => setForm((current) => ({ ...current, department: value }))} options={options.departments} placeholder="Choose department" />
-                      {form.department === "__other" && <input required value={form.departmentOther || ""} onChange={(event) => setForm((current) => ({ ...current, departmentOther: event.target.value }))} placeholder="Enter department" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 outline-none" />}
+                      <label className={`mb-2 block text-xs font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/60" : "text-black/55"}`}>Department</label>
+                      <SearchableSelect darkMode={darkMode} value={form.department} onChange={(value) => setForm((current) => ({ ...current, department: value }))} options={options.departments} placeholder="Choose department" />
+                      {form.department === "__other" && <input required value={form.departmentOther || ""} onChange={(event) => setForm((current) => ({ ...current, departmentOther: event.target.value }))} placeholder="Enter department" className={`mt-2 h-12 w-full rounded-2xl border px-4 outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />}
                     </div>
                   )}
-                  <div><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Involvement</label><SearchableSelect darkMode={false} value={form.involvement} onChange={(value) => setForm((current) => ({ ...current, involvement: value }))} options={options.involvements} placeholder="Choose involvement" />{form.involvement === "__other" && <input required value={form.involvementOther} onChange={(event) => setForm((current) => ({ ...current, involvementOther: event.target.value }))} placeholder="Enter involvement" className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-white px-4 outline-none" />}</div>
-                  <div className="md:col-span-2 rounded-[22px] border border-black/10 bg-[#f8f7f3] p-4">
+                  <div className={`md:col-span-2 overflow-hidden transition-[max-height,opacity,transform,margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${customOptionsVisible ? "max-h-[720px] opacity-100" : "max-h-0 -translate-y-2 opacity-0 pointer-events-none"}`}>
+                  <div className={`rounded-[22px] p-4 ${darkMode ? "border-white/10 bg-[#1c1f24]" : "border-black/10 bg-[#f8f7f3]"}`}>
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-black/55">My saved task options</p>
-                        <p className="mt-1 text-xs text-black/45">Save your own sites/categories. Turn on custom-only to show only your saved list in dropdowns.</p>
+                        <p className={`text-xs font-bold uppercase tracking-[0.12em] ${darkMode ? "text-white/70" : "text-black/55"}`}>My saved task options</p>
+                        <p className={`mt-1 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Save your own sites/categories. <br/>Turn on custom-only to show only your saved list in dropdowns.</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => saveCustomPreferences({ ...customPrefs, useCustomOnly: !customPrefs.useCustomOnly })}
-                        className={`h-10 rounded-full px-4 text-sm font-bold transition ${customPrefs.useCustomOnly ? "bg-[#89ed3f] text-black" : "bg-white text-black/60"}`}
-                      >
-                        {customPrefs.useCustomOnly ? "Using my options" : "Use all options"}
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        {hasCustomPreferences && (
+                          <button
+                            type="button"
+                            onClick={() => setCustomOptionsOpen(false)}
+                            className={`h-10 rounded-full px-4 text-sm font-bold transition ${darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                          >
+                            Done
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => saveCustomPreferences({ ...customPrefs, useCustomOnly: !customPrefs.useCustomOnly })}
+                          className={`h-10 rounded-full px-4 text-sm font-bold transition ${customPrefs.useCustomOnly ? "bg-[#89ed3f] text-black" : darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/60"}`}
+                        >
+                          {customPrefs.useCustomOnly ? "Using my options" : "Use all options"}
+                        </button>
+                        <button type="button" onClick={clearCustomOptions} className={`h-10 rounded-full px-4 text-sm font-bold transition ${darkMode ? "border border-white/10 bg-white/[0.04] text-white/70 hover:bg-red-500/10 hover:text-red-200" : "border border-black/10 bg-white text-black/55 hover:bg-red-50 hover:text-red-600"}`}>
+                          Clear options
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-4 grid gap-3 lg:grid-cols-2">
                       <div>
-                        <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">Custom sites</label>
+                        <label className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Custom sites</label>
                         <div className="flex gap-2">
-                          <input value={customSiteInput} onChange={(event) => setCustomSiteInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("site"); } }} placeholder="Add site name" className="h-11 min-w-0 flex-1 rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none" />
-                          <button type="button" onClick={() => addCustomOption("site")} className="h-11 rounded-2xl bg-black px-4 text-sm font-bold text-white">Save</button>
+                          <input value={customSiteInput} onChange={(event) => setCustomSiteInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("site"); } }} placeholder="Add site name" className={`h-11 min-w-0 flex-1 rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                          <button type="button" onClick={() => addCustomOption("site")} className={`h-11 rounded-2xl px-4 text-sm font-bold ${darkMode ? "bg-[#89ed3f] text-black" : "bg-black text-white"}`}>Save</button>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {customPrefs.sites.map((site) => <button key={site} type="button" onClick={() => removeCustomOption("site", site)} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black/70 hover:bg-red-50 hover:text-red-600">{site} ×</button>)}
-                          {!customPrefs.sites.length && <span className="text-xs text-black/40">No custom sites saved yet.</span>}
+                          {customPrefs.sites.map((site) => <button key={site} type="button" onClick={() => removeCustomOption("site", site)} className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/10 text-white/70 hover:bg-red-500/10 hover:text-red-200" : "bg-white text-black/70 hover:bg-red-50 hover:text-red-600"}`}>{site} ×</button>)}
+                          {!customPrefs.sites.length && <span className={`text-xs ${darkMode ? "text-white/35" : "text-black/40"}`}>No custom sites saved yet.</span>}
                         </div>
                       </div>
                       <div>
-                        <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">Custom categories</label>
+                        <label className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Custom categories</label>
                         <div className="flex gap-2">
-                          <input value={customCategoryInput} onChange={(event) => setCustomCategoryInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("category"); } }} placeholder="Add category name" className="h-11 min-w-0 flex-1 rounded-2xl border border-black/10 bg-white px-4 text-sm outline-none" />
-                          <button type="button" onClick={() => addCustomOption("category")} className="h-11 rounded-2xl bg-black px-4 text-sm font-bold text-white">Save</button>
+                          <input value={customCategoryInput} onChange={(event) => setCustomCategoryInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("category"); } }} placeholder="Add category name" className={`h-11 min-w-0 flex-1 rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                          <button type="button" onClick={() => addCustomOption("category")} className={`h-11 rounded-2xl px-4 text-sm font-bold ${darkMode ? "bg-[#89ed3f] text-black" : "bg-black text-white"}`}>Save</button>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {customPrefs.categories.map((category) => <button key={category} type="button" onClick={() => removeCustomOption("category", category)} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black/70 hover:bg-red-50 hover:text-red-600">{category} ×</button>)}
-                          {!customPrefs.categories.length && <span className="text-xs text-black/40">No custom categories saved yet.</span>}
+                          {customPrefs.categories.map((category) => <button key={category} type="button" onClick={() => removeCustomOption("category", category)} className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/10 text-white/70 hover:bg-red-500/10 hover:text-red-200" : "bg-white text-black/70 hover:bg-red-50 hover:text-red-600"}`}>{category} ×</button>)}
+                          {!customPrefs.categories.length && <span className={`text-xs ${darkMode ? "text-white/35" : "text-black/40"}`}>No custom categories saved yet.</span>}
                         </div>
                       </div>
                     </div>
                   </div>
+                  </div>
                   <TaskRowsEditor
-                    title="Task description"
+                    title="Today's Tasks"
                     rows={form.taskItems}
                     categories={formCategories}
                     sites={formSites}
                     statuses={options.taskStatuses}
+                    involvements={options.involvements}
                     showStatus
+                    showInvolvement
                     required
                     onRowsChange={(rows) => setForm((current) => ({ ...current, taskItems: rows }))}
+                    darkMode={darkMode}
                   />
                   <TaskRowsEditor
                     title="Tasks in waiting / tomorrow plan"
                     rows={form.waitingTaskItems}
                     categories={formCategories}
                     sites={formSites}
+                    involvements={options.involvements}
+                    showInvolvement
                     onRowsChange={(rows) => setForm((current) => ({ ...current, waitingTaskItems: rows }))}
+                    darkMode={darkMode}
                   />
-                  <div className="md:col-span-2"><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-black/55">Note</label><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} rows={3} placeholder="Any extra note..." className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none" /></div>
+                  <div className="md:col-span-2"><label className={`mb-2 block text-xs font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/60" : "text-black/55"}`}>Note</label><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} rows={3} placeholder="Any extra note..." className={`w-full rounded-2xl border px-4 py-3 outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} /></div>
                 </div>
                 </div>
               </div>
@@ -1447,7 +1598,7 @@ export default function EmployeeDailyReport({ darkMode }) {
             <div className="absolute inset-0 z-[60] grid place-items-center bg-black/20 p-4">
               <div className={`w-full max-w-md rounded-[28px] p-5 shadow-2xl ${darkMode ? "bg-[#181a20] text-white" : "bg-white text-black"}`} onMouseDown={(event) => event.stopPropagation()}>
                 <span className="rounded-md bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#4b9b16]">Draft detected</span>
-                <h3 className="mt-4 text-2xl font-bold">Continue your saved report?</h3>
+                <h3 className="mt-4 text-2xl small text-black dark:text-white font-bold">Continue your saved report?</h3>
                 <p className={`mt-2 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
                   A local draft was saved{pendingDraft?.savedAt ? ` at ${formatDraftTime(pendingDraft.savedAt)}` : ""}. Continue from it or start a fresh report for today.
                 </p>
@@ -1590,7 +1741,6 @@ export default function EmployeeDailyReport({ darkMode }) {
                   <div className="flex flex-wrap gap-2 xl:justify-end">
                     {[
                       ["Task Type", detail.taskType],
-                      ["Involvement", detail.involvement],
                     ].map(([label, value]) => (
                       <span key={label} className={`inline-flex items-center gap-2 rounded-full  px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/[0.06] text-white/75" : "border-black/10 bg-[#f7f5ef] text-black/70"}`}>
                         <span className={darkMode ? "text-white/40" : "text-black/45"}>{label}</span>
@@ -1602,8 +1752,8 @@ export default function EmployeeDailyReport({ darkMode }) {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <TaskItemsDisplay title="Task description" items={detail.taskItems} fallback={detail.taskDescription} darkMode={darkMode} showStatus />
-                  <TaskItemsDisplay title="Waiting / tomorrow plan" items={detail.waitingTaskItems} fallback={detail.waitingTaskDescription} darkMode={darkMode} />
+                  <TaskItemsDisplay title="Task description" items={detail.taskItems} fallback={detail.taskDescription} darkMode={darkMode} showStatus showInvolvement />
+                  <TaskItemsDisplay title="Waiting / tomorrow plan" items={detail.waitingTaskItems} fallback={detail.waitingTaskDescription} darkMode={darkMode} showInvolvement />
                   <div className={`rounded-[22px] p-5 md:col-span-2 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
                     <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>Note</p>
                     <p className="mt-3 whitespace-pre-wrap text-base leading-7">{detail.note || "-"}</p>

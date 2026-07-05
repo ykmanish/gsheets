@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images } from "lucide-react";
 import Image from "next/image";
+import { API_URL } from "./AuthProvider";
 
 export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen, collapsed = false, setCollapsed, user, onLogout }) {
   const menuItems = [
@@ -10,6 +11,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "projects", label: "Projects", icon: Building2 },
     { id: "project-dmr", label: "DMR", icon: FileSpreadsheet, parent: "projects" },
     { id: "project-mrn", label: "MRN", icon: ClipboardList, parent: "projects" },
+    { id: "site-images", label: "Site Images", icon: Images, parent: "projects" },
     { id: "sheet-dashboard", label: "Sheet Dashboard", icon: Sheet },
     { id: "automations", label: "Automation", icon: Workflow },
     { id: "reports", label: "Reports", icon: ChartNoAxesCombined },
@@ -20,7 +22,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "manage-roles", label: "Manage Role", icon: ShieldCheck, parent: "access-management" },
     { id: "manage-users", label: "Manage User", icon: Users, parent: "access-management" },
   ];
-  const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn"].includes(item.id) && allowedMenus.includes(item.id));
+  const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn", "site-images"].includes(item.id) && allowedMenus.includes(item.id));
   const accessSubMenu = menuItems.filter((item) => item.parent === "access-management" && allowedMenus.includes(item.id));
   const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id) || (item.id === "projects" && projectSubMenu.length) || (item.id === "access-management" && accessSubMenu.length));
   const [openGroups, setOpenGroups] = useState(() => ({
@@ -29,6 +31,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
   }));
   const [menuSearch, setMenuSearch] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [newSiteImages, setNewSiteImages] = useState(false);
   const navRef = useRef(null);
   const profileRef = useRef(null);
   const searchTerm = menuSearch.trim().toLowerCase();
@@ -55,6 +58,33 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
 
     return () => window.clearTimeout(timeoutId);
   }, [activeMenu]);
+
+  useEffect(() => {
+    let stopped = false;
+    const storageKey = `uipl_site_images_seen_${user?.id || "user"}`;
+    async function check() {
+      try {
+        const docsResponse = await fetch(`${API_URL}/documents`);
+        const docsData = await docsResponse.json();
+        const doc = (docsData.documents || []).find((item) => item.type === "sheet" && /site\s*daily\s*report/i.test(item.name));
+        if (!doc || stopped) return;
+        const response = await fetch(`${API_URL}/sheets/${doc.id}/data`);
+        const data = await response.json();
+        if (!response.ok || stopped) return;
+        const signature = (data.sheets || []).flatMap((sheet) => (sheet.rows || []).flatMap((row) => (sheet.headers || []).flatMap((header) => String(row[header] ?? "").match(/https?:\/\/[^\s,;]+/g) || []))).sort().join("|");
+        const seen = window.localStorage.getItem(storageKey);
+        if (!seen || activeMenu === "site-images") {
+          window.localStorage.setItem(storageKey, signature);
+          setNewSiteImages(false);
+        } else setNewSiteImages(signature !== seen);
+      } catch {
+        // The module itself shows source/access errors; the nav indicator stays quiet.
+      }
+    }
+    void check();
+    const timer = window.setInterval(check, 60000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [activeMenu, user?.id]);
   const shell = darkMode
     ? "border-white/10 bg-[#101114]"
     : "border-[#e7eaee] bg-white";
@@ -67,7 +97,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     .slice(0, 2)
     .toUpperCase();
 
-  const itemClass = ({ active = false, child = false, parentActive = false } = {}) => `w-full newq flex h-10 items-center gap-3 rounded-[14px] text-left transition-all duration-300 ${child ? "px-3" : "px-3"} ${
+  const itemClass = ({ active = false, child = false, parentActive = false } = {}) => `newq flex h-10 items-center gap-3 rounded-[14px] text-left transition-all duration-300 ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-[16px] md:p-0" : "w-full px-3"} ${child ? "px-3" : ""} ${
     parentActive
       ? darkMode
         ? "bg-white/[0.07] text-white/80"
@@ -81,7 +111,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
       : "text-slate-600 hover:bg-[#f3f6f8] hover:text-slate-950"
   }`;
 
-  const iconClass = ({ active = false, child = false, parentActive = false } = {}) => `${child ? "h-7 w-7" : "h-7 w-7"} flex items-center justify-center transition-all duration-200 ${
+  const iconClass = ({ active = false, child = false, parentActive = false } = {}) => `${child ? "h-7 w-7" : "h-7 w-7"} flex shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${collapsed ? "md:h-10 md:w-10" : ""} ${
     parentActive
       ? darkMode
         ? "bg-white/10 text-white/70"
@@ -111,7 +141,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
         }}
       >
         <div className={`relative px-4 pb-2 pt-4 transition-all duration-300 ${collapsed ? "md:px-3" : ""}`}>
-          <div className="flex items-center gap-3 transition-all duration-500">
+          <div className="flex items-center justify-center gap-3 transition-all duration-500">
             <div
               className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all duration-500 `}
             >
@@ -148,9 +178,9 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           </div>
         </div>
 
-        <nav ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-2 transition-all duration-500 ${collapsed ? "md:px-2" : ""}`}>
+        <nav ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-2 transition-all duration-500 ${collapsed ? "md:px-0" : ""}`}>
           <p className={`overflow-hidden px-3 newq text-[9px] font-bold uppercase tracking-[0.14em] transition-[max-height,opacity,margin] duration-300 ${muted} ${collapsed ? "md:mb-0 md:max-h-0 md:opacity-0" : "mb-2 max-h-5 opacity-100"}`}>Workspace</p>
-          <div className="space-y-1">
+          <div className={`space-y-1 ${collapsed ? "md:flex md:flex-col md:items-center md:gap-1 md:space-y-0" : ""}`}>
           {filteredMenuItems.map((item) => {
             if (item.parent === "projects") return null;
             if (item.parent === "access-management") return null;
@@ -191,6 +221,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                                 <ChildIcon className="h-4 w-4" />
                               </span>
                               <span className="max-w-full truncate text-[13px]">{child.label}</span>
+                              {child.id === "site-images" && newSiteImages && <span className="ml-auto flex h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" title="New site photos" />}
                             </button>
                           );
                         })}
@@ -268,13 +299,16 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           </div>
         </nav>
 
-        <div ref={profileRef} className={`relative newq shrink-0 px-3 pb-4 pt-3 transition-all duration-500 ${collapsed ? "md:px-2" : ""}`}>
+        <div ref={profileRef} className={`relative newq shrink-0 px-3 pb-4 pt-3 transition-all duration-500 ${collapsed ? "md:flex md:justify-center md:px-0" : ""}`}>
           <div
-            className={`absolute bottom-[calc(100%+10px)] left-3 right-3 z-[70] origin-bottom rounded-[22px] p-2 shadow-[0_24px_70px_rgba(15,23,42,0.22)] ring-1 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${profileOpen ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-3 scale-95 opacity-0"} ${darkMode ? "bg-[#17181d] text-white ring-white/10" : "bg-white text-[#171714] ring-black/5"}`}
+            className={`absolute bottom-[calc(100%+10px)] z-[70] origin-bottom rounded-[22px] p-2 shadow-[0_24px_70px_rgba(15,23,42,0.22)] ring-1 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? "md:left-2 md:w-56" : "left-3 right-3"} ${profileOpen ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-3 scale-95 opacity-0"} ${darkMode ? "bg-[#17181d] text-white ring-white/10" : "bg-white text-[#171714] ring-black/5"}`}
           >
-            <div className={`rounded-2xl px-3 py-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f7f2]"}`}>
-              <p className="truncate text-sm font-semibold">{displayName}</p>
-              <p className={`mt-1 truncate text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{user?.username || user?.roleName || "UIPL user"}</p>
+            <div className={`flex items-center gap-3 rounded-2xl px-3 py-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f7f2]"}`}>
+              <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-bold leading-none ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}>{initials}</span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{displayName}</p>
+                <p className={`mt-1 truncate text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{user?.username || user?.roleName || "UIPL user"}</p>
+              </div>
             </div>
             <button
               type="button"
@@ -289,10 +323,10 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           <button
             type="button"
             onClick={() => setProfileOpen((open) => !open)}
-            className={`flex h-14 w-full items-center gap-3 rounded-[18px] px-3 text-left shadow-sm ring-1 transition-all duration-300 hover:-translate-y-0.5 ${darkMode ? "bg-white/[0.045] text-white ring-white/10 hover:bg-white/[0.075]" : "bg-white text-[#171714] ring-black/5 hover:bg-[#f8fbf9]"}`}
+            className={`flex items-center gap-3 text-left   transition-all duration-300 hover:-translate-y-0.5 ${collapsed ? "md:mx-auto md:grid md:h-14 md:w-14 md:place-items-center md:gap-0 md:rounded-[20px] md:p-0" : "h-14 w-full rounded-[18px] px-3"} ${darkMode ? "bg-white/[0.045] text-white ring-white/10 hover:bg-white/[0.075]" : "bg-white text-[#171714] ring-black/5 hover:bg-[#f8fbf9]"}`}
             aria-expanded={profileOpen}
           >
-            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}>
+            <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold leading-none ${collapsed ? "md:m-0 md:h-10 md:w-10 md:translate-y-[1px] md:text-sm" : ""} ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}>
               {initials}
             </span>
             <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-300 ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[145px] opacity-100"}`}>

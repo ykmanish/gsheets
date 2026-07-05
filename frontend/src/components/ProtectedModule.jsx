@@ -19,6 +19,7 @@ import Forms from "./Forms";
 import ProjectDashboard from "./ProjectDashboard";
 import DmrDashboard from "./DmrDashboard";
 import MrnDashboard from "./MrnDashboard";
+import SiteImagesDashboard from "./SiteImagesDashboard";
 import EmployeeDailyReport from "./EmployeeDailyReport";
 
 const menuPaths = {
@@ -28,6 +29,7 @@ const menuPaths = {
   projects: "/projects",
   "project-dmr": "/projects/dmr",
   "project-mrn": "/projects/mrn",
+  "site-images": "/projects/site-images",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
@@ -55,9 +57,11 @@ function ProtectedModuleContent({ moduleId }) {
   });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const allowedMenus = useMemo(() => {
-    return Array.from(new Set([
+    const assigned = [
       ...(user?.isSuperAdmin ? [...menus, "project-mrn", "whatsapp", "manage-users"] : menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp"].includes(menu))),
-    ])).filter((menu) => !["notifications", "settings"].includes(menu));
+    ];
+    if (user?.isSuperAdmin || assigned.some((menu) => ["projects", "sheet-dashboard", "site-images"].includes(menu))) assigned.push("site-images");
+    return Array.from(new Set(assigned)).filter((menu) => !["notifications", "settings"].includes(menu));
   }, [menus, user?.isSuperAdmin]);
 
   const [isMounted, setIsMounted] = useState(false);
@@ -130,6 +134,7 @@ function ProtectedModuleContent({ moduleId }) {
         {moduleId === "projects" && <ProjectDashboard darkMode={darkMode} />}
         {moduleId === "project-dmr" && <DmrDashboard darkMode={darkMode} />}
         {moduleId === "project-mrn" && <MrnDashboard darkMode={darkMode} />}
+        {moduleId === "site-images" && <SiteImagesDashboard darkMode={darkMode} />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}

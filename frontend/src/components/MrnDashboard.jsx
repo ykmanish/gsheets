@@ -724,7 +724,7 @@ export default function MrnDashboard({ darkMode }) {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#4b9b16]">
               Requests
             </p>
-            <h2 className="mt-1 text-xl small text-black font-bold">
+            <h2 className="mt-1 text-xl small dark:text-white text-black font-bold">
               MRN records
             </h2>
             <p className={`mt-1 text-sm ${muted}`}>
@@ -1354,7 +1354,7 @@ export default function MrnDashboard({ darkMode }) {
 
                       <div className="mt-5">
                         {historyLoading ? (
-                          <div className={`rounded-3xl border p-8 text-center ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
+                          <div className={`rounded-3xl  p-8 text-center ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
                             <Loader2 className="mx-auto h-5 w-5 animate-spin text-[#4b9b16]" />
                             <p className={`mt-3 text-sm ${muted}`}>Loading versions…</p>
                           </div>
@@ -1363,7 +1363,7 @@ export default function MrnDashboard({ darkMode }) {
                             {mrnHistory.map((entry) => (
                               <article
                                 key={entry.id}
-                                className={`rounded-3xl border p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
+                                className={`rounded-3xl  p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
                               >
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
@@ -1389,15 +1389,15 @@ export default function MrnDashboard({ darkMode }) {
                                         key={`${entry.id}-${change.key}`}
                                         className={`rounded-2xl p-3 text-xs ${darkMode ? "bg-black/20" : "bg-[#f5f7f2]"}`}
                                       >
-                                        <p className="font-semibold">{change.label}</p>
+                                        <p className="">{change.label}</p>
                                         <div className="mt-2 grid gap-2 sm:grid-cols-2">
                                           <div>
                                             <span className={muted}>Before</span>
-                                            <p className="mt-1 break-words">{change.before || "Blank"}</p>
+                                            <p className="mt-1 text-sm break-words">{change.before || "Blank"}</p>
                                           </div>
                                           <div>
                                             <span className={muted}>After</span>
-                                            <p className="mt-1 break-words text-[#3f7d16]">{change.after || "Blank"}</p>
+                                            <p className="mt-1 text-sm break-words text-green-400">{change.after || "Blank"}</p>
                                           </div>
                                         </div>
                                       </div>
@@ -1412,13 +1412,13 @@ export default function MrnDashboard({ darkMode }) {
                             ))}
                           </div>
                         ) : (
-                          <div className={`rounded-3xl border p-6 ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
+                          <div className={`rounded-3xl  p-6 ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
                             <p className="text-sm font-semibold">No stored versions yet.</p>
                             <p className={`mt-2 text-sm leading-6 ${muted}`}>
                               History tracking is active now. The next MRN add/edit will create a version entry with changed fields.
                             </p>
                             <div className={`mt-4 rounded-2xl p-4 text-xs ${darkMode ? "bg-black/20" : "bg-[#f5f7f2]"}`}>
-                              <p className="font-semibold">Current snapshot</p>
+                              <p className="">Current snapshot</p>
                               <p className={`mt-1 ${muted}`}>
                                 {selectedMrn.project || "Project not added"} · {selectedMrn.status || "Open"} · {items.length} material item{items.length === 1 ? "" : "s"}
                               </p>

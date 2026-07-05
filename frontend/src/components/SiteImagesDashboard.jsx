@@ -1,0 +1,241 @@
+"use client";
+/* eslint-disable @next/next/no-img-element -- Google Drive image URLs are dynamic and cannot use the fixed Next image host allowlist. */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ArrowUpRight, CalendarDays, Camera, Folder, ImageOff, Loader2, RefreshCw, Search, UserRound, X } from "lucide-react";
+import toast from "react-hot-toast";
+import { API_URL } from "./AuthProvider";
+import { DatePicker } from "./ui";
+
+const DAY = 86400000;
+
+function localDateKey(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+const MAX_DATE_KEY = localDateKey(new Date(Date.now() + DAY));
+
+function value(row, header) {
+  return String(header ? row?.[header] ?? "" : "").trim();
+}
+
+function urls(input) {
+  return String(input ?? "").match(/https?:\/\/[^\s,;]+/g) || [];
+}
+
+function pick(headers, tests, fallback = "") {
+  for (const test of tests) {
+    const found = headers.find((header) => test.test(String(header).trim()));
+    if (found) return found;
+  }
+  return fallback;
+}
+
+function parseDateKey(input) {
+  const text = String(input || "").trim();
+  if (!text) return "";
+  const iso = text.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if (iso) return `${iso[1]}-${String(iso[2]).padStart(2, "0")}-${String(iso[3]).padStart(2, "0")}`;
+  const parts = text.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+  if (parts) {
+    const first = Number(parts[1]);
+    const second = Number(parts[2]);
+    // Google Form response sheets commonly expose timestamps as M/D/YYYY.
+    // Only switch to D/M/YYYY when the first value cannot be a month.
+    const month = first > 12 ? second : first;
+    const day = first > 12 ? first : second;
+    return `${parts[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? "" : localDateKey(parsed);
+}
+
+function imageUrl(url) {
+  const id = url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || url.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+  return id && /drive\.google\.com|docs\.google\.com/i.test(url)
+    ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600`
+    : url;
+}
+
+function prettyDate(key) {
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${key}T12:00:00`));
+}
+
+function siteInitials(site) {
+  const words = String(site || "Site").trim().split(/\s+/).filter(Boolean);
+  if (words.length > 1) return `${words[0][0] || ""}${words[1][0] || ""}`.toUpperCase();
+  return String(words[0] || "SI").slice(0, 2).toUpperCase();
+}
+
+function SiteImage({ photo, site, alt = "", className = "" }) {
+  const [failed, setFailed] = useState(false);
+  if (!photo || failed) {
+    return <span className={`flex h-full w-full items-center justify-center bg-[#e8ede9] text-4xl font-bold tracking-[-0.06em] text-[#5f6862] dark:bg-white/[0.06] dark:text-white/55 ${className}`}>{siteInitials(site)}</span>;
+  }
+  return <img src={imageUrl(photo.url || photo)} alt={alt} onError={() => setFailed(true)} className={className} />;
+}
+
+function SiteFolder({ group, darkMode, onOpen }) {
+  const cover = group.photos[0];
+  return (
+    <button type="button" onClick={onOpen} className={`group overflow-hidden rounded-[26px] border text-left transition duration-300 hover:-translate-y-1 hover:shadow-xl ${darkMode ? "border-white/10 bg-white/[0.035] hover:border-white/20" : "border-black/[0.06] bg-white hover:border-black/10"}`}>
+      <div className={`relative h-44 overflow-hidden ${darkMode ? "bg-white/5" : "bg-[#e9eeeb]"}`}>
+        {cover ? <SiteImage photo={cover} site={group.site} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : <ImageOff className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 opacity-30" />}
+        <span className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-black/55 text-white backdrop-blur-md"><Folder className="h-5 w-5" /></span>
+        <span className="absolute bottom-3 right-3 rounded-full bg-black/65 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur-md">{group.photos.length} photo{group.photos.length === 1 ? "" : "s"}</span>
+      </div>
+      <div className="p-5">
+        <h3 className="truncate text-lg font-semibold">{group.site}</h3>
+        <div className={`mt-2 flex items-center justify-between text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>
+          <span>{group.trades.size} trade{group.trades.size === 1 ? "" : "s"}</span>
+          <span>Open folder →</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+export default function SiteImagesDashboard({ darkMode }) {
+  const [date, setDate] = useState(localDateKey());
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [source, setSource] = useState(null);
+  const [query, setQuery] = useState("");
+  const [selectedSite, setSelectedSite] = useState("");
+  const [siteDrawerClosing, setSiteDrawerClosing] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+
+  const openSiteDrawer = useCallback((site) => {
+    setSiteDrawerClosing(false);
+    setSelectedSite(site);
+  }, []);
+
+  const closeSiteDrawer = useCallback(() => {
+    if (siteDrawerClosing) return;
+    setSiteDrawerClosing(true);
+    window.setTimeout(() => {
+      setSelectedSite("");
+      setSelectedPhoto(null);
+      setSiteDrawerClosing(false);
+    }, 300);
+  }, [siteDrawerClosing]);
+
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
+    try {
+      const documentsResponse = await fetch(`${API_URL}/documents`);
+      const documentsData = await documentsResponse.json();
+      if (!documentsResponse.ok) throw new Error(documentsData.error || "Could not load sheets");
+      const sheets = (documentsData.documents || []).filter((doc) => doc.type === "sheet" && doc.isReady !== false);
+      const doc = sheets.find((item) => /site\s*daily\s*report/i.test(item.name)) || sheets.find((item) => /site.*report|daily.*site/i.test(item.name));
+      if (!doc) throw new Error('Link a sheet named "Site Daily Report" in Sheet Dashboard first.');
+      const response = await fetch(`${API_URL}/sheets/${doc.id}/data`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not read Site Daily Report");
+
+      const next = [];
+      (data.sheets || []).forEach((sheet) => {
+        const headers = sheet.headers || [];
+        const siteHeader = pick(headers, [/^site(?:\s*name)?$/i, /select.*site|site.*name/i, /project.*site|site.*project/i, /location/i, /project/i]);
+        const dateHeader = pick(headers, [/^date$/i, /timestamp/i, /report.*date|date.*report/i, /created|submitted/i]);
+        const tradeHeader = pick(headers, [/^trade$/i, /trade.*name|work.*trade/i, /work.*category|category.*work/i, /category|department|agency/i]);
+        const uploaderHeader = pick(headers, [/uploaded.*by|submitted.*by/i, /site.*person|person.*site/i, /employee.*name|person.*name/i, /^name$/i, /email/i, /created.*by/i]);
+        const mediaHeaders = headers.filter((header) => /photo|image|upload|attachment|drive\s*link|media/i.test(header) || (sheet.rows || []).some((row) => urls(row[header]).length));
+        (sheet.rows || []).forEach((row, rowIndex) => {
+          mediaHeaders.forEach((header) => urls(row[header]).forEach((url, urlIndex) => next.push({
+            id: `${sheet.name}-${row.__rowIndex || rowIndex}-${header}-${urlIndex}`,
+            url,
+            site: value(row, siteHeader) || "Unassigned site",
+            date: parseDateKey(value(row, dateHeader)),
+            // In Site Daily Report, categories such as Civil and Carpenter are
+            // often the media-column headers rather than values in a Trade cell.
+            trade: value(row, tradeHeader) || String(header || "").trim() || "General work",
+            uploadedBy: value(row, uploaderHeader) || "Site team",
+            sheet: sheet.name,
+          })));
+        });
+      });
+      setPhotos(next);
+      setSource(doc);
+    } catch (error) {
+      setPhotos([]);
+      setSource(null);
+      if (!quiet) toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(id);
+  }, [load]);
+  useEffect(() => {
+    const id = window.setInterval(() => void load({ quiet: true }), 60000);
+    return () => window.clearInterval(id);
+  }, [load]);
+  useEffect(() => {
+    if (!selectedSite) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") closeSiteDrawer();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [closeSiteDrawer, selectedSite]);
+
+  const groups = useMemo(() => {
+    const map = new Map();
+    photos.filter((photo) => photo.date === date).forEach((photo) => {
+      if (!map.has(photo.site)) map.set(photo.site, { site: photo.site, photos: [], trades: new Set() });
+      map.get(photo.site).photos.push(photo);
+      map.get(photo.site).trades.add(photo.trade);
+    });
+    const term = query.trim().toLowerCase();
+    return [...map.values()].filter((group) => !term || group.site.toLowerCase().includes(term) || [...group.trades].some((trade) => trade.toLowerCase().includes(term))).sort((a, b) => b.photos.length - a.photos.length);
+  }, [date, photos, query]);
+  const activeGroup = groups.find((group) => group.site === selectedSite) || null;
+  const panel = darkMode ? "border-white/10 bg-[#17191e]" : "border-black/[0.06] bg-white";
+  const muted = darkMode ? "text-white/45" : "text-black/45";
+
+  return (
+    <main className={`relative min-h-0 flex-1 overflow-y-auto p-5 sm:p-7 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f7f2] text-[#171714]"}`}>
+      <div className={`mb-5 rounded-3xl p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.08] bg-white"}`}>
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div><span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#4b9b16]"><Camera className="h-3.5 w-3.5" /> Projects · Site Images</span><h1 className="mt-2 text-3xl font-bold small tracking-tight">Site Images Dashboard</h1><p className={`mt-2 max-w-2xl text-sm ${muted}`}>Review daily site photos, trades and upload ownership from one workspace.</p></div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <DatePicker darkMode={darkMode} value={date} onChange={(nextDate) => { setDate(nextDate > MAX_DATE_KEY ? MAX_DATE_KEY : nextDate); setSelectedSite(""); }} placeholder="Choose site date" />
+            <label className={`flex h-10 w-full min-w-0 items-center gap-2 rounded-xl border px-4 sm:w-72 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#fafbf8] text-black focus-within:border-[#69c832]"}`}><Search className="h-4 w-4 shrink-0 text-[#4b9b16]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search site or trade" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
+            <button type="button" onClick={() => void load()} className={`flex h-11 w-fit shrink-0 items-center gap-2 rounded-full border px-5 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh</button>
+          </div>
+        </div>
+      </div>
+
+      <section className={`rounded-3xl p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
+        <div className="mb-5">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#4b9b16]">Site gallery</p><h2 className="mt-1 text-xl small font-bold">Photo folders</h2><p className={`mt-1 text-sm ${muted}`}>{prettyDate(date)} · {groups.length} visible sites</p></div>
+        </div>
+
+        {loading && !source ? <div className={`flex h-72 items-center justify-center gap-3 ${muted}`}><Loader2 className="h-5 w-5 animate-spin" /> Reading Site Daily Report…</div> : groups.length ? (
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{groups.map((group) => <SiteFolder key={group.site} group={group} darkMode={darkMode} onOpen={() => openSiteDrawer(group.site)} />)}</div>
+        ) : (
+          <div className={`flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed text-center ${darkMode ? "border-white/10" : "border-black/10"}`}><Camera className={`h-9 w-9 ${muted}`} /><h3 className="mt-4 font-semibold">No site images for this date</h3><p className={`mt-2 max-w-md px-5 text-sm ${muted}`}>{source ? "Choose another date or wait for the site team to add photos to the daily report." : 'Connect a sheet named “Site Daily Report” in Sheet Dashboard.'}</p></div>
+        )}
+      </section>
+
+      {activeGroup && <div className={`fixed inset-0 z-[70] bg-black/45 backdrop-blur-[2px] ${siteDrawerClosing ? "animate-[mrn-backdrop-out_300ms_ease_forwards]" : "animate-[mrn-backdrop-in_320ms_ease-out]"}`} onMouseDown={(event) => event.target === event.currentTarget && closeSiteDrawer()} role="presentation">
+        <aside className={`absolute inset-y-0 right-0 flex w-full max-w-5xl flex-col overflow-hidden border-l shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${siteDrawerClosing ? "animate-[mrn-drawer-out_300ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#111318] text-white" : "border-black/10 bg-[#f7f7f3] text-[#171714]"}`} role="dialog" aria-modal="true" aria-label={`${activeGroup.site} site photos`}>
+          <header className={`flex shrink-0 items-center justify-between border-b px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}><div className="flex min-w-0 items-center gap-3"><button type="button" onClick={closeSiteDrawer} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${panel}`}><ArrowLeft className="h-4 w-4" /></button><div className="min-w-0"><p className={`text-[11px] font-medium uppercase tracking-[0.18em] ${muted}`}>Site folder · {prettyDate(date)}</p><h2 className="mt-1 truncate text-xl font-semibold">{activeGroup.site}</h2></div></div><button type="button" onClick={closeSiteDrawer} className="flex h-10 w-10 items-center justify-center rounded-full"><X className="h-5 w-5" /></button></header>
+          <div className="overflow-y-auto p-5 sm:p-7"><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{activeGroup.photos.map((photo) => <article key={photo.id} className={`overflow-hidden rounded-[22px] border ${panel}`}><button type="button" onClick={() => setSelectedPhoto(photo)} className="block h-52 w-full overflow-hidden bg-black/5"><SiteImage photo={photo} site={photo.site} alt={`${photo.trade} at ${photo.site}`} className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button><div className="p-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#e8f8d7] text-[#39710f]"}`}>{photo.trade}</span><p className={`mt-3 flex items-center gap-2 text-xs ${muted}`}><UserRound className="h-3.5 w-3.5" /> Uploaded by {photo.uploadedBy}</p><a href={photo.url} target="_blank" rel="noreferrer" className={`mt-4 flex items-center gap-1.5 text-xs font-semibold ${darkMode ? "text-[#d8f36a]" : "text-[#39710f]"}`}>Open original <ArrowUpRight className="h-3.5 w-3.5" /></a></div></article>)}</div></div>
+        </aside>
+      </div>}
+
+      {selectedPhoto && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 p-4" onClick={() => setSelectedPhoto(null)}><button type="button" className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white"><X className="h-5 w-5" /></button><img src={imageUrl(selectedPhoto.url)} alt="Site preview" className="max-h-[88vh] max-w-[94vw] object-contain" /></div>}
+    </main>
+  );
+}

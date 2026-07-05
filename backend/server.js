@@ -66,6 +66,7 @@ const MENU_ITEMS = [
   { id: "projects", label: "Projects" },
   { id: "project-dmr", label: "DMR" },
   { id: "project-mrn", label: "MRN" },
+  { id: "site-images", label: "Site Images" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
@@ -459,6 +460,7 @@ function sanitizeEmployeeTaskItems(items = []) {
     site: projectText(item?.site),
     category: projectText(item?.category),
     status: projectText(item?.status),
+    involvement: projectText(item?.involvement),
     description: projectText(item?.description),
   })).filter((item) => item.category && item.description).slice(0, 30);
 }
@@ -483,7 +485,7 @@ function sanitizeEmployeeTaskPreferences(input = {}) {
 }
 
 function taskItemsToText(items = []) {
-  return items.map((item) => `${item.site ? `${item.site} · ` : ""}${item.category}${item.status ? ` [${item.status}]` : ""}: ${item.description}`).join("\n");
+  return items.map((item) => `${item.site ? `${item.site} · ` : ""}${item.category}${item.status ? ` [${item.status}]` : ""}${item.involvement ? ` (${item.involvement})` : ""}: ${item.description}`).join("\n");
 }
 
 function incrementEmployeeReportBucket(map, key, patch = {}) {
@@ -564,6 +566,12 @@ function employeeDailyTabName(reportDate = "") {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : istDateKey(new Date());
 }
 
+function employeeSheetDisplayDate(reportDate = "") {
+  const date = projectText(reportDate);
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : date;
+}
+
 async function ensureEmployeeDailySheetTab(sheets, spreadsheetId, templateMeta, reportDate) {
   const dailyTabName = employeeDailyTabName(reportDate);
   const metadata = await sheets.spreadsheets.get({
@@ -591,6 +599,10 @@ async function ensureEmployeeDailySheetTab(sheets, spreadsheetId, templateMeta, 
     },
   });
   const createdSheetId = duplicateResponse.data?.replies?.[0]?.duplicateSheet?.properties?.sheetId ?? null;
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `${escapeSheetName(dailyTabName)}!A4:Z5`,
+  }).catch(() => {});
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
     range: `${escapeSheetName(dailyTabName)}!A8:Z1000`,
@@ -675,6 +687,7 @@ async function ensureEmployeeAppDataTab(sheets, spreadsheetId, create = true) {
 
 function findEmployeeTemplateColumns(values = []) {
   const fallback = {
+    serial: 1,
     reportDate: null,
     client: 2,
     site: 3,
@@ -688,16 +701,20 @@ function findEmployeeTemplateColumns(values = []) {
     note: 14,
   };
   const headers = [];
-  values.slice(0, 6).forEach((row, rowIndex) => {
+  values.slice(0, 20).forEach((row, rowIndex) => {
     (row || []).forEach((cell, columnIndex) => {
       const text = projectText(cell).toLowerCase();
       if (text) headers.push({ text, rowIndex, column: columnIndex + 1 });
     });
   });
-  const findHeader = (matcher) => headers.find((header) => matcher(header.text))?.column;
+  const clientHeader = headers.find((header) => /^client$/.test(header.text));
+  const tableHeader = clientHeader || headers.find((header) => /^task\s*type$/.test(header.text) || /^task\s*status$/.test(header.text));
+  const tableHeaders = tableHeader ? headers.filter((header) => header.rowIndex === tableHeader.rowIndex) : headers;
+  const findTableHeader = (matcher) => tableHeaders.find((header) => matcher(header.text))?.column;
   const datedHeader = headers.find((header) => /^dated?:?$|^date:?$|report\s*date:?$/.test(header.text));
-  const waitingMarker = headers.find((header) => /tasks?\s+in\s+waiting|tomorrow/.test(header.text) && header.column > 6)?.column || 10;
-  const afterWaiting = (matcher) => headers.find((header) => header.column >= waitingMarker && matcher(header.text))?.column;
+  const reportHeader = headers.find((header) => /^report:?$|^report\s*name:?$/.test(header.text));
+  const waitingMarker = tableHeaders.find((header) => /tasks?\s+in\s+waiting|tomorrow/.test(header.text) && header.column > 6)?.column || 10;
+  const afterWaiting = (matcher) => tableHeaders.find((header) => header.column >= waitingMarker && matcher(header.text))?.column;
   const waitingDescription = afterWaiting((text) => /task\s*description/.test(text)) || fallback.waitingDescription;
   const detectedTomorrowTick = afterWaiting((text) => /tick|tomorrow/.test(text));
   const detectedNote = afterWaiting((text) => /note/.test(text)) || fallback.note;
@@ -707,14 +724,19 @@ function findEmployeeTemplateColumns(values = []) {
       ? detectedNote - 1
       : waitingDescription + 1;
   return {
-    reportDate: findHeader((text) => /^date$|^dated$|report\s*date/.test(text)) || fallback.reportDate,
-    reportDateCell: datedHeader ? { row: datedHeader.rowIndex + 1, column: datedHeader.column + 1 } : null,
-    client: findHeader((text) => /^client$/.test(text)) || fallback.client,
-    site: findHeader((text) => /^site$/.test(text)) || fallback.site,
-    taskType: findHeader((text) => /^task\s*type$/.test(text)) || fallback.taskType,
-    taskDescription: headers.find((header) => header.column < waitingMarker && /task\s*description/.test(header.text))?.column || fallback.taskDescription,
-    taskStatus: findHeader((text) => /^task\s*status$/.test(text)) || fallback.taskStatus,
-    involvement: findHeader((text) => /^involvement$/.test(text)) || fallback.involvement,
+    headerRow: tableHeader ? tableHeader.rowIndex + 1 : 6,
+    serial: tableHeaders.find((header) => header.column < waitingMarker && (/^no\.?$/.test(header.text) || /^sr\.?\s*no\.?$/.test(header.text)))?.column || fallback.serial,
+    reportDate: findTableHeader((text) => /^date$|^dated$|report\s*date/.test(text)) || fallback.reportDate,
+    reportDateLabelCell: datedHeader ? { row: datedHeader.rowIndex + 1, column: datedHeader.column } : { row: 4, column: 6 },
+    reportDateCell: datedHeader ? { row: datedHeader.rowIndex + 1, column: datedHeader.column + 1 } : { row: 4, column: 7 },
+    reportNameLabelCell: reportHeader ? { row: reportHeader.rowIndex + 1, column: reportHeader.column } : { row: 4, column: 3 },
+    reportNameCell: reportHeader ? { row: reportHeader.rowIndex + 1, column: reportHeader.column + 1 } : { row: 4, column: 4 },
+    client: findTableHeader((text) => /^client$/.test(text)) || fallback.client,
+    site: findTableHeader((text) => /^site$/.test(text)) || fallback.site,
+    taskType: findTableHeader((text) => /^task\s*type$/.test(text)) || fallback.taskType,
+    taskDescription: tableHeaders.find((header) => header.column < waitingMarker && /task\s*description/.test(header.text))?.column || fallback.taskDescription,
+    taskStatus: findTableHeader((text) => /^task\s*status$/.test(text)) || fallback.taskStatus,
+    involvement: findTableHeader((text) => /^involvement$/.test(text)) || fallback.involvement,
     waitingSerial: afterWaiting((text) => /sr\.?\s*no/.test(text)) || fallback.waitingSerial,
     waitingDescription,
     tomorrowTick,
@@ -724,6 +746,7 @@ function findEmployeeTemplateColumns(values = []) {
 
 function findNextEmployeeTemplateRow(values = [], columns = findEmployeeTemplateColumns(values)) {
   const contentColumns = [
+    columns.serial,
     columns.client,
     columns.site,
     columns.reportDate,
@@ -735,12 +758,118 @@ function findNextEmployeeTemplateRow(values = [], columns = findEmployeeTemplate
     columns.tomorrowTick,
     columns.note,
   ].filter(Boolean).map((column) => column - 1);
-  for (let index = 2; index < Math.max(values.length, 300); index += 1) {
+  const startIndex = Math.max(Number(columns.headerRow || 2), 2);
+  for (let index = startIndex; index < Math.max(values.length, 300); index += 1) {
     const row = values[index] || [];
     const hasVisibleData = contentColumns.some((columnIndex) => projectText(row[columnIndex]));
     if (!hasVisibleData) return index + 1;
   }
   return Math.max(values.length + 1, 3);
+}
+
+async function cleanEmployeeDailyHeaderJunk(sheets, spreadsheetId, tabName, columns = {}) {
+  const headerRow = Number(columns.headerRow || 0);
+  const startRow = 5;
+  const endRow = headerRow - 1;
+  const ranges = [];
+  if (headerRow && startRow <= endRow) ranges.push(`${escapeSheetName(tabName)}!A${startRow}:Z${endRow}`);
+  if (columns.reportNameLabelCell?.row && columns.reportNameLabelCell?.column) {
+    ranges.push(`${escapeSheetName(tabName)}!${columnName(columns.reportNameLabelCell.column)}${columns.reportNameLabelCell.row}:Z${columns.reportNameLabelCell.row}`);
+  }
+  if (!ranges.length) return;
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId,
+    requestBody: { ranges },
+  }).catch((error) => {
+    console.warn("Employee daily header cleanup skipped:", error.message);
+  });
+}
+
+async function normalizeEmployeeDailyTemplateRows(sheets, spreadsheetId, tab, columns = {}) {
+  const headerRow = Number(columns.headerRow || 0);
+  if (!tab?.tabId && tab?.tabId !== 0) return false;
+  if (!headerRow || headerRow <= 5) return false;
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: tab.tabId,
+            dimension: "ROWS",
+            startIndex: 4,
+            endIndex: headerRow - 1,
+          },
+        },
+      }],
+    },
+  }).catch((error) => {
+    console.warn("Employee daily template row normalize skipped:", error.message);
+  });
+  return true;
+}
+
+async function formatEmployeeDailyTaskRows(sheets, spreadsheetId, sheetId, columns = {}, startRow, rowCount) {
+  if ((sheetId !== 0 && !sheetId) || !startRow || !rowCount) return;
+  const mergeRanges = [];
+  const taskStart = Number(columns.taskDescription || 0);
+  const taskEnd = Number(columns.taskStatus || 0);
+  if (taskStart && taskEnd && taskEnd - taskStart > 1) {
+    mergeRanges.push({ startColumnIndex: taskStart - 1, endColumnIndex: taskEnd - 1 });
+  }
+  const waitingStart = Number(columns.waitingDescription || 0);
+  const waitingEndCandidates = [columns.tomorrowTick, columns.note].map(Number).filter(Boolean);
+  const waitingEnd = waitingEndCandidates.length ? Math.min(...waitingEndCandidates) : 0;
+  if (waitingStart && waitingEnd && waitingEnd - waitingStart > 1) {
+    mergeRanges.push({ startColumnIndex: waitingStart - 1, endColumnIndex: waitingEnd - 1 });
+  }
+  const noteStart = Number(columns.note || 0);
+  if (noteStart) {
+    mergeRanges.push({ startColumnIndex: noteStart - 1, endColumnIndex: Math.max(noteStart, 18) });
+  }
+  if (!mergeRanges.length) return;
+  const requests = [];
+  for (let rowIndex = startRow - 1; rowIndex < startRow - 1 + rowCount; rowIndex += 1) {
+    mergeRanges.forEach((range) => {
+      const gridRange = { sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, ...range };
+      requests.push({ unmergeCells: { range: gridRange } });
+      requests.push({ mergeCells: { range: gridRange, mergeType: "MERGE_ALL" } });
+    });
+  }
+  await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } }).catch((error) => {
+    console.warn("Employee daily row formatting skipped:", error.message);
+  });
+}
+
+async function copyEmployeeDailyRowFormat(sheets, spreadsheetId, sheetId, sourceRow, targetRow, rowCount) {
+  if ((sheetId !== 0 && !sheetId) || !sourceRow || !targetRow || !rowCount) return;
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        copyPaste: {
+          source: {
+            sheetId,
+            startRowIndex: sourceRow - 1,
+            endRowIndex: sourceRow,
+            startColumnIndex: 0,
+            endColumnIndex: 18,
+          },
+          destination: {
+            sheetId,
+            startRowIndex: targetRow - 1,
+            endRowIndex: targetRow - 1 + rowCount,
+            startColumnIndex: 0,
+            endColumnIndex: 18,
+          },
+          pasteType: "PASTE_FORMAT",
+          pasteOrientation: "NORMAL",
+        },
+      }],
+    },
+  }).catch((error) => {
+    console.warn("Employee daily row format copy skipped:", error.message);
+  });
 }
 
 async function repairEmployeeSerialFormulas(sheets, spreadsheetId, tabName, maxRows = 300) {
@@ -791,11 +920,11 @@ function employeeReportFromSheetRows({ rows = [], user, spreadsheetId }) {
     const taskCategory = projectText(row[3]);
     const taskDescription = projectText(row[4]);
     if (taskCategory && taskDescription && !existing.taskItems.some((item) => item.category === taskCategory && item.description === taskDescription)) {
-      existing.taskItems.push({ site: projectText(row[2]), category: taskCategory, status: projectText(row[5]), description: taskDescription });
+      existing.taskItems.push({ site: projectText(row[2]), category: taskCategory, status: projectText(row[5]), involvement: projectText(row[6]), description: taskDescription });
     }
     const waitingDescription = projectText(row[9]);
     if (waitingDescription && !existing.waitingTaskItems.some((item) => item.description === waitingDescription)) {
-      existing.waitingTaskItems.push({ site: projectText(row[2]), category: "Waiting / tomorrow plan", description: waitingDescription });
+      existing.waitingTaskItems.push({ site: projectText(row[2]), category: "Waiting / tomorrow plan", involvement: projectText(row[6]), description: waitingDescription });
     }
     existing.tomorrowPlanTick = existing.tomorrowPlanTick || ["true", "yes", "y", "1", "checked", "tick"].includes(projectText(row[10]).toLowerCase());
     if (!existing.note) existing.note = projectText(row[11]);
@@ -1016,14 +1145,24 @@ async function appendEmployeeReportToSheet({ user, report, taskItems, waitingTas
     throw duplicate;
   }
   const dailyTab = await ensureEmployeeDailySheetTab(sheets, spreadsheetId, meta, report.reportDate);
-  const existing = await sheets.spreadsheets.values.get({
+  let existing = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000`,
   });
-  const values = existing.data.values || [];
-  const columns = findEmployeeTemplateColumns(values);
+  let values = existing.data.values || [];
+  let columns = findEmployeeTemplateColumns(values);
+  if (await normalizeEmployeeDailyTemplateRows(sheets, spreadsheetId, dailyTab, columns)) {
+    existing = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000`,
+    });
+    values = existing.data.values || [];
+    columns = findEmployeeTemplateColumns(values);
+  }
+  await cleanEmployeeDailyHeaderJunk(sheets, spreadsheetId, dailyTab.tabName, columns);
   const startRow = findNextEmployeeTemplateRow(values, columns);
   const rowCount = Math.max(taskItems.length, waitingTaskItems.length, 1);
+  await formatEmployeeDailyTaskRows(sheets, spreadsheetId, dailyTab.tabId, columns, startRow, rowCount);
   await allowEmployeeTaskTypeValuesOnRows(sheets, spreadsheetId, dailyTab.tabId, columns, startRow, rowCount, taskItems);
   const data = [];
   Array.from({ length: rowCount }, (_, index) => {
@@ -1031,14 +1170,19 @@ async function appendEmployeeReportToSheet({ user, report, taskItems, waitingTas
     const waiting = waitingTaskItems[index] || {};
     const rowNumber = startRow + index;
     [
-      ...(index === 0 && columns.reportDateCell ? [[columns.reportDateCell, report.reportDate]] : []),
-      [columns.client, ""],
+      ...(index === 0 && columns.reportNameLabelCell ? [[columns.reportNameLabelCell, "Report:"]] : []),
+      ...(index === 0 && columns.reportNameCell ? [[columns.reportNameCell, "Personnel Daily Work Progress Report"]] : []),
+      ...(index === 0 && columns.reportDateLabelCell ? [[columns.reportDateLabelCell, "Dated:"]] : []),
+      ...(index === 0 && columns.reportDateCell ? [[columns.reportDateCell, employeeSheetDisplayDate(report.reportDate)]] : []),
+      [columns.serial, task.category || waiting.description ? index + 1 : ""],
+      [columns.client, "NA"],
       [columns.site, task.site || waiting.site || ""],
       [columns.reportDate, report.reportDate],
       [columns.taskType, task.category || report.taskType],
       [columns.taskDescription, task.description || ""],
       [columns.taskStatus, task.status || report.taskStatus],
-      [columns.involvement, report.involvement],
+      [columns.involvement, task.involvement || waiting.involvement || report.involvement],
+      [columns.waitingSerial, waiting.description ? index + 1 : ""],
       [columns.waitingDescription, waiting.description || ""],
       [columns.tomorrowTick, report.tomorrowPlanTick ? "TRUE" : ""],
       [columns.note, index === 0 ? report.note : ""],
@@ -1134,12 +1278,18 @@ async function updateEmployeeReportInSheet({ user, report, taskItems, waitingTas
   });
 
   const dailyTab = await ensureEmployeeDailySheetTab(sheets, spreadsheetId, meta, report.reportDate);
-  const existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000` });
-  const values = existing.data.values || [];
-  const columns = findEmployeeTemplateColumns(values);
+  let existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000` });
+  let values = existing.data.values || [];
+  let columns = findEmployeeTemplateColumns(values);
+  if (await normalizeEmployeeDailyTemplateRows(sheets, spreadsheetId, dailyTab, columns)) {
+    existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000` });
+    values = existing.data.values || [];
+    columns = findEmployeeTemplateColumns(values);
+  }
+  await cleanEmployeeDailyHeaderJunk(sheets, spreadsheetId, dailyTab.tabName, columns);
   const previousRowCount = Math.max(previousTaskItems.length, previousWaitingTaskItems.length, 1);
   const previousRowMatches = values.map((row, index) => ({ row, rowNumber: index + 1 })).filter(({ row, rowNumber }) => {
-    if (rowNumber <= 1) return false;
+    if (rowNumber <= Number(columns.headerRow || 6)) return false;
     const site = projectText(row[(columns.site || 0) - 1]);
     const category = projectText(row[(columns.taskType || 0) - 1]);
     const description = projectText(row[(columns.taskDescription || 0) - 1]);
@@ -1178,12 +1328,24 @@ async function updateEmployeeReportInSheet({ user, report, taskItems, waitingTas
     }).catch((error) => {
       console.warn("Employee report row insert skipped:", error.message);
     });
+    await copyEmployeeDailyRowFormat(sheets, spreadsheetId, dailyTab.tabId, Math.max(startRow, startRow + previousRowCount - 1), startRow + previousRowCount, rowsToInsert);
   }
   const clearThrough = Math.max(startRow + rowCount - 1, startRow + previousRowCount - 1, previousRowMatches.at(-1)?.rowNumber || startRow);
-  const clearRanges = [columns.client, columns.site, columns.reportDate, columns.taskType, columns.taskDescription, columns.taskStatus, columns.involvement, columns.waitingDescription, columns.tomorrowTick, columns.note]
+  const clearRanges = [columns.serial, columns.client, columns.site, columns.reportDate, columns.taskType, columns.taskDescription, columns.taskStatus, columns.involvement, columns.waitingSerial, columns.waitingDescription, columns.tomorrowTick, columns.note]
     .filter(Boolean)
     .map((column) => `${escapeSheetName(dailyTab.tabName)}!${columnName(column)}${startRow}:${columnName(column)}${clearThrough}`);
+  if (columns.taskDescription && columns.taskStatus && columns.taskStatus - columns.taskDescription > 1) {
+    clearRanges.push(`${escapeSheetName(dailyTab.tabName)}!${columnName(columns.taskDescription)}${startRow}:${columnName(columns.taskStatus - 1)}${clearThrough}`);
+  }
+  const waitingClearEnd = [columns.tomorrowTick, columns.note].map(Number).filter(Boolean).sort((a, b) => a - b)[0];
+  if (columns.waitingDescription && waitingClearEnd && waitingClearEnd - columns.waitingDescription > 1) {
+    clearRanges.push(`${escapeSheetName(dailyTab.tabName)}!${columnName(columns.waitingDescription)}${startRow}:${columnName(waitingClearEnd - 1)}${clearThrough}`);
+  }
+  if (columns.note) {
+    clearRanges.push(`${escapeSheetName(dailyTab.tabName)}!${columnName(columns.note)}${startRow}:R${clearThrough}`);
+  }
   if (clearRanges.length) await sheets.spreadsheets.values.batchClear({ spreadsheetId, requestBody: { ranges: clearRanges } });
+  await formatEmployeeDailyTaskRows(sheets, spreadsheetId, dailyTab.tabId, columns, startRow, rowCount);
   await allowEmployeeTaskTypeValuesOnRows(sheets, spreadsheetId, dailyTab.tabId, columns, startRow, rowCount, taskItems);
   const data = [];
   Array.from({ length: rowCount }, (_, index) => {
@@ -1191,14 +1353,19 @@ async function updateEmployeeReportInSheet({ user, report, taskItems, waitingTas
     const waiting = waitingTaskItems[index] || {};
     const rowNumber = startRow + index;
     [
-      ...(index === 0 && columns.reportDateCell ? [[columns.reportDateCell, report.reportDate]] : []),
-      [columns.client, ""],
+      ...(index === 0 && columns.reportNameLabelCell ? [[columns.reportNameLabelCell, "Report:"]] : []),
+      ...(index === 0 && columns.reportNameCell ? [[columns.reportNameCell, "Personnel Daily Work Progress Report"]] : []),
+      ...(index === 0 && columns.reportDateLabelCell ? [[columns.reportDateLabelCell, "Dated:"]] : []),
+      ...(index === 0 && columns.reportDateCell ? [[columns.reportDateCell, employeeSheetDisplayDate(report.reportDate)]] : []),
+      [columns.serial, task.category || waiting.description ? index + 1 : ""],
+      [columns.client, "NA"],
       [columns.site, task.site || waiting.site || ""],
       [columns.reportDate, report.reportDate],
       [columns.taskType, task.category || report.taskType],
       [columns.taskDescription, task.description || ""],
       [columns.taskStatus, task.status || report.taskStatus],
-      [columns.involvement, report.involvement],
+      [columns.involvement, task.involvement || waiting.involvement || report.involvement],
+      [columns.waitingSerial, waiting.description ? index + 1 : ""],
       [columns.waitingDescription, waiting.description || ""],
       [columns.tomorrowTick, report.tomorrowPlanTick ? "TRUE" : ""],
       [columns.note, index === 0 ? report.note : ""],
@@ -1376,13 +1543,10 @@ app.post("/employee-daily-report", async (req, res) => {
     if (!department) return res.status(400).json({ error: "Department is required for your first report" });
     const taskItems = sanitizeEmployeeTaskItems(body.taskItems);
     const waitingTaskItems = sanitizeEmployeeTaskItems(body.waitingTaskItems);
-    const required = ["involvement"];
-    for (const field of required) {
-      if (!projectText(body[field])) return res.status(400).json({ error: `${field} is required` });
-    }
     if (!taskItems.length) return res.status(400).json({ error: "Add at least one completed task with site, category, status and description" });
     if (taskItems.some((item) => !item.site) || waitingTaskItems.some((item) => !item.site)) return res.status(400).json({ error: "Choose a site for every task" });
     if (taskItems.some((item) => !item.status)) return res.status(400).json({ error: "Choose a status for every today task" });
+    if (taskItems.some((item) => !item.involvement) || waitingTaskItems.some((item) => !item.involvement)) return res.status(400).json({ error: "Choose involvement for every task" });
     const now = new Date();
     const report = {
       _id: new ObjectId(),
@@ -1398,7 +1562,7 @@ app.post("/employee-daily-report", async (req, res) => {
       taskItems,
       taskDescription: taskItemsToText(taskItems),
       taskStatus: taskItems[0]?.status || "",
-      involvement: projectText(body.involvement),
+      involvement: taskItems[0]?.involvement || waitingTaskItems[0]?.involvement || "",
       waitingTaskItems,
       waitingTaskDescription: taskItemsToText(waitingTaskItems),
       tomorrowPlanTick: Boolean(body.tomorrowPlanTick),
@@ -1433,12 +1597,10 @@ app.put("/employee-daily-report", async (req, res) => {
     if (!department) return res.status(400).json({ error: "Department is required" });
     const taskItems = sanitizeEmployeeTaskItems(body.taskItems);
     const waitingTaskItems = sanitizeEmployeeTaskItems(body.waitingTaskItems);
-    for (const field of ["involvement"]) {
-      if (!projectText(body[field])) return res.status(400).json({ error: `${field} is required` });
-    }
     if (!taskItems.length) return res.status(400).json({ error: "Add at least one completed task with site, category and description" });
     if (taskItems.some((item) => !item.site) || waitingTaskItems.some((item) => !item.site)) return res.status(400).json({ error: "Choose a site for every task" });
     if (taskItems.some((item) => !item.status)) return res.status(400).json({ error: "Choose a status for every today task" });
+    if (taskItems.some((item) => !item.involvement) || waitingTaskItems.some((item) => !item.involvement)) return res.status(400).json({ error: "Choose involvement for every task" });
     const now = new Date();
     const report = {
       reportId: projectText(body.id || body.reportId),
@@ -1453,7 +1615,7 @@ app.put("/employee-daily-report", async (req, res) => {
       taskItems,
       taskDescription: taskItemsToText(taskItems),
       taskStatus: taskItems[0]?.status || "",
-      involvement: projectText(body.involvement),
+      involvement: taskItems[0]?.involvement || waitingTaskItems[0]?.involvement || "",
       waitingTaskItems,
       waitingTaskDescription: taskItemsToText(waitingTaskItems),
       tomorrowPlanTick: Boolean(body.tomorrowPlanTick),

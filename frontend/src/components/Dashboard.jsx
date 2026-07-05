@@ -5,6 +5,7 @@ import {
   Loader2,
   FileText,
   CalendarDays,
+  Images,
   ClipboardCheck,
   MessageCircle,
   RefreshCw,
@@ -207,6 +208,12 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
       href: "/projects/dmr",
     },
     {
+      label: "Check Site Daily Images",
+      helper: "Open Site Daily Images",
+      icon: Images,
+      href: "/projects/site-images",
+    },
+    {
       label: "Employee Report",
       helper: "Review daily employee updates",
       icon: ClipboardCheck,
@@ -279,7 +286,7 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
                   </p>
                 </div>
 
-                <div className="mt-5 max-w-xl mx-auto grid gap-3 sm:grid-cols-2">
+                <div className="mt-5 max-w-4xl mx-auto grid gap-3 sm:grid-cols-3">
                   {quickLinks.map((link) => {
                     const Icon = link.icon;
                     return (

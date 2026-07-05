@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- Google Drive image URLs are dynamic and cannot use the fixed Next image host allowlist. */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpRight, CalendarDays, Camera, Folder, ImageOff, Loader2, RefreshCw, Search, UserRound, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CalendarDays, Camera, ChevronLeft, ChevronRight, Folder, ImageOff, Loader2, RefreshCw, Search, UserRound, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 import { DatePicker } from "./ui";
@@ -175,20 +175,6 @@ export default function SiteImagesDashboard({ darkMode }) {
     const id = window.setInterval(() => void load({ quiet: true }), 60000);
     return () => window.clearInterval(id);
   }, [load]);
-  useEffect(() => {
-    if (!selectedSite) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") closeSiteDrawer();
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [closeSiteDrawer, selectedSite]);
-
   const groups = useMemo(() => {
     const map = new Map();
     photos.filter((photo) => photo.date === date).forEach((photo) => {
@@ -200,6 +186,35 @@ export default function SiteImagesDashboard({ darkMode }) {
     return [...map.values()].filter((group) => !term || group.site.toLowerCase().includes(term) || [...group.trades].some((trade) => trade.toLowerCase().includes(term))).sort((a, b) => b.photos.length - a.photos.length);
   }, [date, photos, query]);
   const activeGroup = groups.find((group) => group.site === selectedSite) || null;
+  const selectedPhotoIndex = activeGroup && selectedPhoto ? activeGroup.photos.findIndex((photo) => photo.id === selectedPhoto.id) : -1;
+  const canNavigateSelectedPhoto = selectedPhotoIndex >= 0 && activeGroup.photos.length > 1;
+  const navigateSelectedPhoto = useCallback((direction) => {
+    if (!activeGroup || !selectedPhoto || activeGroup.photos.length < 2) return;
+    const currentIndex = activeGroup.photos.findIndex((photo) => photo.id === selectedPhoto.id);
+    if (currentIndex === -1) return;
+    const nextIndex = (currentIndex + direction + activeGroup.photos.length) % activeGroup.photos.length;
+    setSelectedPhoto(activeGroup.photos[nextIndex]);
+  }, [activeGroup, selectedPhoto]);
+
+  useEffect(() => {
+    if (!selectedSite) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        if (selectedPhoto) setSelectedPhoto(null);
+        else closeSiteDrawer();
+      }
+      if (event.key === "ArrowLeft" && selectedPhoto) navigateSelectedPhoto(-1);
+      if (event.key === "ArrowRight" && selectedPhoto) navigateSelectedPhoto(1);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [closeSiteDrawer, navigateSelectedPhoto, selectedPhoto, selectedSite]);
+
   const panel = darkMode ? "border-white/10 bg-[#17191e]" : "border-black/[0.06] bg-white";
   const muted = darkMode ? "text-white/45" : "text-black/45";
 
@@ -235,7 +250,15 @@ export default function SiteImagesDashboard({ darkMode }) {
         </aside>
       </div>}
 
-      {selectedPhoto && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 p-4" onClick={() => setSelectedPhoto(null)}><button type="button" className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white"><X className="h-5 w-5" /></button><img src={imageUrl(selectedPhoto.url)} alt="Site preview" className="max-h-[88vh] max-w-[94vw] object-contain" /></div>}
+      {selectedPhoto && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 p-4" onClick={() => setSelectedPhoto(null)} role="dialog" aria-modal="true" aria-label="Site image preview">
+        <button type="button" onClick={() => setSelectedPhoto(null)} className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20" aria-label="Close image preview"><X className="h-5 w-5" /></button>
+        {canNavigateSelectedPhoto && <>
+          <button type="button" onClick={(event) => { event.stopPropagation(); navigateSelectedPhoto(-1); }} className="absolute left-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:left-6 sm:h-14 sm:w-14" aria-label="Previous image"><ChevronLeft className="h-7 w-7" /></button>
+          <button type="button" onClick={(event) => { event.stopPropagation(); navigateSelectedPhoto(1); }} className="absolute right-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:right-6 sm:h-14 sm:w-14" aria-label="Next image"><ChevronRight className="h-7 w-7" /></button>
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">{selectedPhotoIndex + 1} / {activeGroup.photos.length}</div>
+        </>}
+        <img src={imageUrl(selectedPhoto.url)} alt="Site preview" onClick={(event) => event.stopPropagation()} className="max-h-[88vh] max-w-[94vw] object-contain" />
+      </div>}
     </main>
   );
 }

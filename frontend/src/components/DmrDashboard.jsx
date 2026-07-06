@@ -1676,6 +1676,11 @@ export default function DmrDashboard({ darkMode }) {
     activePlan?.summary?.plannedManpower || 0,
     activePlan?.actuals?.actualManpower || 0,
   );
+  const activePlanProgress = activePlanStatus.planned
+    ? Math.round((activePlanStatus.actual / activePlanStatus.planned) * 100)
+    : activePlanStatus.actual
+      ? 100
+      : 0;
   const attentionPlanSites = tomorrowPlanSites.filter(
     (site) => !planActualStatus(site.plannedManpower, site.actualManpower).ok,
   );
@@ -2639,9 +2644,7 @@ export default function DmrDashboard({ darkMode }) {
                               <span
                                 className={`mb-2 rounded-full border px-3 py-1 text-sm font-semibold ${planStatusTone(activePlanStatus, darkMode)}`}
                               >
-                                {activePlanStatus.ok
-                                  ? "On track"
-                                  : "Needs attention"}
+                                {activePlanProgress}% progress
                               </span>
                             </div>
                             <p className={`mt-3 text-sm ${muted}`}>

@@ -2016,8 +2016,10 @@ const dmrHistoryPath = path.join(dataDir, "dmr-history.json");
 const mrnHistoryPath = path.join(dataDir, "mrn-history.json");
 const dmrSettingsPath = path.join(dataDir, "dmr-settings.json");
 const dmrPdfDir = path.join(dataDir, "dmr-pdfs");
+const dmrAiCacheDir = path.join(dataDir, "dmr-ai-cache");
 const mrnSettingsPath = path.join(dataDir, "mrn-settings.json");
 if (!fs.existsSync(dmrPdfDir)) fs.mkdirSync(dmrPdfDir, { recursive: true });
+if (!fs.existsSync(dmrAiCacheDir)) fs.mkdirSync(dmrAiCacheDir, { recursive: true });
 
 let documents = [];
 let documentFolders = [];
@@ -4399,6 +4401,260 @@ function dmrReportVariance(planned, actual) {
   return (Number(actual) || 0) - (Number(planned) || 0);
 }
 
+const DMR_PLAN_SUMMARY_CACHE_VERSION = "ceo-daily-summary-v3";
+const DMR_DAILY_PDF_LAYOUT_VERSION = "ceo-summary-v6-bullets";
+
+function comparablePlanText(value = "") {
+  const text = projectText(value)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/\bfarm\s+house\b/g, "farmhouse")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const compact = text.replace(/\s+/g, "");
+  const siteAliases = {
+    farmhouse: "serenitymeadowsfarmhouse",
+    serenitymeadowsfarm: "serenitymeadowsfarmhouse",
+    serenitymeadowsfarmhouse: "serenitymeadowsfarmhouse",
+    gharana: "gharana",
+    sgharana: "gharana",
+    sheetalgharana: "gharana",
+  };
+  return siteAliases[compact] || text;
+}
+
+function comparableTradeText(value = "") {
+  const text = comparablePlanText(value);
+  const compact = text.replace(/\s+/g, "");
+  const tradeAliases = {
+    ac: "ac",
+    aircondition: "ac",
+    airconditioning: "ac",
+    airconditioner: "ac",
+    airconditioners: "ac",
+  };
+  return tradeAliases[compact] || compact;
+}
+
+function buildDmrPlanSummaryPayload(plan = {}) {
+  const planned = Number(plan?.summary?.plannedManpower) || 0;
+  const actual = Number(plan?.actuals?.actualManpower) || 0;
+  const progress = dmrReportProgress(planned, actual);
+  const siteActuals = new Map((plan?.actuals?.siteBreakdown || []).map((item) => [comparablePlanText(item.site), Number(item.actual) || 0]));
+  const tradeActuals = new Map((plan?.actuals?.tradeSiteBreakdown || []).map((item) => [`${comparablePlanText(item.site)}|${comparableTradeText(item.trade)}`, Number(item.actual) || 0]));
+  const sites = [...(plan?.records || []).reduce((result, record) => {
+    const site = projectText(record.site) || "Unassigned site";
+    const item = result.get(site) || { site, planned: 0, actual: 0, variance: 0, records: 0 };
+    item.planned += Number(record.plannedManpower) || 0;
+    item.records += 1;
+    result.set(site, item);
+    return result;
+  }, new Map()).values()].map((item) => {
+    const actualValue = siteActuals.get(comparablePlanText(item.site)) || 0;
+    return { ...item, actual: actualValue, variance: actualValue - item.planned, progress: dmrReportProgress(item.planned, actualValue) };
+  }).sort((a, b) => a.variance - b.variance || b.planned - a.planned);
+  const trades = [...(plan?.records || []).reduce((result, record) => {
+    const site = projectText(record.site) || "Unassigned site";
+    const trade = projectText(record.category) || "General";
+    const key = `${site}|${trade}`;
+    const item = result.get(key) || { site, trade, planned: 0, actual: 0, variance: 0, records: 0, workSamples: [] };
+    item.planned += Number(record.plannedManpower) || 0;
+    item.records += 1;
+    if (record.work && item.workSamples.length < 2) item.workSamples.push(projectText(record.work).slice(0, 180));
+    result.set(key, item);
+    return result;
+  }, new Map()).values()].map((item) => {
+    const actualValue = tradeActuals.get(`${comparablePlanText(item.site)}|${comparableTradeText(item.trade)}`) || 0;
+    return { ...item, actual: actualValue, variance: actualValue - item.planned, progress: dmrReportProgress(item.planned, actualValue) };
+  }).sort((a, b) => a.variance - b.variance || b.planned - a.planned);
+
+  return {
+    date: plan?.selectedDate || plan?.requestedDate || "",
+    planned,
+    actual,
+    variance: actual - planned,
+    progress,
+    records: plan?.summary?.records || 0,
+    workItems: plan?.summary?.workItems || 0,
+    sitesCount: plan?.summary?.sites || sites.length,
+    categoriesCount: plan?.summary?.categories || 0,
+    attentionSites: sites.filter((item) => item.actual < item.planned).slice(0, 8),
+    goodSites: sites.filter((item) => item.planned > 0 && item.actual >= item.planned).sort((a, b) => b.variance - a.variance || b.planned - a.planned).slice(0, 8),
+    topSites: sites.slice().sort((a, b) => b.planned - a.planned).slice(0, 8),
+    attentionTrades: trades.filter((item) => item.actual < item.planned).slice(0, 10),
+    goodTrades: trades.filter((item) => item.planned > 0 && item.actual >= item.planned).sort((a, b) => b.variance - a.variance || b.planned - a.planned).slice(0, 10),
+    topTrades: trades.slice().sort((a, b) => b.planned - a.planned).slice(0, 10),
+  };
+}
+
+function buildDmrExecutiveSummaryPayload(dashboard = {}) {
+  const plan = buildDmrPlanSummaryPayload(dashboard.todayPlan);
+  const today = dashboard.today || {};
+  return {
+    ...plan,
+    dmr: {
+      date: dashboard.date || plan.date,
+      totals: today.totals || {},
+      siteBreakdown: today.siteBreakdown || [],
+      records: today.records || [],
+      equipment: today.equipment || [],
+      materials: today.materials || [],
+      notes: today.notes || [],
+      staffAttendance: today.staffAttendance || [],
+    },
+  };
+}
+
+function fallbackDmrPlanSummary(payload) {
+  const shortfall = Math.max(0, -payload.variance);
+  const surplus = Math.max(0, payload.variance);
+  const attentionNames = payload.attentionSites.slice(0, 3).map((item) => `${item.site} (${item.actual}/${item.planned})`);
+  const topTradeNames = payload.topTrades.slice(0, 3).map((item) => `${item.trade} at ${item.site}`);
+  const summary = payload.planned
+    ? `Today's plan is ${payload.progress}% complete with ${payload.actual}/${payload.planned} actual manpower reported across ${payload.sitesCount} site${payload.sitesCount === 1 ? "" : "s"}.`
+    : "No planned manpower is available for today's plan yet.";
+  const issues = [];
+  if (shortfall) issues.push(`${shortfall} workers below plan; ${attentionNames.join(", ") || "site actuals require review"}.`);
+  const attendance = payload.dmr?.staffAttendance || [];
+  const absent = attendance.filter((item) => projectText(item.status).toLowerCase() === "a").length;
+  const pending = attendance.filter((item) => !["p", "a", "l"].includes(projectText(item.status).toLowerCase())).length;
+  if (absent) issues.push(`${absent} staff member${absent === 1 ? " is" : "s are"} absent.`);
+  if (pending) issues.push(`${pending} attendance update${pending === 1 ? " is" : "s are"} pending.`);
+  const issueLines = issues.length ? issues.slice(0, 3) : ["No major issues reported."];
+  const actionLines = shortfall
+    ? [`Review manpower gaps at ${attentionNames.map((item) => item.replace(/ \(.+\)$/, "")).join(", ") || "underperforming sites"}.`, "Resolve the largest trade shortfalls before the next shift.", "Confirm pending DMR and attendance updates."]
+    : ["Maintain current manpower deployment.", "Confirm all DMR and attendance updates are complete.", "Monitor priority trades through the next reporting cycle."];
+  return {
+    provider: "rules",
+    model: null,
+    progress: payload.progress,
+    text: [
+      "Overall Status:",
+      summary,
+      "",
+      "Executive Summary:",
+      `${shortfall ? `Manpower is ${shortfall} below plan.` : `Manpower is meeting plan${surplus ? ` with a surplus of ${surplus}` : ""}.`} ${topTradeNames.length ? `Key work areas are ${topTradeNames.join(", ")}.` : "No trade-level work was reported."}`,
+      "",
+      "Issues:",
+      ...issueLines.map((item) => `• ${item}`),
+      "",
+      "Priority Actions:",
+      ...actionLines.map((item) => `• ${item}`),
+    ].join("\n"),
+  };
+}
+
+async function generateDmrPlanAiSummary(payload) {
+  const fallback = fallbackDmrPlanSummary(payload);
+  const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  if (!anthropicKey) return fallback;
+  const system = `You are an Executive Project Analyst preparing a CEO Daily Summary.
+
+Analyze the complete Daily DMR data and generate a concise executive summary.
+
+Rules:
+- Maximum 120 words.
+- Use simple business language.
+- Do NOT repeat tables or raw data.
+- Focus only on insights that matter to management.
+- Mention overall project status first.
+- Highlight major achievements.
+- Mention any risks, delays, shortages, missing updates, attendance issues, or other problems ONLY if they exist.
+- If there are no significant issues, explicitly state "No major issues reported."
+- Mention any sites or trades that require immediate management attention.
+- Do not speculate or invent information.
+- Base every statement only on the provided DMR data.
+
+Return the response in exactly this format:
+
+Overall Status:
+<One short sentence summarizing the day's overall execution.>
+
+Executive Summary:
+<2–4 concise sentences explaining the key insights, progress, and overall performance.>
+
+Issues:
+• Issue 1
+• Issue 2
+• Issue 3
+
+If there are no issues, write:
+Issues:
+• No major issues reported.
+
+Priority Actions:
+• Action 1
+• Action 2
+• Action 3
+
+Keep the response crisp, professional, and suitable for a CEO who should understand the day's situation within 20 seconds.`;
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": anthropicKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
+      max_tokens: 420,
+      system,
+      messages: [{ role: "user", content: `Complete Daily DMR JSON:\n${JSON.stringify(payload)}` }],
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || "Claude request failed");
+  const text = (data.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n").trim();
+  return { provider: "claude", model: data.model, progress: payload.progress, text: text || fallback.text };
+}
+
+function dmrPlanSummarySignature(payload) {
+  return crypto.createHash("sha256").update(JSON.stringify({ version: DMR_PLAN_SUMMARY_CACHE_VERSION, payload })).digest("hex");
+}
+
+function dmrDailyPdfSignature({ dashboard, planPayload }) {
+  return crypto.createHash("sha256").update(JSON.stringify({
+    version: DMR_DAILY_PDF_LAYOUT_VERSION,
+    planPayload,
+    records: dashboard?.today?.records || [],
+    attendance: dashboard?.today?.staffAttendance || [],
+  })).digest("hex");
+}
+
+function readJsonFileSafe(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+async function getCachedDmrPlanSummary(date, payload, signature = dmrPlanSummarySignature(payload)) {
+  const cachePath = dmrAiSummaryCachePath(date);
+  const cached = readJsonFileSafe(cachePath);
+  if (cached?.signature === signature && cached?.insight?.text) {
+    return { ...cached, cacheStatus: "hit" };
+  }
+  let insight;
+  try {
+    insight = await generateDmrPlanAiSummary(payload);
+  } catch (error) {
+    console.error("DMR Today plan AI summary error:", error);
+    insight = { ...fallbackDmrPlanSummary(payload), provider: "error", model: null, error: error.message };
+  }
+  const next = {
+    date,
+    signature,
+    generatedAt: new Date().toISOString(),
+    summary: payload,
+    insight,
+  };
+  fs.writeFileSync(cachePath, JSON.stringify(next, null, 2));
+  return { ...next, cacheStatus: "miss" };
+}
+
 async function buildDmrReport({ startDate, endDate, sections = [] } = {}) {
   const spreadsheetId = getActiveDmrSpreadsheetId();
   const { start, end, dates } = dmrDateRange(startDate, endDate);
@@ -4698,6 +4954,14 @@ function dmrPdfPath(dateKey) {
   return path.join(dmrPdfDir, dmrPdfFilename(dateKey));
 }
 
+function dmrPdfMetaPath(dateKey) {
+  return path.join(dmrPdfDir, `${dmrDateKey(dateKey) || istDateKey(new Date())}.meta.json`);
+}
+
+function dmrAiSummaryCachePath(dateKey) {
+  return path.join(dmrAiCacheDir, `today-plan-summary-${dmrDateKey(dateKey) || istDateKey(new Date())}.json`);
+}
+
 function dmrPdfStatusColor(planned, actual) {
   const plannedValue = Number(planned) || 0;
   const actualValue = Number(actual) || 0;
@@ -4865,6 +5129,134 @@ function dmrPdfDrawAttendance(doc, attendance) {
   doc.y = y + bodyHeight + 10;
 }
 
+function parseDmrExecutiveSummary(text = "") {
+  const normalized = projectText(text).replace(/\r/g, "");
+  const section = (name, nextName) => {
+    const start = normalized.match(new RegExp(`${name}:\\s*`, "i"));
+    if (!start) return "";
+    const contentStart = (start.index || 0) + start[0].length;
+    const remainder = normalized.slice(contentStart);
+    const next = nextName ? remainder.search(new RegExp(`\\n\\s*${nextName}:`, "i")) : -1;
+    return (next >= 0 ? remainder.slice(0, next) : remainder).trim();
+  };
+  const clean = (value) => value
+    .split("\n")
+    .map((line) => line.replace(/^\s*[•*-]\s*/, "").replace(/[–—]/g, "-").trim())
+    .filter(Boolean)
+    .join(" • ");
+  return {
+    overall: clean(section("Overall Status", "Executive Summary")),
+    executive: clean(section("Executive Summary", "Issues")),
+    issues: clean(section("Issues", "Priority Actions")),
+    actions: clean(section("Priority Actions")),
+  };
+}
+
+function dmrPdfQuickLookCards(payload = {}, insight = {}) {
+  const parsed = parseDmrExecutiveSummary(insight.text || "");
+  const fallback = parseDmrExecutiveSummary(fallbackDmrPlanSummary(payload).text);
+  return [
+    {
+      title: "Overall status",
+      text: parsed.overall || fallback.overall,
+      fill: "#eaf4ff",
+      stroke: "#b9dcff",
+      color: "#1268b3",
+    },
+    {
+      title: "Executive summary",
+      text: parsed.executive || fallback.executive,
+      fill: "#e9fbf2",
+      stroke: "#abe8c7",
+      color: "#0f9f6e",
+    },
+    {
+      title: "Issues",
+      text: parsed.issues || fallback.issues,
+      fill: "#fff0f0",
+      stroke: "#ffc2c2",
+      color: "#df3038",
+    },
+    {
+      title: "Priority actions",
+      text: parsed.actions || fallback.actions,
+      fill: "#fff7df",
+      stroke: "#f3d57d",
+      color: "#b66a00",
+    },
+  ];
+}
+
+function dmrPdfCardBulletItems(text = "") {
+  const value = projectText(text);
+  if (!value) return ["No update provided."];
+  const explicitItems = value.split(/\s+•\s+/).map((item) => item.trim()).filter(Boolean);
+  if (explicitItems.length > 1) return explicitItems;
+  const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z0-9])/).map((item) => item.trim()).filter(Boolean);
+  return sentences.length ? sentences : [value];
+}
+
+function dmrPdfDrawTodayPlanSummary(doc, summaryCache) {
+  const payload = summaryCache?.summary || {};
+  const insight = summaryCache?.insight || {};
+  const left = doc.page.margins.left;
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const cards = dmrPdfQuickLookCards(payload, insight);
+  const gap = 12;
+  const cardWidth = (pageWidth - 36 - gap) / 2;
+  const textWidth = cardWidth - 38;
+  cards.forEach((card) => {
+    card.items = dmrPdfCardBulletItems(card.text);
+  });
+  const cardTextHeights = cards.map((card) => {
+    doc.font(dmrPdfFonts.regular).fontSize(7.6);
+    return card.items.reduce((height, item, index) => (
+      height + doc.heightOfString(item, { width: textWidth, lineGap: 1 }) + (index ? 4 : 0)
+    ), 0);
+  });
+  const rowHeights = [0, 1].map((row) => Math.max(
+    78,
+    ...cardTextHeights.slice(row * 2, row * 2 + 2).map((height) => Math.ceil(height) + 39),
+  ));
+  const boxHeight = 90 + rowHeights[0] + gap + rowHeights[1] + 18;
+  let top = doc.y + 12;
+  if (top + boxHeight > doc.page.height - doc.page.margins.bottom) {
+    doc.addPage();
+    dmrPdfDrawDailyHeader(doc, payload.date || istDateKey(new Date()));
+    top = doc.y + 12;
+  }
+
+  doc.roundedRect(left, top, pageWidth, boxHeight, 18).fill("#fbfcfb").stroke("#dce6df");
+  doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text("CEO DAILY SUMMARY", left + 18, top + 15, { characterSpacing: 1.4 });
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(16).text("Executive project overview", left + 18, top + 32, { width: pageWidth - 176 });
+  doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(8).text("Management insights, current issues, and immediate priorities from today's DMR.", left + 18, top + 54, { width: pageWidth - 176 });
+
+  const progressColor = dmrPdfStatusColor(payload.planned, payload.actual);
+  doc.roundedRect(left + pageWidth - 132, top + 18, 104, 58, 16).fill((Number(payload.actual) || 0) >= (Number(payload.planned) || 0) ? "#daf8ea" : "#ffe7e7");
+  doc.fillColor(progressColor).font(dmrPdfFonts.bold).fontSize(24).text(`${payload.progress || 0}%`, left + pageWidth - 120, top + 29, { width: 80, align: "center" });
+  doc.fillColor(progressColor).font(dmrPdfFonts.regular).fontSize(7).text("day progress", left + pageWidth - 120, top + 56, { width: 80, align: "center" });
+
+  const startX = left + 18;
+  const startY = top + 90;
+  cards.forEach((card, index) => {
+    const row = Math.floor(index / 2);
+    const cardHeight = rowHeights[row];
+    const x = startX + (index % 2) * (cardWidth + gap);
+    const y = startY + (row === 0 ? 0 : rowHeights[0] + gap);
+    doc.roundedRect(x, y, cardWidth, cardHeight, 14).fill(card.fill).stroke(card.stroke);
+    doc.fillColor(card.color).font(dmrPdfFonts.bold).fontSize(8).text(card.title.toUpperCase(), x + 12, y + 10, { width: cardWidth - 24, height: 10 });
+    let itemY = y + 27;
+    card.items.forEach((item) => {
+      doc.font(dmrPdfFonts.regular).fontSize(7.6);
+      const itemHeight = doc.heightOfString(item, { width: textWidth, lineGap: 1 });
+      doc.circle(x + 15, itemY + 3.5, 1.7).fill(card.color);
+      doc.fillColor("#26312c").text(item, x + 22, itemY, { width: textWidth, lineGap: 1 });
+      itemY += itemHeight + 4;
+    });
+  });
+  doc.y = top + boxHeight + 8;
+}
+
 function dmrPdfDrawTradeSite(doc, report) {
   const entries = (report.tradeSiteManpowerByDate || [])
     .filter((item) => item.rowType !== "average")
@@ -5004,7 +5396,7 @@ function dmrPdfDrawTradeSite(doc, report) {
   }
 }
 
-function generateDmrDailyPdfBuffer(report, dateKey) {
+function generateDmrDailyPdfBuffer(report, dateKey, todayPlanSummary = null) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
@@ -5028,20 +5420,31 @@ function generateDmrDailyPdfBuffer(report, dateKey) {
     doc.addPage();
     dmrPdfDrawDailyHeader(doc, dateKey);
     dmrPdfDrawAttendance(doc, report.attendance);
+    dmrPdfDrawTodayPlanSummary(doc, todayPlanSummary);
     doc.end();
   });
 }
 
-async function buildDmrDailyPdf(dateKey, { save = false } = {}) {
+async function buildDmrDailyPdf(dateKey, { save = false, knownPayload = null, knownSignature = "", pdfSignature = "" } = {}) {
   const date = dmrDateKey(dateKey) || istDateKey(new Date());
   const report = await buildDmrReport({
     startDate: date,
     endDate: date,
     sections: ["summary", "attendance", "tradeSiteManpower", "dailyProgress"],
   });
-  const buffer = await generateDmrDailyPdfBuffer(report, date);
-  if (save) fs.writeFileSync(dmrPdfPath(date), buffer);
-  return { date, report, buffer };
+  let payload = knownPayload;
+  if (!payload) {
+    const dashboard = await readDmrDashboard(date, { ensureToday: false });
+    payload = buildDmrExecutiveSummaryPayload(dashboard);
+  }
+  const signature = knownSignature || dmrPlanSummarySignature(payload);
+  const todayPlanSummary = await getCachedDmrPlanSummary(date, payload, signature);
+  const buffer = await generateDmrDailyPdfBuffer(report, date, todayPlanSummary);
+  if (save) {
+    fs.writeFileSync(dmrPdfPath(date), buffer);
+    fs.writeFileSync(dmrPdfMetaPath(date), JSON.stringify({ date, signature: pdfSignature || signature, summarySignature: signature, generatedAt: new Date().toISOString(), summaryGeneratedAt: todayPlanSummary.generatedAt }, null, 2));
+  }
+  return { date, report, buffer, signature, todayPlanSummary };
 }
 
 function projectRowMatches(row, headers, assignment, project) {
@@ -7757,6 +8160,29 @@ app.get("/dmr-dashboard", async (req, res) => {
   }
 });
 
+app.get("/dmr-dashboard/today-plan-summary", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
+    if (!publicDmrSettings().linked) return res.status(400).json({ error: "DMR sheet is not linked" });
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : istDateKey(new Date());
+    const dashboard = await readDmrDashboard(date, { ensureToday: false });
+    const payload = buildDmrExecutiveSummaryPayload(dashboard);
+    const signature = dmrPlanSummarySignature(payload);
+    const cached = await getCachedDmrPlanSummary(date, payload, signature);
+    res.json({
+      date,
+      generatedAt: cached.generatedAt,
+      cacheStatus: cached.cacheStatus,
+      signature,
+      summary: cached.summary,
+      insight: cached.insight,
+    });
+  } catch (error) {
+    console.error("DMR Today plan summary error:", error);
+    res.status(500).json({ error: `Could not generate Today plan summary: ${error.message}` });
+  }
+});
+
 app.get("/dmr-dashboard/report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
@@ -7782,12 +8208,16 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
     if (!publicDmrSettings().linked) return res.status(400).json({ error: "DMR sheet is not linked" });
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : istDateKey(new Date());
     const cachedPath = dmrPdfPath(date);
-    const useCache = ["1", "true", "yes"].includes(String(req.query.cache || "").toLowerCase());
+    const cachedMeta = readJsonFileSafe(dmrPdfMetaPath(date));
+    const dashboard = await readDmrDashboard(date, { ensureToday: false });
+    const payload = buildDmrExecutiveSummaryPayload(dashboard);
+    const summarySignature = dmrPlanSummarySignature(payload);
+    const signature = dmrDailyPdfSignature({ dashboard, planPayload: payload });
     let buffer;
-    if (useCache && fs.existsSync(cachedPath)) {
+    if (cachedMeta?.signature === signature && fs.existsSync(cachedPath)) {
       buffer = fs.readFileSync(cachedPath);
     } else {
-      ({ buffer } = await buildDmrDailyPdf(date, { save: true }));
+      ({ buffer } = await buildDmrDailyPdf(date, { save: true, knownPayload: payload, knownSignature: summarySignature, pdfSignature: signature }));
     }
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${dmrPdfFilename(date)}"`);

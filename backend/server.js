@@ -2017,6 +2017,10 @@ const mrnHistoryPath = path.join(dataDir, "mrn-history.json");
 const dmrSettingsPath = path.join(dataDir, "dmr-settings.json");
 const dmrPdfDir = path.join(dataDir, "dmr-pdfs");
 const dmrAiCacheDir = path.join(dataDir, "dmr-ai-cache");
+const dmrPdfBuilds = new Map();
+const dmrPdfRefreshes = new Map();
+const DMR_PDF_CACHE_TTL_MS = Math.max(30_000, Number(process.env.DMR_PDF_CACHE_TTL_MS) || 5 * 60_000);
+const DMR_PDF_RETRY_BACKOFF_MS = Math.max(30_000, Number(process.env.DMR_PDF_RETRY_BACKOFF_MS) || 2 * 60_000);
 const mrnSettingsPath = path.join(dataDir, "mrn-settings.json");
 if (!fs.existsSync(dmrPdfDir)) fs.mkdirSync(dmrPdfDir, { recursive: true });
 if (!fs.existsSync(dmrAiCacheDir)) fs.mkdirSync(dmrAiCacheDir, { recursive: true });
@@ -3361,8 +3365,10 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
     if (!agency || /total|grand total/i.test(agency)) continue;
     agencies.add(agency);
     for (const pair of sitePairs) {
-      const planned = dmrValueNumber(row[pair.plannedColumnIndex]);
-      const actual = dmrValueNumber(row[pair.actualColumnIndex]);
+      const plannedValue = row[pair.plannedColumnIndex];
+      const actualValue = row[pair.actualColumnIndex];
+      const planned = dmrValueNumber(plannedValue);
+      const actual = dmrValueNumber(actualValue);
       records.push({
         id: `${sheetName}:${rowIndex + 1}:${pair.site}`,
         date: dateKey,
@@ -3372,6 +3378,8 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
         site: pair.site,
         planned,
         actual,
+        plannedFilled: projectText(plannedValue) !== "",
+        actualFilled: projectText(actualValue) !== "",
         variance: actual - planned,
         plannedColumn: pair.plannedColumnIndex + 1,
         actualColumn: pair.actualColumnIndex + 1,
@@ -4402,7 +4410,7 @@ function dmrReportVariance(planned, actual) {
 }
 
 const DMR_PLAN_SUMMARY_CACHE_VERSION = "ceo-daily-summary-v3";
-const DMR_DAILY_PDF_LAYOUT_VERSION = "ceo-summary-v6-bullets";
+const DMR_DAILY_PDF_LAYOUT_VERSION = "single-masthead-inline-summary-v10";
 
 function comparablePlanText(value = "") {
   const text = projectText(value)
@@ -4617,6 +4625,7 @@ function dmrDailyPdfSignature({ dashboard, planPayload }) {
   return crypto.createHash("sha256").update(JSON.stringify({
     version: DMR_DAILY_PDF_LAYOUT_VERSION,
     planPayload,
+    todayPlanRecords: dashboard?.todayPlan?.records || [],
     records: dashboard?.today?.records || [],
     attendance: dashboard?.today?.staffAttendance || [],
   })).digest("hex");
@@ -4658,7 +4667,7 @@ async function getCachedDmrPlanSummary(date, payload, signature = dmrPlanSummary
 async function buildDmrReport({ startDate, endDate, sections = [] } = {}) {
   const spreadsheetId = getActiveDmrSpreadsheetId();
   const { start, end, dates } = dmrDateRange(startDate, endDate);
-  const selectedSections = new Set(sections.length ? sections : ["summary", "siteManpower", "agencyManpower", "tradeSiteManpower", "attendance", "equipment", "materials", "notes", "dailyProgress"]);
+  const selectedSections = new Set(sections.length ? sections : ["summary", "siteManpower", "agencyManpower", "tradeSiteManpower", "tradeComments", "attendance", "equipment", "materials", "notes", "dailyProgress"]);
   const sheets = await fetchRawSheetValues(spreadsheetId);
   const planMap = await readDmrTomorrowPlansForDates(dates);
   const parsedTabs = sheets
@@ -4675,6 +4684,34 @@ async function buildDmrReport({ startDate, endDate, sections = [] } = {}) {
   const allEquipment = parsedTabs.flatMap((tab) => (tab.equipment || []).filter((item) => item.site || item.details || item.quantity).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
   const allMaterials = parsedTabs.flatMap((tab) => (tab.materials || []).filter((item) => item.site || item.details || item.unit || item.quantity).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
   const allNotes = parsedTabs.flatMap((tab) => (tab.notes || []).filter((item) => item.note).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
+  const filledTradeKeys = new Set(allRecords
+    .filter((record) => record.actualFilled)
+    .map((record) => `${record.date}|${tomorrowPlanComparableSite(record.site)}|${tomorrowPlanComparableTrade(record.agency)}`));
+  const filledTradeActuals = allRecords.reduce((result, record) => {
+    if (!record.actualFilled) return result;
+    const key = `${record.date}|${tomorrowPlanComparableSite(record.site)}|${tomorrowPlanComparableTrade(record.agency)}`;
+    result.set(key, (result.get(key) || 0) + (Number(record.actual) || 0));
+    return result;
+  }, new Map());
+  const tradeComments = [...dates.reduce((result, date) => {
+    const plan = planMap.get(date);
+    for (const record of plan?.records || []) {
+      const comment = projectText(record.work || record.raw);
+      if (!comment) continue;
+      const site = projectText(record.site) || "Unassigned site";
+      const trade = projectText(record.category) || "General";
+      const filledKey = `${date}|${tomorrowPlanComparableSite(site)}|${tomorrowPlanComparableTrade(trade)}`;
+      if (!filledTradeKeys.has(filledKey)) continue;
+      const key = `${tomorrowPlanComparableSite(site)}|${tomorrowPlanComparableTrade(trade)}`;
+      const current = result.get(key) || { site, trade, comments: [], submittedBy: [], plannedManpower: 0, actualManpower: filledTradeActuals.get(filledKey) || 0 };
+      if (!current.comments.some((item) => item.toLowerCase() === comment.toLowerCase())) current.comments.push(comment);
+      const submitter = projectText(record.submittedBy);
+      if (submitter && !current.submittedBy.includes(submitter)) current.submittedBy.push(submitter);
+      current.plannedManpower += Number(record.plannedManpower) || 0;
+      result.set(key, current);
+    }
+    return result;
+  }, new Map()).values()].sort((a, b) => a.site.localeCompare(b.site) || a.trade.localeCompare(b.trade));
   const allAttendance = parsedTabs.flatMap((tab) => (tab.staffAttendance || []).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
   const actualsByDate = new Map(parsedTabs.map((tab) => [tab.date, dmrActualsForPlan(tab.records || [])]));
   const plannedTotal = dates.reduce((sum, date) => sum + (Number(planMap.get(date)?.summary?.plannedManpower) || 0), 0);
@@ -4927,6 +4964,7 @@ async function buildDmrReport({ startDate, endDate, sections = [] } = {}) {
     agencyManpower: selectedSections.has("agencyManpower") ? finalAgencyManpower : [],
     tradeSiteManpower: selectedSections.has("tradeSiteManpower") ? tradeSiteManpower : [],
     tradeSiteManpowerByDate: selectedSections.has("tradeSiteManpower") ? tradeSiteManpowerByDate : [],
+    tradeComments: selectedSections.has("tradeComments") ? tradeComments : [],
     dailyProgress: selectedSections.has("dailyProgress") ? dailyProgress : [],
     attendance: selectedSections.has("attendance") ? { summary: attendanceSummary, rows: allAttendance, byDate: attendanceByDate } : { summary: attendanceSummary, rows: [], byDate: [] },
     equipment: selectedSections.has("equipment") ? allEquipment : [],
@@ -5079,7 +5117,7 @@ function dmrPdfDrawSummary(doc, report, dateKey) {
     ["Variance", `${report.summary.variance >= 0 ? "+" : ""}${report.summary.variance}`, report.summary.variance >= 0 ? "#0f9f6e" : "#ef3038"],
     ["Attendance", `${report.summary.attendance.present}/${report.summary.attendance.total}`, "#171714"],
   ];
-  const gap = 12;
+  const gap = 8;
   const cardWidth = (pageWidth - gap * (metrics.length - 1)) / metrics.length;
   const y = doc.y;
   metrics.forEach(([label, value, color], index) => {
@@ -5209,25 +5247,24 @@ function dmrPdfDrawTodayPlanSummary(doc, summaryCache) {
     card.items = dmrPdfCardBulletItems(card.text);
   });
   const cardTextHeights = cards.map((card) => {
-    doc.font(dmrPdfFonts.regular).fontSize(7.6);
+    doc.font(dmrPdfFonts.regular).fontSize(7.2);
     return card.items.reduce((height, item, index) => (
       height + doc.heightOfString(item, { width: textWidth, lineGap: 1 }) + (index ? 4 : 0)
     ), 0);
   });
   const rowHeights = [0, 1].map((row) => Math.max(
-    78,
-    ...cardTextHeights.slice(row * 2, row * 2 + 2).map((height) => Math.ceil(height) + 39),
+    70,
+    ...cardTextHeights.slice(row * 2, row * 2 + 2).map((height) => Math.ceil(height) + 35),
   ));
-  const boxHeight = 90 + rowHeights[0] + gap + rowHeights[1] + 18;
-  let top = doc.y + 12;
+  const boxHeight = 82 + rowHeights[0] + gap + rowHeights[1] + 12;
+  let top = doc.y + 8;
   if (top + boxHeight > doc.page.height - doc.page.margins.bottom) {
     doc.addPage();
-    dmrPdfDrawDailyHeader(doc, payload.date || istDateKey(new Date()));
-    top = doc.y + 12;
+    top = doc.y;
   }
 
   doc.roundedRect(left, top, pageWidth, boxHeight, 18).fill("#fbfcfb").stroke("#dce6df");
-  doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text("CEO DAILY SUMMARY", left + 18, top + 15, { characterSpacing: 1.4 });
+  doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text("CEO DAILY SUMMARY", left + 18, top + 13);
   doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(16).text("Executive project overview", left + 18, top + 32, { width: pageWidth - 176 });
   doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(8).text("Management insights, current issues, and immediate priorities from today's DMR.", left + 18, top + 54, { width: pageWidth - 176 });
 
@@ -5237,7 +5274,7 @@ function dmrPdfDrawTodayPlanSummary(doc, summaryCache) {
   doc.fillColor(progressColor).font(dmrPdfFonts.regular).fontSize(7).text("day progress", left + pageWidth - 120, top + 56, { width: 80, align: "center" });
 
   const startX = left + 18;
-  const startY = top + 90;
+  const startY = top + 82;
   cards.forEach((card, index) => {
     const row = Math.floor(index / 2);
     const cardHeight = rowHeights[row];
@@ -5247,7 +5284,7 @@ function dmrPdfDrawTodayPlanSummary(doc, summaryCache) {
     doc.fillColor(card.color).font(dmrPdfFonts.bold).fontSize(8).text(card.title.toUpperCase(), x + 12, y + 10, { width: cardWidth - 24, height: 10 });
     let itemY = y + 27;
     card.items.forEach((item) => {
-      doc.font(dmrPdfFonts.regular).fontSize(7.6);
+      doc.font(dmrPdfFonts.regular).fontSize(7.2);
       const itemHeight = doc.heightOfString(item, { width: textWidth, lineGap: 1 });
       doc.circle(x + 15, itemY + 3.5, 1.7).fill(card.color);
       doc.fillColor("#26312c").text(item, x + 22, itemY, { width: textWidth, lineGap: 1 });
@@ -5396,6 +5433,96 @@ function dmrPdfDrawTradeSite(doc, report) {
   }
 }
 
+function dmrPdfDrawTradeComments(doc, report, dateKey) {
+  const entries = report.tradeComments || [];
+  const left = doc.page.margins.left;
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const bottom = () => doc.page.height - doc.page.margins.bottom;
+  const grouped = [...entries.reduce((result, entry) => {
+    const site = projectText(entry.site) || "Unassigned site";
+    if (!result.has(site)) result.set(site, []);
+    result.get(site).push(entry);
+    return result;
+  }, new Map()).entries()];
+
+  const startPage = (addPage = false, showTitle = true) => {
+    if (addPage) doc.addPage();
+    if (showTitle) dmrPdfPageTitle(doc, "Site trade comments", "Submitted work comments with planned and actual manpower, grouped by site.");
+  };
+
+  startPage(false);
+  if (!grouped.length) {
+    doc.roundedRect(left, doc.y, pageWidth, 72, 14).fill("#f7f4ec").stroke("#e7e1d7");
+    doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(10).text("No site or trade comments were submitted for this date.", left + 18, doc.y + 26, { width: pageWidth - 36 });
+    return;
+  }
+
+  const commentWidth = pageWidth - 72;
+  grouped.forEach(([site, trades]) => {
+    const rows = trades.map((trade) => {
+      const comments = (trade.comments || []).filter(Boolean);
+      doc.font(dmrPdfFonts.regular).fontSize(9.2);
+      const commentsHeight = comments.reduce((height, comment, index) => (
+        height + doc.heightOfString(comment, { width: commentWidth, lineGap: 1.5 }) + (index ? 3 : 0)
+      ), 0);
+      return { trade, comments, rowHeight: Math.max(42, 27 + commentsHeight + 8) };
+    });
+    let nextRow = 0;
+    while (nextRow < rows.length) {
+      if (bottom() - doc.y < 92) startPage(true, false);
+      const available = bottom() - doc.y;
+      const chunkStart = nextRow;
+      const chunk = [];
+      let cardHeight = 42;
+      while (nextRow < rows.length && cardHeight + rows[nextRow].rowHeight <= available) {
+        chunk.push(rows[nextRow]);
+        cardHeight += rows[nextRow].rowHeight;
+        nextRow += 1;
+      }
+      if (!chunk.length) {
+        startPage(true, false);
+        continue;
+      }
+
+      const cardTop = doc.y;
+      doc.roundedRect(left, cardTop, pageWidth, cardHeight, 12).fill("#f7fbf9").stroke("#9dd8bf");
+      doc.roundedRect(left, cardTop, pageWidth, 42, 12).fill("#e8f7f0");
+      doc.rect(left, cardTop + 30, pageWidth, 12).fill("#e8f7f0");
+      doc.fillColor("#087a55").font(dmrPdfFonts.bold).fontSize(13).text(site, left + 18, cardTop + 13, { width: pageWidth - 210, height: 18 });
+      const rangeLabel = rows.length === chunk.length
+        ? `${rows.length} TRADE${rows.length === 1 ? "" : "S"}`
+        : `${chunkStart + 1}-${chunkStart + chunk.length} OF ${rows.length} TRADES`;
+      doc.fillColor("#087a55").font(dmrPdfFonts.bold).fontSize(8.5).text(rangeLabel, left + pageWidth - 176, cardTop + 16, { width: 156, align: "right" });
+
+      let rowTop = cardTop + 42;
+      chunk.forEach(({ trade, comments, rowHeight }, chunkIndex) => {
+        if (chunkIndex) doc.moveTo(left + 18, rowTop).lineTo(left + pageWidth - 18, rowTop).strokeColor("#cfe5da").stroke();
+        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(10).text(projectText(trade.trade) || "General", left + 18, rowTop + 8, { width: pageWidth - 330, height: 15 });
+        const metricX = left + pageWidth - 286;
+        doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8.3).text("PLANNED", metricX, rowTop + 8, { width: 58, align: "right", lineBreak: false });
+        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(9.4).text(String(Number(trade.plannedManpower) || 0), metricX + 62, rowTop + 7, { width: 28, align: "left", lineBreak: false });
+        doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8.3).text("ACTUAL", metricX + 98, rowTop + 8, { width: 50, align: "right", lineBreak: false });
+        doc.fillColor(dmrPdfStatusColor(trade.plannedManpower, trade.actualManpower)).font(dmrPdfFonts.bold).fontSize(9.4).text(String(Number(trade.actualManpower) || 0), metricX + 152, rowTop + 7, { width: 28, align: "left", lineBreak: false });
+        const submitters = (trade.submittedBy || []).join(", ");
+        if (submitters) doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(7.7).text(`By ${submitters}`, metricX + 184, rowTop + 8, { width: 84, align: "right", height: 13 });
+
+        let commentY = rowTop + 27;
+        comments.forEach((comment) => {
+          doc.font(dmrPdfFonts.regular).fontSize(9.2);
+          const commentHeight = doc.heightOfString(comment, { width: commentWidth, lineGap: 1.5 });
+          doc.circle(left + 22, commentY + 4.5, 1.8).fill("#0f9f6e");
+          doc.fillColor("#26312c").text(comment, left + 31, commentY, { width: commentWidth, lineGap: 1.5 });
+          commentY += commentHeight + 3;
+        });
+        rowTop += rowHeight;
+      });
+      doc.roundedRect(left, cardTop, pageWidth, cardHeight, 12).lineWidth(1).strokeColor("#9dd8bf").stroke();
+      doc.y = cardTop + cardHeight + 10;
+      if (nextRow < rows.length) startPage(true, false);
+    }
+  });
+}
+
 function generateDmrDailyPdfBuffer(report, dateKey, todayPlanSummary = null) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -5418,9 +5545,10 @@ function generateDmrDailyPdfBuffer(report, dateKey, todayPlanSummary = null) {
     dmrPdfDrawDailyHeader(doc, dateKey);
     dmrPdfDrawTradeSite(doc, report);
     doc.addPage();
-    dmrPdfDrawDailyHeader(doc, dateKey);
     dmrPdfDrawAttendance(doc, report.attendance);
     dmrPdfDrawTodayPlanSummary(doc, todayPlanSummary);
+    doc.addPage();
+    dmrPdfDrawTradeComments(doc, report, dateKey);
     doc.end();
   });
 }
@@ -5430,7 +5558,7 @@ async function buildDmrDailyPdf(dateKey, { save = false, knownPayload = null, kn
   const report = await buildDmrReport({
     startDate: date,
     endDate: date,
-    sections: ["summary", "attendance", "tradeSiteManpower", "dailyProgress"],
+    sections: ["summary", "attendance", "tradeSiteManpower", "tradeComments", "dailyProgress"],
   });
   let payload = knownPayload;
   if (!payload) {
@@ -5441,8 +5569,9 @@ async function buildDmrDailyPdf(dateKey, { save = false, knownPayload = null, kn
   const todayPlanSummary = await getCachedDmrPlanSummary(date, payload, signature);
   const buffer = await generateDmrDailyPdfBuffer(report, date, todayPlanSummary);
   if (save) {
+    const generatedAt = new Date().toISOString();
     fs.writeFileSync(dmrPdfPath(date), buffer);
-    fs.writeFileSync(dmrPdfMetaPath(date), JSON.stringify({ date, signature: pdfSignature || signature, summarySignature: signature, generatedAt: new Date().toISOString(), summaryGeneratedAt: todayPlanSummary.generatedAt }, null, 2));
+    fs.writeFileSync(dmrPdfMetaPath(date), JSON.stringify({ date, layoutVersion: DMR_DAILY_PDF_LAYOUT_VERSION, signature: pdfSignature || signature, summarySignature: signature, generatedAt, validatedAt: generatedAt, summaryGeneratedAt: todayPlanSummary.generatedAt }, null, 2));
   }
   return { date, report, buffer, signature, todayPlanSummary };
 }
@@ -8208,20 +8337,76 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
     if (!publicDmrSettings().linked) return res.status(400).json({ error: "DMR sheet is not linked" });
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : istDateKey(new Date());
     const cachedPath = dmrPdfPath(date);
-    const cachedMeta = readJsonFileSafe(dmrPdfMetaPath(date));
-    const dashboard = await readDmrDashboard(date, { ensureToday: false });
-    const payload = buildDmrExecutiveSummaryPayload(dashboard);
-    const summarySignature = dmrPlanSummarySignature(payload);
-    const signature = dmrDailyPdfSignature({ dashboard, planPayload: payload });
+    const metaPath = dmrPdfMetaPath(date);
+    const cachedMeta = readJsonFileSafe(metaPath);
+    const hasCachedPdf = fs.existsSync(cachedPath);
+    const now = Date.now();
+    const validatedAt = Date.parse(cachedMeta?.validatedAt || cachedMeta?.generatedAt || "") || 0;
+    const validationFailedAt = Date.parse(cachedMeta?.validationFailedAt || "") || 0;
+    const currentLayout = cachedMeta?.layoutVersion === DMR_DAILY_PDF_LAYOUT_VERSION;
     let buffer;
-    if (cachedMeta?.signature === signature && fs.existsSync(cachedPath)) {
+    let cacheStatus;
+
+    if (hasCachedPdf && currentLayout && now - validatedAt < DMR_PDF_CACHE_TTL_MS) {
       buffer = fs.readFileSync(cachedPath);
+      cacheStatus = "HIT";
+    } else if (hasCachedPdf && currentLayout && validationFailedAt && now - validationFailedAt < DMR_PDF_RETRY_BACKOFF_MS) {
+      buffer = fs.readFileSync(cachedPath);
+      cacheStatus = "STALE-BACKOFF";
     } else {
-      ({ buffer } = await buildDmrDailyPdf(date, { save: true, knownPayload: payload, knownSignature: summarySignature, pdfSignature: signature }));
+      let refresh = dmrPdfRefreshes.get(date);
+      cacheStatus = refresh ? "WAIT" : "MISS";
+      if (!refresh) {
+        refresh = (async () => {
+          try {
+            const dashboard = await readDmrDashboard(date, { ensureToday: false });
+            const payload = buildDmrExecutiveSummaryPayload(dashboard);
+            const summarySignature = dmrPlanSummarySignature(payload);
+            const signature = dmrDailyPdfSignature({ dashboard, planPayload: payload });
+            const latestMeta = readJsonFileSafe(metaPath);
+            if (latestMeta?.signature === signature && fs.existsSync(cachedPath)) {
+              const nextMeta = { ...latestMeta, validatedAt: new Date().toISOString() };
+              delete nextMeta.validationFailedAt;
+              delete nextMeta.validationError;
+              fs.writeFileSync(metaPath, JSON.stringify(nextMeta, null, 2));
+              return { buffer: fs.readFileSync(cachedPath), status: "VALIDATED" };
+            }
+            const buildKey = `${date}:${signature}`;
+            let build = dmrPdfBuilds.get(buildKey);
+            if (!build) {
+              build = buildDmrDailyPdf(date, {
+                save: true,
+                knownPayload: payload,
+                knownSignature: summarySignature,
+                pdfSignature: signature,
+              }).finally(() => dmrPdfBuilds.delete(buildKey));
+              dmrPdfBuilds.set(buildKey, build);
+            }
+            const result = await build;
+            return { buffer: result.buffer, status: "REFRESHED" };
+          } catch (error) {
+            const fallbackMeta = readJsonFileSafe(metaPath) || cachedMeta || { date };
+            if (!fs.existsSync(cachedPath) || fallbackMeta.layoutVersion !== DMR_DAILY_PDF_LAYOUT_VERSION) throw error;
+            fs.writeFileSync(metaPath, JSON.stringify({
+              ...fallbackMeta,
+              validationFailedAt: new Date().toISOString(),
+              validationError: projectText(error.message).slice(0, 240),
+            }, null, 2));
+            console.warn(`Serving stale DMR PDF cache for ${date}:`, error.message);
+            return { buffer: fs.readFileSync(cachedPath), status: "STALE" };
+          }
+        })().finally(() => dmrPdfRefreshes.delete(date));
+        dmrPdfRefreshes.set(date, refresh);
+      }
+      const result = await refresh;
+      buffer = result.buffer;
+      cacheStatus = cacheStatus === "WAIT" ? "WAIT" : result.status;
     }
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${dmrPdfFilename(date)}"`);
     res.setHeader("Content-Length", buffer.length);
+    res.setHeader("X-DMR-PDF-Cache", cacheStatus);
+    res.setHeader("Cache-Control", "private, no-cache, must-revalidate");
     res.send(buffer);
   } catch (error) {
     console.error("DMR PDF report error:", error);

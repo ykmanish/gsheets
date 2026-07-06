@@ -51,6 +51,7 @@ function addDaysInput(value, days) {
 
 function rangeLabel(from, to) {
   if (!from && !to) return "Date range";
+  if (from && to && from === to) return formatShortDate(from);
   if (from && to) return `${formatShortDate(from)} - ${formatShortDate(to)}`;
   return formatShortDate(from || to);
 }
@@ -828,8 +829,8 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => todayInput());
+  const [dateTo, setDateTo] = useState(() => todayInput());
   const [formOpen, setFormOpen] = useState(false);
   const [formClosing, setFormClosing] = useState(false);
   const [formExpanded, setFormExpanded] = useState(false);

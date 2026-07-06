@@ -2,19 +2,14 @@
 /* eslint-disable @next/next/no-img-element -- Google Drive image URLs are dynamic and cannot use the fixed Next image host allowlist. */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpRight, CalendarDays, Camera, ChevronLeft, ChevronRight, Folder, ImageOff, Loader2, RefreshCw, Search, UserRound, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Camera, ChevronLeft, ChevronRight, Folder, ImageOff, Loader2, RefreshCw, Search, UserRound, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { DatePicker } from "./ui";
-
-const DAY = 86400000;
 
 function localDateKey(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
-
-const MAX_DATE_KEY = localDateKey(new Date(Date.now() + DAY));
 
 function value(row, header) {
   return String(header ? row?.[header] ?? "" : "").trim();
@@ -62,6 +57,60 @@ function prettyDate(key) {
   return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${key}T12:00:00`));
 }
 
+function addDays(key, days) {
+  const date = new Date(`${key}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return localDateKey(date);
+}
+
+function weekStartKey(key) {
+  const date = new Date(`${key}T12:00:00`);
+  const offset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - offset);
+  return localDateKey(date);
+}
+
+function compactDayLabel(key) {
+  return new Intl.DateTimeFormat("en-IN", { weekday: "short", month: "short", day: "numeric" }).format(new Date(`${key}T12:00:00`));
+}
+
+function DateStrip({ darkMode, selectedDate, weekStart, direction, counts, onSelectDate, onNavigateWeek }) {
+  const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
+  const border = darkMode ? "border-white/10" : "border-black/10";
+  const navClass = darkMode ? "bg-[#15171c] text-white hover:bg-white/10" : "bg-white text-[#1594ff] hover:bg-[#f3f8ff]";
+  const trackClass = darkMode ? "border-white/10 bg-[#111318]" : "border-black/[0.08] bg-white -[0_10px_24px_rgba(15,23,42,0.08)]";
+
+  return (
+    <div className={`mt-5 flex overflow-hidden rounded-2xl border ${trackClass}`}>
+      <button type="button" onClick={() => onNavigateWeek(-1)} className={`flex w-12 shrink-0 items-center justify-center border-r transition ${border} ${navClass}`} aria-label="Previous week"><ChevronLeft className="h-5 w-5" /></button>
+      <div key={weekStart} className={`grid min-w-0 flex-1 grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 ${direction > 0 ? "animate-[site-week-next_320ms_cubic-bezier(0.22,1,0.36,1)]" : "animate-[site-week-prev_320ms_cubic-bezier(0.22,1,0.36,1)]"}`}>
+        {days.map((day) => {
+          const selected = day === selectedDate;
+          const count = counts.get(day) || 0;
+          return (
+            <button key={day} type="button" onClick={() => onSelectDate(day)} className={`relative min-h-[74px] border-r px-3 py-3 text-center transition last:border-r-0 ${border} ${selected ? "text-[#1295ff]" : darkMode ? "text-white/82 hover:bg-white/[0.04]" : "text-[#272727] hover:bg-[#f8fbf5]"}`}>
+              <span className="block text-sm font-bold">{compactDayLabel(day)}</span>
+              <span className={`mt-1 block text-sm ${selected ? "font-semibold text-[#1295ff]" : count ? "font-medium text-[#20a045]" : darkMode ? "text-white/45" : "text-black/48"}`}>{count ? `${count} photo${count === 1 ? "" : "s"}` : "View"}</span>
+              {selected && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[#1295ff]" />}
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" onClick={() => onNavigateWeek(1)} className={`flex w-12 shrink-0 items-center justify-center border-l transition ${border} ${navClass}`} aria-label="Next week"><ChevronRight className="h-5 w-5" /></button>
+      <style jsx>{`
+        @keyframes site-week-next {
+          from { opacity: 0; transform: translateX(28px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes site-week-prev {
+          from { opacity: 0; transform: translateX(-28px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function siteInitials(site) {
   const words = String(site || "Site").trim().split(/\s+/).filter(Boolean);
   if (words.length > 1) return `${words[0][0] || ""}${words[1][0] || ""}`.toUpperCase();
@@ -79,7 +128,7 @@ function SiteImage({ photo, site, alt = "", className = "" }) {
 function SiteFolder({ group, darkMode, onOpen }) {
   const cover = group.photos[0];
   return (
-    <button type="button" onClick={onOpen} className={`group overflow-hidden rounded-[26px] border text-left transition duration-300 hover:-translate-y-1 hover:shadow-xl ${darkMode ? "border-white/10 bg-white/[0.035] hover:border-white/20" : "border-black/[0.06] bg-white hover:border-black/10"}`}>
+    <button type="button" onClick={onOpen} className={`group overflow-hidden rounded-[26px] border text-left transition duration-300 hover:-translate-y-1 hover:-xl ${darkMode ? "border-white/10 bg-white/[0.035] hover:border-white/20" : "border-black/[0.06] bg-white hover:border-black/10"}`}>
       <div className={`relative h-44 overflow-hidden ${darkMode ? "bg-white/5" : "bg-[#e9eeeb]"}`}>
         {cover ? <SiteImage photo={cover} site={group.site} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : <ImageOff className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 opacity-30" />}
         <span className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-black/55 text-white backdrop-blur-md"><Folder className="h-5 w-5" /></span>
@@ -98,6 +147,8 @@ function SiteFolder({ group, darkMode, onOpen }) {
 
 export default function SiteImagesDashboard({ darkMode }) {
   const [date, setDate] = useState(localDateKey());
+  const [weekStart, setWeekStart] = useState(() => weekStartKey(localDateKey()));
+  const [weekDirection, setWeekDirection] = useState(1);
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState(null);
@@ -185,6 +236,28 @@ export default function SiteImagesDashboard({ darkMode }) {
     const term = query.trim().toLowerCase();
     return [...map.values()].filter((group) => !term || group.site.toLowerCase().includes(term) || [...group.trades].some((trade) => trade.toLowerCase().includes(term))).sort((a, b) => b.photos.length - a.photos.length);
   }, [date, photos, query]);
+  const photoCountsByDate = useMemo(() => {
+    const map = new Map();
+    photos.forEach((photo) => {
+      if (!photo.date) return;
+      map.set(photo.date, (map.get(photo.date) || 0) + 1);
+    });
+    return map;
+  }, [photos]);
+  const selectDate = useCallback((nextDate) => {
+    setDate(nextDate);
+    setWeekStart(weekStartKey(nextDate));
+    setSelectedSite("");
+  }, []);
+  const navigateWeek = useCallback((direction) => {
+    setWeekDirection(direction);
+    setWeekStart((current) => {
+      const nextStart = addDays(current, direction * 7);
+      setDate(nextStart);
+      setSelectedSite("");
+      return nextStart;
+    });
+  }, []);
   const activeGroup = groups.find((group) => group.site === selectedSite) || null;
   const selectedPhotoIndex = activeGroup && selectedPhoto ? activeGroup.photos.findIndex((photo) => photo.id === selectedPhoto.id) : -1;
   const canNavigateSelectedPhoto = selectedPhotoIndex >= 0 && activeGroup.photos.length > 1;
@@ -221,14 +294,14 @@ export default function SiteImagesDashboard({ darkMode }) {
   return (
     <main className={`relative min-h-0 flex-1 overflow-y-auto p-5 sm:p-7 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f7f2] text-[#171714]"}`}>
       <div className={`mb-5 rounded-3xl p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.08] bg-white"}`}>
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-          <div><span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#4b9b16]"><Camera className="h-3.5 w-3.5" /> Projects · Site Images</span><h1 className="mt-2 text-3xl font-bold small tracking-tight">Site Images Dashboard</h1><p className={`mt-2 max-w-2xl text-sm ${muted}`}>Review daily site photos, trades and upload ownership from one workspace.</p></div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <DatePicker darkMode={darkMode} value={date} onChange={(nextDate) => { setDate(nextDate > MAX_DATE_KEY ? MAX_DATE_KEY : nextDate); setSelectedSite(""); }} placeholder="Choose site date" />
-            <label className={`flex h-10 w-full min-w-0 items-center gap-2 rounded-xl border px-4 sm:w-72 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#fafbf8] text-black focus-within:border-[#69c832]"}`}><Search className="h-4 w-4 shrink-0 text-[#4b9b16]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search site or trade" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 flex-1"><span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#4b9b16]"><Camera className="h-3.5 w-3.5" /> Projects · Site Images</span><h1 className="mt-2 text-3xl font-bold small tracking-tight">Site Images Dashboard</h1><p className={`mt-2 max-w-2xl text-sm ${muted}`}>Review daily site photos, trades and upload ownership from one workspace.</p></div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:pt-14">
+            <label className={`flex h-12 w-full min-w-0 items-center gap-2 rounded-3xl border px-4 sm:w-72 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#fafbf8] text-black focus-within:border-[#69c832]"}`}><Search className="h-4 w-4 shrink-0 text-[#4b9b16]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search site or trade" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
             <button type="button" onClick={() => void load()} className={`flex h-11 w-fit shrink-0 items-center gap-2 rounded-full border px-5 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh</button>
           </div>
         </div>
+        <DateStrip darkMode={darkMode} selectedDate={date} weekStart={weekStart} direction={weekDirection} counts={photoCountsByDate} onSelectDate={selectDate} onNavigateWeek={navigateWeek} />
       </div>
 
       <section className={`rounded-3xl p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
@@ -244,7 +317,7 @@ export default function SiteImagesDashboard({ darkMode }) {
       </section>
 
       {activeGroup && <div className={`fixed inset-0 z-[70] bg-black/45 backdrop-blur-[2px] ${siteDrawerClosing ? "animate-[mrn-backdrop-out_300ms_ease_forwards]" : "animate-[mrn-backdrop-in_320ms_ease-out]"}`} onMouseDown={(event) => event.target === event.currentTarget && closeSiteDrawer()} role="presentation">
-        <aside className={`absolute inset-y-0 right-0 flex w-full max-w-5xl flex-col overflow-hidden border-l shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${siteDrawerClosing ? "animate-[mrn-drawer-out_300ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#111318] text-white" : "border-black/10 bg-[#f7f7f3] text-[#171714]"}`} role="dialog" aria-modal="true" aria-label={`${activeGroup.site} site photos`}>
+        <aside className={`absolute inset-y-0 right-0 flex w-full max-w-5xl flex-col overflow-hidden border-l -[-24px_0_80px_rgba(0,0,0,0.22)] ${siteDrawerClosing ? "animate-[mrn-drawer-out_300ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#111318] text-white" : "border-black/10 bg-[#f7f7f3] text-[#171714]"}`} role="dialog" aria-modal="true" aria-label={`${activeGroup.site} site photos`}>
           <header className={`flex shrink-0 items-center justify-between border-b px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}><div className="flex min-w-0 items-center gap-3"><button type="button" onClick={closeSiteDrawer} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${panel}`}><ArrowLeft className="h-4 w-4" /></button><div className="min-w-0"><p className={`text-[11px] font-medium uppercase tracking-[0.18em] ${muted}`}>Site folder · {prettyDate(date)}</p><h2 className="mt-1 truncate text-xl font-semibold">{activeGroup.site}</h2></div></div><button type="button" onClick={closeSiteDrawer} className="flex h-10 w-10 items-center justify-center rounded-full"><X className="h-5 w-5" /></button></header>
           <div className="overflow-y-auto p-5 sm:p-7"><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{activeGroup.photos.map((photo) => <article key={photo.id} className={`overflow-hidden rounded-[22px] border ${panel}`}><button type="button" onClick={() => setSelectedPhoto(photo)} className="block h-52 w-full overflow-hidden bg-black/5"><SiteImage photo={photo} site={photo.site} alt={`${photo.trade} at ${photo.site}`} className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button><div className="p-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#e8f8d7] text-[#39710f]"}`}>{photo.trade}</span><p className={`mt-3 flex items-center gap-2 text-xs ${muted}`}><UserRound className="h-3.5 w-3.5" /> Uploaded by {photo.uploadedBy}</p><a href={photo.url} target="_blank" rel="noreferrer" className={`mt-4 flex items-center gap-1.5 text-xs font-semibold ${darkMode ? "text-[#d8f36a]" : "text-[#39710f]"}`}>Open original <ArrowUpRight className="h-3.5 w-3.5" /></a></div></article>)}</div></div>
         </aside>

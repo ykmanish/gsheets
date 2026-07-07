@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "./AuthProvider";
 
@@ -21,6 +21,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "access-management", label: "Access Control", icon: ShieldCheck },
     { id: "manage-roles", label: "Manage Role", icon: ShieldCheck, parent: "access-management" },
     { id: "manage-users", label: "Manage User", icon: Users, parent: "access-management" },
+    { id: "module-control", label: "Module Control", icon: SlidersHorizontal, parent: "access-management" },
   ];
   const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn", "site-images"].includes(item.id) && allowedMenus.includes(item.id));
   const accessSubMenu = menuItems.filter((item) => item.parent === "access-management" && allowedMenus.includes(item.id));

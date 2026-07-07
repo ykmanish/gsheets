@@ -21,6 +21,7 @@ import DmrDashboard from "./DmrDashboard";
 import MrnDashboard from "./MrnDashboard";
 import SiteImagesDashboard from "./SiteImagesDashboard";
 import EmployeeDailyReport from "./EmployeeDailyReport";
+import ModuleControl from "./ModuleControl";
 
 const menuPaths = {
   dashboard: "/dashboard",
@@ -38,11 +39,12 @@ const menuPaths = {
   whatsapp: "/whatsapp",
   "manage-roles": "/manage-roles",
   "manage-users": "/manage-users",
+  "module-control": "/module-control",
 };
 
 function ProtectedModuleContent({ moduleId }) {
   const router = useRouter();
-  const { user, menus, loading, logout } = useAuth();
+  const { user, menus, disabledModules, loading, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === "undefined") return false;
     const storedUser = getStoredAuth().user;
@@ -58,11 +60,12 @@ function ProtectedModuleContent({ moduleId }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "whatsapp", "manage-users"] : menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
     ];
     if (user?.isSuperAdmin || assigned.some((menu) => ["projects", "sheet-dashboard", "site-images"].includes(menu))) assigned.push("site-images");
-    return Array.from(new Set(assigned)).filter((menu) => !["notifications", "settings"].includes(menu));
-  }, [menus, user?.isSuperAdmin]);
+    const globallyDisabled = new Set(disabledModules || []);
+    return Array.from(new Set(assigned)).filter((menu) => !["notifications", "settings"].includes(menu) && (!globallyDisabled.has(menu) || ["dashboard", "module-control"].includes(menu)));
+  }, [disabledModules, menus, user?.isSuperAdmin]);
 
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
@@ -143,6 +146,7 @@ function ProtectedModuleContent({ moduleId }) {
         {moduleId === "whatsapp" && user?.isSuperAdmin && <WhatsApp darkMode={darkMode} />}
         {moduleId === "manage-roles" && <ManageRoles darkMode={darkMode} mode="roles" />}
         {moduleId === "manage-users" && <ManageRoles darkMode={darkMode} mode="users" />}
+        {moduleId === "module-control" && user?.isSuperAdmin && <ModuleControl darkMode={darkMode} />}
       </div>
       <NotificationDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} darkMode={darkMode} />
     </div>

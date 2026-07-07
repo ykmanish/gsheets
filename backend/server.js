@@ -75,8 +75,9 @@ const MENU_ITEMS = [
   { id: "manage-roles", label: "Manage Roles" },
   { id: "manage-users", label: "Manage Users" },
 ];
-const SUPER_ADMIN_MENU_ITEMS = [{ id: "whatsapp", label: "WhatsApp" }];
+const SUPER_ADMIN_MENU_ITEMS = [{ id: "whatsapp", label: "WhatsApp" }, { id: "module-control", label: "Module Control" }];
 const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];
+const PROTECTED_GLOBAL_MODULES = new Set(["dashboard", "module-control"]);
 const PRIVILEGE_ITEMS = [
   { id: "upload_documents", label: "Upload documents" },
   { id: "link_sheets", label: "Link Google Sheets" },
@@ -95,6 +96,8 @@ const PRIVILEGE_ITEMS = [
 
 let mongoClient;
 let authDb;
+let moduleControlCache = { disabledModules: [], expiresAt: 0 };
+const employeeDailyQuoteBuilds = new Map();
 
 async function connectAuthDb() {
   if (authDb) return authDb;
@@ -109,6 +112,15 @@ async function connectAuthDb() {
   await authDb.collection("employeeDailyReports").createIndex({ reportDate: -1, submittedAt: -1 });
   await seedSuperAdmin();
   return authDb;
+}
+
+async function getDisabledModules({ fresh = false } = {}) {
+  if (!fresh && moduleControlCache.expiresAt > Date.now()) return [...moduleControlCache.disabledModules];
+  const db = await connectAuthDb();
+  const setting = await db.collection("platformSettings").findOne({ _id: "module-control" });
+  const disabledModules = (setting?.disabledModules || []).filter((id) => ALL_MENU_ITEMS.some((item) => item.id === id) && !PROTECTED_GLOBAL_MODULES.has(id));
+  moduleControlCache = { disabledModules, expiresAt: Date.now() + 5000 };
+  return [...disabledModules];
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -231,6 +243,7 @@ async function requireAuth(req, res, next) {
     req.user = user;
     req.role = role;
     req.authUser = sanitizeUser(user, role);
+    req.disabledModules = await getDisabledModules();
     next();
   } catch (error) {
     console.error("Auth error:", error);
@@ -249,6 +262,7 @@ function hasPrivilege(req, privilege) {
 }
 
 function hasMenuAccess(req, menuId) {
+  if (req?.disabledModules?.includes(menuId) && !PROTECTED_GLOBAL_MODULES.has(menuId)) return false;
   if (req?.user?.isSuperAdmin) return true;
   return Boolean(req?.authUser?.menus?.includes(menuId));
 }
@@ -326,7 +340,7 @@ app.post("/auth/login", async (req, res) => {
       status: "success",
       actor: sanitizeUser(user, role),
     });
-    res.json({ token, user: sanitizeUser(user, role), menus: role?.menus || [] });
+    res.json({ token, user: sanitizeUser(user, role), menus: role?.menus || [], disabledModules: await getDisabledModules() });
   } catch (error) {
     console.error("Login error:", error);
     addActivityLog({
@@ -340,8 +354,8 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
-app.get("/auth/me", requireAuth, (req, res) => {
-  res.json({ user: req.authUser, menus: req.role?.menus || [] });
+app.get("/auth/me", requireAuth, async (req, res) => {
+  res.json({ user: req.authUser, menus: req.role?.menus || [], disabledModules: await getDisabledModules() });
 });
 
 app.post("/auth/logout", requireAuth, async (req, res) => {
@@ -401,7 +415,7 @@ const EMPLOYEE_REPORT_OPTIONS = {
   sites: ["Kalhaar", "Paramdham", "Asteria", "Imperial", "Serenity Meadows Farmhouse", "Silver White", "Devsharnam", "Gharana"],
   taskTypes: ["System Designing", "Drawing", "Render", "BoQ", "Material Approval", "Site Work", "Purchase Order", "Installation", "Client Approval", "Quotation", "Negotiation", "Recruitment", "Interview", "Induction", "Salary Processing", "Documentation", "Performance Meeting", "Market Survey", "Event Planning", "Delivery List", "Client Meeting", "IT Solution", "Data Entry", "OutOfOffice Work", "Site Visit", "Vendor Meeting", "PaymentProcessing", "PRN Supportive", "Audit", "Record Filing", "Legal Work", "System Training", "System Implementation", "Material Inspection", "Dispatch", "Packing/Forwarding", "Pre-Production", "Post-Production", "Over-a-Call", "Campaign", "Content Creation", "Other"],
   taskStatuses: ["In Progress", "Completed", "Work Halt", "Work Suspended", "Work Cancelled", "Other"],
-  involvements: ["Client", "Vendor", "Team", "Other"],
+  involvements: ["Self", "Client", "Vendor", "Team", "Other"],
 };
 const EMPLOYEE_REPORT_APP_TAB = "_AppData";
 const EMPLOYEE_REPORT_APP_HEADERS = ["Report ID", "User ID", "Employee", "Department", "Report Date", "Submitted At", "Client", "Site", "Task Type", "Task Status", "Involvement", "Tomorrow Plan", "Note", "Task Items JSON", "Waiting Items JSON"];
@@ -463,6 +477,46 @@ function sanitizeEmployeeTaskItems(items = []) {
     involvement: projectText(item?.involvement),
     description: projectText(item?.description),
   })).filter((item) => item.category && item.description).slice(0, 30);
+}
+
+function employeeReportOptionUsage(reports = []) {
+  const buckets = {
+    sites: new Map(),
+    categories: new Map(),
+    involvements: new Map(),
+  };
+  const count = (bucket, value) => {
+    const label = projectText(value);
+    if (!label || label.toLowerCase() === "other") return;
+    const key = label.toLowerCase();
+    const current = bucket.get(key) || { value: label, count: 0 };
+    current.count += 1;
+    bucket.set(key, current);
+  };
+
+  reports.forEach((report) => {
+    const taskItems = [
+      ...sanitizeEmployeeTaskItems(report.taskItems),
+      ...sanitizeEmployeeTaskItems(report.waitingTaskItems),
+    ];
+    taskItems.forEach((item) => {
+      count(buckets.sites, item.site);
+      count(buckets.categories, item.category);
+      count(buckets.involvements, item.involvement);
+    });
+    if (!taskItems.length) {
+      count(buckets.sites, report.site);
+      count(buckets.categories, report.taskType);
+      count(buckets.involvements, report.involvement);
+    }
+  });
+
+  return Object.fromEntries(Object.entries(buckets).map(([key, bucket]) => [
+    key,
+    [...bucket.values()]
+      .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+      .slice(0, 3),
+  ]));
 }
 
 function sanitizeEmployeeTaskCategories(categories = []) {
@@ -1398,6 +1452,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     .slice(0, 500);
   const today = istDateKey(new Date());
   const ownReports = allCachedReports.filter((report) => String(report.userId) === userId);
+  const optionUsage = employeeReportOptionUsage(ownReports);
   const todayReport = ownReports.find((report) => String(report.userId) === userId && report.reportDate === today) || null;
   const todaySubmitted = Boolean(todayReport);
   const carriedForwardTasks = [];
@@ -1455,6 +1510,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
       sheetUrl: employeeSheetUrl(req.user.employeeDailySpreadsheetId || ""),
     },
     options: { ...EMPLOYEE_REPORT_OPTIONS, sites: siteOptions },
+    optionUsage,
     reportUsers: reportUsers.map((user) => ({ userId: String(user._id), employeeName: user.employeeName || "Employee", department: user.department || "" })),
     todaySubmissionStatus,
     reports: reports.map(sanitizeEmployeeReport),
@@ -1532,6 +1588,76 @@ app.put("/employee-daily-report/sheet", async (req, res) => {
   }
 });
 
+async function getEmployeeDailyPositivityQuote(dateKey) {
+  const date = dmrDateKey(dateKey) || istDateKey(new Date());
+  const cacheId = `employee-daily-quote:${date}`;
+  const db = await connectAuthDb();
+  const cached = await db.collection("platformSettings").findOne({ _id: cacheId });
+  if (projectText(cached?.quote)) return cached.quote;
+  if (employeeDailyQuoteBuilds.has(date)) return employeeDailyQuoteBuilds.get(date);
+
+  const build = (async () => {
+    const fallbackQuotes = [
+      "Consistent progress, thoughtfully shared, turns everyday effort into meaningful momentum.",
+      "Every clear update strengthens teamwork and makes tomorrow's progress easier to achieve.",
+      "Small steps completed with care become the foundation of remarkable results.",
+      "Your steady effort today creates confidence, clarity, and momentum for the whole team.",
+      "Progress grows when good work is completed, shared, and carried forward together.",
+      "Thoughtful work and honest updates turn busy days into meaningful achievement.",
+      "Each well-finished task moves the team closer to something worth being proud of.",
+    ];
+    const fallbackQuote = fallbackQuotes[Number(date.replace(/\D/g, "")) % fallbackQuotes.length];
+    let quote = fallbackQuote;
+    let provider = "fallback";
+    const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+    if (anthropicKey) {
+      try {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          signal: AbortSignal.timeout(8000),
+          headers: { "content-type": "application/json", "x-api-key": anthropicKey, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({
+            model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
+            max_tokens: 80,
+            system: "Write one original, warm positivity quote for employees. Use simple professional language, no attribution, no quotation marks, and no more than 18 words. Return only the quote.",
+            messages: [{ role: "user", content: `Create the daily positivity quote for ${date}.` }],
+          }),
+        });
+        const data = await response.json();
+        const generated = (data.content || []).filter((item) => item.type === "text").map((item) => item.text).join(" ").trim().replace(/^[\"'“”]+|[\"'“”]+$/g, "");
+        if (response.ok && generated) {
+          quote = generated.slice(0, 180);
+          provider = "claude";
+        }
+      } catch (error) {
+        console.warn("Employee daily quote fallback:", error.message);
+      }
+    }
+    await db.collection("platformSettings").updateOne(
+      { _id: cacheId },
+      { $set: { date, quote, provider, generatedAt: new Date() } },
+      { upsert: true },
+    );
+    return quote;
+  })().finally(() => employeeDailyQuoteBuilds.delete(date));
+  employeeDailyQuoteBuilds.set(date, build);
+  return build;
+}
+
+async function generateEmployeeSubmissionPraise({ employeeName, taskItems = [], waitingTaskItems = [], date }) {
+  const firstName = projectText(employeeName).split(/\s+/)[0] || "there";
+  const completedCount = taskItems.length;
+  const waitingCount = waitingTaskItems.length;
+  const progressText = completedCount
+    ? `You shared ${completedCount} clear work update${completedCount === 1 ? "" : "s"}`
+    : "Your clear update";
+  const followUpText = waitingCount ? " and made the next follow-ups visible" : " and helped the team stay aligned";
+  return {
+    message: `Beautiful work, ${firstName}. ${progressText}${followUpText}.`,
+    quote: await getEmployeeDailyPositivityQuote(date),
+  };
+}
+
 app.post("/employee-daily-report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
@@ -1576,7 +1702,8 @@ app.post("/employee-daily-report", async (req, res) => {
     userSet.employeeReportCacheHydratedAt = now;
     if (!req.user.department || req.user.department !== department) userSet.department = department;
     await db.collection("users").updateOne({ _id: req.user._id }, { $set: userSet });
-    res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }) });
+    const celebration = await generateEmployeeSubmissionPraise({ employeeName: report.employeeName, taskItems, waitingTaskItems, date: today });
+    res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }), celebration });
   } catch (error) {
     if (error.code === 11000 || error.code === "EMPLOYEE_REPORT_EXISTS") return res.status(409).json({ error: "Today's report is already submitted" });
     if (/link your google sheet|could not open|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
@@ -1873,6 +2000,42 @@ app.post("/whatsapp/groups/:id/send", requireSuperAdmin, async (req, res) => {
 
 app.get("/admin/menu-items", requireSuperAdmin, (req, res) => {
   res.json({ menuItems: MENU_ITEMS, privilegeItems: PRIVILEGE_ITEMS });
+});
+
+app.get("/admin/module-control", requireSuperAdmin, async (req, res) => {
+  try {
+    const disabledModules = await getDisabledModules();
+    res.json({
+      modules: ALL_MENU_ITEMS.map((item) => ({
+        ...item,
+        enabled: !disabledModules.includes(item.id),
+        locked: PROTECTED_GLOBAL_MODULES.has(item.id),
+      })),
+      disabledModules,
+    });
+  } catch (error) {
+    console.error("Module control load error:", error);
+    res.status(500).json({ error: "Could not load module controls" });
+  }
+});
+
+app.put("/admin/module-control", requireSuperAdmin, async (req, res) => {
+  try {
+    const requested = Array.isArray(req.body?.disabledModules) ? req.body.disabledModules.map(String) : [];
+    const disabledModules = [...new Set(requested)].filter((id) => ALL_MENU_ITEMS.some((item) => item.id === id) && !PROTECTED_GLOBAL_MODULES.has(id));
+    const db = await connectAuthDb();
+    await db.collection("platformSettings").updateOne(
+      { _id: "module-control" },
+      { $set: { disabledModules, updatedAt: new Date(), updatedBy: String(req.authUser?.id || "") } },
+      { upsert: true },
+    );
+    moduleControlCache = { disabledModules, expiresAt: Date.now() + 5000 };
+    addActivityLog({ req, action: "Updated module control", target: "Platform modules", status: "success", details: { disabledModules } });
+    res.json({ success: true, disabledModules });
+  } catch (error) {
+    console.error("Module control update error:", error);
+    res.status(500).json({ error: "Could not update module controls" });
+  }
 });
 
 app.get("/admin/roles", requireSuperAdmin, async (req, res) => {

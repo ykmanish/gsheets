@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Download, Eye, FileText, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Download, Eye, FileText, Heart, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Search, Sparkles, Star, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import { useClickOutside } from "./ui";
@@ -176,13 +176,16 @@ function taskStatusMeta(status, darkMode = false) {
   };
 }
 
-function SearchableSelect({ darkMode, value, onChange, options = [], placeholder, allowOther = true, variant = "default" }) {
+function SearchableSelect({ darkMode, value, onChange, options = [], popularOptions = [], placeholder, allowOther = true, variant = "default" }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   useClickOutside(ref, () => setOpen(false));
   const selectedLabel = value === "__other" ? "Other" : value;
+  const popularKeys = new Set(popularOptions.map((option) => String(option.value || option).toLowerCase()));
   const filtered = options.filter((option) => option.toLowerCase().includes(query.trim().toLowerCase()));
+  const popular = filtered.filter((option) => popularKeys.has(option.toLowerCase()));
+  const regular = filtered.filter((option) => !popularKeys.has(option.toLowerCase()));
   const selectedStatus = variant === "status" && selectedLabel ? taskStatusMeta(selectedLabel, darkMode) : null;
   const SelectedIcon = selectedStatus?.Icon;
   return (
@@ -207,19 +210,25 @@ function SearchableSelect({ darkMode, value, onChange, options = [], placeholder
             className={`mb-2 h-10 w-full rounded-xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white"}`}
           />
           <div className="max-h-56 overflow-y-auto">
-            {filtered.map((option) => {
+            {popular.length > 0 && (
+              <p className={`px-3 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>Most used</p>
+            )}
+            {[...popular, ...regular].map((option, optionIndex) => {
               const meta = variant === "status" ? taskStatusMeta(option, darkMode) : null;
               const OptionIcon = meta?.Icon;
+              const isPopular = popularKeys.has(option.toLowerCase());
               return (
                 <button
                   key={option}
                   type="button"
                   onClick={() => { onChange(option); setOpen(false); setQuery(""); }}
-                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${option === value ? meta?.active || (darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white") : meta?.option || (darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]")}`}
+                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${option === value ? meta?.active || (darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white") : isPopular ? darkMode ? "bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15" : "bg-emerald-50 text-emerald-900 hover:bg-emerald-100" : meta?.option || (darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]")}`}
                 >
                   {OptionIcon ? <OptionIcon className="h-4 w-4 shrink-0" /> : null}
                   {!OptionIcon && variant === "status" ? <span className={`h-2 w-2 rounded-full ${meta?.dot || "bg-slate-400"}`} /> : null}
-                  <span>{option}</span>
+                  <span className="min-w-0 flex-1 truncate">{option}</span>
+                  {isPopular && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] ${option === value ? "bg-white/20" : darkMode ? "bg-emerald-300/15 text-emerald-200" : "bg-emerald-200/70 text-emerald-800"}`}>Most used</span>}
+                  {optionIndex === popular.length - 1 && regular.length > 0 && <span className="sr-only">End of most used options</span>}
                 </button>
               );
             })}
@@ -253,7 +262,7 @@ function taskRowValue(row, field) {
   return "";
 }
 
-function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], involvements = [], showStatus = false, showInvolvement = false, onRowsChange, required = false, darkMode = false }) {
+function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], involvements = [], popularSites = [], popularCategories = [], popularInvolvements = [], showStatus = false, showInvolvement = false, onRowsChange, required = false, darkMode = false }) {
   const [expandedIndex, setExpandedIndex] = useState(0);
   const activeExpandedIndex = Math.min(expandedIndex, Math.max(0, rows.length - 1));
 
@@ -344,7 +353,7 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                 <div className={`grid gap-3 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${expandedGridClass}`}>
                   <div className="order-1">
                     <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Site</p>
-                    <SearchableSelect darkMode={darkMode} value={row.site} onChange={(value) => updateRow(index, { site: value })} options={sites} placeholder="Choose site" allowOther />
+                    <SearchableSelect darkMode={darkMode} value={row.site} onChange={(value) => updateRow(index, { site: value })} options={sites} popularOptions={popularSites} placeholder="Choose site" allowOther />
                     {row.site === "__other" && (
                       <input required value={row.siteOther || ""} onChange={(event) => updateRow(index, { siteOther: event.target.value })} placeholder="Enter site" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
                     )}
@@ -361,14 +370,14 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                   {showInvolvement && (
                     <div className="order-3">
                       <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Involvement</p>
-                      <SearchableSelect darkMode={darkMode} value={row.involvement} onChange={(value) => updateRow(index, { involvement: value })} options={involvements.filter((item) => item !== "Other")} placeholder="Choose involvement" allowOther />
+                      <SearchableSelect darkMode={darkMode} value={row.involvement} onChange={(value) => updateRow(index, { involvement: value })} options={involvements.filter((item) => item !== "Other")} popularOptions={popularInvolvements} placeholder="Choose involvement" allowOther />
                       {row.involvement === "__other" && <input required={required} value={row.involvementOther || ""} onChange={(event) => updateRow(index, { involvementOther: event.target.value })} placeholder="Enter involvement" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />}
                       {required && index === 0 && !row.involvement && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
                     </div>
                   )}
                   <div className="order-2">
                     <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Category</p>
-                    <SearchableSelect darkMode={darkMode} value={row.category} onChange={(value) => updateRow(index, { category: value })} options={categories.filter((category) => category !== "Other")} placeholder="Choose category" allowOther />
+                    <SearchableSelect darkMode={darkMode} value={row.category} onChange={(value) => updateRow(index, { category: value })} options={categories.filter((category) => category !== "Other")} popularOptions={popularCategories} placeholder="Choose category" allowOther />
                     {row.category === "__other" && (
                       <input required={required && index === 0} value={row.categoryOther || ""} onChange={(event) => updateRow(index, { categoryOther: event.target.value })} placeholder="Enter category" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
                     )}
@@ -787,6 +796,44 @@ function ConfettiBurst({ active, onDone }) {
   return <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-[70]" />;
 }
 
+function SubmissionCelebrationModal({ darkMode, celebration, onClose }) {
+  if (!celebration) return null;
+  const saving = celebration.status === "saving";
+  const firstName = String(celebration.name || "there").trim().split(/\s+/)[0];
+  return (
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-[#10231c]/55 p-4 animate-[mrn-backdrop-in_280ms_ease-out]">
+      <section className={`relative w-full max-w-md overflow-hidden rounded-[30px] border p-7 text-center shadow-[0_30px_100px_rgba(0,0,0,0.3)] animate-[mrn-drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#171a20] text-white" : "border-white/70 bg-white text-[#171714]"}`}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-100/70 to-transparent" />
+        <Sparkles className="absolute left-8 top-9 h-5 w-5 animate-bounce text-amber-400 [animation-duration:2.2s]" />
+        <Heart className="absolute right-9 top-14 h-5 w-5 animate-bounce text-rose-400 [animation-delay:300ms] [animation-duration:2.5s]" />
+        <Star className="absolute right-16 top-7 h-4 w-4 animate-pulse text-sky-400" />
+        <div className="relative mx-auto grid h-28 w-28 place-items-center">
+          <span className={`absolute inset-1 rounded-full border-2 border-dashed ${saving ? "animate-spin border-emerald-400/60 [animation-duration:5s]" : "border-emerald-300"}`} />
+          <span className={`absolute inset-4 rounded-full ${saving ? "animate-pulse bg-emerald-100" : "bg-emerald-500"}`} />
+          {saving ? <FileText className="relative h-9 w-9 animate-bounce text-emerald-700 [animation-duration:1.8s]" /> : <Check className="relative h-10 w-10 text-white" />}
+          {/* {!saving && <span className="absolute -bottom-1 text-lg">✦</span>} */}
+        </div>
+
+        <div className="relative mt-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-600">{saving ? "Saving your day" : "Daily report submitted"}</p>
+          <h3 className="mt-3 text-3xl small font-bold leading-tight">{saving ? `One moment, ${firstName}` : `Beautiful work, ${firstName}.`}</h3>
+          <p className={`mx-auto mt-3 max-w-sm text-sm leading-6 ${darkMode ? "text-white/60" : "text-black/55"}`}>
+            {saving ? "Your update is being placed safely into today’s report." : celebration.message}
+          </p>
+          {!saving && celebration.quote && (
+            <blockquote className={`mt-5 text-center border-emerald-400 px-4  text-sm  leading-6 ${darkMode ? "text-white/70" : "text-black/65"}`}>
+              “{celebration.quote}”
+            </blockquote>
+          )}
+          {!saving && (
+            <button type="button" onClick={onClose} className="mt-6 h-11 rounded-full bg-[#89ed3f] px-8 text-sm font-bold text-black transition hover:bg-[#7dde35] active:scale-[0.98]">Done</button>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function heatmapMonthGroups(days = []) {
   return days.reduce((groups, day) => {
     const parsed = new Date(`${day.date}T00:00:00`);
@@ -884,6 +931,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [reportUserIds, setReportUserIds] = useState([]);
   const [heatmapOpen, setHeatmapOpen] = useState(false);
   const [confettiActive, setConfettiActive] = useState(false);
+  const [submissionCelebration, setSubmissionCelebration] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailClosing, setDetailClosing] = useState(false);
   const [detailExpanded, setDetailExpanded] = useState(false);
@@ -1119,6 +1167,8 @@ export default function EmployeeDailyReport({ darkMode }) {
   async function submitReport(event) {
     event.preventDefault();
     if (submitting) return;
+    const firstSubmission = !editingReport && !data?.todaySubmitted;
+    let celebrationStartedAt = 0;
     try {
       setSubmitting(true);
       const missingTaskSite = [...(form.taskItems || []), ...(form.waitingTaskItems || [])].some((item) => (item.category || item.categoryOther || item.description) && !fieldValue(item.site, item.siteOther).trim());
@@ -1137,14 +1187,32 @@ export default function EmployeeDailyReport({ darkMode }) {
         taskItems,
         waitingTaskItems,
       };
-      await api("/employee-daily-report", { method: editingReport ? "PUT" : "POST", body: JSON.stringify(payload) });
+      if (firstSubmission) {
+        celebrationStartedAt = Date.now();
+        setSubmissionCelebration({ status: "saving", name: user?.displayName || user?.username || "there", message: "", quote: "" });
+      }
+      const result = await api("/employee-daily-report", { method: editingReport ? "PUT" : "POST", body: JSON.stringify(payload) });
+      if (firstSubmission) {
+        const remainingAnimationTime = Math.max(0, 900 - (Date.now() - celebrationStartedAt));
+        if (remainingAnimationTime) await new Promise((resolve) => window.setTimeout(resolve, remainingAnimationTime));
+      }
       if (draftStorageKey) window.localStorage.removeItem(draftStorageKey);
       setLastDraftSavedAt("");
-      toast.success(editingReport ? "Today’s report updated" : "Daily report submitted");
-      setConfettiActive(true);
+      if (firstSubmission) {
+        setSubmissionCelebration({
+          status: "success",
+          name: result.report?.employeeName || user?.displayName || user?.username || "there",
+          message: result.celebration?.message || "Your clear update helps the whole team move forward with confidence.",
+          quote: result.celebration?.quote || "Consistent progress, thoughtfully shared, turns everyday effort into meaningful momentum.",
+        });
+        setConfettiActive(true);
+      } else {
+        toast.success("Today’s report updated");
+      }
       closeFormDrawer();
       await load();
     } catch (error) {
+      if (firstSubmission) setSubmissionCelebration(null);
       toast.error(error.message || "Could not submit report");
     } finally {
       setSubmitting(false);
@@ -1211,6 +1279,7 @@ export default function EmployeeDailyReport({ darkMode }) {
 
   const reports = data?.reports || [];
   const options = data?.options || { departments: [], taskTypes: [], taskStatuses: [], involvements: [] };
+  const optionUsage = data?.optionUsage || { sites: [], categories: [], involvements: [] };
   const formSites = customPrefs.useCustomOnly ? customPrefs.sites : uniqueClean([...(options.sites || []), ...customPrefs.sites]);
   const formCategories = customPrefs.useCustomOnly ? customPrefs.categories : uniqueClean([...(options.taskTypes || []), ...customPrefs.categories]);
   const hasCustomPreferences = Boolean(customPrefs.sites.length || customPrefs.categories.length);
@@ -1542,7 +1611,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                 </div>
                 <div className={`flex shrink-0 gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
                   <button type="button" onClick={closeFormDrawer} className={`h-11 flex-1 rounded-full border text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
-                  <button disabled={submitting} className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">{submitting ? "Saving..." : editingReport ? "Update" : "Submit"}</button>
+                  <button disabled={submitting} className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">{submitting && editingReport ? "Saving..." : editingReport ? "Update" : "Submit"}</button>
                 </div>
               </aside>
 
@@ -1627,6 +1696,9 @@ export default function EmployeeDailyReport({ darkMode }) {
                     sites={formSites}
                     statuses={options.taskStatuses}
                     involvements={options.involvements}
+                    popularSites={optionUsage.sites}
+                    popularCategories={optionUsage.categories}
+                    popularInvolvements={optionUsage.involvements}
                     showStatus
                     showInvolvement
                     required
@@ -1639,6 +1711,9 @@ export default function EmployeeDailyReport({ darkMode }) {
                     categories={formCategories}
                     sites={formSites}
                     involvements={options.involvements}
+                    popularSites={optionUsage.sites}
+                    popularCategories={optionUsage.categories}
+                    popularInvolvements={optionUsage.involvements}
                     showInvolvement
                     onRowsChange={(rows) => setForm((current) => ({ ...current, waitingTaskItems: rows }))}
                     darkMode={darkMode}
@@ -1834,6 +1909,7 @@ export default function EmployeeDailyReport({ darkMode }) {
         </div>
       )}
 
+      <SubmissionCelebrationModal darkMode={darkMode} celebration={submissionCelebration} onClose={() => setSubmissionCelebration(null)} />
       <ConfettiBurst active={confettiActive} onDone={() => setConfettiActive(false)} />
     </main>
   );

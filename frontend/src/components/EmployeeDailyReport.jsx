@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Eye, FileText, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
-import { API_URL } from "./AuthProvider";
+import { API_URL, useAuth } from "./AuthProvider";
 import { useClickOutside } from "./ui";
 
 async function api(path, options = {}) {
@@ -826,11 +826,13 @@ function Heatmap({ darkMode, rows = [], title }) {
 }
 
 export default function EmployeeDailyReport({ darkMode }) {
+  const { user } = useAuth();
+  const defaultTableDate = user?.isSuperAdmin ? todayInput() : "";
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState(() => todayInput());
-  const [dateTo, setDateTo] = useState(() => todayInput());
+  const [dateFrom, setDateFrom] = useState(() => defaultTableDate);
+  const [dateTo, setDateTo] = useState(() => defaultTableDate);
   const [formOpen, setFormOpen] = useState(false);
   const [formClosing, setFormClosing] = useState(false);
   const [formExpanded, setFormExpanded] = useState(false);

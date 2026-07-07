@@ -202,7 +202,7 @@ function SearchableSelect({ darkMode, value, onChange, options = [], popularOpti
         <Search className="h-4 w-4 opacity-45" />
       </button>
       {open && (
-        <div className={`absolute left-0 right-0 top-[calc(100%+8px)] z-50 rounded-2xl border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/10 bg-white"}`}>
+        <div className={`absolute left-0 top-[calc(100%+8px)] z-50 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/10 bg-white"}`}>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}

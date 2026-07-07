@@ -1699,6 +1699,76 @@ app.get("/employee-daily-report/report", async (req, res) => {
   }
 });
 
+async function buildEmployeeReportExportData(req, query = {}) {
+  const db = await connectAuthDb();
+  const today = istDateKey(new Date());
+  const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateFrom || "")) ? String(query.dateFrom) : today;
+  const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateTo || "")) ? String(query.dateTo) : dateFrom;
+  const from = dateFrom <= dateTo ? dateFrom : dateTo;
+  const to = dateFrom <= dateTo ? dateTo : dateFrom;
+  const selectedUserIds = projectText(query.userIds).split(",").map((item) => item.trim()).filter(Boolean).slice(0, 100);
+  const userFilter = { employeeDailySpreadsheetId: { $exists: true, $ne: "" } };
+  const selectedObjectIds = selectedUserIds.filter((id) => /^[a-f\d]{24}$/i.test(id)).map((id) => new ObjectId(id));
+  if (selectedObjectIds.length) userFilter._id = { $in: selectedObjectIds };
+  const linkedUsers = await db.collection("users").find(userFilter).limit(500).toArray();
+  const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(
+    await getCachedEmployeeReportsForUsers(db, linkedUsers),
+    { dateFrom: from, dateTo: to, userIds: selectedUserIds },
+  )).sort((a, b) => String(a.reportDate).localeCompare(String(b.reportDate)) || String(a.employeeName).localeCompare(String(b.employeeName))).slice(0, 5000);
+  const dates = [];
+  for (let date = from; date && date <= to; date = addDaysToDateKey(date, 1)) dates.push(date);
+  const employees = new Set();
+  const departments = new Map();
+  const categories = new Map();
+  const dailyMap = new Map(dates.map((date) => [date, { date, reports: 0, completedTasks: 0, waitingTasks: 0, employees: new Set() }]));
+  let completedTasks = 0;
+  let waitingTasks = 0;
+  reports.forEach((report) => {
+    const taskItems = sanitizeEmployeeTaskItems(report.taskItems);
+    const waitingItems = sanitizeEmployeeTaskItems(report.waitingTaskItems);
+    const employeeName = report.employeeName || "Employee";
+    const completedCount = taskItems.length || (projectText(report.taskDescription) ? 1 : 0);
+    const waitingCount = waitingItems.length || (projectText(report.waitingTaskDescription) ? 1 : 0);
+    employees.add(employeeName);
+    completedTasks += completedCount;
+    waitingTasks += waitingCount;
+    incrementEmployeeReportBucket(departments, report.department, { reports: 1, completedTasks: completedCount, waitingTasks: waitingCount, employeeName });
+    taskItems.forEach((item) => incrementEmployeeReportBucket(categories, item.category, { completedTasks: 1, employeeName }));
+    waitingItems.forEach((item) => incrementEmployeeReportBucket(categories, item.category, { waitingTasks: 1, employeeName }));
+    const daily = dailyMap.get(report.reportDate) || { date: report.reportDate, reports: 0, completedTasks: 0, waitingTasks: 0, employees: new Set() };
+    daily.reports += 1;
+    daily.completedTasks += completedCount;
+    daily.waitingTasks += waitingCount;
+    daily.employees.add(employeeName);
+    dailyMap.set(report.reportDate, daily);
+  });
+  return {
+    range: { from, to },
+    selectedUserIds,
+    summary: { reports: reports.length, employees: employees.size, completedTasks, waitingTasks, departments: departments.size, categories: categories.size },
+    daily: [...dailyMap.values()].map((item) => ({ date: item.date, reports: item.reports, employees: item.employees.size, completedTasks: item.completedTasks, waitingTasks: item.waitingTasks })),
+    departments: [...departments.values()].map(serializeEmployeeReportBucket).sort((a, b) => b.reports - a.reports),
+    categories: [...categories.values()].map(serializeEmployeeReportBucket).sort((a, b) => (b.completedTasks + b.waitingTasks) - (a.completedTasks + a.waitingTasks)),
+    reports: reports.map(sanitizeEmployeeReport),
+  };
+}
+
+app.get("/employee-daily-report/report/pdf", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    const report = await buildEmployeeReportExportData(req, req.query || {});
+    const buffer = await generateEmployeeDailyReportPdf(report);
+    const rangeName = report.range.from === report.range.to ? report.range.from : `${report.range.from}_to_${report.range.to}`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="employee-daily-report-${rangeName}.pdf"`);
+    res.setHeader("Content-Length", buffer.length);
+    res.send(buffer);
+  } catch (error) {
+    console.error("Employee daily report PDF error:", error);
+    res.status(500).json({ error: "Could not generate employee report PDF" });
+  }
+});
+
 app.put("/employee-daily-report/preferences", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
@@ -5039,6 +5109,247 @@ function registerDmrPdfFonts(doc) {
   } catch (error) {
     console.warn("Could not register DMR PDF font:", error.message);
   }
+}
+
+function employeePdfRangeLabel(range = {}) {
+  if (range.from === range.to) return dmrPdfDateLabel(range.from);
+  return `${dmrPdfDateLabel(range.from)} - ${dmrPdfDateLabel(range.to)}`;
+}
+
+function employeePdfEnsureSpace(doc, height, onNewPage) {
+  if (doc.y + height <= doc.page.height - doc.page.margins.bottom) return;
+  doc.addPage();
+  if (onNewPage) onNewPage();
+}
+
+function employeePdfReportHeader(doc, report, continued = false) {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - left - doc.page.margins.right;
+  const top = doc.y;
+  doc.roundedRect(left, top, width, 76, 14).fill("#f4f8f5").stroke("#cfe5da");
+  doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text(continued ? "EMPLOYEE SUBMISSION - CONTINUED" : "EMPLOYEE SUBMISSION", left + 18, top + 13);
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(17).text(projectText(report.employeeName) || "Employee", left + 18, top + 30, { width: width - 250, height: 23 });
+  doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8).text(projectText(report.department) || "No department", left + 18, top + 55, { width: width - 250, height: 12 });
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(11).text(dmrPdfDateLabel(report.reportDate), left + width - 210, top + 23, { width: 190, align: "right", height: 16 });
+  const submitted = report.submittedAt ? new Date(report.submittedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Not available";
+  doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(7.5).text(`Submitted ${submitted}`, left + width - 250, top + 48, { width: 230, align: "right", height: 12 });
+  doc.y = top + 88;
+}
+
+function employeePdfTaskCard(doc, item, index, theme, onNewPage) {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - left - doc.page.margins.right;
+  const description = projectText(item.description) || "No description provided.";
+  doc.font(dmrPdfFonts.regular).fontSize(9);
+  const descriptionHeight = doc.heightOfString(description, { width: width - 72, lineGap: 1.5 });
+  const cardHeight = Math.max(70, 49 + descriptionHeight);
+  employeePdfEnsureSpace(doc, cardHeight + 10, onNewPage);
+  const top = doc.y;
+  doc.roundedRect(left, top, width, cardHeight, 12).fill(theme.fill).stroke(theme.stroke);
+  doc.circle(left + 20, top + 21, 10).fill(theme.color);
+  doc.fillColor("#ffffff").font(dmrPdfFonts.bold).fontSize(8).text(String(index + 1), left + 14, top + 17, { width: 12, align: "center", lineBreak: false });
+  const category = projectText(item.category) || "General";
+  const site = projectText(item.site) || "No site";
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(10.5).text(category, left + 40, top + 12, { width: width - 300, height: 15 });
+  doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8).text(site, left + 40, top + 29, { width: width - 300, height: 12 });
+  const metadata = [projectText(item.status), projectText(item.involvement)].filter(Boolean).join(" | ");
+  if (metadata) doc.fillColor(theme.color).font(dmrPdfFonts.bold).fontSize(8).text(metadata, left + width - 250, top + 14, { width: 230, align: "right", height: 15 });
+  doc.fillColor("#26312c").font(dmrPdfFonts.regular).fontSize(9).text(description, left + 40, top + 47, { width: width - 60, lineGap: 1.5 });
+  doc.y = top + cardHeight + 10;
+}
+
+function employeePdfInfoCard(doc, title, text, theme, onNewPage) {
+  const value = projectText(text);
+  if (!value) return;
+  const left = doc.page.margins.left;
+  const width = doc.page.width - left - doc.page.margins.right;
+  doc.font(dmrPdfFonts.regular).fontSize(9);
+  const textHeight = doc.heightOfString(value, { width: width - 36, lineGap: 1.5 });
+  const height = Math.max(62, textHeight + 38);
+  employeePdfEnsureSpace(doc, height + 10, onNewPage);
+  const top = doc.y;
+  doc.roundedRect(left, top, width, height, 12).fill(theme.fill).stroke(theme.stroke);
+  doc.fillColor(theme.color).font(dmrPdfFonts.bold).fontSize(8).text(title.toUpperCase(), left + 18, top + 12);
+  doc.fillColor("#26312c").font(dmrPdfFonts.regular).fontSize(9).text(value, left + 18, top + 31, { width: width - 36, lineGap: 1.5 });
+  doc.y = top + height + 10;
+}
+
+function employeePdfCompactItem(item, type) {
+  const site = projectText(item.site) || "No site";
+  const category = projectText(item.category) || (type === "waiting" ? "Follow-up" : "General");
+  const metadata = [projectText(item.status), projectText(item.involvement)].filter(Boolean).join(" / ");
+  const description = projectText(item.description) || "No description provided.";
+  return { type, text: `${site} - ${category}${metadata ? ` (${metadata})` : ""}: ${description}` };
+}
+
+function employeePdfCompactCardHeight(doc, segment, width) {
+  const textWidth = width - 36;
+  let height = 58;
+  let previousType = "";
+  segment.items.forEach((item) => {
+    if (item.type !== previousType) height += 17;
+    doc.font(dmrPdfFonts.regular).fontSize(7.4);
+    height += Math.max(13, doc.heightOfString(item.text, { width: textWidth, lineGap: 1 })) + 4;
+    previousType = item.type;
+  });
+  if (segment.includeFooter) {
+    height += 26;
+    if (projectText(segment.report.note)) {
+      doc.font(dmrPdfFonts.regular).fontSize(7.3);
+      height += Math.max(13, doc.heightOfString(projectText(segment.report.note), { width: textWidth - 28, lineGap: 1 })) + 7;
+    }
+  }
+  return Math.max(92, Math.ceil(height) + 8);
+}
+
+function employeePdfCompactSegments(doc, report, width, maxHeight) {
+  let completed = sanitizeEmployeeTaskItems(report.taskItems);
+  if (!completed.length && projectText(report.taskDescription)) completed = [{ site: report.site, category: report.taskType, status: report.taskStatus, involvement: report.involvement, description: report.taskDescription }];
+  let waiting = sanitizeEmployeeTaskItems(report.waitingTaskItems);
+  if (!waiting.length && projectText(report.waitingTaskDescription)) waiting = [{ site: report.site, category: "Waiting / tomorrow plan", involvement: report.involvement, description: report.waitingTaskDescription }];
+  const items = [
+    ...completed.map((item) => employeePdfCompactItem(item, "completed")),
+    ...waiting.map((item) => employeePdfCompactItem(item, "waiting")),
+  ];
+  const segments = [];
+  let current = [];
+  items.forEach((item) => {
+    const candidate = { report, items: [...current, item], includeFooter: false };
+    if (current.length && employeePdfCompactCardHeight(doc, candidate, width) > maxHeight) {
+      segments.push({ report, items: current, includeFooter: false });
+      current = [item];
+    } else {
+      current.push(item);
+    }
+  });
+  segments.push({ report, items: current, includeFooter: true });
+  return segments;
+}
+
+function employeePdfDrawCompactCard(doc, segment, x, y, width, index) {
+  const height = employeePdfCompactCardHeight(doc, segment, width);
+  const report = segment.report;
+  doc.roundedRect(x, y, width, height, 12).fill("#ffffff").stroke("#dce6df");
+  doc.roundedRect(x, y, width, 50, 12).fill("#f1f8f4");
+  doc.rect(x, y + 38, width, 12).fill("#f1f8f4");
+  doc.circle(x + 19, y + 19, 9).fill("#0f9f6e");
+  doc.fillColor("#ffffff").font(dmrPdfFonts.bold).fontSize(7.5).text(String(index + 1), x + 13, y + 15.5, { width: 12, align: "center", lineBreak: false });
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(11.5).text(projectText(report.employeeName) || "Employee", x + 35, y + 11, { width: width - 155, height: 16 });
+  doc.fillColor("#69716c").font(dmrPdfFonts.regular).fontSize(7.2).text(projectText(report.department) || "No department", x + 35, y + 29, { width: width - 155, height: 11 });
+  doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text(dmrPdfDateLabel(report.reportDate), x + width - 112, y + 13, { width: 96, align: "right", height: 12 });
+  doc.fillColor("#7c817e").font(dmrPdfFonts.regular).fontSize(6.6).text(segment.includeFooter ? "Submission" : "Continued", x + width - 112, y + 29, { width: 96, align: "right", height: 10 });
+
+  let cursor = y + 59;
+  let previousType = "";
+  segment.items.forEach((item) => {
+    if (item.type !== previousType) {
+      const color = item.type === "completed" ? "#0f9f6e" : "#b66a00";
+      doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(7.2).text(item.type === "completed" ? "COMPLETED WORK" : "WAITING / FOLLOW-UP", x + 14, cursor, { width: width - 28, height: 11 });
+      cursor += 17;
+    }
+    doc.font(dmrPdfFonts.regular).fontSize(7.4);
+    const itemHeight = Math.max(13, doc.heightOfString(item.text, { width: width - 36, lineGap: 1 }));
+    doc.circle(x + 17, cursor + 3.8, 1.5).fill(item.type === "completed" ? "#0f9f6e" : "#b66a00");
+    doc.fillColor("#303733").text(item.text, x + 23, cursor, { width: width - 36, lineGap: 1 });
+    cursor += itemHeight + 4;
+    previousType = item.type;
+  });
+  if (segment.includeFooter) {
+    doc.moveTo(x + 14, cursor + 2).lineTo(x + width - 14, cursor + 2).strokeColor("#e6ebe8").stroke();
+    cursor += 10;
+    doc.fillColor(report.tomorrowPlanTick ? "#0f9f6e" : "#b66a00").font(dmrPdfFonts.bold).fontSize(7.2).text(`TOMORROW PLAN: ${report.tomorrowPlanTick ? "CONFIRMED" : "NOT CONFIRMED"}`, x + 14, cursor, { width: width - 28, height: 11 });
+    cursor += 16;
+    const note = projectText(report.note);
+    if (note) {
+      doc.fillColor("#1268b3").font(dmrPdfFonts.bold).fontSize(7.2).text("NOTE", x + 14, cursor, { width: 28, height: 11 });
+      doc.fillColor("#46514b").font(dmrPdfFonts.regular).fontSize(7.3).text(note, x + 44, cursor, { width: width - 58, lineGap: 1 });
+    }
+  }
+  doc.roundedRect(x, y, width, height, 12).lineWidth(0.8).strokeColor("#dce6df").stroke();
+  return height;
+}
+
+function generateEmployeeDailyReportPdf(report) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 32, bufferPages: true, info: { Title: `Employee Daily Report ${report.range.from} to ${report.range.to}`, Author: "UIPL Docs" } });
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    registerDmrPdfFonts(doc);
+
+    const left = doc.page.margins.left;
+    const pageWidth = doc.page.width - left - doc.page.margins.right;
+    doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text("EMPLOYEE DAILY REPORT", left, doc.y, { characterSpacing: 1.2 });
+    doc.moveDown(0.7);
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(23).text("Employee work summary");
+    doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(9).text(`${employeePdfRangeLabel(report.range)} | Generated ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`);
+    doc.moveDown(1.2);
+    const metrics = [
+      ["Reports", report.summary.reports, "#eaf4ff", "#1268b3"],
+      ["Employees", report.summary.employees, "#e9fbf2", "#0f9f6e"],
+      ["Completed tasks", report.summary.completedTasks, "#eef8e8", "#4b8f29"],
+      ["Waiting tasks", report.summary.waitingTasks, "#fff7df", "#b66a00"],
+      ["Departments", report.summary.departments, "#f4efff", "#7651b5"],
+      ["Categories", report.summary.categories, "#fff0f0", "#d83b45"],
+    ];
+    const gap = 10;
+    const metricWidth = (pageWidth - gap * 5) / 6;
+    const metricTop = doc.y;
+    metrics.forEach(([label, value, fill, color], index) => {
+      const x = left + index * (metricWidth + gap);
+      doc.roundedRect(x, metricTop, metricWidth, 70, 12).fill(fill);
+      doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(20).text(String(value), x + 14, metricTop + 14, { width: metricWidth - 28, height: 25 });
+      doc.fillColor("#5f665f").font(dmrPdfFonts.regular).fontSize(7.5).text(label, x + 14, metricTop + 45, { width: metricWidth - 28, height: 12 });
+    });
+    doc.y = metricTop + 88;
+    const summaryColumns = [
+      { title: "Daily submissions", rows: (report.daily || []).filter((item) => item.reports).slice(0, 8).map((item) => `${dmrPdfDateLabel(item.date)}: ${item.reports} reports, ${item.completedTasks} completed`) },
+      { title: "Departments", rows: (report.departments || []).slice(0, 8).map((item) => `${item.label}: ${item.reports} reports`) },
+      { title: "Task categories", rows: (report.categories || []).slice(0, 8).map((item) => `${item.label}: ${item.completedTasks} completed, ${item.waitingTasks} waiting`) },
+    ];
+    const columnWidth = (pageWidth - 20) / 3;
+    const summaryTop = doc.y;
+    summaryColumns.forEach((column, index) => {
+      const x = left + index * (columnWidth + 10);
+      doc.roundedRect(x, summaryTop, columnWidth, 190, 12).fill("#f8faf8").stroke("#e1e8e3");
+      doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(11).text(column.title, x + 14, summaryTop + 14, { width: columnWidth - 28 });
+      let y = summaryTop + 39;
+      (column.rows.length ? column.rows : ["No data available."]).forEach((row) => {
+        doc.circle(x + 17, y + 4, 1.6).fill("#0f9f6e");
+        doc.fillColor("#4f5852").font(dmrPdfFonts.regular).fontSize(8).text(row, x + 24, y, { width: columnWidth - 38, height: 18 });
+        y += 19;
+      });
+    });
+
+    const reportGap = 12;
+    const reportCardWidth = (pageWidth - reportGap) / 2;
+    const pageTop = 62;
+    const pageBottom = doc.page.height - doc.page.margins.bottom;
+    const maxCardHeight = pageBottom - pageTop;
+    const compactSegments = (report.reports || []).flatMap((entry) => employeePdfCompactSegments(doc, entry, reportCardWidth, maxCardHeight));
+    let columnY = [pageTop, pageTop];
+    let submissionPage = 0;
+    const startSubmissionPage = () => {
+      doc.addPage();
+      submissionPage += 1;
+      doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(15).text("Employee submissions", left, 32, { width: pageWidth - 180, height: 20 });
+      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(7.5).text(`${employeePdfRangeLabel(report.range)} | Page ${submissionPage}`, left + pageWidth - 180, 36, { width: 180, align: "right", height: 12 });
+      columnY = [pageTop, pageTop];
+    };
+    if (compactSegments.length) startSubmissionPage();
+    compactSegments.forEach((segment, index) => {
+      const cardHeight = employeePdfCompactCardHeight(doc, segment, reportCardWidth);
+      const fittingColumns = [0, 1].filter((column) => columnY[column] + cardHeight <= pageBottom);
+      if (!fittingColumns.length) startSubmissionPage();
+      const availableColumns = [0, 1].filter((column) => columnY[column] + cardHeight <= pageBottom);
+      const column = availableColumns.sort((a, b) => columnY[a] - columnY[b])[0] ?? 0;
+      const x = left + column * (reportCardWidth + reportGap);
+      const height = employeePdfDrawCompactCard(doc, segment, x, columnY[column], reportCardWidth, index);
+      columnY[column] += height + reportGap;
+    });
+    doc.end();
+  });
 }
 
 function dmrPdfPill(doc, text, x, y, options = {}) {
@@ -9210,23 +9521,27 @@ app.post("/chat", async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-cron.schedule("0 12 * * *", async () => {
-  try {
-    if (!publicDmrSettings().linked) return;
-    const date = istDateKey(new Date());
-    await buildDmrDailyPdf(date, { save: true });
-    console.log(`Generated scheduled DMR CEO PDF for ${date}`);
-  } catch (error) {
-    console.error("Scheduled DMR PDF generation error:", error);
-  }
-}, { timezone: "Asia/Kolkata" });
+if (require.main === module) {
+  cron.schedule("0 12 * * *", async () => {
+    try {
+      if (!publicDmrSettings().linked) return;
+      const date = istDateKey(new Date());
+      await buildDmrDailyPdf(date, { save: true });
+      console.log(`Generated scheduled DMR CEO PDF for ${date}`);
+    } catch (error) {
+      console.error("Scheduled DMR PDF generation error:", error);
+    }
+  }, { timezone: "Asia/Kolkata" });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📁 Uploads: ${uploadsDir}`);
-  console.log(`📁 Vectors: ${vectorsDir}`);
-  console.log(`📁 Data: ${dataDir}`);
-});
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📁 Uploads: ${uploadsDir}`);
+    console.log(`📁 Vectors: ${vectorsDir}`);
+    console.log(`📁 Data: ${dataDir}`);
+  });
+}
+
+module.exports = { app, generateEmployeeDailyReportPdf };
 
 app.patch("/reports/:id/read", (req, res) => {
   const report = reports.find((item) => item.id === req.params.id);

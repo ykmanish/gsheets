@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Eye, FileText, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Download, Eye, FileText, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import { useClickOutside } from "./ui";
@@ -502,8 +502,10 @@ function EmployeeReportTable({ title, headers, rows, darkMode }) {
 
 function EmployeeUserMultiSelect({ darkMode, users = [], selectedIds = [], onChange }) {
   const ref = useRef(null);
+  const triggerRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [panelStyle, setPanelStyle] = useState({});
   useClickOutside(ref, () => setOpen(false));
   const selected = new Set(selectedIds);
   const filtered = users.filter((user) => `${user.employeeName} ${user.department}`.toLowerCase().includes(query.trim().toLowerCase()));
@@ -513,9 +515,42 @@ function EmployeeUserMultiSelect({ darkMode, users = [], selectedIds = [], onCha
     onChange(selected.has(userId) ? selectedIds.filter((id) => id !== userId) : [...selectedIds, userId]);
   }
 
+  useEffect(() => {
+    if (!open) return undefined;
+    function updatePanelPosition() {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const margin = 12;
+      const gap = 10;
+      const panelWidth = Math.min(window.innerWidth - margin * 2, 360);
+      const desiredHeight = 420;
+      const roomBelow = window.innerHeight - rect.bottom - gap - margin;
+      const roomAbove = rect.top - gap - margin;
+      const openUpward = roomBelow < desiredHeight && roomAbove > roomBelow;
+      const availableHeight = openUpward ? roomAbove : roomBelow;
+      const maxHeight = Math.max(160, Math.min(desiredHeight, availableHeight));
+      const left = Math.min(Math.max(margin, rect.right - panelWidth), window.innerWidth - panelWidth - margin);
+      setPanelStyle({
+        left,
+        width: panelWidth,
+        maxHeight,
+        top: openUpward ? undefined : rect.bottom + gap,
+        bottom: openUpward ? window.innerHeight - rect.top + gap : undefined,
+      });
+    }
+    updatePanelPosition();
+    window.addEventListener("resize", updatePanelPosition);
+    window.addEventListener("scroll", updatePanelPosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePanelPosition);
+      window.removeEventListener("scroll", updatePanelPosition, true);
+    };
+  }, [open]);
+
   return (
     <div ref={ref} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
         className={`flex h-11 min-w-[220px] items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
@@ -524,12 +559,12 @@ function EmployeeUserMultiSelect({ darkMode, users = [], selectedIds = [], onCha
         <Search className="h-4 w-4 opacity-45" />
       </button>
       {open && (
-        <div className={`absolute right-0 top-[calc(100%+10px)] z-[80] w-[min(92vw,360px)] rounded-[22px] border p-3 shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
-          <div className="mb-2 flex gap-2">
+        <div style={panelStyle} className={`fixed z-[80] flex flex-col overflow-hidden rounded-[22px] border p-3 shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
+          <div className="mb-2 flex shrink-0 gap-2">
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee..." className={`h-10 min-w-0 flex-1 rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
             <button type="button" onClick={() => onChange([])} className={`h-10 rounded-2xl px-3 text-xs font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>All</button>
           </div>
-          <div className="max-h-72 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {filtered.map((user) => (
               <button
                 key={user.userId}
@@ -842,6 +877,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [todayStatusFilter, setTodayStatusFilter] = useState("all");
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
+  const [reportDownloading, setReportDownloading] = useState("");
   const [reportData, setReportData] = useState(null);
   const [reportFrom, setReportFrom] = useState(() => addDaysInput(todayInput(), -6));
   const [reportTo, setReportTo] = useState(() => todayInput());
@@ -1129,20 +1165,6 @@ export default function EmployeeDailyReport({ darkMode }) {
     }
   }
 
-  function setReportPreset(preset) {
-    const today = todayInput();
-    if (preset === "daily") {
-      setReportFrom(today);
-      setReportTo(today);
-    } else if (preset === "weekly") {
-      setReportFrom(addDaysInput(today, -6));
-      setReportTo(today);
-    } else if (preset === "monthly") {
-      setReportFrom(today.slice(0, 8) + "01");
-      setReportTo(today);
-    }
-  }
-
   async function generateEmployeeReport() {
     try {
       setReportLoading(true);
@@ -1154,6 +1176,36 @@ export default function EmployeeDailyReport({ darkMode }) {
       toast.error(error.message || "Could not generate report");
     } finally {
       setReportLoading(false);
+    }
+  }
+
+  async function downloadEmployeeReportPdf({ from = reportFrom, to = reportTo, mode = "range" } = {}) {
+    try {
+      setReportDownloading(mode);
+      const resolvedFrom = from || todayInput();
+      const resolvedTo = to || resolvedFrom;
+      const params = new URLSearchParams({ dateFrom: resolvedFrom, dateTo: resolvedTo });
+      if (reportUserIds.length) params.set("userIds", reportUserIds.join(","));
+      const response = await fetch(`${API_URL}/employee-daily-report/report/pdf?${params.toString()}`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Could not download employee report PDF");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const rangeName = resolvedFrom === resolvedTo ? resolvedFrom : `${resolvedFrom}_to_${resolvedTo}`;
+      link.href = url;
+      link.download = `employee-daily-report-${rangeName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+      toast.success("Employee report PDF downloaded");
+    } catch (error) {
+      toast.error(error.message || "Could not download employee report PDF");
+    } finally {
+      setReportDownloading("");
     }
   }
 
@@ -1629,16 +1681,15 @@ export default function EmployeeDailyReport({ darkMode }) {
                   {/* <h4 className="mt-2 text-2xl font-semibold">Generate employee work summary</h4> */}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  {[
-                    ["daily", "Today"],
-                    ["weekly", "This week"],
-                    ["monthly", "This month"],
-                  ].map(([value, label]) => (
-                    <button key={value} type="button" onClick={() => setReportPreset(value)} className={`h-11 rounded-2xl border px-4 text-sm font-semibold ${darkMode ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-[#f7f5ef] hover:bg-black/[0.04]"}`}>{label}</button>
-                  ))}
                   <EmployeeUserMultiSelect darkMode={darkMode} users={reportUsers} selectedIds={reportUserIds} onChange={setReportUserIds} />
                   <EmployeeDateRangePicker darkMode={darkMode} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo} />
                   <button onClick={generateEmployeeReport} disabled={reportLoading} className="h-11 rounded-full bg-[#89ed3f] px-5 text-sm font-bold text-black hover:bg-[#7dde35] disabled:opacity-60">{reportLoading ? "Generating..." : "Generate"}</button>
+                  <button onClick={() => downloadEmployeeReportPdf()} disabled={Boolean(reportDownloading)} className={`flex h-11 items-center justify-center gap-2 rounded-full border px-5 text-sm font-bold transition disabled:opacity-60 ${darkMode ? "border-white/15 bg-white/10 text-white hover:bg-white/15" : "border-black/10 bg-white text-black hover:bg-[#eef7df]"}`}>
+                    <Download className="h-4 w-4" /> {reportDownloading === "range" ? "Preparing..." : "Download range PDF"}
+                  </button>
+                  <button onClick={() => { const today = todayInput(); void downloadEmployeeReportPdf({ from: today, to: today, mode: "today" }); }} disabled={Boolean(reportDownloading)} className="flex h-11 items-center justify-center gap-2 rounded-full bg-red-600 px-5 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-60">
+                    <FileText className="h-4 w-4" /> {reportDownloading === "today" ? "Preparing..." : "Today PDF"}
+                  </button>
                 </div>
               </div>
             </div>

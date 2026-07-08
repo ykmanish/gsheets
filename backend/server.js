@@ -372,7 +372,7 @@ const whatsappService = createWhatsAppService({
   phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
   businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
   appSecret: process.env.WHATSAPP_APP_SECRET,
-  verifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+  verifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN,
   graphVersion: process.env.META_GRAPH_API_VERSION || "v23.0",
 });
 

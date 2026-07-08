@@ -8,6 +8,7 @@ import {
   ContactRound,
   Loader2,
   MessageCircleMore,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -179,7 +180,7 @@ export default function WhatsApp({ darkMode }) {
   });
 
   const [contactModal, setContactModal] = useState(false);
-  const [contactForm, setContactForm] = useState({ name: "", phone: "" });
+  const [contactForm, setContactForm] = useState({ id: "", name: "", phone: "" });
   const [groupModal, setGroupModal] = useState(false);
   const [groupForm, setGroupForm] = useState({ name: "", members: [] });
   const [broadcastGroup, setBroadcastGroup] = useState(null);
@@ -313,6 +314,11 @@ export default function WhatsApp({ darkMode }) {
     contacts.find((item) => item.phone === selectedPhone)?.name ||
     formatPhone(selectedPhone);
 
+  const selectedContact =
+    contacts.find((item) => item.phone === selectedPhone) ||
+    selectedConversation?.contact ||
+    null;
+
   const templateOptions = useMemo(() => {
     const approved = templates.filter(
       (template) => template.status === "APPROVED",
@@ -367,6 +373,20 @@ export default function WhatsApp({ darkMode }) {
     }
   }
 
+  function openContactModal(contact = null) {
+    setContactForm({
+      id: contact?.id || "",
+      name: contact?.name || contact?.profileName || "",
+      phone: contact?.phone || "",
+    });
+    setContactModal(true);
+  }
+
+  function closeContactModal() {
+    setContactModal(false);
+    setContactForm({ id: "", name: "", phone: "" });
+  }
+
   async function addContact(event) {
     event.preventDefault();
 
@@ -376,13 +396,12 @@ export default function WhatsApp({ darkMode }) {
         body: JSON.stringify(contactForm),
       });
 
-      setContactModal(false);
-      setContactForm({ name: "", phone: "" });
+      closeContactModal();
       setSelectedPhone(data.contact.phone);
       setView("inbox");
 
       await loadData(true);
-      toast.success("Contact saved");
+      toast.success(contactForm.id ? "Contact renamed" : "Contact saved");
     } catch (error) {
       toast.error(error.message);
     }
@@ -390,6 +409,7 @@ export default function WhatsApp({ darkMode }) {
 
   async function deleteContact(id) {
     try {
+      if (!window.confirm("Delete this WhatsApp contact? Conversation history will remain.")) return;
       await api(`/whatsapp/contacts/${id}`, { method: "DELETE" });
       await loadData(true);
       toast.success("Contact removed");
@@ -661,7 +681,7 @@ export default function WhatsApp({ darkMode }) {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setContactModal(true)}
+                      onClick={() => openContactModal()}
                       title="Add contact"
                       className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#25D366] text-white transition hover:bg-[#20bd5a]"
                     >
@@ -755,6 +775,26 @@ export default function WhatsApp({ darkMode }) {
                           {formatPhone(selectedPhone)}
                         </p>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openContactModal(
+                            selectedContact || {
+                              name:
+                                recipientName === formatPhone(selectedPhone)
+                                  ? ""
+                                  : recipientName,
+                              phone: selectedPhone,
+                            },
+                          )
+                        }
+                        className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl transition sm:flex ${hover}`}
+                        title={selectedContact ? "Rename contact" : "Save contact name"}
+                        aria-label={selectedContact ? "Rename contact" : "Save contact name"}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
 
                       <span className="hidden items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-500 sm:inline-flex">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -906,7 +946,7 @@ export default function WhatsApp({ darkMode }) {
                   <EmptyState
                     darkMode={darkMode}
                     muted={muted}
-                    onAddContact={() => setContactModal(true)}
+                    onAddContact={() => openContactModal()}
                   />
                 )}
               </section>
@@ -925,7 +965,7 @@ export default function WhatsApp({ darkMode }) {
 
                 <button
                   type="button"
-                  onClick={() => setContactModal(true)}
+                  onClick={() => openContactModal()}
                   className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#25D366] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#20bd5a]"
                 >
                   <Plus className="h-4 w-4" />
@@ -953,14 +993,25 @@ export default function WhatsApp({ darkMode }) {
                         </p>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => deleteContact(contact.id)}
-                        aria-label={`Delete ${contact.name}`}
-                        className="rounded-xl p-2 text-red-500 transition hover:bg-red-500/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openContactModal(contact)}
+                          aria-label={`Rename ${contact.name}`}
+                          className={`rounded-xl p-2 transition ${hover}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => deleteContact(contact.id)}
+                          aria-label={`Delete ${contact.name}`}
+                          className="rounded-xl p-2 text-red-500 transition hover:bg-red-500/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1059,8 +1110,8 @@ export default function WhatsApp({ darkMode }) {
       {contactModal && (
         <Modal
           darkMode={darkMode}
-          title="Add WhatsApp contact"
-          onClose={() => setContactModal(false)}
+          title={contactForm.id ? "Rename WhatsApp contact" : "Add WhatsApp contact"}
+          onClose={closeContactModal}
         >
           <form onSubmit={addContact} className="space-y-4">
             <input
@@ -1079,6 +1130,7 @@ export default function WhatsApp({ darkMode }) {
             <input
               required
               inputMode="tel"
+              disabled={Boolean(contactForm.id)}
               value={contactForm.phone}
               onChange={(event) =>
                 setContactForm((current) => ({
@@ -1087,15 +1139,17 @@ export default function WhatsApp({ darkMode }) {
                 }))
               }
               placeholder="Phone with country code, e.g. 9198…"
-              className={field}
+              className={`${field} disabled:cursor-not-allowed disabled:opacity-60`}
             />
 
             <p className={`text-xs leading-5 ${muted}`}>
-              Test-number recipients must also be verified in Meta API Setup.
+              {contactForm.id
+                ? "Only the display name will change; existing chat history stays linked to this number."
+                : "Test-number recipients must also be verified in Meta API Setup."}
             </p>
 
             <button className="w-full rounded-full bg-[#25D366] py-3 text-sm font-medium text-white transition hover:bg-[#20bd5a]">
-              Save and open chat
+              {contactForm.id ? "Save name" : "Save and open chat"}
             </button>
           </form>
         </Modal>

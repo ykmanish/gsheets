@@ -224,6 +224,16 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
       .sort((a, b) => new Date(a.timestamp || a.createdAt) - new Date(b.timestamp || b.createdAt));
   }
 
+  function clearConversation(phone) {
+    const normalized = normalizePhone(phone);
+    if (!normalized) return 0;
+    const before = state.messages.length;
+    state.messages = state.messages.filter((message) => message.from !== normalized && message.to !== normalized);
+    const deleted = before - state.messages.length;
+    if (deleted > 0) save();
+    return deleted;
+  }
+
   function listContacts(search = "") {
     const term = String(search || "").trim().toLowerCase();
     return state.contacts
@@ -304,6 +314,7 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
     sendMessage,
     listConversations,
     listMessages,
+    clearConversation,
     listContacts,
     saveContact,
     deleteContact,

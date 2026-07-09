@@ -174,13 +174,34 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
     save();
   }
 
-  async function sendMessage({ to, text, templateName, language = "en_US" }, actor = null) {
+  function templateParameter(text) {
+    return { type: "text", text: String(text ?? "") };
+  }
+
+  async function sendMessage({ to, text, templateName, language = "en_US", templateParams = [], buttonUrlParam = "" }, actor = null) {
     const phone = normalizePhone(to);
     if (!phone) throw new Error("A valid recipient phone number is required");
     if (!text?.trim() && !templateName) throw new Error("Message text or template is required");
     addOrUpdateContact({ phone, source: "outbound" });
+    const components = [];
+    if (templateName && Array.isArray(templateParams) && templateParams.length) {
+      components.push({ type: "body", parameters: templateParams.map(templateParameter) });
+    }
+    if (templateName && buttonUrlParam) {
+      components.push({ type: "button", sub_type: "url", index: "0", parameters: [templateParameter(buttonUrlParam)] });
+    }
     const payload = templateName
-      ? { messaging_product: "whatsapp", recipient_type: "individual", to: phone, type: "template", template: { name: templateName, language: { code: language } } }
+      ? {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: phone,
+        type: "template",
+        template: {
+          name: templateName,
+          language: { code: language },
+          ...(components.length ? { components } : {}),
+        },
+      }
       : { messaging_product: "whatsapp", recipient_type: "individual", to: phone, type: "text", text: { preview_url: true, body: text.trim() } };
     const result = await graphRequest(`${phoneNumberId}/messages`, { method: "POST", body: JSON.stringify(payload) });
     const record = storeMessage({
@@ -189,7 +210,7 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
       from: normalizePhone(phoneNumberId),
       to: phone,
       type: templateName ? "template" : "text",
-      text: templateName ? `Template: ${templateName}` : text.trim(),
+      text: templateName ? `Template: ${templateName}${templateParams.length ? ` - ${templateParams.join(" | ")}` : ""}` : text.trim(),
       templateName: templateName || null,
       timestamp: new Date().toISOString(),
       status: "sent",

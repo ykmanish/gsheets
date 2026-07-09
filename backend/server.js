@@ -16,7 +16,7 @@ const crypto = require("crypto");
 const { MongoClient, ObjectId } = require("mongodb");
 
 const { processDocument, processSheetText } = require("./lib/processDocument");
-const { createWhatsAppService } = require("./lib/whatsappService");
+const { createWhatsAppService, normalizePhone } = require("./lib/whatsappService");
 const { callClaude, retrieveRelevantChunks, routeClaudeModel } = require("./lib/claudeRag");
 const { registerFormsModule } = require("./lib/formsModule");
 const adminMiscExpensesArchitecture = require("./sheetArchitectures/adminMiscExpenses");
@@ -141,12 +141,25 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+function profileText(value, max = 120) {
+  return String(value || "").trim().replace(/\s+/g, " ").slice(0, max);
+}
+
+function profilePhone(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 20);
+}
+
 function sanitizeUser(user, role) {
   if (!user) return null;
   return {
     id: String(user._id),
     username: user.username,
     displayName: user.displayName || user.username,
+    email: user.email || "",
+    phone: user.phone || "",
+    whatsappPhone: user.whatsappPhone || user.whatsappNumber || "",
+    department: user.department || "",
+    designation: user.designation || user.jobTitle || "",
     roleId: user.roleId ? String(user.roleId) : null,
     roleName: role?.name || user.roleName || null,
     menus: role?.menus || user.menus || [],
@@ -358,6 +371,35 @@ app.get("/auth/me", requireAuth, async (req, res) => {
   res.json({ user: req.authUser, menus: req.role?.menus || [], disabledModules: await getDisabledModules() });
 });
 
+app.get("/profile", requireAuth, async (req, res) => {
+  const role = req.role || await getRole(req.user?.roleId);
+  res.json({ user: sanitizeUser(req.user, role) });
+});
+
+app.patch("/profile", requireAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const update = {
+      displayName: profileText(body.displayName || req.user.displayName || req.user.username, 80),
+      email: profileText(body.email, 120),
+      phone: profilePhone(body.phone),
+      whatsappPhone: profilePhone(body.whatsappPhone || body.phone),
+      department: profileText(body.department, 80),
+      designation: profileText(body.designation, 80),
+      updatedAt: new Date(),
+    };
+    if (!update.displayName) return res.status(400).json({ error: "Display name is required" });
+    const db = await connectAuthDb();
+    await db.collection("users").updateOne({ _id: req.user._id }, { $set: update });
+    const user = await db.collection("users").findOne({ _id: req.user._id });
+    const role = await getRole(user?.roleId);
+    res.json({ success: true, user: sanitizeUser(user, role) });
+  } catch (error) {
+    console.error("Profile update error:", error);
+    res.status(500).json({ error: "Could not update profile" });
+  }
+});
+
 app.post("/auth/logout", requireAuth, async (req, res) => {
   const db = await connectAuthDb();
   const token = (req.headers.authorization || "").slice(7);
@@ -419,6 +461,9 @@ const EMPLOYEE_REPORT_OPTIONS = {
 };
 const EMPLOYEE_REPORT_APP_TAB = "_AppData";
 const EMPLOYEE_REPORT_APP_HEADERS = ["Report ID", "User ID", "Employee", "Department", "Report Date", "Submitted At", "Client", "Site", "Task Type", "Task Status", "Involvement", "Tomorrow Plan", "Note", "Task Items JSON", "Waiting Items JSON"];
+const EMPLOYEE_REPORT_REMINDER_TEMPLATE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_TEMPLATE || "daily_report_reminder";
+const EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_LANGUAGE || "en";
+const EMPLOYEE_REPORT_REMINDER_LINK = process.env.EMPLOYEE_REPORT_REMINDER_LINK || process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "http://localhost:3000/employee-daily-report";
 const employeeMetaCache = new Map();
 const employeeReportCache = new Map();
 const EMPLOYEE_META_CACHE_MS = 5 * 60 * 1000;
@@ -472,6 +517,85 @@ function employeeReportToday(req = null) {
   const headerDate = dmrDateKey(req?.headers?.["x-employee-report-date"]);
   const envDate = dmrDateKey(process.env.EMPLOYEE_REPORT_TEST_DATE);
   return headerDate || envDate || istDateKey(new Date());
+}
+
+function employeeReportReminderRunId(dateKey) {
+  return `employee-report-whatsapp-reminder:${dmrDateKey(dateKey) || employeeReportToday()}`;
+}
+
+function isEmployeeReminderSunday(dateKey) {
+  const date = new Date(`${dmrDateKey(dateKey) || employeeReportToday()}T00:00:00+05:30`);
+  return date.getDay() === 0;
+}
+
+function employeeReminderPhone(user = {}) {
+  return normalizePhone(
+    user.whatsappPhone ||
+    user.whatsappNumber ||
+    user.whatsapp ||
+    user.mobileNumber ||
+    user.mobile ||
+    user.phoneNumber ||
+    user.phone ||
+    user.contactNumber ||
+    user.contact ||
+    ""
+  );
+}
+
+function employeeReminderLink(dateKey) {
+  const base = projectText(EMPLOYEE_REPORT_REMINDER_LINK) || "http://localhost:3000/employee-daily-report";
+  try {
+    const url = new URL(base);
+    url.pathname = url.pathname || "/employee-daily-report";
+    url.searchParams.set("employeeReportDate", dmrDateKey(dateKey) || employeeReportToday());
+    return url.toString();
+  } catch {
+    const separator = base.includes("?") ? "&" : "?";
+    return `${base}${separator}employeeReportDate=${encodeURIComponent(dmrDateKey(dateKey) || employeeReportToday())}`;
+  }
+}
+
+async function resolveEmployeeReminderTemplateName() {
+  if (projectText(EMPLOYEE_REPORT_REMINDER_TEMPLATE)) return projectText(EMPLOYEE_REPORT_REMINDER_TEMPLATE);
+  try {
+    const templates = await whatsappService.templates();
+    const approved = (templates || []).filter((template) => String(template.status || "").toUpperCase() === "APPROVED");
+    const daily = approved.find((template) => /daily|work|report|reminder/i.test(`${template.name || ""} ${template.category || ""}`));
+    return daily?.name || approved[0]?.name || "";
+  } catch (error) {
+    console.warn("Employee WhatsApp reminder template lookup skipped:", error.message);
+    return "";
+  }
+}
+
+function serializeReminderRun(run = null, dateKey = employeeReportToday()) {
+  if (!run) {
+    return {
+      date: dmrDateKey(dateKey) || employeeReportToday(),
+      status: isEmployeeReminderSunday(dateKey) ? "skipped" : "not_sent",
+      reason: isEmployeeReminderSunday(dateKey) ? "Sunday" : "",
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      recipients: 0,
+      results: [],
+    };
+  }
+  return {
+    date: run.date,
+    status: run.status || "unknown",
+    reason: run.reason || "",
+    sent: Number(run.sent || 0),
+    failed: Number(run.failed || 0),
+    skipped: Number(run.skipped || 0),
+    recipients: Number(run.recipients || 0),
+    startedAt: run.startedAt || null,
+    finishedAt: run.finishedAt || null,
+    source: run.source || "",
+    templateName: run.templateName || "",
+    results: Array.isArray(run.results) ? run.results.slice(0, 300) : [],
+  };
 }
 
 function uniqueEmployeeValues(values = []) {
@@ -1175,6 +1299,94 @@ async function getCachedEmployeeReportsForUsers(db, users = []) {
     .toArray();
 }
 
+async function sendEmployeeDailyReportReminders({ dateKey = employeeReportToday(), source = "manual", force = false, includeSubmitted = false } = {}) {
+  const db = await connectAuthDb();
+  const date = dmrDateKey(dateKey) || employeeReportToday();
+  const runId = employeeReportReminderRunId(date);
+  const existingRun = await db.collection("platformSettings").findOne({ _id: runId });
+  if (!force && existingRun?.status === "completed") return serializeReminderRun(existingRun, date);
+  if (isEmployeeReminderSunday(date)) {
+    const skippedRun = {
+      _id: runId,
+      date,
+      status: "skipped",
+      reason: "Sunday",
+      recipients: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+      source,
+      finishedAt: new Date(),
+    };
+    await db.collection("platformSettings").updateOne({ _id: runId }, { $set: skippedRun }, { upsert: true });
+    return serializeReminderRun(skippedRun, date);
+  }
+
+  const templateName = await resolveEmployeeReminderTemplateName();
+  if (!templateName) throw new Error("No approved WhatsApp reminder template found. Set EMPLOYEE_REPORT_REMINDER_TEMPLATE in backend/.env.");
+
+  const linkedUsers = await db.collection("users").find({
+    employeeDailySpreadsheetId: { $exists: true, $ne: "" },
+    isActive: { $ne: false },
+  }).limit(500).toArray();
+  const reports = await getCachedEmployeeReportsForUsers(db, linkedUsers);
+  const submitted = new Set(reports.filter((report) => report.reportDate === date).map((report) => String(report.userId)));
+  const startedAt = new Date();
+  const results = [];
+  await db.collection("platformSettings").updateOne(
+    { _id: runId },
+    { $set: { _id: runId, date, status: "running", source, templateName, recipients: linkedUsers.length, startedAt, updatedAt: startedAt } },
+    { upsert: true },
+  );
+
+  for (const user of linkedUsers) {
+    const userId = String(user._id || user.id || "");
+    const employeeName = user.displayName || user.username || "Employee";
+    const phone = employeeReminderPhone(user);
+    if (!includeSubmitted && submitted.has(userId)) {
+      results.push({ userId, employeeName, status: "skipped", reason: "Already submitted" });
+      continue;
+    }
+    if (!phone) {
+      results.push({ userId, employeeName, status: "failed", reason: "WhatsApp phone not set" });
+      continue;
+    }
+    try {
+      const message = await whatsappService.sendMessage({
+        to: phone,
+        templateName,
+        language: EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE,
+        templateParams: [employeeName, dmrPdfDateLabel(date), employeeReminderLink(date)],
+      }, { id: "system", displayName: "Employee report reminder" });
+      results.push({ userId, employeeName, phone, status: "sent", messageId: message.wamid || message.id || null });
+    } catch (error) {
+      results.push({ userId, employeeName, phone, status: "failed", reason: error.message });
+    }
+  }
+
+  const finishedAt = new Date();
+  const run = {
+    _id: runId,
+    date,
+    status: "completed",
+    source,
+    templateName,
+    language: EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE,
+    link: employeeReminderLink(date),
+    recipients: linkedUsers.length,
+    sent: results.filter((item) => item.status === "sent").length,
+    failed: results.filter((item) => item.status === "failed").length,
+    skipped: results.filter((item) => item.status === "skipped").length,
+    results,
+    startedAt,
+    finishedAt,
+    updatedAt: finishedAt,
+  };
+  await db.collection("platformSettings").updateOne({ _id: runId }, { $set: run }, { upsert: true });
+  return serializeReminderRun(run, date);
+}
+
 function filterEmployeeReports(reports = [], { search = "", dateFrom = "", dateTo = "", userIds = [] } = {}) {
   const needle = projectText(search).toLowerCase();
   const selected = new Set((userIds || []).map(String).filter(Boolean));
@@ -1500,48 +1712,49 @@ async function updateEmployeeReportInSheet({ user, report, taskItems, waitingTas
   return existingReportId;
 }
 
-async function deleteEmployeeReportFromSheet({ user, reportDate }) {
+async function deleteEmployeeReportFromSheet({ user, reportDate, fallbackReport = null }) {
   const spreadsheetId = user?.employeeDailySpreadsheetId;
   if (!spreadsheetId) throw new Error("Linked Google Sheet not found for this employee");
   const date = employeeDailyTabName(reportDate);
   const meta = await getEmployeeSpreadsheetMeta(spreadsheetId, user?.employeeDailySheetTab);
   const sheets = await getDmrSpreadsheet(spreadsheetId);
   const appTab = await ensureEmployeeAppDataTab(sheets, spreadsheetId, false);
-  if (!appTab) {
-    const missing = new Error("Submitted report could not be found in app data");
-    missing.code = "EMPLOYEE_REPORT_NOT_FOUND";
-    throw missing;
+  let appRows = [];
+  let appRowIndex = -1;
+  let appRow = [];
+  if (appTab) {
+    const appResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A2:O10000`,
+    });
+    appRows = appResponse.data.values || [];
+    appRowIndex = appRows.findIndex((row) => String(row[1] || "") === String(user._id || user.id || "") && projectText(row[4]) === date);
+    appRow = appRowIndex >= 0 ? (appRows[appRowIndex] || []) : [];
   }
-  const appResponse = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A2:O10000`,
-  });
-  const appRows = appResponse.data.values || [];
-  const appRowIndex = appRows.findIndex((row) => String(row[1] || "") === String(user._id || user.id || "") && projectText(row[4]) === date);
-  if (appRowIndex < 0) {
-    const missing = new Error("Submitted report could not be found in app data");
-    missing.code = "EMPLOYEE_REPORT_NOT_FOUND";
-    throw missing;
-  }
-  const appRow = appRows[appRowIndex] || [];
-  const previousTaskItems = parseEmployeeJsonItems(appRow[13]);
-  const previousWaitingTaskItems = parseEmployeeJsonItems(appRow[14]);
+  const previousTaskItems = parseEmployeeJsonItems(appRow[13]).length
+    ? parseEmployeeJsonItems(appRow[13])
+    : sanitizeEmployeeTaskItems(fallbackReport?.taskItems);
+  const previousWaitingTaskItems = parseEmployeeJsonItems(appRow[14]).length
+    ? parseEmployeeJsonItems(appRow[14])
+    : sanitizeEmployeeTaskItems(fallbackReport?.waitingTaskItems);
 
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      requests: [{
-        deleteDimension: {
-          range: {
-            sheetId: appTab.sheetId,
-            dimension: "ROWS",
-            startIndex: appRowIndex + 1,
-            endIndex: appRowIndex + 2,
+  if (appTab && appRowIndex >= 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: appTab.sheetId,
+              dimension: "ROWS",
+              startIndex: appRowIndex + 1,
+              endIndex: appRowIndex + 2,
+            },
           },
-        },
-      }],
-    },
-  });
+        }],
+      },
+    });
+  }
 
   const dailyTab = await ensureEmployeeDailySheetTab(sheets, spreadsheetId, meta, date);
   let existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000` });
@@ -1560,6 +1773,8 @@ async function deleteEmployeeReportFromSheet({ user, reportDate }) {
     const status = projectText(row[(columns.taskStatus || 0) - 1]);
     const waitingDescription = projectText(row[(columns.waitingDescription || 0) - 1]);
     const rowDate = projectText(row[(columns.reportDate || 0) - 1]);
+    const fallbackSite = projectText(fallbackReport?.site);
+    const fallbackCategory = projectText(fallbackReport?.taskType);
     return previousTaskItems.some((item) => (
       projectText(item.description) === description &&
       (!projectText(item.category) || projectText(item.category) === category) &&
@@ -1568,7 +1783,8 @@ async function deleteEmployeeReportFromSheet({ user, reportDate }) {
     )) || previousWaitingTaskItems.some((item) => (
       projectText(item.description) === waitingDescription &&
       (!projectText(item.site) || projectText(item.site) === site)
-    )) || (rowDate === date && projectText(appRow[7]) && projectText(appRow[7]) === site && projectText(appRow[8]) && projectText(appRow[8]) === category);
+    )) || (rowDate === date && projectText(appRow[7]) && projectText(appRow[7]) === site && projectText(appRow[8]) && projectText(appRow[8]) === category)
+      || (rowDate === date && fallbackSite && fallbackSite === site && (!fallbackCategory || fallbackCategory === category));
   });
   if (previousRowMatches.length) {
     const startRow = previousRowMatches[0].rowNumber;
@@ -1580,7 +1796,7 @@ async function deleteEmployeeReportFromSheet({ user, reportDate }) {
     if (clearRanges.length) await sheets.spreadsheets.values.batchClear({ spreadsheetId, requestBody: { ranges: clearRanges } });
   }
   invalidateEmployeeSheetCache(user);
-  return { deletedAppRow: appRowIndex + 2, clearedRows: previousRowMatches.length };
+  return { deletedAppRow: appRowIndex >= 0 ? appRowIndex + 2 : null, appDataFound: appRowIndex >= 0, clearedRows: previousRowMatches.length };
 }
 
 async function buildEmployeeReportDashboard(req, query = {}) {
@@ -1926,21 +2142,46 @@ app.delete("/employee-daily-report/:reportDate", async (req, res) => {
       ? req.user
       : await db.collection("users").findOne({ _id: targetObjectId });
     if (!targetUser) return res.status(404).json({ error: "Employee user not found" });
-    const result = await deleteEmployeeReportFromSheet({ user: targetUser, reportDate });
     const targetUserId = String(targetUser._id || requestedUserId);
-    await db.collection("employeeDailyReports").deleteOne({ userId: targetUserId, reportDate });
+    const cachedReport = await db.collection("employeeDailyReports").findOne({ userId: targetUserId, reportDate });
+    const result = await deleteEmployeeReportFromSheet({ user: targetUser, reportDate, fallbackReport: cachedReport });
+    const cacheDelete = await db.collection("employeeDailyReports").deleteOne({ userId: targetUserId, reportDate });
     await db.collection("users").updateOne(
       { _id: targetUser._id },
       { $set: { employeeReportCacheHydratedAt: new Date(), updatedAt: new Date() } },
     );
     employeeReportCache.delete(employeeReportCacheKey(targetUser));
-    addActivityLog({ req, action: "Deleted employee daily report", target: `${targetUser.displayName || targetUser.username || "Employee"} · ${reportDate}`, details: result });
-    res.json({ success: true, ...result });
+    addActivityLog({ req, action: "Deleted employee daily report", target: `${targetUser.displayName || targetUser.username || "Employee"} · ${reportDate}`, details: { ...result, cacheDeleted: cacheDelete.deletedCount } });
+    res.json({ success: true, ...result, cacheDeleted: cacheDelete.deletedCount });
   } catch (error) {
-    if (error.code === "EMPLOYEE_REPORT_NOT_FOUND") return res.status(404).json({ error: error.message });
     if (/linked google sheet|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
     console.error("Employee daily report delete error:", employeeSheetErrorMessage(error));
     res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: employeeSheetErrorMessage(error, "Could not delete employee daily report") });
+  }
+});
+
+app.get("/employee-daily-report/reminder/status", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    const date = dmrDateKey(req.query.date) || employeeReportToday(req);
+    const db = await connectAuthDb();
+    const run = await db.collection("platformSettings").findOne({ _id: employeeReportReminderRunId(date) });
+    res.json({ reminder: serializeReminderRun(run, date) });
+  } catch (error) {
+    console.error("Employee reminder status error:", error);
+    res.status(500).json({ error: "Could not check reminder status" });
+  }
+});
+
+app.post("/employee-daily-report/reminder/send-now", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    const date = dmrDateKey(req.body?.date || req.query.date) || employeeReportToday(req);
+    const reminder = await sendEmployeeDailyReportReminders({ dateKey: date, source: "manual", force: true, includeSubmitted: true });
+    res.json({ success: true, reminder });
+  } catch (error) {
+    console.error("Employee reminder send-now error:", error);
+    res.status(500).json({ error: error.message || "Could not send reminders now" });
   }
 });
 
@@ -9865,6 +10106,15 @@ app.post("/chat", async (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 if (require.main === module) {
+  cron.schedule("50 18 * * 1-6", async () => {
+    try {
+      const result = await sendEmployeeDailyReportReminders({ source: "cron" });
+      console.log(`Employee WhatsApp reminders ${result.status} for ${result.date}: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped`);
+    } catch (error) {
+      console.error("Employee WhatsApp reminder cron error:", error);
+    }
+  }, { timezone: "Asia/Kolkata" });
+
   cron.schedule("0 12 * * *", async () => {
     try {
       if (!publicDmrSettings().linked) return;

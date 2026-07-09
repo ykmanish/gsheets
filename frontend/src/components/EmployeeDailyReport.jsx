@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Download, Eye, FileText, Heart, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Sparkles, Star, Trash2, X } from "lucide-react";
+import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Download, Eye, FileText, Heart, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Sparkles, Star, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import { useClickOutside } from "./ui";
@@ -1092,6 +1092,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [submitting, setSubmitting] = useState(false);
   const [refreshingToday, setRefreshingToday] = useState(false);
   const [deletingReportId, setDeletingReportId] = useState("");
+  const [checkingReminder, setCheckingReminder] = useState(false);
 
   const closeFormDrawer = useCallback(() => {
     setFormClosing(true);
@@ -1407,6 +1408,32 @@ export default function EmployeeDailyReport({ darkMode }) {
     }
   }
 
+  async function checkReminderStatus() {
+    if (checkingReminder) return;
+    try {
+      setCheckingReminder(true);
+      const date = data?.today || todayInput();
+      const result = await api("/employee-daily-report/reminder/send-now", {
+        method: "POST",
+        body: JSON.stringify({ date }),
+      });
+      const reminder = result.reminder || {};
+      if (reminder.status === "completed") {
+        toast.success(`Reminder sent now for ${date}: ${reminder.sent || 0} sent, ${reminder.failed || 0} failed, ${reminder.skipped || 0} skipped`);
+      } else if (reminder.status === "skipped") {
+        toast(`Reminder skipped for ${date}${reminder.reason ? `: ${reminder.reason}` : ""}`);
+      } else if (reminder.status === "running") {
+        toast(`Reminder is currently sending for ${date}`);
+      } else {
+        toast(`Reminder has not been sent yet for ${date}`);
+      }
+    } catch (error) {
+      toast.error(error.message || "Could not send reminders now");
+    } finally {
+      setCheckingReminder(false);
+    }
+  }
+
   async function deleteEmployeeReport(report) {
     if (!report?.reportDate || deletingReportId) return;
     const confirmed = window.confirm(`Delete ${report.employeeName || "this employee"}'s report for ${report.reportDate}? This will remove it from _AppData and clear the matching Google Sheet rows.`);
@@ -1538,6 +1565,17 @@ export default function EmployeeDailyReport({ darkMode }) {
                 {data?.isAdmin && (
                   <button onClick={() => setTodayStatusOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
                     <CalendarCheck className="h-4 w-4" /> Today status
+                  </button>
+                )}
+                {data?.isAdmin && (
+                  <button
+                    type="button"
+                    onClick={checkReminderStatus}
+                    disabled={checkingReminder}
+                    className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
+                  >
+                    <BellRing className={`h-4 w-4 ${checkingReminder ? "animate-pulse" : ""}`} />
+                    {checkingReminder ? "Sending..." : "Send reminders now"}
                   </button>
                 )}
               </div>

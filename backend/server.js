@@ -523,6 +523,55 @@ function employeeReportReminderRunId(dateKey) {
   return `employee-report-whatsapp-reminder:${dmrDateKey(dateKey) || employeeReportToday()}`;
 }
 
+function validEmployeeReminderTime(value) {
+  const text = String(value || "").trim();
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(text) ? text : "";
+}
+
+async function getEmployeeReminderSettings() {
+  const db = await connectAuthDb();
+  const settings = await db.collection("platformSettings").findOne({ _id: "employee-report-whatsapp-reminder-settings" });
+  return {
+    enabled: settings?.enabled !== false,
+    time: validEmployeeReminderTime(settings?.time) || "18:50",
+    timezone: "Asia/Kolkata",
+    updatedAt: settings?.updatedAt || null,
+    updatedBy: settings?.updatedBy || null,
+  };
+}
+
+async function saveEmployeeReminderSettings({ time, enabled = true, actor = null }) {
+  const reminderTime = validEmployeeReminderTime(time);
+  if (!reminderTime) throw new Error("Choose a valid reminder time");
+  const db = await connectAuthDb();
+  const settings = {
+    enabled: Boolean(enabled),
+    time: reminderTime,
+    timezone: "Asia/Kolkata",
+    updatedAt: new Date(),
+    updatedBy: actor ? { id: actor.id, name: actor.displayName || actor.username || "User" } : null,
+  };
+  await db.collection("platformSettings").updateOne(
+    { _id: "employee-report-whatsapp-reminder-settings" },
+    { $set: settings },
+    { upsert: true },
+  );
+  return settings;
+}
+
+function employeeReminderCurrentTimeParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date).reduce((result, part) => {
+    if (part.type !== "literal") result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.hour}:${parts.minute}`;
+}
+
 function isEmployeeReminderSunday(dateKey) {
   const date = new Date(`${dmrDateKey(dateKey) || employeeReportToday()}T00:00:00+05:30`);
   return date.getDay() === 0;
@@ -1852,6 +1901,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
       };
     })
     : [];
+  const reminderSettings = isAdmin ? await getEmployeeReminderSettings() : null;
   return {
     isAdmin,
     today,
@@ -1876,6 +1926,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     optionUsage,
     reportUsers: reportUsers.map((user) => ({ userId: String(user._id), employeeName: user.employeeName || "Employee", department: user.department || "" })),
     todaySubmissionStatus,
+    reminderSettings,
     reports: reports.map(sanitizeEmployeeReport),
     heatmap,
   };
@@ -2170,6 +2221,31 @@ app.get("/employee-daily-report/reminder/status", async (req, res) => {
   } catch (error) {
     console.error("Employee reminder status error:", error);
     res.status(500).json({ error: "Could not check reminder status" });
+  }
+});
+
+app.get("/employee-daily-report/reminder/settings", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    res.json({ settings: await getEmployeeReminderSettings() });
+  } catch (error) {
+    console.error("Employee reminder settings load error:", error);
+    res.status(500).json({ error: "Could not load reminder settings" });
+  }
+});
+
+app.patch("/employee-daily-report/reminder/settings", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    const settings = await saveEmployeeReminderSettings({
+      time: req.body?.time,
+      enabled: req.body?.enabled !== false,
+      actor: req.authUser,
+    });
+    res.json({ success: true, settings });
+  } catch (error) {
+    console.error("Employee reminder settings save error:", error);
+    res.status(400).json({ error: error.message || "Could not save reminder settings" });
   }
 });
 
@@ -10106,8 +10182,11 @@ app.post("/chat", async (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 if (require.main === module) {
-  cron.schedule("50 18 * * 1-6", async () => {
+  cron.schedule("* * * * *", async () => {
     try {
+      const settings = await getEmployeeReminderSettings();
+      if (!settings.enabled) return;
+      if (employeeReminderCurrentTimeParts(new Date()) !== settings.time) return;
       const result = await sendEmployeeDailyReportReminders({ source: "cron" });
       console.log(`Employee WhatsApp reminders ${result.status} for ${result.date}: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped`);
     } catch (error) {

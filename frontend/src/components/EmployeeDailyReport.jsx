@@ -1065,6 +1065,9 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [todayStatusSearch, setTodayStatusSearch] = useState("");
   const [todayStatusFilter, setTodayStatusFilter] = useState("all");
   const [reportOpen, setReportOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [reminderSettings, setReminderSettings] = useState({ enabled: true, time: "18:50", timezone: "Asia/Kolkata" });
   const [reportLoading, setReportLoading] = useState(false);
   const [reportDownloading, setReportDownloading] = useState("");
   const [reportData, setReportData] = useState(null);
@@ -1154,6 +1157,11 @@ export default function EmployeeDailyReport({ darkMode }) {
       if (dateTo) params.set("dateTo", dateTo);
       const result = await api(`/employee-daily-report?${params.toString()}`);
       setData(result);
+      if (result.reminderSettings) setReminderSettings({
+        enabled: result.reminderSettings.enabled !== false,
+        time: result.reminderSettings.time || "18:50",
+        timezone: result.reminderSettings.timezone || "Asia/Kolkata",
+      });
       setSheetInput(result.profile?.sheetUrl || "");
       const storedPrefs = result.profile?.taskPreferences || {};
       const normalizedPrefs = {
@@ -1434,6 +1442,44 @@ export default function EmployeeDailyReport({ darkMode }) {
     }
   }
 
+  async function openReminderSchedule() {
+    setReminderOpen(true);
+    try {
+      const result = await api("/employee-daily-report/reminder/settings");
+      if (result.settings) setReminderSettings({
+        enabled: result.settings.enabled !== false,
+        time: result.settings.time || "18:50",
+        timezone: result.settings.timezone || "Asia/Kolkata",
+      });
+    } catch (error) {
+      toast.error(error.message || "Could not load reminder schedule");
+    }
+  }
+
+  async function saveReminderSchedule(event) {
+    event.preventDefault();
+    if (reminderSaving) return;
+    try {
+      setReminderSaving(true);
+      const result = await api("/employee-daily-report/reminder/settings", {
+        method: "PATCH",
+        body: JSON.stringify(reminderSettings),
+      });
+      if (result.settings) setReminderSettings({
+        enabled: result.settings.enabled !== false,
+        time: result.settings.time || reminderSettings.time,
+        timezone: result.settings.timezone || "Asia/Kolkata",
+      });
+      toast.success(`Daily reminder scheduled at ${result.settings?.time || reminderSettings.time} IST`);
+      setReminderOpen(false);
+      await load();
+    } catch (error) {
+      toast.error(error.message || "Could not save reminder schedule");
+    } finally {
+      setReminderSaving(false);
+    }
+  }
+
   async function deleteEmployeeReport(report) {
     if (!report?.reportDate || deletingReportId) return;
     const confirmed = window.confirm(`Delete ${report.employeeName || "this employee"}'s report for ${report.reportDate}? This will remove it from _AppData and clear the matching Google Sheet rows.`);
@@ -1570,12 +1616,12 @@ export default function EmployeeDailyReport({ darkMode }) {
                 {data?.isAdmin && (
                   <button
                     type="button"
-                    onClick={checkReminderStatus}
-                    disabled={checkingReminder}
+                    onClick={openReminderSchedule}
+                    disabled={initialLoading}
                     className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
                   >
-                    <BellRing className={`h-4 w-4 ${checkingReminder ? "animate-pulse" : ""}`} />
-                    {checkingReminder ? "Sending..." : "Send reminders now"}
+                    <BellRing className="h-4 w-4" />
+                    Reminder schedule
                   </button>
                 )}
               </div>
@@ -1684,6 +1730,80 @@ export default function EmployeeDailyReport({ darkMode }) {
           </table>
         </div>
       </section>
+
+      {reminderOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 p-4 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setReminderOpen(false); }}>
+          <div className={`mx-auto mt-10 w-full max-w-2xl overflow-hidden rounded-[30px] shadow-[0_24px_80px_rgba(15,23,42,0.25)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex h-14 items-center justify-between border-b px-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <div className="flex min-w-0 items-center gap-3">
+                <span className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}>
+                  <BellRing className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-bold">Daily WhatsApp reminders</p>
+                  <p className={`text-xs ${muted}`}>Automatic Employee Daily Report reminder time</p>
+                </div>
+              </div>
+              <button onClick={() => setReminderOpen(false)} className={`rounded-full p-2 transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close reminder schedule">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={saveReminderSchedule} className={`p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
+              <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
+                <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Schedule</p>
+                    <h3 className="mt-2 text-2xl font-black">Send every day at selected time</h3>
+                    <p className={`mt-2 text-sm leading-6 ${muted}`}>Runs in IST and skips Sunday. Automatic reminders are sent only to employees who have not submitted for the day.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReminderSettings((current) => ({ ...current, enabled: !current.enabled }))}
+                    className={`flex h-11 items-center gap-3 rounded-full px-3 text-sm font-bold transition ${reminderSettings.enabled ? "bg-[#10a66b] text-white" : darkMode ? "bg-white/10 text-white/55" : "bg-black/10 text-black/55"}`}
+                  >
+                    <span className={`h-6 w-6 rounded-full bg-white transition ${reminderSettings.enabled ? "translate-x-0" : "opacity-70"}`} />
+                    {reminderSettings.enabled ? "On" : "Off"}
+                  </button>
+                </div>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Reminder time</span>
+                    <span className="relative mt-2 block">
+                      <Clock3 className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${darkMode ? "text-white/38" : "text-black/35"}`} />
+                      <input
+                        type="time"
+                        required
+                        value={reminderSettings.time}
+                        onChange={(event) => setReminderSettings((current) => ({ ...current, time: event.target.value }))}
+                        className={`h-12 w-full rounded-2xl border pl-11 pr-4 text-sm font-semibold outline-none transition focus:ring-4 ${darkMode ? "border-white/10 bg-white/[0.045] text-white focus:ring-white/5" : "border-black/10 bg-white text-black focus:ring-emerald-500/10"}`}
+                      />
+                    </span>
+                  </label>
+                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f5f7f2]"}`}>
+                    <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Current setup</p>
+                    <p className="mt-2 text-sm font-bold">{reminderSettings.enabled ? `Daily at ${reminderSettings.time} IST` : "Automatic reminders are off"}</p>
+                  </div>
+                </div>
+              </section>
+              <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setReminderOpen(false)} className={`h-12 rounded-3xl px-5 text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-white text-black ring-1 ring-black/10"}`}>Cancel</button>
+                <button
+                  type="button"
+                  onClick={checkReminderStatus}
+                  disabled={checkingReminder}
+                  className={`inline-flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}
+                >
+                  <BellRing className={`h-4 w-4 ${checkingReminder ? "animate-pulse" : ""}`} />
+                  {checkingReminder ? "Sending..." : "Send now"}
+                </button>
+                <button type="submit" disabled={reminderSaving} className={`inline-flex h-12 items-center justify-center rounded-3xl px-6 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white shadow-[0_16px_30px_rgba(16,166,107,0.22)]"}`}>
+                  {reminderSaving ? "Saving..." : "Save schedule"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {sheetOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheetOpen(false); }}>

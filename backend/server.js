@@ -466,6 +466,7 @@ const EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE = process.env.EMPLOYEE_REPORT_R
 const EMPLOYEE_REPORT_REMINDER_LINK = process.env.EMPLOYEE_REPORT_REMINDER_LINK || process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "http://localhost:3000/employee-daily-report";
 const employeeMetaCache = new Map();
 const employeeReportCache = new Map();
+let employeeReminderCronTask = null;
 const EMPLOYEE_META_CACHE_MS = 5 * 60 * 1000;
 const EMPLOYEE_REPORT_CACHE_MS = 60 * 1000;
 
@@ -556,20 +557,44 @@ async function saveEmployeeReminderSettings({ time, enabled = true, actor = null
     { $set: settings },
     { upsert: true },
   );
+  configureEmployeeReminderCron(settings);
   return settings;
 }
 
-function employeeReminderCurrentTimeParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Kolkata",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date).reduce((result, part) => {
-    if (part.type !== "literal") result[part.type] = part.value;
-    return result;
-  }, {});
-  return `${parts.hour}:${parts.minute}`;
+function employeeReminderCronExpression(time) {
+  const reminderTime = validEmployeeReminderTime(time) || "18:50";
+  const [hour, minute] = reminderTime.split(":");
+  return `${Number(minute)} ${Number(hour)} * * 1-6`;
+}
+
+function configureEmployeeReminderCron(settings = {}) {
+  if (employeeReminderCronTask) {
+    employeeReminderCronTask.stop();
+    if (typeof employeeReminderCronTask.destroy === "function") employeeReminderCronTask.destroy();
+    employeeReminderCronTask = null;
+  }
+  const reminderTime = validEmployeeReminderTime(settings.time) || "18:50";
+  if (settings.enabled === false) {
+    console.log("Employee WhatsApp reminder cron disabled");
+    return null;
+  }
+  const expression = employeeReminderCronExpression(reminderTime);
+  employeeReminderCronTask = cron.schedule(expression, async () => {
+    try {
+      const result = await sendEmployeeDailyReportReminders({ source: "cron" });
+      console.log(`Employee WhatsApp reminders ${result.status} for ${result.date}: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped`);
+    } catch (error) {
+      console.error("Employee WhatsApp reminder cron error:", error);
+    }
+  }, { timezone: "Asia/Kolkata" });
+  console.log(`Employee WhatsApp reminder cron scheduled at ${reminderTime} IST (${expression})`);
+  return employeeReminderCronTask;
+}
+
+async function refreshEmployeeReminderCron() {
+  const settings = await getEmployeeReminderSettings();
+  configureEmployeeReminderCron(settings);
+  return settings;
 }
 
 function isEmployeeReminderSunday(dateKey) {
@@ -1353,7 +1378,7 @@ async function sendEmployeeDailyReportReminders({ dateKey = employeeReportToday(
   const date = dmrDateKey(dateKey) || employeeReportToday();
   const runId = employeeReportReminderRunId(date);
   const existingRun = await db.collection("platformSettings").findOne({ _id: runId });
-  if (!force && existingRun?.status === "completed") return serializeReminderRun(existingRun, date);
+  if (!force && existingRun?.status === "completed" && existingRun?.source === source) return serializeReminderRun(existingRun, date);
   if (isEmployeeReminderSunday(date)) {
     const skippedRun = {
       _id: runId,
@@ -10182,17 +10207,9 @@ app.post("/chat", async (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 if (require.main === module) {
-  cron.schedule("* * * * *", async () => {
-    try {
-      const settings = await getEmployeeReminderSettings();
-      if (!settings.enabled) return;
-      if (employeeReminderCurrentTimeParts(new Date()) !== settings.time) return;
-      const result = await sendEmployeeDailyReportReminders({ source: "cron" });
-      console.log(`Employee WhatsApp reminders ${result.status} for ${result.date}: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped`);
-    } catch (error) {
-      console.error("Employee WhatsApp reminder cron error:", error);
-    }
-  }, { timezone: "Asia/Kolkata" });
+  refreshEmployeeReminderCron().catch((error) => {
+    console.error("Employee WhatsApp reminder cron setup error:", error);
+  });
 
   cron.schedule("0 12 * * *", async () => {
     try {

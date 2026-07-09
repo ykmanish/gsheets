@@ -1,15 +1,37 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Download, Eye, FileText, Heart, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Search, Sparkles, Star, Trash2, X } from "lucide-react";
+import { AlertTriangle, Ban, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Download, Eye, FileText, Heart, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Sparkles, Star, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import { useClickOutside } from "./ui";
 
+const employeeReportTestDateKey = "employee-report-test-date";
+
+function employeeReportTestDate() {
+  if (typeof window === "undefined") return "";
+  const queryDate = new URLSearchParams(window.location.search).get("employeeReportDate");
+  if (String(queryDate || "").toLowerCase() === "clear") {
+    window.localStorage.removeItem(employeeReportTestDateKey);
+    return "";
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(queryDate || ""))) {
+    window.localStorage.setItem(employeeReportTestDateKey, queryDate);
+    return queryDate;
+  }
+  const stored = window.localStorage.getItem(employeeReportTestDateKey);
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(stored || "")) ? stored : "";
+}
+
 async function api(path, options = {}) {
+  const testDate = employeeReportTestDate();
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(testDate ? { "X-Employee-Report-Date": testDate } : {}),
+      ...(options.headers || {}),
+    },
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Request failed");
@@ -17,6 +39,8 @@ async function api(path, options = {}) {
 }
 
 function todayInput() {
+  const testDate = employeeReportTestDate();
+  if (testDate) return testDate;
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
     year: "numeric",
@@ -87,16 +111,55 @@ function buildMonthGrid(monthDate) {
   });
 }
 
+function createEmptyTaskRow() {
+  return { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", recurring: false, recurringId: "" };
+}
+
+function createEmptyWaitingRow() {
+  return { site: "", category: "", categoryOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "" };
+}
+
 const emptyForm = {
   department: "",
-  taskItems: [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementOther: "", description: "" }],
-  waitingTaskItems: [{ site: "", category: "", categoryOther: "", involvement: "", involvementOther: "", description: "" }],
+  taskItems: [createEmptyTaskRow()],
+  waitingTaskItems: [createEmptyWaitingRow()],
   tomorrowPlanTick: true,
   note: "",
 };
 
 function fieldValue(value, other) {
   return value === "__other" ? other : value;
+}
+
+function involvementValuesFromRow(row = {}) {
+  return uniqueClean([
+    ...(Array.isArray(row.involvementValues) ? row.involvementValues : []),
+    ...(Array.isArray(row.involvement) ? row.involvement : String(row.involvement || "").split(",")),
+  ].filter((value) => value !== "__other"));
+}
+
+function involvementText(row = {}) {
+  return uniqueClean([
+    ...involvementValuesFromRow(row),
+    row.involvement === "__other" ? row.involvementOther : "",
+  ]).join(", ");
+}
+
+function recurringIdForTask(item = {}) {
+  return item.recurringId || [item.site, item.category, item.description].map((value) => String(value || "").trim().toLowerCase()).join("|");
+}
+
+function normalizeTaskRowForForm(item = {}, fallback = {}, includeStatus = true) {
+  const involvementValues = involvementValuesFromRow({ ...item, involvement: item.involvement || fallback.involvement });
+  return {
+    ...(includeStatus ? createEmptyTaskRow() : createEmptyWaitingRow()),
+    ...item,
+    status: includeStatus ? item.status || fallback.taskStatus || "" : "",
+    involvement: involvementValues.join(", "),
+    involvementValues,
+    recurring: includeStatus ? Boolean(item.recurring) : false,
+    recurringId: includeStatus ? item.recurringId || recurringIdForTask(item) : "",
+  };
 }
 
 function uniqueClean(values = []) {
@@ -249,6 +312,72 @@ function SearchableSelect({ darkMode, value, onChange, options = [], popularOpti
   );
 }
 
+function MultiChoiceSelect({ darkMode, values = [], onChange, options = [], popularOptions = [], placeholder }) {
+  const ref = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  useClickOutside(ref, () => setOpen(false));
+  const selected = new Set(values.map((value) => String(value).toLowerCase()));
+  const popularKeys = new Set(popularOptions.map((option) => String(option.value || option).toLowerCase()));
+  const filtered = options.filter((option) => option.toLowerCase().includes(query.trim().toLowerCase()));
+  const popular = filtered.filter((option) => popularKeys.has(option.toLowerCase()));
+  const regular = filtered.filter((option) => !popularKeys.has(option.toLowerCase()));
+  const label = values.length ? values.join(", ") : placeholder;
+
+  function toggle(option) {
+    const key = option.toLowerCase();
+    const next = selected.has(key)
+      ? values.filter((value) => value.toLowerCase() !== key)
+      : [...values, option];
+    onChange(uniqueClean(next));
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-2 text-left text-sm transition ${darkMode ? "border-white/10 bg-white/[0.035] text-white" : "border-black/10 bg-white text-black"}`}
+      >
+        <span className={`min-w-0 flex-1 truncate ${values.length ? "" : darkMode ? "text-white/35" : "text-black/35"}`}>{label}</span>
+        {values.length > 0 && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-emerald-300/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>{values.length}</span>}
+        <Search className="h-4 w-4 opacity-45" />
+      </button>
+      {open && (
+        <div className={`absolute left-0 top-[calc(100%+8px)] z-50 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/10 bg-white"}`}>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search..."
+            className={`mb-2 h-10 w-full rounded-xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white"}`}
+          />
+          <div className="max-h-56 overflow-y-auto">
+            {popular.length > 0 && <p className={`px-3 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>Most used</p>}
+            {[...popular, ...regular].map((option) => {
+              const checked = selected.has(option.toLowerCase());
+              const isPopular = popularKeys.has(option.toLowerCase());
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => toggle(option)}
+                  className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-all duration-200 ${checked ? darkMode ? "bg-emerald-400/15 text-emerald-100" : "bg-emerald-50 text-emerald-900" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
+                >
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-lg border transition-all duration-200 ${checked ? "scale-105 border-emerald-500 bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
+                    {checked && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{option}</span>
+                  {isPopular && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] ${darkMode ? "bg-emerald-300/15 text-emerald-200" : "bg-emerald-200/70 text-emerald-800"}`}>Most used</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function taskNumberTone(index, darkMode = false) {
   void index;
   return darkMode ? "bg-[#89ed3f] text-black shadow-[#89ed3f]/15" : "bg-[#89ed3f] text-black shadow-[#89ed3f]/20";
@@ -258,7 +387,7 @@ function taskRowValue(row, field) {
   if (field === "site") return row.site === "__other" ? row.siteOther : row.site;
   if (field === "category") return row.category === "__other" ? row.categoryOther : row.category;
   if (field === "status") return row.status === "__other" ? row.statusOther : row.status;
-  if (field === "involvement") return row.involvement === "__other" ? row.involvementOther : row.involvement;
+  if (field === "involvement") return involvementText(row);
   return "";
 }
 
@@ -271,7 +400,7 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
   }
   function addRow() {
     setExpandedIndex(rows.length);
-    onRowsChange([...rows, { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementOther: "", description: "" }]);
+    onRowsChange([...rows, showStatus ? createEmptyTaskRow() : createEmptyWaitingRow()]);
   }
   function duplicateRow(index) {
     const source = rows[index] || {};
@@ -286,14 +415,17 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
         status: source.status || "",
         statusOther: source.statusOther || "",
         involvement: source.involvement || "",
+        involvementValues: involvementValuesFromRow(source),
         involvementOther: source.involvementOther || "",
         description: "",
+        recurring: Boolean(source.recurring),
+        recurringId: source.recurringId || "",
       },
     ]);
   }
   function removeRow(index) {
     setExpandedIndex((current) => Math.max(0, current > index ? current - 1 : Math.min(current, rows.length - 2)));
-    onRowsChange(rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementOther: "", description: "" }]);
+    onRowsChange(rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [showStatus ? createEmptyTaskRow() : createEmptyWaitingRow()]);
   }
 
   const summaryPill = darkMode ? "bg-white/[0.055] text-white/80" : "bg-white text-black/70";
@@ -370,9 +502,8 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                   {showInvolvement && (
                     <div className="order-3">
                       <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Involvement</p>
-                      <SearchableSelect darkMode={darkMode} value={row.involvement} onChange={(value) => updateRow(index, { involvement: value })} options={involvements.filter((item) => item !== "Other")} popularOptions={popularInvolvements} placeholder="Choose involvement" allowOther />
-                      {row.involvement === "__other" && <input required={required} value={row.involvementOther || ""} onChange={(event) => updateRow(index, { involvementOther: event.target.value })} placeholder="Enter involvement" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />}
-                      {required && index === 0 && !row.involvement && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
+                      <MultiChoiceSelect darkMode={darkMode} values={involvementValuesFromRow(row)} onChange={(values) => updateRow(index, { involvementValues: values, involvement: values.join(", ") })} options={involvements.filter((item) => item !== "Other")} popularOptions={popularInvolvements} placeholder="Choose involvement" />
+                      {required && index === 0 && !involvementText(row) && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
                     </div>
                   )}
                   <div className="order-2">
@@ -390,6 +521,17 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                   <div className="order-5 flex flex-col lg:self-start">
                     <p className="mb-2 select-none text-[10px] font-semibold uppercase tracking-[0.12em] opacity-0">Actions</p>
                     <div className="flex h-12 items-center justify-end gap-3">
+                      {showStatus && (
+                        <button
+                          type="button"
+                          onClick={() => updateRow(index, { recurring: !row.recurring })}
+                          className={`inline-flex h-12 items-center gap-2 rounded-2xl px-3 text-xs font-bold transition-all duration-200 ${row.recurring ? darkMode ? "bg-emerald-300 text-black " : "bg-emerald-100 text-emerald-800 " : darkMode ? "bg-white/10 text-white/60 hover:bg-white/15" : "bg-white text-black/55 hover:bg-[#eafbdc]"}`}
+                          title="Repeat this task tomorrow until turned off"
+                        >
+                          <Repeat2 className={`h-4 w-4 ${row.recurring ? "animate-pulse" : ""}`} />
+                          Recurring
+                        </button>
+                      )}
                       <span className={`inline-flex h-12 min-w-11 items-center justify-center rounded-2xl px-4 text-sm font-black shadow-lg ${taskNumberTone(index, darkMode)}`}>
                         Task {index + 1}
                       </span>
@@ -949,6 +1091,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [sheetSaving, setSheetSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [refreshingToday, setRefreshingToday] = useState(false);
+  const [deletingReportId, setDeletingReportId] = useState("");
 
   const closeFormDrawer = useCallback(() => {
     setFormClosing(true);
@@ -1055,6 +1198,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     setFormClosing(false);
     setFormExpanded(false);
     const todayReport = data?.todayReport;
+    const recurringTasks = Array.isArray(data?.carriedForwardTasks) ? data.carriedForwardTasks : [];
     setEditingReport(Boolean(todayReport));
     const nextDraftKey = `${draftStoragePrefix}:${todayReport?.id ? `edit:${todayReport.id}` : "new"}`;
     setActiveDraftKey(nextDraftKey);
@@ -1062,10 +1206,16 @@ export default function EmployeeDailyReport({ darkMode }) {
       ...emptyForm,
       ...(todayReport || {}),
       tomorrowPlanTick: true,
-      taskItems: todayReport?.taskItems?.length ? todayReport.taskItems.map((item) => ({ ...item, status: item.status || todayReport.taskStatus || "", involvement: item.involvement || todayReport.involvement || "" })) : [{ site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementOther: "", description: "" }],
-      waitingTaskItems: todayReport?.waitingTaskItems?.length ? todayReport.waitingTaskItems.map((item) => ({ ...item, involvement: item.involvement || todayReport.involvement || "" })) : [{ site: "", category: "", categoryOther: "", involvement: "", involvementOther: "", description: "" }],
+      taskItems: todayReport?.taskItems?.length
+        ? todayReport.taskItems.map((item) => normalizeTaskRowForForm(item, todayReport, true))
+        : recurringTasks.length
+          ? recurringTasks.map((item) => normalizeTaskRowForForm(item, {}, true))
+          : [createEmptyTaskRow()],
+      waitingTaskItems: todayReport?.waitingTaskItems?.length
+        ? todayReport.waitingTaskItems.map((item) => normalizeTaskRowForForm(item, todayReport, false))
+        : [createEmptyWaitingRow()],
       department: todayReport?.department || data?.profile?.department || "",
-      carriedForwardFrom: "",
+      carriedForwardFrom: data?.carriedForwardFrom || "",
     };
     const storedDraft = safeJsonParse(window.localStorage.getItem(nextDraftKey), null);
     const usableDraft = storedDraft?.form && hasEmployeeDraftContent(storedDraft.form) ? storedDraft : null;
@@ -1175,10 +1325,34 @@ export default function EmployeeDailyReport({ darkMode }) {
       if (missingTaskSite) throw new Error("Choose a site for every task");
       const missingTaskStatus = (form.taskItems || []).some((item) => (item.category || item.categoryOther || item.description) && !fieldValue(item.status, item.statusOther).trim());
       if (missingTaskStatus) throw new Error("Choose a status for every today task");
-      const missingTaskInvolvement = [...(form.taskItems || []), ...(form.waitingTaskItems || [])].some((item) => (item.category || item.categoryOther || item.description) && !fieldValue(item.involvement, item.involvementOther).trim());
+      const missingTaskInvolvement = [...(form.taskItems || []), ...(form.waitingTaskItems || [])].some((item) => (item.category || item.categoryOther || item.description) && !involvementText(item));
       if (missingTaskInvolvement) throw new Error("Choose involvement for every task");
-      const taskItems = (form.taskItems || []).map((item) => ({ site: fieldValue(item.site, item.siteOther).trim(), category: fieldValue(item.category, item.categoryOther).trim(), status: fieldValue(item.status, item.statusOther).trim(), involvement: fieldValue(item.involvement, item.involvementOther).trim(), description: item.description.trim() })).filter((item) => item.site && item.category && item.status && item.involvement && item.description);
-      const waitingTaskItems = (form.waitingTaskItems || []).map((item) => ({ site: fieldValue(item.site, item.siteOther).trim(), category: fieldValue(item.category, item.categoryOther).trim(), involvement: fieldValue(item.involvement, item.involvementOther).trim(), description: item.description.trim() })).filter((item) => item.site && item.category && item.involvement && item.description);
+      const taskItems = (form.taskItems || []).map((item) => {
+        const involvementValues = involvementValuesFromRow(item);
+        const site = fieldValue(item.site, item.siteOther).trim();
+        const category = fieldValue(item.category, item.categoryOther).trim();
+        const description = item.description.trim();
+        return {
+          site,
+          category,
+          status: fieldValue(item.status, item.statusOther).trim(),
+          involvement: involvementValues.join(", "),
+          involvementValues,
+          description,
+          recurring: Boolean(item.recurring),
+          recurringId: item.recurringId || recurringIdForTask({ site, category, description }),
+        };
+      }).filter((item) => item.site && item.category && item.status && item.involvement && item.description);
+      const waitingTaskItems = (form.waitingTaskItems || []).map((item) => {
+        const involvementValues = involvementValuesFromRow(item);
+        return {
+          site: fieldValue(item.site, item.siteOther).trim(),
+          category: fieldValue(item.category, item.categoryOther).trim(),
+          involvement: involvementValues.join(", "),
+          involvementValues,
+          description: item.description.trim(),
+        };
+      }).filter((item) => item.site && item.category && item.involvement && item.description);
       const payload = {
         ...form,
         tomorrowPlanTick: true,
@@ -1233,6 +1407,25 @@ export default function EmployeeDailyReport({ darkMode }) {
     }
   }
 
+  async function deleteEmployeeReport(report) {
+    if (!report?.reportDate || deletingReportId) return;
+    const confirmed = window.confirm(`Delete ${report.employeeName || "this employee"}'s report for ${report.reportDate}? This will remove it from _AppData and clear the matching Google Sheet rows.`);
+    if (!confirmed) return;
+    try {
+      setDeletingReportId(report.id);
+      const params = new URLSearchParams();
+      if (report.userId) params.set("userId", report.userId);
+      await api(`/employee-daily-report/${encodeURIComponent(report.reportDate)}${params.toString() ? `?${params.toString()}` : ""}`, { method: "DELETE" });
+      if (detail?.id === report.id) setDetail(null);
+      toast.success("Employee report deleted");
+      await load();
+    } catch (error) {
+      toast.error(error.message || "Could not delete employee report");
+    } finally {
+      setDeletingReportId("");
+    }
+  }
+
   async function generateEmployeeReport() {
     try {
       setReportLoading(true);
@@ -1254,7 +1447,10 @@ export default function EmployeeDailyReport({ darkMode }) {
       const resolvedTo = to || resolvedFrom;
       const params = new URLSearchParams({ dateFrom: resolvedFrom, dateTo: resolvedTo });
       if (reportUserIds.length) params.set("userIds", reportUserIds.join(","));
-      const response = await fetch(`${API_URL}/employee-daily-report/report/pdf?${params.toString()}`);
+      const testDate = employeeReportTestDate();
+      const response = await fetch(`${API_URL}/employee-daily-report/report/pdf?${params.toString()}`, {
+        headers: testDate ? { "X-Employee-Report-Date": testDate } : {},
+      });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.error || "Could not download employee report PDF");
@@ -1429,7 +1625,18 @@ export default function EmployeeDailyReport({ darkMode }) {
                       <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${reportStatusClass(statusSummary, darkMode)}`}>{statusSummary}</span>
                     </td>
                     <td className="rounded-r-2xl px-5 py-4">
-                      <button onClick={() => { setDetailClosing(false); setDetailExpanded(false); setDetail(report); }} className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-blue-600  hover:bg-blue-50"}`} title="View detail"><Eye className="h-4 w-4" /></button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => { setDetailClosing(false); setDetailExpanded(false); setDetail(report); }} className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-blue-600  hover:bg-blue-50"}`} title="View detail"><Eye className="h-4 w-4" /></button>
+                        <button
+                          type="button"
+                          onClick={() => deleteEmployeeReport(report)}
+                          disabled={deletingReportId === report.id}
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-red-500/10 text-red-300 hover:bg-red-500/15" : "bg-white text-red-600 hover:bg-red-50"}`}
+                          title="Delete report"
+                        >
+                          <Trash2 className={`h-4 w-4 ${deletingReportId === report.id ? "animate-pulse" : ""}`} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

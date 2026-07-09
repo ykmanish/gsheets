@@ -457,7 +457,7 @@ function canViewEmployeeDailyReports(req) {
 
 function employeeReportDateRange() {
   const dates = [];
-  const today = istDateKey(new Date());
+  const today = employeeReportToday();
   const year = today.slice(0, 4);
   let date = `${year}-01-01`;
   const end = `${year}-12-31`;
@@ -468,14 +468,42 @@ function employeeReportDateRange() {
   return dates;
 }
 
+function employeeReportToday(req = null) {
+  const headerDate = dmrDateKey(req?.headers?.["x-employee-report-date"]);
+  const envDate = dmrDateKey(process.env.EMPLOYEE_REPORT_TEST_DATE);
+  return headerDate || envDate || istDateKey(new Date());
+}
+
+function uniqueEmployeeValues(values = []) {
+  const seen = new Set();
+  return values
+    .flatMap((value) => String(value || "").split(","))
+    .map((value) => projectText(value))
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (!value || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function sanitizeEmployeeTaskItems(items = []) {
   if (!Array.isArray(items)) return [];
   return items.map((item) => ({
     site: projectText(item?.site),
     category: projectText(item?.category),
     status: projectText(item?.status),
-    involvement: projectText(item?.involvement),
+    involvement: uniqueEmployeeValues([
+      ...(Array.isArray(item?.involvementValues) ? item.involvementValues : []),
+      ...(Array.isArray(item?.involvement) ? item.involvement : [item?.involvement]),
+    ]).join(", "),
+    involvementValues: uniqueEmployeeValues([
+      ...(Array.isArray(item?.involvementValues) ? item.involvementValues : []),
+      ...(Array.isArray(item?.involvement) ? item.involvement : String(item?.involvement || "").split(",")),
+    ]),
     description: projectText(item?.description),
+    recurring: Boolean(item?.recurring),
+    recurringId: projectText(item?.recurringId),
   })).filter((item) => item.category && item.description).slice(0, 30);
 }
 
@@ -502,7 +530,7 @@ function employeeReportOptionUsage(reports = []) {
     taskItems.forEach((item) => {
       count(buckets.sites, item.site);
       count(buckets.categories, item.category);
-      count(buckets.involvements, item.involvement);
+      (item.involvementValues?.length ? item.involvementValues : [item.involvement]).forEach((value) => count(buckets.involvements, value));
     });
     if (!taskItems.length) {
       count(buckets.sites, report.site);
@@ -540,6 +568,42 @@ function sanitizeEmployeeTaskPreferences(input = {}) {
 
 function taskItemsToText(items = []) {
   return items.map((item) => `${item.site ? `${item.site} · ` : ""}${item.category}${item.status ? ` [${item.status}]` : ""}${item.involvement ? ` (${item.involvement})` : ""}: ${item.description}`).join("\n");
+}
+
+function employeeRecurringKey(item = {}) {
+  return projectText(item.recurringId) || [
+    projectText(item.site).toLowerCase(),
+    projectText(item.category).toLowerCase(),
+    projectText(item.description).toLowerCase(),
+  ].join("|");
+}
+
+function employeeRecurringTasksFromReports(reports = [], today) {
+  const latest = new Map();
+  reports
+    .filter((report) => projectText(report.reportDate) && projectText(report.reportDate) < today)
+    .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
+    .forEach((report) => {
+      sanitizeEmployeeTaskItems(report.taskItems).forEach((item) => {
+        const key = employeeRecurringKey(item);
+        if (!key || latest.has(key)) return;
+        latest.set(key, { ...item, recurringId: key, recurringFrom: report.reportDate });
+      });
+    });
+  return [...latest.values()]
+    .filter((item) => item.recurring)
+    .map((item) => ({
+      site: item.site,
+      category: item.category,
+      status: item.status,
+      involvement: item.involvement,
+      involvementValues: item.involvementValues || [],
+      description: item.description,
+      recurring: true,
+      recurringId: item.recurringId,
+      recurringFrom: item.recurringFrom,
+    }))
+    .slice(0, 20);
 }
 
 function incrementEmployeeReportBucket(map, key, patch = {}) {
@@ -1436,6 +1500,89 @@ async function updateEmployeeReportInSheet({ user, report, taskItems, waitingTas
   return existingReportId;
 }
 
+async function deleteEmployeeReportFromSheet({ user, reportDate }) {
+  const spreadsheetId = user?.employeeDailySpreadsheetId;
+  if (!spreadsheetId) throw new Error("Linked Google Sheet not found for this employee");
+  const date = employeeDailyTabName(reportDate);
+  const meta = await getEmployeeSpreadsheetMeta(spreadsheetId, user?.employeeDailySheetTab);
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const appTab = await ensureEmployeeAppDataTab(sheets, spreadsheetId, false);
+  if (!appTab) {
+    const missing = new Error("Submitted report could not be found in app data");
+    missing.code = "EMPLOYEE_REPORT_NOT_FOUND";
+    throw missing;
+  }
+  const appResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(EMPLOYEE_REPORT_APP_TAB)}!A2:O10000`,
+  });
+  const appRows = appResponse.data.values || [];
+  const appRowIndex = appRows.findIndex((row) => String(row[1] || "") === String(user._id || user.id || "") && projectText(row[4]) === date);
+  if (appRowIndex < 0) {
+    const missing = new Error("Submitted report could not be found in app data");
+    missing.code = "EMPLOYEE_REPORT_NOT_FOUND";
+    throw missing;
+  }
+  const appRow = appRows[appRowIndex] || [];
+  const previousTaskItems = parseEmployeeJsonItems(appRow[13]);
+  const previousWaitingTaskItems = parseEmployeeJsonItems(appRow[14]);
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: appTab.sheetId,
+            dimension: "ROWS",
+            startIndex: appRowIndex + 1,
+            endIndex: appRowIndex + 2,
+          },
+        },
+      }],
+    },
+  });
+
+  const dailyTab = await ensureEmployeeDailySheetTab(sheets, spreadsheetId, meta, date);
+  let existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000` });
+  let values = existing.data.values || [];
+  let columns = findEmployeeTemplateColumns(values);
+  if (await normalizeEmployeeDailyTemplateRows(sheets, spreadsheetId, dailyTab, columns)) {
+    existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${escapeSheetName(dailyTab.tabName)}!A1:R10000` });
+    values = existing.data.values || [];
+    columns = findEmployeeTemplateColumns(values);
+  }
+  const previousRowMatches = values.map((row, index) => ({ row, rowNumber: index + 1 })).filter(({ row, rowNumber }) => {
+    if (rowNumber <= Number(columns.headerRow || 6)) return false;
+    const site = projectText(row[(columns.site || 0) - 1]);
+    const category = projectText(row[(columns.taskType || 0) - 1]);
+    const description = projectText(row[(columns.taskDescription || 0) - 1]);
+    const status = projectText(row[(columns.taskStatus || 0) - 1]);
+    const waitingDescription = projectText(row[(columns.waitingDescription || 0) - 1]);
+    const rowDate = projectText(row[(columns.reportDate || 0) - 1]);
+    return previousTaskItems.some((item) => (
+      projectText(item.description) === description &&
+      (!projectText(item.category) || projectText(item.category) === category) &&
+      (!projectText(item.site) || projectText(item.site) === site) &&
+      (!projectText(item.status) || projectText(item.status) === status)
+    )) || previousWaitingTaskItems.some((item) => (
+      projectText(item.description) === waitingDescription &&
+      (!projectText(item.site) || projectText(item.site) === site)
+    )) || (rowDate === date && projectText(appRow[7]) && projectText(appRow[7]) === site && projectText(appRow[8]) && projectText(appRow[8]) === category);
+  });
+  if (previousRowMatches.length) {
+    const startRow = previousRowMatches[0].rowNumber;
+    const clearThrough = previousRowMatches.at(-1).rowNumber;
+    const clearRanges = [columns.serial, columns.client, columns.site, columns.reportDate, columns.taskType, columns.taskDescription, columns.taskStatus, columns.involvement, columns.waitingSerial, columns.waitingDescription, columns.tomorrowTick, columns.note]
+      .filter(Boolean)
+      .map((column) => `${escapeSheetName(dailyTab.tabName)}!${columnName(column)}${startRow}:${columnName(column)}${clearThrough}`);
+    if (columns.note) clearRanges.push(`${escapeSheetName(dailyTab.tabName)}!${columnName(columns.note)}${startRow}:R${clearThrough}`);
+    if (clearRanges.length) await sheets.spreadsheets.values.batchClear({ spreadsheetId, requestBody: { ranges: clearRanges } });
+  }
+  invalidateEmployeeSheetCache(user);
+  return { deletedAppRow: appRowIndex + 2, clearedRows: previousRowMatches.length };
+}
+
 async function buildEmployeeReportDashboard(req, query = {}) {
   const db = await connectAuthDb();
   const isAdmin = canViewEmployeeDailyReports(req);
@@ -1450,12 +1597,12 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(allCachedReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] }))
     .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
     .slice(0, 500);
-  const today = istDateKey(new Date());
+  const today = employeeReportToday(req);
   const ownReports = allCachedReports.filter((report) => String(report.userId) === userId);
   const optionUsage = employeeReportOptionUsage(ownReports);
   const todayReport = ownReports.find((report) => String(report.userId) === userId && report.reportDate === today) || null;
   const todaySubmitted = Boolean(todayReport);
-  const carriedForwardTasks = [];
+  const carriedForwardTasks = todayReport ? [] : employeeRecurringTasksFromReports(ownReports, today);
   const siteOptions = [...new Set([...EMPLOYEE_REPORT_OPTIONS.sites, ...allCachedReports.flatMap((report) => [
     report.site,
     ...sanitizeEmployeeTaskItems(report.taskItems).map((item) => item.site),
@@ -1495,7 +1642,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     todaySubmitted,
     todayReport: sanitizeEmployeeReport(todayReport),
     carriedForwardTasks,
-    carriedForwardFrom: "",
+    carriedForwardFrom: carriedForwardTasks[0]?.recurringFrom || "",
     currentUserId: userId,
     profile: {
       department: req.user.department || "",
@@ -1534,7 +1681,7 @@ app.post("/employee-daily-report/refresh-today", async (req, res) => {
     const spreadsheetId = req.user?.employeeDailySpreadsheetId;
     if (!spreadsheetId) return res.status(400).json({ error: "Link your Google Sheet before refreshing" });
     const db = await connectAuthDb();
-    const today = istDateKey(new Date());
+    const today = employeeReportToday(req);
     const userId = String(req.authUser.id);
     const sheets = await getDmrSpreadsheet(spreadsheetId);
     const appTab = await ensureEmployeeAppDataTab(sheets, spreadsheetId, false);
@@ -1662,7 +1809,7 @@ app.post("/employee-daily-report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
     const db = await connectAuthDb();
-    const today = istDateKey(new Date());
+    const today = employeeReportToday(req);
     const userId = String(req.authUser.id);
     const body = req.body || {};
     const department = projectText(body.department || req.user.department);
@@ -1716,7 +1863,7 @@ app.put("/employee-daily-report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
     const db = await connectAuthDb();
-    const today = istDateKey(new Date());
+    const today = employeeReportToday(req);
     const userId = String(req.authUser.id);
     const body = req.body || {};
     if (body.reportDate && projectText(body.reportDate) !== today) return res.status(403).json({ error: "Only the current date report can be edited" });
@@ -1764,11 +1911,44 @@ app.put("/employee-daily-report", async (req, res) => {
   }
 });
 
+app.delete("/employee-daily-report/:reportDate", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    const reportDate = dmrDateKey(req.params.reportDate);
+    if (!reportDate) return res.status(400).json({ error: "Valid report date is required" });
+    const db = await connectAuthDb();
+    const requestedUserId = projectText(req.query.userId || req.body?.userId || req.authUser.id);
+    const isAdmin = canViewEmployeeDailyReports(req);
+    const ownUserId = String(req.authUser.id);
+    if (!isAdmin && requestedUserId !== ownUserId) return res.status(403).json({ error: "You can delete only your own report" });
+    const targetObjectId = /^[a-f\d]{24}$/i.test(requestedUserId) ? new ObjectId(requestedUserId) : req.user._id;
+    const targetUser = requestedUserId === ownUserId
+      ? req.user
+      : await db.collection("users").findOne({ _id: targetObjectId });
+    if (!targetUser) return res.status(404).json({ error: "Employee user not found" });
+    const result = await deleteEmployeeReportFromSheet({ user: targetUser, reportDate });
+    const targetUserId = String(targetUser._id || requestedUserId);
+    await db.collection("employeeDailyReports").deleteOne({ userId: targetUserId, reportDate });
+    await db.collection("users").updateOne(
+      { _id: targetUser._id },
+      { $set: { employeeReportCacheHydratedAt: new Date(), updatedAt: new Date() } },
+    );
+    employeeReportCache.delete(employeeReportCacheKey(targetUser));
+    addActivityLog({ req, action: "Deleted employee daily report", target: `${targetUser.displayName || targetUser.username || "Employee"} · ${reportDate}`, details: result });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    if (error.code === "EMPLOYEE_REPORT_NOT_FOUND") return res.status(404).json({ error: error.message });
+    if (/linked google sheet|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
+    console.error("Employee daily report delete error:", employeeSheetErrorMessage(error));
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: employeeSheetErrorMessage(error, "Could not delete employee daily report") });
+  }
+});
+
 app.get("/employee-daily-report/report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
     const db = await connectAuthDb();
-    const today = istDateKey(new Date());
+    const today = employeeReportToday(req);
     const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateFrom || "")) ? String(req.query.dateFrom) : today;
     const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateTo || "")) ? String(req.query.dateTo) : dateFrom;
     const from = dateFrom <= dateTo ? dateFrom : dateTo;
@@ -1828,7 +2008,7 @@ app.get("/employee-daily-report/report", async (req, res) => {
 
 async function buildEmployeeReportExportData(req, query = {}) {
   const db = await connectAuthDb();
-  const today = istDateKey(new Date());
+  const today = employeeReportToday(req);
   const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateFrom || "")) ? String(query.dateFrom) : today;
   const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateTo || "")) ? String(query.dateTo) : dateFrom;
   const from = dateFrom <= dateTo ? dateFrom : dateTo;

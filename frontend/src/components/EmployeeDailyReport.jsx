@@ -1732,76 +1732,87 @@ export default function EmployeeDailyReport({ darkMode }) {
       </section>
 
       {reminderOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 p-4 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setReminderOpen(false); }}>
-          <div className={`mx-auto mt-10 w-full max-w-2xl overflow-hidden rounded-[30px] shadow-[0_24px_80px_rgba(15,23,42,0.25)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-14 items-center justify-between border-b px-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div className="flex min-w-0 items-center gap-3">
-                <span className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}>
-                  <BellRing className="h-5 w-5" />
-                </span>
-                <div>
-                  <p className="text-sm font-bold">Daily WhatsApp reminders</p>
-                  <p className={`text-xs ${muted}`}>Automatic Employee Daily Report reminder time</p>
-                </div>
-              </div>
-              <button onClick={() => setReminderOpen(false)} className={`rounded-full p-2 transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close reminder schedule">
-                <X className="h-5 w-5" />
-              </button>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setReminderOpen(false); }}>
+          <form onSubmit={saveReminderSchedule} className={`employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <span><b>Employee daily report</b> · Reminder schedule</span>
+              <button type="button" onClick={() => setReminderOpen(false)} className="font-semibold text-[#4b9b16]">Close</button>
             </div>
-            <form onSubmit={saveReminderSchedule} className={`p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-              <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
-                <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
-                  <div>
-                    <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Schedule</p>
-                    <h3 className="mt-2 text-2xl font-black">Send every day at selected time</h3>
-                    <p className={`mt-2 text-sm leading-6 ${muted}`}>Runs in IST and skips Sunday. Automatic reminders are sent only to employees who have not submitted for the day.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setReminderSettings((current) => ({ ...current, enabled: !current.enabled }))}
-                    className={`flex h-11 items-center gap-3 rounded-full px-3 text-sm font-bold transition ${reminderSettings.enabled ? "bg-[#10a66b] text-white" : darkMode ? "bg-white/10 text-white/55" : "bg-black/10 text-black/55"}`}
-                  >
-                    <span className={`h-6 w-6 rounded-full bg-white transition ${reminderSettings.enabled ? "translate-x-0" : "opacity-70"}`} />
-                    {reminderSettings.enabled ? "On" : "Off"}
-                  </button>
-                </div>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Reminder time</span>
-                    <span className="relative mt-2 block">
-                      <Clock3 className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${darkMode ? "text-white/38" : "text-black/35"}`} />
-                      <input
-                        type="time"
-                        required
-                        value={reminderSettings.time}
-                        onChange={(event) => setReminderSettings((current) => ({ ...current, time: event.target.value }))}
-                        className={`h-12 w-full rounded-2xl border pl-11 pr-4 text-sm font-semibold outline-none transition focus:ring-4 ${darkMode ? "border-white/10 bg-white/[0.045] text-white focus:ring-white/5" : "border-black/10 bg-white text-black focus:ring-emerald-500/10"}`}
-                      />
+            <div className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
+              <section className={`overflow-hidden rounded-[30px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
+                <div className={`border-b p-5 sm:p-6 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+                  <div className="flex items-start gap-4">
+                    <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}>
+                      <BellRing className="h-6 w-6" />
                     </span>
-                  </label>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f5f7f2]"}`}>
-                    <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Current setup</p>
-                    <p className="mt-2 text-sm font-bold">{reminderSettings.enabled ? `Daily at ${reminderSettings.time} IST` : "Automatic reminders are off"}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#4b9b16]">WhatsApp automation</p>
+                      <h3 className="mt-2 text-2xl font-black">Daily WhatsApp reminders</h3>
+                      <p className={`mt-2 text-sm leading-6 ${muted}`}>
+                        Set the reminder time once. It runs from the backend server even when this browser tab is closed.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-5 sm:p-6">
+                  <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
+                    <div>
+                      <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Schedule</p>
+                      <h4 className="mt-2 text-xl font-black">Send every day at selected time</h4>
+                      <p className={`mt-2 text-sm leading-6 ${muted}`}>
+                        Runs in IST and skips Sunday. Automatic reminders are sent only to employees who have not submitted for the day.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReminderSettings((current) => ({ ...current, enabled: !current.enabled }))}
+                      className={`flex h-12 w-24 items-center justify-between rounded-full px-2 text-sm font-bold transition ${reminderSettings.enabled ? "bg-[#10a66b] text-white" : darkMode ? "bg-white/10 text-white/55" : "bg-black/10 text-black/55"}`}
+                    >
+                      <span className={`h-8 w-8 rounded-full bg-white transition ${reminderSettings.enabled ? "translate-x-0" : "opacity-70"}`} />
+                      <span className="pr-2">{reminderSettings.enabled ? "On" : "Off"}</span>
+                    </button>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                    <label className="block">
+                      <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Reminder time</span>
+                      <span className="relative mt-2 block">
+                        <Clock3 className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${darkMode ? "text-white/38" : "text-black/35"}`} />
+                        <input
+                          type="time"
+                          required
+                          value={reminderSettings.time}
+                          onChange={(event) => setReminderSettings((current) => ({ ...current, time: event.target.value }))}
+                          className={`h-12 w-full rounded-2xl border pl-11 pr-4 text-sm font-semibold outline-none transition focus:ring-4 ${darkMode ? "border-white/10 bg-white/[0.045] text-white focus:ring-white/5" : "border-black/10 bg-white text-black focus:ring-emerald-500/10"}`}
+                        />
+                      </span>
+                    </label>
+                    <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f5f7f2]"}`}>
+                      <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Current setup</p>
+                      <p className="mt-2 text-sm font-bold">{reminderSettings.enabled ? `Daily at ${reminderSettings.time} IST` : "Automatic reminders are off"}</p>
+                      <p className={`mt-2 text-xs leading-5 ${muted}`}>Saved schedule is handled by the server cron, not the open page.</p>
+                    </div>
                   </div>
                 </div>
               </section>
-              <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <button type="button" onClick={() => setReminderOpen(false)} className={`h-12 rounded-3xl px-5 text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-white text-black ring-1 ring-black/10"}`}>Cancel</button>
-                <button
-                  type="button"
-                  onClick={checkReminderStatus}
-                  disabled={checkingReminder}
-                  className={`inline-flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}
-                >
-                  <BellRing className={`h-4 w-4 ${checkingReminder ? "animate-pulse" : ""}`} />
-                  {checkingReminder ? "Sending..." : "Send now"}
-                </button>
-                <button type="submit" disabled={reminderSaving} className={`inline-flex h-12 items-center justify-center rounded-3xl px-6 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white shadow-[0_16px_30px_rgba(16,166,107,0.22)]"}`}>
-                  {reminderSaving ? "Saving..." : "Save schedule"}
-                </button>
-              </div>
-            </form>
-          </div>
+            </div>
+            <div className={`flex shrink-0 flex-col-reverse gap-3 border-t p-4 sm:flex-row sm:justify-end ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
+              <button type="button" onClick={() => setReminderOpen(false)} className={`h-12 rounded-3xl px-5 text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-white text-black ring-1 ring-black/10"}`}>Cancel</button>
+              <button
+                type="button"
+                onClick={checkReminderStatus}
+                disabled={checkingReminder}
+                className={`inline-flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}
+              >
+                <BellRing className={`h-4 w-4 ${checkingReminder ? "animate-pulse" : ""}`} />
+                {checkingReminder ? "Sending..." : "Send now"}
+              </button>
+              <button type="submit" disabled={reminderSaving} className={`inline-flex h-12 items-center justify-center rounded-3xl px-6 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white shadow-[0_16px_30px_rgba(16,166,107,0.22)]"}`}>
+                {reminderSaving ? "Saving..." : "Save schedule"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

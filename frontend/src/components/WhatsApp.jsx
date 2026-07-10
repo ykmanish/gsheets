@@ -209,6 +209,9 @@ export default function WhatsApp({ darkMode }) {
   const [broadcastGroup, setBroadcastGroup] = useState(null);
 
   const messagesEndRef = useRef(null);
+  const messagesPaneRef = useRef(null);
+  const shouldStickToBottomRef = useRef(true);
+  const previousSelectedPhoneRef = useRef("");
 
   const surface = darkMode
     ? "border-white/10 bg-[#15171c]"
@@ -247,11 +250,29 @@ export default function WhatsApp({ darkMode }) {
   ];
 
   useEffect(() => {
+    if (previousSelectedPhoneRef.current !== selectedPhone) {
+      shouldStickToBottomRef.current = true;
+      previousSelectedPhoneRef.current = selectedPhone;
+    }
+  }, [selectedPhone]);
+
+  useEffect(() => {
+    if (!shouldStickToBottomRef.current) return;
+
     messagesEndRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "nearest",
     });
   }, [messages]);
+
+  function updateMessageScrollState() {
+    const pane = messagesPaneRef.current;
+    if (!pane) return;
+
+    const distanceFromBottom =
+      pane.scrollHeight - pane.scrollTop - pane.clientHeight;
+    shouldStickToBottomRef.current = distanceFromBottom < 120;
+  }
 
   const loadData = useCallback(
     async (quiet = false) => {
@@ -407,6 +428,7 @@ export default function WhatsApp({ darkMode }) {
 
       setSelectedPhone(phone);
       setComposer((current) => ({ ...current, text: "", to: "" }));
+      shouldStickToBottomRef.current = true;
 
       await Promise.all([loadMessages(phone), loadData(true)]);
       toast.success("Message sent");
@@ -895,6 +917,8 @@ export default function WhatsApp({ darkMode }) {
                     </header>
 
                     <div
+                      ref={messagesPaneRef}
+                      onScroll={updateMessageScrollState}
                       className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 ${subSurface}`}
                     >
                       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-end space-y-3">
@@ -911,6 +935,12 @@ export default function WhatsApp({ darkMode }) {
 
                         {messages.map((message) => {
                           const outbound = message.direction === "outbound";
+                          const outboundBubble = darkMode
+                            ? "rounded-br-md bg-[#005c4b] text-white"
+                            : "rounded-br-md bg-[#dcf8c6] text-[#111b21]";
+                          const inboundBubble = darkMode
+                            ? "rounded-bl-md bg-[#202c33] text-white"
+                            : "rounded-bl-md bg-white text-[#111b21]";
 
                           return (
                             <div
@@ -919,11 +949,7 @@ export default function WhatsApp({ darkMode }) {
                             >
                               <div
                                 className={`max-w-[88%] rounded-[20px] px-4 py-3 text-sm -sm sm:max-w-[75%] ${
-                                  outbound
-                                    ? "rounded-br-md bg-[#d8f36a] text-black"
-                                    : darkMode
-                                      ? "rounded-bl-md bg-[#22252c] text-white"
-                                      : "rounded-bl-md bg-white text-black"
+                                  outbound ? outboundBubble : inboundBubble
                                 }`}
                               >
                                 <p className="whitespace-pre-wrap break-words leading-5">
@@ -932,14 +958,22 @@ export default function WhatsApp({ darkMode }) {
 
                                 <p
                                   className={`mt-1.5 flex items-center justify-end gap-1 text-[10px] ${
-                                    outbound ? "text-black/45" : muted
+                                    outbound
+                                      ? darkMode
+                                        ? "text-white/58"
+                                        : "text-[#667781]"
+                                      : muted
                                   }`}
                                 >
                                   {formatTime(message.timestamp)}
                                   {outbound && (
                                     <CheckCheck
                                       className={`h-3 w-3 ${
-                                        message.status === "read" ? "text-blue-600" : ""
+                                        message.status === "read"
+                                          ? "text-[#53bdeb]"
+                                          : darkMode
+                                            ? "text-white/50"
+                                            : "text-[#667781]"
                                       }`}
                                     />
                                   )}

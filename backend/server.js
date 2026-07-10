@@ -149,8 +149,25 @@ function profilePhone(value) {
   return String(value || "").replace(/\D/g, "").slice(0, 20);
 }
 
+function isSuperAdminRole(role) {
+  return Boolean(role && (role.nameLower === "super admin" || String(role.name || "").trim().toLowerCase() === "super admin"));
+}
+
+function isEffectiveSuperAdmin(user, role) {
+  return Boolean(user?.isSuperAdmin || isSuperAdminRole(role));
+}
+
+function roleMenusForUser(user, role) {
+  return isEffectiveSuperAdmin(user, role) ? ALL_MENU_ITEMS.map((item) => item.id) : role?.menus || user?.menus || [];
+}
+
+function rolePrivilegesForUser(user, role) {
+  return isEffectiveSuperAdmin(user, role) ? PRIVILEGE_ITEMS.map((item) => item.id) : role?.privileges || user?.privileges || [];
+}
+
 function sanitizeUser(user, role) {
   if (!user) return null;
+  const superAdmin = isEffectiveSuperAdmin(user, role);
   return {
     id: String(user._id),
     username: user.username,
@@ -162,9 +179,9 @@ function sanitizeUser(user, role) {
     designation: user.designation || user.jobTitle || "",
     roleId: user.roleId ? String(user.roleId) : null,
     roleName: role?.name || user.roleName || null,
-    menus: role?.menus || user.menus || [],
-    privileges: role?.privileges || user.privileges || [],
-    isSuperAdmin: Boolean(user.isSuperAdmin),
+    menus: roleMenusForUser(user, role),
+    privileges: rolePrivilegesForUser(user, role),
+    isSuperAdmin: superAdmin,
     blacklisted: Boolean(user.blacklisted),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -209,6 +226,10 @@ async function seedSuperAdmin() {
     { upsert: true, returnDocument: "after" }
   );
   const role = roleResult.value || roleResult;
+  await db.collection("users").updateMany(
+    { roleId: role._id },
+    { $set: { isSuperAdmin: true, updatedAt: now } }
+  );
   const existing = await db.collection("users").findOne({ usernameLower: SUPER_ADMIN_USERNAME.toLowerCase() });
   if (!existing) {
     const password = hashPassword(SUPER_ADMIN_PASSWORD);
@@ -265,23 +286,23 @@ async function requireAuth(req, res, next) {
 }
 
 function requireSuperAdmin(req, res, next) {
-  if (!req.user?.isSuperAdmin) return res.status(403).json({ error: "Super Admin access required" });
+  if (!req.authUser?.isSuperAdmin) return res.status(403).json({ error: "Super Admin access required" });
   next();
 }
 
 function hasPrivilege(req, privilege) {
-  if (req?.user?.isSuperAdmin) return true;
+  if (req?.authUser?.isSuperAdmin) return true;
   return Boolean(req?.authUser?.privileges?.includes(privilege));
 }
 
 function hasMenuAccess(req, menuId) {
   if (req?.disabledModules?.includes(menuId) && !PROTECTED_GLOBAL_MODULES.has(menuId)) return false;
-  if (req?.user?.isSuperAdmin) return true;
+  if (req?.authUser?.isSuperAdmin) return true;
   return Boolean(req?.authUser?.menus?.includes(menuId));
 }
 
 function hasAllDocumentAccess(req) {
-  return Boolean(req?.user?.isSuperAdmin);
+  return Boolean(req?.authUser?.isSuperAdmin);
 }
 
 function canCreateFolder(req) {
@@ -353,7 +374,7 @@ app.post("/auth/login", async (req, res) => {
       status: "success",
       actor: sanitizeUser(user, role),
     });
-    res.json({ token, user: sanitizeUser(user, role), menus: role?.menus || [], disabledModules: await getDisabledModules() });
+    res.json({ token, user: sanitizeUser(user, role), menus: roleMenusForUser(user, role), disabledModules: await getDisabledModules() });
   } catch (error) {
     console.error("Login error:", error);
     addActivityLog({
@@ -368,7 +389,7 @@ app.post("/auth/login", async (req, res) => {
 });
 
 app.get("/auth/me", requireAuth, async (req, res) => {
-  res.json({ user: req.authUser, menus: req.role?.menus || [], disabledModules: await getDisabledModules() });
+  res.json({ user: req.authUser, menus: roleMenusForUser(req.user, req.role), disabledModules: await getDisabledModules() });
 });
 
 app.get("/profile", requireAuth, async (req, res) => {
@@ -498,7 +519,7 @@ function employeeSheetErrorMessage(error, fallback = "Could not read employee re
 }
 
 function canViewEmployeeDailyReports(req) {
-  return Boolean(req.user?.isSuperAdmin || hasPrivilege(req, "view_employee_daily_reports"));
+  return Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "view_employee_daily_reports"));
 }
 
 function employeeReportDateRange() {
@@ -2670,7 +2691,7 @@ app.post("/admin/users", requireSuperAdmin, async (req, res) => {
       passwordHash: hashed.hash,
       passwordSalt: hashed.salt,
       roleId: role._id,
-      isSuperAdmin: false,
+      isSuperAdmin: isSuperAdminRole(role),
       blacklisted: false,
       createdAt: now,
       updatedAt: now,
@@ -2696,6 +2717,7 @@ app.patch("/admin/users/:id", requireSuperAdmin, async (req, res) => {
       const role = await db.collection("roles").findOne({ _id: new ObjectId(roleId) });
       if (!role) return res.status(404).json({ error: "Role not found" });
       update.roleId = role._id;
+      update.isSuperAdmin = isSuperAdminRole(role);
     }
     if (blacklisted !== undefined) update.blacklisted = Boolean(blacklisted);
     await db.collection("users").updateOne({ _id: userId }, { $set: update });
@@ -2733,7 +2755,8 @@ app.delete("/admin/users/:id", requireSuperAdmin, async (req, res) => {
     const userId = new ObjectId(req.params.id);
     const user = await db.collection("users").findOne({ _id: userId });
     if (!user) return res.status(404).json({ error: "User not found" });
-    if (user.isSuperAdmin) return res.status(400).json({ error: "Super Admin cannot be deleted" });
+    const role = await getRole(user.roleId);
+    if (isEffectiveSuperAdmin(user, role)) return res.status(400).json({ error: "Super Admin cannot be deleted" });
     res.locals.activityTarget = formatUserTarget(user);
     await db.collection("users").deleteOne({ _id: userId });
     await db.collection("sessions").deleteMany({ userId });
@@ -3205,7 +3228,7 @@ function isFolderVisible(folder, req) {
 
 function canContributeToFolder(folder, req) {
   if (!folder) return false;
-  if (req.user?.isSuperAdmin) return true;
+  if (req.authUser?.isSuperAdmin) return true;
   const userId = req.authUser?.id;
   return Boolean(folder.createdBy === userId || hasActiveGrant(folder, userId));
 }
@@ -4055,7 +4078,7 @@ function dmrProjectMatchesSite(project, dmrConfig, siteName) {
 }
 
 function canViewProjectDmr(project, req) {
-  if (req.user?.isSuperAdmin) return true;
+  if (req.authUser?.isSuperAdmin) return true;
   const dmrConfig = project?.dmr || {};
   if (!dmrConfig.enabled) return false;
   const userId = String(req.authUser?.id || req.user?._id || "");
@@ -4065,7 +4088,7 @@ function canViewProjectDmr(project, req) {
 }
 
 function canEditProjectDmr(project, req) {
-  if (req.user?.isSuperAdmin) return true;
+  if (req.authUser?.isSuperAdmin) return true;
   if (!hasPrivilege(req, "edit_project_dmr")) return false;
   const userId = String(req.authUser?.id || req.user?._id || "");
   const editors = Array.isArray(project?.dmr?.editableUserIds) ? project.dmr.editableUserIds.map(String) : [];
@@ -7797,11 +7820,13 @@ app.get("/documents", async (req, res) => {
   ) {
     const db = await connectAuthDb();
     const rawUsers = await db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1 }).toArray();
+    const roles = await db.collection("roles").find({}).toArray();
+    const roleMap = new Map(roles.map((role) => [String(role._id), role]));
     users = rawUsers.map((user) => ({
       id: String(user._id),
       username: user.username,
       displayName: user.displayName || user.username,
-      isSuperAdmin: Boolean(user.isSuperAdmin),
+      isSuperAdmin: isEffectiveSuperAdmin(user, roleMap.get(String(user.roleId))),
     }));
   }
 
@@ -8388,6 +8413,8 @@ app.get("/project-dashboard/config", requireSuperAdmin, async (req, res) => {
     });
   }
   const users = await db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1 }).toArray();
+  const roles = await db.collection("roles").find({}).toArray();
+  const roleMap = new Map(roles.map((role) => [String(role._id), role]));
   res.json({
     projects: projectDashboardConfig.projects,
     sheets,
@@ -8395,7 +8422,7 @@ app.get("/project-dashboard/config", requireSuperAdmin, async (req, res) => {
       id: String(user._id),
       displayName: user.displayName || user.username,
       username: user.username,
-      isSuperAdmin: Boolean(user.isSuperAdmin),
+      isSuperAdmin: isEffectiveSuperAdmin(user, roleMap.get(String(user.roleId))),
     })),
   });
 });
@@ -9045,7 +9072,7 @@ app.get("/dmr-dashboard/settings", (req, res) => {
   if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
   res.json({
     settings: publicDmrSettings(),
-    canManage: Boolean(req.user?.isSuperAdmin),
+    canManage: Boolean(req.authUser?.isSuperAdmin),
   });
 });
 
@@ -9097,7 +9124,7 @@ app.get("/mrn-dashboard/settings", (req, res) => {
   if (!hasMenuAccess(req, "project-mrn")) return res.status(403).json({ error: "MRN module access required" });
   res.json({
     settings: publicMrnSettings(),
-    canManage: Boolean(req.user?.isSuperAdmin),
+    canManage: Boolean(req.authUser?.isSuperAdmin),
   });
 });
 
@@ -9162,8 +9189,8 @@ app.get("/mrn-dashboard", async (req, res) => {
     res.json({
       ...dashboard,
       canEdit: hasPrivilege(req, "edit_project_mrn"),
-      canViewMrnHistory: Boolean(req.user?.isSuperAdmin),
-      canManageMrnSettings: Boolean(req.user?.isSuperAdmin),
+      canViewMrnHistory: Boolean(req.authUser?.isSuperAdmin),
+      canManageMrnSettings: Boolean(req.authUser?.isSuperAdmin),
       mrnSettings: publicMrnSettings(),
       generatedAt: new Date().toISOString(),
     });
@@ -9274,8 +9301,8 @@ app.get("/dmr-dashboard", async (req, res) => {
     res.json({
       ...dashboard,
       canEdit: hasPrivilege(req, "edit_project_dmr"),
-      canViewHistory: Boolean(req.user?.isSuperAdmin),
-      canManageDmrSettings: Boolean(req.user?.isSuperAdmin),
+      canViewHistory: Boolean(req.authUser?.isSuperAdmin),
+      canManageDmrSettings: Boolean(req.authUser?.isSuperAdmin),
       dmrSettings: publicDmrSettings(),
       generatedAt: new Date().toISOString(),
     });

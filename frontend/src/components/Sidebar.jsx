@@ -397,99 +397,104 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
       </aside>
       {profileModalOpen && (
         <div
-          className="fixed inset-0 z-[90] bg-black/45 p-4 backdrop-blur-[3px] animate-[mrn-backdrop-in_260ms_ease-out]"
+          className="fixed inset-0 z-[90] bg-black/45 backdrop-blur-[3px] animate-[mrn-backdrop-in_260ms_ease-out]"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setProfileModalOpen(false);
           }}
         >
-          <div className={`mx-auto flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] shadow-[0_28px_90px_rgba(15,23,42,0.28)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-14 shrink-0 items-center justify-between border-b px-5 text-sm ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div className="flex min-w-0 items-center gap-3">
-                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}>{initials}</span>
-                <span className="min-w-0 truncate font-semibold">My profile</span>
+          <form onSubmit={saveProfile} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex h-14 shrink-0 items-center justify-between border-b px-4 sm:px-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <div className="min-w-0 text-sm">
+                <span className="font-black">{displayName}</span>
+                <span className={darkMode ? "text-white/55" : "text-black/55"}> · Profile details</span>
               </div>
-              <button onClick={() => setProfileModalOpen(false)} className={`rounded-full p-2 transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close profile">
-                <X className="h-5 w-5" />
-              </button>
+              <button type="button" onClick={() => setProfileModalOpen(false)} className="h-10 rounded-full px-4 text-sm font-bold text-[#4b9b16]" aria-label="Close profile">Close</button>
             </div>
 
-            <form onSubmit={saveProfile} className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-7 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-              <section className={`relative overflow-hidden rounded-[28px] border p-6 ${darkMode ? "border-white/10 bg-[#202328]" : "border-[#dfe7e4] bg-white"}`}>
-                {!darkMode && (
-                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(17,17,17,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(17,17,17,0.035)_1px,transparent_1px)] bg-[size:72px_72px]" />
-                )}
-                <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-center gap-4">
-                    <span className={`grid h-20 w-20 shrink-0 place-items-center rounded-[26px] text-2xl font-black ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white shadow-[0_18px_34px_rgba(16,166,107,0.22)]"}`}>{initials}</span>
+            <div className="min-h-0 flex-1 overflow-hidden lg:flex">
+              <aside className={`min-h-0 shrink-0 overflow-y-auto border-b p-5 lg:w-[300px] lg:border-b-0 lg:border-r ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
+                <div className="flex gap-2">
+                  <span className={`rounded-md px-3 py-2 text-[10px] font-black uppercase tracking-[0.08em] ${darkMode ? "bg-white/10 text-white" : "bg-[#ffe8f3] text-[#c92362]"}`}>Profile</span>
+                  <span className={`rounded-md px-3 py-2 text-[10px] font-black uppercase tracking-[0.08em] ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2f2f0] text-black/70"}`}>{user?.roleName || "Team member"}</span>
+                </div>
+
+                <div className="mt-7">
+                  <p className={`text-sm ${darkMode ? "text-white/50" : "text-black/45"}`}>User profile</p>
+                  <div className="mt-4 flex items-center gap-4">
+                    <span className={`grid h-20 w-20 shrink-0 place-items-center rounded-full text-2xl font-black ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white "}`}>{initials}</span>
                     <div className="min-w-0">
-                      <span className={`inline-flex rounded-2xl px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "bg-white/10 text-white/60" : "bg-[#e8f6ee] text-[#0f6b49]"}`}>UIPL profile</span>
-                      <h2 className="mt-3 truncate text-3xl font-black leading-tight">{displayName}</h2>
-                      <p className={`mt-1 text-sm ${darkMode ? "text-white/55" : "text-black/52"}`}>{user?.roleName || "Team member"} · {user?.username || "username"}</p>
+                      <h2 className="truncate text-2xl font-black leading-tight">{displayName}</h2>
+                      <p className={`mt-1 truncate text-sm ${darkMode ? "text-white/55" : "text-black/52"}`}>{user?.username || "username"}</p>
                     </div>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:w-[320px]">
-                    <ProfileMiniCard darkMode={darkMode} label="Department" value={profileForm.department || "Not added"} />
-                    <ProfileMiniCard darkMode={darkMode} label="WhatsApp" value={profileForm.whatsappPhone ? `+${profileForm.whatsappPhone}` : "Required"} highlight={!profileForm.whatsappPhone} />
-                  </div>
-                </div>
-              </section>
-
-              <section className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-                <div className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}><UserRound className="h-5 w-5" /></span>
-                    <div>
-                      <h3 className="text-lg font-bold">Personal information</h3>
-                      <p className={`text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Keep your details updated for reports and reminders.</p>
-                    </div>
-                  </div>
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <ProfileField darkMode={darkMode} label="Full name" value={profileForm.displayName} onChange={(value) => setProfileForm((current) => ({ ...current, displayName: value }))} required />
-                    <ProfileField darkMode={darkMode} label="Designation" value={profileForm.designation} onChange={(value) => setProfileForm((current) => ({ ...current, designation: value }))} placeholder="e.g. Designer" icon={BriefcaseBusiness} />
-                    <ProfileField darkMode={darkMode} label="Department" value={profileForm.department} onChange={(value) => setProfileForm((current) => ({ ...current, department: value }))} placeholder="e.g. Design" />
-                    <ProfileField darkMode={darkMode} label="Email" value={profileForm.email} onChange={(value) => setProfileForm((current) => ({ ...current, email: value }))} placeholder="name@company.com" icon={Mail} type="email" />
-                  </div>
+                  <p className={`mt-5 text-sm leading-6 ${darkMode ? "text-white/52" : "text-black/52"}`}>Manage contact details used for employee reports and WhatsApp reminders.</p>
                 </div>
 
-                <div className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}><Phone className="h-5 w-5" /></span>
-                    <div>
-                      <h3 className="text-lg font-bold">Phone & WhatsApp</h3>
-                      <p className={`text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Daily report reminders use the WhatsApp number.</p>
+                <button
+                  type="submit"
+                  disabled={profileSaving}
+                  className={`mt-7 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full text-base font-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#7ced31] text-black shadow-[0_20px_36px_rgba(124,237,49,0.24)]"}`}
+                >
+                  <Save className="h-5 w-5" />
+                  {profileSaving ? "Saving profile..." : "Save profile"}
+                </button>
+
+                <div className={`mt-7 rounded-2xl p-5 ${darkMode ? "bg-white/[0.055]" : "bg-[#f5f5f1]"}`}>
+                  <p className={`text-xs ${darkMode ? "text-white/50" : "text-black/45"}`}>Department</p>
+                  <p className="mt-2 text-2xl font-black">{profileForm.department || "Not added"}</p>
+                  <p className={`mt-4 text-xs ${darkMode ? "text-white/50" : "text-black/45"}`}>WhatsApp</p>
+                  <p className={`mt-2 text-lg font-bold ${profileForm.whatsappPhone ? "" : "text-[#ff2f3f]"}`}>{profileForm.whatsappPhone ? `+${profileForm.whatsappPhone}` : "Required"}</p>
+                </div>
+
+              </aside>
+
+              <main className={`min-h-0 flex-1 overflow-y-auto ${darkMode ? "bg-[#101116]" : "bg-white"}`}>
+                <section className="p-5 sm:p-6">
+                  <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+                    <div className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}><UserRound className="h-5 w-5" /></span>
+                        <div>
+                          <h3 className="text-lg font-bold">Personal information</h3>
+                          <p className={`text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Keep your details updated for reports and reminders.</p>
+                        </div>
+                      </div>
+                      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                        <ProfileField darkMode={darkMode} label="Full name" value={profileForm.displayName} onChange={(value) => setProfileForm((current) => ({ ...current, displayName: value }))} required />
+                        <ProfileField darkMode={darkMode} label="Designation" value={profileForm.designation} onChange={(value) => setProfileForm((current) => ({ ...current, designation: value }))} placeholder="e.g. Designer" icon={BriefcaseBusiness} />
+                        <ProfileField darkMode={darkMode} label="Department" value={profileForm.department} onChange={(value) => setProfileForm((current) => ({ ...current, department: value }))} placeholder="e.g. Design" />
+                        <ProfileField darkMode={darkMode} label="Email" value={profileForm.email} onChange={(value) => setProfileForm((current) => ({ ...current, email: value }))} placeholder="name@company.com" icon={Mail} type="email" />
+                      </div>
+                    </div>
+
+                    <div className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}><Phone className="h-5 w-5" /></span>
+                        <div>
+                          <h3 className="text-lg font-bold">Phone & WhatsApp</h3>
+                          <p className={`text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Daily report reminders use the WhatsApp number.</p>
+                        </div>
+                      </div>
+                      <div className="mt-5 space-y-4">
+                        <ProfileField darkMode={darkMode} label="Phone number" value={profileForm.phone} onChange={(value) => setProfileForm((current) => ({ ...current, phone: value.replace(/\D/g, "") }))} placeholder="919898892887" icon={Phone} inputMode="numeric" />
+                        <ProfileField darkMode={darkMode} label="WhatsApp number" value={profileForm.whatsappPhone} onChange={(value) => setProfileForm((current) => ({ ...current, whatsappPhone: value.replace(/\D/g, "") }))} placeholder="919898892887" icon={MessageCircleMore} inputMode="numeric" />
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-5 space-y-4">
-                    <ProfileField darkMode={darkMode} label="Phone number" value={profileForm.phone} onChange={(value) => setProfileForm((current) => ({ ...current, phone: value.replace(/\D/g, "") }))} placeholder="919898892887" icon={Phone} inputMode="numeric" />
-                    <ProfileField darkMode={darkMode} label="WhatsApp number" value={profileForm.whatsappPhone} onChange={(value) => setProfileForm((current) => ({ ...current, whatsappPhone: value.replace(/\D/g, "") }))} placeholder="919898892887" icon={MessageCircleMore} inputMode="numeric" />
-                    <div className={`rounded-2xl p-4 text-xs leading-5 ${darkMode ? "bg-white/[0.055] text-white/55" : "bg-[#f5f7f2] text-black/52"}`}>
+
+                  <div className={`mt-5 rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
+                    <h3 className="text-xl font-bold">Reminder setup</h3>
+                    <div className={`mt-4 rounded-2xl p-5 text-sm leading-6 ${darkMode ? "bg-white/[0.055] text-white/60" : "bg-[#f5f7f2] text-black/55"}`}>
                       Use country code without `+`, for example `919898892887`. In Meta test mode, this number must also be added as an allowed/test recipient.
                     </div>
                   </div>
-                </div>
-              </section>
-
-              <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <button type="button" onClick={() => setProfileModalOpen(false)} className={`h-12 rounded-3xl px-6 text-sm font-semibold transition active:scale-[0.98] ${darkMode ? "bg-white/10 text-white" : "bg-white text-black ring-1 ring-black/10"}`}>Cancel</button>
-                <button type="submit" disabled={profileSaving} className={`inline-flex h-12 items-center justify-center gap-2 rounded-3xl px-6 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white shadow-[0_16px_30px_rgba(16,166,107,0.22)]"}`}>
-                  <Save className="h-4 w-4" />
-                  {profileSaving ? "Saving..." : "Save profile"}
-                </button>
-              </div>
-            </form>
-          </div>
+                </section>
+              </main>
+            </div>
+          </form>
         </div>
       )}
     </>
-  );
-}
-
-function ProfileMiniCard({ darkMode, label, value, highlight = false }) {
-  return (
-    <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.055]" : highlight ? "bg-[#fff2d8]" : "bg-[#f5f7f2]"}`}>
-      <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${highlight ? "text-[#b46a00]" : darkMode ? "text-white/45" : "text-black/40"}`}>{label}</p>
-      <p className="mt-2 truncate text-sm font-bold">{value}</p>
-    </div>
   );
 }
 

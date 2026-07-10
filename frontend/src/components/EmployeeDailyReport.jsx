@@ -179,6 +179,111 @@ function formatDraftTime(value) {
   return new Date(value).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+function padTimePart(value) {
+  return String(Number(value) || 0).padStart(2, "0");
+}
+
+function parseReminderTime(value) {
+  const [rawHour, rawMinute] = String(value || "18:50").split(":");
+  const hour = Math.min(23, Math.max(0, Number.parseInt(rawHour, 10) || 0));
+  const minute = Math.min(59, Math.max(0, Number.parseInt(rawMinute, 10) || 0));
+  return { hour, minute };
+}
+
+function formatReminderTime(hour, minute) {
+  return `${padTimePart(hour)}:${padTimePart(minute)}`;
+}
+
+function shiftReminderTime(value, part, delta) {
+  const { hour, minute } = parseReminderTime(value);
+  if (part === "hour") return formatReminderTime((hour + delta + 24) % 24, minute);
+  return formatReminderTime(hour, (minute + delta + 60) % 60);
+}
+
+function ReminderTimeWheel({ value, onChange, darkMode }) {
+  const wheelStateRef = useRef({});
+  const { hour, minute } = parseReminderTime(value);
+  const columns = [
+    { key: "hour", label: "Hr", value: hour, max: 24 },
+    { key: "minute", label: "Min", value: minute, max: 60 },
+  ];
+  const scrollPart = (event, part) => {
+    event.preventDefault();
+    if (!event.deltaY) return;
+    const current = wheelStateRef.current[part] || { delta: 0, lastAt: 0 };
+    const now = event.timeStamp || 0;
+    const nextDelta = now - current.lastAt > 220 ? event.deltaY : current.delta + event.deltaY;
+    const threshold = 95;
+    if (Math.abs(nextDelta) < threshold) {
+      wheelStateRef.current[part] = { delta: nextDelta, lastAt: now };
+      return;
+    }
+    wheelStateRef.current[part] = { delta: 0, lastAt: now };
+    onChange(shiftReminderTime(value, part, nextDelta > 0 ? 1 : -1));
+  };
+
+  return (
+    <div className={`mt-2 overflow-hidden rounded-[28px] border p-4  ${darkMode ? "border-white/10 bg-white/[0.045]" : "border-black/10 bg-white"}`}>
+      <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/40" : "text-black/42"}`}>Pick time</p>
+      <div className="mt-3 grid grid-cols-2 items-center gap-3">
+        {columns.map((column, index) => {
+          const previous = (column.value - 1 + column.max) % column.max;
+          const next = (column.value + 1) % column.max;
+          return (
+            <div key={column.key} className={`grid grid-cols-[1fr_auto] items-center gap-2 ${index === 0 ? "border-r pr-3 " : ""}${index === 0 ? darkMode ? "border-white/10" : "border-black/10" : ""}`}>
+              <div
+                role="spinbutton"
+                tabIndex={0}
+                aria-label={`${column.label} picker`}
+                aria-valuemin={0}
+                aria-valuemax={column.max - 1}
+                aria-valuenow={column.value}
+                onWheel={(event) => scrollPart(event, column.key)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    onChange(shiftReminderTime(value, column.key, -1));
+                  }
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    onChange(shiftReminderTime(value, column.key, 1));
+                  }
+                }}
+                className={`relative overflow-hidden rounded-2xl outline-none transition focus:ring-4 ${darkMode ? "bg-black/15 focus:ring-white/10" : "bg-[#fafbf8] focus:ring-emerald-500/10"}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onChange(shiftReminderTime(value, column.key, -1))}
+                  className={`block h-9 w-full text-center text-xl font-black transition hover:scale-105 ${darkMode ? "text-white/20 hover:text-white/45" : "text-black/12 hover:text-black/35"}`}
+                  aria-label={`Decrease ${column.label}`}
+                >
+                  {padTimePart(previous)}
+                </button>
+                <div className={`mx-auto grid h-12 w-full place-items-center border-y text-3xl font-black ${darkMode ? "border-white/10 text-white" : "border-black/10 text-[#222]"}`}>
+                  {padTimePart(column.value)}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onChange(shiftReminderTime(value, column.key, 1))}
+                  className={`block h-9 w-full text-center text-xl font-black transition hover:scale-105 ${darkMode ? "text-white/20 hover:text-white/45" : "text-black/12 hover:text-black/35"}`}
+                  aria-label={`Increase ${column.label}`}
+                >
+                  {padTimePart(next)}
+                </button>
+              </div>
+              <span className={`text-xs font-bold ${darkMode ? "text-white/45" : "text-black/45"}`}>{column.label}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className={`mt-4 flex items-center justify-between rounded-2xl px-4 py-3 ${darkMode ? "bg-white/[0.055]" : "bg-[#f5f7f2]"}`}>
+        <span className={`text-xs font-bold ${darkMode ? "text-white/45" : "text-black/45"}`}>Selected</span>
+        <span className="font-black">{formatReminderTime(hour, minute)} IST</span>
+      </div>
+    </div>
+  );
+}
+
 function hasEmployeeDraftContent(form = {}) {
   const hasText = [form.note].some((value) => String(value || "").trim());
   const hasRows = [...(Array.isArray(form.taskItems) ? form.taskItems : []), ...(Array.isArray(form.waitingTaskItems) ? form.waitingTaskItems : [])]
@@ -1618,9 +1723,9 @@ export default function EmployeeDailyReport({ darkMode }) {
                     type="button"
                     onClick={openReminderSchedule}
                     disabled={initialLoading}
-                    className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
+                    className={`flex h-12 items-center text-red-600 dark:text-white justify-center gap-2 rounded-3xl border-2 border-dotted border-red-600 px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 ${darkMode ? "border-white/10 bg-white/10 " : "border-[#dfe7e4] bg-white  hover:bg-[#f1f7f4]"}`}
                   >
-                    <BellRing className="h-4 w-4" />
+                    <BellRing className="h-4 text-red-600 dark:text-white w-4" />
                     Reminder schedule
                   </button>
                 )}
@@ -1739,21 +1844,8 @@ export default function EmployeeDailyReport({ darkMode }) {
               <button type="button" onClick={() => setReminderOpen(false)} className="font-semibold text-[#4b9b16]">Close</button>
             </div>
             <div className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-              <section className={`overflow-hidden rounded-[30px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
-                <div className={`border-b p-5 sm:p-6 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-                  <div className="flex items-start gap-4">
-                    <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}>
-                      <BellRing className="h-6 w-6" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#4b9b16]">WhatsApp automation</p>
-                      <h3 className="mt-2 text-2xl font-black">Daily WhatsApp reminders</h3>
-                      <p className={`mt-2 text-sm leading-6 ${muted}`}>
-                        Set the reminder time once. It runs from the backend server even when this browser tab is closed.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              <section className={`overflow-hidden rounded-[30px]  ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
+                
 
                 <div className="p-5 sm:p-6">
                   <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
@@ -1775,19 +1867,14 @@ export default function EmployeeDailyReport({ darkMode }) {
                   </div>
 
                   <div className="mt-6 grid gap-4 lg:grid-cols-2">
-                    <label className="block">
+                    <div className="block">
                       <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Reminder time</span>
-                      <span className="relative mt-2 block">
-                        <Clock3 className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${darkMode ? "text-white/38" : "text-black/35"}`} />
-                        <input
-                          type="time"
-                          required
-                          value={reminderSettings.time}
-                          onChange={(event) => setReminderSettings((current) => ({ ...current, time: event.target.value }))}
-                          className={`h-12 w-full rounded-2xl border pl-11 pr-4 text-sm font-semibold outline-none transition focus:ring-4 ${darkMode ? "border-white/10 bg-white/[0.045] text-white focus:ring-white/5" : "border-black/10 bg-white text-black focus:ring-emerald-500/10"}`}
-                        />
-                      </span>
-                    </label>
+                      <ReminderTimeWheel
+                        value={reminderSettings.time}
+                        onChange={(time) => setReminderSettings((current) => ({ ...current, time }))}
+                        darkMode={darkMode}
+                      />
+                    </div>
                     <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f5f7f2]"}`}>
                       <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Current setup</p>
                       <p className="mt-2 text-sm font-bold">{reminderSettings.enabled ? `Daily at ${reminderSettings.time} IST` : "Automatic reminders are off"}</p>

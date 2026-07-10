@@ -174,6 +174,14 @@ function safeJsonParse(value, fallback = null) {
   }
 }
 
+function executiveAnswerState(questions = [], saved = null) {
+  const savedMap = new Map((saved?.answers || []).map((answer) => [answer.id, answer.answer || ""]));
+  return questions.reduce((result, question) => {
+    result[question.id] = savedMap.get(question.id) || "";
+    return result;
+  }, {});
+}
+
 function formatDraftTime(value) {
   if (!value) return "";
   return new Date(value).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -1182,6 +1190,16 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [heatmapOpen, setHeatmapOpen] = useState(false);
   const [confettiActive, setConfettiActive] = useState(false);
   const [submissionCelebration, setSubmissionCelebration] = useState(null);
+  const [pendingCelebration, setPendingCelebration] = useState(null);
+  const [executiveOpen, setExecutiveOpen] = useState(false);
+  const [executiveQuestions, setExecutiveQuestions] = useState([]);
+  const [executiveAnswers, setExecutiveAnswers] = useState({});
+  const [executiveSaving, setExecutiveSaving] = useState(false);
+  const [questionSettingsOpen, setQuestionSettingsOpen] = useState(false);
+  const [questionSettingsLoading, setQuestionSettingsLoading] = useState(false);
+  const [questionSettingsSaving, setQuestionSettingsSaving] = useState(false);
+  const [questionSettingsDraft, setQuestionSettingsDraft] = useState([]);
+  const [questionSettingsUsers, setQuestionSettingsUsers] = useState([]);
   const [detail, setDetail] = useState(null);
   const [detailClosing, setDetailClosing] = useState(false);
   const [detailExpanded, setDetailExpanded] = useState(false);
@@ -1262,6 +1280,8 @@ export default function EmployeeDailyReport({ darkMode }) {
       if (dateTo) params.set("dateTo", dateTo);
       const result = await api(`/employee-daily-report?${params.toString()}`);
       setData(result);
+      setExecutiveQuestions(result.executiveQuestions || []);
+      setExecutiveAnswers(executiveAnswerState(result.executiveQuestions || [], result.executiveAnswers));
       if (result.reminderSettings) setReminderSettings({
         enabled: result.reminderSettings.enabled !== false,
         time: result.reminderSettings.time || "18:50",
@@ -1486,13 +1506,24 @@ export default function EmployeeDailyReport({ darkMode }) {
       }
       if (draftStorageKey) window.localStorage.removeItem(draftStorageKey);
       setLastDraftSavedAt("");
-      if (firstSubmission) {
-        setSubmissionCelebration({
-          status: "success",
-          name: result.report?.employeeName || user?.displayName || user?.username || "there",
-          message: result.celebration?.message || "Your clear update helps the whole team move forward with confidence.",
-          quote: result.celebration?.quote || "Consistent progress, thoughtfully shared, turns everyday effort into meaningful momentum.",
-        });
+      const nextCelebration = {
+        status: "success",
+        name: result.report?.employeeName || user?.displayName || user?.username || "there",
+        message: result.celebration?.message || "Your clear update helps the whole team move forward with confidence.",
+        quote: result.celebration?.quote || "Consistent progress, thoughtfully shared, turns everyday effort into meaningful momentum.",
+      };
+      const assignedQuestions = result.executiveQuestions || [];
+      const savedExecutiveAnswers = result.executiveAnswers || null;
+      const needsExecutiveAnswers = assignedQuestions.length && (savedExecutiveAnswers?.answers || []).length < assignedQuestions.length;
+      if (needsExecutiveAnswers) {
+        setSubmissionCelebration(null);
+        setPendingCelebration(firstSubmission ? nextCelebration : null);
+        setExecutiveQuestions(assignedQuestions);
+        setExecutiveAnswers(executiveAnswerState(assignedQuestions, savedExecutiveAnswers));
+        setExecutiveOpen(true);
+        toast.success("Daily report saved. Please complete the required management questions.");
+      } else if (firstSubmission) {
+        setSubmissionCelebration(nextCelebration);
         setConfettiActive(true);
       } else {
         toast.success("Today’s report updated");
@@ -1504,6 +1535,36 @@ export default function EmployeeDailyReport({ darkMode }) {
       toast.error(error.message || "Could not submit report");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function saveExecutiveAnswers(event) {
+    event.preventDefault();
+    if (executiveSaving) return;
+    try {
+      const missing = executiveQuestions.find((question) => !String(executiveAnswers[question.id] || "").trim());
+      if (missing) throw new Error(`Please answer: ${missing.label}`);
+      setExecutiveSaving(true);
+      await api("/employee-daily-report/executive-answers", {
+        method: "PUT",
+        body: JSON.stringify({
+          reportDate: data?.today || todayInput(),
+          answers: executiveQuestions.map((question) => ({ id: question.id, answer: executiveAnswers[question.id] || "" })),
+        }),
+      });
+      setExecutiveOpen(false);
+      if (pendingCelebration) {
+        setSubmissionCelebration(pendingCelebration);
+        setPendingCelebration(null);
+        setConfettiActive(true);
+      } else {
+        toast.success("Management questions saved");
+      }
+      await load();
+    } catch (error) {
+      toast.error(error.message || "Could not save management questions");
+    } finally {
+      setExecutiveSaving(false);
     }
   }
 
@@ -1582,6 +1643,72 @@ export default function EmployeeDailyReport({ darkMode }) {
       toast.error(error.message || "Could not save reminder schedule");
     } finally {
       setReminderSaving(false);
+    }
+  }
+
+  async function openQuestionSettings() {
+    setQuestionSettingsOpen(true);
+    try {
+      setQuestionSettingsLoading(true);
+      const result = await api("/employee-daily-report/executive-questions/settings");
+      setQuestionSettingsDraft((result.questions || []).map((question) => ({
+        id: question.id,
+        label: question.label || "",
+        assignedUserIds: question.assignedUserIds || [],
+        enabled: question.enabled !== false,
+      })));
+      setQuestionSettingsUsers(result.users || []);
+    } catch (error) {
+      toast.error(error.message || "Could not load management questions");
+    } finally {
+      setQuestionSettingsLoading(false);
+    }
+  }
+
+  function updateQuestionDraft(id, patch) {
+    setQuestionSettingsDraft((current) => current.map((question) => question.id === id ? { ...question, ...patch } : question));
+  }
+
+  function addQuestionDraft() {
+    setQuestionSettingsDraft((current) => [
+      ...current,
+      { id: `new-${Date.now()}`, label: "", assignedUserIds: [], enabled: true },
+    ]);
+  }
+
+  function removeQuestionDraft(id) {
+    setQuestionSettingsDraft((current) => current.filter((question) => question.id !== id));
+  }
+
+  async function saveQuestionSettings(event) {
+    event.preventDefault();
+    if (questionSettingsSaving) return;
+    try {
+      const questions = questionSettingsDraft.map((question) => ({
+        id: question.id?.startsWith("new-") ? "" : question.id,
+        label: question.label.trim(),
+        assignedUserIds: question.assignedUserIds || [],
+        enabled: question.enabled !== false,
+      })).filter((question) => question.label);
+      if (!questions.length) throw new Error("Add at least one management question");
+      setQuestionSettingsSaving(true);
+      const result = await api("/employee-daily-report/executive-questions/settings", {
+        method: "PUT",
+        body: JSON.stringify({ questions }),
+      });
+      setQuestionSettingsDraft((result.questions || []).map((question) => ({
+        id: question.id,
+        label: question.label || "",
+        assignedUserIds: question.assignedUserIds || [],
+        enabled: question.enabled !== false,
+      })));
+      setQuestionSettingsUsers(result.users || questionSettingsUsers);
+      toast.success("Management questions saved");
+      await load();
+    } catch (error) {
+      toast.error(error.message || "Could not save management questions");
+    } finally {
+      setQuestionSettingsSaving(false);
     }
   }
 
@@ -1756,6 +1883,11 @@ export default function EmployeeDailyReport({ darkMode }) {
                 {data?.isAdmin && (
                   <button onClick={() => setReportOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
                     <FileText className="h-4 w-4" /> Generate report
+                  </button>
+                )}
+                {data?.isAdmin && (
+                  <button onClick={openQuestionSettings} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
+                    <Sparkles className="h-4 w-4" /> Management questions
                   </button>
                 )}
               </div>
@@ -2205,6 +2337,172 @@ export default function EmployeeDailyReport({ darkMode }) {
         </div>
       )}
 
+      {questionSettingsOpen && data?.isAdmin && (
+        <div className="fixed inset-0 z-[55] bg-black/45 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setQuestionSettingsOpen(false); }}>
+          <form onSubmit={saveQuestionSettings} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <span><b>Employee daily report</b> · Management questions</span>
+              <button type="button" onClick={() => setQuestionSettingsOpen(false)} className="px-1 font-semibold text-[#4b9b16]">Close</button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[270px_minmax(0,1fr)]">
+              <aside className={`flex min-h-0 flex-col overflow-hidden border-b md:border-b-0 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
+                <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                  <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">SUPER ADMIN</span>
+                  <h3 className="mt-5 text-2xl font-bold leading-tight">Assign management questions</h3>
+                  <p className={`mt-3 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
+                    Choose which employees must answer each question after submitting their daily report.
+                  </p>
+                  <div className={`mt-6 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Questions</p>
+                    <p className="mt-1 text-3xl font-bold text-[#0f9f6e]">{questionSettingsDraft.length}</p>
+                  </div>
+                  <div className={`mt-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Employees</p>
+                    <p className="mt-1 text-xl font-bold">{questionSettingsUsers.length}</p>
+                  </div>
+                </div>
+                <div className={`flex shrink-0 flex-col gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+                  <button type="button" onClick={addQuestionDraft} className={`h-11 rounded-full border text-sm font-bold ${darkMode ? "border-white/15 bg-white/10" : "border-black/10 bg-white"}`}>
+                    <Plus className="mr-2 inline h-4 w-4" /> Add question
+                  </button>
+                  <button disabled={questionSettingsSaving || questionSettingsLoading} className="h-11 rounded-full bg-[#89ed3f] text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">
+                    {questionSettingsSaving ? "Saving..." : "Save setup"}
+                  </button>
+                </div>
+              </aside>
+
+              <div className={`min-h-0 overflow-y-auto p-5 pb-24 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
+                <section className={`rounded-3xl p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Question control</p>
+                      <h4 className={`mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-black"}`}>Management answer setup</h4>
+                      <p className={`mt-1 text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>Enabled questions are compulsory only for the selected employees.</p>
+                    </div>
+                    <button type="button" onClick={addQuestionDraft} className="h-11 rounded-full bg-black px-5 text-sm font-bold text-white">
+                      <Plus className="mr-2 inline h-4 w-4" /> Add question
+                    </button>
+                  </div>
+
+                  {questionSettingsLoading ? (
+                    <div className={`mt-6 grid min-h-[260px] place-items-center rounded-[24px] ${darkMode ? "bg-white/[0.04]" : "bg-[#f8f7f3]"}`}><ThreeDotLoader /></div>
+                  ) : (
+                    <div className="mt-6 space-y-4">
+                      {questionSettingsDraft.map((question, index) => (
+                        <div key={question.id} className={`rounded-[26px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f8f7f3]"}`}>
+                          <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+                            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0f9f6e] text-sm font-black text-white">{index + 1}</div>
+                            <div className="min-w-0 flex-1">
+                              <label className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Question</label>
+                              <input
+                                value={question.label}
+                                onChange={(event) => updateQuestionDraft(question.id, { label: event.target.value })}
+                                placeholder="Type management question"
+                                className={`h-12 w-full rounded-2xl border px-4 text-sm outline-none transition focus:border-[#0f9f6e] focus:ring-4 focus:ring-[#0f9f6e]/10 ${darkMode ? "border-white/10 bg-black/15 text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+                              />
+                            </div>
+                            <div className="w-full xl:w-[340px]">
+                              <label className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Assign employees</label>
+                              <EmployeeUserMultiSelect
+                                darkMode={darkMode}
+                                users={questionSettingsUsers}
+                                selectedIds={question.assignedUserIds || []}
+                                onChange={(ids) => updateQuestionDraft(question.id, { assignedUserIds: ids })}
+                              />
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2 pt-6">
+                              <button
+                                type="button"
+                                onClick={() => updateQuestionDraft(question.id, { enabled: question.enabled === false })}
+                                className={`h-11 rounded-full px-4 text-sm font-bold transition ${question.enabled !== false ? "bg-[#0fba7a] text-white" : darkMode ? "bg-white/10 text-white/55" : "bg-white text-black/50"}`}
+                              >
+                                {question.enabled !== false ? "On" : "Off"}
+                              </button>
+                              <button type="button" onClick={() => removeQuestionDraft(question.id)} className={`grid h-11 w-11 place-items-center rounded-full transition ${darkMode ? "bg-red-500/10 text-red-200" : "bg-red-50 text-red-600"}`}>
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {!questionSettingsDraft.length && (
+                        <div className={`grid min-h-[220px] place-items-center rounded-[24px] ${darkMode ? "bg-white/[0.04] text-white/45" : "bg-[#f8f7f3] text-black/45"}`}>No management questions yet.</div>
+                      )}
+                    </div>
+                  )}
+                </section>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {executiveOpen && (
+        <div className="fixed inset-0 z-[55] bg-black/45 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]">
+          <form onSubmit={saveExecutiveAnswers} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <span><b>Management follow-up</b> · {data?.today || todayInput()}</span>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700">Required</span>
+            </div>
+
+            <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[270px_minmax(0,1fr)]">
+              <aside className={`flex min-h-0 flex-col overflow-hidden border-b md:border-b-0 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
+                <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                  <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">CEO INPUTS</span>
+                  <h3 className="mt-5 text-2xl font-bold leading-tight">Complete today&apos;s management questions</h3>
+                  <p className={`mt-3 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
+                    These answers are used for the executive employee report and tomorrow risk analysis.
+                  </p>
+                  <div className={`mt-6 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Assigned questions</p>
+                    <p className="mt-1 text-3xl font-bold text-[#0f9f6e]">{executiveQuestions.length}</p>
+                  </div>
+                  <div className={`mt-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#fff7df]"}`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-amber-700"}`}>Must complete</p>
+                    <p className={`mt-1 text-sm font-semibold ${darkMode ? "text-white/70" : "text-black/65"}`}>All fields are required before closing this step.</p>
+                  </div>
+                </div>
+                <div className={`flex shrink-0 gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+                  <button disabled={executiveSaving} className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">
+                    {executiveSaving ? "Saving..." : "Save answers"}
+                  </button>
+                </div>
+              </aside>
+
+              <div className={`min-h-0 overflow-y-auto p-5 pb-24 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
+                <section className={`rounded-3xl p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Additional report data</p>
+                  <h4 className={`mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-black"}`}>Management questions</h4>
+                  <p className={`mt-1 text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>Answer briefly but clearly. Mention names, dates, blockers, and ownership wherever applicable.</p>
+                  <div className="mt-6 grid gap-4">
+                    {executiveQuestions.map((question, index) => (
+                      <label key={question.id} className={`block rounded-[24px] p-4 transition ${darkMode ? "bg-white/[0.055]" : "bg-[#f8f7f3]"}`}>
+                        <span className="flex items-start gap-3">
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#0f9f6e] text-xs font-black text-white">{index + 1}</span>
+                          <span>
+                            <span className={`block text-sm font-bold ${darkMode ? "text-white" : "text-black"}`}>{question.label}</span>
+                            <span className={`mt-1 block text-xs ${darkMode ? "text-white/40" : "text-black/42"}`}>Required for executive analysis</span>
+                          </span>
+                        </span>
+                        <textarea
+                          required
+                          value={executiveAnswers[question.id] || ""}
+                          onChange={(event) => setExecutiveAnswers((current) => ({ ...current, [question.id]: event.target.value }))}
+                          rows={3}
+                          placeholder="Type the update here..."
+                          className={`mt-3 w-full resize-y rounded-2xl border px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#0f9f6e] focus:ring-4 focus:ring-[#0f9f6e]/10 ${darkMode ? "border-white/10 bg-black/15 text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
       {reportOpen && data?.isAdmin && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setReportOpen(false); }}>
           <div className={`employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#101216] text-white" : "bg-white text-[#171714]"}`}>
@@ -2243,19 +2541,17 @@ export default function EmployeeDailyReport({ darkMode }) {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${muted}`}>{reportData.range.from} to {reportData.range.to}</p>
-                        <h4 className="mt-2 text-2xl font-semibold">Executive summary</h4>
+                        <h4 className="mt-2 text-2xl font-semibold">CEO operating brief</h4>
                         <p className={`mt-1 text-sm ${muted}`}>{reportData.selectedUserIds?.length ? `${reportData.selectedUserIds.length} selected employee${reportData.selectedUserIds.length === 1 ? "" : "s"}` : "All employees"}</p>
                       </div>
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#eef7df] text-[#17643f]"}`}>Generated</span>
                     </div>
                     <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
                       {[
-                        ["Reports", reportData.summary.reports],
+                        ["Responses", reportData.summary.responses],
                         ["Employees", reportData.summary.employees],
-                        ["Completed tasks", reportData.summary.completedTasks],
-                        ["Waiting tasks", reportData.summary.waitingTasks],
                         ["Departments", reportData.summary.departments],
-                        ["Categories", reportData.summary.categories],
+                        ["Questions", reportData.summary.questions],
                       ].map(([label, value]) => (
                         <div key={label} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
                           <p className={`text-xs ${muted}`}>{label}</p>
@@ -2263,30 +2559,92 @@ export default function EmployeeDailyReport({ darkMode }) {
                         </div>
                       ))}
                     </div>
+                    <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                      {[
+                        ["CEO operating status", reportData.analysis?.overallStatus],
+                        ["Most at risk today", reportData.analysis?.projectMostAtRiskTomorrow],
+                      ].map(([label, value]) => (
+                        <div key={label} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
+                          <p className={`text-xs font-bold uppercase tracking-[0.14em] ${muted}`}>{label}</p>
+                          <p className="mt-2 text-sm leading-6">{value || "No analysis available."}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      {[
+                        ["Project most at risk", reportData.analysis?.ceoFocus?.projectRisk],
+                        ["Payment focus", reportData.analysis?.ceoFocus?.paymentFocus],
+                        ["CEO decision", reportData.analysis?.ceoFocus?.ceoDecision],
+                        ["Must finish today", reportData.analysis?.ceoFocus?.todayMustFinish],
+                      ].map(([label, value]) => (
+                        <div key={label} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
+                          <p className={`text-xs font-bold uppercase tracking-[0.14em] ${muted}`}>{label}</p>
+                          <p className="mt-2 text-sm leading-6">{value || "No update submitted."}</p>
+                        </div>
+                      ))}
+                    </div>
                   </section>
 
                   <EmployeeReportTable
-                    title="Daily submissions"
-                    headers={["Date", "Reports", "Employees", "Completed tasks", "Waiting tasks"]}
-                    rows={(reportData.daily || []).map((item) => [item.date, item.reports, item.employees, item.completedTasks, item.waitingTasks])}
+                    title="Projects"
+                    headers={["Insight"]}
+                    rows={(reportData.analysis?.projectHealth || []).map((item) => [item])}
                     darkMode={darkMode}
                   />
                   <EmployeeReportTable
-                    title="Department wise summary"
-                    headers={["Department", "Reports", "Employees", "Completed tasks", "Waiting tasks"]}
-                    rows={(reportData.departments || []).map((item) => [item.label, item.reports, item.employees, item.completedTasks, item.waitingTasks])}
+                    title="Money"
+                    headers={["Insight"]}
+                    rows={(reportData.analysis?.moneySignals || []).map((item) => [item])}
                     darkMode={darkMode}
                   />
                   <EmployeeReportTable
-                    title="Task category summary"
-                    headers={["Task category", "Employees", "Completed tasks", "Waiting tasks"]}
-                    rows={(reportData.categories || []).map((item) => [item.label, item.employees, item.completedTasks, item.waitingTasks])}
+                    title="Team"
+                    headers={["Insight"]}
+                    rows={(reportData.analysis?.teamSignals || []).map((item) => [item])}
                     darkMode={darkMode}
                   />
                   <EmployeeReportTable
-                    title="Submitted reports"
-                    headers={["Date", "Employee", "Department", "Client", "Site", "Task type", "Status"]}
-                    rows={(reportData.reports || []).map((item) => [item.reportDate, item.employeeName, item.department, item.client, item.site, item.taskType, item.taskStatus])}
+                    title="Procurement"
+                    headers={["Insight"]}
+                    rows={(reportData.analysis?.procurementSignals || []).map((item) => [item])}
+                    darkMode={darkMode}
+                  />
+                  <EmployeeReportTable
+                    title="Critical blockers"
+                    headers={["Insight"]}
+                    rows={(reportData.analysis?.keyRisks || []).map((item) => [item])}
+                    darkMode={darkMode}
+                  />
+                  <EmployeeReportTable
+                    title="CEO decisions"
+                    headers={["Decision"]}
+                    rows={(reportData.analysis?.ceoDecisions || reportData.analysis?.decisionsNeeded || []).map((item) => [item])}
+                    darkMode={darkMode}
+                  />
+                  <EmployeeReportTable
+                    title="Tomorrow commitments"
+                    headers={["Commitment"]}
+                    rows={(reportData.analysis?.tomorrowCommitments || reportData.analysis?.tomorrowPriorities || []).map((item) => [item])}
+                    darkMode={darkMode}
+                  />
+                  <EmployeeReportTable
+                    title="Legal / approvals"
+                    headers={["Insight"]}
+                    rows={(reportData.analysis?.legalSignals || []).map((item) => [item])}
+                    darkMode={darkMode}
+                  />
+                  {(reportData.analysis?.positiveSignals || []).length ? (
+                    <EmployeeReportTable
+                      title="Going well"
+                      headers={["Signal"]}
+                      rows={(reportData.analysis?.positiveSignals || []).map((item) => [item])}
+                      darkMode={darkMode}
+                    />
+                  ) : null}
+                  <EmployeeReportTable
+                    title="Question coverage"
+                    headers={["Question", "Responses", "Employees"]}
+                    rows={(reportData.questions || []).map((item) => [item.label, item.responses, item.employees])}
                     darkMode={darkMode}
                   />
                 </div>

@@ -110,6 +110,9 @@ async function connectAuthDb() {
   await authDb.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await authDb.collection("employeeDailyReports").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
   await authDb.collection("employeeDailyReports").createIndex({ reportDate: -1, submittedAt: -1 });
+  await authDb.collection("employeeExecutiveReportAnswers").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
+  await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
+  await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
   await seedSuperAdmin();
   return authDb;
 }
@@ -485,6 +488,18 @@ const EMPLOYEE_REPORT_APP_HEADERS = ["Report ID", "User ID", "Employee", "Depart
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_TEMPLATE || "daily_report_reminder";
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_LANGUAGE || "en";
 const EMPLOYEE_REPORT_REMINDER_LINK = process.env.EMPLOYEE_REPORT_REMINDER_LINK || process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "http://localhost:3000/employee-daily-report";
+const DEFAULT_EMPLOYEE_EXECUTIVE_QUESTIONS = [
+  { id: "vendor_finalized", label: "Was the vendor finalized?", assignees: ["nishi", "iqbal", "krupali", "milind", "dipak"] },
+  { id: "quotation_received", label: "Is quotation received?", assignees: ["nishi", "iqbal", "krupali", "milind", "dipak"] },
+  { id: "decision_pending", label: "What decision is pending?", assignees: ["krupali", "namrata", "chirag", "nishi", "iqbal", "milind"] },
+  { id: "blocking_work_owner_due", label: "What is blocking work? Who owns the next step and by when?", assignees: ["krupali", "namrata", "chirag", "nishi", "iqbal"] },
+  { id: "planned_payment_collection", label: "Planned payment collection for tomorrow", assignees: ["dhwani"] },
+  { id: "ceo_decision_required", label: "CEO decision if required for critical items if pending", assignees: ["krupali", "chirag", "namrata", "miti", "shruti"] },
+  { id: "material_delivery_dates", label: "Expected delivery dates of material ordered", assignees: ["milind", "nishi", "dipak"] },
+  { id: "client_meeting_decisions", label: "Today's client meeting and decisions taken", assignees: ["krupali", "namrata"] },
+  { id: "critical_client_approvals", label: "Critical client approvals pending", assignees: ["krupali", "namrata"] },
+];
+const EMPLOYEE_EXECUTIVE_QUESTIONS_SETTINGS_ID = "employee-executive-questions-settings";
 const employeeMetaCache = new Map();
 const employeeReportCache = new Map();
 let employeeReminderCronTask = null;
@@ -520,6 +535,116 @@ function employeeSheetErrorMessage(error, fallback = "Could not read employee re
 
 function canViewEmployeeDailyReports(req) {
   return Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "view_employee_daily_reports"));
+}
+
+function normalizeEmployeeAssignee(value = "") {
+  return projectText(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function employeeQuestionMatchTokens(user = {}) {
+  const names = [
+    user.displayName,
+    user.employeeName,
+    user.name,
+    user.username,
+    user.usernameLower,
+  ].map(projectText).filter(Boolean);
+  return [...new Set(names.flatMap((name) => {
+    const normalized = normalizeEmployeeAssignee(name);
+    const first = normalizeEmployeeAssignee(name.split(/\s+/)[0]);
+    return [normalized, first].filter(Boolean);
+  }))];
+}
+
+function employeeExecutiveUserId(user = {}) {
+  return String(user._id || user.id || user.userId || "");
+}
+
+function serializeEmployeeExecutiveQuestion(question = {}) {
+  return {
+    id: projectText(question.id) || new ObjectId().toString(),
+    label: projectText(question.label),
+    assignedUserIds: [...new Set((Array.isArray(question.assignedUserIds) ? question.assignedUserIds : []).map((id) => projectText(id)).filter(Boolean))],
+    enabled: question.enabled !== false,
+  };
+}
+
+async function employeeExecutiveQuestionUsers(db) {
+  return db.collection("users")
+    .find({ active: { $ne: false } })
+    .project({ displayName: 1, username: 1, usernameLower: 1, department: 1, role: 1, isSuperAdmin: 1 })
+    .sort({ displayName: 1, username: 1 })
+    .limit(1000)
+    .toArray();
+}
+
+function defaultEmployeeExecutiveQuestionsForUsers(users = []) {
+  return DEFAULT_EMPLOYEE_EXECUTIVE_QUESTIONS.map((question) => {
+    const assignees = new Set((question.assignees || []).map(normalizeEmployeeAssignee));
+    const assignedUserIds = users
+      .filter((user) => employeeQuestionMatchTokens(user).some((token) => assignees.has(token)))
+      .map((user) => String(user._id));
+    return serializeEmployeeExecutiveQuestion({ id: question.id, label: question.label, assignedUserIds, enabled: true });
+  });
+}
+
+async function getEmployeeExecutiveQuestionSettings({ includeUsers = false } = {}) {
+  const db = await connectAuthDb();
+  const users = includeUsers ? await employeeExecutiveQuestionUsers(db) : [];
+  let settings = await db.collection("platformSettings").findOne({ _id: EMPLOYEE_EXECUTIVE_QUESTIONS_SETTINGS_ID });
+  if (!settings) {
+    const defaultUsers = includeUsers ? users : await employeeExecutiveQuestionUsers(db);
+    const questions = defaultEmployeeExecutiveQuestionsForUsers(defaultUsers);
+    settings = { _id: EMPLOYEE_EXECUTIVE_QUESTIONS_SETTINGS_ID, questions, createdAt: new Date(), updatedAt: new Date() };
+    await db.collection("platformSettings").updateOne(
+      { _id: EMPLOYEE_EXECUTIVE_QUESTIONS_SETTINGS_ID },
+      { $set: { questions, createdAt: settings.createdAt, updatedAt: settings.updatedAt } },
+      { upsert: true },
+    );
+  }
+  const questions = (Array.isArray(settings.questions) ? settings.questions : []).map(serializeEmployeeExecutiveQuestion).filter((question) => question.label);
+  return {
+    questions,
+    users: includeUsers ? users.map((user) => ({
+      userId: String(user._id),
+      employeeName: user.displayName || user.username || "Employee",
+      department: user.department || "",
+      role: user.role || "",
+      isSuperAdmin: Boolean(user.isSuperAdmin),
+    })) : [],
+  };
+}
+
+async function employeeExecutiveQuestionsForUser(user = {}) {
+  const userId = employeeExecutiveUserId(user);
+  if (!userId) return [];
+  const settings = await getEmployeeExecutiveQuestionSettings();
+  return settings.questions
+    .filter((question) => question.enabled !== false && question.assignedUserIds.includes(userId))
+    .map(({ id, label }) => ({ id, label, required: true }));
+}
+
+function sanitizeEmployeeExecutiveAnswersDoc(doc = null) {
+  if (!doc) return null;
+  return {
+    id: String(doc._id || `${doc.userId || "employee"}-${doc.reportDate || ""}`),
+    userId: String(doc.userId || ""),
+    employeeName: doc.employeeName || "",
+    username: doc.username || "",
+    department: doc.department || "",
+    reportDate: doc.reportDate || "",
+    submittedAt: doc.submittedAt || doc.updatedAt || null,
+    answers: Array.isArray(doc.answers) ? doc.answers.map((answer) => ({
+      id: answer.id || "",
+      label: answer.label || "",
+      answer: answer.answer || "",
+    })).filter((answer) => answer.id && answer.label) : [],
+  };
+}
+
+async function employeeExecutiveAnswersForUserDate(db, userId, reportDate) {
+  const doc = await db.collection("employeeExecutiveReportAnswers").findOne({ userId: String(userId), reportDate: dmrDateKey(reportDate) || employeeReportToday() });
+  return sanitizeEmployeeExecutiveAnswersDoc(doc);
 }
 
 function employeeReportDateRange() {
@@ -1913,6 +2038,8 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const optionUsage = employeeReportOptionUsage(ownReports);
   const todayReport = ownReports.find((report) => String(report.userId) === userId && report.reportDate === today) || null;
   const todaySubmitted = Boolean(todayReport);
+  const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
+  const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
   const carriedForwardTasks = todayReport ? [] : employeeRecurringTasksFromReports(ownReports, today);
   const siteOptions = [...new Set([...EMPLOYEE_REPORT_OPTIONS.sites, ...allCachedReports.flatMap((report) => [
     report.site,
@@ -1953,6 +2080,9 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     today,
     todaySubmitted,
     todayReport: sanitizeEmployeeReport(todayReport),
+    executiveQuestions,
+    executiveAnswers,
+    executiveAnswersSubmitted: Boolean(executiveAnswers?.answers?.length),
     carriedForwardTasks,
     carriedForwardFrom: carriedForwardTasks[0]?.recurringFrom || "",
     currentUserId: userId,
@@ -2045,6 +2175,85 @@ app.put("/employee-daily-report/sheet", async (req, res) => {
   } catch (error) {
     console.error("Employee daily sheet link error:", employeeSheetErrorMessage(error));
     res.status(isGoogleSheetsQuotaError(error) ? 429 : 400).json({ error: employeeSheetErrorMessage(error, `Could not link sheet: ${error.message}`) });
+  }
+});
+
+app.get("/employee-daily-report/executive-questions/settings", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    res.json(await getEmployeeExecutiveQuestionSettings({ includeUsers: true }));
+  } catch (error) {
+    console.error("Employee executive question settings load error:", error);
+    res.status(500).json({ error: "Could not load management question settings" });
+  }
+});
+
+app.put("/employee-daily-report/executive-questions/settings", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    const db = await connectAuthDb();
+    const validUsers = new Set((await employeeExecutiveQuestionUsers(db)).map((user) => String(user._id)));
+    const questions = (Array.isArray(req.body?.questions) ? req.body.questions : [])
+      .map((question) => serializeEmployeeExecutiveQuestion({
+        id: projectText(question?.id) || new ObjectId().toString(),
+        label: question?.label,
+        enabled: question?.enabled !== false,
+        assignedUserIds: (Array.isArray(question?.assignedUserIds) ? question.assignedUserIds : []).filter((id) => validUsers.has(String(id))),
+      }))
+      .filter((question) => question.label)
+      .slice(0, 40);
+    if (!questions.length) return res.status(400).json({ error: "Add at least one management question" });
+    const now = new Date();
+    await db.collection("platformSettings").updateOne(
+      { _id: EMPLOYEE_EXECUTIVE_QUESTIONS_SETTINGS_ID },
+      { $set: { questions, updatedAt: now, updatedBy: { id: req.authUser.id, name: req.authUser.displayName || req.authUser.username || "Admin" } }, $setOnInsert: { createdAt: now } },
+      { upsert: true },
+    );
+    await db.collection("employeeExecutiveReportAnalyses").deleteMany({});
+    res.json({ success: true, ...(await getEmployeeExecutiveQuestionSettings({ includeUsers: true })) });
+  } catch (error) {
+    console.error("Employee executive question settings save error:", error);
+    res.status(500).json({ error: error.message || "Could not save management question settings" });
+  }
+});
+
+app.put("/employee-daily-report/executive-answers", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    const db = await connectAuthDb();
+    const reportDate = dmrDateKey(req.body?.reportDate) || employeeReportToday(req);
+    const userId = String(req.authUser.id);
+    const assignedQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
+    if (!assignedQuestions.length) return res.status(400).json({ error: "No management questions are assigned to this employee" });
+    const answerMap = new Map((Array.isArray(req.body?.answers) ? req.body.answers : []).map((item) => [projectText(item?.id), projectText(item?.answer)]));
+    const answers = assignedQuestions.map((question) => ({
+      id: question.id,
+      label: question.label,
+      answer: answerMap.get(question.id) || "",
+    }));
+    const missing = answers.find((item) => !item.answer);
+    if (missing) return res.status(400).json({ error: `Please answer: ${missing.label}` });
+    const now = new Date();
+    const doc = {
+      userId,
+      employeeName: req.authUser.displayName || req.authUser.username || "Employee",
+      username: req.authUser.username || "",
+      department: projectText(req.user?.department || ""),
+      reportDate,
+      answers,
+      submittedAt: now,
+      updatedAt: now,
+    };
+    await db.collection("employeeExecutiveReportAnswers").updateOne(
+      { userId, reportDate },
+      { $set: doc, $setOnInsert: { createdAt: now } },
+      { upsert: true },
+    );
+    await db.collection("employeeExecutiveReportAnalyses").deleteMany({ rangeFrom: { $lte: reportDate }, rangeTo: { $gte: reportDate } });
+    res.json({ success: true, answers: sanitizeEmployeeExecutiveAnswersDoc(doc) });
+  } catch (error) {
+    console.error("Employee executive answers save error:", error);
+    res.status(500).json({ error: error.message || "Could not save management answers" });
   }
 });
 
@@ -2163,7 +2372,9 @@ app.post("/employee-daily-report", async (req, res) => {
     if (!req.user.department || req.user.department !== department) userSet.department = department;
     await db.collection("users").updateOne({ _id: req.user._id }, { $set: userSet });
     const celebration = await generateEmployeeSubmissionPraise({ employeeName: report.employeeName, taskItems, waitingTaskItems, date: today });
-    res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }), celebration });
+    const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
+    const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
+    res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }), celebration, executiveQuestions, executiveAnswers });
   } catch (error) {
     if (error.code === 11000 || error.code === "EMPLOYEE_REPORT_EXISTS") return res.status(409).json({ error: "Today's report is already submitted" });
     if (/link your google sheet|could not open|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
@@ -2215,7 +2426,9 @@ app.put("/employee-daily-report", async (req, res) => {
     userSet.employeeReportCacheHydratedAt = now;
     if (!req.user.department || req.user.department !== department) userSet.department = department;
     await db.collection("users").updateOne({ _id: req.user._id }, { $set: userSet });
-    res.json({ success: true, report: sanitizeEmployeeReport(report) });
+    const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
+    const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
+    res.json({ success: true, report: sanitizeEmployeeReport(report), executiveQuestions, executiveAnswers });
   } catch (error) {
     if (error.code === "EMPLOYEE_REPORT_NOT_FOUND") return res.status(404).json({ error: error.message });
     if (/link your google sheet|could not open|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
@@ -2243,6 +2456,7 @@ app.delete("/employee-daily-report/:reportDate", async (req, res) => {
     const cachedReport = await db.collection("employeeDailyReports").findOne({ userId: targetUserId, reportDate });
     const result = await deleteEmployeeReportFromSheet({ user: targetUser, reportDate, fallbackReport: cachedReport });
     const cacheDelete = await db.collection("employeeDailyReports").deleteOne({ userId: targetUserId, reportDate });
+    await db.collection("employeeExecutiveReportAnswers").deleteOne({ userId: targetUserId, reportDate });
     await db.collection("users").updateOne(
       { _id: targetUser._id },
       { $set: { employeeReportCacheHydratedAt: new Date(), updatedAt: new Date() } },
@@ -2307,67 +2521,179 @@ app.post("/employee-daily-report/reminder/send-now", async (req, res) => {
   }
 });
 
-app.get("/employee-daily-report/report", async (req, res) => {
-  try {
-    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
-    const db = await connectAuthDb();
-    const today = employeeReportToday(req);
-    const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateFrom || "")) ? String(req.query.dateFrom) : today;
-    const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateTo || "")) ? String(req.query.dateTo) : dateFrom;
-    const from = dateFrom <= dateTo ? dateFrom : dateTo;
-    const to = dateFrom <= dateTo ? dateTo : dateFrom;
-    const selectedUserIds = projectText(req.query.userIds).split(",").map((item) => item.trim()).filter(Boolean).slice(0, 100);
-    const userFilter = { employeeDailySpreadsheetId: { $exists: true, $ne: "" } };
-    const selectedObjectIds = selectedUserIds.filter((id) => /^[a-f\d]{24}$/i.test(id)).map((id) => new ObjectId(id));
-    if (selectedObjectIds.length) userFilter._id = { $in: selectedObjectIds };
-    const linkedUsers = await db.collection("users").find(userFilter).limit(500).toArray();
-    const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(await getCachedEmployeeReportsForUsers(db, linkedUsers), { dateFrom: from, dateTo: to, userIds: selectedUserIds }))
-      .sort((a, b) => String(a.reportDate).localeCompare(String(b.reportDate)) || String(a.employeeName).localeCompare(String(b.employeeName)))
-      .slice(0, 5000);
-    const dates = [];
-    for (let date = from; date && date <= to; date = addDaysToDateKey(date, 1)) dates.push(date);
-    const employees = new Set();
-    const departments = new Map();
-    const taskTypes = new Map();
-    const categories = new Map();
-    const dailyMap = new Map(dates.map((date) => [date, { date, reports: 0, completedTasks: 0, waitingTasks: 0, employees: new Set() }]));
-    let completedTasks = 0;
-    let waitingTasks = 0;
-    reports.forEach((report) => {
-      const taskItems = sanitizeEmployeeTaskItems(report.taskItems);
-      const waitingItems = sanitizeEmployeeTaskItems(report.waitingTaskItems);
-      const employeeName = report.employeeName || "Employee";
-      employees.add(employeeName);
-      completedTasks += taskItems.length || (projectText(report.taskDescription) ? 1 : 0);
-      waitingTasks += waitingItems.length || (projectText(report.waitingTaskDescription) ? 1 : 0);
-      const completedCount = taskItems.length || (projectText(report.taskDescription) ? 1 : 0);
-      const waitingCount = waitingItems.length || (projectText(report.waitingTaskDescription) ? 1 : 0);
-      incrementEmployeeReportBucket(departments, report.department, { reports: 1, completedTasks: completedCount, waitingTasks: waitingCount, employeeName });
-      incrementEmployeeReportBucket(taskTypes, report.taskType, { reports: 1, completedTasks: completedCount, waitingTasks: waitingCount, employeeName });
-      taskItems.forEach((item) => incrementEmployeeReportBucket(categories, item.category, { completedTasks: 1, employeeName }));
-      waitingItems.forEach((item) => incrementEmployeeReportBucket(categories, item.category, { waitingTasks: 1, employeeName }));
-      const daily = dailyMap.get(report.reportDate) || { date: report.reportDate, reports: 0, completedTasks: 0, waitingTasks: 0, employees: new Set() };
-      daily.reports += 1;
-      daily.completedTasks += completedCount;
-      daily.waitingTasks += waitingCount;
-      daily.employees.add(employeeName);
-      dailyMap.set(report.reportDate, daily);
-    });
-    res.json({
-      range: { from, to },
-      selectedUserIds,
-      summary: { reports: reports.length, employees: employees.size, completedTasks, waitingTasks, departments: departments.size, categories: categories.size },
-      daily: [...dailyMap.values()].map((item) => ({ date: item.date, reports: item.reports, employees: item.employees.size, completedTasks: item.completedTasks, waitingTasks: item.waitingTasks })),
-      departments: [...departments.values()].map(serializeEmployeeReportBucket).sort((a, b) => b.reports - a.reports),
-      taskTypes: [...taskTypes.values()].map(serializeEmployeeReportBucket).sort((a, b) => b.reports - a.reports),
-      categories: [...categories.values()].map(serializeEmployeeReportBucket).sort((a, b) => (b.completedTasks + b.waitingTasks) - (a.completedTasks + a.waitingTasks)),
-      reports: reports.map(sanitizeEmployeeReport),
-    });
-  } catch (error) {
-    console.error("Employee daily report generation error:", error);
-    res.status(500).json({ error: "Could not generate employee daily report" });
+function fallbackEmployeeExecutiveAnalysis(entries = []) {
+  const answerText = entries.flatMap((entry) => entry.answers || []).map((answer) => answer.answer).join(" ").toLowerCase();
+  const riskWords = ["pending", "block", "delay", "not", "no", "issue", "critical", "required", "short", "hold"];
+  const riskEntries = entries.filter((entry) => (entry.answers || []).some((answer) => riskWords.some((word) => String(answer.answer || "").toLowerCase().includes(word))));
+  const riskNames = [...new Set(riskEntries.map((entry) => entry.employeeName).filter(Boolean))].slice(0, 4);
+  const referencedAnswer = (entry, answer) => `${entry.employeeName || "Employee"}: ${shortExecutiveInsight(answer || "Follow-up required", 135)}`;
+  const answersByLabel = (pattern) => entries.flatMap((entry) => (entry.answers || [])
+    .filter((answer) => pattern.test(`${answer.label || ""} ${answer.answer || ""}`) && projectText(answer.answer))
+    .map((answer) => referencedAnswer(entry, answer.answer)));
+  const moneySignals = answersByLabel(/payment|collection|cash|amount|account|invoice/i).slice(0, 4);
+  const procurementSignals = answersByLabel(/vendor|quotation|material|delivery|purchase|procure/i).slice(0, 4);
+  const ceoDecisions = answersByLabel(/ceo|decision|approval|pending/i).slice(0, 4);
+  const tomorrowCommitments = answersByLabel(/tomorrow|commitment|complete|delivery|target/i).slice(0, 4);
+  const projectHealth = answersByLabel(/project|site|client|drawing|execution|work/i).slice(0, 4);
+  return {
+    provider: "fallback",
+    model: "local",
+    overallStatus: entries.length ? `${entries.length} management update${entries.length === 1 ? "" : "s"} submitted for the selected range.` : "No management question data is available for the selected range.",
+    projectMostAtRiskTomorrow: riskNames.length ? `${riskNames.join(", ")} need follow-up based on pending or blocking updates.` : "No specific project risk was identified from the submitted answers.",
+    keyRisks: riskEntries.slice(0, 5).map((entry) => referencedAnswer(entry, (entry.answers || []).find((answer) => riskWords.some((word) => String(answer.answer || "").toLowerCase().includes(word)))?.answer || "Follow-up required")),
+    decisionsNeeded: entries.flatMap((entry) => (entry.answers || []).filter((answer) => /decision|approval|pending/i.test(answer.label) && projectText(answer.answer)).map((answer) => referencedAnswer(entry, answer.answer))).slice(0, 5),
+    tomorrowPriorities: entries.flatMap((entry) => (entry.answers || []).filter((answer) => /tomorrow|delivery|blocking|payment/i.test(answer.label) && projectText(answer.answer)).map((answer) => referencedAnswer(entry, answer.answer))).slice(0, 5),
+    positiveSignals: answerText && !riskEntries.length ? ["No major blockers were reported in the submitted management answers."] : [],
+    ceoFocus: {
+      projectRisk: riskNames.length ? `${riskNames.join(", ")} have the clearest pending or blocking updates.` : "No project risk was clearly identified.",
+      paymentFocus: moneySignals[0] || "No payment or collection update submitted.",
+      ceoDecision: ceoDecisions[0] || "No CEO decision request was clearly submitted.",
+      todayMustFinish: tomorrowCommitments[0] || "No measurable next commitment was clearly submitted.",
+    },
+    projectHealth,
+    moneySignals,
+    teamSignals: riskEntries.slice(0, 4).map((entry) => `${entry.employeeName || "Employee"}: Follow-up needed on reported blocker or pending item.`),
+    procurementSignals,
+    legalSignals: answersByLabel(/legal|agreement|approval|compliance|document|contract/i).slice(0, 4),
+    ceoDecisions,
+    tomorrowCommitments,
+  };
+}
+
+function shortExecutiveInsight(value, maxLength = 180, maxWords = 26) {
+  const text = projectText(value).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const words = text.split(/\s+/);
+  const wordLimited = words.length > maxWords ? `${words.slice(0, maxWords).join(" ").replace(/[.,;:-]+$/, "")}.` : text;
+  if (wordLimited.length <= maxLength) return wordLimited;
+  const window = wordLimited.slice(0, maxLength + 1);
+  const sentenceBreak = Math.max(window.lastIndexOf(". "), window.lastIndexOf("; "), window.lastIndexOf(", "));
+  const cutAt = sentenceBreak >= Math.floor(maxLength * 0.55) ? sentenceBreak + 1 : window.lastIndexOf(" ");
+  return `${window.slice(0, cutAt > 0 ? cutAt : maxLength).trim().replace(/[.,;:-]+$/, "")}.`;
+}
+
+function normalizeExecutiveInsightList(items, fallbackItems, options = {}) {
+  const maxItems = options.maxItems || 4;
+  const maxLength = options.maxLength || 190;
+  const maxWords = options.maxWords || 24;
+  return (Array.isArray(items) ? items : fallbackItems)
+    .map((item) => shortExecutiveInsight(item, maxLength, maxWords))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function normalizeCeoFocus(rawFocus = {}, fallbackFocus = {}) {
+  return {
+    projectRisk: shortExecutiveInsight(rawFocus.projectRisk, 180, 24) || fallbackFocus.projectRisk || "No project risk was clearly identified.",
+    paymentFocus: shortExecutiveInsight(rawFocus.paymentFocus, 180, 24) || fallbackFocus.paymentFocus || "No payment or collection update submitted.",
+    ceoDecision: shortExecutiveInsight(rawFocus.ceoDecision, 180, 24) || fallbackFocus.ceoDecision || "No CEO decision request was clearly submitted.",
+    todayMustFinish: shortExecutiveInsight(rawFocus.todayMustFinish, 180, 24) || fallbackFocus.todayMustFinish || "No measurable next commitment was clearly submitted.",
+  };
+}
+
+function normalizeEmployeeExecutiveAnalysis(raw = {}, entries = []) {
+  const fallback = fallbackEmployeeExecutiveAnalysis(entries);
+  return {
+    provider: raw.provider || fallback.provider,
+    model: raw.model || fallback.model,
+    overallStatus: shortExecutiveInsight(raw.overallStatus, 170, 22) || fallback.overallStatus,
+    projectMostAtRiskTomorrow: shortExecutiveInsight(raw.projectMostAtRiskTomorrow, 190, 28) || fallback.projectMostAtRiskTomorrow,
+    keyRisks: normalizeExecutiveInsightList(raw.keyRisks, fallback.keyRisks, { maxItems: 4, maxLength: 175, maxWords: 22 }),
+    decisionsNeeded: normalizeExecutiveInsightList(raw.decisionsNeeded, fallback.decisionsNeeded, { maxItems: 4, maxLength: 175, maxWords: 22 }),
+    tomorrowPriorities: normalizeExecutiveInsightList(raw.tomorrowPriorities, fallback.tomorrowPriorities, { maxItems: 4, maxLength: 175, maxWords: 22 }),
+    positiveSignals: normalizeExecutiveInsightList(raw.positiveSignals, fallback.positiveSignals, { maxItems: 3, maxLength: 175, maxWords: 22 }),
+    ceoFocus: normalizeCeoFocus(raw.ceoFocus, fallback.ceoFocus),
+    projectHealth: normalizeExecutiveInsightList(raw.projectHealth, fallback.projectHealth, { maxItems: 5, maxLength: 175, maxWords: 22 }),
+    moneySignals: normalizeExecutiveInsightList(raw.moneySignals, fallback.moneySignals, { maxItems: 4, maxLength: 175, maxWords: 22 }),
+    teamSignals: normalizeExecutiveInsightList(raw.teamSignals, fallback.teamSignals, { maxItems: 4, maxLength: 175, maxWords: 22 }),
+    procurementSignals: normalizeExecutiveInsightList(raw.procurementSignals, fallback.procurementSignals, { maxItems: 4, maxLength: 175, maxWords: 22 }),
+    legalSignals: normalizeExecutiveInsightList(raw.legalSignals, fallback.legalSignals, { maxItems: 3, maxLength: 175, maxWords: 22 }),
+    ceoDecisions: normalizeExecutiveInsightList(raw.ceoDecisions, fallback.ceoDecisions || fallback.decisionsNeeded, { maxItems: 5, maxLength: 175, maxWords: 22 }),
+    tomorrowCommitments: normalizeExecutiveInsightList(raw.tomorrowCommitments, fallback.tomorrowCommitments || fallback.tomorrowPriorities, { maxItems: 5, maxLength: 175, maxWords: 22 }),
+  };
+}
+
+async function generateEmployeeExecutiveAnalysis({ range, entries = [] }) {
+  const normalizedEntries = entries.map((entry) => ({
+    date: entry.reportDate,
+    employee: entry.employeeName,
+    department: entry.department,
+    answers: (entry.answers || []).map((answer) => ({ question: answer.label, answer: answer.answer })),
+  }));
+  const signature = crypto.createHash("sha256").update(JSON.stringify({ range, entries: normalizedEntries })).digest("hex");
+  const cacheKey = `employee-executive-analysis:v5:${range.from}:${range.to}:${signature}`;
+  const db = await connectAuthDb();
+  const cached = await db.collection("employeeExecutiveReportAnalyses").findOne({ cacheKey });
+  if (cached?.analysis) return cached.analysis;
+  const fallback = fallbackEmployeeExecutiveAnalysis(entries);
+  const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  let analysis = fallback;
+  if (anthropicKey && entries.length) {
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: AbortSignal.timeout(18000),
+        headers: { "content-type": "application/json", "x-api-key": anthropicKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
+          max_tokens: 1800,
+          system: "You are an executive project analyst preparing a CEO management report. Analyze only the provided employee management-question answers. Do not invent facts. Synthesize insights, do not copy raw employee wording. Return strict JSON only.",
+          messages: [{
+            role: "user",
+            content: `Create a polished CEO-ready 5-minute operating brief for ${range.from} to ${range.to}.
+
+Rules:
+- Analyze every submitted answer together.
+- Base every statement only on explicit facts present in the submitted answers.
+- Do NOT paste or closely paraphrase raw answer text.
+- Do NOT add vendor names, amounts, dates, recommendations, owners, or statuses unless they are explicitly present in the answers.
+- Merge duplicate themes across employees.
+- Each bullet must be an executive insight: impact, risk, decision, or action.
+- Every bullet in list fields must begin with the source employee name(s), for example "Krupali: ...".
+- Maximum 4 bullets per section.
+- Maximum 22 words per bullet.
+- overallStatus: one sentence, maximum 22 words.
+- projectMostAtRiskTomorrow: one sentence, maximum 28 words.
+- Use professional CEO language.
+- If evidence is insufficient, say that the update needs clarification instead of guessing.
+- Focus on deliverables, blockers, CEO decisions, risk, money, procurement, team load, legal/compliance, and tomorrow measurable commitments.
+
+Return strict JSON only with keys:
+overallStatus,
+projectMostAtRiskTomorrow,
+ceoFocus: { projectRisk, paymentFocus, ceoDecision, todayMustFinish },
+projectHealth,
+moneySignals,
+teamSignals,
+procurementSignals,
+legalSignals,
+keyRisks,
+ceoDecisions,
+decisionsNeeded,
+tomorrowCommitments,
+tomorrowPriorities,
+positiveSignals.
+
+Data: ${JSON.stringify(normalizedEntries).slice(0, 50000)}`,
+          }],
+        }),
+      });
+      const data = await response.json();
+      const text = (data.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n").trim();
+      const jsonText = text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+      if (response.ok && jsonText) analysis = normalizeEmployeeExecutiveAnalysis({ ...JSON.parse(jsonText), provider: "claude", model: data.model || process.env.CLAUDE_MODEL || "claude-sonnet-4-6" }, entries);
+    } catch (error) {
+      console.warn("Employee executive analysis fallback:", error.message);
+      analysis = fallback;
+    }
   }
-});
+  await db.collection("employeeExecutiveReportAnalyses").updateOne(
+    { cacheKey },
+    { $set: { cacheKey, rangeFrom: range.from, rangeTo: range.to, signature, analysis, createdAt: new Date() } },
+    { upsert: true },
+  );
+  return analysis;
+}
 
 async function buildEmployeeReportExportData(req, query = {}) {
   const db = await connectAuthDb();
@@ -2377,51 +2703,49 @@ async function buildEmployeeReportExportData(req, query = {}) {
   const from = dateFrom <= dateTo ? dateFrom : dateTo;
   const to = dateFrom <= dateTo ? dateTo : dateFrom;
   const selectedUserIds = projectText(query.userIds).split(",").map((item) => item.trim()).filter(Boolean).slice(0, 100);
-  const userFilter = { employeeDailySpreadsheetId: { $exists: true, $ne: "" } };
-  const selectedObjectIds = selectedUserIds.filter((id) => /^[a-f\d]{24}$/i.test(id)).map((id) => new ObjectId(id));
-  if (selectedObjectIds.length) userFilter._id = { $in: selectedObjectIds };
-  const linkedUsers = await db.collection("users").find(userFilter).limit(500).toArray();
-  const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(
-    await getCachedEmployeeReportsForUsers(db, linkedUsers),
-    { dateFrom: from, dateTo: to, userIds: selectedUserIds },
-  )).sort((a, b) => String(a.reportDate).localeCompare(String(b.reportDate)) || String(a.employeeName).localeCompare(String(b.employeeName))).slice(0, 5000);
-  const dates = [];
-  for (let date = from; date && date <= to; date = addDaysToDateKey(date, 1)) dates.push(date);
+  const answerFilter = { reportDate: { $gte: from, $lte: to } };
+  if (selectedUserIds.length) answerFilter.userId = { $in: selectedUserIds };
+  const executiveAnswers = (await db.collection("employeeExecutiveReportAnswers")
+    .find(answerFilter)
+    .sort({ reportDate: 1, employeeName: 1 })
+    .limit(5000)
+    .toArray())
+    .map(sanitizeEmployeeExecutiveAnswersDoc)
+    .filter(Boolean);
   const employees = new Set();
   const departments = new Map();
-  const categories = new Map();
-  const dailyMap = new Map(dates.map((date) => [date, { date, reports: 0, completedTasks: 0, waitingTasks: 0, employees: new Set() }]));
-  let completedTasks = 0;
-  let waitingTasks = 0;
-  reports.forEach((report) => {
-    const taskItems = sanitizeEmployeeTaskItems(report.taskItems);
-    const waitingItems = sanitizeEmployeeTaskItems(report.waitingTaskItems);
-    const employeeName = report.employeeName || "Employee";
-    const completedCount = taskItems.length || (projectText(report.taskDescription) ? 1 : 0);
-    const waitingCount = waitingItems.length || (projectText(report.waitingTaskDescription) ? 1 : 0);
-    employees.add(employeeName);
-    completedTasks += completedCount;
-    waitingTasks += waitingCount;
-    incrementEmployeeReportBucket(departments, report.department, { reports: 1, completedTasks: completedCount, waitingTasks: waitingCount, employeeName });
-    taskItems.forEach((item) => incrementEmployeeReportBucket(categories, item.category, { completedTasks: 1, employeeName }));
-    waitingItems.forEach((item) => incrementEmployeeReportBucket(categories, item.category, { waitingTasks: 1, employeeName }));
-    const daily = dailyMap.get(report.reportDate) || { date: report.reportDate, reports: 0, completedTasks: 0, waitingTasks: 0, employees: new Set() };
-    daily.reports += 1;
-    daily.completedTasks += completedCount;
-    daily.waitingTasks += waitingCount;
-    daily.employees.add(employeeName);
-    dailyMap.set(report.reportDate, daily);
+  const questions = new Map();
+  executiveAnswers.forEach((entry) => {
+    employees.add(entry.employeeName || entry.username || entry.userId);
+    incrementEmployeeReportBucket(departments, entry.department, { reports: 1, employeeName: entry.employeeName });
+    (entry.answers || []).forEach((answer) => {
+      const current = questions.get(answer.id) || { id: answer.id, label: answer.label, responses: 0, employees: new Set() };
+      current.responses += projectText(answer.answer) ? 1 : 0;
+      if (entry.employeeName) current.employees.add(entry.employeeName);
+      questions.set(answer.id, current);
+    });
   });
+  const analysis = await generateEmployeeExecutiveAnalysis({ range: { from, to }, entries: executiveAnswers });
   return {
     range: { from, to },
     selectedUserIds,
-    summary: { reports: reports.length, employees: employees.size, completedTasks, waitingTasks, departments: departments.size, categories: categories.size },
-    daily: [...dailyMap.values()].map((item) => ({ date: item.date, reports: item.reports, employees: item.employees.size, completedTasks: item.completedTasks, waitingTasks: item.waitingTasks })),
+    summary: { responses: executiveAnswers.length, employees: employees.size, departments: departments.size, questions: questions.size },
+    analysis,
     departments: [...departments.values()].map(serializeEmployeeReportBucket).sort((a, b) => b.reports - a.reports),
-    categories: [...categories.values()].map(serializeEmployeeReportBucket).sort((a, b) => (b.completedTasks + b.waitingTasks) - (a.completedTasks + a.waitingTasks)),
-    reports: reports.map(sanitizeEmployeeReport),
+    questions: [...questions.values()].map((item) => ({ id: item.id, label: item.label, responses: item.responses, employees: item.employees.size })).sort((a, b) => b.responses - a.responses),
+    executiveAnswers,
   };
 }
+
+app.get("/employee-daily-report/report", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    res.json(await buildEmployeeReportExportData(req, req.query || {}));
+  } catch (error) {
+    console.error("Employee daily report generation error:", error);
+    res.status(500).json({ error: "Could not generate employee daily report" });
+  }
+});
 
 app.get("/employee-daily-report/report/pdf", async (req, res) => {
   try {
@@ -5991,21 +6315,93 @@ function generateEmployeeDailyReportPdf(report) {
 
     const left = doc.page.margins.left;
     const pageWidth = doc.page.width - left - doc.page.margins.right;
-    doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text("EMPLOYEE DAILY REPORT", left, doc.y, { characterSpacing: 1.2 });
-    doc.moveDown(0.7);
-    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(23).text("Employee work summary");
-    doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(9).text(`${employeePdfRangeLabel(report.range)} | Generated ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`);
-    doc.moveDown(1.2);
+    const pageBottom = doc.page.height - doc.page.margins.bottom;
+    const addHeader = (continued = false) => {
+      doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text(continued ? "EMPLOYEE MANAGEMENT REPORT - CONTINUED" : "EMPLOYEE MANAGEMENT REPORT", left, 32, { characterSpacing: 1.2 });
+      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(7.5).text(employeePdfRangeLabel(report.range), left + pageWidth - 190, 34, { width: 190, align: "right" });
+      doc.x = left;
+      doc.y = 56;
+    };
+    const ensureSpace = (height) => {
+      if (doc.y + height <= pageBottom) return;
+      doc.addPage();
+      addHeader(true);
+    };
+    const bulletList = (items = []) => (items.length ? items : ["No specific update reported."]);
+    const insightCardHeight = (items, width) => {
+      let height = 54;
+      doc.font(dmrPdfFonts.regular).fontSize(8);
+      bulletList(items).slice(0, 5).forEach((item) => {
+        height += Math.max(15, doc.heightOfString(projectText(item), { width: width - 41, lineGap: 1.2 })) + 9;
+      });
+      return Math.max(160, Math.ceil(height) + 12);
+    };
+    const drawInsightCard = (title, items, fill, color, x, y, width, height) => {
+      doc.roundedRect(x, y, width, height, 16).fill(fill).stroke("#dce6df");
+      doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(8).text(title.toUpperCase(), x + 16, y + 14, { width: width - 32, height: 12 });
+      let cursor = y + 36;
+      bulletList(items).slice(0, 5).forEach((item) => {
+        doc.font(dmrPdfFonts.regular).fontSize(8);
+        const itemHeight = Math.max(15, doc.heightOfString(projectText(item), { width: width - 41, lineGap: 1.2 }));
+        doc.circle(x + 18, cursor + 4, 1.7).fill(color);
+        doc.fillColor("#26312c").text(projectText(item), x + 25, cursor, { width: width - 41, lineGap: 1.2 });
+        cursor += itemHeight + 9;
+      });
+    };
+    const drawFocusCard = (label, value, fill, color, x, y, width, height = 82) => {
+      doc.roundedRect(x, y, width, height, 15).fill(fill).stroke("#dce6df");
+      doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(7.8).text(label.toUpperCase(), x + 14, y + 13, { width: width - 28, height: 11 });
+      doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(10).text(projectText(value) || "No update submitted.", x + 14, y + 32, { width: width - 28, height: height - 42, lineGap: 1.1 });
+    };
+    const signalCardHeight = (items, width) => {
+      let height = 50;
+      doc.font(dmrPdfFonts.regular).fontSize(7.7);
+      bulletList(items).slice(0, 4).forEach((item) => {
+        height += Math.max(14, doc.heightOfString(projectText(item), { width: width - 38, lineGap: 1 })) + 7;
+      });
+      return Math.max(118, Math.ceil(height) + 10);
+    };
+    const drawSignalCard = (title, items, fill, color, x, y, width, height) => {
+      doc.roundedRect(x, y, width, height, 14).fill(fill).stroke("#dce6df");
+      doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(7.8).text(title.toUpperCase(), x + 14, y + 13, { width: width - 28, height: 11 });
+      let cursor = y + 34;
+      bulletList(items).slice(0, 4).forEach((item) => {
+        doc.font(dmrPdfFonts.regular).fontSize(7.7);
+        const text = projectText(item);
+        const itemHeight = Math.max(14, doc.heightOfString(text, { width: width - 38, lineGap: 1 }));
+        doc.circle(x + 16, cursor + 4, 1.5).fill(color);
+        doc.fillColor("#26312c").text(text, x + 23, cursor, { width: width - 38, lineGap: 1 });
+        cursor += itemHeight + 7;
+      });
+    };
+    const drawSignalGrid = (cards) => {
+      const cardGap = 10;
+      const cardWidth = (pageWidth - cardGap * 2) / 3;
+      for (let index = 0; index < cards.length; index += 3) {
+        const row = cards.slice(index, index + 3);
+        const rowHeight = Math.max(...row.map((card) => signalCardHeight(card.items || [], cardWidth)));
+        ensureSpace(rowHeight + 14);
+        const rowTop = doc.y;
+        row.forEach((card, column) => {
+          drawSignalCard(card.title, card.items, card.fill, card.color, left + column * (cardWidth + cardGap), rowTop, cardWidth, rowHeight);
+        });
+        doc.y = rowTop + rowHeight + 14;
+      }
+    };
+
+    addHeader(false);
+    doc.y = 72;
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(24).text("Executive employee insights", left, doc.y, { width: pageWidth * 0.62, lineGap: 1 });
+    doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(9).text(`${employeePdfRangeLabel(report.range)} | Generated ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`, left, doc.y + 4, { width: pageWidth * 0.62 });
+    doc.y += 30;
     const metrics = [
-      ["Reports", report.summary.reports, "#eaf4ff", "#1268b3"],
+      ["Responses", report.summary.responses, "#eaf4ff", "#1268b3"],
       ["Employees", report.summary.employees, "#e9fbf2", "#0f9f6e"],
-      ["Completed tasks", report.summary.completedTasks, "#eef8e8", "#4b8f29"],
-      ["Waiting tasks", report.summary.waitingTasks, "#fff7df", "#b66a00"],
       ["Departments", report.summary.departments, "#f4efff", "#7651b5"],
-      ["Categories", report.summary.categories, "#fff0f0", "#d83b45"],
+      ["Questions", report.summary.questions, "#fff7df", "#b66a00"],
     ];
     const gap = 10;
-    const metricWidth = (pageWidth - gap * 5) / 6;
+    const metricWidth = (pageWidth - gap * (metrics.length - 1)) / metrics.length;
     const metricTop = doc.y;
     metrics.forEach(([label, value, fill, color], index) => {
       const x = left + index * (metricWidth + gap);
@@ -6014,51 +6410,54 @@ function generateEmployeeDailyReportPdf(report) {
       doc.fillColor("#5f665f").font(dmrPdfFonts.regular).fontSize(7.5).text(label, x + 14, metricTop + 45, { width: metricWidth - 28, height: 12 });
     });
     doc.y = metricTop + 88;
-    const summaryColumns = [
-      { title: "Daily submissions", rows: (report.daily || []).filter((item) => item.reports).slice(0, 8).map((item) => `${dmrPdfDateLabel(item.date)}: ${item.reports} reports, ${item.completedTasks} completed`) },
-      { title: "Departments", rows: (report.departments || []).slice(0, 8).map((item) => `${item.label}: ${item.reports} reports`) },
-      { title: "Task categories", rows: (report.categories || []).slice(0, 8).map((item) => `${item.label}: ${item.completedTasks} completed, ${item.waitingTasks} waiting`) },
-    ];
-    const columnWidth = (pageWidth - 20) / 3;
-    const summaryTop = doc.y;
-    summaryColumns.forEach((column, index) => {
-      const x = left + index * (columnWidth + 10);
-      doc.roundedRect(x, summaryTop, columnWidth, 190, 12).fill("#f8faf8").stroke("#e1e8e3");
-      doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(11).text(column.title, x + 14, summaryTop + 14, { width: columnWidth - 28 });
-      let y = summaryTop + 39;
-      (column.rows.length ? column.rows : ["No data available."]).forEach((row) => {
-        doc.circle(x + 17, y + 4, 1.6).fill("#0f9f6e");
-        doc.fillColor("#4f5852").font(dmrPdfFonts.regular).fontSize(8).text(row, x + 24, y, { width: columnWidth - 38, height: 18 });
-        y += 19;
-      });
-    });
 
-    const reportGap = 12;
-    const reportCardWidth = (pageWidth - reportGap) / 2;
-    const pageTop = 62;
-    const pageBottom = doc.page.height - doc.page.margins.bottom;
-    const maxCardHeight = pageBottom - pageTop;
-    const compactSegments = (report.reports || []).flatMap((entry) => employeePdfCompactSegments(doc, entry, reportCardWidth, maxCardHeight));
-    let columnY = [pageTop, pageTop];
-    let submissionPage = 0;
-    const startSubmissionPage = () => {
-      doc.addPage();
-      submissionPage += 1;
-      doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(15).text("Employee submissions", left, 32, { width: pageWidth - 180, height: 20 });
-      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(7.5).text(`${employeePdfRangeLabel(report.range)} | Page ${submissionPage}`, left + pageWidth - 180, 36, { width: 180, align: "right", height: 12 });
-      columnY = [pageTop, pageTop];
-    };
-    if (compactSegments.length) startSubmissionPage();
-    compactSegments.forEach((segment, index) => {
-      const cardHeight = employeePdfCompactCardHeight(doc, segment, reportCardWidth);
-      const fittingColumns = [0, 1].filter((column) => columnY[column] + cardHeight <= pageBottom);
-      if (!fittingColumns.length) startSubmissionPage();
-      const availableColumns = [0, 1].filter((column) => columnY[column] + cardHeight <= pageBottom);
-      const column = availableColumns.sort((a, b) => columnY[a] - columnY[b])[0] ?? 0;
-      const x = left + column * (reportCardWidth + reportGap);
-      const height = employeePdfDrawCompactCard(doc, segment, x, columnY[column], reportCardWidth, index);
-      columnY[column] += height + reportGap;
-    });
+    const analysis = report.analysis || {};
+    const focus = analysis.ceoFocus || {};
+    const overviewHeight = 76;
+    const overviewTop = doc.y;
+    doc.roundedRect(left, overviewTop, pageWidth, overviewHeight, 16).fill("#f4f8f5").stroke("#d7e6dd");
+    doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text("CEO OPERATING STATUS", left + 18, overviewTop + 13);
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(13.5).text(projectText(analysis.overallStatus) || "No executive analysis available.", left + 18, overviewTop + 32, { width: pageWidth * 0.56, height: 30 });
+    doc.fillColor("#d83b45").font(dmrPdfFonts.bold).fontSize(8).text("MOST AT RISK TODAY", left + pageWidth * 0.61, overviewTop + 13, { width: pageWidth * 0.34 });
+    doc.fillColor("#171714").font(dmrPdfFonts.regular).fontSize(9).text(projectText(analysis.projectMostAtRiskTomorrow) || "No risk identified.", left + pageWidth * 0.61, overviewTop + 32, { width: pageWidth * 0.34, height: 32, lineGap: 1 });
+    doc.y = overviewTop + overviewHeight + 12;
+
+    const focusGap = 10;
+    const focusWidth = (pageWidth - focusGap * 3) / 4;
+    const focusTop = doc.y;
+    drawFocusCard("Project most at risk", focus.projectRisk || analysis.projectMostAtRiskTomorrow, "#fff0f0", "#d83b45", left, focusTop, focusWidth);
+    drawFocusCard("Payment focus", focus.paymentFocus, "#fff7df", "#b66a00", left + focusWidth + focusGap, focusTop, focusWidth);
+    drawFocusCard("CEO decision", focus.ceoDecision, "#f4efff", "#7651b5", left + (focusWidth + focusGap) * 2, focusTop, focusWidth);
+    drawFocusCard("Must finish today", focus.todayMustFinish, "#eaf4ff", "#1268b3", left + (focusWidth + focusGap) * 3, focusTop, focusWidth);
+    doc.y = focusTop + 96;
+
+    drawSignalGrid([
+      { title: "Projects", items: analysis.projectHealth || [], fill: "#f1f8f4", color: "#0f6b49" },
+      { title: "Money", items: analysis.moneySignals || [], fill: "#fff7df", color: "#b66a00" },
+      { title: "Team", items: analysis.teamSignals || [], fill: "#eef7ff", color: "#1268b3" },
+      { title: "Procurement", items: analysis.procurementSignals || [], fill: "#f4efff", color: "#7651b5" },
+      { title: "Legal / approvals", items: analysis.legalSignals || [], fill: "#f8f7f3", color: "#5f665f" },
+      { title: "Going well", items: analysis.positiveSignals || [], fill: "#e9fbf2", color: "#0f9f6e" },
+    ]);
+
+    const insightWidth = (pageWidth - 24) / 3;
+    const insightHeight = Math.max(
+      insightCardHeight(analysis.keyRisks || [], insightWidth),
+      insightCardHeight(analysis.ceoDecisions || analysis.decisionsNeeded || [], insightWidth),
+      insightCardHeight(analysis.tomorrowCommitments || analysis.tomorrowPriorities || [], insightWidth),
+    );
+    ensureSpace(insightHeight + 18);
+    const resolvedInsightTop = doc.y;
+    drawInsightCard("Critical blockers", analysis.keyRisks || [], "#fff0f0", "#d83b45", left, resolvedInsightTop, insightWidth, insightHeight);
+    drawInsightCard("CEO decisions", analysis.ceoDecisions || analysis.decisionsNeeded || [], "#fff7df", "#b66a00", left + insightWidth + 12, resolvedInsightTop, insightWidth, insightHeight);
+    drawInsightCard("Tomorrow commitments", analysis.tomorrowCommitments || analysis.tomorrowPriorities || [], "#eaf4ff", "#1268b3", left + (insightWidth + 12) * 2, resolvedInsightTop, insightWidth, insightHeight);
+    doc.y = resolvedInsightTop + insightHeight + 18;
+
+    if (!(report.executiveAnswers || []).length) {
+      ensureSpace(80);
+      doc.roundedRect(left, doc.y, pageWidth, 72, 14).fill("#f8faf8").stroke("#e1e8e3");
+      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(10).text("No management question answers were submitted for this date range.", left + 18, doc.y + 26, { width: pageWidth - 36, align: "center" });
+    }
     doc.end();
   });
 }

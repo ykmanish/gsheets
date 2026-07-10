@@ -2541,7 +2541,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${muted}`}>{reportData.range.from} to {reportData.range.to}</p>
-                        <h4 className="mt-2 text-2xl font-semibold">CEO operating brief</h4>
+                        <h4 className="mt-2 text-2xl font-semibold">CEO Dashboard</h4>
                         <p className={`mt-1 text-sm ${muted}`}>{reportData.selectedUserIds?.length ? `${reportData.selectedUserIds.length} selected employee${reportData.selectedUserIds.length === 1 ? "" : "s"}` : "All employees"}</p>
                       </div>
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#eef7df] text-[#17643f]"}`}>Generated</span>
@@ -2585,34 +2585,64 @@ export default function EmployeeDailyReport({ darkMode }) {
                     </div>
                   </section>
 
-                  <EmployeeReportTable
-                    title="Projects"
-                    headers={["Insight"]}
-                    rows={(reportData.analysis?.projectHealth || []).map((item) => [item])}
-                    darkMode={darkMode}
-                  />
+                  {(reportData.analysis?.projectCards || []).length ? (
+                    <section className={`rounded-[28px] border p-5 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className={`text-xs font-bold uppercase tracking-[0.16em] ${muted}`}>Projects</p>
+                          <h4 className="mt-1 text-xl font-semibold">Project risk dashboard</h4>
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                        {(reportData.analysis?.projectCards || []).map((project, index) => (
+                          <div key={`${project.name || "project"}-${index}`} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
+                            <div className="flex items-start justify-between gap-3">
+                              <h5 className="text-base font-bold">{project.name || "Project needs clarification"}</h5>
+                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-black/60"}`}>{project.progress || project.status || "Update"}</span>
+                            </div>
+                            {[project.status, project.criticalPending && `Pending: ${project.criticalPending}`, project.owner && `Owner: ${project.owner}`, project.target && `Target: ${project.target}`, project.summary, project.nextAction && `Next: ${project.nextAction}`, project.source && `Source: ${project.source}`].filter(Boolean).map((line, lineIndex) => (
+                              <p key={lineIndex} className={`mt-2 text-sm leading-5 ${lineIndex === 0 ? "" : muted}`}>{line}</p>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
                   <EmployeeReportTable
                     title="Money"
                     headers={["Insight"]}
-                    rows={(reportData.analysis?.moneySignals || []).map((item) => [item])}
+                    rows={(reportData.analysis?.moneyDashboard || reportData.analysis?.moneySignals || []).map((item) => [item])}
                     darkMode={darkMode}
                   />
                   <EmployeeReportTable
                     title="Team"
                     headers={["Insight"]}
-                    rows={(reportData.analysis?.teamSignals || []).map((item) => [item])}
+                    rows={(reportData.analysis?.teamDashboard || reportData.analysis?.teamSignals || []).map((item) => [item])}
                     darkMode={darkMode}
                   />
                   <EmployeeReportTable
                     title="Procurement"
                     headers={["Insight"]}
-                    rows={(reportData.analysis?.procurementSignals || []).map((item) => [item])}
+                    rows={(reportData.analysis?.procurementDashboard || reportData.analysis?.procurementSignals || []).map((item) => [item])}
                     darkMode={darkMode}
                   />
                   <EmployeeReportTable
-                    title="Critical blockers"
+                    title="Legal / approvals"
                     headers={["Insight"]}
-                    rows={(reportData.analysis?.keyRisks || []).map((item) => [item])}
+                    rows={(reportData.analysis?.legalDashboard || reportData.analysis?.legalSignals || []).map((item) => [item])}
+                    darkMode={darkMode}
+                  />
+                  <EmployeeReportTable
+                    title="What moved forward"
+                    headers={["Insight"]}
+                    rows={(reportData.analysis?.deliverablesMovedForward || reportData.analysis?.positiveSignals || []).map((item) => [item])}
+                    darkMode={darkMode}
+                  />
+                  <EmployeeReportTable
+                    title="Stuck / risk"
+                    headers={["Insight"]}
+                    rows={(reportData.analysis?.stuckItems || reportData.analysis?.keyRisks || []).map((item) => [item])}
                     darkMode={darkMode}
                   />
                   <EmployeeReportTable
@@ -2628,23 +2658,9 @@ export default function EmployeeDailyReport({ darkMode }) {
                     darkMode={darkMode}
                   />
                   <EmployeeReportTable
-                    title="Legal / approvals"
-                    headers={["Insight"]}
-                    rows={(reportData.analysis?.legalSignals || []).map((item) => [item])}
-                    darkMode={darkMode}
-                  />
-                  {(reportData.analysis?.positiveSignals || []).length ? (
-                    <EmployeeReportTable
-                      title="Going well"
-                      headers={["Signal"]}
-                      rows={(reportData.analysis?.positiveSignals || []).map((item) => [item])}
-                      darkMode={darkMode}
-                    />
-                  ) : null}
-                  <EmployeeReportTable
-                    title="Question coverage"
-                    headers={["Question", "Responses", "Employees"]}
-                    rows={(reportData.questions || []).map((item) => [item.label, item.responses, item.employees])}
+                    title="Support required"
+                    headers={["Support"]}
+                    rows={(reportData.analysis?.supportRequired || []).map((item) => [item])}
                     darkMode={darkMode}
                   />
                 </div>

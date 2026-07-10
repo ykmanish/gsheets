@@ -2591,8 +2591,43 @@ function normalizeCeoFocus(rawFocus = {}, fallbackFocus = {}) {
   };
 }
 
+function normalizeEmployeeDashboardCards(items, fallbackItems = [], options = {}) {
+  const maxItems = options.maxItems || 4;
+  return (Array.isArray(items) && items.length ? items : fallbackItems)
+    .map((item) => {
+      if (typeof item === "string") {
+        return {
+          name: shortExecutiveInsight(item, 70, 9),
+          status: "",
+          summary: shortExecutiveInsight(item, 180, 22),
+          owner: "",
+          nextAction: "",
+        };
+      }
+      return {
+        name: shortExecutiveInsight(item?.name || item?.project || item?.title, 70, 9),
+        status: shortExecutiveInsight(item?.status, 80, 10),
+        progress: shortExecutiveInsight(item?.progress, 45, 6),
+        target: shortExecutiveInsight(item?.target, 70, 8),
+        owner: shortExecutiveInsight(item?.owner, 80, 10),
+        criticalPending: shortExecutiveInsight(item?.criticalPending, 70, 9),
+        summary: shortExecutiveInsight(item?.summary || item?.insight, 185, 23),
+        nextAction: shortExecutiveInsight(item?.nextAction, 165, 20),
+        source: shortExecutiveInsight(item?.source, 90, 11),
+      };
+    })
+    .filter((item) => item.name || item.summary || item.nextAction)
+    .slice(0, maxItems);
+}
+
 function normalizeEmployeeExecutiveAnalysis(raw = {}, entries = []) {
   const fallback = fallbackEmployeeExecutiveAnalysis(entries);
+  const fallbackProjectCards = (fallback.projectHealth || fallback.keyRisks || []).slice(0, 4).map((item) => ({
+    name: "Clarify project",
+    status: "Needs review",
+    summary: item,
+    source: item.split(":")[0],
+  }));
   return {
     provider: raw.provider || fallback.provider,
     model: raw.model || fallback.model,
@@ -2610,6 +2645,14 @@ function normalizeEmployeeExecutiveAnalysis(raw = {}, entries = []) {
     legalSignals: normalizeExecutiveInsightList(raw.legalSignals, fallback.legalSignals, { maxItems: 3, maxLength: 175, maxWords: 22 }),
     ceoDecisions: normalizeExecutiveInsightList(raw.ceoDecisions, fallback.ceoDecisions || fallback.decisionsNeeded, { maxItems: 5, maxLength: 175, maxWords: 22 }),
     tomorrowCommitments: normalizeExecutiveInsightList(raw.tomorrowCommitments, fallback.tomorrowCommitments || fallback.tomorrowPriorities, { maxItems: 5, maxLength: 175, maxWords: 22 }),
+    projectCards: normalizeEmployeeDashboardCards(raw.projectCards, fallbackProjectCards, { maxItems: 5 }),
+    moneyDashboard: normalizeExecutiveInsightList(raw.moneyDashboard, fallback.moneySignals, { maxItems: 5, maxLength: 180, maxWords: 22 }),
+    teamDashboard: normalizeExecutiveInsightList(raw.teamDashboard, fallback.teamSignals, { maxItems: 5, maxLength: 180, maxWords: 22 }),
+    procurementDashboard: normalizeExecutiveInsightList(raw.procurementDashboard, fallback.procurementSignals, { maxItems: 5, maxLength: 180, maxWords: 22 }),
+    legalDashboard: normalizeExecutiveInsightList(raw.legalDashboard, fallback.legalSignals, { maxItems: 4, maxLength: 180, maxWords: 22 }),
+    deliverablesMovedForward: normalizeExecutiveInsightList(raw.deliverablesMovedForward, fallback.positiveSignals, { maxItems: 5, maxLength: 180, maxWords: 22 }),
+    stuckItems: normalizeExecutiveInsightList(raw.stuckItems, fallback.keyRisks, { maxItems: 5, maxLength: 180, maxWords: 22 }),
+    supportRequired: normalizeExecutiveInsightList(raw.supportRequired, fallback.teamSignals, { maxItems: 5, maxLength: 180, maxWords: 22 }),
   };
 }
 
@@ -2621,7 +2664,7 @@ async function generateEmployeeExecutiveAnalysis({ range, entries = [] }) {
     answers: (entry.answers || []).map((answer) => ({ question: answer.label, answer: answer.answer })),
   }));
   const signature = crypto.createHash("sha256").update(JSON.stringify({ range, entries: normalizedEntries })).digest("hex");
-  const cacheKey = `employee-executive-analysis:v5:${range.from}:${range.to}:${signature}`;
+  const cacheKey = `employee-executive-analysis:v6:${range.from}:${range.to}:${signature}`;
   const db = await connectAuthDb();
   const cached = await db.collection("employeeExecutiveReportAnalyses").findOne({ cacheKey });
   if (cached?.analysis) return cached.analysis;
@@ -2637,10 +2680,10 @@ async function generateEmployeeExecutiveAnalysis({ range, entries = [] }) {
         body: JSON.stringify({
           model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
           max_tokens: 1800,
-          system: "You are an executive project analyst preparing a CEO management report. Analyze only the provided employee management-question answers. Do not invent facts. Synthesize insights, do not copy raw employee wording. Return strict JSON only.",
+          system: "You are an executive project analyst preparing a CEO daily operating dashboard. Analyze only the provided employee management-question answers. Do not invent facts. Synthesize insights, do not copy raw employee wording. Return strict JSON only.",
           messages: [{
             role: "user",
-            content: `Create a polished CEO-ready 5-minute operating brief for ${range.from} to ${range.to}.
+            content: `Create a polished CEO-ready 5-minute operating dashboard for ${range.from} to ${range.to}.
 
 Rules:
 - Analyze every submitted answer together.
@@ -2656,12 +2699,27 @@ Rules:
 - projectMostAtRiskTomorrow: one sentence, maximum 28 words.
 - Use professional CEO language.
 - If evidence is insufficient, say that the update needs clarification instead of guessing.
-- Focus on deliverables, blockers, CEO decisions, risk, money, procurement, team load, legal/compliance, and tomorrow measurable commitments.
+- Focus on these CEO questions:
+  1. Which project is most at risk today?
+  2. Which payment is most important today?
+  3. Which CEO decision is blocking progress?
+  4. What must be completed before leaving today?
+- Also extract: vendor finalized, quotation received, pending decision, blocking work, owner, due date, what moved the project forward, top completed deliverables, 100% completed outputs, stuck items, risk, support required, and who should help.
+- Organize around Projects, Money, Team, Procurement, Legal/approvals.
+- Do not treat activity as progress unless it produced a clear deliverable, decision, payment, approval, or unblocked next step.
 
 Return strict JSON only with keys:
 overallStatus,
 projectMostAtRiskTomorrow,
 ceoFocus: { projectRisk, paymentFocus, ceoDecision, todayMustFinish },
+projectCards: [{ name, status, progress, target, criticalPending, owner, summary, nextAction, source }],
+moneyDashboard,
+teamDashboard,
+procurementDashboard,
+legalDashboard,
+deliverablesMovedForward,
+stuckItems,
+supportRequired,
 projectHealth,
 moneySignals,
 teamSignals,
@@ -6388,31 +6446,76 @@ function generateEmployeeDailyReportPdf(report) {
         doc.y = rowTop + rowHeight + 14;
       }
     };
+    const drawProjectDashboard = (projects = []) => {
+      const cards = Array.isArray(projects) && projects.length
+        ? projects
+        : [{ name: "Project risk", status: "Needs clarification", summary: "No clear project-level risk was identified from the submitted management answers." }];
+      const cardGap = 10;
+      const cardWidth = (pageWidth - cardGap * 2) / 3;
+      const visibleCards = cards.slice(0, 6);
+      for (let index = 0; index < visibleCards.length; index += 3) {
+        const row = visibleCards.slice(index, index + 3);
+        let rowHeight = 118;
+        row.forEach((card) => {
+          const text = [
+            card.status,
+            card.progress ? `Progress: ${card.progress}` : "",
+            card.criticalPending ? `Pending: ${card.criticalPending}` : "",
+            card.owner ? `Owner: ${card.owner}` : "",
+            card.target ? `Target: ${card.target}` : "",
+            card.summary,
+            card.nextAction ? `Next: ${card.nextAction}` : "",
+            card.source ? `Source: ${card.source}` : "",
+          ].filter(Boolean).join("\n");
+          doc.font(dmrPdfFonts.regular).fontSize(7.7);
+          rowHeight = Math.max(rowHeight, 50 + doc.heightOfString(text, { width: cardWidth - 28, lineGap: 1.1 }));
+        });
+        ensureSpace(rowHeight + 14);
+        const rowTop = doc.y;
+        row.forEach((card, column) => {
+          const x = left + column * (cardWidth + cardGap);
+          const riskText = `${card.status || ""} ${card.summary || ""} ${card.criticalPending || ""}`.toLowerCase();
+          const color = /delay|risk|block|pending|stuck|issue|critical|approval|not|no /.test(riskText)
+            ? "#d83b45"
+            : /complete|done|approved|received|finalized|confirmed/.test(riskText)
+              ? "#0f9f6e"
+              : "#b66a00";
+          const fill = color === "#d83b45" ? "#fff0f0" : color === "#0f9f6e" ? "#e9fbf2" : "#fff7df";
+          doc.roundedRect(x, rowTop, cardWidth, rowHeight, 14).fill(fill).stroke("#dce6df");
+          doc.circle(x + 18, rowTop + 18, 7).fill(color);
+          doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(12).text(projectText(card.name) || "Project", x + 34, rowTop + 10, { width: cardWidth - 48, height: 17 });
+          let cursor = rowTop + 34;
+          const rows = [
+            card.status ? { label: "Status", value: card.status, bold: true } : null,
+            card.progress ? { label: "Progress", value: card.progress } : null,
+            card.criticalPending ? { label: "Critical pending", value: card.criticalPending } : null,
+            card.owner ? { label: "Owner", value: card.owner } : null,
+            card.target ? { label: "Target", value: card.target } : null,
+            card.summary ? { label: "Insight", value: card.summary } : null,
+            card.nextAction ? { label: "Next action", value: card.nextAction } : null,
+            card.source ? { label: "Source", value: card.source } : null,
+          ].filter(Boolean);
+          rows.forEach((rowItem) => {
+            doc.font(rowItem.bold ? dmrPdfFonts.bold : dmrPdfFonts.regular).fontSize(7.7);
+            const line = `${rowItem.label}: ${rowItem.value}`;
+            const lineHeight = Math.max(11, doc.heightOfString(line, { width: cardWidth - 28, lineGap: 1.1 }));
+            doc.fillColor(rowItem.label === "Source" ? "#6f756f" : "#26312c").text(line, x + 14, cursor, { width: cardWidth - 28, lineGap: 1.1 });
+            cursor += lineHeight + 3;
+          });
+        });
+        doc.y = rowTop + rowHeight + 14;
+      }
+    };
 
     addHeader(false);
     doc.y = 72;
-    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(24).text("Executive employee insights", left, doc.y, { width: pageWidth * 0.62, lineGap: 1 });
-    doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(9).text(`${employeePdfRangeLabel(report.range)} | Generated ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`, left, doc.y + 4, { width: pageWidth * 0.62 });
-    doc.y += 30;
-    const metrics = [
-      ["Responses", report.summary.responses, "#eaf4ff", "#1268b3"],
-      ["Employees", report.summary.employees, "#e9fbf2", "#0f9f6e"],
-      ["Departments", report.summary.departments, "#f4efff", "#7651b5"],
-      ["Questions", report.summary.questions, "#fff7df", "#b66a00"],
-    ];
-    const gap = 10;
-    const metricWidth = (pageWidth - gap * (metrics.length - 1)) / metrics.length;
-    const metricTop = doc.y;
-    metrics.forEach(([label, value, fill, color], index) => {
-      const x = left + index * (metricWidth + gap);
-      doc.roundedRect(x, metricTop, metricWidth, 70, 12).fill(fill);
-      doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(20).text(String(value), x + 14, metricTop + 14, { width: metricWidth - 28, height: 25 });
-      doc.fillColor("#5f665f").font(dmrPdfFonts.regular).fontSize(7.5).text(label, x + 14, metricTop + 45, { width: metricWidth - 28, height: 12 });
-    });
-    doc.y = metricTop + 88;
-
     const analysis = report.analysis || {};
     const focus = analysis.ceoFocus || {};
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(24).text("CEO Dashboard", left, doc.y, { width: pageWidth * 0.58, lineGap: 1 });
+    doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(9).text("Projects, money, team blockers, procurement, and CEO decisions from management answers.", left, doc.y + 4, { width: pageWidth * 0.58 });
+    doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8).text(`${employeePdfRangeLabel(report.range)} | Generated ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`, left + pageWidth - 245, 80, { width: 245, align: "right" });
+    doc.y += 34;
+
     const overviewHeight = 76;
     const overviewTop = doc.y;
     doc.roundedRect(left, overviewTop, pageWidth, overviewHeight, 16).fill("#f4f8f5").stroke("#d7e6dd");
@@ -6431,24 +6534,29 @@ function generateEmployeeDailyReportPdf(report) {
     drawFocusCard("Must finish today", focus.todayMustFinish, "#eaf4ff", "#1268b3", left + (focusWidth + focusGap) * 3, focusTop, focusWidth);
     doc.y = focusTop + 96;
 
+    ensureSpace(24);
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(14).text("Projects", left, doc.y, { width: pageWidth, height: 20 });
+    doc.y += 24;
+    drawProjectDashboard(analysis.projectCards || []);
+
     drawSignalGrid([
-      { title: "Projects", items: analysis.projectHealth || [], fill: "#f1f8f4", color: "#0f6b49" },
-      { title: "Money", items: analysis.moneySignals || [], fill: "#fff7df", color: "#b66a00" },
-      { title: "Team", items: analysis.teamSignals || [], fill: "#eef7ff", color: "#1268b3" },
-      { title: "Procurement", items: analysis.procurementSignals || [], fill: "#f4efff", color: "#7651b5" },
-      { title: "Legal / approvals", items: analysis.legalSignals || [], fill: "#f8f7f3", color: "#5f665f" },
-      { title: "Going well", items: analysis.positiveSignals || [], fill: "#e9fbf2", color: "#0f9f6e" },
+      { title: "Money", items: analysis.moneyDashboard || analysis.moneySignals || [], fill: "#fff7df", color: "#b66a00" },
+      { title: "Team", items: analysis.teamDashboard || analysis.teamSignals || [], fill: "#eef7ff", color: "#1268b3" },
+      { title: "Procurement", items: analysis.procurementDashboard || analysis.procurementSignals || [], fill: "#f4efff", color: "#7651b5" },
+      { title: "Legal / approvals", items: analysis.legalDashboard || analysis.legalSignals || [], fill: "#f8f7f3", color: "#5f665f" },
+      { title: "What moved forward", items: analysis.deliverablesMovedForward || analysis.positiveSignals || [], fill: "#e9fbf2", color: "#0f9f6e" },
+      { title: "Support required", items: analysis.supportRequired || analysis.teamSignals || [], fill: "#fff0f0", color: "#d83b45" },
     ]);
 
     const insightWidth = (pageWidth - 24) / 3;
     const insightHeight = Math.max(
-      insightCardHeight(analysis.keyRisks || [], insightWidth),
+      insightCardHeight(analysis.stuckItems || analysis.keyRisks || [], insightWidth),
       insightCardHeight(analysis.ceoDecisions || analysis.decisionsNeeded || [], insightWidth),
       insightCardHeight(analysis.tomorrowCommitments || analysis.tomorrowPriorities || [], insightWidth),
     );
     ensureSpace(insightHeight + 18);
     const resolvedInsightTop = doc.y;
-    drawInsightCard("Critical blockers", analysis.keyRisks || [], "#fff0f0", "#d83b45", left, resolvedInsightTop, insightWidth, insightHeight);
+    drawInsightCard("Stuck / risk", analysis.stuckItems || analysis.keyRisks || [], "#fff0f0", "#d83b45", left, resolvedInsightTop, insightWidth, insightHeight);
     drawInsightCard("CEO decisions", analysis.ceoDecisions || analysis.decisionsNeeded || [], "#fff7df", "#b66a00", left + insightWidth + 12, resolvedInsightTop, insightWidth, insightHeight);
     drawInsightCard("Tomorrow commitments", analysis.tomorrowCommitments || analysis.tomorrowPriorities || [], "#eaf4ff", "#1268b3", left + (insightWidth + 12) * 2, resolvedInsightTop, insightWidth, insightHeight);
     doc.y = resolvedInsightTop + insightHeight + 18;

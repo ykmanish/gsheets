@@ -261,7 +261,7 @@ export default function WhatsApp({ darkMode }) {
       try {
         const [conversationData, contactData, groupData, templateData] =
           await Promise.all([
-            api(`/whatsapp/conversations?search=${encodeURIComponent(search)}`),
+            api("/whatsapp/conversations"),
             api("/whatsapp/contacts"),
             api("/whatsapp/groups"),
             api("/whatsapp/templates").catch(() => ({ templates: [] })),
@@ -287,7 +287,7 @@ export default function WhatsApp({ darkMode }) {
         setRefreshing(false);
       }
     },
-    [search],
+    [],
   );
 
   const loadMessages = useCallback(async (phone, quiet = false) => {
@@ -341,6 +341,22 @@ export default function WhatsApp({ darkMode }) {
     contacts.find((item) => item.phone === selectedPhone) ||
     selectedConversation?.contact ||
     null;
+
+  const filteredConversations = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return conversations;
+
+    return conversations.filter((item) => {
+      const contactName = item.contact?.name || "";
+      const phone = formatPhone(item.phone);
+      const preview = item.lastMessage?.text || "";
+
+      return [contactName, phone, item.phone, preview]
+        .join(" ")
+        .toLowerCase()
+        .includes(term);
+    });
+  }, [conversations, search]);
 
   const contactByPhone = useMemo(
     () => new Map(contacts.map((contact) => [contact.phone, contact])),
@@ -746,7 +762,9 @@ export default function WhatsApp({ darkMode }) {
                     <div>
                       <h1 className="text-lg font-semibold">Conversations</h1>
                       <p className={`mt-0.5 text-xs ${muted}`}>
-                        {conversations.length} chats available
+                        {search.trim()
+                          ? `${filteredConversations.length} of ${conversations.length} chats`
+                          : `${conversations.length} chats available`}
                       </p>
                     </div>
                     <button
@@ -774,7 +792,7 @@ export default function WhatsApp({ darkMode }) {
 
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
                   <div className="space-y-1">
-                    {conversations.map((item) => {
+                    {filteredConversations.map((item) => {
                       const name = item.contact?.name || formatPhone(item.phone);
                       const isActive = selectedPhone === item.phone;
 
@@ -804,14 +822,18 @@ export default function WhatsApp({ darkMode }) {
                       );
                     })}
 
-                    {!conversations.length && (
+                    {!filteredConversations.length && (
                       <div className="flex min-h-72 flex-col items-center justify-center px-6 py-10 text-center">
                         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366]/10 text-[#25D366]">
                           <MessageCircleMore className="h-6 w-6" />
                         </span>
-                        <p className="mt-4 text-sm font-medium">No conversations found</p>
+                        <p className="mt-4 text-sm font-medium">
+                          {search.trim() ? "No matching conversations" : "No conversations found"}
+                        </p>
                         <p className={`mt-1 text-xs leading-5 ${muted}`}>
-                          Add a verified recipient and send the hello_world template.
+                          {search.trim()
+                            ? "Try another name, phone number, or message keyword."
+                            : "Add a verified recipient and send the hello_world template."}
                         </p>
                       </div>
                     )}

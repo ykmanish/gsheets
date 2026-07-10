@@ -431,6 +431,7 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
                 <tbody>
                   {filteredUsers.map((user) => {
                     const role = roleMap.get(user.roleId);
+                    const isSystemSuperAdmin = String(user.username || "").toLowerCase() === "adminuipl";
                     return (
                       <tr key={user.id} className={`transition ${darkMode ? "bg-white/[0.035] hover:bg-white/[0.06]" : "bg-[#f8f9fc] hover:bg-[#f3f5f9]"}`}>
                         <td className="rounded-l-xl px-4 py-3">
@@ -450,7 +451,7 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
                             value={user.roleId || ""}
                             options={roleOptions}
                             onChange={(roleId) => updateUser(user.id, { roleId })}
-                            disabled={user.isSuperAdmin}
+                            disabled={isSystemSuperAdmin}
                             className="w-[180px]"
                           />
                         </td>

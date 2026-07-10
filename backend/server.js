@@ -2716,6 +2716,9 @@ app.patch("/admin/users/:id", requireSuperAdmin, async (req, res) => {
     if (roleId) {
       const role = await db.collection("roles").findOne({ _id: new ObjectId(roleId) });
       if (!role) return res.status(404).json({ error: "Role not found" });
+      if (String(user.usernameLower || user.username || "").toLowerCase() === SUPER_ADMIN_USERNAME.toLowerCase() && !isSuperAdminRole(role)) {
+        return res.status(400).json({ error: "System Super Admin role cannot be changed" });
+      }
       update.roleId = role._id;
       update.isSuperAdmin = isSuperAdminRole(role);
     }

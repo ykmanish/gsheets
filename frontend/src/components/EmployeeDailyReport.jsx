@@ -1798,7 +1798,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const profileUsername = String(data?.profile?.username || user?.username || "").trim().toLowerCase();
   const formInvolvements = uniqueClean([
     ...(options.involvements || []),
-    ...(profileUsername === "nishimehta" ? ["Nishi & Iqbal"] : []),
+    ...(profileUsername === "nishimehta" ? ["Nishi & Iqbal", "Iqbal"] : []),
     "Other",
   ]);
   const hasCustomPreferences = Boolean(customPrefs.sites.length || customPrefs.categories.length);

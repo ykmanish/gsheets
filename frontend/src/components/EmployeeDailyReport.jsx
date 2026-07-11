@@ -2550,6 +2550,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                       {[
                         ["Submissions", reportData.summary.responses],
                         ["Employees", reportData.summary.employees],
+                        ["Not submitted", reportData.summary.notSubmitted || 0],
                         ["Departments", reportData.summary.departments],
                         ["Questions", reportData.summary.questions],
                       ].map(([label, value]) => (
@@ -2559,6 +2560,16 @@ export default function EmployeeDailyReport({ darkMode }) {
                         </div>
                       ))}
                     </div>
+                    {(reportData.notSubmitted || []).some((group) => group.count > 0) && (
+                      <div className={`mt-5 rounded-[22px] p-4 ${darkMode ? "bg-red-500/10" : "bg-red-50"}`}>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-red-600">Not submitted</p>
+                        <ul className="mt-2 space-y-1.5 text-sm leading-5">
+                          {(reportData.notSubmitted || []).filter((group) => group.count > 0).slice(0, 4).map((group) => (
+                            <li key={group.date}>• {group.date}: {(group.employees || []).map((employee) => employee.displayName || employee.username).filter(Boolean).join(", ")}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <div className="mt-5 grid gap-3 lg:grid-cols-2">
                       {(reportData.employeeReports || []).slice(0, 8).map((report, index) => (
                         <div key={report.id || `${report.userId}-${report.reportDate}-${index}`} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>

@@ -2761,6 +2761,28 @@ async function buildEmployeeReportExportData(req, query = {}) {
   const from = dateFrom <= dateTo ? dateFrom : dateTo;
   const to = dateFrom <= dateTo ? dateTo : dateFrom;
   const selectedUserIds = projectText(query.userIds).split(",").map((item) => item.trim()).filter(Boolean).slice(0, 100);
+  const selectedUserSet = new Set(selectedUserIds);
+  const roles = await db.collection("roles").find({}).project({ name: 1, nameLower: 1 }).toArray();
+  const roleMap = new Map(roles.map((role) => [String(role._id), role]));
+  const activeUsers = (await db.collection("users")
+    .find({ blacklisted: { $ne: true }, usernameLower: { $ne: SUPER_ADMIN_USERNAME.toLowerCase() } })
+    .project({ displayName: 1, username: 1, usernameLower: 1, department: 1, roleId: 1, roleName: 1 })
+    .sort({ displayName: 1, username: 1 })
+    .limit(1000)
+    .toArray())
+    .map((user) => {
+      const role = roleMap.get(String(user.roleId));
+      return {
+        id: String(user._id),
+        displayName: user.displayName || user.username || "Employee",
+        username: user.username || "",
+        department: user.department || "",
+        roleName: role?.name || user.roleName || "",
+      };
+    })
+    .filter((user) => projectText(user.roleName).toLowerCase() !== "dmr manager")
+    .filter((user) => !selectedUserSet.size || selectedUserSet.has(user.id));
+  const eligibleUserIdSet = new Set(activeUsers.map((user) => user.id));
   const answerFilter = { reportDate: { $gte: from, $lte: to } };
   if (selectedUserIds.length) answerFilter.userId = { $in: selectedUserIds };
   const executiveAnswers = (await db.collection("employeeExecutiveReportAnswers")
@@ -2769,7 +2791,11 @@ async function buildEmployeeReportExportData(req, query = {}) {
     .limit(5000)
     .toArray())
     .map(sanitizeEmployeeExecutiveAnswersDoc)
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((entry) => {
+      if (projectText(entry.username).toLowerCase() === SUPER_ADMIN_USERNAME.toLowerCase()) return false;
+      return entry.userId ? eligibleUserIdSet.has(String(entry.userId)) : true;
+    });
   const reportFilter = { reportDate: { $gte: from, $lte: to } };
   if (selectedUserIds.length) reportFilter.userId = { $in: selectedUserIds };
   const employeeReports = (await db.collection("employeeDailyReports")
@@ -2778,7 +2804,8 @@ async function buildEmployeeReportExportData(req, query = {}) {
     .limit(5000)
     .toArray())
     .map(sanitizeEmployeeReport)
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((report) => report.userId ? eligibleUserIdSet.has(String(report.userId)) : projectText(report.employeeName).toLowerCase() !== "super admin");
   const answersByUserDate = new Map();
   executiveAnswers.forEach((entry) => {
     answersByUserDate.set(`${entry.userId || ""}|${entry.reportDate || ""}`, entry);
@@ -2845,14 +2872,35 @@ async function buildEmployeeReportExportData(req, query = {}) {
       questions.set(answer.id, current);
     });
   });
+  const dateKeys = [];
+  for (let cursor = from; cursor && cursor <= to && dateKeys.length < 370; cursor = addDaysToDateKey(cursor, 1)) dateKeys.push(cursor);
+  const submittedByDate = new Map();
+  employeeSubmissions.forEach((report) => {
+    const date = dmrDateKey(report.reportDate);
+    if (!date) return;
+    const set = submittedByDate.get(date) || new Set();
+    if (report.userId) set.add(String(report.userId));
+    submittedByDate.set(date, set);
+  });
+  const notSubmitted = dateKeys.map((date) => {
+    const submitted = submittedByDate.get(date) || new Set();
+    const missingEmployees = activeUsers.filter((user) => !submitted.has(user.id));
+    return {
+      date,
+      count: missingEmployees.length,
+      employees: missingEmployees,
+    };
+  });
+  const notSubmittedCount = notSubmitted.reduce((sum, group) => sum + group.count, 0);
   return {
     range: { from, to },
     selectedUserIds,
-    summary: { responses: employeeSubmissions.length, employees: employees.size, departments: departments.size, questions: questions.size },
+    summary: { responses: employeeSubmissions.length, employees: employees.size, totalEmployees: activeUsers.length, notSubmitted: notSubmittedCount, departments: departments.size, questions: questions.size },
     analysis: null,
     departments: [...departments.values()].map(serializeEmployeeReportBucket).sort((a, b) => b.reports - a.reports),
     questions: [...questions.values()].map((item) => ({ id: item.id, label: item.label, responses: item.responses, employees: item.employees.size })).sort((a, b) => b.responses - a.responses),
     executiveAnswers,
+    notSubmitted,
     employeeReports: employeeSubmissions,
   };
 }
@@ -6493,6 +6541,7 @@ function generateEmployeeDailyReportPdf(report) {
         ["Waiting tasks", waitingTasks, "#fff7df", "#b66a00"],
         ["Departments", report.summary.departments || 0, "#f4efff", "#7651b5"],
         ["Categories", categories.size, "#fff0f0", "#d83b45"],
+        ["Not submitted", report.summary.notSubmitted || 0, "#fff0f0", "#d83b45"],
       ];
       const metricGap = 10;
       const metricWidth = (pageWidth - metricGap * (metrics.length - 1)) / metrics.length;
@@ -6531,15 +6580,34 @@ function generateEmployeeDailyReportPdf(report) {
           cursor += Math.max(14, doc.heightOfString(item, { width: summaryWidth - 42, lineGap: 1 })) + 7;
         });
       });
+      const missingGroups = Array.isArray(report.notSubmitted) ? report.notSubmitted.filter((group) => group.count > 0) : [];
+      const missingTop = 444;
+      const missingHeight = 82;
+      doc.roundedRect(left, missingTop, pageWidth, missingHeight, 14).fill(missingGroups.length ? "#fff7f7" : "#f8faf8").stroke("#e1e8e3");
+      doc.fillColor(missingGroups.length ? "#d83b45" : "#0f9f6e").font(dmrPdfFonts.bold).fontSize(9).text("NOT SUBMITTED", left + 16, missingTop + 14, { width: pageWidth - 32, height: 12 });
+      const missingLines = missingGroups.length
+        ? missingGroups.map((group) => {
+          const names = (group.employees || []).map((employee) => employee.displayName || employee.username).filter(Boolean);
+          const visible = names.slice(0, 18).join(", ");
+          const remaining = names.length > 18 ? `, +${names.length - 18} more` : "";
+          return `${dmrPdfDateLabel(group.date)}: ${visible || "No names available"}${remaining}`;
+        })
+        : ["Everyone submitted for the selected date range."];
+      let missingCursor = missingTop + 34;
+      missingLines.slice(0, 4).forEach((line) => {
+        doc.circle(left + 18, missingCursor + 4, 1.7).fill(missingGroups.length ? "#d83b45" : "#0f9f6e");
+        doc.fillColor("#26312c").font(dmrPdfFonts.regular).fontSize(8.2).text(line, left + 26, missingCursor, { width: pageWidth - 42, lineGap: 1 });
+        missingCursor += Math.max(13, doc.heightOfString(line, { width: pageWidth - 42, lineGap: 1 })) + 5;
+      });
+      if (missingLines.length > 4) {
+        doc.fillColor("#6f756f").font(dmrPdfFonts.bold).fontSize(7.8).text(`+${missingLines.length - 4} more dates with pending submissions`, left + 26, missingCursor, { width: pageWidth - 42, height: 10 });
+      }
     };
+    drawSummaryPage();
     if (!submissions.length) {
-      addSubmissionsHeader();
-      doc.roundedRect(left, doc.y, pageWidth, 82, 14).fill("#f8faf8").stroke("#e1e8e3");
-      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(10).text("No employee submissions were found for this date range.", left + 18, doc.y + 32, { width: pageWidth - 36, align: "center" });
       doc.end();
       return;
     }
-    drawSummaryPage();
     addSubmissionPage();
     const columnGap = 12;
     const cardWidth = (pageWidth - columnGap) / 2;

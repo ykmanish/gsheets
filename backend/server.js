@@ -6378,9 +6378,6 @@ function employeePdfInfoCard(doc, title, text, theme, onNewPage) {
 }
 
 function employeePdfCompactItem(item, type) {
-  if (type === "more") {
-    return { type, text: projectText(item.text) || "More items available in the submitted report." };
-  }
   if (type === "management") {
     const question = projectText(item.label) || "Management question";
     const answer = projectText(item.answer) || "No answer provided.";
@@ -6419,13 +6416,9 @@ function employeePdfCompactSegments(doc, report, width, maxHeight) {
   let waiting = sanitizeEmployeeTaskItems(report.waitingTaskItems);
   if (!waiting.length && projectText(report.waitingTaskDescription)) waiting = [{ site: report.site, category: "Waiting / tomorrow plan", involvement: report.involvement, description: report.waitingTaskDescription }];
   const management = Array.isArray(report.managementAnswers) ? report.managementAnswers : [];
-  const completedVisible = completed.slice(0, management.length ? 4 : 5);
-  const waitingVisible = waiting.slice(0, management.length ? 2 : 3);
   const items = [
-    ...completedVisible.map((item) => employeePdfCompactItem(item, "completed")),
-    ...(completed.length > completedVisible.length ? [employeePdfCompactItem({ text: `+${completed.length - completedVisible.length} more completed task${completed.length - completedVisible.length === 1 ? "" : "s"}.` }, "more")] : []),
-    ...waitingVisible.map((item) => employeePdfCompactItem(item, "waiting")),
-    ...(waiting.length > waitingVisible.length ? [employeePdfCompactItem({ text: `+${waiting.length - waitingVisible.length} more waiting / follow-up item${waiting.length - waitingVisible.length === 1 ? "" : "s"}.` }, "more")] : []),
+    ...completed.map((item) => employeePdfCompactItem(item, "completed")),
+    ...waiting.map((item) => employeePdfCompactItem(item, "waiting")),
     ...management.map((item) => employeePdfCompactItem(item, "management")),
   ];
   const segments = [];
@@ -6460,14 +6453,14 @@ function employeePdfDrawCompactCard(doc, segment, x, y, width, index) {
   let previousType = "";
   segment.items.forEach((item) => {
     if (item.type !== previousType) {
-      const color = item.type === "completed" ? "#0f9f6e" : item.type === "management" ? "#1268b3" : item.type === "more" ? "#6f756f" : "#b66a00";
-      const label = item.type === "completed" ? "COMPLETED WORK" : item.type === "management" ? "MANAGEMENT ANSWERS" : item.type === "more" ? "ADDITIONAL ITEMS" : "WAITING / FOLLOW-UP";
+      const color = item.type === "completed" ? "#0f9f6e" : item.type === "management" ? "#1268b3" : "#b66a00";
+      const label = item.type === "completed" ? "COMPLETED WORK" : item.type === "management" ? "MANAGEMENT ANSWERS" : "WAITING / FOLLOW-UP";
       doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(7.2).text(label, x + 14, cursor, { width: width - 28, height: 11 });
       cursor += 17;
     }
     doc.font(dmrPdfFonts.regular).fontSize(7.4);
     const itemHeight = Math.max(13, doc.heightOfString(item.text, { width: width - 36, lineGap: 1 }));
-    doc.circle(x + 17, cursor + 3.8, 1.5).fill(item.type === "completed" ? "#0f9f6e" : item.type === "management" ? "#1268b3" : item.type === "more" ? "#6f756f" : "#b66a00");
+    doc.circle(x + 17, cursor + 3.8, 1.5).fill(item.type === "completed" ? "#0f9f6e" : item.type === "management" ? "#1268b3" : "#b66a00");
     doc.fillColor("#303733").text(item.text, x + 23, cursor, { width: width - 36, lineGap: 1 });
     cursor += itemHeight + 4;
     previousType = item.type;

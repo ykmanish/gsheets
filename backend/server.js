@@ -2770,12 +2770,74 @@ async function buildEmployeeReportExportData(req, query = {}) {
     .toArray())
     .map(sanitizeEmployeeExecutiveAnswersDoc)
     .filter(Boolean);
+  const reportFilter = { reportDate: { $gte: from, $lte: to } };
+  if (selectedUserIds.length) reportFilter.userId = { $in: selectedUserIds };
+  const employeeReports = (await db.collection("employeeDailyReports")
+    .find(reportFilter)
+    .sort({ reportDate: 1, employeeName: 1, submittedAt: 1 })
+    .limit(5000)
+    .toArray())
+    .map(sanitizeEmployeeReport)
+    .filter(Boolean);
+  const answersByUserDate = new Map();
+  executiveAnswers.forEach((entry) => {
+    answersByUserDate.set(`${entry.userId || ""}|${entry.reportDate || ""}`, entry);
+  });
+  const reportsByUserDate = new Map(employeeReports.map((report) => [`${report.userId || ""}|${report.reportDate || ""}`, report]));
+  executiveAnswers.forEach((entry) => {
+    const key = `${entry.userId || ""}|${entry.reportDate || ""}`;
+    if (reportsByUserDate.has(key)) return;
+    const fallbackReport = sanitizeEmployeeReport({
+      _id: key,
+      userId: entry.userId,
+      employeeName: entry.employeeName,
+      department: entry.department,
+      reportDate: entry.reportDate,
+      submittedAt: entry.submittedAt || entry.updatedAt || entry.createdAt,
+      taskItems: [],
+      waitingTaskItems: [],
+      tomorrowPlanTick: false,
+      note: "",
+    });
+    if (fallbackReport) {
+      employeeReports.push(fallbackReport);
+      reportsByUserDate.set(key, fallbackReport);
+    }
+  });
+  const employeeSubmissions = employeeReports
+    .map((report) => {
+      const executiveEntry = answersByUserDate.get(`${report.userId || ""}|${report.reportDate || ""}`);
+      return {
+        ...report,
+        managementAnswers: (executiveEntry?.answers || [])
+          .map((answer) => ({
+            id: answer.id,
+            label: answer.label,
+            answer: answer.answer,
+          }))
+          .filter((answer) => projectText(answer.answer)),
+      };
+    })
+    .sort((a, b) => {
+      const aHasManagement = (a.managementAnswers || []).length ? 1 : 0;
+      const bHasManagement = (b.managementAnswers || []).length ? 1 : 0;
+      if (aHasManagement !== bHasManagement) return bHasManagement - aHasManagement;
+      return `${a.reportDate || ""} ${a.employeeName || ""}`.localeCompare(`${b.reportDate || ""} ${b.employeeName || ""}`);
+    });
   const employees = new Set();
   const departments = new Map();
   const questions = new Map();
+  employeeSubmissions.forEach((report) => {
+    employees.add(report.employeeName || report.userId);
+    incrementEmployeeReportBucket(departments, report.department, {
+      reports: 1,
+      completedTasks: sanitizeEmployeeTaskItems(report.taskItems).length,
+      waitingTasks: sanitizeEmployeeTaskItems(report.waitingTaskItems).length,
+      employeeName: report.employeeName,
+    });
+  });
   executiveAnswers.forEach((entry) => {
     employees.add(entry.employeeName || entry.username || entry.userId);
-    incrementEmployeeReportBucket(departments, entry.department, { reports: 1, employeeName: entry.employeeName });
     (entry.answers || []).forEach((answer) => {
       const current = questions.get(answer.id) || { id: answer.id, label: answer.label, responses: 0, employees: new Set() };
       current.responses += projectText(answer.answer) ? 1 : 0;
@@ -2783,15 +2845,15 @@ async function buildEmployeeReportExportData(req, query = {}) {
       questions.set(answer.id, current);
     });
   });
-  const analysis = await generateEmployeeExecutiveAnalysis({ range: { from, to }, entries: executiveAnswers });
   return {
     range: { from, to },
     selectedUserIds,
-    summary: { responses: executiveAnswers.length, employees: employees.size, departments: departments.size, questions: questions.size },
-    analysis,
+    summary: { responses: employeeSubmissions.length, employees: employees.size, departments: departments.size, questions: questions.size },
+    analysis: null,
     departments: [...departments.values()].map(serializeEmployeeReportBucket).sort((a, b) => b.reports - a.reports),
     questions: [...questions.values()].map((item) => ({ id: item.id, label: item.label, responses: item.responses, employees: item.employees.size })).sort((a, b) => b.responses - a.responses),
     executiveAnswers,
+    employeeReports: employeeSubmissions,
   };
 }
 
@@ -6268,6 +6330,14 @@ function employeePdfInfoCard(doc, title, text, theme, onNewPage) {
 }
 
 function employeePdfCompactItem(item, type) {
+  if (type === "more") {
+    return { type, text: projectText(item.text) || "More items available in the submitted report." };
+  }
+  if (type === "management") {
+    const question = projectText(item.label) || "Management question";
+    const answer = projectText(item.answer) || "No answer provided.";
+    return { type, text: `${question}: ${answer}` };
+  }
   const site = projectText(item.site) || "No site";
   const category = projectText(item.category) || (type === "waiting" ? "Follow-up" : "General");
   const metadata = [projectText(item.status), projectText(item.involvement)].filter(Boolean).join(" / ");
@@ -6300,9 +6370,15 @@ function employeePdfCompactSegments(doc, report, width, maxHeight) {
   if (!completed.length && projectText(report.taskDescription)) completed = [{ site: report.site, category: report.taskType, status: report.taskStatus, involvement: report.involvement, description: report.taskDescription }];
   let waiting = sanitizeEmployeeTaskItems(report.waitingTaskItems);
   if (!waiting.length && projectText(report.waitingTaskDescription)) waiting = [{ site: report.site, category: "Waiting / tomorrow plan", involvement: report.involvement, description: report.waitingTaskDescription }];
+  const management = Array.isArray(report.managementAnswers) ? report.managementAnswers : [];
+  const completedVisible = completed.slice(0, management.length ? 4 : 5);
+  const waitingVisible = waiting.slice(0, management.length ? 2 : 3);
   const items = [
-    ...completed.map((item) => employeePdfCompactItem(item, "completed")),
-    ...waiting.map((item) => employeePdfCompactItem(item, "waiting")),
+    ...completedVisible.map((item) => employeePdfCompactItem(item, "completed")),
+    ...(completed.length > completedVisible.length ? [employeePdfCompactItem({ text: `+${completed.length - completedVisible.length} more completed task${completed.length - completedVisible.length === 1 ? "" : "s"}.` }, "more")] : []),
+    ...waitingVisible.map((item) => employeePdfCompactItem(item, "waiting")),
+    ...(waiting.length > waitingVisible.length ? [employeePdfCompactItem({ text: `+${waiting.length - waitingVisible.length} more waiting / follow-up item${waiting.length - waitingVisible.length === 1 ? "" : "s"}.` }, "more")] : []),
+    ...management.map((item) => employeePdfCompactItem(item, "management")),
   ];
   const segments = [];
   let current = [];
@@ -6336,13 +6412,14 @@ function employeePdfDrawCompactCard(doc, segment, x, y, width, index) {
   let previousType = "";
   segment.items.forEach((item) => {
     if (item.type !== previousType) {
-      const color = item.type === "completed" ? "#0f9f6e" : "#b66a00";
-      doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(7.2).text(item.type === "completed" ? "COMPLETED WORK" : "WAITING / FOLLOW-UP", x + 14, cursor, { width: width - 28, height: 11 });
+      const color = item.type === "completed" ? "#0f9f6e" : item.type === "management" ? "#1268b3" : item.type === "more" ? "#6f756f" : "#b66a00";
+      const label = item.type === "completed" ? "COMPLETED WORK" : item.type === "management" ? "MANAGEMENT ANSWERS" : item.type === "more" ? "ADDITIONAL ITEMS" : "WAITING / FOLLOW-UP";
+      doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(7.2).text(label, x + 14, cursor, { width: width - 28, height: 11 });
       cursor += 17;
     }
     doc.font(dmrPdfFonts.regular).fontSize(7.4);
     const itemHeight = Math.max(13, doc.heightOfString(item.text, { width: width - 36, lineGap: 1 }));
-    doc.circle(x + 17, cursor + 3.8, 1.5).fill(item.type === "completed" ? "#0f9f6e" : "#b66a00");
+    doc.circle(x + 17, cursor + 3.8, 1.5).fill(item.type === "completed" ? "#0f9f6e" : item.type === "management" ? "#1268b3" : item.type === "more" ? "#6f756f" : "#b66a00");
     doc.fillColor("#303733").text(item.text, x + 23, cursor, { width: width - 36, lineGap: 1 });
     cursor += itemHeight + 4;
     previousType = item.type;
@@ -6374,6 +6451,122 @@ function generateEmployeeDailyReportPdf(report) {
     const left = doc.page.margins.left;
     const pageWidth = doc.page.width - left - doc.page.margins.right;
     const pageBottom = doc.page.height - doc.page.margins.bottom;
+    const submissions = Array.isArray(report.employeeReports) ? report.employeeReports : [];
+    let pageNumber = 1;
+    const addSubmissionsHeader = () => {
+      doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(18).text("Employee submissions", left, 44, { width: pageWidth * 0.55, height: 24 });
+      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8).text(`${employeePdfRangeLabel(report.range)} | Page ${pageNumber}`, left + pageWidth - 190, 50, { width: 190, align: "right", height: 12 });
+      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8).text(`${report.summary.responses || 0} submissions · ${report.summary.employees || 0} employees · ${report.summary.questions || 0} management questions`, left, 68, { width: pageWidth, height: 12 });
+      doc.y = 86;
+    };
+    const addSubmissionPage = () => {
+      doc.addPage();
+      pageNumber += 1;
+      addSubmissionsHeader();
+    };
+    const drawSummaryPage = () => {
+      const completedTasks = submissions.reduce((sum, item) => sum + sanitizeEmployeeTaskItems(item.taskItems).length, 0);
+      const waitingTasks = submissions.reduce((sum, item) => sum + sanitizeEmployeeTaskItems(item.waitingTaskItems).length, 0);
+      const categories = new Map();
+      const dates = new Map();
+      submissions.forEach((submission) => {
+        const dateLabel = dmrPdfDateLabel(submission.reportDate);
+        dates.set(dateLabel, {
+          reports: (dates.get(dateLabel)?.reports || 0) + 1,
+          completed: (dates.get(dateLabel)?.completed || 0) + sanitizeEmployeeTaskItems(submission.taskItems).length,
+        });
+        [...sanitizeEmployeeTaskItems(submission.taskItems).map((task) => ({ ...task, waiting: false })), ...sanitizeEmployeeTaskItems(submission.waitingTaskItems).map((task) => ({ ...task, waiting: true }))].forEach((task) => {
+          const label = projectText(task.category) || "General";
+          const current = categories.get(label) || { label, completed: 0, waiting: 0 };
+          if (task.waiting) current.waiting += 1;
+          else current.completed += 1;
+          categories.set(label, current);
+        });
+      });
+      doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text("EMPLOYEE DAILY REPORT", left, 42, { characterSpacing: 1.2 });
+      doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(26).text("Employee work summary", left, 68, { width: pageWidth * 0.68, height: 34 });
+      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(9).text(`${employeePdfRangeLabel(report.range)} | Generated ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`, left, 104, { width: pageWidth * 0.68, height: 13 });
+      const metrics = [
+        ["Reports", submissions.length, "#eaf4ff", "#1268b3"],
+        ["Employees", report.summary.employees || 0, "#e9fbf2", "#0f9f6e"],
+        ["Completed tasks", completedTasks, "#eef8e8", "#4b9b16"],
+        ["Waiting tasks", waitingTasks, "#fff7df", "#b66a00"],
+        ["Departments", report.summary.departments || 0, "#f4efff", "#7651b5"],
+        ["Categories", categories.size, "#fff0f0", "#d83b45"],
+      ];
+      const metricGap = 10;
+      const metricWidth = (pageWidth - metricGap * (metrics.length - 1)) / metrics.length;
+      const metricTop = 142;
+      metrics.forEach(([label, value, fill, color], index) => {
+        const x = left + index * (metricWidth + metricGap);
+        doc.roundedRect(x, metricTop, metricWidth, 70, 12).fill(fill);
+        doc.fillColor(color).font(dmrPdfFonts.bold).fontSize(20).text(String(value), x + 14, metricTop + 14, { width: metricWidth - 28, height: 25 });
+        doc.fillColor("#5f665f").font(dmrPdfFonts.regular).fontSize(7.5).text(label, x + 14, metricTop + 45, { width: metricWidth - 28, height: 12 });
+      });
+      const summaryTop = 238;
+      const summaryGap = 12;
+      const summaryWidth = (pageWidth - summaryGap * 2) / 3;
+      const summaryCards = [
+        {
+          title: "Daily submissions",
+          items: [...dates.entries()].map(([label, value]) => `${label}: ${value.reports} reports, ${value.completed} completed`).slice(0, 6),
+        },
+        {
+          title: "Departments",
+          items: (report.departments || []).map((item) => `${item.label}: ${item.reports} reports`).slice(0, 6),
+        },
+        {
+          title: "Task categories",
+          items: [...categories.values()].sort((a, b) => (b.completed + b.waiting) - (a.completed + a.waiting)).map((item) => `${item.label}: ${item.completed} completed, ${item.waiting} waiting`).slice(0, 8),
+        },
+      ];
+      summaryCards.forEach((card, index) => {
+        const x = left + index * (summaryWidth + summaryGap);
+        doc.roundedRect(x, summaryTop, summaryWidth, 190, 14).fill("#f8faf8").stroke("#e1e8e3");
+        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(13).text(card.title, x + 16, summaryTop + 16, { width: summaryWidth - 32, height: 18 });
+        let cursor = summaryTop + 45;
+        (card.items.length ? card.items : ["No data submitted."]).forEach((item) => {
+          doc.circle(x + 18, cursor + 4, 1.7).fill("#0f9f6e");
+          doc.fillColor("#26312c").font(dmrPdfFonts.regular).fontSize(8.2).text(item, x + 26, cursor, { width: summaryWidth - 42, lineGap: 1 });
+          cursor += Math.max(14, doc.heightOfString(item, { width: summaryWidth - 42, lineGap: 1 })) + 7;
+        });
+      });
+    };
+    if (!submissions.length) {
+      addSubmissionsHeader();
+      doc.roundedRect(left, doc.y, pageWidth, 82, 14).fill("#f8faf8").stroke("#e1e8e3");
+      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(10).text("No employee submissions were found for this date range.", left + 18, doc.y + 32, { width: pageWidth - 36, align: "center" });
+      doc.end();
+      return;
+    }
+    drawSummaryPage();
+    addSubmissionPage();
+    const columnGap = 12;
+    const cardWidth = (pageWidth - columnGap) / 2;
+    const columnX = [left, left + cardWidth + columnGap];
+    let columnY = [doc.y, doc.y];
+    const maxSegmentHeight = pageBottom - doc.y - 10;
+    submissions.forEach((submission, index) => {
+      const segments = employeePdfCompactSegments(doc, submission, cardWidth, maxSegmentHeight);
+      segments.forEach((segment) => {
+        const height = employeePdfCompactCardHeight(doc, segment, cardWidth);
+        let column = columnY[0] <= columnY[1] ? 0 : 1;
+        if (columnY[column] + height > pageBottom) {
+          const other = column === 0 ? 1 : 0;
+          if (columnY[other] + height <= pageBottom) {
+            column = other;
+          } else {
+            addSubmissionPage();
+            columnY = [doc.y, doc.y];
+            column = 0;
+          }
+        }
+        const drawnHeight = employeePdfDrawCompactCard(doc, segment, columnX[column], columnY[column], cardWidth, index);
+        columnY[column] += drawnHeight + 12;
+      });
+    });
+    doc.end();
+    return;
     const addHeader = (continued = false) => {
       doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(8).text(continued ? "EMPLOYEE MANAGEMENT REPORT - CONTINUED" : "EMPLOYEE MANAGEMENT REPORT", left, 32, { characterSpacing: 1.2 });
       doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(7.5).text(employeePdfRangeLabel(report.range), left + pageWidth - 190, 34, { width: 190, align: "right" });

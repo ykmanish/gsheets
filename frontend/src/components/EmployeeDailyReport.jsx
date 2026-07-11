@@ -2541,14 +2541,14 @@ export default function EmployeeDailyReport({ darkMode }) {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${muted}`}>{reportData.range.from} to {reportData.range.to}</p>
-                        <h4 className="mt-2 text-2xl font-semibold">CEO Dashboard</h4>
+                        <h4 className="mt-2 text-2xl font-semibold">Employee submissions</h4>
                         <p className={`mt-1 text-sm ${muted}`}>{reportData.selectedUserIds?.length ? `${reportData.selectedUserIds.length} selected employee${reportData.selectedUserIds.length === 1 ? "" : "s"}` : "All employees"}</p>
                       </div>
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#eef7df] text-[#17643f]"}`}>Generated</span>
                     </div>
                     <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
                       {[
-                        ["Responses", reportData.summary.responses],
+                        ["Submissions", reportData.summary.responses],
                         ["Employees", reportData.summary.employees],
                         ["Departments", reportData.summary.departments],
                         ["Questions", reportData.summary.questions],
@@ -2559,6 +2559,54 @@ export default function EmployeeDailyReport({ darkMode }) {
                         </div>
                       ))}
                     </div>
+                    <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                      {(reportData.employeeReports || []).slice(0, 8).map((report, index) => (
+                        <div key={report.id || `${report.userId}-${report.reportDate}-${index}`} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-base font-bold">{index + 1}. {report.employeeName || "Employee"}</p>
+                              <p className={`mt-1 text-xs ${muted}`}>{report.department || "No department"} | {report.reportDate}</p>
+                            </div>
+                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${report.tomorrowPlanTick ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
+                              {report.tomorrowPlanTick ? "Plan confirmed" : "Plan pending"}
+                            </span>
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {[
+                              ["Completed work", report.taskItems || []],
+                              ["Waiting / follow-up", report.waitingTaskItems || []],
+                            ].map(([label, items]) => items.length ? (
+                              <div key={label}>
+                                <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${muted}`}>{label}</p>
+                                <ul className="mt-2 space-y-1.5 text-sm leading-5">
+                                  {items.slice(0, 3).map((item, itemIndex) => (
+                                    <li key={itemIndex}>• {[item.site, item.category].filter(Boolean).join(" - ")}{item.description ? `: ${item.description}` : ""}</li>
+                                  ))}
+                                  {items.length > 3 && <li className={muted}>• +{items.length - 3} more</li>}
+                                </ul>
+                              </div>
+                            ) : null)}
+                            {(report.managementAnswers || []).length ? (
+                              <div>
+                                <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${muted}`}>Management answers</p>
+                                <ul className="mt-2 space-y-1.5 text-sm leading-5">
+                                  {(report.managementAnswers || []).slice(0, 3).map((answer, answerIndex) => (
+                                    <li key={answer.id || answerIndex}>• <b>{answer.label}</b>: {answer.answer}</li>
+                                  ))}
+                                  {report.managementAnswers.length > 3 && <li className={muted}>• +{report.managementAnswers.length - 3} more</li>}
+                                </ul>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {!(reportData.employeeReports || []).length && (
+                      <div className={`mt-5 rounded-[22px] p-6 text-center text-sm ${darkMode ? "bg-white/[0.055] text-white/50" : "bg-[#f7f5ef] text-black/50"}`}>
+                        No employee submissions found for this range.
+                      </div>
+                    )}
+                    {reportData.analysis ? <>
                     <div className="mt-5 grid gap-3 lg:grid-cols-2">
                       {[
                         ["CEO operating status", reportData.analysis?.overallStatus],
@@ -2583,9 +2631,10 @@ export default function EmployeeDailyReport({ darkMode }) {
                         </div>
                       ))}
                     </div>
+                    </> : null}
                   </section>
 
-                  {(reportData.analysis?.projectCards || []).length ? (
+                  {reportData.analysis && (reportData.analysis?.projectCards || []).length ? (
                     <section className={`rounded-[28px] border p-5 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -2609,6 +2658,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     </section>
                   ) : null}
 
+                  {reportData.analysis ? <>
                   <EmployeeReportTable
                     title="Money"
                     headers={["Insight"]}
@@ -2663,6 +2713,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     rows={(reportData.analysis?.supportRequired || []).map((item) => [item])}
                     darkMode={darkMode}
                   />
+                  </> : null}
                 </div>
               )}
             </div>

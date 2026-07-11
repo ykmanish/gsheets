@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, Clock3, Copy, Download, Eye, FileText, Heart, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Sparkles, Star, Trash2, X } from "lucide-react";
+import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, ChevronDown, Clock3, Copy, Download, Eye, FileText, Heart, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Settings2, Sparkles, Star, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import { useClickOutside } from "./ui";
@@ -141,7 +141,7 @@ function involvementValuesFromRow(row = {}) {
 function involvementText(row = {}) {
   return uniqueClean([
     ...involvementValuesFromRow(row),
-    row.involvement === "__other" ? row.involvementOther : "",
+    row.involvementOther,
   ]).join(", ");
 }
 
@@ -615,7 +615,16 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                   {showInvolvement && (
                     <div className="order-3">
                       <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Involvement</p>
-                      <MultiChoiceSelect darkMode={darkMode} values={involvementValuesFromRow(row)} onChange={(values) => updateRow(index, { involvementValues: values, involvement: values.join(", ") })} options={involvements.filter((item) => item !== "Other")} popularOptions={popularInvolvements} placeholder="Choose involvement" />
+                      <MultiChoiceSelect darkMode={darkMode} values={involvementValuesFromRow(row)} onChange={(values) => updateRow(index, { involvementValues: values, involvement: values.join(", ") })} options={involvements} popularOptions={popularInvolvements} placeholder="Choose involvement" />
+                      {involvementValuesFromRow(row).some((value) => value.toLowerCase() === "other") && (
+                        <input
+                          required={required && index === 0}
+                          value={row.involvementOther || ""}
+                          onChange={(event) => updateRow(index, { involvementOther: event.target.value })}
+                          placeholder="Enter involvement"
+                          className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none transition focus:ring-2 ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35 focus:ring-[#d8f36a]/20" : "border-black/10 bg-white text-black placeholder:text-black/35 focus:ring-black/10"}`}
+                        />
+                      )}
                       {required && index === 0 && !involvementText(row) && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
                     </div>
                   )}
@@ -1219,6 +1228,9 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [refreshingToday, setRefreshingToday] = useState(false);
   const [deletingReportId, setDeletingReportId] = useState("");
   const [checkingReminder, setCheckingReminder] = useState(false);
+  const [heroActionOpen, setHeroActionOpen] = useState(false);
+  const heroActionRef = useRef(null);
+  useClickOutside(heroActionRef, () => setHeroActionOpen(false));
 
   const closeFormDrawer = useCallback(() => {
     setFormClosing(true);
@@ -1462,7 +1474,7 @@ export default function EmployeeDailyReport({ darkMode }) {
       const missingTaskInvolvement = [...(form.taskItems || []), ...(form.waitingTaskItems || [])].some((item) => (item.category || item.categoryOther || item.description) && !involvementText(item));
       if (missingTaskInvolvement) throw new Error("Choose involvement for every task");
       const taskItems = (form.taskItems || []).map((item) => {
-        const involvementValues = involvementValuesFromRow(item);
+        const involvementValues = uniqueClean([...involvementValuesFromRow(item), item.involvementOther]);
         const site = fieldValue(item.site, item.siteOther).trim();
         const category = fieldValue(item.category, item.categoryOther).trim();
         const description = item.description.trim();
@@ -1478,7 +1490,7 @@ export default function EmployeeDailyReport({ darkMode }) {
         };
       }).filter((item) => item.site && item.category && item.status && item.involvement && item.description);
       const waitingTaskItems = (form.waitingTaskItems || []).map((item) => {
-        const involvementValues = involvementValuesFromRow(item);
+        const involvementValues = uniqueClean([...involvementValuesFromRow(item), item.involvementOther]);
         return {
           site: fieldValue(item.site, item.siteOther).trim(),
           category: fieldValue(item.category, item.categoryOther).trim(),
@@ -1783,6 +1795,12 @@ export default function EmployeeDailyReport({ darkMode }) {
   const optionUsage = data?.optionUsage || { sites: [], categories: [], involvements: [] };
   const formSites = customPrefs.useCustomOnly ? customPrefs.sites : uniqueClean([...(options.sites || []), ...customPrefs.sites]);
   const formCategories = customPrefs.useCustomOnly ? customPrefs.categories : uniqueClean([...(options.taskTypes || []), ...customPrefs.categories]);
+  const profileUsername = String(data?.profile?.username || user?.username || "").trim().toLowerCase();
+  const formInvolvements = uniqueClean([
+    ...(options.involvements || []),
+    ...(profileUsername === "nishimehta" ? ["Nishi & Iqbal"] : []),
+    "Other",
+  ]);
   const hasCustomPreferences = Boolean(customPrefs.sites.length || customPrefs.categories.length);
   const customOptionsVisible = customOptionsOpen || !hasCustomPreferences;
   const sidebarSitesPreview = customPrefs.sites.slice(0, 3);
@@ -1805,7 +1823,7 @@ export default function EmployeeDailyReport({ darkMode }) {
 
   return (
     <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}>
-      <section className={`relative mb-5 overflow-hidden rounded-[30px] border p-6 sm:p-8 ${darkMode ? "border-white/10 bg-[#202328]" : "border-[#dfe7e4] bg-white/95"}`}>
+      <section className={`relative z-20 mb-5 overflow-visible rounded-[30px] border p-6 sm:p-8 ${darkMode ? "border-white/10 bg-[#202328]" : "border-[#dfe7e4] bg-white/95"}`}>
           {!darkMode && (
             <>
               <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(17,17,17,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(17,17,17,0.035)_1px,transparent_1px)] bg-[size:72px_72px]" />
@@ -1830,34 +1848,7 @@ export default function EmployeeDailyReport({ darkMode }) {
               <h1 className={`mt-5 max-w-4xl text-4xl small font-black  leading-[0.96] tracking-tight sm:text-4xl ${darkMode ? "text-white" : "text-[#161616]"}`}>Daily work reports, made simple.</h1>
               <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>Submit today&apos;s work progress, review previous entries, and track reporting consistency in one clean workspace.</p>
             </div>
-            <div className="flex flex-col gap-3 lg:items-end">
-              <div className="flex flex-wrap gap-3 lg:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setSheetOpen(true)}
-                  disabled={initialLoading}
-                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
-                >
-                  <FileText className="h-4 w-4" /> {data?.profile?.sheetLinked ? "Sheet settings" : "Link sheet"}
-                </button>
-                {data?.isAdmin && (
-                  <button onClick={() => setTodayStatusOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
-                    <CalendarCheck className="h-4 w-4" /> Today status
-                  </button>
-                )}
-                {data?.isAdmin && (
-                  <button
-                    type="button"
-                    onClick={openReminderSchedule}
-                    disabled={initialLoading}
-                    className={`flex h-12 items-center text-red-600 dark:text-white justify-center gap-2 rounded-3xl border-2 border-dotted border-red-600 px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 ${darkMode ? "border-white/10 bg-white/10 " : "border-[#dfe7e4] bg-white  hover:bg-[#f1f7f4]"}`}
-                  >
-                    <BellRing className="h-4 text-red-600 dark:text-white w-4" />
-                    Reminder schedule
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-3 lg:justify-end">
+            <div className="flex flex-wrap gap-3 lg:justify-end">
                 <button
                   disabled={initialLoading || !data?.profile?.sheetLinked}
                   onClick={openForm}
@@ -1866,31 +1857,94 @@ export default function EmployeeDailyReport({ darkMode }) {
                   {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
                   {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Edit today's report" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
                 </button>
-                <button
-                  type="button"
-                  disabled={initialLoading || refreshingToday || !data?.profile?.sheetLinked}
-                  onClick={refreshTodayReport}
-                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
-                >
-                  <RefreshCw className={`h-4 w-4 ${refreshingToday ? "animate-spin" : ""}`} />
-                  {refreshingToday ? "Refreshing..." : "Refresh today"}
-                </button>
-                {!data?.isAdmin && (
-                  <button onClick={() => setHeatmapOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
-                    <CalendarCheck className="h-4 w-4" /> My activity
+                <div ref={heroActionRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setHeroActionOpen((value) => !value)}
+                    disabled={initialLoading}
+                    className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-white/10 bg-white/10 text-white hover:bg-white/15" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    Actions
+                    <ChevronDown className={`h-4 w-4 transition-transform ${heroActionOpen ? "rotate-180" : ""}`} />
                   </button>
-                )}
-                {data?.isAdmin && (
-                  <button onClick={() => setReportOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
-                    <FileText className="h-4 w-4" /> Generate report
-                  </button>
-                )}
-                {data?.isAdmin && (
-                  <button onClick={openQuestionSettings} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
-                    <Sparkles className="h-4 w-4" /> Management questions
-                  </button>
-                )}
-              </div>
+                  {heroActionOpen && (
+                    <div className={`absolute right-0 top-[calc(100%+10px)] z-[80] w-[286px] overflow-hidden rounded-[22px] border p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
+                      {[
+                        {
+                          label: data?.profile?.sheetLinked ? "Sheet settings" : "Link sheet",
+                          icon: FileText,
+                          disabled: initialLoading,
+                          onClick: () => setSheetOpen(true),
+                        },
+                        ...(data?.isAdmin ? [{
+                          label: "Today status",
+                          icon: CalendarCheck,
+                          onClick: () => setTodayStatusOpen(true),
+                        }] : [{
+                          label: "My activity",
+                          icon: CalendarCheck,
+                          onClick: () => setHeatmapOpen(true),
+                        }]),
+                        {
+                          label: refreshingToday ? "Refreshing today..." : "Refresh today",
+                          icon: RefreshCw,
+                          disabled: refreshingToday || !data?.profile?.sheetLinked,
+                          onClick: refreshTodayReport,
+                          spin: refreshingToday,
+                        },
+                        ...(data?.isAdmin ? [
+                          {
+                            label: "Generate report",
+                            icon: FileText,
+                            onClick: () => setReportOpen(true),
+                          },
+                          {
+                            label: "Reminder schedule",
+                            icon: BellRing,
+                            onClick: openReminderSchedule,
+                            danger: true,
+                          },
+                          {
+                            label: "Management questions",
+                            icon: Sparkles,
+                            onClick: openQuestionSettings,
+                          },
+                        ] : []),
+                      ].map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.label}
+                            type="button"
+                            disabled={item.disabled}
+                            onClick={() => {
+                              if (item.disabled) return;
+                              setHeroActionOpen(false);
+                              item.onClick?.();
+                            }}
+                            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "text-white hover:bg-white/[0.08]" : "hover:bg-[#f3f5f9] text-slate-800"}`}
+                          >
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${item.danger ? darkMode ? "bg-red-500/15 text-red-300" : "bg-red-50 text-red-600" : darkMode ? "bg-white/[0.08] text-white/75" : "bg-[#eef7f4] text-[#17643f]"}`}>
+                              <Icon className={`h-4 w-4 ${item.spin ? "animate-spin" : ""}`} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className={`block font-semibold ${item.danger ? "text-red-600 dark:text-red-300" : ""}`}>{item.label}</span>
+                              <span className={`mt-0.5 block text-xs ${muted}`}>
+                                {item.label.includes("Sheet") || item.label.includes("Link") ? "Workbook connection"
+                                  : item.label.includes("status") || item.label.includes("activity") ? "Submission tracking"
+                                    : item.label.includes("Refresh") || item.label.includes("Refreshing") ? "Sync latest sheet data"
+                                      : item.label.includes("Generate") ? "Download and preview PDF"
+                                        : item.label.includes("Reminder") ? "WhatsApp reminder timing"
+                                          : "Assigned management prompts"}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
             </div>
           </div>
           {initialLoading ? (
@@ -2290,7 +2344,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     categories={formCategories}
                     sites={formSites}
                     statuses={options.taskStatuses}
-                    involvements={options.involvements}
+                    involvements={formInvolvements}
                     popularSites={optionUsage.sites}
                     popularCategories={optionUsage.categories}
                     popularInvolvements={optionUsage.involvements}
@@ -2305,7 +2359,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     rows={form.waitingTaskItems}
                     categories={formCategories}
                     sites={formSites}
-                    involvements={options.involvements}
+                    involvements={formInvolvements}
                     popularSites={optionUsage.sites}
                     popularCategories={optionUsage.categories}
                     popularInvolvements={optionUsage.involvements}

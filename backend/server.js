@@ -5683,7 +5683,7 @@ function dmrReportVariance(planned, actual) {
 }
 
 const DMR_PLAN_SUMMARY_CACHE_VERSION = "ceo-daily-summary-v3";
-const DMR_DAILY_PDF_LAYOUT_VERSION = "single-masthead-inline-summary-v10";
+const DMR_DAILY_PDF_LAYOUT_VERSION = "single-masthead-inline-summary-v11-force-plan-cache";
 
 function comparablePlanText(value = "") {
   const text = projectText(value)
@@ -10123,6 +10123,7 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
     if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
     if (!publicDmrSettings().linked) return res.status(400).json({ error: "DMR sheet is not linked" });
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : istDateKey(new Date());
+    const forceRefresh = ["1", "true", "yes", "force"].includes(String(req.query.force || "").toLowerCase());
     const cachedPath = dmrPdfPath(date);
     const metaPath = dmrPdfMetaPath(date);
     const cachedMeta = readJsonFileSafe(metaPath);
@@ -10134,15 +10135,15 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
     let buffer;
     let cacheStatus;
 
-    if (hasCachedPdf && currentLayout && now - validatedAt < DMR_PDF_CACHE_TTL_MS) {
+    if (!forceRefresh && hasCachedPdf && currentLayout && now - validatedAt < DMR_PDF_CACHE_TTL_MS) {
       buffer = fs.readFileSync(cachedPath);
       cacheStatus = "HIT";
-    } else if (hasCachedPdf && currentLayout && validationFailedAt && now - validationFailedAt < DMR_PDF_RETRY_BACKOFF_MS) {
+    } else if (!forceRefresh && hasCachedPdf && currentLayout && validationFailedAt && now - validationFailedAt < DMR_PDF_RETRY_BACKOFF_MS) {
       buffer = fs.readFileSync(cachedPath);
       cacheStatus = "STALE-BACKOFF";
     } else {
       let refresh = dmrPdfRefreshes.get(date);
-      cacheStatus = refresh ? "WAIT" : "MISS";
+      cacheStatus = refresh ? "WAIT" : forceRefresh ? "FORCE" : "MISS";
       if (!refresh) {
         refresh = (async () => {
           try {
@@ -10151,7 +10152,7 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
             const summarySignature = dmrPlanSummarySignature(payload);
             const signature = dmrDailyPdfSignature({ dashboard, planPayload: payload });
             const latestMeta = readJsonFileSafe(metaPath);
-            if (latestMeta?.signature === signature && fs.existsSync(cachedPath)) {
+            if (!forceRefresh && latestMeta?.signature === signature && fs.existsSync(cachedPath)) {
               const nextMeta = { ...latestMeta, validatedAt: new Date().toISOString() };
               delete nextMeta.validationFailedAt;
               delete nextMeta.validationError;
@@ -10173,7 +10174,7 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
             return { buffer: result.buffer, status: "REFRESHED" };
           } catch (error) {
             const fallbackMeta = readJsonFileSafe(metaPath) || cachedMeta || { date };
-            if (!fs.existsSync(cachedPath) || fallbackMeta.layoutVersion !== DMR_DAILY_PDF_LAYOUT_VERSION) throw error;
+            if (forceRefresh || !fs.existsSync(cachedPath) || fallbackMeta.layoutVersion !== DMR_DAILY_PDF_LAYOUT_VERSION) throw error;
             fs.writeFileSync(metaPath, JSON.stringify({
               ...fallbackMeta,
               validationFailedAt: new Date().toISOString(),
@@ -10187,7 +10188,7 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
       }
       const result = await refresh;
       buffer = result.buffer;
-      cacheStatus = cacheStatus === "WAIT" ? "WAIT" : result.status;
+      cacheStatus = cacheStatus === "WAIT" ? "WAIT" : forceRefresh ? `FORCE-${result.status}` : result.status;
     }
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${dmrPdfFilename(date)}"`);

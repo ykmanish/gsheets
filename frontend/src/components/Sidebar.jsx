@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, Phone, Mail, BriefcaseBusiness, Save } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, Phone, Mail, BriefcaseBusiness, Save, PackageSearch } from "lucide-react";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
@@ -13,6 +13,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "projects", label: "Projects", icon: Building2 },
     { id: "project-dmr", label: "DMR", icon: FileSpreadsheet, parent: "projects" },
     { id: "project-mrn", label: "MRN", icon: ClipboardList, parent: "projects" },
+    { id: "project-stock", label: "Stock", icon: PackageSearch, parent: "projects" },
     { id: "site-images", label: "Site Images", icon: Images, parent: "projects" },
     { id: "sheet-dashboard", label: "Sheet Dashboard", icon: Sheet },
     { id: "automations", label: "Automation", icon: Workflow },
@@ -25,7 +26,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "manage-users", label: "Manage User", icon: Users, parent: "access-management" },
     { id: "module-control", label: "Module Control", icon: SlidersHorizontal, parent: "access-management" },
   ];
-  const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn", "site-images"].includes(item.id) && allowedMenus.includes(item.id));
+  const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn", "project-stock", "site-images"].includes(item.id) && allowedMenus.includes(item.id));
   const accessSubMenu = menuItems.filter((item) => item.parent === "access-management" && allowedMenus.includes(item.id));
   const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id) || (item.id === "projects" && projectSubMenu.length) || (item.id === "access-management" && accessSubMenu.length));
   const [openGroups, setOpenGroups] = useState(() => ({

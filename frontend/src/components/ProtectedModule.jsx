@@ -19,6 +19,7 @@ import Forms from "./Forms";
 import ProjectDashboard from "./ProjectDashboard";
 import DmrDashboard from "./DmrDashboard";
 import MrnDashboard from "./MrnDashboard";
+import StockDashboard from "./StockDashboard";
 import SiteImagesDashboard from "./SiteImagesDashboard";
 import EmployeeDailyReport from "./EmployeeDailyReport";
 import ModuleControl from "./ModuleControl";
@@ -30,6 +31,7 @@ const menuPaths = {
   projects: "/projects",
   "project-dmr": "/projects/dmr",
   "project-mrn": "/projects/mrn",
+  "project-stock": "/projects/stock",
   "site-images": "/projects/site-images",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
@@ -60,9 +62,9 @@ function ProtectedModuleContent({ moduleId }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
     ];
-    if (user?.isSuperAdmin || assigned.some((menu) => ["projects", "sheet-dashboard", "site-images"].includes(menu))) assigned.push("site-images");
+    if (user?.isSuperAdmin || assigned.some((menu) => ["projects", "sheet-dashboard", "site-images", "project-stock"].includes(menu))) assigned.push("site-images");
     const globallyDisabled = new Set(disabledModules || []);
     return Array.from(new Set(assigned)).filter((menu) => !["notifications", "settings"].includes(menu) && (!globallyDisabled.has(menu) || ["dashboard", "module-control"].includes(menu)));
   }, [disabledModules, menus, user?.isSuperAdmin]);
@@ -137,6 +139,7 @@ function ProtectedModuleContent({ moduleId }) {
         {moduleId === "projects" && <ProjectDashboard darkMode={darkMode} />}
         {moduleId === "project-dmr" && <DmrDashboard darkMode={darkMode} />}
         {moduleId === "project-mrn" && <MrnDashboard darkMode={darkMode} />}
+        {moduleId === "project-stock" && <StockDashboard darkMode={darkMode} />}
         {moduleId === "site-images" && <SiteImagesDashboard darkMode={darkMode} />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}

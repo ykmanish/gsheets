@@ -66,6 +66,7 @@ const MENU_ITEMS = [
   { id: "projects", label: "Projects" },
   { id: "project-dmr", label: "DMR" },
   { id: "project-mrn", label: "MRN" },
+  { id: "project-stock", label: "Stock" },
   { id: "site-images", label: "Site Images" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
@@ -92,6 +93,7 @@ const PRIVILEGE_ITEMS = [
   { id: "view_activity_log", label: "View activity log" },
   { id: "edit_project_dmr", label: "Fill project DMR records" },
   { id: "edit_project_mrn", label: "Add MRN records" },
+  { id: "manage_project_stock", label: "Manage project stock sheets" },
 ];
 
 let mongoClient;
@@ -113,6 +115,7 @@ async function connectAuthDb() {
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
   await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
+  await authDb.collection("dmrWhatsAppReminderRuns").createIndex({ date: 1, type: 1 }, { unique: true });
   await seedSuperAdmin();
   return authDb;
 }
@@ -488,6 +491,34 @@ const EMPLOYEE_REPORT_APP_HEADERS = ["Report ID", "User ID", "Employee", "Depart
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_TEMPLATE || "daily_report_reminder";
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_LANGUAGE || "en";
 const EMPLOYEE_REPORT_REMINDER_LINK = process.env.EMPLOYEE_REPORT_REMINDER_LINK || process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "http://localhost:3000/employee-daily-report";
+const DMR_REMINDER_SETTINGS_ID = "dmr-whatsapp-reminder-settings";
+const DMR_REMINDER_TEMPLATE_LANGUAGE = process.env.DMR_REMINDER_TEMPLATE_LANGUAGE || process.env.WHATSAPP_DMR_REMINDER_LANGUAGE || "en";
+const DMR_REMINDER_TYPES = {
+  actualManpower: {
+    id: "actualManpower",
+    label: "Actual manpower",
+    templateName: process.env.DMR_ACTUAL_MANPOWER_REMINDER_TEMPLATE || "actual_manpower_reminder",
+    defaultTime: "11:30",
+    dateOffset: 0,
+    filledCheck: "actual",
+  },
+  tomorrowPlan: {
+    id: "tomorrowPlan",
+    label: "Tomorrow planned manpower",
+    templateName: process.env.DMR_TOMORROW_PLAN_REMINDER_TEMPLATE || "tomorrow_planned_manpower_reminder",
+    defaultTime: "15:00",
+    dateOffset: 1,
+    filledCheck: "tomorrowPlan",
+  },
+  siteDailyReport: {
+    id: "siteDailyReport",
+    label: "Site daily report",
+    templateName: process.env.DMR_SITE_DAILY_REPORT_REMINDER_TEMPLATE || "site_daily_report_reminder",
+    defaultTime: "18:00",
+    dateOffset: 0,
+    filledCheck: "siteDailyReport",
+  },
+};
 const DEFAULT_EMPLOYEE_EXECUTIVE_QUESTIONS = [
   { id: "vendor_finalized", label: "Was the vendor finalized?", assignees: ["nishi", "iqbal", "krupali", "milind", "dipak"] },
   { id: "quotation_received", label: "Is quotation received?", assignees: ["nishi", "iqbal", "krupali", "milind", "dipak"] },
@@ -503,6 +534,7 @@ const EMPLOYEE_EXECUTIVE_QUESTIONS_SETTINGS_ID = "employee-executive-questions-s
 const employeeMetaCache = new Map();
 const employeeReportCache = new Map();
 let employeeReminderCronTask = null;
+const dmrReminderCronTasks = new Map();
 const EMPLOYEE_META_CACHE_MS = 5 * 60 * 1000;
 const EMPLOYEE_REPORT_CACHE_MS = 60 * 1000;
 
@@ -1605,6 +1637,258 @@ async function sendEmployeeDailyReportReminders({ dateKey = employeeReportToday(
   };
   await db.collection("platformSettings").updateOne({ _id: runId }, { $set: run }, { upsert: true });
   return serializeReminderRun(run, date);
+}
+
+function defaultDmrReminderItems() {
+  return Object.fromEntries(Object.values(DMR_REMINDER_TYPES).map((item) => [item.id, {
+    enabled: true,
+    time: item.defaultTime,
+    templateName: item.templateName,
+    recipientPhones: [],
+  }]));
+}
+
+function normalizeDmrReminderSettings(settings = {}) {
+  const reminders = defaultDmrReminderItems();
+  const incoming = settings.reminders || {};
+  for (const item of Object.values(DMR_REMINDER_TYPES)) {
+    const current = incoming[item.id] || {};
+    reminders[item.id] = {
+      enabled: current.enabled !== false,
+      time: validEmployeeReminderTime(current.time) || item.defaultTime,
+      templateName: projectText(current.templateName) || item.templateName,
+      recipientPhones: [...new Set((Array.isArray(current.recipientPhones) ? current.recipientPhones : []).map(normalizePhone).filter(Boolean))],
+    };
+  }
+  return {
+    enabled: settings.enabled !== false,
+    timezone: "Asia/Kolkata",
+    reminders,
+    updatedAt: settings.updatedAt || null,
+    updatedBy: settings.updatedBy || null,
+  };
+}
+
+async function getDmrReminderSettings() {
+  const db = await connectAuthDb();
+  const settings = await db.collection("platformSettings").findOne({ _id: DMR_REMINDER_SETTINGS_ID });
+  return normalizeDmrReminderSettings(settings || {});
+}
+
+async function saveDmrReminderSettings({ reminders = {}, enabled = true, actor = null } = {}) {
+  const db = await connectAuthDb();
+  const settings = normalizeDmrReminderSettings({ reminders, enabled });
+  settings.updatedAt = new Date();
+  settings.updatedBy = actor ? { id: actor.id, name: actor.displayName || actor.username || "User" } : null;
+  await db.collection("platformSettings").updateOne(
+    { _id: DMR_REMINDER_SETTINGS_ID },
+    { $set: settings },
+    { upsert: true },
+  );
+  configureDmrReminderCrons(settings);
+  return settings;
+}
+
+function dmrReminderRunId(type, dateKey) {
+  return `dmr-whatsapp-reminder:${type}:${dmrDateKey(dateKey) || istDateKey(new Date())}`;
+}
+
+function dmrReminderCronExpression(time) {
+  const reminderTime = validEmployeeReminderTime(time) || "18:00";
+  const [hour, minute] = reminderTime.split(":");
+  return `${Number(minute)} ${Number(hour)} * * *`;
+}
+
+function configureDmrReminderCrons(settings = {}) {
+  for (const task of dmrReminderCronTasks.values()) {
+    task.stop();
+    if (typeof task.destroy === "function") task.destroy();
+  }
+  dmrReminderCronTasks.clear();
+  const normalized = normalizeDmrReminderSettings(settings);
+  if (normalized.enabled === false) {
+    console.log("DMR WhatsApp reminder crons disabled");
+    return;
+  }
+  for (const item of Object.values(DMR_REMINDER_TYPES)) {
+    const reminder = normalized.reminders[item.id];
+    if (!reminder?.enabled) continue;
+    const expression = dmrReminderCronExpression(reminder.time);
+    const task = cron.schedule(expression, async () => {
+      try {
+        const result = await sendDmrWhatsAppReminder({ type: item.id, source: "cron" });
+        console.log(`DMR ${item.id} reminder ${result.status} for ${result.date}: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped`);
+      } catch (error) {
+        console.error(`DMR ${item.id} reminder cron error:`, error);
+      }
+    }, { timezone: "Asia/Kolkata" });
+    dmrReminderCronTasks.set(item.id, task);
+    console.log(`DMR ${item.id} WhatsApp reminder cron scheduled at ${reminder.time} IST (${expression})`);
+  }
+}
+
+async function refreshDmrReminderCrons() {
+  const settings = await getDmrReminderSettings();
+  configureDmrReminderCrons(settings);
+  return settings;
+}
+
+function dmrReminderDateForType(type, baseDate = istDateKey(new Date())) {
+  const config = DMR_REMINDER_TYPES[type] || DMR_REMINDER_TYPES.actualManpower;
+  return addDaysToDateKey(dmrDateKey(baseDate) || istDateKey(new Date()), config.dateOffset || 0) || dmrDateKey(baseDate) || istDateKey(new Date());
+}
+
+function dmrReminderContactTokens(contact = {}) {
+  return [...new Set([
+    contact.name,
+    contact.profileName,
+    contact.phone,
+    normalizePhone(contact.phone),
+  ].map((value) => projectText(value).toLowerCase().replace(/[^a-z0-9]+/g, "")).filter(Boolean))];
+}
+
+function dmrReminderNameMatches(contact = {}, value = "") {
+  const needle = projectText(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (!needle) return false;
+  return dmrReminderContactTokens(contact).some((token) => token && (token === needle || token.includes(needle) || needle.includes(token)));
+}
+
+function serializeDmrReminderRun(run = null, type = "actualManpower", dateKey = istDateKey(new Date())) {
+  return {
+    type,
+    date: dmrDateKey(run?.date || dateKey) || istDateKey(new Date()),
+    status: run?.status || "not_sent",
+    sent: Number(run?.sent || 0),
+    failed: Number(run?.failed || 0),
+    skipped: Number(run?.skipped || 0),
+    recipients: Number(run?.recipients || 0),
+    source: run?.source || "",
+    templateName: run?.templateName || DMR_REMINDER_TYPES[type]?.templateName || "",
+    results: Array.isArray(run?.results) ? run.results.slice(0, 300) : [],
+    startedAt: run?.startedAt || null,
+    finishedAt: run?.finishedAt || null,
+  };
+}
+
+async function dmrReminderActualFilledContacts(date, contacts = []) {
+  const history = dmrHistory.filter((entry) => entry.dmrDate === date && entry.section === "manpower" && entry.field === "actual" && projectText(entry.after));
+  return new Set(contacts.filter((contact) => history.some((entry) => dmrReminderNameMatches(contact, entry.displayName || entry.username || ""))).map((contact) => normalizePhone(contact.phone)));
+}
+
+async function dmrReminderTomorrowPlanFilledContacts(date, contacts = []) {
+  const plan = await readDmrTomorrowPlan(date).catch(() => null);
+  const submitters = [...new Set((plan?.records || []).map((record) => record.submittedBy).filter(Boolean))];
+  return new Set(contacts.filter((contact) => submitters.some((name) => dmrReminderNameMatches(contact, name))).map((contact) => normalizePhone(contact.phone)));
+}
+
+function dmrReminderParseSheetDate(value = "") {
+  const text = projectText(value);
+  if (!text) return "";
+  const googleDate = parseGoogleTimestampDate(text);
+  if (googleDate) return googleDate;
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) return istDateKey(date);
+  const match = text.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if (!match) return "";
+  const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
+  const month = String(Number(match[2])).padStart(2, "0");
+  const day = String(Number(match[1])).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+async function dmrReminderSiteDailyFilledContacts(date, contacts = []) {
+  const doc = documents.find((item) => item.type === "sheet" && item.isReady !== false && /site\s*daily\s*report/i.test(item.name || ""))
+    || documents.find((item) => item.type === "sheet" && item.isReady !== false && /site.*report|daily.*site/i.test(item.name || ""));
+  if (!doc?.sheetId) return new Set();
+  const dataset = await fetchSheetDataset(doc.sheetId).catch(() => []);
+  const names = [];
+  for (const sheet of dataset || []) {
+    const headers = sheet.headers || [];
+    const dateHeader = headers.find((header) => /^date$/i.test(header) || /timestamp|report.*date|date.*report|created|submitted/i.test(header));
+    const nameHeader = headers.find((header) => /uploaded.*by|submitted.*by|site.*person|person.*site|employee.*name|person.*name|^name$|email|created.*by/i.test(header));
+    if (!dateHeader || !nameHeader) continue;
+    for (const row of sheet.rows || []) {
+      if (dmrReminderParseSheetDate(row[dateHeader]) === date && projectText(row[nameHeader])) names.push(row[nameHeader]);
+    }
+  }
+  return new Set(contacts.filter((contact) => names.some((name) => dmrReminderNameMatches(contact, name))).map((contact) => normalizePhone(contact.phone)));
+}
+
+async function dmrReminderFilledContacts(type, date, contacts) {
+  if (type === "actualManpower") return dmrReminderActualFilledContacts(date, contacts);
+  if (type === "tomorrowPlan") return dmrReminderTomorrowPlanFilledContacts(date, contacts);
+  if (type === "siteDailyReport") return dmrReminderSiteDailyFilledContacts(date, contacts);
+  return new Set();
+}
+
+async function sendDmrWhatsAppReminder({ type = "actualManpower", dateKey = istDateKey(new Date()), source = "manual", force = false } = {}) {
+  const config = DMR_REMINDER_TYPES[type];
+  if (!config) throw new Error("Unknown DMR reminder type");
+  const db = await connectAuthDb();
+  const settings = await getDmrReminderSettings();
+  const reminder = settings.reminders[type];
+  const date = dmrReminderDateForType(type, dateKey);
+  const runId = dmrReminderRunId(type, date);
+  const existingRun = await db.collection("dmrWhatsAppReminderRuns").findOne({ _id: runId });
+  if (!force && existingRun?.status === "completed") return serializeDmrReminderRun(existingRun, type, date);
+  if (settings.enabled === false || reminder?.enabled === false) {
+    const skipped = { _id: runId, type, date, status: "skipped", reason: "Reminder disabled", recipients: 0, sent: 0, failed: 0, skipped: 0, results: [], source, finishedAt: new Date() };
+    await db.collection("dmrWhatsAppReminderRuns").updateOne({ _id: runId }, { $set: skipped }, { upsert: true });
+    return serializeDmrReminderRun(skipped, type, date);
+  }
+  const contacts = whatsappService.listContacts()
+    .filter((contact) => reminder.recipientPhones.includes(normalizePhone(contact.phone)))
+    .filter((contact) => normalizePhone(contact.phone));
+  const startedAt = new Date();
+  const templateName = projectText(reminder.templateName) || config.templateName;
+  const filledPhones = await dmrReminderFilledContacts(type, date, contacts);
+  const results = [];
+  await db.collection("dmrWhatsAppReminderRuns").updateOne(
+    { _id: runId },
+    { $set: { _id: runId, type, date, status: "running", source, templateName, recipients: contacts.length, startedAt, updatedAt: startedAt } },
+    { upsert: true },
+  );
+
+  for (const contact of contacts) {
+    const phone = normalizePhone(contact.phone);
+    const name = projectText(contact.name || contact.profileName || phone) || "Team";
+    if (filledPhones.has(phone)) {
+      results.push({ phone, name, status: "skipped", reason: "Already filled" });
+      continue;
+    }
+    try {
+      const message = await whatsappService.sendMessage({
+        to: phone,
+        templateName,
+        language: DMR_REMINDER_TEMPLATE_LANGUAGE,
+        templateParams: [name, dmrPdfDateLabel(date)],
+      }, { id: "system", displayName: "DMR WhatsApp reminder" });
+      results.push({ phone, name, status: "sent", messageId: message.wamid || message.id || null });
+    } catch (error) {
+      results.push({ phone, name, status: "failed", reason: error.message });
+    }
+  }
+
+  const finishedAt = new Date();
+  const run = {
+    _id: runId,
+    type,
+    date,
+    status: "completed",
+    source,
+    templateName,
+    language: DMR_REMINDER_TEMPLATE_LANGUAGE,
+    recipients: contacts.length,
+    sent: results.filter((item) => item.status === "sent").length,
+    failed: results.filter((item) => item.status === "failed").length,
+    skipped: results.filter((item) => item.status === "skipped").length,
+    results,
+    startedAt,
+    finishedAt,
+    updatedAt: finishedAt,
+  };
+  await db.collection("dmrWhatsAppReminderRuns").updateOne({ _id: runId }, { $set: run }, { upsert: true });
+  return serializeDmrReminderRun(run, type, date);
 }
 
 function filterEmployeeReports(reports = [], { search = "", dateFrom = "", dateTo = "", userIds = [] } = {}) {
@@ -3597,6 +3881,238 @@ function getActiveMrnSpreadsheetId() {
   const spreadsheetId = normalizeSpreadsheetId(mrnSettings.spreadsheetId);
   if (!spreadsheetId) throw new Error("No MRN sheet is linked yet.");
   return spreadsheetId;
+}
+
+const STOCK_SETTINGS_ID = "project-stock-sites";
+const stockDashboardCache = new Map();
+const STOCK_DASHBOARD_CACHE_TTL_MS = 1000 * 60 * 3;
+
+function normalizeStockSite(input = {}) {
+  const name = profileText(input.name || input.siteName || input.title, 80);
+  const spreadsheetId = normalizeSpreadsheetId(input.spreadsheetId || input.sheetUrl || input.url || input.link || input.spreadsheet || "");
+  return {
+    id: projectText(input.id) || crypto.randomBytes(8).toString("hex"),
+    name,
+    spreadsheetId,
+    sheetUrl: spreadsheetId ? employeeSheetUrl(spreadsheetId) : "",
+    architecture: profileText(input.architecture || "auto", 40) || "auto",
+    notes: profileText(input.notes || "", 160),
+    linkedFileName: input.linkedFileName || null,
+    linkedAt: input.linkedAt || null,
+    linkedBy: input.linkedBy || null,
+    createdAt: input.createdAt || new Date().toISOString(),
+    updatedAt: input.updatedAt || new Date().toISOString(),
+  };
+}
+
+async function getStockSettings() {
+  const db = await connectAuthDb();
+  const setting = await db.collection("platformSettings").findOne({ _id: STOCK_SETTINGS_ID });
+  return {
+    sites: (Array.isArray(setting?.sites) ? setting.sites : []).map(normalizeStockSite).filter((site) => site.name && site.spreadsheetId),
+    updatedAt: setting?.updatedAt || null,
+  };
+}
+
+async function saveStockSites(sites = [], actor = null) {
+  const db = await connectAuthDb();
+  const normalized = sites.map(normalizeStockSite).filter((site) => site.name && site.spreadsheetId);
+  await db.collection("platformSettings").updateOne(
+    { _id: STOCK_SETTINGS_ID },
+    { $set: { sites: normalized, updatedAt: new Date(), updatedBy: String(actor?.id || actor?._id || "") } },
+    { upsert: true },
+  );
+  return normalized;
+}
+
+function stockText(value, max = 220) {
+  return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max);
+}
+
+function stockHeaderKey(value) {
+  return stockText(value, 80).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function stockNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const cleaned = String(value ?? "").replace(/#REF!/gi, "").replace(/[₹,\s]/g, "").trim();
+  const match = cleaned.match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) || 0 : 0;
+}
+
+function findStockHeaderRow(values = []) {
+  let best = { index: -1, score: 0 };
+  values.slice(0, 20).forEach((row, index) => {
+    const keys = (row || []).map(stockHeaderKey);
+    const score = [
+      keys.some((key) => /^(sno|srno|serialno|serial)$/.test(key)),
+      keys.some((key) => /(item|material|description|product|particular)/.test(key)),
+      keys.some((key) => /(qty|quantity|stock|usable|closing|balance|received)/.test(key)),
+      keys.some((key) => /(unit|uom)/.test(key)),
+    ].filter(Boolean).length;
+    if (score > best.score) best = { index, score };
+  });
+  return best.score >= 2 ? best.index : -1;
+}
+
+function pickStockColumn(headers = [], patterns = []) {
+  const keys = headers.map(stockHeaderKey);
+  for (const pattern of patterns) {
+    const found = keys.findIndex((key) => pattern.test(key));
+    if (found >= 0) return found;
+  }
+  return -1;
+}
+
+function parseStockSheet(sheet = {}, site = {}) {
+  const values = Array.isArray(sheet.values) ? sheet.values : [];
+  const headerIndex = findStockHeaderRow(values);
+  if (headerIndex < 0) {
+    return { name: sheet.name || "Sheet", headerRow: 0, items: [], totalQuantity: 0, totalValue: 0, categories: [], lowStockItems: [] };
+  }
+  const headers = (values[headerIndex] || []).map((value) => stockText(value, 80));
+  const itemCol = pickStockColumn(headers, [/item.*name/, /item.*description/, /material.*description/, /description/, /particular/, /product/, /item/]);
+  const quantityCol = pickStockColumn(headers, [/usablestock/, /closingstock/, /^balance$/, /balanceqty/, /^qty$/, /quantity/, /stockqty/, /receivedquantity/, /recivedquantity/, /received/]);
+  const receivedCol = pickStockColumn(headers, [/^received$/, /receivedquantity/, /recivedquantity/, /^inward$/, /inwardqty/]);
+  const issuedCol = pickStockColumn(headers, [/stockissued/, /issuedquantity/, /^issued$/, /outward/, /consumed/]);
+  const unitCol = pickStockColumn(headers, [/^unit$/, /^uom$/, /unitofmeasure/]);
+  const categoryCol = pickStockColumn(headers, [/catagery/, /category/, /group/, /department/]);
+  const locationCol = pickStockColumn(headers, [/location/, /site/, /godown/, /warehouse/]);
+  const minCol = pickStockColumn(headers, [/reorder.*min/, /minimum/, /^min$/]);
+  const maxCol = pickStockColumn(headers, [/reorder.*max/, /maximum/, /^max$/]);
+  const rateCol = pickStockColumn(headers, [/^rate$/, /unitrate/, /price/]);
+  const valueCol = pickStockColumn(headers, [/^value$/, /^amount$/, /stockvalue/, /total/]);
+
+  if (itemCol < 0 || quantityCol < 0) {
+    return { name: sheet.name || "Sheet", headerRow: headerIndex + 1, items: [], totalQuantity: 0, totalValue: 0, categories: [], lowStockItems: [] };
+  }
+
+  const items = values.slice(headerIndex + 1).map((row, rowIndex) => {
+    const itemName = stockText(row[itemCol], 180);
+    const quantity = stockNumber(row[quantityCol]);
+    const received = receivedCol >= 0 ? stockNumber(row[receivedCol]) : quantity;
+    const issued = issuedCol >= 0 ? stockNumber(row[issuedCol]) : 0;
+    const rate = rateCol >= 0 ? stockNumber(row[rateCol]) : 0;
+    const explicitValue = valueCol >= 0 ? stockNumber(row[valueCol]) : 0;
+    return {
+      rowNumber: headerIndex + 2 + rowIndex,
+      itemName,
+      quantity,
+      received,
+      issued,
+      unit: unitCol >= 0 ? stockText(row[unitCol], 40) : "",
+      category: categoryCol >= 0 ? stockText(row[categoryCol], 80) : stockText(sheet.name, 80),
+      location: locationCol >= 0 ? stockText(row[locationCol], 80) : site.name,
+      reorderMin: minCol >= 0 ? stockNumber(row[minCol]) : 0,
+      reorderMax: maxCol >= 0 ? stockNumber(row[maxCol]) : 0,
+      rate,
+      value: explicitValue || (rate ? rate * quantity : 0),
+    };
+  }).filter((item) => item.itemName && !/^(total|grand total)$/i.test(item.itemName));
+
+  const categoriesMap = new Map();
+  items.forEach((item) => {
+    const key = item.category || "Uncategorized";
+    const current = categoriesMap.get(key) || { name: key, items: 0, quantity: 0, value: 0 };
+    current.items += 1;
+    current.quantity += item.quantity;
+    current.value += item.value;
+    categoriesMap.set(key, current);
+  });
+
+  return {
+    name: sheet.name || "Sheet",
+    headerRow: headerIndex + 1,
+    items,
+    totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+    totalReceived: items.reduce((sum, item) => sum + item.received, 0),
+    totalIssued: items.reduce((sum, item) => sum + item.issued, 0),
+    totalValue: items.reduce((sum, item) => sum + item.value, 0),
+    categories: [...categoriesMap.values()].sort((a, b) => b.items - a.items).slice(0, 8),
+    lowStockItems: items.filter((item) => item.quantity <= Math.max(0, item.reorderMin || 0)).slice(0, 8),
+  };
+}
+
+async function buildStockSiteDashboard(site, { force = false } = {}) {
+  const cacheKey = `${site.id}:${site.spreadsheetId}`;
+  const cached = stockDashboardCache.get(cacheKey);
+  if (!force && cached && Date.now() - cached.createdAt < STOCK_DASHBOARD_CACHE_TTL_MS) return cached.data;
+
+  const sheets = await fetchRawSheetValues(site.spreadsheetId);
+  const parsedSheets = sheets.map((sheet) => parseStockSheet(sheet, site));
+  const items = parsedSheets.flatMap((sheet) => sheet.items.map((item) => ({ ...item, sheetName: sheet.name })));
+  const categoryMap = new Map();
+  items.forEach((item) => {
+    const key = item.category || "Uncategorized";
+    const current = categoryMap.get(key) || { name: key, items: 0, quantity: 0, value: 0 };
+    current.items += 1;
+    current.quantity += item.quantity;
+    current.value += item.value;
+    categoryMap.set(key, current);
+  });
+  const dashboard = {
+    ...site,
+    fetchedAt: new Date().toISOString(),
+    summary: {
+      sheets: parsedSheets.length,
+      totalItems: items.length,
+      totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+      totalReceived: items.reduce((sum, item) => sum + item.received, 0),
+      totalIssued: items.reduce((sum, item) => sum + item.issued, 0),
+      totalValue: items.reduce((sum, item) => sum + item.value, 0),
+      lowStock: items.filter((item) => item.quantity <= Math.max(0, item.reorderMin || 0)).length,
+      categories: categoryMap.size,
+    },
+    sheets: parsedSheets.map((sheet) => ({
+      name: sheet.name,
+      headerRow: sheet.headerRow,
+      totalItems: sheet.items.length,
+      totalQuantity: sheet.totalQuantity,
+      totalReceived: sheet.totalReceived,
+      totalIssued: sheet.totalIssued,
+      totalValue: sheet.totalValue,
+      categories: sheet.categories,
+      lowStockItems: sheet.lowStockItems,
+    })),
+    categories: [...categoryMap.values()].sort((a, b) => b.items - a.items).slice(0, 12),
+    lowStockItems: items.filter((item) => item.quantity <= Math.max(0, item.reorderMin || 0)).slice(0, 12),
+    items,
+    recentItems: items.slice(0, 80),
+  };
+  stockDashboardCache.set(cacheKey, { createdAt: Date.now(), data: dashboard });
+  return dashboard;
+}
+
+async function readStockDashboard({ force = false } = {}) {
+  const settings = await getStockSettings();
+  const results = await Promise.allSettled(settings.sites.map((site) => buildStockSiteDashboard(site, { force })));
+  const sites = results.map((result, index) => {
+    if (result.status === "fulfilled") return result.value;
+    return {
+      ...settings.sites[index],
+      error: result.reason?.message || "Could not read stock sheet",
+      fetchedAt: new Date().toISOString(),
+      summary: { sheets: 0, totalItems: 0, totalQuantity: 0, totalReceived: 0, totalIssued: 0, totalValue: 0, lowStock: 0, categories: 0 },
+      sheets: [],
+      categories: [],
+      lowStockItems: [],
+      items: [],
+      recentItems: [],
+    };
+  });
+  return {
+    sites,
+    summary: {
+      sites: sites.length,
+      linkedSites: sites.filter((site) => site.spreadsheetId).length,
+      totalSheets: sites.reduce((sum, site) => sum + (site.summary?.sheets || 0), 0),
+      totalItems: sites.reduce((sum, site) => sum + (site.summary?.totalItems || 0), 0),
+      totalQuantity: sites.reduce((sum, site) => sum + (site.summary?.totalQuantity || 0), 0),
+      lowStock: sites.reduce((sum, site) => sum + (site.summary?.lowStock || 0), 0),
+      totalValue: sites.reduce((sum, site) => sum + (site.summary?.totalValue || 0), 0),
+    },
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 function getClientIp(req) {
@@ -9884,6 +10400,66 @@ app.delete("/dmr-dashboard/settings", requireSuperAdmin, (req, res) => {
   res.json({ success: true, settings: publicDmrSettings() });
 });
 
+app.get("/dmr-dashboard/reminders/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const settings = await getDmrReminderSettings();
+    const contacts = whatsappService.listContacts().map((contact) => ({
+      id: contact.id,
+      name: contact.name || contact.profileName || contact.phone,
+      profileName: contact.profileName || "",
+      phone: normalizePhone(contact.phone),
+      source: contact.source || "",
+    })).filter((contact) => contact.phone);
+    const date = dmrDateKey(req.query.date) || istDateKey(new Date());
+    const status = {};
+    for (const type of Object.keys(DMR_REMINDER_TYPES)) {
+      const reminderDate = dmrReminderDateForType(type, date);
+      const run = await db.collection("dmrWhatsAppReminderRuns").findOne({ _id: dmrReminderRunId(type, reminderDate) });
+      status[type] = serializeDmrReminderRun(run, type, reminderDate);
+    }
+    res.json({
+      settings,
+      contacts,
+      reminderTypes: Object.values(DMR_REMINDER_TYPES).map((item) => ({
+        id: item.id,
+        label: item.label,
+        templateName: item.templateName,
+        defaultTime: item.defaultTime,
+      })),
+      status,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Could not load DMR reminders" });
+  }
+});
+
+app.patch("/dmr-dashboard/reminders/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const settings = await saveDmrReminderSettings({
+      enabled: req.body?.enabled !== false,
+      reminders: req.body?.reminders || {},
+      actor: req.authUser,
+    });
+    addActivityLog({ req, action: "Updated DMR WhatsApp reminders", target: "DMR reminders" });
+    res.json({ success: true, settings });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not save DMR reminders" });
+  }
+});
+
+app.post("/dmr-dashboard/reminders/send-now", requireSuperAdmin, async (req, res) => {
+  try {
+    const type = projectText(req.body?.type || req.query.type) || "actualManpower";
+    const date = dmrDateKey(req.body?.date || req.query.date) || istDateKey(new Date());
+    const reminder = await sendDmrWhatsAppReminder({ type, dateKey: date, source: "manual", force: true });
+    addActivityLog({ req, action: "Sent DMR WhatsApp reminder", target: DMR_REMINDER_TYPES[type]?.label || type, details: reminder });
+    res.json({ success: true, reminder });
+  } catch (error) {
+    res.status(error.status || 400).json({ error: error.message || "Could not send DMR reminder" });
+  }
+});
+
 app.get("/mrn-dashboard/settings", (req, res) => {
   if (!hasMenuAccess(req, "project-mrn")) return res.status(403).json({ error: "MRN module access required" });
   res.json({
@@ -9934,6 +10510,114 @@ app.delete("/mrn-dashboard/settings", requireSuperAdmin, (req, res) => {
   saveMrnSettings();
   addActivityLog({ req, action: "Unlinked MRN sheet", target: previousSpreadsheetId || "MRN sheet" });
   res.json({ success: true, settings: publicMrnSettings() });
+});
+
+app.get("/project-stock", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-stock")) return res.status(403).json({ error: "Stock module access required" });
+    const dashboard = await readStockDashboard({ force: ["1", "true", "yes"].includes(String(req.query.force || "").toLowerCase()) });
+    res.json({
+      ...dashboard,
+      canManage: Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_stock")),
+    });
+  } catch (error) {
+    console.error("Stock dashboard error:", error);
+    res.status(500).json({ error: `Could not load stock dashboard: ${error.message}` });
+  }
+});
+
+app.post("/project-stock/sites", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-stock")) return res.status(403).json({ error: "Stock module access required" });
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_project_stock")) return res.status(403).json({ error: "Stock management permission required" });
+    const name = profileText(req.body?.name || req.body?.siteName, 80);
+    const spreadsheetId = normalizeSpreadsheetId(req.body?.spreadsheetId || req.body?.sheetUrl || req.body?.url || req.body?.link);
+    if (!name) return res.status(400).json({ error: "Site name is required" });
+    if (!spreadsheetId) return res.status(400).json({ error: "Paste a valid Google Sheet link or spreadsheet ID" });
+    const file = await assertNativeGoogleSpreadsheet(spreadsheetId, "Stock sheet");
+    const settings = await getStockSettings();
+    if (settings.sites.some((site) => site.spreadsheetId === spreadsheetId)) return res.status(409).json({ error: "This stock sheet is already linked" });
+    const site = normalizeStockSite({
+      name,
+      spreadsheetId,
+      architecture: req.body?.architecture || "auto",
+      notes: req.body?.notes || "",
+      linkedAt: new Date().toISOString(),
+      linkedBy: req.authUser?.displayName || req.authUser?.username || "Super Admin",
+      linkedFileName: file.name || null,
+    });
+    await buildStockSiteDashboard(site, { force: true });
+    const sites = await saveStockSites([...settings.sites, site], req.authUser);
+    addActivityLog({ req, action: "Linked stock sheet", target: name, details: { spreadsheetId, siteId: site.id } });
+    res.json({ success: true, site, sites });
+  } catch (error) {
+    console.error("Stock site add error:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.patch("/project-stock/sites/:id", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-stock")) return res.status(403).json({ error: "Stock module access required" });
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_project_stock")) return res.status(403).json({ error: "Stock management permission required" });
+    const settings = await getStockSettings();
+    const index = settings.sites.findIndex((site) => site.id === req.params.id);
+    if (index < 0) return res.status(404).json({ error: "Stock site not found" });
+    const incomingSpreadsheetId = normalizeSpreadsheetId(req.body?.spreadsheetId || req.body?.sheetUrl || req.body?.url || req.body?.link);
+    const spreadsheetId = incomingSpreadsheetId || settings.sites[index].spreadsheetId;
+    const name = profileText(req.body?.name || req.body?.siteName || settings.sites[index].name, 80);
+    if (!name) return res.status(400).json({ error: "Site name is required" });
+    if (!spreadsheetId) return res.status(400).json({ error: "Paste a valid Google Sheet link or spreadsheet ID" });
+    const file = incomingSpreadsheetId ? await assertNativeGoogleSpreadsheet(spreadsheetId, "Stock sheet") : null;
+    if (settings.sites.some((site) => site.id !== req.params.id && site.spreadsheetId === spreadsheetId)) return res.status(409).json({ error: "This stock sheet is already linked" });
+    const site = normalizeStockSite({
+      ...settings.sites[index],
+      ...req.body,
+      id: req.params.id,
+      name,
+      spreadsheetId,
+      linkedFileName: file?.name || settings.sites[index].linkedFileName || null,
+      updatedAt: new Date().toISOString(),
+    });
+    await buildStockSiteDashboard(site, { force: true });
+    settings.sites[index] = site;
+    const sites = await saveStockSites(settings.sites, req.authUser);
+    addActivityLog({ req, action: "Updated stock site", target: name, details: { spreadsheetId, siteId: site.id } });
+    res.json({ success: true, site, sites });
+  } catch (error) {
+    console.error("Stock site update error:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/project-stock/sites/:id", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-stock")) return res.status(403).json({ error: "Stock module access required" });
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_project_stock")) return res.status(403).json({ error: "Stock management permission required" });
+    const settings = await getStockSettings();
+    const site = settings.sites.find((item) => item.id === req.params.id);
+    if (!site) return res.status(404).json({ error: "Stock site not found" });
+    stockDashboardCache.delete(`${site.id}:${site.spreadsheetId}`);
+    const sites = await saveStockSites(settings.sites.filter((item) => item.id !== req.params.id), req.authUser);
+    addActivityLog({ req, action: "Unlinked stock sheet", target: site.name, details: { spreadsheetId: site.spreadsheetId, siteId: site.id } });
+    res.json({ success: true, sites });
+  } catch (error) {
+    console.error("Stock site delete error:", error);
+    res.status(500).json({ error: "Could not delete stock site" });
+  }
+});
+
+app.get("/project-stock/sites/:id", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-stock")) return res.status(403).json({ error: "Stock module access required" });
+    const settings = await getStockSettings();
+    const site = settings.sites.find((item) => item.id === req.params.id);
+    if (!site) return res.status(404).json({ error: "Stock site not found" });
+    res.json({ site: await buildStockSiteDashboard(site, { force: ["1", "true", "yes"].includes(String(req.query.force || "").toLowerCase()) }) });
+  } catch (error) {
+    console.error("Stock site detail error:", error);
+    res.status(500).json({ error: `Could not load stock site: ${error.message}` });
+  }
 });
 
 app.get("/mrn-dashboard", async (req, res) => {
@@ -11001,6 +11685,9 @@ const PORT = process.env.PORT || 5000;
 if (require.main === module) {
   refreshEmployeeReminderCron().catch((error) => {
     console.error("Employee WhatsApp reminder cron setup error:", error);
+  });
+  refreshDmrReminderCrons().catch((error) => {
+    console.error("DMR WhatsApp reminder cron setup error:", error);
   });
 
   cron.schedule("0 12 * * *", async () => {

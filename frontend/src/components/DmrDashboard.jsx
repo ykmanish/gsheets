@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BellRing,
   CalendarDays,
+  Check,
+  Clock3,
   Download,
   FileSpreadsheet,
   Filter,
@@ -14,6 +17,8 @@ import {
   RefreshCw,
   Save,
   Search,
+  Send,
+  Users,
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -1449,6 +1454,17 @@ export default function DmrDashboard({ darkMode }) {
     DMR_REPORT_SECTION_OPTIONS.map((option) => option.id),
   );
   const [reportTradeSearch, setReportTradeSearch] = useState("");
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [reminderSending, setReminderSending] = useState("");
+  const [reminderContacts, setReminderContacts] = useState([]);
+  const [reminderTypes, setReminderTypes] = useState([]);
+  const [reminderStatus, setReminderStatus] = useState({});
+  const [reminderSettings, setReminderSettings] = useState({
+    enabled: true,
+    reminders: {},
+  });
 
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode
@@ -1479,6 +1495,90 @@ export default function DmrDashboard({ darkMode }) {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [closeReportDrawer, reportOpen]);
+
+  async function openReminderDrawer() {
+    setReminderOpen(true);
+    setReminderLoading(true);
+    try {
+      const result = await api(`/dmr-dashboard/reminders/settings?date=${encodeURIComponent(date)}`);
+      setReminderSettings(result.settings || { enabled: true, reminders: {} });
+      setReminderContacts(result.contacts || []);
+      setReminderTypes(result.reminderTypes || []);
+      setReminderStatus(result.status || {});
+    } catch (error) {
+      toast.error(error.message || "Could not load DMR reminders");
+    } finally {
+      setReminderLoading(false);
+    }
+  }
+
+  function updateDmrReminder(type, patch) {
+    setReminderSettings((current) => ({
+      ...current,
+      reminders: {
+        ...(current.reminders || {}),
+        [type]: {
+          ...((current.reminders || {})[type] || {}),
+          ...patch,
+        },
+      },
+    }));
+  }
+
+  function toggleDmrReminderContact(type, phone) {
+    const normalizedPhone = String(phone || "").replace(/\D/g, "");
+    if (!normalizedPhone) return;
+    setReminderSettings((current) => {
+      const reminder = (current.reminders || {})[type] || {};
+      const selected = new Set(reminder.recipientPhones || []);
+      if (selected.has(normalizedPhone)) selected.delete(normalizedPhone);
+      else selected.add(normalizedPhone);
+      return {
+        ...current,
+        reminders: {
+          ...(current.reminders || {}),
+          [type]: { ...reminder, recipientPhones: [...selected] },
+        },
+      };
+    });
+  }
+
+  async function saveDmrReminderSchedule(event) {
+    event?.preventDefault?.();
+    if (reminderSaving) return;
+    setReminderSaving(true);
+    try {
+      const result = await api("/dmr-dashboard/reminders/settings", {
+        method: "PATCH",
+        body: JSON.stringify(reminderSettings),
+      });
+      setReminderSettings(result.settings || reminderSettings);
+      toast.success("DMR reminder schedule saved");
+      setReminderOpen(false);
+    } catch (error) {
+      toast.error(error.message || "Could not save DMR reminders");
+    } finally {
+      setReminderSaving(false);
+    }
+  }
+
+  async function sendDmrReminderNow(type) {
+    if (reminderSending) return;
+    setReminderSending(type);
+    try {
+      const result = await api("/dmr-dashboard/reminders/send-now", {
+        method: "POST",
+        body: JSON.stringify({ type, date }),
+      });
+      const reminder = result.reminder || {};
+      setReminderStatus((current) => ({ ...current, [type]: reminder }));
+      toast.success(`${reminder.sent || 0} sent, ${reminder.failed || 0} failed, ${reminder.skipped || 0} skipped`);
+    } catch (error) {
+      toast.error(error.message || "Could not send DMR reminder");
+    } finally {
+      setReminderSending("");
+    }
+  }
 
   const load = useCallback(
     async (quiet = false) => {
@@ -2191,6 +2291,12 @@ export default function DmrDashboard({ darkMode }) {
                   className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-3xl border border-[#10a66b] bg-[#e8f6ee] px-4 text-sm font-medium text-[#0f6b49] hover:bg-[#dff3e8] sm:h-12 sm:shrink-0 sm:px-5"
                 >
                   <FileSpreadsheet className="h-4 w-4" /> Tomorrow&apos;s Plan
+                </button>
+                <button
+                  onClick={openReminderDrawer}
+                  className={`flex h-11 min-w-0 items-center justify-center gap-2 rounded-3xl border px-4 text-sm font-medium sm:h-12 sm:shrink-0 sm:px-5 ${darkMode ? "border-red-400/30 bg-red-400/10 text-red-100 hover:bg-red-400/15" : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"}`}
+                >
+                  <BellRing className="h-4 w-4" /> Reminders
                 </button>
               </div>
               <div className="grid w-full grid-cols-1 gap-2 min-[430px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center lg:justify-end">
@@ -3681,6 +3787,372 @@ export default function DmrDashboard({ darkMode }) {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {reminderOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-[#171714]/60 backdrop-blur-md"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setReminderOpen(false);
+          }}
+        >
+          <form
+            onSubmit={saveDmrReminderSchedule}
+            className={`flex h-[100dvh] w-screen flex-col overflow-hidden ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#faf9f5] text-[#171714]"}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="DMR WhatsApp reminder schedule"
+          >
+            <div
+              className={`flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span
+                  className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-red-400/10 text-red-100" : "bg-red-50 text-red-600"}`}
+                >
+                  <BellRing className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p
+                    className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-red-200" : "text-red-600"}`}
+                  >
+                    DMR WhatsApp reminders
+                  </p>
+                  <h3 className="mt-1 text-2xl font-semibold">
+                    Reminder schedule
+                  </h3>
+                  <p className={`mt-1 hidden text-sm sm:block ${muted}`}>
+                    Actual manpower, tomorrow&apos;s plan, and site daily report
+                    reminders run from the backend cron even when this tab is
+                    closed.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReminderOpen(false)}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-7">
+              <section
+                className={`rounded-[30px] border p-4 sm:p-6 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/[0.07] bg-white"}`}
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p
+                      className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}
+                    >
+                      Daily schedule
+                    </p>
+                    <h4 className="mt-2 text-2xl font-semibold">
+                      Send only to pending DMR users
+                    </h4>
+                    <p className={`mt-2 max-w-3xl text-sm leading-6 ${muted}`}>
+                      Each reminder sends once per day per type. People selected
+                      below are skipped automatically once their matching DMR
+                      data is filled.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReminderSettings((current) => ({
+                        ...current,
+                        enabled: !current.enabled,
+                      }))
+                    }
+                    className={`flex h-14 w-28 items-center justify-between rounded-full p-2 text-sm font-semibold transition ${reminderSettings.enabled ? "bg-[#10a66b] text-white" : darkMode ? "bg-white/10 text-white/55" : "bg-black/[0.06] text-black/55"}`}
+                  >
+                    <span
+                      className={`h-10 w-10 rounded-full bg-white transition ${reminderSettings.enabled ? "translate-x-0" : "translate-x-14"}`}
+                    />
+                    <span>{reminderSettings.enabled ? "On" : "Off"}</span>
+                  </button>
+                </div>
+              </section>
+
+              {reminderLoading ? (
+                <div
+                  className={`mt-5 rounded-[30px] border px-5 py-14 text-center text-sm ${darkMode ? "border-white/10 bg-white/[0.025] text-white/55" : "border-black/[0.06] bg-white text-black/55"}`}
+                >
+                  <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
+                  Loading WhatsApp contacts and DMR reminder status...
+                </div>
+              ) : (
+                <div className="mt-5 space-y-5">
+                  <div className="grid gap-4 xl:grid-cols-3">
+                    {reminderTypes.map((item) => {
+                      const reminder =
+                        (reminderSettings.reminders || {})[item.id] || {};
+                      const selectedCount = Array.isArray(
+                        reminder.recipientPhones,
+                      )
+                        ? reminder.recipientPhones.length
+                        : 0;
+                      const status = reminderStatus[item.id] || {};
+                      const itemEnabled = reminder.enabled !== false;
+                      return (
+                        <article
+                          key={item.id}
+                          className={`rounded-[28px] border p-4 ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.07] bg-white"}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p
+                                className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}
+                              >
+                                {item.templateName}
+                              </p>
+                              <h5 className="mt-2 text-xl font-semibold">
+                                {item.label}
+                              </h5>
+                              <p className={`mt-1 text-xs ${muted}`}>
+                                {selectedCount} recipients selected
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDmrReminder(item.id, {
+                                  enabled: !itemEnabled,
+                                })
+                              }
+                              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${itemEnabled ? "bg-emerald-500/10 text-emerald-700" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}
+                            >
+                              {itemEnabled ? "On" : "Off"}
+                            </button>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_auto]">
+                            <label className="block">
+                              <span
+                                className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}
+                              >
+                                Reminder time
+                              </span>
+                              <input
+                                type="time"
+                                value={reminder.time || item.defaultTime}
+                                onChange={(event) =>
+                                  updateDmrReminder(item.id, {
+                                    time: event.target.value,
+                                  })
+                                }
+                                className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm font-semibold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-[#fafafa]"}`}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => sendDmrReminderNow(item.id)}
+                              disabled={reminderSending === item.id}
+                              className={`mt-auto flex h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                            >
+                              {reminderSending === item.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Send className="h-4 w-4" />
+                              )}
+                              Send now
+                            </button>
+                          </div>
+
+                          <div
+                            className={`mt-4 rounded-2xl p-3 text-xs ${darkMode ? "bg-white/[0.035] text-white/60" : "bg-[#f5f7f2] text-black/55"}`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span>Last run</span>
+                              <span className="font-semibold">
+                                {status.finishedAt
+                                  ? new Date(status.finishedAt).toLocaleString()
+                                  : "Not sent yet"}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                              <span className="rounded-xl bg-emerald-500/10 px-2 py-1 text-emerald-700">
+                                {status.sent || 0} sent
+                              </span>
+                              <span className="rounded-xl bg-red-500/10 px-2 py-1 text-red-700">
+                                {status.failed || 0} failed
+                              </span>
+                              <span className="rounded-xl bg-sky-500/10 px-2 py-1 text-sky-700">
+                                {status.skipped || 0} skipped
+                              </span>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+
+                  <section
+                    className={`overflow-hidden rounded-[30px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.07] bg-white"}`}
+                  >
+                    <div className="flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+                      <div>
+                        <p
+                          className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}
+                        >
+                          Numbers
+                        </p>
+                        <h4 className="mt-1 text-2xl font-semibold">
+                          Reminder recipients
+                        </h4>
+                        <p className={`mt-1 text-sm ${muted}`}>
+                          Choose which WhatsApp contacts receive each reminder
+                          category.
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-3 py-1.5 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}
+                      >
+                        {reminderContacts.length} saved contacts
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[900px] w-full text-left">
+                        <thead
+                          className={
+                            darkMode
+                              ? "bg-white/[0.035] text-white/55"
+                              : "bg-[#f4f0e8] text-black/55"
+                          }
+                        >
+                          <tr>
+                            <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.16em]">
+                              Contact
+                            </th>
+                            {reminderTypes.map((item) => {
+                              const selectedCount = Array.isArray(
+                                reminderSettings.reminders?.[item.id]
+                                  ?.recipientPhones,
+                              )
+                                ? reminderSettings.reminders[item.id]
+                                    .recipientPhones.length
+                                : 0;
+                              return (
+                                <th
+                                  key={item.id}
+                                  className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em]"
+                                >
+                                  <span className="block">{item.label}</span>
+                                  <span className="mt-1 block normal-case tracking-normal text-black/40 dark:text-white/40">
+                                    {selectedCount} selected
+                                  </span>
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody
+                          className={
+                            darkMode
+                              ? "divide-y divide-white/10"
+                              : "divide-y divide-black/[0.06]"
+                          }
+                        >
+                          {reminderContacts.map((contact) => (
+                            <tr key={contact.phone}>
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#10a66b] text-sm font-semibold text-white">
+                                    {(contact.name || contact.phone || "?")
+                                      .split(/\s+/)
+                                      .map((part) => part[0])
+                                      .join("")
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </span>
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold">
+                                      {contact.name || contact.phone}
+                                    </p>
+                                    <p className={`truncate text-xs ${muted}`}>
+                                      +{contact.phone}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+                              {reminderTypes.map((item) => {
+                                const selectedPhones =
+                                  reminderSettings.reminders?.[item.id]
+                                    ?.recipientPhones || [];
+                                const checked = selectedPhones.includes(
+                                  contact.phone,
+                                );
+                                return (
+                                  <td key={item.id} className="px-4 py-4">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        toggleDmrReminderContact(
+                                          item.id,
+                                          contact.phone,
+                                        )
+                                      }
+                                      className={`inline-flex h-11 min-w-32 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold transition ${checked ? "border-emerald-400 bg-emerald-50 text-emerald-800" : darkMode ? "border-white/10 bg-white/[0.025] text-white/50 hover:bg-white/[0.055]" : "border-black/10 bg-white text-black/45 hover:bg-[#f1f7f4]"}`}
+                                    >
+                                      <span
+                                        className={`grid h-5 w-5 place-items-center rounded-lg border transition ${checked ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                                      >
+                                        {checked && (
+                                          <Check className="h-3.5 w-3.5" />
+                                        )}
+                                      </span>
+                                      {checked ? "Selected" : "Select"}
+                                    </button>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                          {!reminderContacts.length && (
+                            <tr>
+                              <td
+                                colSpan={1 + reminderTypes.length}
+                                className={`px-5 py-12 text-center text-sm ${muted}`}
+                              >
+                                No WhatsApp contacts saved yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </div>
+              )}
+            </div>
+
+            <div
+              className={`flex shrink-0 items-center justify-end gap-2 border-t px-4 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+            >
+              <button
+                type="button"
+                onClick={() => setReminderOpen(false)}
+                className={`h-11 rounded-full border px-5 text-sm ${darkMode ? "border-white/10 text-white/60" : "border-black/10 text-black/60"}`}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={reminderSaving || reminderLoading}
+                className={`flex h-11 min-w-40 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}
+              >
+                {reminderSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save schedule
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

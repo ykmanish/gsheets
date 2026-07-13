@@ -115,7 +115,14 @@ async function connectAuthDb() {
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
   await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
-  await authDb.collection("dmrWhatsAppReminderRuns").createIndex({ date: 1, type: 1 }, { unique: true });
+  try {
+    await authDb.collection("dmrWhatsAppReminderRuns").dropIndex("date_1_type_1");
+  } catch (error) {
+    if (error?.codeName !== "IndexNotFound" && error?.code !== 27) {
+      console.warn("Could not drop old DMR reminder run index:", error.message);
+    }
+  }
+  await authDb.collection("dmrWhatsAppReminderRuns").createIndex({ date: 1, type: 1, scope: 1 }, { unique: true });
   await seedSuperAdmin();
   return authDb;
 }
@@ -535,6 +542,7 @@ const employeeMetaCache = new Map();
 const employeeReportCache = new Map();
 let employeeReminderCronTask = null;
 const dmrReminderCronTasks = new Map();
+let dmrReminderSchedulerBusy = false;
 const EMPLOYEE_META_CACHE_MS = 5 * 60 * 1000;
 const EMPLOYEE_REPORT_CACHE_MS = 60 * 1000;
 
@@ -1689,8 +1697,9 @@ async function saveDmrReminderSettings({ reminders = {}, enabled = true, actor =
   return settings;
 }
 
-function dmrReminderRunId(type, dateKey) {
-  return `dmr-whatsapp-reminder:${type}:${dmrDateKey(dateKey) || istDateKey(new Date())}`;
+function dmrReminderRunId(type, dateKey, scope = "auto") {
+  const normalizedScope = projectText(scope) || "auto";
+  return `dmr-whatsapp-reminder:${normalizedScope}:${type}:${dmrDateKey(dateKey) || istDateKey(new Date())}`;
 }
 
 function dmrReminderCronExpression(time) {
@@ -1707,24 +1716,41 @@ function configureDmrReminderCrons(settings = {}) {
   dmrReminderCronTasks.clear();
   const normalized = normalizeDmrReminderSettings(settings);
   if (normalized.enabled === false) {
-    console.log("DMR WhatsApp reminder crons disabled");
+    console.log("DMR WhatsApp reminder scheduler disabled");
     return;
   }
-  for (const item of Object.values(DMR_REMINDER_TYPES)) {
-    const reminder = normalized.reminders[item.id];
-    if (!reminder?.enabled) continue;
-    const expression = dmrReminderCronExpression(reminder.time);
-    const task = cron.schedule(expression, async () => {
-      try {
-        const result = await sendDmrWhatsAppReminder({ type: item.id, source: "cron" });
-        console.log(`DMR ${item.id} reminder ${result.status} for ${result.date}: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped`);
-      } catch (error) {
-        console.error(`DMR ${item.id} reminder cron error:`, error);
+  const task = cron.schedule("* * * * *", async () => {
+    if (dmrReminderSchedulerBusy) return;
+    dmrReminderSchedulerBusy = true;
+    try {
+      const liveSettings = await getDmrReminderSettings();
+      if (liveSettings.enabled === false) return;
+      const now = new Date();
+      const today = istDateKey(now);
+      const nowTime = istTimeKey(now);
+      const nowMinutes = minutesFromTimeKey(nowTime);
+      for (const item of Object.values(DMR_REMINDER_TYPES)) {
+        const reminder = liveSettings.reminders[item.id];
+        if (!reminder?.enabled) continue;
+        const scheduledMinutes = minutesFromTimeKey(reminder.time || item.defaultTime);
+        if (scheduledMinutes === null || nowMinutes === null || nowMinutes < scheduledMinutes) continue;
+        const reminderDate = dmrReminderDateForType(item.id, today);
+        const result = await sendDmrWhatsAppReminder({ type: item.id, dateKey: today, source: "cron" });
+        if (result.status === "completed") {
+          console.log(`DMR ${item.id} reminder checked at ${nowTime} IST for ${reminderDate}: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped`);
+        }
       }
-    }, { timezone: "Asia/Kolkata" });
-    dmrReminderCronTasks.set(item.id, task);
-    console.log(`DMR ${item.id} WhatsApp reminder cron scheduled at ${reminder.time} IST (${expression})`);
-  }
+    } catch (error) {
+      console.error("DMR WhatsApp reminder scheduler error:", error);
+    } finally {
+      dmrReminderSchedulerBusy = false;
+    }
+  }, { timezone: "Asia/Kolkata" });
+  dmrReminderCronTasks.set("scheduler", task);
+  const summary = Object.values(DMR_REMINDER_TYPES)
+    .map((item) => `${item.id}:${normalized.reminders[item.id]?.time || item.defaultTime}`)
+    .join(", ");
+  console.log(`DMR WhatsApp reminder scheduler active in IST (${summary})`);
 }
 
 async function refreshDmrReminderCrons() {
@@ -1757,6 +1783,7 @@ function serializeDmrReminderRun(run = null, type = "actualManpower", dateKey = 
   return {
     type,
     date: dmrDateKey(run?.date || dateKey) || istDateKey(new Date()),
+    scope: run?.scope || "",
     status: run?.status || "not_sent",
     sent: Number(run?.sent || 0),
     failed: Number(run?.failed || 0),
@@ -1828,11 +1855,13 @@ async function sendDmrWhatsAppReminder({ type = "actualManpower", dateKey = istD
   const settings = await getDmrReminderSettings();
   const reminder = settings.reminders[type];
   const date = dmrReminderDateForType(type, dateKey);
-  const runId = dmrReminderRunId(type, date);
+  const scope = source === "cron" ? "auto" : "manual";
+  const runId = dmrReminderRunId(type, date, scope);
   const existingRun = await db.collection("dmrWhatsAppReminderRuns").findOne({ _id: runId });
   if (!force && existingRun?.status === "completed") return serializeDmrReminderRun(existingRun, type, date);
+  if (!force && existingRun?.status === "running") return serializeDmrReminderRun(existingRun, type, date);
   if (settings.enabled === false || reminder?.enabled === false) {
-    const skipped = { _id: runId, type, date, status: "skipped", reason: "Reminder disabled", recipients: 0, sent: 0, failed: 0, skipped: 0, results: [], source, finishedAt: new Date() };
+    const skipped = { _id: runId, type, date, scope, status: "skipped", reason: "Reminder disabled", recipients: 0, sent: 0, failed: 0, skipped: 0, results: [], source, finishedAt: new Date() };
     await db.collection("dmrWhatsAppReminderRuns").updateOne({ _id: runId }, { $set: skipped }, { upsert: true });
     return serializeDmrReminderRun(skipped, type, date);
   }
@@ -1843,11 +1872,47 @@ async function sendDmrWhatsAppReminder({ type = "actualManpower", dateKey = istD
   const templateName = projectText(reminder.templateName) || config.templateName;
   const filledPhones = await dmrReminderFilledContacts(type, date, contacts);
   const results = [];
-  await db.collection("dmrWhatsAppReminderRuns").updateOne(
-    { _id: runId },
-    { $set: { _id: runId, type, date, status: "running", source, templateName, recipients: contacts.length, startedAt, updatedAt: startedAt } },
-    { upsert: true },
-  );
+  if (!force) {
+    const lockPayload = {
+      _id: runId,
+      type,
+      date,
+      scope,
+      status: "running",
+      source,
+      templateName,
+      recipients: contacts.length,
+      startedAt,
+      updatedAt: startedAt,
+    };
+    if (existingRun) {
+      const lock = await db.collection("dmrWhatsAppReminderRuns").findOneAndUpdate(
+        { _id: runId, status: { $nin: ["running", "completed"] } },
+        { $set: lockPayload },
+        { returnDocument: "after" },
+      );
+      if (!lock) {
+        const run = await db.collection("dmrWhatsAppReminderRuns").findOne({ _id: runId });
+        return serializeDmrReminderRun(run, type, date);
+      }
+    } else {
+      try {
+        await db.collection("dmrWhatsAppReminderRuns").insertOne(lockPayload);
+      } catch (error) {
+        if (error?.code === 11000) {
+          const run = await db.collection("dmrWhatsAppReminderRuns").findOne({ _id: runId });
+          return serializeDmrReminderRun(run, type, date);
+        }
+        throw error;
+      }
+    }
+  } else {
+    await db.collection("dmrWhatsAppReminderRuns").updateOne(
+      { _id: runId },
+      { $set: { _id: runId, type, date, scope, status: "running", source, templateName, recipients: contacts.length, startedAt, updatedAt: startedAt } },
+      { upsert: true },
+    );
+  }
 
   for (const contact of contacts) {
     const phone = normalizePhone(contact.phone);
@@ -1874,6 +1939,7 @@ async function sendDmrWhatsAppReminder({ type = "actualManpower", dateKey = istD
     _id: runId,
     type,
     date,
+    scope,
     status: "completed",
     source,
     templateName,
@@ -4962,6 +5028,27 @@ function istDateKey(value = new Date()) {
     return result;
   }, {});
   return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function istTimeKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "00:00";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: IST_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date).reduce((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.hour || "00"}:${parts.minute || "00"}`;
+}
+
+function minutesFromTimeKey(value = "") {
+  const match = String(value || "").match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 function addDaysToDateKey(dateKey, days = 0) {
@@ -10415,7 +10502,11 @@ app.get("/dmr-dashboard/reminders/settings", requireSuperAdmin, async (req, res)
     const status = {};
     for (const type of Object.keys(DMR_REMINDER_TYPES)) {
       const reminderDate = dmrReminderDateForType(type, date);
-      const run = await db.collection("dmrWhatsAppReminderRuns").findOne({ _id: dmrReminderRunId(type, reminderDate) });
+      const run = await db.collection("dmrWhatsAppReminderRuns")
+        .find({ type, date: reminderDate })
+        .sort({ finishedAt: -1, updatedAt: -1, startedAt: -1 })
+        .limit(1)
+        .next();
       status[type] = serializeDmrReminderRun(run, type, reminderDate);
     }
     res.json({

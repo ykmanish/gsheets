@@ -542,7 +542,6 @@ const employeeMetaCache = new Map();
 const employeeReportCache = new Map();
 let employeeReminderCronTask = null;
 const dmrReminderCronTasks = new Map();
-let dmrReminderSchedulerBusy = false;
 const EMPLOYEE_META_CACHE_MS = 5 * 60 * 1000;
 const EMPLOYEE_REPORT_CACHE_MS = 60 * 1000;
 
@@ -1565,6 +1564,7 @@ async function sendEmployeeDailyReportReminders({ dateKey = employeeReportToday(
   const runId = employeeReportReminderRunId(date);
   const existingRun = await db.collection("platformSettings").findOne({ _id: runId });
   if (!force && existingRun?.status === "completed" && existingRun?.source === source) return serializeReminderRun(existingRun, date);
+  if (!force && existingRun?.status === "running" && existingRun?.source === source) return serializeReminderRun(existingRun, date);
   if (isEmployeeReminderSunday(date)) {
     const skippedRun = {
       _id: runId,
@@ -1594,11 +1594,36 @@ async function sendEmployeeDailyReportReminders({ dateKey = employeeReportToday(
   const submitted = new Set(reports.filter((report) => report.reportDate === date).map((report) => String(report.userId)));
   const startedAt = new Date();
   const results = [];
-  await db.collection("platformSettings").updateOne(
-    { _id: runId },
-    { $set: { _id: runId, date, status: "running", source, templateName, recipients: linkedUsers.length, startedAt, updatedAt: startedAt } },
-    { upsert: true },
-  );
+  const lockPayload = { _id: runId, date, status: "running", source, templateName, recipients: linkedUsers.length, startedAt, updatedAt: startedAt };
+  if (!force) {
+    if (existingRun) {
+      const lock = await db.collection("platformSettings").findOneAndUpdate(
+        { _id: runId, $or: [{ status: { $nin: ["running", "completed"] } }, { source: { $ne: source } }] },
+        { $set: lockPayload },
+        { returnDocument: "after" },
+      );
+      if (!lock) {
+        const run = await db.collection("platformSettings").findOne({ _id: runId });
+        return serializeReminderRun(run, date);
+      }
+    } else {
+      try {
+        await db.collection("platformSettings").insertOne(lockPayload);
+      } catch (error) {
+        if (error?.code === 11000) {
+          const run = await db.collection("platformSettings").findOne({ _id: runId });
+          return serializeReminderRun(run, date);
+        }
+        throw error;
+      }
+    }
+  } else {
+    await db.collection("platformSettings").updateOne(
+      { _id: runId },
+      { $set: lockPayload },
+      { upsert: true },
+    );
+  }
 
   for (const user of linkedUsers) {
     const userId = String(user._id || user.id || "");
@@ -1716,41 +1741,33 @@ function configureDmrReminderCrons(settings = {}) {
   dmrReminderCronTasks.clear();
   const normalized = normalizeDmrReminderSettings(settings);
   if (normalized.enabled === false) {
-    console.log("DMR WhatsApp reminder scheduler disabled");
+    console.log("DMR WhatsApp reminder crons disabled");
     return;
   }
-  const task = cron.schedule("* * * * *", async () => {
-    if (dmrReminderSchedulerBusy) return;
-    dmrReminderSchedulerBusy = true;
-    try {
-      const liveSettings = await getDmrReminderSettings();
-      if (liveSettings.enabled === false) return;
-      const now = new Date();
-      const today = istDateKey(now);
-      const nowTime = istTimeKey(now);
-      const nowMinutes = minutesFromTimeKey(nowTime);
-      for (const item of Object.values(DMR_REMINDER_TYPES)) {
-        const reminder = liveSettings.reminders[item.id];
-        if (!reminder?.enabled) continue;
-        const scheduledMinutes = minutesFromTimeKey(reminder.time || item.defaultTime);
-        if (scheduledMinutes === null || nowMinutes === null || nowMinutes < scheduledMinutes) continue;
-        const reminderDate = dmrReminderDateForType(item.id, today);
-        const result = await sendDmrWhatsAppReminder({ type: item.id, dateKey: today, source: "cron" });
-        if (result.status === "completed") {
-          console.log(`DMR ${item.id} reminder checked at ${nowTime} IST for ${reminderDate}: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped`);
+  for (const item of Object.values(DMR_REMINDER_TYPES)) {
+    const reminder = normalized.reminders[item.id];
+    if (!reminder?.enabled) continue;
+    const reminderTime = validEmployeeReminderTime(reminder.time) || item.defaultTime;
+    const expression = dmrReminderCronExpression(reminderTime);
+    const task = cron.schedule(expression, async () => {
+      try {
+        const liveSettings = await getDmrReminderSettings();
+        const liveReminder = liveSettings.reminders[item.id];
+        if (liveSettings.enabled === false || liveReminder?.enabled === false) return;
+        const liveTime = validEmployeeReminderTime(liveReminder.time) || item.defaultTime;
+        if (liveTime !== reminderTime) {
+          console.log(`DMR ${item.id} reminder skipped stale cron ${reminderTime}; live time is ${liveTime}`);
+          return;
         }
+        const result = await sendDmrWhatsAppReminder({ type: item.id, source: "cron" });
+        console.log(`DMR ${item.id} reminder ${result.status} for ${result.date}: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped`);
+      } catch (error) {
+        console.error(`DMR ${item.id} reminder cron error:`, error);
       }
-    } catch (error) {
-      console.error("DMR WhatsApp reminder scheduler error:", error);
-    } finally {
-      dmrReminderSchedulerBusy = false;
-    }
-  }, { timezone: "Asia/Kolkata" });
-  dmrReminderCronTasks.set("scheduler", task);
-  const summary = Object.values(DMR_REMINDER_TYPES)
-    .map((item) => `${item.id}:${normalized.reminders[item.id]?.time || item.defaultTime}`)
-    .join(", ");
-  console.log(`DMR WhatsApp reminder scheduler active in IST (${summary})`);
+    }, { timezone: "Asia/Kolkata" });
+    dmrReminderCronTasks.set(item.id, task);
+    console.log(`DMR ${item.id} WhatsApp reminder cron scheduled at ${reminderTime} IST (${expression})`);
+  }
 }
 
 async function refreshDmrReminderCrons() {

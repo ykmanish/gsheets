@@ -10,7 +10,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "documents", label: "Documents", icon: FileText },
     { id: "forms", label: "Forms", icon: ClipboardList },
-    { id: "projects", label: "Projects", icon: Building2 },
+    { id: "projects", label: "Project Control", icon: Building2 },
     { id: "project-dmr", label: "DMR", icon: FileSpreadsheet, parent: "projects" },
     { id: "project-mrn", label: "MRN", icon: ClipboardList, parent: "projects" },
     { id: "project-stock", label: "Stock", icon: PackageSearch, parent: "projects" },

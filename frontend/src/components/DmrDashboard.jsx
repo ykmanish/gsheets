@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BellRing,
   CalendarDays,
+  ChevronDown,
   Check,
   Clock3,
   Download,
@@ -18,6 +19,7 @@ import {
   Save,
   Search,
   Send,
+  Settings2,
   Users,
   X,
 } from "lucide-react";
@@ -1465,6 +1467,8 @@ export default function DmrDashboard({ darkMode }) {
     enabled: true,
     reminders: {},
   });
+  const [heroActionOpen, setHeroActionOpen] = useState(false);
+  const heroActionRef = useRef(null);
 
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode
@@ -1472,6 +1476,7 @@ export default function DmrDashboard({ darkMode }) {
     : "border-[#dfe7e4] bg-white";
   const dmrSheetLinked = Boolean(data?.dmrSettings?.linked);
   const canFillDmr = Boolean(data?.canEdit && dmrSheetLinked);
+  useClickOutside(heroActionRef, () => setHeroActionOpen(false));
 
   const closeReportDrawer = useCallback(() => {
     setReportClosing(true);
@@ -1581,12 +1586,12 @@ export default function DmrDashboard({ darkMode }) {
   }
 
   const load = useCallback(
-    async (quiet = false) => {
+    async (quiet = false, force = false) => {
       try {
         if (quiet) setRefreshing(true);
         else setLoading(true);
         const result = await api(
-          `/dmr-dashboard?date=${encodeURIComponent(date)}`,
+          `/dmr-dashboard?date=${encodeURIComponent(date)}${force ? "&force=true" : ""}`,
         );
         setData(result);
         setDrafts({});
@@ -1894,7 +1899,7 @@ export default function DmrDashboard({ darkMode }) {
       }
       toast.success("DMR saved to Google Sheet");
       setFillOpen(false);
-      await load(true);
+      await load(true, true);
     } catch (error) {
       toast.error(error.message || "Could not save DMR");
     } finally {
@@ -1914,7 +1919,7 @@ export default function DmrDashboard({ darkMode }) {
         current ? { ...current, dmrSettings: result.settings } : current,
       );
       setDmrSheetLink("");
-      await load(true);
+      await load(true, true);
     } catch (error) {
       toast.error(error.message || "Could not link DMR sheet");
     } finally {
@@ -1936,7 +1941,7 @@ export default function DmrDashboard({ darkMode }) {
       setData((current) =>
         current ? { ...current, dmrSettings: result.settings } : current,
       );
-      await load(true);
+      await load(true, true);
     } catch (error) {
       toast.error(error.message || "Could not unlink DMR sheet");
     } finally {
@@ -2026,7 +2031,7 @@ export default function DmrDashboard({ darkMode }) {
     try {
       setReportPdfLoading(true);
       const response = await fetch(
-        `${API_URL}/dmr-dashboard/report/pdf?date=${encodeURIComponent(pdfDate)}&force=1`,
+        `${API_URL}/dmr-dashboard/report/pdf?date=${encodeURIComponent(pdfDate)}`,
       );
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
@@ -2237,7 +2242,7 @@ export default function DmrDashboard({ darkMode }) {
     >
       <div className="mx-auto w-full">
         <div
-          className={`mb-8 overflow-hidden rounded-[26px] p-5 sm:rounded-[30px] sm:p-8 ${darkMode ? "border-white/10 bg-[#151612]" : "border-[#dfe7e4] bg-white/95"}`}
+          className={`relative z-30 mb-8 overflow-visible rounded-[26px] p-5 sm:rounded-[30px] sm:p-8 ${darkMode ? "border-white/10 bg-[#151612]" : "border-[#dfe7e4] bg-white/95"}`}
         >
           <div className="flex min-w-0 flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0 flex-1">
@@ -2254,8 +2259,8 @@ export default function DmrDashboard({ darkMode }) {
                 Fill today&apos;s DMR without touching spreadsheet cells.
               </p>
             </div>
-            <div className="relative z-20 flex w-full min-w-0 flex-col gap-3 lg:w-auto lg:items-end">
-              <div className="grid w-full grid-cols-1 gap-2 min-[430px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center lg:justify-end">
+            <div className="relative z-40 flex w-full min-w-0 flex-col gap-3 lg:w-auto lg:items-end">
+              <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:justify-end">
                 <button
                   onClick={() => {
                     setFillTab("manpower");
@@ -2265,67 +2270,102 @@ export default function DmrDashboard({ darkMode }) {
                 >
                   <CalendarDays className="h-4 w-4" /> Fill DMR
                 </button>
-                <button
-                  onClick={() => {
-                    setReportClosing(false);
-                    setReportOpen(true);
-                  }}
-                  className={`flex h-11 min-w-0 items-center justify-center gap-2 rounded-3xl border px-4 text-sm font-medium sm:h-12 sm:shrink-0 sm:px-5 ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
-                >
-                  <FileSpreadsheet className="h-4 w-4" /> CEO Report
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedTomorrowSite("");
-                    setPlanMode("today");
-                  }}
-                  className={`flex h-11 min-w-0 items-center justify-center gap-2 rounded-3xl border px-4 text-sm font-medium sm:h-12 sm:shrink-0 sm:px-5 ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
-                >
-                  <FileSpreadsheet className="h-4 w-4" /> Today&apos;s Plan
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedTomorrowSite("");
-                    setPlanMode("tomorrow");
-                  }}
-                  className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-3xl border border-[#10a66b] bg-[#e8f6ee] px-4 text-sm font-medium text-[#0f6b49] hover:bg-[#dff3e8] sm:h-12 sm:shrink-0 sm:px-5"
-                >
-                  <FileSpreadsheet className="h-4 w-4" /> Tomorrow&apos;s Plan
-                </button>
-                <button
-                  onClick={openReminderDrawer}
-                  className={`flex h-11 min-w-0 items-center justify-center gap-2 rounded-3xl border px-4 text-sm font-medium sm:h-12 sm:shrink-0 sm:px-5 ${darkMode ? "border-red-400/30 bg-red-400/10 text-red-100 hover:bg-red-400/15" : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"}`}
-                >
-                  <BellRing className="h-4 w-4" /> Reminders
-                </button>
-              </div>
-              <div className="grid w-full grid-cols-1 gap-2 min-[430px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center lg:justify-end">
-                <div className="min-w-0 min-[430px]:col-span-2 sm:order-none sm:w-[188px]">
-                  <DatePicker
-                    darkMode={darkMode}
-                    value={date}
-                    onChange={setDate}
-                    placeholder="Choose DMR date"
-                  />
-                </div>
-                <button
-                  onClick={() => load(true)}
-                  disabled={refreshing}
-                  className={`flex h-11 min-w-0 items-center justify-center gap-2 rounded-3xl border px-4 text-sm font-medium sm:h-12 sm:shrink-0 ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
-                >
-                  <RefreshCw
-                    className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-                  />{" "}
-                  Refresh
-                </button>
-                {data?.canViewHistory && (
+                <div ref={heroActionRef} className="relative min-w-0">
                   <button
-                    onClick={openHistory}
-                    className={`flex h-11 min-w-0 items-center justify-center gap-2 rounded-3xl border px-4 text-sm font-medium sm:h-12 sm:shrink-0 ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
+                    type="button"
+                    onClick={() => setHeroActionOpen((value) => !value)}
+                    className={`flex h-11 w-full min-w-0 items-center justify-center gap-2 rounded-3xl border px-4 text-sm font-semibold transition active:scale-[0.98] sm:h-12 sm:w-auto sm:shrink-0 sm:px-5 ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
                   >
-                    <History className="h-4 w-4" /> History
+                    <Settings2 className="h-4 w-4" />
+                    Actions
+                    <ChevronDown className={`h-4 w-4 transition-transform ${heroActionOpen ? "rotate-180" : ""}`} />
                   </button>
-                )}
+                  {heroActionOpen && (
+                    <div className={`absolute right-0 top-[calc(100%+10px)] z-[120] w-[286px] overflow-hidden rounded-[22px] border p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
+                      {[
+                        {
+                          label: "CEO Report",
+                          helper: "Download and preview DMR PDF",
+                          icon: FileSpreadsheet,
+                          onClick: () => {
+                            setReportClosing(false);
+                            setReportOpen(true);
+                          },
+                        },
+                        {
+                          label: "Today's Plan",
+                          helper: "Review current manpower plan",
+                          icon: CalendarDays,
+                          onClick: () => {
+                            setSelectedTomorrowSite("");
+                            setPlanMode("today");
+                          },
+                        },
+                        {
+                          label: "Tomorrow's Plan",
+                          helper: "Review next day manpower plan",
+                          icon: CalendarDays,
+                          onClick: () => {
+                            setSelectedTomorrowSite("");
+                            setPlanMode("tomorrow");
+                          },
+                        },
+                        {
+                          label: "Reminders",
+                          helper: "WhatsApp DMR reminder timing",
+                          icon: BellRing,
+                          onClick: openReminderDrawer,
+                          danger: true,
+                        },
+                        {
+                          label: refreshing ? "Refreshing..." : "Refresh",
+                          helper: "Sync latest DMR data",
+                          icon: RefreshCw,
+                          disabled: refreshing,
+                          onClick: () => load(true, true),
+                          spin: refreshing,
+                        },
+                        ...(data?.canViewHistory ? [{
+                          label: "History",
+                          helper: "View DMR version changes",
+                          icon: History,
+                          onClick: openHistory,
+                        }] : []),
+                      ].map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.label}
+                            type="button"
+                            disabled={item.disabled}
+                            onClick={() => {
+                              if (item.disabled) return;
+                              setHeroActionOpen(false);
+                              item.onClick?.();
+                            }}
+                            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "text-white hover:bg-white/[0.08]" : "text-slate-800 hover:bg-[#f3f5f9]"}`}
+                          >
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${item.danger ? darkMode ? "bg-red-500/15 text-red-300" : "bg-red-50 text-red-600" : darkMode ? "bg-white/[0.08] text-white/75" : "bg-[#eef7f4] text-[#17643f]"}`}>
+                              <Icon className={`h-4 w-4 ${item.spin ? "animate-spin" : ""}`} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className={`block font-semibold ${item.danger ? "text-red-600 dark:text-red-300" : ""}`}>{item.label}</span>
+                              <span className={`mt-0.5 block text-xs ${muted}`}>{item.helper}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="w-full min-w-0 sm:w-[236px]">
+                <DatePicker
+                  darkMode={darkMode}
+                  value={date}
+                  onChange={setDate}
+                  placeholder="Choose DMR date"
+                />
               </div>
             </div>
           </div>

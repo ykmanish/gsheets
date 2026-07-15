@@ -44,7 +44,7 @@ const menuPaths = {
   "module-control": "/module-control",
 };
 
-function ProtectedModuleContent({ moduleId }) {
+function ProtectedModuleContent({ moduleId, projectId }) {
   const router = useRouter();
   const { user, menus, disabledModules, loading, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(() => {
@@ -136,7 +136,7 @@ function ProtectedModuleContent({ moduleId }) {
           <Documents darkMode={darkMode} selectedDocs={selectedDocs} setSelectedDocs={setSelectedDocs} />
         )}
         {moduleId === "forms" && <Forms darkMode={darkMode} />}
-        {moduleId === "projects" && <ProjectDashboard darkMode={darkMode} />}
+        {moduleId === "projects" && <ProjectDashboard darkMode={darkMode} projectId={projectId} />}
         {moduleId === "project-dmr" && <DmrDashboard darkMode={darkMode} />}
         {moduleId === "project-mrn" && <MrnDashboard darkMode={darkMode} />}
         {moduleId === "project-stock" && <StockDashboard darkMode={darkMode} />}
@@ -156,10 +156,10 @@ function ProtectedModuleContent({ moduleId }) {
   );
 }
 
-export default function ProtectedModule({ moduleId }) {
+export default function ProtectedModule({ moduleId, projectId }) {
   return (
     <AuthProvider>
-      <ProtectedModuleContent moduleId={moduleId} />
+      <ProtectedModuleContent moduleId={moduleId} projectId={projectId} />
     </AuthProvider>
   );
 }

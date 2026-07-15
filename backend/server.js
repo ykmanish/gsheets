@@ -3657,6 +3657,7 @@ const mrnHistoryPath = path.join(dataDir, "mrn-history.json");
 const dmrSettingsPath = path.join(dataDir, "dmr-settings.json");
 const dmrPdfDir = path.join(dataDir, "dmr-pdfs");
 const dmrAiCacheDir = path.join(dataDir, "dmr-ai-cache");
+const sheetSnapshotDir = path.join(dataDir, "sheet-snapshots");
 const dmrPdfBuilds = new Map();
 const dmrPdfRefreshes = new Map();
 const DMR_PDF_CACHE_TTL_MS = Math.max(30_000, Number(process.env.DMR_PDF_CACHE_TTL_MS) || 5 * 60_000);
@@ -3664,6 +3665,7 @@ const DMR_PDF_RETRY_BACKOFF_MS = Math.max(30_000, Number(process.env.DMR_PDF_RET
 const mrnSettingsPath = path.join(dataDir, "mrn-settings.json");
 if (!fs.existsSync(dmrPdfDir)) fs.mkdirSync(dmrPdfDir, { recursive: true });
 if (!fs.existsSync(dmrAiCacheDir)) fs.mkdirSync(dmrAiCacheDir, { recursive: true });
+if (!fs.existsSync(sheetSnapshotDir)) fs.mkdirSync(sheetSnapshotDir, { recursive: true });
 
 let documents = [];
 let documentFolders = [];
@@ -4776,24 +4778,120 @@ async function fetchOfficeWorkbookValues(sheetId) {
   }
 }
 
-async function fetchRawSheetValues(sheetId) {
-  const auth = await getGoogleAuth();
-  const sheets = google.sheets({ version: "v4", auth });
+const rawSheetValuesCache = new Map();
+const RAW_SHEET_VALUES_CACHE_TTL_MS = Math.max(15_000, Number(process.env.RAW_SHEET_VALUES_CACHE_TTL_MS) || 90_000);
+const DMR_SHEET_CACHE_TTL_MS = Math.max(30_000, Number(process.env.DMR_SHEET_CACHE_TTL_MS) || 5 * 60_000);
 
+function rawSheetSnapshotPath(sheetId) {
+  const key = crypto.createHash("sha256").update(String(sheetId || "")).digest("hex");
+  return path.join(sheetSnapshotDir, `${key}.json`);
+}
+
+function readRawSheetSnapshot(sheetId) {
   try {
-    const meta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
-    const result = [];
-    for (const sheet of meta.data.sheets || []) {
-      const name = sheet.properties.title;
-      const safeRange = `'${name.replace(/'/g, "''")}'`;
-      const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: safeRange });
-      result.push({ name, values: response.data.values || [] });
-    }
-    return result;
+    const snapshot = readJsonFileSafe(rawSheetSnapshotPath(sheetId));
+    if (!snapshot || !Array.isArray(snapshot.sheets)) return null;
+    return {
+      createdAt: Date.parse(snapshot.createdAt || "") || 0,
+      data: snapshot.sheets,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveRawSheetSnapshot(sheetId, data) {
+  try {
+    fs.writeFileSync(rawSheetSnapshotPath(sheetId), JSON.stringify({
+      sheetId,
+      createdAt: new Date().toISOString(),
+      sheets: data,
+    }));
   } catch (error) {
-    if (!isOfficeSpreadsheetError(error)) throw error;
-    console.log(`Sheet ${sheetId} is an Office workbook; using XLSX export fallback.`);
-    return fetchOfficeWorkbookValues(sheetId);
+    console.warn(`Could not save sheet snapshot for ${sheetId}:`, error.message);
+  }
+}
+
+function invalidateRawSheetValuesCache(sheetId) {
+  rawSheetValuesCache.delete(String(sheetId || ""));
+}
+
+async function fetchRawSheetValues(sheetId, options = {}) {
+  const cacheKey = String(sheetId || "");
+  const force = Boolean(options.force);
+  const cacheTtlMs = Math.max(15_000, Number(options.cacheTtlMs) || RAW_SHEET_VALUES_CACHE_TTL_MS);
+  const now = Date.now();
+  const cached = rawSheetValuesCache.get(cacheKey);
+  if (!force && cached?.data && now - cached.createdAt < cacheTtlMs) return cached.data;
+  if (cached?.promise) return cached.promise;
+
+  const diskSnapshot = readRawSheetSnapshot(cacheKey);
+  const staleData = cached?.data || diskSnapshot?.data || null;
+  if (!force && diskSnapshot?.data && now - diskSnapshot.createdAt < cacheTtlMs) {
+    rawSheetValuesCache.set(cacheKey, { createdAt: diskSnapshot.createdAt, data: diskSnapshot.data, promise: null });
+    return diskSnapshot.data;
+  }
+
+  const request = (async () => {
+    const auth = await getGoogleAuth();
+    const sheets = google.sheets({ version: "v4", auth });
+    try {
+      const meta = await sheets.spreadsheets.get({
+        spreadsheetId: cacheKey,
+        fields: "sheets.properties(title,gridProperties.columnCount)",
+      });
+      const sheetDefinitions = (meta.data.sheets || [])
+        .map((sheet) => {
+          const rangeName = String(sheet.properties?.title ?? "");
+          return {
+            name: projectText(rangeName),
+            rangeName,
+            columnCount: Math.max(1, Number(sheet.properties?.gridProperties?.columnCount) || 1),
+          };
+        })
+        .filter((sheet) => sheet.name);
+      if (!sheetDefinitions.length) return [];
+      const ranges = sheetDefinitions.map(
+        ({ rangeName, columnCount }) => `${escapeSheetName(rangeName)}!A:${columnName(columnCount)}`
+      );
+      const response = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: cacheKey,
+        ranges,
+        majorDimension: "ROWS",
+      });
+      const valueRanges = response.data.valueRanges || [];
+      return sheetDefinitions.map(({ name }, index) => ({
+        name,
+        values: valueRanges[index]?.values || [],
+      }));
+    } catch (error) {
+      if (isOfficeSpreadsheetError(error)) {
+        console.log(`Sheet ${cacheKey} is an Office workbook; using XLSX export fallback.`);
+        return fetchOfficeWorkbookValues(cacheKey);
+      }
+      if (isGoogleSheetsQuotaError(error) && staleData) {
+        console.warn(`Google Sheets quota reached for ${cacheKey}; using the last valid local snapshot.`);
+        return staleData;
+      }
+      throw error;
+    }
+  })();
+
+  rawSheetValuesCache.set(cacheKey, {
+    createdAt: cached?.createdAt || diskSnapshot?.createdAt || 0,
+    data: staleData,
+    promise: request,
+  });
+  try {
+    const data = await request;
+    const createdAt = Date.now();
+    rawSheetValuesCache.set(cacheKey, { createdAt, data, promise: null });
+    if (data !== staleData || !diskSnapshot) saveRawSheetSnapshot(cacheKey, data);
+    return data;
+  } catch (error) {
+    if (staleData) rawSheetValuesCache.set(cacheKey, { createdAt: cached?.createdAt || diskSnapshot?.createdAt || 0, data: staleData, promise: null });
+    else rawSheetValuesCache.delete(cacheKey);
+    throw error;
   }
 }
 
@@ -5433,6 +5531,7 @@ async function ensureDmrTab(spreadsheetId, dateKey) {
   if (notesLabel) clearRanges.push(`${escapeSheetName(tabName)}!C${notesLabel.rowIndex + 2}:C${notesLabel.rowIndex + 3}`);
   if (staffLabel) clearRanges.push(`${escapeSheetName(tabName)}!C${staffLabel.rowIndex + 3}:W${staffLabel.rowIndex + 3}`);
   await Promise.all(clearRanges.map((range) => sheets.spreadsheets.values.clear({ spreadsheetId, range })));
+  invalidateRawSheetValuesCache(spreadsheetId);
   return { sheetName: tabName, created: true };
 }
 
@@ -5592,6 +5691,7 @@ async function writeDmrRecords(spreadsheetId, dateKey, updates = []) {
   });
   const totalUpdatedCells = await refreshDmrManpowerTotals(spreadsheetId, sheetName);
   sheetDatasetCache.delete(spreadsheetId);
+  invalidateRawSheetValuesCache(spreadsheetId);
   return { updatedCells: (response.data.totalUpdatedCells || 0) + totalUpdatedCells, sheetName, totalUpdatedCells };
 }
 
@@ -5705,6 +5805,7 @@ async function addDmrSectionRow(spreadsheetId, dateKey, section, valuesToWrite =
     });
   }
   sheetDatasetCache.delete(spreadsheetId);
+  invalidateRawSheetValuesCache(spreadsheetId);
   return { sheetName, section: normalizedSection, insertedRowNumber: insertBeforeRowIndex + 1 };
 }
 
@@ -6015,7 +6116,7 @@ async function readDmrTomorrowPlan(dateKey) {
   const spreadsheetId = DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID;
   if (!spreadsheetId) return null;
   const targetDate = dmrDateKey(dateKey);
-  const sheets = await fetchRawSheetValues(spreadsheetId);
+  const sheets = await fetchRawSheetValues(spreadsheetId, { cacheTtlMs: DMR_SHEET_CACHE_TTL_MS });
   const planSheets = [];
   const allRecords = [];
 
@@ -6105,13 +6206,16 @@ async function readDmrTomorrowPlan(dateKey) {
   };
 }
 
-async function readDmrTomorrowPlansForDates(dateKeys = []) {
+async function readDmrTomorrowPlansForDates(dateKeys = [], options = {}) {
   const spreadsheetId = DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID;
   const targetDates = new Set(dateKeys.map(dmrDateKey).filter(Boolean));
   const result = new Map();
   if (!spreadsheetId || !targetDates.size) return result;
 
-  const sheets = await fetchRawSheetValues(spreadsheetId);
+  const sheets = await fetchRawSheetValues(spreadsheetId, {
+    force: Boolean(options.force),
+    cacheTtlMs: DMR_SHEET_CACHE_TTL_MS,
+  });
   const planSheets = [];
   const allRecords = [];
 
@@ -6197,11 +6301,11 @@ async function readDmrTomorrowPlansForDates(dateKeys = []) {
   return result;
 }
 
-async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
+async function readDmrDashboard(dateKey, { ensureToday = true, force = false } = {}) {
   const spreadsheetId = getActiveDmrSpreadsheetId();
   const date = dmrDateKey(dateKey);
   if (ensureToday) await ensureDmrTab(spreadsheetId, date);
-  const sheets = await fetchRawSheetValues(spreadsheetId);
+  const sheets = await fetchRawSheetValues(spreadsheetId, { force, cacheTtlMs: DMR_SHEET_CACHE_TTL_MS });
   const parsedTabs = sheets
     .map((sheet) => {
       const tabDate = dmrDateFromTabName(sheet.name, Number(date.slice(0, 4)) || new Date().getFullYear());
@@ -6227,18 +6331,15 @@ async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
   const actualsForDate = (targetDate) => dmrActualsForPlan(parsedTabs.find((tab) => tab.date === targetDate)?.records || []);
   let todayPlan = null;
   let tomorrowPlan = null;
+  const tomorrowDate = addDaysToDateKey(date, 1) || date;
   try {
-    todayPlan = await readDmrTomorrowPlan(date);
+    const planMap = await readDmrTomorrowPlansForDates([date, tomorrowDate], { force });
+    todayPlan = planMap.get(date) || emptyDmrTomorrowPlan({ date, label: "Today's Plan" });
+    tomorrowPlan = planMap.get(tomorrowDate) || emptyDmrTomorrowPlan({ date: tomorrowDate, label: "Tomorrow's Plan" });
   } catch (error) {
-    console.error("Today plan read error:", error);
+    console.error("DMR plan read error:", error);
     todayPlan = emptyDmrTomorrowPlan({ date, label: "Today's Plan", error: error.message });
-  }
-  try {
-    const tomorrowDate = addDaysToDateKey(date, 1) || date;
-    tomorrowPlan = await readDmrTomorrowPlan(tomorrowDate);
-  } catch (error) {
-    console.error("Tomorrow plan read error:", error);
-    tomorrowPlan = emptyDmrTomorrowPlan({ date: addDaysToDateKey(date, 1) || date, label: "Tomorrow's Plan", error: error.message });
+    tomorrowPlan = emptyDmrTomorrowPlan({ date: tomorrowDate, label: "Tomorrow's Plan", error: error.message });
   }
   const recentTabs = parsedTabs.slice(0, 14).map((tab) => ({
     date: tab.date,
@@ -6270,7 +6371,7 @@ async function readDmrDashboard(dateKey, { ensureToday = true } = {}) {
       agencyBreakdown: dmrBreakdown(allRecords, "agency"),
     },
     todayPlan: todayPlan ? { ...todayPlan, label: "Today's Plan", actuals: actualsForDate(date) } : { ...emptyDmrTomorrowPlan({ date, label: "Today's Plan" }), actuals: actualsForDate(date) },
-    tomorrowPlan: tomorrowPlan ? { ...tomorrowPlan, label: "Tomorrow's Plan", actuals: actualsForDate(addDaysToDateKey(date, 1) || date) } : { ...emptyDmrTomorrowPlan({ date: addDaysToDateKey(date, 1) || date, label: "Tomorrow's Plan" }), actuals: actualsForDate(addDaysToDateKey(date, 1) || date) },
+    tomorrowPlan: tomorrowPlan ? { ...tomorrowPlan, label: "Tomorrow's Plan", actuals: actualsForDate(tomorrowDate) } : { ...emptyDmrTomorrowPlan({ date: tomorrowDate, label: "Tomorrow's Plan" }), actuals: actualsForDate(tomorrowDate) },
   };
 }
 
@@ -6561,7 +6662,7 @@ async function buildDmrReport({ startDate, endDate, sections = [] } = {}) {
   const spreadsheetId = getActiveDmrSpreadsheetId();
   const { start, end, dates } = dmrDateRange(startDate, endDate);
   const selectedSections = new Set(sections.length ? sections : ["summary", "siteManpower", "agencyManpower", "tradeSiteManpower", "tradeComments", "attendance", "equipment", "materials", "notes", "dailyProgress"]);
-  const sheets = await fetchRawSheetValues(spreadsheetId);
+  const sheets = await fetchRawSheetValues(spreadsheetId, { cacheTtlMs: DMR_SHEET_CACHE_TTL_MS });
   const planMap = await readDmrTomorrowPlansForDates(dates);
   const parsedTabs = sheets
     .map((sheet) => {
@@ -9721,6 +9822,72 @@ app.get("/sheets/:id/data", async (req, res) => {
 function normalizeProjectInput(body, existing = {}) {
   const name = projectText(body?.name ?? existing.name);
   if (!name) throw new Error("Project name is required");
+  const now = new Date().toISOString();
+  const normalizeList = (value) => Array.isArray(value) ? value.map(projectText).filter(Boolean) : [];
+  const normalizeTask = (task = {}, phaseId = "") => {
+    const id = projectText(task.id) || crypto.randomUUID();
+    const title = projectText(task.title);
+    return {
+      id,
+      phaseId: projectText(task.phaseId || phaseId),
+      title,
+      description: projectText(task.description),
+      status: projectText(task.status) || "todo",
+      priority: projectText(task.priority) || "medium",
+      startDate: projectText(task.startDate),
+      dueDate: projectText(task.dueDate || task.deadline),
+      assigneeIds: normalizeList(task.assigneeIds),
+      assignees: normalizeList(task.assignees),
+      dependencyIds: normalizeList(task.dependencyIds),
+      documentIds: normalizeList(task.documentIds),
+      comments: Array.isArray(task.comments)
+        ? task.comments.map((comment) => ({
+            id: projectText(comment.id) || crypto.randomUUID(),
+            text: projectText(comment.text),
+            authorId: projectText(comment.authorId),
+            authorName: projectText(comment.authorName),
+            createdAt: projectText(comment.createdAt) || now,
+          })).filter((comment) => comment.text)
+        : [],
+      createdAt: projectText(task.createdAt) || now,
+      updatedAt: now,
+    };
+  };
+  const phases = Array.isArray(body?.phases ?? existing.phases)
+    ? (body?.phases ?? existing.phases).map((phase, index) => {
+        const id = projectText(phase.id) || crypto.randomUUID();
+        return {
+          id,
+          name: projectText(phase.name) || `Phase ${index + 1}`,
+          description: projectText(phase.description),
+          status: projectText(phase.status) || "todo",
+          startDate: projectText(phase.startDate),
+          dueDate: projectText(phase.dueDate || phase.deadline),
+          ownerId: projectText(phase.ownerId),
+          ownerName: projectText(phase.ownerName),
+          dependencyIds: normalizeList(phase.dependencyIds),
+          order: Number.isFinite(Number(phase.order)) ? Number(phase.order) : index,
+          tasks: Array.isArray(phase.tasks) ? phase.tasks.map((task) => normalizeTask(task, id)).filter((task) => task.title) : [],
+        };
+      })
+    : [];
+  const phaseTaskIds = new Set(phases.flatMap((phase) => phase.tasks.map((task) => task.id)));
+  const looseTasks = Array.isArray(body?.tasks ?? existing.tasks)
+    ? (body?.tasks ?? existing.tasks).map((task) => normalizeTask(task)).filter((task) => task.title && !phaseTaskIds.has(task.id))
+    : [];
+  const documentsList = Array.isArray(body?.projectDocuments ?? body?.documents ?? existing.projectDocuments ?? existing.documents)
+    ? (body?.projectDocuments ?? body?.documents ?? existing.projectDocuments ?? existing.documents).map((doc) => ({
+        id: projectText(doc.id) || crypto.randomUUID(),
+        name: projectText(doc.name) || "Project document",
+        category: projectText(doc.category) || "General",
+        url: projectText(doc.url || doc.webViewLink || doc.driveWebViewLink),
+        driveFileId: projectText(doc.driveFileId) || extractDriveFileId(doc.url || doc.webViewLink || doc.driveWebViewLink || ""),
+        mimeType: projectText(doc.mimeType || doc.driveMimeType),
+        source: projectText(doc.source) || "manual",
+        uploadedBy: projectText(doc.uploadedBy),
+        uploadedAt: projectText(doc.uploadedAt) || now,
+      })).filter((doc) => doc.url || doc.driveFileId)
+    : [];
   const assignments = Array.isArray(body?.assignments ?? existing.assignments)
     ? (body?.assignments ?? existing.assignments).map((assignment) => ({
         id: projectText(assignment.id) || crypto.randomUUID(),
@@ -9758,15 +9925,56 @@ function normalizeProjectInput(body, existing = {}) {
     ...existing,
     name,
     code: projectText(body?.code ?? existing.code),
+    client: projectText(body?.client ?? existing.client),
     location: projectText(body?.location ?? existing.location),
     manager: projectText(body?.manager ?? existing.manager),
+    managerId: projectText(body?.managerId ?? existing.managerId),
     status: projectText(body?.status ?? existing.status) || "active",
+    priority: projectText(body?.priority ?? existing.priority) || "medium",
+    health: projectText(body?.health ?? existing.health) || "green",
+    startDate: projectText(body?.startDate ?? existing.startDate),
+    targetDate: projectText(body?.targetDate ?? existing.targetDate ?? body?.dueDate ?? existing.dueDate),
+    driveFolderId: extractDriveFileId(body?.driveFolderId || body?.driveFolderLink || existing.driveFolderId || existing.driveFolderLink || "") || "",
+    driveFolderLink: projectText(body?.driveFolderLink ?? existing.driveFolderLink),
     aliases: Array.isArray(body?.aliases ?? existing.aliases)
       ? (body?.aliases ?? existing.aliases).map(projectText).filter(Boolean)
       : [],
+    phases,
+    tasks: looseTasks,
+    projectDocuments: documentsList,
     assignments,
     dmr,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
+  };
+}
+
+function projectManualTasks(project = {}) {
+  return [
+    ...(project.tasks || []),
+    ...(project.phases || []).flatMap((phase) => (phase.tasks || []).map((task) => ({ ...task, phaseId: task.phaseId || phase.id, phaseName: phase.name }))),
+  ];
+}
+
+function summarizeManualProject(project = {}, date = istDateKey(new Date())) {
+  const tasks = projectManualTasks(project);
+  const completed = tasks.filter((task) => /done|complete|completed/i.test(task.status || ""));
+  const blocked = tasks.filter((task) => /block|stuck|hold/i.test(task.status || ""));
+  const dueToday = tasks.filter((task) => task.dueDate === date && !completed.some((done) => done.id === task.id));
+  const overdue = tasks.filter((task) => task.dueDate && task.dueDate < date && !completed.some((done) => done.id === task.id));
+  const highPriority = tasks.filter((task) => /high|critical/i.test(task.priority || "") && !completed.some((done) => done.id === task.id));
+  const progress = tasks.length ? Math.round((completed.length / tasks.length) * 100) : 0;
+  return {
+    tasks,
+    progress,
+    totalTasks: tasks.length,
+    completed: completed.length,
+    pending: tasks.length - completed.length,
+    blocked: blocked.length,
+    dueToday: dueToday.length,
+    overdue: overdue.length,
+    highPriority: highPriority.length,
+    phases: (project.phases || []).length,
+    documents: (project.projectDocuments || []).length,
   };
 }
 
@@ -9845,6 +10053,123 @@ app.delete("/project-dashboard/projects/:id", requireSuperAdmin, (req, res) => {
   if (before === projectDashboardConfig.projects.length) return res.status(404).json({ error: "Project not found" });
   saveProjectDashboardConfig();
   res.json({ success: true });
+});
+
+async function listProjectDriveFiles(project) {
+  const folderId = extractDriveFileId(project?.driveFolderId || project?.driveFolderLink || "");
+  if (!folderId) return [];
+  const auth = await getGoogleAuth();
+  const drive = google.drive({ version: "v3", auth });
+  const response = await drive.files.list({
+    q: `'${folderId}' in parents and trashed=false`,
+    fields: "files(id,name,mimeType,webViewLink,modifiedTime,size)",
+    orderBy: "modifiedTime desc",
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+    pageSize: 100,
+  });
+  return (response.data.files || []).map((file) => ({
+    id: file.id,
+    name: file.name,
+    category: "Google Drive",
+    url: file.webViewLink,
+    driveFileId: file.id,
+    mimeType: file.mimeType,
+    source: "drive-folder",
+    uploadedAt: file.modifiedTime || null,
+    size: file.size || null,
+  }));
+}
+
+async function uploadProjectFileToDrive(project, file, category = "General") {
+  const folderId = extractDriveFileId(project?.driveFolderId || project?.driveFolderLink || "");
+  if (!folderId) throw new Error("Link a Google Drive folder before uploading project documents.");
+  if (!file?.path) throw new Error("Choose a file to upload.");
+  const auth = await getGoogleAuth();
+  const drive = google.drive({ version: "v3", auth });
+  const safeName = safeFileName(file.originalname || "project-document");
+  const response = await drive.files.create({
+    requestBody: { name: safeName, parents: [folderId] },
+    media: { mimeType: file.mimetype || "application/octet-stream", body: fs.createReadStream(file.path) },
+    fields: "id,name,mimeType,webViewLink,modifiedTime",
+    supportsAllDrives: true,
+  });
+  return {
+    id: crypto.randomUUID(),
+    name: response.data.name || safeName,
+    category: projectText(category) || "General",
+    url: response.data.webViewLink || `https://drive.google.com/open?id=${response.data.id}`,
+    driveFileId: response.data.id,
+    mimeType: response.data.mimeType || file.mimetype || "",
+    source: "drive-upload",
+    uploadedAt: response.data.modifiedTime || new Date().toISOString(),
+  };
+}
+
+app.get("/project-dashboard/projects/:id/documents", async (req, res) => {
+  try {
+    const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    const driveFiles = await listProjectDriveFiles(project).catch((error) => {
+      console.warn(`Could not list Drive files for ${project.name}:`, error.message);
+      return [];
+    });
+    const manualDocs = project.projectDocuments || [];
+    const seen = new Set();
+    const documents = [...manualDocs, ...driveFiles].filter((doc) => {
+      const key = doc.driveFileId || doc.url || doc.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    res.json({ documents, driveFiles });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/project-dashboard/projects/:id/documents", requireSuperAdmin, (req, res) => {
+  try {
+    const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    const url = projectText(req.body?.url);
+    if (!url) return res.status(400).json({ error: "Document link is required" });
+    const doc = {
+      id: crypto.randomUUID(),
+      name: projectText(req.body?.name) || "Project document",
+      category: projectText(req.body?.category) || "General",
+      url,
+      driveFileId: extractDriveFileId(url),
+      mimeType: "",
+      source: "manual",
+      uploadedBy: req.authUser?.displayName || req.authUser?.username || "Admin",
+      uploadedAt: new Date().toISOString(),
+    };
+    project.projectDocuments = [doc, ...(project.projectDocuments || [])];
+    project.updatedAt = new Date().toISOString();
+    saveProjectDashboardConfig();
+    res.json({ success: true, document: doc });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/project-dashboard/projects/:id/documents/upload", requireSuperAdmin, upload.single("file"), async (req, res) => {
+  try {
+    const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    const doc = await uploadProjectFileToDrive(project, req.file, req.body?.category);
+    project.projectDocuments = [doc, ...(project.projectDocuments || [])];
+    project.updatedAt = new Date().toISOString();
+    saveProjectDashboardConfig();
+    res.json({ success: true, document: doc });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  } finally {
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+    }
+  }
 });
 
 const MRN_SHEET_NAME = "MRN Form";
@@ -10851,8 +11176,9 @@ app.get("/dmr-dashboard", async (req, res) => {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
       ? String(req.query.date)
       : istDateKey(new Date());
+    const force = ["1", "true", "yes", "force"].includes(String(req.query.force || "").toLowerCase());
     const dashboard = publicDmrSettings().linked
-      ? await readDmrDashboard(date, { ensureToday: true })
+      ? await readDmrDashboard(date, { ensureToday: false, force })
       : emptyDmrDashboard(date);
     res.json({
       ...dashboard,
@@ -10927,18 +11253,11 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
     let buffer;
     let cacheStatus;
 
-    if (!forceRefresh && hasCachedPdf && currentLayout && now - validatedAt < DMR_PDF_CACHE_TTL_MS) {
-      buffer = fs.readFileSync(cachedPath);
-      cacheStatus = "HIT";
-    } else if (!forceRefresh && hasCachedPdf && currentLayout && validationFailedAt && now - validationFailedAt < DMR_PDF_RETRY_BACKOFF_MS) {
-      buffer = fs.readFileSync(cachedPath);
-      cacheStatus = "STALE-BACKOFF";
-    } else {
+    const startRefresh = () => {
       let refresh = dmrPdfRefreshes.get(date);
-      cacheStatus = refresh ? "WAIT" : forceRefresh ? "FORCE" : "MISS";
       if (!refresh) {
         refresh = (async () => {
-          try {
+          const buildFreshPdf = async () => {
             const dashboard = await readDmrDashboard(date, { ensureToday: false });
             const payload = buildDmrExecutiveSummaryPayload(dashboard);
             const summarySignature = dmrPlanSummarySignature(payload);
@@ -10964,6 +11283,9 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
             }
             const result = await build;
             return { buffer: result.buffer, status: "REFRESHED" };
+          };
+          try {
+            return await buildFreshPdf();
           } catch (error) {
             const fallbackMeta = readJsonFileSafe(metaPath) || cachedMeta || { date };
             if (forceRefresh || !fs.existsSync(cachedPath) || fallbackMeta.layoutVersion !== DMR_DAILY_PDF_LAYOUT_VERSION) throw error;
@@ -10978,6 +11300,24 @@ app.get("/dmr-dashboard/report/pdf", async (req, res) => {
         })().finally(() => dmrPdfRefreshes.delete(date));
         dmrPdfRefreshes.set(date, refresh);
       }
+      return refresh;
+    };
+
+    const cacheAge = validatedAt ? now - validatedAt : Number.POSITIVE_INFINITY;
+    const shouldRefreshCachedPdf = cacheAge >= DMR_PDF_CACHE_TTL_MS
+      && (!validationFailedAt || now - validationFailedAt >= DMR_PDF_RETRY_BACKOFF_MS);
+
+    if (!forceRefresh && hasCachedPdf && currentLayout) {
+      buffer = fs.readFileSync(cachedPath);
+      cacheStatus = shouldRefreshCachedPdf ? "STALE-REFRESHING" : "HIT";
+      if (shouldRefreshCachedPdf && !dmrPdfRefreshes.has(date)) {
+        startRefresh().catch((error) => {
+          console.warn(`Background DMR PDF cache refresh failed for ${date}:`, error.message);
+        });
+      }
+    } else {
+      cacheStatus = dmrPdfRefreshes.has(date) ? "WAIT" : forceRefresh ? "FORCE" : "MISS";
+      const refresh = startRefresh();
       const result = await refresh;
       buffer = result.buffer;
       cacheStatus = cacheStatus === "WAIT" ? "WAIT" : forceRefresh ? `FORCE-${result.status}` : result.status;
@@ -11429,14 +11769,28 @@ app.get("/project-dashboard", async (req, res) => {
         ? Math.round((progressBase.filter((record) => record.completed).length / progressBase.length) * 100)
         : 0;
       const take = (items, limit = 100) => items.slice(0, limit);
+      const manual = summarizeManualProject(project, date);
+      const effectiveProgress = manual.totalTasks ? manual.progress : progress;
 
       dashboardProjects.push({
         id: project.id,
         name: project.name,
         code: project.code,
+        client: project.client,
         location: project.location,
         manager: project.manager,
+        managerId: project.managerId,
         status: project.status,
+        priority: project.priority || "medium",
+        health: project.health || (manual.overdue || manual.blocked ? "red" : manual.dueToday || manual.highPriority ? "yellow" : "green"),
+        startDate: project.startDate || "",
+        targetDate: project.targetDate || "",
+        driveFolderId: project.driveFolderId || "",
+        driveFolderLink: project.driveFolderLink || "",
+        phases: project.phases || [],
+        tasks: project.tasks || [],
+        projectDocuments: project.projectDocuments || [],
+        manualTasks: manual.tasks,
         date,
         dmr: {
           enabled: Boolean(project.dmr?.enabled && project.dmr?.spreadsheetId),
@@ -11444,16 +11798,21 @@ app.get("/project-dashboard", async (req, res) => {
           canEdit: Boolean(project.dmr?.enabled && project.dmr?.spreadsheetId && canEditProjectDmr(project, req)),
         },
         metrics: {
-          progress,
+          progress: effectiveProgress,
+          sheetProgress: progress,
           totalRecords: activeRecords.length,
-          completed: completedRecords.length,
-          pending: activeRecords.filter((record) => !record.completed).length,
-          dueToday: dueToday.length,
+          totalTasks: manual.totalTasks,
+          completed: manual.totalTasks ? manual.completed : completedRecords.length,
+          pending: manual.totalTasks ? manual.pending : activeRecords.filter((record) => !record.completed).length,
+          dueToday: manual.totalTasks ? manual.dueToday : dueToday.length,
           startingToday: startingToday.length,
           completedToday: completedToday.length,
           actionsToday: actionsToday.length,
-          overdue: overdue.length,
-          blocked: blocked.length,
+          overdue: manual.totalTasks ? manual.overdue : overdue.length,
+          blocked: manual.totalTasks ? manual.blocked : blocked.length,
+          highPriority: manual.highPriority,
+          phases: manual.phases,
+          documents: manual.documents,
           attendancePresent,
           attendanceAbsent,
           agencies: agencyBreakdown.filter((item) => item.label !== "Unassigned").length,
@@ -11493,8 +11852,10 @@ app.get("/project-dashboard", async (req, res) => {
         totals.completedToday += project.metrics.completedToday;
         totals.overdue += project.metrics.overdue;
         totals.blocked += project.metrics.blocked;
+        totals.tasks += project.metrics.totalTasks || 0;
+        totals.documents += project.metrics.documents || 0;
         return totals;
-      }, { projects: 0, dueToday: 0, completedToday: 0, overdue: 0, blocked: 0 }),
+      }, { projects: 0, dueToday: 0, completedToday: 0, overdue: 0, blocked: 0, tasks: 0, documents: 0 }),
     });
   } catch (error) {
     console.error("Project dashboard error:", error);

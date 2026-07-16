@@ -184,6 +184,48 @@
   [class*="mrn-drawer-"], [class*="mrn-backdrop-"] { animation-duration: 1ms !important; }
 }
 
+.project-drawer-backdrop {
+  animation: project-backdrop-in 180ms ease-out both;
+}
+
+.project-drawer-backdrop.is-closing {
+  animation: project-backdrop-out 220ms ease both;
+  pointer-events: none;
+}
+
+.project-drawer-panel {
+  animation: project-drawer-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.project-drawer-panel.is-closing {
+  animation: project-drawer-out 220ms ease both;
+}
+
+@keyframes project-drawer-in {
+  from { transform: translateX(104%); opacity: 0.72; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes project-drawer-out {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(104%); opacity: 0.72; }
+}
+
+@keyframes project-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes project-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-drawer-backdrop,
+  .project-drawer-panel { animation-duration: 1ms !important; }
+}
+
 .mrn-form-drawer input:not([type="file"]),
 .mrn-form-drawer textarea {
   border: 1px solid rgba(0, 0, 0, 0.09);

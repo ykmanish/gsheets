@@ -15,6 +15,7 @@ import {
   Sheet,
   Sun,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 
 export function useClickOutside(ref, onOutside) {
   useEffect(() => {
@@ -391,13 +392,13 @@ export function DateRangePicker({ darkMode, from, to, onChange, placeholder = "C
   );
 }
 
-export function DatePicker({ darkMode, value, onChange, placeholder = "Choose date" }) {
+export function DatePicker({ darkMode, value, onChange, placeholder = "Choose date", disabled = false }) {
   const ref = useRef(null);
+  const popoverRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [popoverStyle, setPopoverStyle] = useState({ top: 0, left: 0, maxHeight: 380 });
   const selectedDate = fromDateInputValue(value);
   const [monthDate, setMonthDate] = useState(() => selectedDate || new Date());
-  useClickOutside(ref, () => setOpen(false));
 
   const positionPopover = useCallback(() => {
     if (!ref.current) return;
@@ -421,11 +422,23 @@ export function DatePicker({ darkMode, value, onChange, placeholder = "Choose da
   }, []);
 
   useEffect(() => {
+    function handlePointerDown(event) {
+      if (ref.current?.contains(event.target)) return;
+      if (popoverRef.current?.contains(event.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  useEffect(() => {
     if (!open) return undefined;
     positionPopover();
+    const frame = requestAnimationFrame(positionPopover);
     window.addEventListener("resize", positionPopover);
     window.addEventListener("scroll", positionPopover, true);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("resize", positionPopover);
       window.removeEventListener("scroll", positionPopover, true);
     };
@@ -457,8 +470,13 @@ export function DatePicker({ darkMode, value, onChange, placeholder = "Choose da
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
-        className={`h-10 w-full min-w-[150px] rounded-xl border px-3 text-left transition ${
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          positionPopover();
+          setOpen((current) => !current);
+        }}
+        className={`h-10 w-full min-w-[150px] rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
           darkMode
             ? "bg-[#15171c] border-white/10 text-white hover:bg-white/10"
             : "bg-white border-black/10 text-black hover:bg-black/[0.03]"
@@ -470,10 +488,11 @@ export function DatePicker({ darkMode, value, onChange, placeholder = "Choose da
         </span>
       </button>
 
-      {open && (
+      {open && !disabled && typeof document !== "undefined" && createPortal(
         <div
+          ref={popoverRef}
           style={popoverStyle}
-          className={`fixed z-[100] overflow-y-auto rounded-2xl border p-3 shadow-[0_18px_60px_rgba(0,0,0,0.2)] ${
+          className={`fixed z-[300] overflow-y-auto rounded-2xl border p-3 shadow-[0_18px_60px_rgba(0,0,0,0.2)] ${
             darkMode ? "bg-[#121317] border-white/10 text-white" : "bg-white border-black/10 text-black"
           }`}
         >
@@ -554,7 +573,7 @@ export function DatePicker({ darkMode, value, onChange, placeholder = "Choose da
             })}
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }

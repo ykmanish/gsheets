@@ -10114,9 +10114,11 @@ app.get("/project-dashboard/projects/:id/documents", async (req, res) => {
       console.warn(`Could not list Drive files for ${project.name}:`, error.message);
       return [];
     });
+    const hiddenDocuments = new Set((project.deletedProjectDocumentIds || []).map(projectText).filter(Boolean));
+    const visibleDriveFiles = driveFiles.filter((doc) => ![doc.id, doc.driveFileId, doc.url].some((value) => hiddenDocuments.has(projectText(value))));
     const manualDocs = project.projectDocuments || [];
     const seen = new Set();
-    const documents = [...manualDocs, ...driveFiles].filter((doc) => {
+    const documents = [...manualDocs, ...visibleDriveFiles].filter((doc) => {
       const key = doc.driveFileId || doc.url || doc.id;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -10127,6 +10129,26 @@ app.get("/project-dashboard/projects/:id/documents", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+function projectDocumentIndex(project, documentId) {
+  const id = projectText(documentId);
+  return (project.projectDocuments || []).findIndex((doc) => [doc.id, doc.driveFileId, doc.url].some((value) => projectText(value) === id));
+}
+
+function projectDocumentKeys(doc = {}) {
+  return [doc.id, doc.driveFileId, doc.url].map(projectText).filter(Boolean);
+}
+
+function unhideProjectDocument(project, doc = {}) {
+  const keys = new Set(projectDocumentKeys(doc));
+  project.deletedProjectDocumentIds = (project.deletedProjectDocumentIds || []).map(projectText).filter((id) => id && !keys.has(id));
+}
+
+function hideProjectDocument(project, doc = {}) {
+  const key = projectText(doc.driveFileId || doc.id || doc.url);
+  if (!key) return;
+  project.deletedProjectDocumentIds = [...new Set([...(project.deletedProjectDocumentIds || []).map(projectText).filter(Boolean), key])];
+}
 
 app.post("/project-dashboard/projects/:id/documents", requireSuperAdmin, (req, res) => {
   try {
@@ -10146,6 +10168,7 @@ app.post("/project-dashboard/projects/:id/documents", requireSuperAdmin, (req, r
       uploadedAt: new Date().toISOString(),
     };
     project.projectDocuments = [doc, ...(project.projectDocuments || [])];
+    unhideProjectDocument(project, doc);
     project.updatedAt = new Date().toISOString();
     saveProjectDashboardConfig();
     res.json({ success: true, document: doc });
@@ -10154,12 +10177,59 @@ app.post("/project-dashboard/projects/:id/documents", requireSuperAdmin, (req, r
   }
 });
 
+app.patch("/project-dashboard/projects/:id/documents/:documentId", requireSuperAdmin, (req, res) => {
+  try {
+    const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    const index = projectDocumentIndex(project, req.params.documentId);
+    const now = new Date().toISOString();
+    const current = index === -1
+      ? { id: crypto.randomUUID(), driveFileId: projectText(req.params.documentId), source: "manual-override", uploadedAt: now }
+      : project.projectDocuments[index];
+    const url = projectText(req.body?.url ?? current.url);
+    if (!url && !current.driveFileId) return res.status(400).json({ error: "Document link is required" });
+    const updated = {
+      ...current,
+      name: projectText(req.body?.name) || current.name || "Project document",
+      category: projectText(req.body?.category) || current.category || "General",
+      url,
+      driveFileId: projectText(req.body?.driveFileId) || extractDriveFileId(url) || current.driveFileId || "",
+      source: current.source || "manual",
+      uploadedAt: current.uploadedAt || now,
+      updatedAt: now,
+    };
+    project.projectDocuments = index === -1
+      ? [updated, ...(project.projectDocuments || [])]
+      : (project.projectDocuments || []).map((doc, docIndex) => docIndex === index ? updated : doc);
+    unhideProjectDocument(project, updated);
+    project.updatedAt = now;
+    saveProjectDashboardConfig();
+    res.json({ success: true, document: updated });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/project-dashboard/projects/:id/documents/:documentId", requireSuperAdmin, (req, res) => {
+  const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+  if (!project) return res.status(404).json({ error: "Project not found" });
+  const index = projectDocumentIndex(project, req.params.documentId);
+  const removed = index === -1
+    ? { id: projectText(req.params.documentId), driveFileId: projectText(req.params.documentId) }
+    : project.projectDocuments.splice(index, 1)[0];
+  hideProjectDocument(project, removed);
+  project.updatedAt = new Date().toISOString();
+  saveProjectDashboardConfig();
+  res.json({ success: true, document: removed });
+});
+
 app.post("/project-dashboard/projects/:id/documents/upload", requireSuperAdmin, upload.single("file"), async (req, res) => {
   try {
     const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
     if (!project) return res.status(404).json({ error: "Project not found" });
     const doc = await uploadProjectFileToDrive(project, req.file, req.body?.category);
     project.projectDocuments = [doc, ...(project.projectDocuments || [])];
+    unhideProjectDocument(project, doc);
     project.updatedAt = new Date().toISOString();
     saveProjectDashboardConfig();
     res.json({ success: true, document: doc });

@@ -701,6 +701,290 @@ function LoadingView({ darkMode }) {
   );
 }
 
+function DetailBadge({ icon: Icon, label, children, className = "" }) {
+  return (
+    <div className={cn("rounded-2xl p-4", className)}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
+          {label}
+        </p>
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/55 text-current dark:bg-white/10">
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+      <div className="mt-2 text-base font-bold">{children}</div>
+    </div>
+  );
+}
+
+function DetailSection({ title, icon: Icon, children }) {
+  return (
+    <section className="rounded-2xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+        {Icon && <Icon className="h-4 w-4 text-[#6c7468]" />}
+        {title}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function TaskDetailView({
+  task,
+  project,
+  phase,
+  assignees,
+  attachments,
+  dependencies,
+}) {
+  return (
+    <div className="space-y-5 px-6 pb-8 pt-6 sm:px-7">
+      <div className="flex items-start gap-4">
+        <span
+          className={cn(
+            "mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full border-2",
+            task.status === "done"
+              ? "border-[#65bf45] bg-[#65bf45] text-white"
+              : "border-[#a9afa5] text-transparent",
+          )}
+        >
+          <Check className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c8378] dark:text-white/45">
+            {project.code || "Project"} task
+          </p>
+          <h2 className="mt-1 text-3xl font-semibold tracking-[-0.03em] small">
+            {task.title || "Untitled task"}
+          </h2>
+          <p className="mt-2 text-sm text-[#737970] dark:text-white/50">
+            {phase?.name || "No phase assigned"}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <DetailBadge
+          icon={Circle}
+          label="Status"
+          className="bg-[#eef0ec] text-[#51564e] dark:bg-white/10 dark:text-white/75"
+        >
+          <StatusPill status={task.status || "todo"} compact />
+        </DetailBadge>
+        <DetailBadge
+          icon={Flag}
+          label="Priority"
+          className="bg-[#fff2cc] text-[#805b11] dark:bg-amber-400/15 dark:text-amber-100"
+        >
+          <PriorityPill priority={task.priority || "medium"} />
+        </DetailBadge>
+        <DetailBadge
+          icon={CalendarDays}
+          label="Due date"
+          className="bg-[#e8f0ff] text-[#2d55a1] dark:bg-blue-400/15 dark:text-blue-100"
+        >
+          {formatDate(task.dueDate, "No date")}
+        </DetailBadge>
+        <DetailBadge
+          icon={Layers3}
+          label="Phase"
+          className="bg-[#eafbdc] text-[#3f7d16] dark:bg-green-400/15 dark:text-green-100"
+        >
+          <span className="block truncate">{phase?.name || "No phase"}</span>
+        </DetailBadge>
+      </div>
+
+      <DetailSection title="Assignees" icon={Users}>
+        {assignees.length ? (
+          <div className="flex flex-wrap gap-2">
+            {assignees.map((person, index) => (
+              <span
+                key={person.id}
+                className="inline-flex items-center gap-2 rounded-full bg-[#f1f3ef] py-1 pl-1 pr-3 text-sm font-medium dark:bg-white/[0.06]"
+              >
+                <Avatar
+                  name={person.displayName || person.username}
+                  index={index}
+                  size="sm"
+                />
+                {person.displayName || person.username}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-[#858b82]">No assignees added.</p>
+        )}
+      </DetailSection>
+
+      <DetailSection title="Description" icon={FileText}>
+        <p className="whitespace-pre-wrap text-sm leading-6 text-[#4f554c] dark:text-white/65">
+          {task.description || "No description added."}
+        </p>
+      </DetailSection>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <DetailSection title={`Attachments (${attachments.length})`} icon={Paperclip}>
+          <div className="space-y-2">
+            {attachments.map((doc) => (
+              <a
+                key={doc.id || doc.driveFileId || doc.url}
+                href={doc.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-xl bg-[#f5f7f2] px-3 py-2.5 text-sm hover:bg-[#edf1e8] dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
+              >
+                <FileText className="h-4 w-4 text-[#6a73bd]" />
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {doc.name || "File"}
+                </span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </a>
+            ))}
+            {!attachments.length && (
+              <p className="text-sm text-[#858b82]">No files attached.</p>
+            )}
+          </div>
+        </DetailSection>
+
+        <DetailSection title={`Dependencies (${dependencies.length})`} icon={Link2}>
+          <div className="space-y-2">
+            {dependencies.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-2 rounded-xl bg-[#f5f7f2] px-3 py-2.5 text-sm dark:bg-white/[0.05]"
+              >
+                <StatusPill status={item.status || "todo"} compact />
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {item.title || "Untitled task"}
+                </span>
+              </div>
+            ))}
+            {!dependencies.length && (
+              <p className="text-sm text-[#858b82]">No dependencies linked.</p>
+            )}
+          </div>
+        </DetailSection>
+      </div>
+
+      <DetailSection title="Activity" icon={Clock3}>
+        <div className="space-y-3 text-sm">
+          <div className="flex gap-3">
+            <span className="mt-1 h-2 w-2 rounded-full bg-[#72cf50]" />
+            <p>
+              Task is currently{" "}
+              <b>{statusLabel(task.status || "todo").toLowerCase()}</b>.
+            </p>
+          </div>
+          {(task.comments || []).length ? (
+            <p className="text-[#6f766c] dark:text-white/55">
+              {(task.comments || []).length} comment
+              {(task.comments || []).length === 1 ? "" : "s"} added.
+            </p>
+          ) : (
+            <p className="text-[#858b82]">No comments yet.</p>
+          )}
+        </div>
+      </DetailSection>
+    </div>
+  );
+}
+
+function PhaseDetailView({ phase, tasks, users }) {
+  const done = tasks.filter((task) => task.status === "done").length;
+  const blocked = tasks.filter((task) => task.status === "blocked").length;
+  const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  return (
+    <div className="space-y-5 px-6 pb-8 pt-6 sm:px-7">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c8378] dark:text-white/45">
+          Delivery milestone
+        </p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-[-0.03em] small">
+          {phase.name || "Untitled phase"}
+        </h2>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-[#737970] dark:text-white/50">
+          {phase.description || "No description added for this phase."}
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <DetailBadge
+          icon={Sparkles}
+          label="Progress"
+          className="bg-[#dff6d7] text-[#225f17] dark:bg-[#74d957]/18 dark:text-[#bdf5ab]"
+        >
+          {progress}%
+        </DetailBadge>
+        <DetailBadge
+          icon={CheckCircle2}
+          label="Tasks done"
+          className="bg-[#dfeaff] text-[#284b92] dark:bg-[#6c8dff]/18 dark:text-[#b9c9ff]"
+        >
+          {done}/{tasks.length}
+        </DetailBadge>
+        <DetailBadge
+          icon={AlertCircle}
+          label="Blocked"
+          className="bg-[#ffe2e7] text-[#9c2d43] dark:bg-rose-500/18 dark:text-rose-200"
+        >
+          {blocked}
+        </DetailBadge>
+        <DetailBadge
+          icon={CalendarDays}
+          label="Target"
+          className="bg-[#fff0c9] text-[#7a5511] dark:bg-amber-400/18 dark:text-amber-100"
+        >
+          {formatDate(phase.dueDate)}
+        </DetailBadge>
+      </div>
+
+      <section className="rounded-2xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-semibold">Phase progress</span>
+          <span className="text-[#737970] dark:text-white/50">
+            {done} of {tasks.length} done
+          </span>
+        </div>
+        <ProgressBar value={progress} className="mt-3" />
+      </section>
+
+      <DetailSection title="Tasks in this phase" icon={ListChecks}>
+        <div className="divide-y divide-[#e7eae4] overflow-hidden rounded-xl border border-[#e0e4dd] dark:divide-white/10 dark:border-white/10">
+          {tasks.map((task, index) => {
+            const names = users
+              .filter((person) => (task.assigneeIds || []).includes(person.id))
+              .map((person) => person.displayName || person.username);
+            return (
+              <div
+                key={task.id}
+                className="grid gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <StatusPill status={task.status || "todo"} compact />
+                    <span className="truncate text-sm font-semibold">
+                      {task.title || "Untitled task"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-[#858b82]">
+                    Due {formatDate(task.dueDate, "not set")}
+                  </p>
+                </div>
+                <AvatarStack names={names} limit={2} key={index} />
+              </div>
+            );
+          })}
+          {!tasks.length && (
+            <p className="p-7 text-center text-xs text-[#858b82]">
+              No tasks in this phase yet.
+            </p>
+          )}
+        </div>
+      </DetailSection>
+    </div>
+  );
+}
+
 function TaskDrawer({
   darkMode,
   task,
@@ -718,7 +1002,9 @@ function TaskDrawer({
   onDelete,
 }) {
   const [tab, setTab] = useState("details");
+  const [editMode, setEditMode] = useState(Boolean(task.__isNew));
   const [comment, setComment] = useState("");
+  const isEditing = Boolean(editable && (task.__isNew || editMode));
   const assignees = users.filter((person) =>
     (task.assigneeIds || []).includes(person.id),
   );
@@ -732,6 +1018,7 @@ function TaskDrawer({
   const dependencies = allTasks.filter((item) =>
     (task.dependencyIds || []).includes(item.id),
   );
+  const phase = phases.find((item) => item.id === task.phaseId);
 
   function addComment() {
     if (!comment.trim()) return;
@@ -762,7 +1049,7 @@ function TaskDrawer({
       onClose={onClose}
       width="max-w-[590px]"
       footer={
-        editable ? (
+        isEditing ? (
           <div className="flex items-center justify-between gap-3">
             {task.__isNew ? (
               <span />
@@ -789,19 +1076,37 @@ function TaskDrawer({
             </div>
           </div>
         ) : (
-          <div className="flex justify-end">
-            <Button variant="primary" onClick={onClose}>
+          <div className="flex items-center justify-between gap-3">
+            {editable ? (
+              <Button variant="primary" onClick={() => setEditMode(true)}>
+                <Pencil className="h-4 w-4" />
+                Edit task
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button onClick={onClose}>
               Close
             </Button>
           </div>
         )
       }
     >
+      {!isEditing ? (
+        <TaskDetailView
+          task={task}
+          project={project}
+          phase={phase}
+          assignees={assignees}
+          attachments={attachments}
+          dependencies={dependencies}
+        />
+      ) : (
       <div className="px-6 pb-8 pt-5 sm:px-7">
         <div className="flex items-start gap-3">
           <button
             type="button"
-            disabled={!editable}
+            disabled={!isEditing}
             onClick={() =>
               onChange({ status: task.status === "done" ? "todo" : "done" })
             }
@@ -816,7 +1121,7 @@ function TaskDrawer({
           </button>
           <textarea
             rows={2}
-            readOnly={!editable}
+            readOnly={!isEditing}
             value={task.title || ""}
             onChange={(event) => onChange({ title: event.target.value })}
             placeholder="Task title"
@@ -828,7 +1133,7 @@ function TaskDrawer({
           <PropertyRow icon={Circle} label="Status">
             <NativeSelect
               darkMode={darkMode}
-              disabled={!editable}
+              disabled={!isEditing}
               value={task.status || "todo"}
               onChange={(value) => onChange({ status: value })}
               options={STATUS_OPTIONS}
@@ -837,7 +1142,7 @@ function TaskDrawer({
           <PropertyRow icon={CalendarDays} label="Due date">
             <DatePicker
               darkMode={darkMode}
-              disabled={!editable}
+              disabled={!isEditing}
               value={task.dueDate || ""}
               onChange={(value) => onChange({ dueDate: value })}
               placeholder="No date"
@@ -846,7 +1151,7 @@ function TaskDrawer({
           <PropertyRow icon={Users} label="Assignee">
             <AssigneePicker
               darkMode={darkMode}
-              disabled={!editable}
+              disabled={!isEditing}
               users={users}
               selectedIds={task.assigneeIds || []}
               onChange={(value) => onChange({ assigneeIds: value })}
@@ -855,7 +1160,7 @@ function TaskDrawer({
           <PropertyRow icon={Layers3} label="Phase">
             <NativeSelect
               darkMode={darkMode}
-              disabled={!editable}
+              disabled={!isEditing}
               value={task.phaseId || ""}
               onChange={(value) => onChange({ phaseId: value })}
               options={[
@@ -870,7 +1175,7 @@ function TaskDrawer({
           <PropertyRow icon={Flag} label="Priority">
             <NativeSelect
               darkMode={darkMode}
-              disabled={!editable}
+              disabled={!isEditing}
               value={task.priority || "medium"}
               onChange={(value) => onChange({ priority: value })}
               options={PRIORITY_OPTIONS}
@@ -885,7 +1190,7 @@ function TaskDrawer({
           </div>
           <textarea
             rows={5}
-            readOnly={!editable}
+            readOnly={!isEditing}
             value={task.description || ""}
             onChange={(event) => onChange({ description: event.target.value })}
             placeholder="Describe the outcome, context, blockers, and completion criteria..."
@@ -934,7 +1239,7 @@ function TaskDrawer({
                 </span>
               </a>
             ))}
-            {editable && (
+            {isEditing && (
               <label className="relative flex min-h-[58px] items-center justify-center rounded-lg border border-dashed border-[#ccd2c8] text-[#7d837a] hover:bg-[#f4f6f2] dark:border-white/15 dark:hover:bg-white/[0.04]">
                 <Plus className="pointer-events-none h-4 w-4" />
                 <select
@@ -1000,7 +1305,7 @@ function TaskDrawer({
                 {dependencies.length} linked
               </span>
             </div>
-            {editable && (
+            {isEditing && (
               <NativeSelect
                 darkMode={darkMode}
                 value=""
@@ -1053,7 +1358,7 @@ function TaskDrawer({
                     {item.title}
                   </span>
                   <StatusPill status={item.status} compact />
-                  {editable && (
+                  {isEditing && (
                     <IconButton
                       label="Remove dependency"
                       onClick={() =>
@@ -1107,7 +1412,7 @@ function TaskDrawer({
                 </p>
               )}
             </div>
-            {editable && (
+            {isEditing && (
               <div className="mt-4 flex items-end gap-2">
                 <textarea
                   rows={2}
@@ -1163,6 +1468,7 @@ function TaskDrawer({
           </section>
         )}
       </div>
+      )}
     </SlideOver>
   );
 }
@@ -1180,6 +1486,8 @@ function PhaseDrawer({
   onDelete,
   onAddTask,
 }) {
+  const [editMode, setEditMode] = useState(Boolean(phase.__isNew));
+  const isEditing = Boolean(editable && (phase.__isNew || editMode));
   const done = tasks.filter((task) => task.status === "done").length;
   const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
   return (
@@ -1189,7 +1497,7 @@ function PhaseDrawer({
       onClose={onClose}
       width="max-w-[560px]"
       footer={
-        editable ? (
+        isEditing ? (
           <div className="flex items-center justify-between">
             {phase.__isNew ? (
               <span />
@@ -1216,18 +1524,29 @@ function PhaseDrawer({
             </div>
           </div>
         ) : (
-          <div className="flex justify-end">
-            <Button variant="primary" onClick={onClose}>
+          <div className="flex items-center justify-between gap-3">
+            {editable ? (
+              <Button variant="primary" onClick={() => setEditMode(true)}>
+                <Pencil className="h-4 w-4" />
+                Edit phase
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button onClick={onClose}>
               Close
             </Button>
           </div>
         )
       }
     >
+      {!isEditing ? (
+        <PhaseDetailView phase={phase} tasks={tasks} users={users} />
+      ) : (
       <div className="px-6 pb-8 pt-6 sm:px-7">
         <p className="text-xs font-medium text-[#777d74]">Delivery milestone</p>
         <input
-          readOnly={!editable}
+          readOnly={!isEditing}
           value={phase.name || ""}
           onChange={(event) => onChange({ name: event.target.value })}
           placeholder="Phase name"
@@ -1237,7 +1556,7 @@ function PhaseDrawer({
           <Field label="Start date" icon={CalendarDays}>
             <DatePicker
               darkMode={darkMode}
-              disabled={!editable}
+              disabled={!isEditing}
               value={phase.startDate || ""}
               onChange={(value) => onChange({ startDate: value })}
               placeholder="No start date"
@@ -1246,7 +1565,7 @@ function PhaseDrawer({
           <Field label="Target date" icon={CalendarDays}>
             <DatePicker
               darkMode={darkMode}
-              disabled={!editable}
+              disabled={!isEditing}
               value={phase.dueDate || ""}
               onChange={(value) => onChange({ dueDate: value })}
               placeholder="No target date"
@@ -1256,7 +1575,7 @@ function PhaseDrawer({
         <Field label="Description" icon={FileText} className="mt-4">
           <textarea
             rows={4}
-            readOnly={!editable}
+            readOnly={!isEditing}
             value={phase.description || ""}
             onChange={(event) => onChange({ description: event.target.value })}
             placeholder="What must be achieved in this phase?"
@@ -1283,7 +1602,7 @@ function PhaseDrawer({
             <section className="mt-6">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-semibold">Tasks in this phase</h4>
-                {editable && (
+                {isEditing && (
                   <Button onClick={onAddTask}>
                     <Plus className="h-4 w-4" />
                     Add task
@@ -1336,6 +1655,7 @@ function PhaseDrawer({
           </>
         )}
       </div>
+      )}
     </SlideOver>
   );
 }
@@ -2237,11 +2557,11 @@ function OverviewView({
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              ["Progress", `${progress}%`, "bg-[#dff6d7] text-[#225f17] dark:bg-[#74d957]/18 dark:text-[#bdf5ab]"],
-              ["Tasks done", `${done}/${tasks.length}`, "bg-[#dfeaff] text-[#284b92] dark:bg-[#6c8dff]/18 dark:text-[#b9c9ff]"],
-              ["Blocked", blocked, "bg-[#ffe2e7] text-[#9c2d43] dark:bg-rose-500/18 dark:text-rose-200"],
-              ["Target", formatDate(project.targetDate), "bg-[#fff0c9] text-[#7a5511] dark:bg-amber-400/18 dark:text-amber-100"],
-            ].map(([label, value, badgeClass]) => (
+              [Sparkles, "Progress", `${progress}%`, "bg-[#dff6d7] text-[#225f17] dark:bg-[#74d957]/18 dark:text-[#bdf5ab]"],
+              [CheckCircle2, "Tasks done", `${done}/${tasks.length}`, "bg-[#dfeaff] text-[#284b92] dark:bg-[#6c8dff]/18 dark:text-[#b9c9ff]"],
+              [AlertCircle, "Blocked", blocked, "bg-[#ffe2e7] text-[#9c2d43] dark:bg-rose-500/18 dark:text-rose-200"],
+              [CalendarDays, "Target", formatDate(project.targetDate), "bg-[#fff0c9] text-[#7a5511] dark:bg-amber-400/18 dark:text-amber-100"],
+            ].map(([Icon, label, value, badgeClass]) => (
               <div
                 key={label}
                 className={cn(
@@ -2249,9 +2569,14 @@ function OverviewView({
                   badgeClass,
                 )}
               >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
-                  {label}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
+                    {label}
+                  </p>
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/55 text-current dark:bg-white/10">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                </div>
                 <p className="mt-1 text-lg font-bold tabular-nums">{value}</p>
               </div>
             ))}

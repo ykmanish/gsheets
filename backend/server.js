@@ -11177,8 +11177,9 @@ app.get("/dmr-dashboard", async (req, res) => {
       ? String(req.query.date)
       : istDateKey(new Date());
     const force = ["1", "true", "yes", "force"].includes(String(req.query.force || "").toLowerCase());
+    const isToday = date === istDateKey(new Date());
     const dashboard = publicDmrSettings().linked
-      ? await readDmrDashboard(date, { ensureToday: false, force })
+      ? await readDmrDashboard(date, { ensureToday: isToday, force })
       : emptyDmrDashboard(date);
     res.json({
       ...dashboard,

@@ -1,47 +1,78 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle,
+  AlertCircle,
   ArrowLeft,
   ArrowUpRight,
-  BriefcaseBusiness,
+  BarChart3,
   CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
-  ClipboardList,
+  Circle,
   Clock3,
-  Database,
+  Columns3,
+  Download,
   FilePlus2,
   FileText,
+  Filter,
   Flag,
   FolderKanban,
-  GanttChartSquare,
-  GripVertical,
+  FolderOpen,
+  Grid2X2,
   Layers3,
-  Link as LinkIcon,
+  LayoutDashboard,
+  Link2,
+  List,
   ListChecks,
   Loader2,
+  MapPin,
+  MessageSquare,
+  MoreHorizontal,
   Paperclip,
-  Plus,
   Pencil,
+  Plus,
   RefreshCw,
   Save,
   Search,
-  ShieldAlert,
   ShieldCheck,
-  Table2,
+  SlidersHorizontal,
+  Sparkles,
+  Tag,
   Trash2,
   Upload,
+  UserPlus,
   UserRound,
   Users,
-  UsersRound,
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
-import { SelectMenu } from "./ui";
+
+const STATUS_OPTIONS = [
+  { value: "todo", label: "Not started", color: "slate" },
+  { value: "in_progress", label: "In progress", color: "amber" },
+  { value: "blocked", label: "Blocked", color: "rose" },
+  { value: "done", label: "Done", color: "green" },
+];
+
+const PRIORITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "critical", label: "Critical" },
+];
+
+const HEALTH_OPTIONS = [
+  { value: "green", label: "On track" },
+  { value: "yellow", label: "Needs attention" },
+  { value: "red", label: "At risk" },
+];
+
+const DOC_CATEGORIES = ["Drawing", "Agreement", "Quotation", "Approval", "Bill", "Site photo", "General"];
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -60,234 +91,438 @@ async function apiForm(path, formData) {
   return data;
 }
 
-const STATUS_OPTIONS = [
-  { value: "todo", label: "Todo" },
-  { value: "in_progress", label: "In progress" },
-  { value: "blocked", label: "Blocked" },
-  { value: "done", label: "Done" },
-];
-
-const PRIORITY_OPTIONS = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "critical", label: "Critical" },
-];
-
-const HEALTH_OPTIONS = [
-  { value: "green", label: "Green" },
-  { value: "yellow", label: "Yellow" },
-  { value: "red", label: "Red" },
-];
-
-const DOC_CATEGORIES = ["Drawing", "Agreement", "Quotation", "Approval", "Bill", "Site photo", "General"].map((label) => ({
-  value: label,
-  label,
-}));
-
-const blankPhase = () => ({
-  id: `phase_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-  name: "",
-  description: "",
-  status: "todo",
-  startDate: "",
-  dueDate: "",
-  ownerId: "",
-  ownerName: "",
-  dependencyIds: [],
-  tasks: [],
-});
-
-const blankTask = (phaseId = "") => ({
-  id: `task_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-  phaseId,
-  title: "",
-  description: "",
-  status: "todo",
-  priority: "medium",
-  startDate: "",
-  dueDate: "",
-  assigneeIds: [],
-  assignees: [],
-  dependencyIds: [],
-  documentIds: [],
-  comments: [],
-});
-
-const blankProject = () => ({
-  name: "",
-  code: "",
-  client: "",
-  location: "",
-  manager: "",
-  managerId: "",
-  status: "active",
-  priority: "medium",
-  health: "green",
-  startDate: "",
-  targetDate: "",
-  driveFolderLink: "",
-  aliases: [],
-  phases: [{ ...blankPhase(), name: "Planning" }],
-  tasks: [],
-  projectDocuments: [],
-  assignments: [],
-  dmr: { enabled: false, spreadsheetId: "", siteNames: [], agencyNames: [], assignedUserIds: [], editableUserIds: [] },
-});
-
-function listFromText(value = "") {
-  return String(value).split(",").map((item) => item.trim()).filter(Boolean);
+function uid(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-function todayKey() {
-  const date = new Date();
-  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-  return date.toISOString().slice(0, 10);
+function blankTask(phaseId = "") {
+  return {
+    id: uid("task"),
+    phaseId,
+    title: "",
+    description: "",
+    status: "todo",
+    priority: "medium",
+    startDate: "",
+    dueDate: "",
+    assigneeIds: [],
+    assignees: [],
+    dependencyIds: [],
+    documentIds: [],
+    comments: [],
+    __isNew: true,
+  };
 }
 
-function formatDate(value) {
-  if (!value) return "Not set";
-  const date = new Date(`${value}T00:00:00`);
+function blankPhase() {
+  return {
+    id: uid("phase"),
+    name: "",
+    description: "",
+    status: "todo",
+    startDate: "",
+    dueDate: "",
+    ownerId: "",
+    ownerName: "",
+    dependencyIds: [],
+    tasks: [],
+    __isNew: true,
+  };
+}
+
+function blankProject() {
+  return {
+    name: "",
+    code: "",
+    client: "",
+    location: "",
+    manager: "",
+    managerId: "",
+    status: "active",
+    priority: "medium",
+    health: "green",
+    startDate: "",
+    targetDate: "",
+    driveFolderLink: "",
+    aliases: [],
+    phases: [{ ...blankPhase(), name: "Planning", __isNew: undefined }],
+    tasks: [],
+    projectDocuments: [],
+    assignments: [],
+    dmr: { enabled: false, spreadsheetId: "", siteNames: [], agencyNames: [], assignedUserIds: [], editableUserIds: [] },
+  };
+}
+
+function formatDate(value, fallback = "Not set") {
+  if (!value) return fallback;
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function statusLabel(value = "") {
-  return STATUS_OPTIONS.find((item) => item.value === value)?.label || value || "Todo";
+function formatRelativeDate(value) {
+  if (!value) return "No deadline";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(`${value}T00:00:00`);
+  const days = Math.round((due - today) / 86400000);
+  if (days === 0) return "Due today";
+  if (days === 1) return "Due tomorrow";
+  if (days === -1) return "1 day overdue";
+  if (days < 0) return `${Math.abs(days)} days overdue`;
+  return `${days} days left`;
 }
 
-function priorityClass(priority, darkMode) {
-  if (priority === "critical") return "bg-red-500 text-white";
-  if (priority === "high") return darkMode ? "bg-orange-400/15 text-orange-200" : "bg-orange-50 text-orange-700";
-  if (priority === "low") return darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55";
-  return darkMode ? "bg-blue-400/10 text-blue-200" : "bg-blue-50 text-blue-700";
+function initials(name = "?") {
+  return String(name).trim().split(/\s+/).map((word) => word[0]).join("").slice(0, 2).toUpperCase() || "?";
 }
 
-function healthClass(health, darkMode) {
-  if (health === "red") return darkMode ? "bg-red-400/12 text-red-200" : "bg-red-50 text-red-700";
-  if (health === "yellow") return darkMode ? "bg-amber-400/12 text-amber-200" : "bg-amber-50 text-amber-700";
-  return darkMode ? "bg-emerald-400/12 text-emerald-200" : "bg-emerald-50 text-emerald-700";
+function statusLabel(status) {
+  return STATUS_OPTIONS.find((item) => item.value === status)?.label || "Not started";
 }
 
-function Drawer({ darkMode, title, subtitle, onClose, children, footer }) {
+function cn(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function Button({ children, variant = "default", className = "", ...props }) {
+  const variants = {
+    default: "border border-[#d9ddd6] bg-white text-[#20231f] hover:bg-[#f6f7f4] dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/10",
+    primary: "border border-[#20231f] bg-[#20231f] text-white hover:bg-black dark:border-[#7ddb58] dark:bg-[#7ddb58] dark:text-[#11150f]",
+    accent: "border border-[#71c94e] bg-[#78d455] text-[#13200e] hover:bg-[#6bc248]",
+    ghost: "border border-transparent text-[#60655d] hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.06]",
+    danger: "border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300",
+  };
+  return <button type="button" className={cn("inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45", variants[variant], className)} {...props}>{children}</button>;
+}
+
+function IconButton({ label, className = "", children, ...props }) {
+  return <button type="button" aria-label={label} title={label} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#63685f] transition hover:bg-black/[0.05] hover:text-black dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white", className)} {...props}>{children}</button>;
+}
+
+function Avatar({ name, index = 0, size = "md", className = "" }) {
+  const colors = ["bg-[#2e8b70]", "bg-[#637dd8]", "bg-[#b06f9f]", "bg-[#c47a45]", "bg-[#77883c]"];
+  const sizes = size === "sm" ? "h-6 w-6 text-[9px]" : size === "lg" ? "h-11 w-11 text-sm" : "h-8 w-8 text-[10px]";
+  return <span title={name} className={cn("inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white dark:ring-[#171915]", colors[index % colors.length], sizes, className)}>{initials(name)}</span>;
+}
+
+function AvatarStack({ names = [], limit = 4 }) {
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-black/45 backdrop-blur-sm">
-      <div className={`flex h-full w-full flex-col overflow-hidden border-l shadow-2xl xl:w-[92vw] ${darkMode ? "border-white/10 bg-[#0f1115] text-white" : "border-black/10 bg-[#f5f4ef] text-[#171714]"}`}>
-        <header className={`flex shrink-0 items-center justify-between border-b px-5 py-4 sm:px-8 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.07] bg-white"}`}>
-          <div className="flex min-w-0 items-center gap-3">
-            <button type="button" onClick={onClose} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 hover:bg-white/10" : "border-black/10 hover:bg-black/[0.04]"}`}>
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <div className="min-w-0">
-              <h3 className="truncate text-xl font-semibold">{title}</h3>
-              <p className={`mt-0.5 truncate text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>{subtitle}</p>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full">
-            <X className="h-5 w-5" />
-          </button>
-        </header>
-        <main className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-8">{children}</main>
-        {footer && <footer className={`shrink-0 border-t px-5 py-4 sm:px-8 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.07] bg-white"}`}>{footer}</footer>}
-      </div>
-    </div>
+    <span className="flex items-center -space-x-2">
+      {names.slice(0, limit).map((name, index) => <Avatar key={`${name}-${index}`} name={name} index={index} />)}
+      {names.length > limit && <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#eceee9] text-[10px] font-bold text-[#5f645c] ring-2 ring-white dark:bg-white/10 dark:text-white/70 dark:ring-[#171915]">+{names.length - limit}</span>}
+    </span>
   );
 }
 
-function Field({ label, children }) {
+function ProgressBar({ value = 0, className = "" }) {
+  return <span className={cn("block h-1.5 overflow-hidden rounded-full bg-[#e8ebe5] dark:bg-white/10", className)}><span className="block h-full rounded-full bg-[#72cf50] transition-all" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></span>;
+}
+
+function StatusPill({ status, count, compact = false }) {
+  const styles = {
+    todo: "bg-[#eef0ec] text-[#51564e] dark:bg-white/10 dark:text-white/65",
+    in_progress: "bg-[#fff0c9] text-[#8a6312] dark:bg-amber-400/15 dark:text-amber-200",
+    blocked: "bg-[#ffe2e4] text-[#a93b47] dark:bg-rose-400/15 dark:text-rose-200",
+    done: "bg-[#dff6d7] text-[#367b25] dark:bg-green-400/15 dark:text-green-200",
+  };
+  return <span className={cn("inline-flex items-center gap-1.5 rounded-full font-semibold", compact ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-xs", styles[status] || styles.todo)}><span className={cn("h-2 w-2 rounded-full border-2", status === "done" ? "border-[#63bd43] bg-[#63bd43]" : status === "blocked" ? "border-[#d95b67]" : status === "in_progress" ? "border-[#d8a62e]" : "border-[#8c9288]")} />{statusLabel(status)}{typeof count === "number" && <span className="ml-0.5 opacity-60">{count}</span>}</span>;
+}
+
+function PriorityPill({ priority = "medium" }) {
+  const styles = {
+    low: "bg-[#eef1ec] text-[#5f675b]",
+    medium: "bg-[#fff2cc] text-[#836115]",
+    high: "bg-[#ffe2d2] text-[#9b4a25]",
+    critical: "bg-[#ffe0e4] text-[#a63644]",
+  };
+  return <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold capitalize dark:bg-white/10 dark:text-white/70", styles[priority] || styles.medium)}><Flag className="h-3 w-3" />{priority}</span>;
+}
+
+function Field({ label, icon: Icon, hint, children, className = "" }) {
   return (
-    <label className="block">
-      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-black/40 dark:text-white/40">{label}</span>
+    <label className={cn("block", className)}>
+      <span className="mb-1.5 flex items-center justify-between gap-2 text-xs font-medium text-[#666c63] dark:text-white/50">
+        <span className="flex items-center gap-1.5">{Icon && <Icon className="h-3.5 w-3.5" />}{label}</span>{hint && <span className="text-[10px] opacity-70">{hint}</span>}
+      </span>
       {children}
     </label>
   );
 }
 
-function TextInput({ darkMode, value, onChange, placeholder, type = "text", required = false }) {
+const inputClass = "h-10 w-full rounded-lg border border-[#dfe3dc] bg-white px-3 text-sm text-[#20231f] outline-none transition placeholder:text-[#a4a9a1] focus:border-[#9acb87] focus:ring-2 focus:ring-[#72cf50]/10 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-white/25";
+const textAreaClass = "w-full resize-none rounded-lg border border-[#dfe3dc] bg-white px-3 py-2.5 text-sm leading-6 text-[#20231f] outline-none transition placeholder:text-[#a4a9a1] focus:border-[#9acb87] focus:ring-2 focus:ring-[#72cf50]/10 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-white/25";
+
+function NativeSelect({ value, onChange, options, className = "", disabled = false }) {
   return (
-    <input
-      type={type}
-      value={value || ""}
-      required={required}
-      placeholder={placeholder}
-      onChange={(event) => onChange(event.target.value)}
-      className={`h-12 w-full rounded-2xl border px-4 text-sm outline-none transition focus:ring-2 ${darkMode ? "border-white/10 bg-white/[0.04] focus:ring-[#d8f36a]/25" : "border-black/10 bg-white focus:ring-black/10"}`}
-    />
+    <span className="relative block">
+      <select value={value || ""} disabled={disabled} onChange={(event) => onChange(event.target.value)} className={cn(inputClass, "appearance-none pr-9 disabled:cursor-default disabled:bg-[#f4f5f2] disabled:text-[#656b62] dark:disabled:bg-white/[0.025]", className)}>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#747a71]" />
+    </span>
   );
 }
 
-function TextArea({ darkMode, value, onChange, placeholder, rows = 4 }) {
-  return (
-    <textarea
-      value={value || ""}
-      rows={rows}
-      placeholder={placeholder}
-      onChange={(event) => onChange(event.target.value)}
-      className={`w-full resize-none rounded-2xl border px-4 py-3 text-sm outline-none transition focus:ring-2 ${darkMode ? "border-white/10 bg-white/[0.04] focus:ring-[#d8f36a]/25" : "border-black/10 bg-white focus:ring-black/10"}`}
-    />
-  );
-}
-
-function UserPicker({ darkMode, users = [], selectedIds = [], onChange, placeholder = "Assign members" }) {
+function AssigneePicker({ users, selectedIds, onChange, disabled = false }) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const ref = useRef(null);
-
-  useEffect(() => {
-    function close(event) {
-      if (!ref.current || ref.current.contains(event.target)) return;
-      setOpen(false);
-    }
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, []);
-
-  const selected = users.filter((user) => selectedIds.includes(user.id));
-  const filtered = users.filter((user) => `${user.displayName} ${user.username}`.toLowerCase().includes(query.toLowerCase()));
-  const toggle = (id) => onChange(selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]);
-
+  const selected = users.filter((item) => selectedIds.includes(item.id));
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-2 text-left text-sm ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
-      >
-        <span className="flex min-w-0 flex-wrap gap-1.5">
-          {selected.length ? selected.map((user) => (
-            <span key={user.id} className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/8 text-white/75" : "bg-[#eef4ec] text-black/65"}`}>{user.displayName}</span>
-          )) : <span className={darkMode ? "text-white/35" : "text-black/35"}>{placeholder}</span>}
+    <div className="relative">
+      <button type="button" disabled={disabled} onClick={() => setOpen((current) => !current)} className={cn(inputClass, "flex min-h-10 h-auto items-center justify-between gap-2 py-1.5 text-left disabled:cursor-default disabled:bg-[#f4f5f2] dark:disabled:bg-white/[0.025]")}>
+        <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {selected.length ? selected.map((person, index) => <span key={person.id} className="inline-flex items-center gap-1 rounded-full bg-[#eef1ec] py-1 pl-1 pr-2 text-xs dark:bg-white/10"><Avatar name={person.displayName || person.username} index={index} size="sm" />{person.displayName || person.username}</span>) : <span className="text-[#a4a9a1]">Assign people</span>}
         </span>
-        <UsersRound className="h-4 w-4 shrink-0 opacity-45" />
+        <UserPlus className="h-4 w-4 shrink-0 text-[#747a71]" />
       </button>
       {open && (
-        <div className={`absolute left-0 right-0 top-[calc(100%+8px)] z-50 rounded-[20px] border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search member..."
-            className={`mb-2 h-10 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
-          />
-          <div className="max-h-56 overflow-y-auto pr-1">
-            {filtered.map((user) => {
-              const active = selectedIds.includes(user.id);
-              return (
-                <button key={user.id} type="button" onClick={() => toggle(user.id)} className={`mb-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${active ? "bg-emerald-500/10 text-emerald-600" : darkMode ? "hover:bg-white/8" : "hover:bg-black/[0.04]"}`}>
-                  <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-emerald-500 text-white" : darkMode ? "bg-white/8" : "bg-[#eef4ec]"}`}>{(user.displayName || user.username || "?").slice(0, 1).toUpperCase()}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{user.displayName || user.username}</span>
-                    <span className={`block truncate text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>{user.username}</span>
-                  </span>
-                  <span className={`h-5 w-5 rounded-full border transition ${active ? "border-emerald-500 bg-emerald-500 shadow-[inset_0_0_0_4px_white]" : darkMode ? "border-white/20" : "border-black/15"}`} />
-                </button>
-              );
-            })}
-            {!filtered.length && <p className={`px-3 py-5 text-center text-sm ${darkMode ? "text-white/40" : "text-black/40"}`}>No members found.</p>}
-          </div>
+        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[90] max-h-64 overflow-y-auto rounded-xl border border-[#dfe3dc] bg-white p-1.5 shadow-[0_16px_40px_rgba(20,28,18,0.14)] dark:border-white/10 dark:bg-[#1c1f1a]">
+          {users.map((person, index) => {
+            const active = selectedIds.includes(person.id);
+            return <button key={person.id} type="button" onClick={() => onChange(active ? selectedIds.filter((id) => id !== person.id) : [...selectedIds, person.id])} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[#f4f6f2] dark:hover:bg-white/[0.06]"><span className={cn("flex h-4 w-4 items-center justify-center rounded border", active ? "border-[#69c549] bg-[#69c549] text-white" : "border-[#cfd4cc]")}>{active && <Check className="h-3 w-3" />}</span><Avatar name={person.displayName || person.username} index={index} size="sm" /><span className="min-w-0"><span className="block truncate font-medium">{person.displayName || person.username}</span><span className="block truncate text-[11px] text-[#858b82]">{person.username}</span></span></button>;
+          })}
+          {!users.length && <p className="p-4 text-center text-xs text-[#858b82]">No users available</p>}
         </div>
       )}
     </div>
   );
+}
+
+function SlideOver({ title, eyebrow, onClose, width = "max-w-[560px]", children, footer }) {
+  return (
+    <div className="fixed inset-0 z-[80] flex justify-end bg-[#11150f]/20 backdrop-blur-[1px]" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <aside role="dialog" aria-modal="true" aria-label={title} className={cn("flex h-full w-full flex-col border-l border-[#dfe3dc] bg-[#fbfcfa] text-[#20231f] shadow-[-18px_0_60px_rgba(28,36,24,0.12)] dark:border-white/10 dark:bg-[#141713] dark:text-white", width)}>
+        <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[#e4e7e1] bg-white px-5 dark:border-white/10 dark:bg-[#171a16]">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-[#737970] dark:text-white/45">
+            {eyebrow && <span className="truncate">{eyebrow}</span>}
+            {eyebrow && <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+            <span className="truncate font-medium text-[#30342e] dark:text-white/75">{title}</span>
+          </div>
+          <div className="flex items-center gap-0.5"><IconButton label="More actions"><MoreHorizontal className="h-4 w-4" /></IconButton><IconButton label="Close" onClick={onClose}><X className="h-4 w-4" /></IconButton></div>
+        </header>
+        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        {footer && <footer className="shrink-0 border-t border-[#e4e7e1] bg-white px-5 py-3 dark:border-white/10 dark:bg-[#171a16]">{footer}</footer>}
+      </aside>
+    </div>
+  );
+}
+
+function PropertyRow({ icon: Icon, label, children }) {
+  return <div className="grid min-h-10 grid-cols-[112px_minmax(0,1fr)] items-center gap-3"><span className="flex items-center gap-2 text-xs text-[#777d74] dark:text-white/45"><Icon className="h-3.5 w-3.5" />{label}</span><div className="min-w-0">{children}</div></div>;
+}
+
+function LoadingView({ darkMode }) {
+  return <div className={cn("flex min-h-0 flex-1 items-center justify-center", darkMode ? "bg-[#10120f] text-white" : "bg-[#f4f5f2] text-[#20231f]")}><div className="flex items-center gap-3 rounded-xl border border-[#dfe3dc] bg-white px-5 py-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]"><Loader2 className="h-5 w-5 animate-spin text-[#61b642]" /><span className="text-sm font-medium">Loading project workspace...</span></div></div>;
+}
+
+function TaskDrawer({ task, project, users, phases, documents, allTasks, currentUser, saving, editable, onChange, onClose, onSave, onDelete }) {
+  const [tab, setTab] = useState("details");
+  const [comment, setComment] = useState("");
+  const assignees = users.filter((person) => (task.assigneeIds || []).includes(person.id));
+  const attachments = documents.filter((doc) => (task.documentIds || []).includes(doc.id) || (doc.driveFileId && (task.documentIds || []).includes(doc.driveFileId))).slice(0, 6);
+  const dependencies = allTasks.filter((item) => (task.dependencyIds || []).includes(item.id));
+
+  function addComment() {
+    if (!comment.trim()) return;
+    onChange({
+      comments: [...(task.comments || []), {
+        id: uid("comment"),
+        text: comment.trim(),
+        authorId: currentUser?.id || "",
+        authorName: currentUser?.displayName || currentUser?.username || "You",
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    setComment("");
+  }
+
+  return (
+    <SlideOver
+      title={task.__isNew ? "New task" : `${project.code || "TASK"}-${String(allTasks.findIndex((item) => item.id === task.id) + 1).padStart(2, "0")}`}
+      eyebrow={`${project.name} / ${phases.find((phase) => phase.id === task.phaseId)?.name || "Unassigned"}`}
+      onClose={onClose}
+      width="max-w-[590px]"
+      footer={editable ? <div className="flex items-center justify-between gap-3">{task.__isNew ? <span /> : <Button variant="danger" onClick={onDelete}><Trash2 className="h-4 w-4" />Delete</Button>}<div className="flex gap-2"><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={saving || !task.title.trim()} onClick={onSave}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save task</Button></div></div> : <div className="flex justify-end"><Button variant="primary" onClick={onClose}>Close</Button></div>}
+    >
+      <div className="px-6 pb-8 pt-5 sm:px-7">
+        <div className="flex items-start gap-3">
+          <button type="button" disabled={!editable} onClick={() => onChange({ status: task.status === "done" ? "todo" : "done" })} className={cn("mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition disabled:cursor-default", task.status === "done" ? "border-[#65bf45] bg-[#65bf45] text-white" : "border-[#a9afa5] text-transparent hover:border-[#65bf45]")}><Check className="h-3.5 w-3.5" /></button>
+          <textarea rows={2} readOnly={!editable} value={task.title || ""} onChange={(event) => onChange({ title: event.target.value })} placeholder="Task title" className="min-h-[66px] w-full resize-none border-0 bg-transparent p-0 text-2xl font-semibold leading-tight tracking-[-0.02em] outline-none placeholder:text-[#a6aaa3] read-only:cursor-default dark:text-white" />
+        </div>
+
+        <div className="mt-5 space-y-1 border-y border-[#e6e9e3] py-3 dark:border-white/10">
+          <PropertyRow icon={Circle} label="Status"><NativeSelect disabled={!editable} value={task.status || "todo"} onChange={(value) => onChange({ status: value })} options={STATUS_OPTIONS} /></PropertyRow>
+          <PropertyRow icon={CalendarDays} label="Due date"><input type="date" disabled={!editable} value={task.dueDate || ""} onChange={(event) => onChange({ dueDate: event.target.value })} className={cn(inputClass, "disabled:cursor-default disabled:bg-[#f4f5f2] dark:disabled:bg-white/[0.025]")} /></PropertyRow>
+          <PropertyRow icon={Users} label="Assignee"><AssigneePicker disabled={!editable} users={users} selectedIds={task.assigneeIds || []} onChange={(value) => onChange({ assigneeIds: value })} /></PropertyRow>
+          <PropertyRow icon={Layers3} label="Phase"><NativeSelect disabled={!editable} value={task.phaseId || ""} onChange={(value) => onChange({ phaseId: value })} options={[{ value: "", label: "No phase" }, ...phases.map((phase) => ({ value: phase.id, label: phase.name || "Untitled phase" }))]} /></PropertyRow>
+          <PropertyRow icon={Flag} label="Priority"><NativeSelect disabled={!editable} value={task.priority || "medium"} onChange={(value) => onChange({ priority: value })} options={PRIORITY_OPTIONS} /></PropertyRow>
+        </div>
+
+        <section className="mt-5">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-[#72786f] dark:text-white/50"><FileText className="h-3.5 w-3.5" />Description</div>
+          <textarea rows={5} readOnly={!editable} value={task.description || ""} onChange={(event) => onChange({ description: event.target.value })} placeholder="Describe the outcome, context, blockers, and completion criteria..." className={cn(textAreaClass, "read-only:cursor-default read-only:bg-[#f4f5f2] dark:read-only:bg-white/[0.025]")} />
+        </section>
+
+        <section className="mt-6">
+          <div className="mb-3 flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-xs font-medium text-[#72786f] dark:text-white/50"><Paperclip className="h-3.5 w-3.5" />Attachments ({attachments.length})</span>{attachments.length > 1 && <button type="button" className="text-xs font-semibold text-[#527d42]"><Download className="mr-1 inline h-3.5 w-3.5" />Download all</button>}</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {attachments.map((doc) => <a key={doc.id || doc.driveFileId || doc.url} href={doc.url} target="_blank" rel="noreferrer" className="group flex min-w-0 items-center gap-2 rounded-lg border border-[#dfe3dc] bg-white p-2.5 hover:border-[#b8c4b3] dark:border-white/10 dark:bg-white/[0.03]"><span className="flex h-9 w-8 shrink-0 items-center justify-center rounded-md bg-rose-50 text-rose-500 dark:bg-rose-400/10"><FileText className="h-4 w-4" /></span><span className="min-w-0"><span className="block truncate text-xs font-semibold">{doc.name}</span><span className="mt-0.5 block truncate text-[10px] text-[#858b82]">{doc.category || "Document"} · Open</span></span></a>)}
+            {editable && <label className="relative flex min-h-[58px] items-center justify-center rounded-lg border border-dashed border-[#ccd2c8] text-[#7d837a] hover:bg-[#f4f6f2] dark:border-white/15 dark:hover:bg-white/[0.04]"><Plus className="pointer-events-none h-4 w-4" /><select value="" aria-label="Attach project file" onChange={(event) => event.target.value && onChange({ documentIds: [...new Set([...(task.documentIds || []), event.target.value])] })} className="absolute inset-0 cursor-pointer opacity-0"><option value="">Attach file</option>{documents.filter((doc) => !attachments.includes(doc)).map((doc) => <option key={doc.id || doc.driveFileId || doc.url} value={doc.id || doc.driveFileId}>{doc.name}</option>)}</select></label>}
+          </div>
+        </section>
+
+        <div className="mt-7 flex gap-6 border-b border-[#e1e5de] dark:border-white/10">
+          {[["details", "Subtasks"], ["comments", `Comments ${(task.comments || []).length || ""}`], ["activity", "Activities"]].map(([value, label]) => <button key={value} type="button" onClick={() => setTab(value)} className={cn("border-b-2 px-1 pb-3 text-sm transition", tab === value ? "border-[#20231f] font-semibold text-[#20231f] dark:border-white dark:text-white" : "border-transparent text-[#7c8278] dark:text-white/45")}>{label}</button>)}
+        </div>
+
+        {tab === "details" && <section className="pt-5"><div className="flex items-center justify-between"><h4 className="text-sm font-semibold">Dependencies</h4><span className="text-xs text-[#858b82]">{dependencies.length} linked</span></div>{editable && <NativeSelect value="" onChange={(value) => value && onChange({ dependencyIds: [...new Set([...(task.dependencyIds || []), value])] })} options={[{ value: "", label: "Add a dependency..." }, ...allTasks.filter((item) => item.id !== task.id && !(task.dependencyIds || []).includes(item.id)).map((item) => ({ value: item.id, label: item.title || "Untitled task" }))]} className="mt-3" />}<div className="mt-3 space-y-2">{dependencies.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-lg border border-[#e0e4dd] bg-white px-3 py-3 dark:border-white/10 dark:bg-white/[0.03]"><span className={cn("flex h-5 w-5 items-center justify-center rounded-full border", item.status === "done" ? "border-[#65bf45] bg-[#65bf45] text-white" : "border-[#a9afa5]")}>{item.status === "done" && <Check className="h-3 w-3" />}</span><span className={cn("min-w-0 flex-1 truncate text-sm", item.status === "done" && "text-[#8a8f87] line-through")}>{item.title}</span><StatusPill status={item.status} compact />{editable && <IconButton label="Remove dependency" onClick={() => onChange({ dependencyIds: (task.dependencyIds || []).filter((id) => id !== item.id) })}><X className="h-3.5 w-3.5" /></IconButton>}</div>)}{!dependencies.length && <div className="rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">No dependencies linked to this task.</div>}</div></section>}
+
+        {tab === "comments" && <section className="pt-5"><div className="space-y-4">{(task.comments || []).map((item, index) => <div key={item.id || index} className="flex items-start gap-3"><Avatar name={item.authorName || "User"} index={index} /><div className="min-w-0 flex-1 rounded-lg bg-[#f1f3ef] px-3 py-2.5 dark:bg-white/[0.05]"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold">{item.authorName || "User"}</span><span className="text-[10px] text-[#8b9088]">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ""}</span></div><p className="mt-1 text-sm leading-5 text-[#555b52] dark:text-white/65">{item.text}</p></div></div>)}{!(task.comments || []).length && <p className="py-4 text-center text-xs text-[#858b82]">No comments yet.</p>}</div>{editable && <div className="mt-4 flex items-end gap-2"><textarea rows={2} value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment..." className={textAreaClass} /><Button variant="primary" className="shrink-0" onClick={addComment}>Post</Button></div>}</section>}
+
+        {tab === "activity" && <section className="pt-5"><div className="space-y-4"><div className="flex gap-3"><span className="mt-1 h-2 w-2 rounded-full bg-[#72cf50]" /><div><p className="text-sm font-medium">Task is currently {statusLabel(task.status).toLowerCase()}</p><p className="mt-1 text-xs text-[#858b82]">Latest workspace state</p></div></div>{assignees.map((person, index) => <div key={person.id} className="flex gap-3"><Avatar name={person.displayName || person.username} index={index} size="sm" /><div><p className="text-sm font-medium">{person.displayName || person.username} is assigned</p><p className="mt-1 text-xs text-[#858b82]">Project member</p></div></div>)}</div></section>}
+      </div>
+    </SlideOver>
+  );
+}
+
+function PhaseDrawer({ phase, tasks, users, saving, editable, onChange, onClose, onSave, onDelete, onAddTask }) {
+  const done = tasks.filter((task) => task.status === "done").length;
+  const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  return (
+    <SlideOver title={phase.__isNew ? "New phase" : "Phase details"} eyebrow="Project schedule" onClose={onClose} width="max-w-[560px]" footer={editable ? <div className="flex items-center justify-between">{phase.__isNew ? <span /> : <Button variant="danger" onClick={onDelete}><Trash2 className="h-4 w-4" />Delete</Button>}<div className="flex gap-2"><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={saving || !phase.name.trim()} onClick={onSave}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save phase</Button></div></div> : <div className="flex justify-end"><Button variant="primary" onClick={onClose}>Close</Button></div>}>
+      <div className="px-6 pb-8 pt-6 sm:px-7">
+        <p className="text-xs font-medium text-[#777d74]">Delivery milestone</p>
+        <input readOnly={!editable} value={phase.name || ""} onChange={(event) => onChange({ name: event.target.value })} placeholder="Phase name" className="mt-2 w-full border-0 bg-transparent p-0 text-2xl font-semibold outline-none placeholder:text-[#a6aaa3] read-only:cursor-default dark:text-white" />
+        <div className="mt-6 grid grid-cols-2 gap-3"><Field label="Start date" icon={CalendarDays}><input type="date" disabled={!editable} value={phase.startDate || ""} onChange={(event) => onChange({ startDate: event.target.value })} className={cn(inputClass, "disabled:cursor-default disabled:bg-[#f4f5f2] dark:disabled:bg-white/[0.025]")} /></Field><Field label="Target date" icon={CalendarDays}><input type="date" disabled={!editable} value={phase.dueDate || ""} onChange={(event) => onChange({ dueDate: event.target.value })} className={cn(inputClass, "disabled:cursor-default disabled:bg-[#f4f5f2] dark:disabled:bg-white/[0.025]")} /></Field></div>
+        <Field label="Description" icon={FileText} className="mt-4"><textarea rows={4} readOnly={!editable} value={phase.description || ""} onChange={(event) => onChange({ description: event.target.value })} placeholder="What must be achieved in this phase?" className={cn(textAreaClass, "read-only:cursor-default read-only:bg-[#f4f5f2] dark:read-only:bg-white/[0.025]")} /></Field>
+        {!phase.__isNew && <><section className="mt-7 rounded-xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]"><div className="flex items-end justify-between"><div><p className="text-xs text-[#777d74]">Phase progress</p><p className="mt-1 text-2xl font-semibold">{progress}%</p></div><p className="text-xs text-[#777d74]">{done} of {tasks.length} tasks done</p></div><ProgressBar value={progress} className="mt-3" /></section><section className="mt-6"><div className="flex items-center justify-between"><h4 className="text-sm font-semibold">Tasks in this phase</h4>{editable && <Button onClick={onAddTask}><Plus className="h-4 w-4" />Add task</Button>}</div><div className="mt-3 divide-y divide-[#e4e7e1] overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:divide-white/10 dark:border-white/10 dark:bg-white/[0.03]">{tasks.map((task, index) => { const names = users.filter((person) => (task.assigneeIds || []).includes(person.id)).map((person) => person.displayName || person.username); return <div key={task.id} className="flex items-center gap-3 px-3 py-3"><span className={cn("h-2.5 w-2.5 rounded-full", task.status === "done" ? "bg-[#65bf45]" : task.status === "blocked" ? "bg-rose-500" : task.status === "in_progress" ? "bg-amber-400" : "border-2 border-[#9ba096]")} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{task.title}</span><span className="mt-0.5 block text-[11px] text-[#858b82]">{formatDate(task.dueDate)}</span></span><AvatarStack names={names} limit={2} key={index} /></div>; })}{!tasks.length && <p className="p-7 text-center text-xs text-[#858b82]">No tasks in this phase yet.</p>}</div></section></>}
+      </div>
+    </SlideOver>
+  );
+}
+
+function ProjectEditor({ project, users, saving, onChange, onClose, onSave, onDelete }) {
+  const [section, setSection] = useState("details");
+  return (
+    <SlideOver title={project.id ? "Edit project" : "Create project"} eyebrow="Project Control" onClose={onClose} width="max-w-[700px]" footer={<div className="flex items-center justify-between gap-3">{project.id && onDelete ? <Button variant="danger" onClick={onDelete}><Trash2 className="h-4 w-4" />Delete project</Button> : <span />}<div className="flex gap-2"><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={saving || !project.name.trim()} onClick={onSave}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{project.id ? "Save changes" : "Create project"}</Button></div></div>}>
+      <div className="grid min-h-full sm:grid-cols-[160px_minmax(0,1fr)]">
+        <nav className="border-b border-[#e3e7e0] bg-[#f2f4f0] p-3 sm:border-b-0 sm:border-r dark:border-white/10 dark:bg-white/[0.025]">
+          {[ ["details", LayoutDashboard, "Details"], ["delivery", CalendarDays, "Delivery"], ["workspace", FolderOpen, "Workspace"] ].map(([value, Icon, label]) => <button key={value} type="button" onClick={() => setSection(value)} className={cn("mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium", section === value ? "bg-white text-[#20231f] shadow-sm dark:bg-white/10 dark:text-white" : "text-[#686e65] hover:bg-white/60 dark:text-white/45 dark:hover:bg-white/[0.05]")}><Icon className="h-4 w-4" />{label}</button>)}
+        </nav>
+        <div className="p-5 sm:p-6">
+          {section === "details" && <div><h3 className="text-xl font-semibold">Project identity</h3><p className="mt-1 text-sm text-[#777d74]">Core information shown across the portfolio and workspace.</p><div className="mt-6 grid gap-4 sm:grid-cols-2"><Field label="Project name"><input value={project.name || ""} onChange={(event) => onChange({ name: event.target.value })} placeholder="e.g. Kalhaar Residence" className={inputClass} /></Field><Field label="Project code"><input value={project.code || ""} onChange={(event) => onChange({ code: event.target.value })} placeholder="e.g. KAL-01" className={inputClass} /></Field><Field label="Client"><input value={project.client || ""} onChange={(event) => onChange({ client: event.target.value })} placeholder="Client name" className={inputClass} /></Field><Field label="Location"><input value={project.location || ""} onChange={(event) => onChange({ location: event.target.value })} placeholder="Site location" className={inputClass} /></Field><Field label="Project manager"><input value={project.manager || ""} onChange={(event) => onChange({ manager: event.target.value })} placeholder="Responsible person" className={inputClass} /></Field><Field label="Linked manager"><NativeSelect value={project.managerId || ""} onChange={(value) => { const person = users.find((item) => item.id === value); onChange({ managerId: value, manager: person?.displayName || project.manager }); }} options={[{ value: "", label: "No linked user" }, ...users.map((person) => ({ value: person.id, label: person.displayName || person.username }))]} /></Field></div></div>}
+          {section === "delivery" && <div><h3 className="text-xl font-semibold">Delivery setup</h3><p className="mt-1 text-sm text-[#777d74]">Dates, priority, and health used by reports and project views.</p><div className="mt-6 grid gap-4 sm:grid-cols-2"><Field label="Start date"><input type="date" value={project.startDate || ""} onChange={(event) => onChange({ startDate: event.target.value })} className={inputClass} /></Field><Field label="Target date"><input type="date" value={project.targetDate || ""} onChange={(event) => onChange({ targetDate: event.target.value })} className={inputClass} /></Field><Field label="Priority"><NativeSelect value={project.priority || "medium"} onChange={(value) => onChange({ priority: value })} options={PRIORITY_OPTIONS} /></Field><Field label="Health"><NativeSelect value={project.health || "green"} onChange={(value) => onChange({ health: value })} options={HEALTH_OPTIONS} /></Field><Field label="Project status" className="sm:col-span-2"><NativeSelect value={project.status || "active"} onChange={(value) => onChange({ status: value })} options={[{ value: "active", label: "Active" }, { value: "on_hold", label: "On hold" }, { value: "closed", label: "Closed" }, { value: "archived", label: "Archived" }]} /></Field></div></div>}
+          {section === "workspace" && <div><h3 className="text-xl font-semibold">Connected workspace</h3><p className="mt-1 text-sm text-[#777d74]">Link Drive and define alternate names used in imported reports.</p><div className="mt-6 space-y-4"><Field label="Google Drive folder" icon={FolderOpen}><input value={project.driveFolderLink || ""} onChange={(event) => onChange({ driveFolderLink: event.target.value })} placeholder="https://drive.google.com/drive/folders/..." className={inputClass} /></Field><Field label="Aliases" hint="Comma separated"><input value={(project.aliases || []).join(", ")} onChange={(event) => onChange({ aliases: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="Alternate project names" className={inputClass} /></Field><div className="rounded-xl border border-[#dfe3dc] bg-[#f5f7f3] p-4 dark:border-white/10 dark:bg-white/[0.03]"><p className="text-sm font-semibold">Workspace summary</p><div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-lg bg-white px-2 py-3 dark:bg-white/[0.05]"><p className="text-lg font-semibold">{(project.phases || []).length}</p><p className="text-[10px] text-[#858b82]">Phases</p></div><div className="rounded-lg bg-white px-2 py-3 dark:bg-white/[0.05]"><p className="text-lg font-semibold">{(project.tasks || []).length + (project.phases || []).flatMap((phase) => phase.tasks || []).length}</p><p className="text-[10px] text-[#858b82]">Tasks</p></div><div className="rounded-lg bg-white px-2 py-3 dark:bg-white/[0.05]"><p className="text-lg font-semibold">{(project.projectDocuments || []).length}</p><p className="text-[10px] text-[#858b82]">Files</p></div></div></div></div></div>}
+        </div>
+      </div>
+    </SlideOver>
+  );
+}
+
+function FileDrawer({ form, canUpload, uploading, onChange, onClose, onAddLink, onUpload }) {
+  return (
+    <SlideOver title="Add project file" eyebrow="Documents" onClose={onClose} width="max-w-[520px]" footer={<div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!form.url.trim()} onClick={onAddLink}><Link2 className="h-4 w-4" />Add link</Button></div>}>
+      <div className="px-6 py-6">
+        <h3 className="text-xl font-semibold">Connect a document</h3><p className="mt-1 text-sm leading-6 text-[#737970]">Paste a document link or upload a file to the project&apos;s connected Google Drive folder.</p>
+        <div className="mt-6 space-y-4"><Field label="Category"><NativeSelect value={form.category} onChange={(value) => onChange({ category: value })} options={DOC_CATEGORIES.map((value) => ({ value, label: value }))} /></Field><Field label="Document name"><input value={form.name} onChange={(event) => onChange({ name: event.target.value })} placeholder="e.g. Approved drawing" className={inputClass} /></Field><Field label="Drive or document link"><input value={form.url} onChange={(event) => onChange({ url: event.target.value })} placeholder="https://..." className={inputClass} /></Field></div>
+        <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-[#93988f]"><span className="h-px flex-1 bg-[#e1e5de]" />or upload<span className="h-px flex-1 bg-[#e1e5de]" /></div>
+        <label className={cn("flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed p-5 text-center transition", canUpload ? "cursor-pointer border-[#a9c99c] bg-[#f2f9ef] hover:bg-[#edf7e9] dark:border-green-400/30 dark:bg-green-400/[0.05]" : "cursor-not-allowed border-[#d5d9d2] bg-[#f5f6f4] text-[#a0a59d] dark:border-white/10 dark:bg-white/[0.02]")}><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-sm dark:bg-white/10">{uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}</span><span className="mt-3 text-sm font-semibold">{uploading ? "Uploading to Drive..." : "Choose a file to upload"}</span><span className="mt-1 text-xs text-[#858b82]">PDF, image, spreadsheet, or supporting document</span><input type="file" className="hidden" disabled={!canUpload || uploading} onChange={onUpload} /></label>
+        {!canUpload && <p className="mt-3 flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-700 dark:bg-amber-400/10 dark:text-amber-200"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />Connect a Drive folder in project settings before uploading files.</p>}
+      </div>
+    </SlideOver>
+  );
+}
+
+function PortfolioView({ darkMode, projects, users, search, onSearch, layout, onLayout, refreshing, isSuperAdmin, onRefresh, onCreate, onOpen }) {
+  const totalTasks = projects.reduce((sum, project) => sum + (project.metrics?.totalTasks || 0), 0);
+  const completed = projects.reduce((sum, project) => sum + (project.metrics?.completed || 0), 0);
+  const atRisk = projects.filter((project) => project.health === "red" || (project.metrics?.blocked || 0) > 0).length;
+  const progress = totalTasks ? Math.round((completed / totalTasks) * 100) : 0;
+
+  return (
+    <div className={cn("min-h-0 flex-1 overflow-y-auto", darkMode ? "bg-[#10120f] text-white" : "bg-[#f4f5f2] text-[#20231f]")}>
+      <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <header className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div><div className="flex items-center gap-2 text-xs font-semibold text-[#65984f]"><Sparkles className="h-3.5 w-3.5" />PROJECT CONTROL</div><h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">Projects, clearly organized.</h1><p className="mt-2 max-w-2xl text-sm text-[#71776e] dark:text-white/45">Plan delivery, manage issues, coordinate people, and keep every project file in one focused workspace.</p></div>
+          <div className="flex flex-wrap items-center gap-2"><div className="relative min-w-[220px] flex-1 sm:flex-none"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#858b82]" /><input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search projects" className={cn(inputClass, "pl-9 sm:w-[270px]")} /></div><Button onClick={onRefresh} disabled={refreshing}><RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />Refresh</Button>{isSuperAdmin && <Button variant="primary" onClick={onCreate}><Plus className="h-4 w-4" />New project</Button>}</div>
+        </header>
+
+        <section className="mt-7 grid overflow-hidden rounded-xl border border-[#dfe3dc] bg-white sm:grid-cols-2 xl:grid-cols-4 dark:border-white/10 dark:bg-white/[0.03]">
+          {[ [FolderKanban, "Active projects", projects.length], [ListChecks, "Open tasks", Math.max(0, totalTasks - completed)], [AlertCircle, "Projects at risk", atRisk], [BarChart3, "Portfolio progress", `${progress}%`] ].map(([Icon, label, value], index) => <div key={label} className={cn("flex items-center gap-4 px-5 py-4", index > 0 && "border-t border-[#e6e9e3] sm:border-l sm:border-t-0", index === 2 && "sm:border-l-0 xl:border-l", "dark:border-white/10")}><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#f0f3ed] text-[#5e6759] dark:bg-white/[0.06] dark:text-white/60"><Icon className="h-4.5 w-4.5" /></span><div><p className="text-xl font-semibold tabular-nums">{value}</p><p className="text-xs text-[#777d74] dark:text-white/45">{label}</p></div></div>)}
+        </section>
+
+        <section className="mt-7">
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Project portfolio</h2><p className="mt-0.5 text-xs text-[#7b8178]">{projects.length} visible {projects.length === 1 ? "project" : "projects"}</p></div><div className="flex rounded-lg border border-[#dfe3dc] bg-white p-1 dark:border-white/10 dark:bg-white/[0.03]"><IconButton label="Grid view" className={layout === "grid" ? "bg-[#eef1ec] text-black dark:bg-white/10 dark:text-white" : ""} onClick={() => onLayout("grid")}><Grid2X2 className="h-4 w-4" /></IconButton><IconButton label="List view" className={layout === "list" ? "bg-[#eef1ec] text-black dark:bg-white/10 dark:text-white" : ""} onClick={() => onLayout("list")}><List className="h-4 w-4" /></IconButton></div></div>
+
+          {!projects.length ? <div className="mt-4 rounded-xl border border-dashed border-[#cfd5cc] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-white/[0.02]"><FolderKanban className="mx-auto h-8 w-8 text-[#969c93]" /><h3 className="mt-3 text-base font-semibold">No projects found</h3><p className="mt-1 text-sm text-[#7b8178]">Try another search or create a new project.</p></div> : layout === "grid" ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {projects.map((project, projectIndex) => {
+                const tasks = project.manualTasks || [];
+                const memberNames = [...new Set([project.manager, ...tasks.flatMap((task) => (task.assigneeIds || []).map((id) => users.find((person) => person.id === id)?.displayName || id))].filter(Boolean))];
+                const projectProgress = project.metrics?.progress || 0;
+                return <button key={project.id} type="button" onClick={() => onOpen(project)} className="group rounded-xl border border-[#dfe3dc] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-[#b8c4b3] hover:shadow-[0_10px_30px_rgba(31,42,26,0.07)] dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white", projectIndex % 3 === 0 ? "bg-[#348a70]" : projectIndex % 3 === 1 ? "bg-[#687ac6]" : "bg-[#9b704f]")}>{initials(project.name)}</span><div className="min-w-0"><h3 className="truncate text-sm font-semibold">{project.name}</h3><p className="mt-0.5 truncate text-xs text-[#7e847b]">{project.client || project.location || "Project workspace"}</p></div></div><ChevronRight className="mt-2 h-4 w-4 text-[#9aa097] transition group-hover:translate-x-0.5 group-hover:text-black" /></div><div className="mt-4 flex items-center gap-2"><span className={cn("rounded-full px-2 py-1 text-[10px] font-semibold", project.health === "red" ? "bg-rose-50 text-rose-600" : project.health === "yellow" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700")}>{HEALTH_OPTIONS.find((item) => item.value === project.health)?.label || "On track"}</span>{project.code && <span className="rounded-full bg-[#f1f3ef] px-2 py-1 text-[10px] text-[#686e65] dark:bg-white/[0.06] dark:text-white/55">{project.code}</span>}<span className="ml-auto text-[10px] text-[#858b82]">{formatRelativeDate(project.targetDate)}</span></div><div className="mt-5"><div className="mb-2 flex items-center justify-between text-xs"><span className="text-[#777d74]">Progress</span><span className="font-semibold">{projectProgress}%</span></div><ProgressBar value={projectProgress} /></div><div className="mt-5 flex items-center justify-between border-t border-[#eceeea] pt-3 dark:border-white/10"><AvatarStack names={memberNames} /><div className="flex items-center gap-3 text-[11px] text-[#7d837a]"><span>{project.metrics?.totalTasks || 0} tasks</span><span>{project.metrics?.documents || 0} files</span></div></div></button>;
+              })}
+            </div>
+          ) : (
+            <div className="mt-4 overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]"><div className="hidden grid-cols-[minmax(240px,1.5fr)_160px_140px_180px_120px_40px] gap-4 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]"><span>Project</span><span>Manager</span><span>Health</span><span>Progress</span><span>Target</span><span /></div>{projects.map((project, index) => <button key={project.id} type="button" onClick={() => onOpen(project)} className="grid w-full gap-3 border-b border-[#eceeea] px-4 py-3 text-left last:border-0 hover:bg-[#f8f9f6] md:grid-cols-[minmax(240px,1.5fr)_160px_140px_180px_120px_40px] md:items-center dark:border-white/10 dark:hover:bg-white/[0.03]"><span className="flex min-w-0 items-center gap-3"><span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white", index % 2 ? "bg-[#687ac6]" : "bg-[#348a70]")}>{initials(project.name)}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold">{project.name}</span><span className="block truncate text-[11px] text-[#858b82]">{project.client || project.location || project.code}</span></span></span><span className="text-xs text-[#686e65] dark:text-white/55">{project.manager || "Unassigned"}</span><span className="text-xs capitalize">{HEALTH_OPTIONS.find((item) => item.value === project.health)?.label || "On track"}</span><span className="flex items-center gap-3"><ProgressBar value={project.metrics?.progress || 0} className="flex-1" /><span className="w-8 text-xs font-semibold">{project.metrics?.progress || 0}%</span></span><span className="text-xs text-[#686e65] dark:text-white/55">{formatDate(project.targetDate)}</span><ChevronRight className="h-4 w-4 text-[#969c93]" /></button>)}</div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+const WORKSPACE_NAV = [
+  { value: "overview", label: "Overview", icon: LayoutDashboard },
+  { value: "issues", label: "Issues", icon: ListChecks },
+  { value: "board", label: "Board", icon: Columns3 },
+  { value: "phases", label: "Phases", icon: Layers3 },
+  { value: "files", label: "Files", icon: FolderOpen },
+];
+
+function WorkspaceRail({ project, view, onView, tasks, documents, users }) {
+  const memberNames = [...new Set([project.manager, ...tasks.flatMap((task) => (task.assigneeIds || []).map((id) => users.find((person) => person.id === id)?.displayName || id))].filter(Boolean))];
+  return <aside className="hidden w-[220px] shrink-0 flex-col border-r border-[#e0e4dd] bg-[#f0f2ee] px-3 py-4 md:flex dark:border-white/10 dark:bg-[#121511]"><div className="px-2"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#348a70] text-xs font-bold text-white">{initials(project.name)}</span><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{project.name}</h2><p className="truncate text-[10px] text-[#7b8178]">{project.code || "Project workspace"}</p></div></div></div><nav className="mt-6 space-y-1">{WORKSPACE_NAV.map(({ value, label, icon: Icon }) => <button key={value} type="button" onClick={() => onView(value)} className={cn("flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition", view === value ? "bg-white font-semibold text-[#20231f] shadow-sm dark:bg-white/10 dark:text-white" : "text-[#62685f] hover:bg-white/60 dark:text-white/45 dark:hover:bg-white/[0.05]")}><Icon className="h-4 w-4" /><span className="flex-1">{label}</span>{value === "issues" && <span className="text-[10px] text-[#8a9087]">{tasks.length}</span>}{value === "files" && <span className="text-[10px] text-[#8a9087]">{documents.length}</span>}</button>)}</nav><div className="mt-6 border-t border-[#dce0d8] pt-5 dark:border-white/10"><p className="px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#949a91]">Project team</p><div className="mt-3 px-3"><AvatarStack names={memberNames} /></div><p className="mt-2 px-3 text-[11px] text-[#7d837a]">{memberNames.length || 0} active members</p></div><div className="mt-auto rounded-lg border border-[#dce0d8] bg-white/70 p-3 dark:border-white/10 dark:bg-white/[0.03]"><div className="flex items-center justify-between text-xs"><span className="text-[#777d74]">Overall progress</span><strong>{project.metrics?.progress || 0}%</strong></div><ProgressBar value={project.metrics?.progress || 0} className="mt-2" /></div></aside>;
+}
+
+function OverviewView({ project, tasks, phases, documents, users, isSuperAdmin, onOpenTask, onAddTask, onOpenPhase }) {
+  const done = tasks.filter((task) => task.status === "done").length;
+  const blocked = tasks.filter((task) => task.status === "blocked").length;
+  const progress = tasks.length ? Math.round((done / tasks.length) * 100) : project.metrics?.progress || 0;
+  const recent = [...tasks].sort((a, b) => String(b.updatedAt || b.createdAt || b.dueDate || "").localeCompare(String(a.updatedAt || a.createdAt || a.dueDate || ""))).slice(0, 6);
+  return <div className="mx-auto max-w-[1250px] p-4 sm:p-6"><section className="rounded-xl border border-[#dfe3dc] bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]"><div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between"><div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#e8f6e3] px-2.5 py-1 text-[10px] font-semibold text-[#3e7c2d]">{HEALTH_OPTIONS.find((item) => item.value === project.health)?.label || "On track"}</span><PriorityPill priority={project.priority} /></div><h2 className="mt-3 text-2xl font-semibold tracking-[-0.025em]">{project.name}</h2><p className="mt-1 text-sm text-[#72786f]">{project.client || "Client not set"}{project.location ? ` · ${project.location}` : ""}</p></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[["Progress", `${progress}%`], ["Tasks done", `${done}/${tasks.length}`], ["Blocked", blocked], ["Target", formatDate(project.targetDate)]].map(([label, value]) => <div key={label} className="min-w-[118px] rounded-lg border border-[#e3e6e0] bg-[#f8f9f6] px-3 py-3 dark:border-white/10 dark:bg-white/[0.035]"><p className="text-[10px] text-[#7f857c]">{label}</p><p className="mt-1 text-base font-semibold">{value}</p></div>)}</div></div></section>
+
+    <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_360px]"><section className="rounded-xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]"><header className="flex items-center justify-between border-b border-[#e5e8e2] px-4 py-3 dark:border-white/10"><div><h3 className="text-sm font-semibold">Recent work</h3><p className="mt-0.5 text-[11px] text-[#858b82]">Latest tasks across the project</p></div>{isSuperAdmin && <Button onClick={onAddTask}><Plus className="h-4 w-4" />Add task</Button>}</header><div className="divide-y divide-[#e9ebe7] dark:divide-white/10">{recent.map((task, index) => { const names = users.filter((person) => (task.assigneeIds || []).includes(person.id)).map((person) => person.displayName || person.username); return <button key={task.id} type="button" onClick={() => onOpenTask(task)} className="grid w-full grid-cols-[minmax(0,1fr)_110px_90px] items-center gap-3 px-4 py-3 text-left hover:bg-[#f8f9f6] dark:hover:bg-white/[0.025]"><span className="flex min-w-0 items-center gap-3"><span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full", task.status === "done" ? "bg-[#dcf5d4] text-[#4d9d36]" : task.status === "blocked" ? "bg-rose-50 text-rose-500" : "bg-[#eef0ec] text-[#747a71]")}>{task.status === "done" ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}</span><span className="min-w-0"><span className="block truncate text-sm font-medium">{task.title || "Untitled task"}</span><span className="mt-0.5 block truncate text-[11px] text-[#858b82]">{phases.find((phase) => phase.id === task.phaseId)?.name || "No phase"}</span></span></span><AvatarStack names={names} limit={3} key={index} /><span className="text-right text-[11px] text-[#777d74]">{formatDate(task.dueDate, "No date")}</span></button>; })}{!recent.length && <p className="px-5 py-12 text-center text-xs text-[#858b82]">No project tasks yet.</p>}</div></section>
+      <section className="rounded-xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]"><header className="border-b border-[#e5e8e2] px-4 py-3 dark:border-white/10"><h3 className="text-sm font-semibold">Delivery phases</h3><p className="mt-0.5 text-[11px] text-[#858b82]">Milestone progress</p></header><div className="space-y-1 p-2">{phases.map((phase, index) => { const phaseTasks = tasks.filter((task) => task.phaseId === phase.id); const phaseDone = phaseTasks.filter((task) => task.status === "done").length; const phaseProgress = phaseTasks.length ? Math.round((phaseDone / phaseTasks.length) * 100) : 0; return <button key={phase.id} type="button" onClick={() => onOpenPhase(phase)} className="w-full rounded-lg p-3 text-left hover:bg-[#f6f8f4] dark:hover:bg-white/[0.03]"><div className="flex items-center justify-between gap-3"><span className="flex min-w-0 items-center gap-2"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#eef6eb] text-[10px] font-bold text-[#568443]">{index + 1}</span><span className="truncate text-xs font-semibold">{phase.name}</span></span><span className="text-[10px] text-[#858b82]">{phaseProgress}%</span></div><ProgressBar value={phaseProgress} className="mt-2.5" /></button>; })}{!phases.length && <p className="p-6 text-center text-xs text-[#858b82]">No phases yet.</p>}</div><div className="border-t border-[#e5e8e2] px-4 py-3 text-[11px] text-[#777d74] dark:border-white/10"><div className="flex justify-between"><span>Connected files</span><strong className="text-[#30342e] dark:text-white">{documents.length}</strong></div></div></section></div>
+  </div>;
+}
+
+function IssuesView({ tasks, phases, users, isSuperAdmin, onOpenTask, onAddTask }) {
+  const [query, setQuery] = useState("");
+  const [priority, setPriority] = useState("all");
+  const [assignee, setAssignee] = useState("all");
+  const filtered = tasks.filter((task) => {
+    const matchesQuery = !query || `${task.title} ${task.description}`.toLowerCase().includes(query.toLowerCase());
+    const matchesPriority = priority === "all" || task.priority === priority;
+    const matchesAssignee = assignee === "all" || (task.assigneeIds || []).includes(assignee);
+    return matchesQuery && matchesPriority && matchesAssignee;
+  });
+  return <div className="mx-auto max-w-[1350px] p-4 sm:p-6"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-xl font-semibold">All issues</h2><p className="mt-0.5 text-xs text-[#7b8178]">Filter, scan, and update every project task.</p></div>{isSuperAdmin && <Button variant="primary" onClick={() => onAddTask()}><Plus className="h-4 w-4" />New issue</Button>}</div>
+    <div className="mt-5 flex flex-wrap items-center gap-2"><div className="relative min-w-[240px] flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#878d84]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter issues..." className={cn(inputClass, "pl-9")} /></div><span className="relative"><Filter className="pointer-events-none absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-[#777d74]" /><select value={priority} onChange={(event) => setPriority(event.target.value)} className={cn(inputClass, "w-auto appearance-none pl-8 pr-8")}><option value="all">All priorities</option>{PRIORITY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" /></span><span className="relative"><Users className="pointer-events-none absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-[#777d74]" /><select value={assignee} onChange={(event) => setAssignee(event.target.value)} className={cn(inputClass, "w-auto appearance-none pl-8 pr-8")}><option value="all">All assignees</option>{users.map((person) => <option key={person.id} value={person.id}>{person.displayName || person.username}</option>)}</select><ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" /></span><Button><SlidersHorizontal className="h-4 w-4" />More</Button></div>
+    <section className="mt-4 overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">{STATUS_OPTIONS.map((status) => { const items = filtered.filter((task) => (task.status || "todo") === status.value); return <div key={status.value}><div className="flex items-center gap-2 border-b border-[#e6e9e3] bg-[#f7f8f5] px-4 py-2.5 dark:border-white/10 dark:bg-white/[0.025]"><StatusPill status={status.value} count={items.length} /><button type="button" onClick={() => onAddTask("", status.value)} className="ml-1 text-[#7f857c] hover:text-black"><Plus className="h-4 w-4" /></button></div><div>{items.map((task, index) => { const assigneeNames = users.filter((person) => (task.assigneeIds || []).includes(person.id)).map((person) => person.displayName || person.username); return <button key={task.id} type="button" onClick={() => onOpenTask(task)} className="grid w-full grid-cols-[minmax(260px,1.5fr)_170px_110px_120px_110px_28px] items-center gap-3 border-b border-[#eceeea] px-4 py-3 text-left text-sm last:border-0 hover:bg-[#fafbf9] dark:border-white/10 dark:hover:bg-white/[0.025]"><span className="flex min-w-0 items-center gap-3"><span className={cn("h-3.5 w-3.5 shrink-0 rounded-full border-2", task.status === "done" ? "border-[#62bd43] bg-[#62bd43]" : task.status === "blocked" ? "border-rose-500" : task.status === "in_progress" ? "border-amber-400" : "border-[#a5aaa1]")} /><span className="min-w-0"><span className="block truncate font-medium">{task.title || "Untitled issue"}</span>{task.description && <span className="mt-0.5 block truncate text-[11px] text-[#858b82]">{task.description}</span>}</span></span><span className="truncate text-xs text-[#6e746b] dark:text-white/50">{phases.find((phase) => phase.id === task.phaseId)?.name || "No phase"}</span><AvatarStack names={assigneeNames} limit={3} key={index} /><PriorityPill priority={task.priority} /><span className={cn("text-xs", task.dueDate && new Date(`${task.dueDate}T00:00:00`) < new Date() && task.status !== "done" ? "font-semibold text-rose-500" : "text-[#747a71]")}>{formatDate(task.dueDate, "No date")}</span><ChevronRight className="h-4 w-4 text-[#a0a59d]" /></button>; })}{!items.length && <p className="border-b border-[#eceeea] px-4 py-5 text-center text-xs text-[#979c94] dark:border-white/10">No matching issues</p>}</div></div>; })}</section>
+  </div>;
+}
+
+function BoardView({ tasks, phases, users, isSuperAdmin, onOpenTask, onAddTask }) {
+  return <div className="min-w-max p-4 sm:p-6"><div className="mb-5 flex items-center justify-between"><div><h2 className="text-xl font-semibold">Project board</h2><p className="mt-0.5 text-xs text-[#7b8178]">Work organized by status.</p></div>{isSuperAdmin && <Button variant="primary" onClick={() => onAddTask()}><Plus className="h-4 w-4" />New task</Button>}</div><div className="grid grid-cols-4 gap-3">{STATUS_OPTIONS.map((status) => { const items = tasks.filter((task) => (task.status || "todo") === status.value); return <section key={status.value} className="w-[250px] rounded-xl bg-[#eceee9] p-2.5 dark:bg-white/[0.035]"><header className="flex items-center justify-between px-1 py-1"><StatusPill status={status.value} count={items.length} /><div className="flex items-center"><IconButton label={`Add ${status.label} task`} onClick={() => onAddTask("", status.value)}><Plus className="h-4 w-4" /></IconButton><IconButton label="Column options"><MoreHorizontal className="h-4 w-4" /></IconButton></div></header><div className="mt-2 space-y-2">{items.map((task, index) => { const names = users.filter((person) => (task.assigneeIds || []).includes(person.id)).map((person) => person.displayName || person.username); return <button key={task.id} type="button" onClick={() => onOpenTask(task)} className="w-full rounded-lg border border-[#dfe3dc] bg-white p-3 text-left shadow-[0_1px_2px_rgba(20,28,18,0.03)] transition hover:-translate-y-0.5 hover:border-[#bbc6b6] hover:shadow-[0_6px_16px_rgba(25,35,22,0.07)] dark:border-white/10 dark:bg-[#1a1d18]"><div className="flex items-start justify-between gap-2"><span className="text-[10px] font-medium text-[#858b82]">{phases.find((phase) => phase.id === task.phaseId)?.name || "Project task"}</span><MoreHorizontal className="h-4 w-4 text-[#a0a59d]" /></div><h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-5">{task.title}</h3>{task.description && <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[#7b8178]">{task.description}</p>}<div className="mt-3 flex flex-wrap gap-1.5"><PriorityPill priority={task.priority} />{(task.dependencyIds || []).length > 0 && <span className="inline-flex items-center gap-1 rounded-md bg-[#eef0ec] px-2 py-1 text-[10px] text-[#62685f]"><Link2 className="h-3 w-3" />{task.dependencyIds.length}</span>}</div><div className="mt-4 flex items-center justify-between border-t border-[#eceeea] pt-2.5 dark:border-white/10"><AvatarStack names={names} limit={3} key={index} /><span className="flex items-center gap-1 text-[10px] text-[#777d74]"><CalendarDays className="h-3 w-3" />{formatDate(task.dueDate, "No date")}</span></div></button>; })}<button type="button" onClick={() => onAddTask("", status.value)} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#c9cec6] text-xs font-medium text-[#747a71] hover:bg-white/70 dark:border-white/10 dark:hover:bg-white/[0.04]"><Plus className="h-3.5 w-3.5" />Add task</button></div></section>; })}</div></div>;
+}
+
+function PhasesView({ phases, tasks, isSuperAdmin, onOpenPhase, onAddPhase, onAddTask }) {
+  return <div className="mx-auto max-w-[1250px] p-4 sm:p-6"><div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold">Project timeline</h2><p className="mt-0.5 text-xs text-[#7b8178]">Phases, deadlines, and task completion.</p></div>{isSuperAdmin && <Button variant="primary" onClick={onAddPhase}><Plus className="h-4 w-4" />New phase</Button>}</div><section className="mt-5 overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]"><div className="hidden grid-cols-[56px_minmax(240px,1.5fr)_160px_130px_180px_100px] gap-4 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]"><span>#</span><span>Phase</span><span>Delivery</span><span>Tasks</span><span>Progress</span><span /></div>{phases.map((phase, index) => { const phaseTasks = tasks.filter((task) => task.phaseId === phase.id); const done = phaseTasks.filter((task) => task.status === "done").length; const blocked = phaseTasks.filter((task) => task.status === "blocked").length; const progress = phaseTasks.length ? Math.round((done / phaseTasks.length) * 100) : 0; return <div key={phase.id} className="grid gap-3 border-b border-[#e9ebe7] px-4 py-4 last:border-0 md:grid-cols-[56px_minmax(240px,1.5fr)_160px_130px_180px_100px] md:items-center dark:border-white/10"><button type="button" onClick={() => onOpenPhase(phase)} className="contents text-left"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ecf5e8] text-xs font-bold text-[#568443]">{String(index + 1).padStart(2, "0")}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold">{phase.name || "Untitled phase"}</span><span className="mt-0.5 block truncate text-xs text-[#858b82]">{phase.description || "No description added"}</span></span><span><span className="block text-[10px] text-[#858b82]">Target date</span><span className="mt-0.5 block text-xs font-medium">{formatDate(phase.dueDate)}</span></span><span><span className="text-sm font-semibold">{done}/{phaseTasks.length}</span><span className={cn("ml-2 text-[10px]", blocked ? "text-rose-500" : "text-[#858b82]")}>{blocked ? `${blocked} blocked` : "complete"}</span></span><span><span className="flex justify-between text-[10px]"><span>{progress}%</span><span className="text-[#858b82]">{phaseTasks.length ? "active" : "not started"}</span></span><ProgressBar value={progress} className="mt-2" /></span></button><span className="flex justify-end">{isSuperAdmin && <Button onClick={() => onAddTask(phase.id)}><Plus className="h-3.5 w-3.5" />Task</Button>}</span></div>; })}{!phases.length && <p className="px-6 py-14 text-center text-sm text-[#858b82]">No phases created yet.</p>}</section></div>;
+}
+
+function FilesView({ project, documents, isSuperAdmin, onAddFile }) {
+  return <div className="mx-auto max-w-[1250px] p-4 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">Project files</h2><p className="mt-0.5 text-xs text-[#7b8178]">Documents and links connected to this workspace.</p></div><div className="flex gap-2">{(project.driveFolderId || project.driveFolderLink) && <a href={project.driveFolderLink || `https://drive.google.com/drive/folders/${project.driveFolderId}`} target="_blank" rel="noreferrer"><Button><FolderOpen className="h-4 w-4" />Open Drive</Button></a>}{isSuperAdmin && <Button variant="primary" onClick={onAddFile}><FilePlus2 className="h-4 w-4" />Add file</Button>}</div></div>{!(project.driveFolderId || project.driveFolderLink) && <div className="mt-4 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200"><AlertCircle className="h-4 w-4 shrink-0" />Connect a Google Drive folder in project settings to enable folder sync and uploads.</div>}<section className="mt-5 overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]"><div className="hidden grid-cols-[minmax(280px,1.7fr)_160px_160px_150px_90px] gap-4 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]"><span>Name</span><span>Category</span><span>Source</span><span>Updated</span><span /></div>{documents.map((doc) => <div key={doc.id || doc.driveFileId || doc.url} className="grid gap-3 border-b border-[#e9ebe7] px-4 py-3.5 last:border-0 md:grid-cols-[minmax(280px,1.7fr)_160px_160px_150px_90px] md:items-center dark:border-white/10"><span className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#eef3ff] text-[#5874bd] dark:bg-blue-400/10 dark:text-blue-300"><FileText className="h-4 w-4" /></span><span className="min-w-0"><span className="block truncate text-sm font-semibold">{doc.name || "Untitled file"}</span><span className="mt-0.5 block truncate text-[11px] text-[#858b82]">{doc.url || "Drive file"}</span></span></span><span className="text-xs text-[#6d736a] dark:text-white/50">{doc.category || "General"}</span><span className="text-xs text-[#6d736a] dark:text-white/50">{doc.driveFileId ? "Google Drive" : "Linked file"}</span><span className="text-xs text-[#6d736a] dark:text-white/50">{doc.uploadedAt ? formatDate(String(doc.uploadedAt).slice(0, 10)) : "Unknown"}</span><a href={doc.url} target="_blank" rel="noreferrer" className="inline-flex h-8 w-fit items-center gap-1.5 rounded-lg bg-[#f0f2ee] px-3 text-xs font-semibold text-[#4f554c] hover:bg-[#e7eae4] dark:bg-white/[0.06] dark:text-white/65">Open<ArrowUpRight className="h-3.5 w-3.5" /></a></div>)}{!documents.length && <div className="px-6 py-16 text-center"><Paperclip className="mx-auto h-7 w-7 text-[#9ca199]" /><h3 className="mt-3 text-sm font-semibold">No files connected</h3><p className="mt-1 text-xs text-[#858b82]">Add a link or upload the first project document.</p></div>}</section></div>;
 }
 
 export default function ProjectDashboard({ darkMode, projectId = null }) {
@@ -299,34 +534,25 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [portfolioLayout, setPortfolioLayout] = useState("grid");
   const [selected, setSelected] = useState(null);
-  const [detailTab, setDetailTab] = useState("board");
-  const [editor, setEditor] = useState(null);
-  const [editorTab, setEditorTab] = useState("project");
-  const [saving, setSaving] = useState(false);
-  const [docForm, setDocForm] = useState({ name: "", category: "General", url: "" });
-  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState("overview");
   const [driveDocs, setDriveDocs] = useState([]);
-  const [newTaskDraft, setNewTaskDraft] = useState(null);
-  const [phaseDraft, setPhaseDraft] = useState(null);
-  const [taskEdits, setTaskEdits] = useState({});
-  const [taskDetail, setTaskDetail] = useState(null);
-
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const panel = darkMode ? "border-white/10 bg-[#151612]" : "border-[#dfe7e4] bg-white";
-  const today = todayKey();
+  const [taskEditor, setTaskEditor] = useState(null);
+  const [phaseEditor, setPhaseEditor] = useState(null);
+  const [projectEditor, setProjectEditor] = useState(null);
+  const [fileDrawerOpen, setFileDrawerOpen] = useState(false);
+  const [fileForm, setFileForm] = useState({ name: "", category: "General", url: "" });
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
     try {
-      if (quiet) setRefreshing(true);
-      else setLoading(true);
+      quiet ? setRefreshing(true) : setLoading(true);
       const dashboard = await api("/project-dashboard");
       setData(dashboard);
       setSelected((current) => current ? dashboard.projects.find((project) => project.id === current.id) || null : null);
-      if (isSuperAdmin) {
-        const dashboardConfig = await api("/project-dashboard/config");
-        setConfig(dashboardConfig);
-      }
+      if (isSuperAdmin) setConfig(await api("/project-dashboard/config"));
     } catch (error) {
       toast.error(error.message || "Could not load projects");
     } finally {
@@ -335,125 +561,151 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     }
   }, [isSuperAdmin]);
 
+  const loadProjectDocs = useCallback(async (id) => {
+    if (!id) return setDriveDocs([]);
+    try {
+      const result = await api(`/project-dashboard/projects/${id}/documents`);
+      setDriveDocs(result.documents || []);
+    } catch {
+      setDriveDocs([]);
+    }
+  }, []);
+
   useEffect(() => {
+    // Initial dashboard synchronization is intentionally owned by this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+
+  const routeProject = projectId ? data.projects.find((project) => String(project.id) === String(projectId)) : null;
+  const selectedProject = routeProject || (selected ? data.projects.find((project) => project.id === selected.id) || selected : null);
+
+  useEffect(() => {
+    // Refresh the external Drive listing whenever the focused project changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadProjectDocs(selectedProject?.id);
+  }, [loadProjectDocs, selectedProject?.id]);
 
   const users = config.users || [];
   const projects = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return (data.projects || []).filter((project) => !query || [
-      project.name,
-      project.code,
-      project.client,
-      project.location,
-      project.manager,
-      ...(project.manualTasks || []).map((task) => task.title),
-    ].join(" ").toLowerCase().includes(query));
+    return (data.projects || []).filter((project) => !query || [project.name, project.code, project.client, project.location, project.manager, ...(project.manualTasks || []).map((task) => task.title)].join(" ").toLowerCase().includes(query));
   }, [data.projects, search]);
+  const phases = selectedProject?.phases || [];
+  const tasks = selectedProject?.manualTasks || [];
+  const documents = useMemo(() => {
+    const byKey = new Map([...(selectedProject?.projectDocuments || []), ...driveDocs].map((doc) => [doc.driveFileId || doc.url || doc.id, doc]));
+    return [...byKey.values()];
+  }, [driveDocs, selectedProject?.projectDocuments]);
 
-  const routeProject = projectId ? (data.projects || []).find((project) => String(project.id) === String(projectId)) : null;
-  const selectedProject = routeProject || (selected ? (data.projects || []).find((project) => project.id === selected.id) || selected : null);
-  const selectedTasks = selectedProject?.manualTasks || [];
-  const phaseMap = new Map((selectedProject?.phases || []).map((phase) => [phase.id, phase]));
-  const docs = useMemo(() => {
-    const byId = new Map([...(selectedProject?.projectDocuments || []), ...driveDocs].map((doc) => [doc.driveFileId || doc.url || doc.id, doc]));
-    return [...byId.values()];
-  }, [driveDocs, selectedProject]);
-
-  async function loadProjectDocs(projectId = selectedProject?.id) {
-    if (!projectId) return;
-    try {
-      const result = await api(`/project-dashboard/projects/${projectId}/documents`);
-      setDriveDocs(result.documents || []);
-    } catch (error) {
-      setDriveDocs([]);
-      toast.error(error.message || "Could not load project documents");
-    }
-  }
-
-  useEffect(() => {
-    setDriveDocs([]);
-    if (selectedProject?.id) void loadProjectDocs(selectedProject.id);
-  }, [selectedProject?.id]);
-
-  function openEditor(project = null) {
-    const source = project ? config.projects.find((item) => item.id === project.id) || project : blankProject();
-    const next = JSON.parse(JSON.stringify(source));
-    next.phases = next.phases?.length ? next.phases : [{ ...blankPhase(), name: "Planning" }];
-    next.tasks = next.tasks || [];
-    next.projectDocuments = next.projectDocuments || [];
-    next.assignments = next.assignments || [];
-    next.dmr = next.dmr || { enabled: false, spreadsheetId: "", siteNames: [], agencyNames: [], assignedUserIds: [], editableUserIds: [] };
-    setEditor(next);
-    setEditorTab("project");
+  function fullProject(project) {
+    return (config.projects || []).find((item) => item.id === project?.id) || project;
   }
 
   function openProject(project) {
     setSelected(project);
-    setDetailTab("board");
+    setWorkspaceView("overview");
     router.push(`/projects/${project.id}`);
   }
 
   function closeProject() {
     setSelected(null);
-    setTaskDetail(null);
-    setNewTaskDraft(null);
-    setPhaseDraft(null);
+    setTaskEditor(null);
+    setPhaseEditor(null);
     router.push("/projects");
   }
 
-  function updateEditor(patch) {
-    setEditor((current) => ({ ...current, ...patch }));
-  }
-
-  function updatePhase(index, patch) {
-    setEditor((current) => ({
-      ...current,
-      phases: current.phases.map((phase, phaseIndex) => phaseIndex === index ? { ...phase, ...patch } : phase),
-    }));
-  }
-
-  function updateTask(taskId, patch) {
-    setEditor((current) => ({
-      ...current,
-      phases: current.phases.map((phase) => ({
-        ...phase,
-        tasks: (phase.tasks || []).map((task) => task.id === taskId ? { ...task, ...patch } : task),
-      })),
-      tasks: (current.tasks || []).map((task) => task.id === taskId ? { ...task, ...patch } : task),
-    }));
-  }
-
-  function addTask(phaseIndex) {
-    setEditor((current) => ({
-      ...current,
-      phases: current.phases.map((phase, index) => index === phaseIndex ? { ...phase, tasks: [...(phase.tasks || []), blankTask(phase.id)] } : phase),
-    }));
-  }
-
-  function deleteTask(taskId) {
-    setEditor((current) => ({
-      ...current,
-      phases: current.phases.map((phase) => ({ ...phase, tasks: (phase.tasks || []).filter((task) => task.id !== taskId) })),
-      tasks: (current.tasks || []).filter((task) => task.id !== taskId),
-    }));
-  }
-
-  async function saveProject(event) {
-    event.preventDefault();
+  async function patchProject(project, payload, message) {
     try {
       setSaving(true);
-      const payload = {
-        ...editor,
-        aliases: Array.isArray(editor.aliases) ? editor.aliases : listFromText(editor.aliases),
-      };
-      await api(editor.id ? `/project-dashboard/projects/${editor.id}` : "/project-dashboard/projects", {
-        method: editor.id ? "PATCH" : "POST",
-        body: JSON.stringify(payload),
-      });
-      toast.success(editor.id ? "Project updated" : "Project created");
-      setEditor(null);
+      const result = await api(`/project-dashboard/projects/${project.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      if (message) toast.success(message);
+      await load(true);
+      return result.project;
+    } catch (error) {
+      toast.error(error.message || "Could not save changes");
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openTask(task) {
+    setTaskEditor(JSON.parse(JSON.stringify(task)));
+  }
+
+  function addTask(phaseId = "", status = "todo") {
+    const resolvedPhase = phaseId || phases[0]?.id || "";
+    setTaskEditor({ ...blankTask(resolvedPhase), status });
+  }
+
+  async function saveTask() {
+    if (!selectedProject || !taskEditor?.title.trim()) return;
+    const source = JSON.parse(JSON.stringify(fullProject(selectedProject)));
+    const cleanTask = { ...taskEditor };
+    delete cleanTask.__isNew;
+    source.phases = (source.phases || []).map((phase) => ({ ...phase, tasks: (phase.tasks || []).filter((task) => task.id !== cleanTask.id) }));
+    source.tasks = (source.tasks || []).filter((task) => task.id !== cleanTask.id);
+    const targetPhase = source.phases.find((phase) => phase.id === cleanTask.phaseId);
+    if (targetPhase) targetPhase.tasks = [...(targetPhase.tasks || []), cleanTask];
+    else source.tasks = [...source.tasks, cleanTask];
+    const updated = await patchProject(selectedProject, source, taskEditor.__isNew ? "Task created" : "Task updated");
+    if (updated) setTaskEditor(null);
+  }
+
+  async function deleteTask() {
+    if (!selectedProject || !taskEditor || !window.confirm(`Delete ${taskEditor.title}?`)) return;
+    const source = JSON.parse(JSON.stringify(fullProject(selectedProject)));
+    source.phases = (source.phases || []).map((phase) => ({ ...phase, tasks: (phase.tasks || []).filter((task) => task.id !== taskEditor.id) }));
+    source.tasks = (source.tasks || []).filter((task) => task.id !== taskEditor.id);
+    const updated = await patchProject(selectedProject, source, "Task deleted");
+    if (updated) setTaskEditor(null);
+  }
+
+  function openPhase(phase) {
+    setPhaseEditor(JSON.parse(JSON.stringify(phase)));
+  }
+
+  function addPhase() {
+    setPhaseEditor(blankPhase());
+  }
+
+  async function savePhase() {
+    if (!selectedProject || !phaseEditor?.name.trim()) return;
+    const source = JSON.parse(JSON.stringify(fullProject(selectedProject)));
+    const cleanPhase = { ...phaseEditor };
+    delete cleanPhase.__isNew;
+    source.phases = phaseEditor.__isNew ? [...(source.phases || []), cleanPhase] : (source.phases || []).map((phase) => phase.id === cleanPhase.id ? cleanPhase : phase);
+    const updated = await patchProject(selectedProject, source, phaseEditor.__isNew ? "Phase created" : "Phase updated");
+    if (updated) setPhaseEditor(null);
+  }
+
+  async function deletePhase() {
+    if (!selectedProject || !phaseEditor) return;
+    if (tasks.some((task) => task.phaseId === phaseEditor.id)) return toast.error("Move or delete this phase's tasks before deleting the phase");
+    if (!window.confirm(`Delete ${phaseEditor.name}?`)) return;
+    const source = JSON.parse(JSON.stringify(fullProject(selectedProject)));
+    source.phases = (source.phases || []).filter((phase) => phase.id !== phaseEditor.id);
+    const updated = await patchProject(selectedProject, source, "Phase deleted");
+    if (updated) setPhaseEditor(null);
+  }
+
+  function editProject(project = null) {
+    setProjectEditor(JSON.parse(JSON.stringify(project ? fullProject(project) : blankProject())));
+  }
+
+  async function saveProject() {
+    if (!projectEditor?.name.trim()) return;
+    try {
+      setSaving(true);
+      if (projectEditor.id) {
+        await api(`/project-dashboard/projects/${projectEditor.id}`, { method: "PATCH", body: JSON.stringify(projectEditor) });
+        toast.success("Project updated");
+      } else {
+        await api("/project-dashboard/projects", { method: "POST", body: JSON.stringify(projectEditor) });
+        toast.success("Project created");
+      }
+      setProjectEditor(null);
       await load(true);
     } catch (error) {
       toast.error(error.message || "Could not save project");
@@ -462,1694 +714,89 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     }
   }
 
-  async function deleteProject(project) {
-    if (!window.confirm(`Delete ${project.name}?`)) return;
+  async function deleteProject() {
+    if (!projectEditor?.id || !window.confirm(`Delete ${projectEditor.name}? This cannot be undone.`)) return;
     try {
-      await api(`/project-dashboard/projects/${project.id}`, { method: "DELETE" });
+      setSaving(true);
+      await api(`/project-dashboard/projects/${projectEditor.id}`, { method: "DELETE" });
       toast.success("Project deleted");
+      setProjectEditor(null);
       setSelected(null);
+      router.push("/projects");
       await load(true);
     } catch (error) {
       toast.error(error.message || "Could not delete project");
+    } finally {
+      setSaving(false);
     }
-  }
-
-  async function patchProject(project, patch, successMessage = "Project updated") {
-    try {
-      const source = config.projects.find((item) => item.id === project.id) || project;
-      await api(`/project-dashboard/projects/${project.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ ...source, ...patch }),
-      });
-      toast.success(successMessage);
-      await load(true);
-    } catch (error) {
-      toast.error(error.message || "Could not update project");
-    }
-  }
-
-  function quickAddPhase() {
-    setPhaseDraft({ ...blankPhase() });
-    setDetailTab("phases");
-  }
-
-  function quickAddTask(project, phaseId = null) {
-    const phases = project.phases?.length ? project.phases : [{ ...blankPhase(), name: "Planning" }];
-    const targetPhaseId = phaseId || phases[0]?.id;
-    setNewTaskDraft({ ...blankTask(targetPhaseId), phaseId: targetPhaseId });
-    setDetailTab("table");
-  }
-
-  async function saveNewTask(project) {
-    if (!newTaskDraft?.title?.trim()) return toast.error("Add task title");
-    const phases = project.phases?.length ? project.phases : [{ ...blankPhase(), name: "Planning" }];
-    const targetPhaseId = newTaskDraft.phaseId || phases[0]?.id;
-    const nextTask = { ...newTaskDraft, phaseId: targetPhaseId, title: newTaskDraft.title.trim() };
-    const nextPhases = phases.map((phase) => phase.id === targetPhaseId ? { ...phase, tasks: [...(phase.tasks || []), nextTask] } : phase);
-    await patchProject(project, { phases: nextPhases }, "Task added");
-    setNewTaskDraft(null);
-  }
-
-  async function saveNewPhase(project) {
-    if (!phaseDraft?.name?.trim()) return toast.error("Add phase name");
-    await patchProject(project, { phases: [...(project.phases || []), { ...phaseDraft, name: phaseDraft.name.trim() }] }, "Phase added");
-    setPhaseDraft(null);
-  }
-
-  async function saveInlineTask(project, taskId) {
-    const patch = taskEdits[taskId];
-    if (!patch) return;
-    const phases = project.phases?.length ? project.phases : [];
-    const originalTask = selectedTasks.find((task) => task.id === taskId);
-    if (!originalTask) return toast.error("Task not found");
-    const nextTask = { ...originalTask, ...patch };
-    const nextPhases = phases.map((phase) => ({
-      ...phase,
-      tasks: (phase.tasks || []).filter((task) => task.id !== taskId),
-    })).map((phase) => phase.id === nextTask.phaseId ? { ...phase, tasks: [...(phase.tasks || []), nextTask] } : phase);
-    await patchProject(project, { phases: nextPhases }, "Task updated");
-    setTaskEdits((current) => {
-      const next = { ...current };
-      delete next[taskId];
-      return next;
-    });
-  }
-
-  async function deleteInlineTask(project, taskId) {
-    const nextPhases = (project.phases || []).map((phase) => ({ ...phase, tasks: (phase.tasks || []).filter((task) => task.id !== taskId) }));
-    await patchProject(project, { phases: nextPhases }, "Task deleted");
-  }
-
-  function openTaskDetail(task) {
-    setTaskDetail(JSON.parse(JSON.stringify(task)));
-  }
-
-  async function saveTaskDetail(project) {
-    if (!taskDetail?.title?.trim()) return toast.error("Add task title");
-    const phases = project.phases?.length ? project.phases : [{ ...blankPhase(), name: "Planning" }];
-    const nextTask = { ...taskDetail, title: taskDetail.title.trim() };
-    const nextPhases = phases.map((phase) => ({
-      ...phase,
-      tasks: (phase.tasks || []).filter((task) => task.id !== nextTask.id),
-    })).map((phase) => phase.id === nextTask.phaseId ? { ...phase, tasks: [...(phase.tasks || []), nextTask] } : phase);
-    await patchProject(project, { phases: nextPhases }, "Task updated");
-    setTaskDetail(null);
   }
 
   async function addDocumentLink() {
-    if (!selectedProject?.id || !docForm.url.trim()) return toast.error("Paste a document link");
+    if (!selectedProject || !fileForm.url.trim()) return;
     try {
-      await api(`/project-dashboard/projects/${selectedProject.id}/documents`, {
-        method: "POST",
-        body: JSON.stringify(docForm),
-      });
-      toast.success("Document added");
-      setDocForm({ name: "", category: "General", url: "" });
-      await load(true);
-      await loadProjectDocs(selectedProject.id);
+      setSaving(true);
+      await api(`/project-dashboard/projects/${selectedProject.id}/documents`, { method: "POST", body: JSON.stringify(fileForm) });
+      toast.success("Document linked");
+      setFileForm({ name: "", category: "General", url: "" });
+      setFileDrawerOpen(false);
+      await Promise.all([loadProjectDocs(selectedProject.id), load(true)]);
     } catch (error) {
       toast.error(error.message || "Could not add document");
+    } finally {
+      setSaving(false);
     }
   }
 
-  async function uploadProjectDocument(event) {
+  async function uploadDocument(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || !selectedProject?.id) return;
+    if (!file || !selectedProject) return;
     try {
-      setUploadingDoc(true);
+      setUploading(true);
       const form = new FormData();
       form.append("file", file);
-      form.append("category", docForm.category || "General");
+      form.append("category", fileForm.category || "General");
       await apiForm(`/project-dashboard/projects/${selectedProject.id}/documents/upload`, form);
-      toast.success("Uploaded to project Drive folder");
-      await load(true);
-      await loadProjectDocs(selectedProject.id);
+      toast.success("File uploaded to Drive");
+      setFileDrawerOpen(false);
+      await Promise.all([loadProjectDocs(selectedProject.id), load(true)]);
     } catch (error) {
       toast.error(error.message || "Upload failed");
     } finally {
-      setUploadingDoc(false);
+      setUploading(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className={`flex min-h-0 flex-1 items-center justify-center ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f4ef] text-[#171714]"}`}>
-        <div className={`rounded-[30px] border p-8 text-center ${panel}`}>
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-500" />
-          <h2 className="mt-4 text-xl font-semibold">Loading project workspace</h2>
-          <p className={`mt-2 text-sm ${muted}`}>Preparing projects, phases, tasks, and linked documents.</p>
-        </div>
-      </div>
-    );
+  if (loading) return <LoadingView darkMode={darkMode} />;
+
+  if (!selectedProject) {
+    return <><PortfolioView darkMode={darkMode} projects={projects} users={users} search={search} onSearch={setSearch} layout={portfolioLayout} onLayout={setPortfolioLayout} refreshing={refreshing} isSuperAdmin={isSuperAdmin} onRefresh={() => load(true)} onCreate={() => editProject()} onOpen={openProject} />{projectEditor && <ProjectEditor project={projectEditor} users={users} saving={saving} onChange={(patch) => setProjectEditor((current) => ({ ...current, ...patch }))} onClose={() => setProjectEditor(null)} onSave={saveProject} onDelete={deleteProject} />}</>;
   }
 
-  const renderTaskCard = (task) => (
-    <button type="button" onClick={() => openTaskDetail(task)} key={task.id} className={`w-full rounded-[22px] border p-4 text-left transition hover:-translate-y-0.5 ${darkMode ? "border-white/10 bg-white/[0.045]" : "border-black/[0.06] bg-white shadow-[0_14px_36px_rgba(28,42,64,0.06)]"}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h4 className="truncate text-sm font-semibold">{task.title}</h4>
-          <p className={`mt-1 text-xs ${muted}`}>{phaseMap.get(task.phaseId)?.name || task.phaseName || "No phase"} · {formatDate(task.dueDate)}</p>
-        </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${priorityClass(task.priority, darkMode)}`}>{task.priority || "medium"}</span>
-      </div>
-      {task.description && <p className={`mt-3 line-clamp-3 text-xs leading-5 ${muted}`}>{task.description}</p>}
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {(task.assigneeIds || []).map((id) => {
-          const member = users.find((item) => item.id === id);
-          return <span key={id} className={`rounded-full px-2 py-1 text-[10px] ${darkMode ? "bg-white/8 text-white/65" : "bg-[#eef4ec] text-black/60"}`}>{member?.displayName || id}</span>;
-        })}
-        {(task.dependencyIds || []).length > 0 && <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] text-amber-700">{task.dependencyIds.length} dependencies</span>}
-      </div>
-    </button>
-  );
-
-  if (selectedProject) {
-    const totalTasks = selectedTasks.length;
-    const doneTasks = selectedTasks.filter((task) => task.status === "done").length;
-    const blockedTasks = selectedTasks.filter((task) => task.status === "blocked").length;
-    const inProgressTasks = selectedTasks.filter((task) => task.status === "in_progress").length;
-    const todoTasks = selectedTasks.filter((task) => !task.status || task.status === "todo").length;
-    const progress = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : selectedProject.metrics?.progress || 0;
-    const ringCircumference = 2 * Math.PI * 42;
-    const ringOffset = ringCircumference - (progress / 100) * ringCircumference;
-    const statusCounts = [
-      { label: "Todo", value: todoTasks, color: "bg-violet-500" },
-      { label: "In progress", value: inProgressTasks, color: "bg-sky-500" },
-      { label: "Blocked", value: blockedTasks, color: "bg-rose-500" },
-      { label: "Done", value: doneTasks, color: "bg-emerald-500" },
-    ];
-    const priorityCounts = PRIORITY_OPTIONS.map((option) => ({
-      ...option,
-      count: selectedTasks.filter((task) => (task.priority || "medium") === option.value).length,
-    }));
-    const editablePhases = selectedProject.phases?.length ? selectedProject.phases : [{ ...blankPhase(), name: "Planning" }];
-    const newTaskPhaseOptions = editablePhases.map((phase) => ({ value: phase.id, label: phase.name || "Untitled phase" }));
-    const tabItems = [
-      { value: "board", label: "Activity" },
-      { value: "table", label: "Tasks", count: totalTasks },
-      { value: "phases", label: "Phases", count: editablePhases.length },
-      { value: "documents", label: "Files", count: docs.length || selectedProject.metrics?.documents || 0 },
-    ];
-    const stageItems = editablePhases.slice(0, 4);
-    const projectMembers = [...new Set(selectedTasks.flatMap((task) => task.assigneeIds || []))]
-      .map((id) => users.find((user) => user.id === id)?.displayName || id)
-      .filter(Boolean);
-    const latestTasks = [...selectedTasks]
-      .sort((a, b) => String(b.updatedAt || b.createdAt || b.dueDate || "").localeCompare(String(a.updatedAt || a.createdAt || a.dueDate || "")))
-      .slice(0, 5);
-    const compactTaskDrawer = taskDetail && (
-      <div className="fixed inset-0 z-[80] flex justify-end bg-black/35 backdrop-blur-sm">
-        <aside className={`flex h-full w-full max-w-[620px] flex-col overflow-hidden border-l shadow-2xl ${darkMode ? "border-white/10 bg-[#111318] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
-          <header className={`flex items-center justify-between border-b px-6 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
-            <div className="flex items-center gap-3 text-sm">
-              <button type="button" className={`rounded-full px-3 py-2 ${darkMode ? "bg-white/8" : "bg-black/[0.04]"}`}>Share</button>
-              <button type="button" className={`rounded-full px-3 py-2 ${darkMode ? "bg-white/8" : "bg-black/[0.04]"}`}>Expand</button>
-            </div>
-            <button type="button" onClick={() => setTaskDetail(null)} className={`flex h-10 w-10 items-center justify-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.05]"}`}>
-              <X className="h-5 w-5" />
-            </button>
-          </header>
-          <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-            <p className={`flex items-center gap-2 text-xs ${muted}`}><CalendarDays className="h-4 w-4" /> {phaseMap.get(taskDetail.phaseId)?.name || "Project task"}</p>
-            <input value={taskDetail.title || ""} onChange={(event) => setTaskDetail((current) => ({ ...current, title: event.target.value }))} className={`mt-3 w-full rounded-2xl border-0 bg-transparent text-3xl font-semibold leading-tight outline-none ${darkMode ? "placeholder:text-white/25" : "placeholder:text-black/25"}`} placeholder="Task title" />
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <SelectMenu darkMode={darkMode} value={taskDetail.priority || "medium"} onChange={(value) => setTaskDetail((current) => ({ ...current, priority: value }))} options={PRIORITY_OPTIONS} />
-              <SelectMenu darkMode={darkMode} value={taskDetail.status || "todo"} onChange={(value) => setTaskDetail((current) => ({ ...current, status: value }))} options={STATUS_OPTIONS} />
-              <TextInput darkMode={darkMode} type="date" value={taskDetail.dueDate} onChange={(value) => setTaskDetail((current) => ({ ...current, dueDate: value }))} />
-            </div>
-            <div className={`mt-6 flex items-center justify-between rounded-2xl px-4 py-4 ${darkMode ? "bg-violet-400/12" : "bg-gradient-to-r from-violet-100 to-pink-100"}`}>
-              <span className="flex items-center gap-3 text-sm font-semibold"><Clock3 className="h-5 w-5" /> Time spent on this project</span>
-              <span className="text-lg font-semibold">00:00:00</span>
-            </div>
-            <section className="mt-7">
-              <h4 className="text-sm font-semibold">Description</h4>
-              <TextArea darkMode={darkMode} value={taskDetail.description} onChange={(value) => setTaskDetail((current) => ({ ...current, description: value }))} placeholder="Write expected output, blockers, and completion notes..." rows={5} />
-            </section>
-            <section className="mt-7 grid gap-4 sm:grid-cols-2">
-              <Field label="Phase"><SelectMenu darkMode={darkMode} value={taskDetail.phaseId} onChange={(value) => setTaskDetail((current) => ({ ...current, phaseId: value }))} options={newTaskPhaseOptions} /></Field>
-              <Field label="People"><UserPicker darkMode={darkMode} users={users} selectedIds={taskDetail.assigneeIds || []} onChange={(ids) => setTaskDetail((current) => ({ ...current, assigneeIds: ids }))} /></Field>
-            </section>
-          </main>
-          <footer className={`flex justify-between gap-3 border-t px-6 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
-            <button type="button" onClick={() => deleteInlineTask(selectedProject, taskDetail.id)} className="rounded-full bg-rose-500/10 px-5 py-3 text-sm font-semibold text-rose-500">Delete task</button>
-            <button type="button" onClick={() => saveTaskDetail(selectedProject)} className="rounded-full bg-[#7bea2a] px-6 py-3 text-sm font-semibold text-black">Save task</button>
-          </footer>
-        </aside>
-      </div>
-    );
-    const focusedProjectDetailView = (
-      <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f3f3ef] text-[#171714]"}`}>
-        <header className={`sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b px-5 py-3 ${darkMode ? "border-white/10 bg-[#111318]" : "border-black/[0.08] bg-white"}`}>
-          <div className="min-w-0">
-            <p className="truncate text-sm"><span className="font-semibold">{selectedProject.name}</span><span className={muted}> · Project details</span></p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={() => load(true)} className={`rounded-full px-4 py-2 text-sm font-semibold ${darkMode ? "bg-white/8 text-white/80" : "bg-[#eef4ec] text-[#3d7f14]"}`}><RefreshCw className="mr-2 inline h-4 w-4" /> Refresh</button>
-            {isSuperAdmin && <button type="button" onClick={() => openEditor(selectedProject)} className="rounded-full bg-[#ff3347] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(255,51,71,0.22)]"><Pencil className="mr-2 inline h-4 w-4" /> Edit project</button>}
-            <button type="button" onClick={closeProject} className="rounded-full px-4 py-2 text-sm font-semibold text-[#3d7f14] hover:bg-[#eef4ec]">Close</button>
-          </div>
-        </header>
-
-        <nav className={`z-20 flex shrink-0 gap-7 border-b px-6 lg:px-10 ${darkMode ? "border-white/10 bg-[#101216]" : "border-black/[0.06] bg-white"}`}>
-          {tabItems.map((tab) => (
-            <button key={tab.value} type="button" onClick={() => setDetailTab(tab.value)} className={`flex items-center gap-2 border-b-2 py-4 text-sm font-semibold transition ${detailTab === tab.value ? "border-[#4b9b16] text-[#4b9b16]" : "border-transparent text-black/60 hover:text-black"}`}>
-              {tab.label}
-              {typeof tab.count === "number" && <span className={`rounded-full px-2 py-0.5 text-xs ${detailTab === tab.value ? "bg-[#4b9b16]/10" : darkMode ? "bg-white/8" : "bg-black/[0.05]"}`}>{tab.count}</span>}
-            </button>
-          ))}
-        </nav>
-
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          {detailTab === "board" && (
-            <div className="space-y-5 p-5 lg:p-8">
-              <section className={`rounded-[28px] border p-5 ${panel}`}>
-                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_540px]">
-                  <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
-                    <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] bg-[#14aa6d] text-3xl font-bold text-white">
-                      {(selectedProject.name || "P").slice(0, 2).toUpperCase()}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap gap-2">
-                        <span className="rounded-md bg-pink-100 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-pink-700">Project</span>
-                        <span className={`rounded-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] ${healthClass(selectedProject.health, darkMode)}`}>
-                          {selectedProject.health || "Green"}
-                        </span>
-                      </div>
-                      <h2 className="mt-3 truncate text-3xl font-semibold">{selectedProject.name}</h2>
-                      <p className={`mt-1 truncate text-base ${muted}`}>{selectedProject.client || selectedProject.location || "Project workspace"}</p>
-                      <p className={`mt-3 line-clamp-2 max-w-3xl text-sm leading-6 ${muted}`}>
-                        {selectedProject.description || "Manage phases, tasks, deadlines, people, and project documents in one workspace."}
-                      </p>
-                    </div>
-                    {isSuperAdmin && (
-                      <button type="button" onClick={() => openEditor(selectedProject)} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-[#7bea2a] px-5 text-sm font-semibold text-black">
-                        <Pencil className="h-4 w-4" /> Edit
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className={`rounded-[20px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#eef8ff]"}`}>
-                      <div className="flex items-center justify-between gap-3">
-                        <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${muted}`}>Progress</p>
-                        <span className="text-2xl font-semibold text-[#1374c8]">{progress}%</span>
-                      </div>
-                      <div className={`mt-3 h-2 rounded-full ${darkMode ? "bg-white/10" : "bg-white"}`}>
-                        <div className="h-full rounded-full bg-[#28b7e8]" style={{ width: `${Math.min(100, progress)}%` }} />
-                      </div>
-                    </div>
-                    <div className={`rounded-[20px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#effaf2]"}`}>
-                      <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${muted}`}>Tasks done</p>
-                      <p className="mt-2 text-2xl font-semibold text-[#079c62]">{doneTasks}/{totalTasks || 0}</p>
-                    </div>
-                    <div className={`rounded-[20px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#fff6df]"}`}>
-                      <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${muted}`}>Target date</p>
-                      <p className="mt-2 text-lg font-semibold">{formatDate(selectedProject.targetDate)}</p>
-                    </div>
-                    <div className={`rounded-[20px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#fff0f1]"}`}>
-                      <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${muted}`}>Blocked</p>
-                      <p className={`mt-2 text-2xl font-semibold ${blockedTasks ? "text-red-500" : "text-[#079c62]"}`}>{blockedTasks}</p>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_420px]">
-                <div className={`rounded-[24px] border p-5 ${panel}`}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Pipeline</p>
-                      <h3 className="mt-1 text-2xl font-semibold">Project Work · {blockedTasks ? "Attention" : progress === 100 ? "Complete" : "Active"}</h3>
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-sm font-semibold ${darkMode ? "bg-white/8 text-white/70" : "bg-[#f2f2ef] text-black/60"}`}>{progress}% complete</span>
-                  </div>
-                  <div className="mt-5 overflow-hidden rounded-full">
-                    <div className={`grid h-12 ${stageItems.length <= 1 ? "grid-cols-1" : stageItems.length === 2 ? "grid-cols-2" : stageItems.length === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
-                      {(stageItems.length ? stageItems : [{ id: "default", name: "Planning" }]).map((phase, index) => {
-                        const phaseTasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                        const phaseDone = phaseTasks.filter((task) => task.status === "done").length;
-                        const phaseProgress = phaseTasks.length ? Math.round((phaseDone / phaseTasks.length) * 100) : index === 0 ? progress : 0;
-                        return (
-                          <button key={phase.id || phase.name} type="button" onClick={() => setDetailTab("phases")} className={`min-w-0 px-3 text-sm font-semibold ${phaseProgress === 100 ? "bg-[#8edbd6]" : phaseProgress > 0 ? "bg-[#a1e4df]" : darkMode ? "bg-white/8" : "bg-[#e8e7e2]"}`}>
-                            <span className="block truncate">{phase.name || `Phase ${index + 1}`}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="mt-5 grid gap-3 md:grid-cols-2">
-                    <div className="flex items-center gap-3">
-                      <span className={`flex h-11 w-11 items-center justify-center rounded-full ${blockedTasks ? "bg-red-500/10 text-red-500" : "bg-emerald-500/10 text-emerald-600"}`}>
-                        {blockedTasks ? <AlertTriangle className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
-                      </span>
-                      <div>
-                        <p className={`text-xs ${muted}`}>Current status</p>
-                        <p className="font-semibold">{blockedTasks ? "Needs attention" : "On track"}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`flex h-11 w-11 items-center justify-center rounded-full ${darkMode ? "bg-white/8" : "bg-[#f2f2ef]"}`}><UserRound className="h-5 w-5" /></span>
-                      <div className="min-w-0">
-                        <p className={`text-xs ${muted}`}>Manager</p>
-                        <p className="truncate font-semibold">{selectedProject.manager || "Not assigned"}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={`rounded-[24px] border p-5 ${panel}`}>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Project details</p>
-                  <div className="mt-4 grid gap-3">
-                    {[[CalendarDays, "Target", formatDate(selectedProject.targetDate)], [Flag, "Priority", selectedProject.priority || "Medium"], [ShieldCheck, "Health", selectedProject.health || "Green"], [FileText, "Documents", docs.length || selectedProject.metrics?.documents || 0]].map(([Icon, label, value]) => (
-                      <div key={label} className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 ${darkMode ? "bg-white/[0.035]" : "bg-[#f7f8f4]"}`}>
-                        <span className="flex min-w-0 items-center gap-3">
-                          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${darkMode ? "bg-white/8" : "bg-white"}`}><Icon className="h-4 w-4" /></span>
-                          <span className={`text-sm ${muted}`}>{label}</span>
-                        </span>
-                        <span className="truncate text-sm font-semibold capitalize">{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-
-              <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
-                <section className={`rounded-[24px] border p-5 ${panel}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Activity</p>
-                      <h3 className="mt-1 text-2xl font-semibold">Latest movement</h3>
-                    </div>
-                    {isSuperAdmin && (
-                      <button type="button" onClick={() => quickAddTask(selectedProject)} className="rounded-full bg-[#171714] px-4 py-2 text-sm font-semibold text-white">
-                        <Plus className="mr-1 inline h-4 w-4" /> Add task
-                      </button>
-                    )}
-                  </div>
-                  <div className="mt-5 divide-y divide-black/[0.06]">
-                    {(latestTasks.length ? latestTasks : selectedTasks.slice(0, 4)).map((task, index) => (
-                      <button key={task.id || index} type="button" onClick={() => openTaskDetail(task)} className="flex w-full items-center justify-between gap-4 py-4 text-left">
-                        <span className="flex min-w-0 items-center gap-3">
-                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${task.status === "done" ? "bg-[#7bea2a] text-black" : task.status === "blocked" ? "bg-red-100 text-red-600" : "bg-[#8edbd6] text-black"}`}>
-                            {task.status === "done" ? <CheckCircle2 className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block truncate font-semibold">{task.title || "Untitled task"}</span>
-                            <span className={`mt-0.5 block truncate text-sm ${muted}`}>{statusLabel(task.status)} in {phaseMap.get(task.phaseId)?.name || "project"}</span>
-                          </span>
-                        </span>
-                        <span className={`shrink-0 text-sm ${muted}`}>{formatDate(task.dueDate)}</span>
-                      </button>
-                    ))}
-                    {!selectedTasks.length && <p className={`rounded-2xl border border-dashed p-8 text-center text-sm ${muted}`}>No task activity yet. Add a task to start the project timeline.</p>}
-                  </div>
-                </section>
-
-                <section className={`overflow-hidden rounded-[24px] border ${panel}`}>
-                  <div className={`border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Schedule</p>
-                    <h3 className="mt-1 text-2xl font-semibold">Milestones</h3>
-                  </div>
-                  <div className="divide-y divide-black/[0.06]">
-                    {editablePhases.map((phase, index) => {
-                      const phaseTasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                      const phaseDone = phaseTasks.filter((task) => task.status === "done").length;
-                      const phaseProgress = phaseTasks.length ? Math.round((phaseDone / phaseTasks.length) * 100) : 0;
-                      return (
-                        <button key={phase.id || index} type="button" onClick={() => setDetailTab("phases")} className="grid w-full grid-cols-[96px_minmax(0,1fr)] text-left">
-                          <span className={`px-4 py-4 ${darkMode ? "bg-white/[0.03]" : "bg-[#f6f6f2]"}`}>
-                            <span className="block text-xs font-semibold text-[#4b9b16]">Phase {index + 1}</span>
-                            <span className="mt-1 block text-sm font-semibold">{formatDate(phase.dueDate)}</span>
-                          </span>
-                          <span className="min-w-0 px-4 py-4">
-                            <span className="flex items-center justify-between gap-3">
-                              <span className="truncate font-semibold">{phase.name || "Untitled phase"}</span>
-                              <span className={`shrink-0 text-xs ${muted}`}>{phaseProgress}%</span>
-                            </span>
-                            <span className={`mt-1 block text-xs ${muted}`}>{phaseTasks.length} tasks · {phaseDone} done</span>
-                            <span className={`mt-2 block h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>
-                              <span className="block h-full rounded-full bg-[#7bea2a]" style={{ width: `${phaseProgress}%` }} />
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              </section>
-            </div>
-          )}
-
-          {detailTab === "board" && false && (
-            <div className="grid min-h-full lg:grid-cols-[360px_minmax(0,1fr)]">
-              <aside className={`border-r p-6 ${darkMode ? "border-white/10 bg-[#111318]" : "border-black/[0.08] bg-white"}`}>
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-md bg-pink-100 px-3 py-2 text-xs font-bold uppercase text-pink-700">Project</span>
-                  <span className={`rounded-md px-3 py-2 text-xs font-bold uppercase ${healthClass(selectedProject.health, darkMode)}`}>{selectedProject.health || "Green"}</span>
-                </div>
-                <p className={`mt-8 text-sm ${muted}`}>Project workspace</p>
-                <div className="mt-5 flex items-center gap-5">
-                  <span className="flex h-24 w-24 shrink-0 items-center justify-center rounded-[32px] bg-[#14aa6d] text-4xl font-bold text-white">{(selectedProject.name || "P").slice(0, 2).toUpperCase()}</span>
-                  <div className="min-w-0"><h2 className="truncate text-3xl font-semibold">{selectedProject.name}</h2><p className={`mt-1 truncate text-lg ${muted}`}>{selectedProject.client || selectedProject.location || "Project"}</p></div>
-                </div>
-                <p className={`mt-8 text-lg leading-8 ${muted}`}>{selectedProject.description || "Manage phases, tasks, deadlines, people, and project documents in one workspace."}</p>
-                {isSuperAdmin && <button type="button" onClick={() => openEditor(selectedProject)} className="mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#7bea2a] text-lg font-semibold text-black shadow-[0_14px_34px_rgba(123,234,42,0.25)]"><Pencil className="h-5 w-5" /> Edit project</button>}
-                <div className={`mt-8 rounded-[18px] p-5 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f4f1]"}`}>
-                  <p className={`text-sm ${muted}`}>Progress</p>
-                  <div className="mt-2 flex items-end justify-between gap-4"><p className="text-4xl font-semibold">{progress}%</p><p className={`pb-1 text-sm ${muted}`}>{doneTasks}/{totalTasks || 0} tasks done</p></div>
-                  <div className={`mt-4 h-2 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}><div className="h-full rounded-full bg-[#7bea2a]" style={{ width: `${Math.min(100, progress)}%` }} /></div>
-                </div>
-                <div className="mt-8 space-y-4">
-                  {[[UserRound, "Manager", selectedProject.manager || "Not assigned"], [CalendarDays, "Target", formatDate(selectedProject.targetDate)], [Flag, "Priority", selectedProject.priority || "Medium"], [ShieldCheck, "Health", selectedProject.health || "Green"]].map(([Icon, label, value]) => (
-                    <div key={label} className="flex items-center gap-4"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${darkMode ? "bg-white/8" : "bg-[#f2f2ef]"}`}><Icon className="h-5 w-5" /></span><span className="min-w-0"><span className={`block text-sm ${muted}`}>{label}</span><span className="block truncate text-base font-semibold capitalize">{value}</span></span></div>
-                  ))}
-                </div>
-              </aside>
-              <section className="min-w-0 p-6 lg:p-10">
-                <div className={`rounded-[28px] border p-6 ${panel}`}>
-                  <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2 text-2xl"><span>Pipeline: <strong>Project Work</strong></span><span className={muted}>| Stage:</span><strong>{blockedTasks ? "Attention" : progress === 100 ? "Complete" : "Active"}</strong></div>
-                      <div className="mt-6 overflow-hidden rounded-full">
-                        <div className={`grid h-12 ${stageItems.length <= 1 ? "grid-cols-1" : stageItems.length === 2 ? "grid-cols-2" : stageItems.length === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
-                          {(stageItems.length ? stageItems : [{ id: "default", name: "Planning" }]).map((phase, index) => {
-                            const phaseTasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                            const phaseDone = phaseTasks.filter((task) => task.status === "done").length;
-                            const phaseProgress = phaseTasks.length ? Math.round((phaseDone / phaseTasks.length) * 100) : index === 0 ? progress : 0;
-                            return <button key={phase.id || phase.name} type="button" onClick={() => setDetailTab("phases")} className={`min-w-0 px-3 text-sm font-semibold ${phaseProgress === 100 ? "bg-[#8edbd6]" : phaseProgress > 0 ? "bg-[#a1e4df]" : darkMode ? "bg-white/8" : "bg-[#e8e7e2]"}`}><span className="block truncate">{phase.name || `Phase ${index + 1}`}</span></button>;
-                          })}
-                        </div>
-                      </div>
-                      <div className="mt-6 grid gap-4 md:grid-cols-2">
-                        <div className="flex items-center gap-4"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-500"><AlertTriangle className="h-5 w-5" /></span><div><p className={`text-sm ${muted}`}>Current status</p><p className="text-lg font-semibold">{blockedTasks ? "Needs attention" : "On track"}</p></div></div>
-                        <div className="flex items-center gap-4"><span className={`flex h-12 w-12 items-center justify-center rounded-full ${darkMode ? "bg-white/8" : "bg-[#f2f2ef]"}`}><Clock3 className="h-5 w-5" /></span><div><p className={`text-sm ${muted}`}>Target date</p><p className="text-lg font-semibold">{formatDate(selectedProject.targetDate)}</p></div></div>
-                      </div>
-                    </div>
-                    <p className={`text-sm ${muted}`}>{progress}% complete</p>
-                  </div>
-                </div>
-                <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_420px]">
-                  <section>
-                    <h3 className="text-3xl font-semibold">Latest Activity</h3>
-                    <div className="mt-5 space-y-5">
-                      {(latestTasks.length ? latestTasks : selectedTasks.slice(0, 4)).map((task, index) => (
-                        <button key={task.id || index} type="button" onClick={() => openTaskDetail(task)} className="flex w-full items-start justify-between gap-4 text-left">
-                          <span className="flex min-w-0 items-start gap-4"><span className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${task.status === "done" ? "bg-[#7bea2a] text-black" : task.status === "blocked" ? "bg-red-100 text-red-600" : "bg-[#8edbd6] text-black"}`}>{task.status === "done" ? <CheckCircle2 className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}</span><span className="min-w-0"><span className="block text-lg font-semibold">{task.title || "Untitled task"}</span><span className={`mt-1 block text-sm ${muted}`}>{task.description || `${statusLabel(task.status)} in ${phaseMap.get(task.phaseId)?.name || "project"}.`}</span></span></span>
-                          <span className={`shrink-0 text-sm ${muted}`}>{formatDate(task.dueDate)}</span>
-                        </button>
-                      ))}
-                      {!selectedTasks.length && <p className={`rounded-2xl border border-dashed p-10 text-center text-sm ${muted}`}>No task activity yet. Add a task to start the project timeline.</p>}
-                    </div>
-                  </section>
-                  <section className={`overflow-hidden rounded-[24px] border ${panel}`}>
-                    <div className={`border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Project schedule</p><h3 className="mt-2 text-2xl font-semibold">Milestone overview</h3></div>
-                    <div className="divide-y divide-black/[0.06]">
-                      {editablePhases.map((phase, index) => {
-                        const phaseTasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                        const phaseDone = phaseTasks.filter((task) => task.status === "done").length;
-                        const phaseProgress = phaseTasks.length ? Math.round((phaseDone / phaseTasks.length) * 100) : 0;
-                        return <button key={phase.id || index} type="button" onClick={() => setDetailTab("phases")} className="grid w-full grid-cols-[130px_minmax(0,1fr)] text-left"><span className={`px-5 py-5 ${darkMode ? "bg-white/[0.03]" : "bg-[#f6f6f2]"}`}><span className="block text-sm font-semibold text-[#4b9b16]">Phase {index + 1}</span><span className="mt-1 block text-lg font-semibold">{formatDate(phase.dueDate)}</span></span><span className="min-w-0 px-5 py-5"><span className="block truncate text-lg font-semibold">{phase.name || "Untitled phase"}</span><span className={`mt-1 block text-sm ${muted}`}>{phaseTasks.length} tasks · {phaseProgress}% complete</span></span></button>;
-                      })}
-                    </div>
-                  </section>
-                </div>
-              </section>
-            </div>
-          )}
-
-          {detailTab === "table" && (
-            <div className="p-6 lg:p-10">
-              <section className={`overflow-hidden rounded-[28px] border ${panel}`}>
-                <div className="flex items-center justify-between gap-4 px-6 py-6"><div><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Tasks</p><h3 className="text-3xl font-semibold">Project task register</h3></div>{isSuperAdmin && <button type="button" onClick={() => quickAddTask(selectedProject)} className="rounded-full bg-[#171714] px-5 py-3 text-sm font-semibold text-white"><Plus className="mr-2 inline h-4 w-4" /> Add task</button>}</div>
-                <div className="overflow-x-auto"><div className="min-w-[1020px]">
-                  <div className={`grid grid-cols-[minmax(280px,1.5fr)_180px_240px_150px_140px_150px_90px] gap-4 border-y px-6 py-4 text-[11px] font-bold uppercase tracking-[0.16em] ${darkMode ? "border-white/10 text-white/40" : "border-black/[0.06] bg-[#f7f8f5] text-black/45"}`}><span>Task</span><span>Phase</span><span>People</span><span>Status</span><span>Priority</span><span>Deadline</span><span>Action</span></div>
-                  {newTaskDraft && <div className={`grid grid-cols-[minmax(280px,1.5fr)_180px_240px_150px_140px_150px_90px] gap-4 border-b px-6 py-4 ${darkMode ? "border-white/8 bg-emerald-400/5" : "border-black/[0.05] bg-emerald-50/70"}`}><div className="space-y-2"><TextInput darkMode={darkMode} value={newTaskDraft.title} onChange={(value) => setNewTaskDraft((current) => ({ ...current, title: value }))} placeholder="Task title" /><TextInput darkMode={darkMode} value={newTaskDraft.description} onChange={(value) => setNewTaskDraft((current) => ({ ...current, description: value }))} placeholder="Short description / output" /></div><SelectMenu darkMode={darkMode} value={newTaskDraft.phaseId} onChange={(value) => setNewTaskDraft((current) => ({ ...current, phaseId: value }))} options={newTaskPhaseOptions} /><UserPicker darkMode={darkMode} users={users} selectedIds={newTaskDraft.assigneeIds || []} onChange={(ids) => setNewTaskDraft((current) => ({ ...current, assigneeIds: ids }))} /><SelectMenu darkMode={darkMode} value={newTaskDraft.status} onChange={(value) => setNewTaskDraft((current) => ({ ...current, status: value }))} options={STATUS_OPTIONS} /><SelectMenu darkMode={darkMode} value={newTaskDraft.priority} onChange={(value) => setNewTaskDraft((current) => ({ ...current, priority: value }))} options={PRIORITY_OPTIONS} /><TextInput darkMode={darkMode} type="date" value={newTaskDraft.dueDate} onChange={(value) => setNewTaskDraft((current) => ({ ...current, dueDate: value }))} /><div className="flex flex-col gap-2"><button type="button" onClick={() => saveNewTask(selectedProject)} className="rounded-full bg-[#7bea2a] px-4 py-2 text-xs font-semibold text-black">Save</button><button type="button" onClick={() => setNewTaskDraft(null)} className={`rounded-full px-4 py-2 text-xs font-semibold ${darkMode ? "bg-white/8 text-white/70" : "bg-black/[0.04] text-black/60"}`}>Cancel</button></div></div>}
-                  {selectedTasks.map((task) => {
-                    const assignees = (task.assigneeIds || []).map((id) => users.find((item) => item.id === id)?.displayName || id).filter(Boolean);
-                    return <button type="button" onClick={() => openTaskDetail(task)} key={task.id} className={`grid w-full grid-cols-[minmax(280px,1.5fr)_180px_240px_150px_140px_150px_90px] items-center gap-4 border-t px-6 py-5 text-left text-sm transition ${darkMode ? "border-white/8 hover:bg-white/[0.035]" : "border-black/[0.05] hover:bg-[#f7fbff]"}`}><span className="min-w-0"><span className="block truncate font-semibold">{task.title || "Untitled task"}</span><span className={`mt-1 block truncate text-xs ${muted}`}>{task.description || "No description"}</span></span><span className={muted}>{phaseMap.get(task.phaseId)?.name || task.phaseName || "-"}</span><span className="flex min-w-0 flex-wrap gap-1.5">{assignees.length ? assignees.slice(0, 2).map((name) => <span key={name} className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/8 text-white/65" : "bg-[#eef4ec] text-black/60"}`}>{name}</span>) : <span className={muted}>Unassigned</span>}</span><span>{statusLabel(task.status)}</span><span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${priorityClass(task.priority, darkMode)}`}>{task.priority || "medium"}</span><span>{formatDate(task.dueDate)}</span><span className="font-semibold text-emerald-600">Open</span></button>;
-                  })}
-                  {!selectedTasks.length && !newTaskDraft && <p className={`p-10 text-center text-sm ${muted}`}>No tasks added yet. Use Add task to create the first row.</p>}
-                </div></div>
-              </section>
-            </div>
-          )}
-
-          {detailTab === "phases" && (
-            <div className="space-y-5 p-6 lg:p-10">
-              <div className="flex items-center justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Phases</p><h3 className="text-3xl font-semibold">Project phase schedule</h3></div>{isSuperAdmin && <button type="button" onClick={quickAddPhase} className="rounded-full bg-[#171714] px-5 py-3 text-sm font-semibold text-white"><Layers3 className="mr-2 inline h-4 w-4" /> Add phase</button>}</div>
-              {phaseDraft && <article className={`rounded-[18px] border p-5 ${darkMode ? "border-emerald-400/30 bg-emerald-400/5" : "border-emerald-200 bg-emerald-50/70"}`}><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-600">New phase</p><div className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Phase name"><TextInput darkMode={darkMode} value={phaseDraft.name} onChange={(value) => setPhaseDraft((current) => ({ ...current, name: value }))} placeholder="e.g. Design approval" /></Field><Field label="Due date"><TextInput darkMode={darkMode} type="date" value={phaseDraft.dueDate} onChange={(value) => setPhaseDraft((current) => ({ ...current, dueDate: value }))} /></Field><div className="md:col-span-2"><Field label="Description"><TextArea darkMode={darkMode} value={phaseDraft.description} onChange={(value) => setPhaseDraft((current) => ({ ...current, description: value }))} placeholder="What this phase must complete..." rows={3} /></Field></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => saveNewPhase(selectedProject)} className="rounded-full bg-[#7bea2a] px-5 py-2.5 text-sm font-semibold text-black">Save phase</button><button type="button" onClick={() => setPhaseDraft(null)} className={`rounded-full px-5 py-2.5 text-sm font-semibold ${darkMode ? "bg-white/8 text-white/70" : "bg-white text-black/60"}`}>Cancel</button></div></article>}
-              {editablePhases.map((phase, index) => {
-                const tasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                const done = tasks.filter((task) => task.status === "done").length;
-                const phaseProgress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
-                return <article key={phase.id || index} className={`grid overflow-hidden rounded-[24px] border ${panel} md:grid-cols-[240px_minmax(0,1fr)]`}><div className={`p-6 ${darkMode ? "bg-white/[0.03]" : "bg-[#f6f6f2]"}`}><p className="text-sm font-semibold text-[#4b9b16]">Phase {index + 1}</p><h4 className="mt-3 text-2xl font-semibold">{phase.name || "Untitled phase"}</h4><p className={`mt-2 text-sm ${muted}`}>{formatDate(phase.dueDate)}</p></div><div className="p-6"><div className="flex items-center justify-between gap-4"><p className={`text-sm ${muted}`}>{phase.description || "No description added."}</p><span className="text-lg font-semibold">{phaseProgress}%</span></div><div className={`mt-4 h-2 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}><div className="h-full rounded-full bg-[#7bea2a]" style={{ width: `${phaseProgress}%` }} /></div>{isSuperAdmin && <button type="button" onClick={() => quickAddTask(selectedProject, phase.id)} className="mt-5 rounded-full bg-[#171714] px-4 py-2 text-xs font-semibold text-white"><Plus className="mr-1 inline h-3.5 w-3.5" /> Add task</button>}</div></article>;
-              })}
-            </div>
-          )}
-
-          {detailTab === "documents" && (
-            <div className="grid gap-5 p-6 lg:grid-cols-[420px_minmax(0,1fr)] lg:p-10">
-              <section className={`rounded-[24px] border p-6 ${panel}`}><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Google Drive</p><h4 className="mt-1 text-2xl font-semibold">Project documents</h4><p className={`mt-2 text-sm leading-6 ${muted}`}>Files are read from the linked Drive folder. Uploads go into that same folder when it is shared with the service account.</p>{selectedProject.driveFolderId || selectedProject.driveFolderLink ? <a href={selectedProject.driveFolderLink || `https://drive.google.com/drive/folders/${selectedProject.driveFolderId}`} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white">Open Drive folder <ArrowUpRight className="h-4 w-4" /></a> : <p className="mt-4 rounded-2xl bg-amber-500/10 p-4 text-sm text-amber-700">Add a Google Drive folder link in project settings to enable Drive sync and uploads.</p>}{isSuperAdmin && <div className="mt-6 space-y-3"><Field label="Category"><SelectMenu darkMode={darkMode} value={docForm.category} onChange={(value) => setDocForm((current) => ({ ...current, category: value }))} options={DOC_CATEGORIES} /></Field><Field label="Document name"><TextInput darkMode={darkMode} value={docForm.name} onChange={(value) => setDocForm((current) => ({ ...current, name: value }))} placeholder="e.g. Approved drawing" /></Field><Field label="Drive/document link"><TextInput darkMode={darkMode} value={docForm.url} onChange={(value) => setDocForm((current) => ({ ...current, url: value }))} placeholder="https://drive.google.com/..." /></Field><button type="button" onClick={addDocumentLink} className="flex h-11 w-full items-center justify-center gap-2 rounded-full border border-black/10 bg-white text-sm font-semibold text-black"><LinkIcon className="h-4 w-4" /> Add link</button><label className={`flex h-11 cursor-pointer items-center justify-center gap-2 rounded-full text-sm font-semibold ${selectedProject.driveFolderId || selectedProject.driveFolderLink ? "bg-[#7bea2a] text-black" : "bg-black/5 text-black/35"}`}>{uploadingDoc ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload to Drive<input type="file" disabled={uploadingDoc || !(selectedProject.driveFolderId || selectedProject.driveFolderLink)} onChange={uploadProjectDocument} className="hidden" /></label></div>}</section>
-              <section className="grid content-start gap-3 md:grid-cols-2 xl:grid-cols-3">{docs.map((doc) => <a key={doc.driveFileId || doc.url || doc.id} href={doc.url} target="_blank" rel="noreferrer" className={`rounded-[18px] border p-4 transition hover:-translate-y-0.5 ${panel}`}><div className="flex items-start gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600"><FileText className="h-5 w-5" /></span><div className="min-w-0"><p className="truncate text-sm font-semibold">{doc.name}</p><p className={`mt-1 text-xs ${muted}`}>{doc.category || doc.source || "Document"} · {doc.uploadedAt ? formatDate(String(doc.uploadedAt).slice(0, 10)) : "Drive"}</p></div></div></a>)}{!docs.length && <p className={`rounded-[18px] border border-dashed p-10 text-center text-sm ${muted}`}>No project documents found yet.</p>}</section>
-            </div>
-          )}
-        </main>
-        {compactTaskDrawer}
-      </div>
-    );
-    return focusedProjectDetailView;
-    const projectDetailView = (
-      <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f3f3ef] text-[#171714]"}`}>
-        <header className={`sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b px-5 py-3 ${darkMode ? "border-white/10 bg-[#111318]" : "border-black/[0.08] bg-white"}`}>
-          <div className="min-w-0">
-            <p className="truncate text-sm">
-              <span className="font-semibold">{selectedProject.name}</span>
-              <span className={muted}> · Project details</span>
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={() => load(true)} className={`hidden rounded-full px-4 py-2 text-sm font-semibold sm:inline-flex ${darkMode ? "bg-white/8 text-white/80" : "bg-[#eef4ec] text-[#3d7f14]"}`}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Refresh
-            </button>
-            {isSuperAdmin && (
-              <button type="button" onClick={() => openEditor(selectedProject)} className="hidden rounded-full bg-[#ff3347] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(255,51,71,0.22)] sm:inline-flex">
-                <Pencil className="mr-2 h-4 w-4" /> Edit project
-              </button>
-            )}
-            <button type="button" onClick={closeProject} className="rounded-full px-4 py-2 text-sm font-semibold text-[#3d7f14] hover:bg-[#eef4ec]">Close</button>
-          </div>
-        </header>
-
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <aside className={`hidden w-[340px] shrink-0 overflow-y-auto border-r p-6 lg:block ${darkMode ? "border-white/10 bg-[#111318]" : "border-black/[0.08] bg-white"}`}>
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-md bg-pink-100 px-3 py-2 text-xs font-bold uppercase text-pink-700">Project</span>
-              <span className={`rounded-md px-3 py-2 text-xs font-bold uppercase ${healthClass(selectedProject.health, darkMode)}`}>{selectedProject.health || "Green"}</span>
-            </div>
-            <p className={`mt-8 text-sm ${muted}`}>Project workspace</p>
-            <div className="mt-5 flex items-center gap-5">
-              <span className="flex h-24 w-24 shrink-0 items-center justify-center rounded-[32px] bg-[#14aa6d] text-4xl font-bold text-white">
-                {(selectedProject.name || "P").slice(0, 2).toUpperCase()}
-              </span>
-              <div className="min-w-0">
-                <h2 className="truncate text-3xl font-semibold">{selectedProject.name}</h2>
-                <p className={`mt-1 truncate text-lg ${muted}`}>{selectedProject.client || selectedProject.location || "Project"}</p>
-              </div>
-            </div>
-            <p className={`mt-8 text-lg leading-8 ${muted}`}>{selectedProject.description || "Manage phases, tasks, deadlines, people, and project documents in one workspace."}</p>
-            {isSuperAdmin && (
-              <button type="button" onClick={() => openEditor(selectedProject)} className="mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#7bea2a] text-lg font-semibold text-black shadow-[0_14px_34px_rgba(123,234,42,0.25)]">
-                <Pencil className="h-5 w-5" /> Edit project
-              </button>
-            )}
-            <div className={`mt-8 rounded-[18px] p-5 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f4f1]"}`}>
-              <p className={`text-sm ${muted}`}>Progress</p>
-              <div className="mt-2 flex items-end justify-between gap-4">
-                <p className="text-4xl font-semibold">{progress}%</p>
-                <p className={`pb-1 text-sm ${muted}`}>{doneTasks}/{totalTasks || 0} tasks done</p>
-              </div>
-              <div className={`mt-4 h-2 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>
-                <div className="h-full rounded-full bg-[#7bea2a]" style={{ width: `${Math.min(100, progress)}%` }} />
-              </div>
-            </div>
-            <div className="mt-8">
-              <h3 className="text-xl font-semibold">Project Details</h3>
-              <div className="mt-4 space-y-4">
-                {[
-                  [UserRound, "Manager", selectedProject.manager || "Not assigned"],
-                  [CalendarDays, "Target", formatDate(selectedProject.targetDate)],
-                  [Flag, "Priority", selectedProject.priority || "Medium"],
-                  [ShieldCheck, "Health", selectedProject.health || "Green"],
-                  [Users, "Team", projectMembers.length ? projectMembers.slice(0, 3).join(", ") : "No assignees"],
-                ].map(([Icon, label, value]) => (
-                  <div key={label} className="flex items-center gap-4">
-                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${darkMode ? "bg-white/8" : "bg-[#f2f2ef]"}`}><Icon className="h-5 w-5" /></span>
-                    <span className="min-w-0">
-                      <span className={`block text-sm ${muted}`}>{label}</span>
-                      <span className="block truncate text-base font-semibold capitalize">{value}</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </aside>
-
-          <main className="min-w-0 flex-1 overflow-y-auto">
-            <section className={`border-b px-5 py-6 lg:px-8 ${darkMode ? "border-white/10 bg-[#101216]" : "border-black/[0.06] bg-white"}`}>
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2 text-xl">
-                    <span>Pipeline: <strong>Project Work</strong></span>
-                    <span className={muted}>| Stage:</span>
-                    <strong>{blockedTasks ? "Attention" : progress === 100 ? "Complete" : "Active"}</strong>
-                  </div>
-                  <div className="mt-6 overflow-hidden rounded-full">
-                    <div className={`grid h-11 ${stageItems.length <= 1 ? "grid-cols-1" : stageItems.length === 2 ? "grid-cols-2" : stageItems.length === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
-                      {(stageItems.length ? stageItems : [{ id: "default", name: "Planning" }]).map((phase, index) => {
-                        const phaseTasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                        const phaseDone = phaseTasks.filter((task) => task.status === "done").length;
-                        const phaseProgress = phaseTasks.length ? Math.round((phaseDone / phaseTasks.length) * 100) : index === 0 ? progress : 0;
-                        return (
-                          <button key={phase.id || phase.name} type="button" onClick={() => setDetailTab("phases")} className={`min-w-0 px-3 text-sm font-semibold ${phaseProgress === 100 ? "bg-[#8edbd6]" : phaseProgress > 0 ? "bg-[#a1e4df]" : darkMode ? "bg-white/8" : "bg-[#e8e7e2]"}`}>
-                            <span className="block truncate">{phase.name || `Phase ${index + 1}`}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="mt-6 grid gap-4 md:grid-cols-2">
-                    <div className="flex items-center gap-4">
-                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-500"><AlertTriangle className="h-5 w-5" /></span>
-                      <div>
-                        <p className={`text-sm ${muted}`}>Current status</p>
-                        <p className="text-lg font-semibold">{blockedTasks ? "Needs attention" : "On track"}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className={`flex h-12 w-12 items-center justify-center rounded-full ${darkMode ? "bg-white/8" : "bg-[#f2f2ef]"}`}><Clock3 className="h-5 w-5" /></span>
-                      <div>
-                        <p className={`text-sm ${muted}`}>Target date</p>
-                        <p className="text-lg font-semibold">{formatDate(selectedProject.targetDate)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <p className={`text-sm ${muted}`}>{progress}% complete</p>
-              </div>
-            </section>
-
-            <nav className={`sticky top-0 z-20 flex gap-7 border-b px-5 lg:px-8 ${darkMode ? "border-white/10 bg-[#101216]" : "border-black/[0.06] bg-white"}`}>
-              {tabItems.map((tab) => (
-                <button key={tab.value} type="button" onClick={() => setDetailTab(tab.value)} className={`flex items-center gap-2 border-b-2 py-4 text-sm font-semibold transition ${detailTab === tab.value ? "border-[#4b9b16] text-[#4b9b16]" : "border-transparent text-black/60 hover:text-black"}`}>
-                  {tab.label}
-                  {typeof tab.count === "number" && <span className={`rounded-full px-2 py-0.5 text-xs ${detailTab === tab.value ? "bg-[#4b9b16]/10" : darkMode ? "bg-white/8" : "bg-black/[0.05]"}`}>{tab.count}</span>}
-                </button>
-              ))}
-            </nav>
-
-            <div className="space-y-6 p-5 lg:p-8">
-              {detailTab === "board" && (
-                <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
-                  <section>
-                    <h3 className="text-2xl font-semibold">Latest Activity</h3>
-                    <div className="mt-5 space-y-5">
-                      {(latestTasks.length ? latestTasks : selectedTasks.slice(0, 4)).map((task, index) => (
-                        <button key={task.id || index} type="button" onClick={() => openTaskDetail(task)} className="flex w-full items-start justify-between gap-4 text-left">
-                          <span className="flex min-w-0 items-start gap-4">
-                            <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${task.status === "done" ? "bg-[#7bea2a] text-black" : task.status === "blocked" ? "bg-red-100 text-red-600" : "bg-[#8edbd6] text-black"}`}>
-                              {task.status === "done" ? <CheckCircle2 className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
-                            </span>
-                            <span className="min-w-0">
-                              <span className="block text-lg font-semibold">{task.title || "Untitled task"}</span>
-                              <span className={`mt-1 block text-sm ${muted}`}>{task.description || `${statusLabel(task.status)} in ${phaseMap.get(task.phaseId)?.name || "project"}.`}</span>
-                            </span>
-                          </span>
-                          <span className={`shrink-0 text-sm ${muted}`}>{formatDate(task.dueDate)}</span>
-                        </button>
-                      ))}
-                      {!selectedTasks.length && <p className={`rounded-2xl border border-dashed p-10 text-center text-sm ${muted}`}>No task activity yet. Add a task to start the project timeline.</p>}
-                    </div>
-                  </section>
-                  <section className={`rounded-[18px] border ${panel}`}>
-                    <div className={`border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Project schedule</p>
-                      <h3 className="mt-2 text-xl font-semibold">Milestone overview</h3>
-                    </div>
-                    <div className="divide-y divide-black/[0.06]">
-                      {editablePhases.map((phase, index) => {
-                        const phaseTasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                        const phaseDone = phaseTasks.filter((task) => task.status === "done").length;
-                        const phaseProgress = phaseTasks.length ? Math.round((phaseDone / phaseTasks.length) * 100) : 0;
-                        return (
-                          <button key={phase.id || index} type="button" onClick={() => setDetailTab("phases")} className="grid w-full grid-cols-[120px_minmax(0,1fr)] text-left">
-                            <span className={`px-5 py-5 ${darkMode ? "bg-white/[0.03]" : "bg-[#f6f6f2]"}`}>
-                              <span className="block text-sm font-semibold text-[#4b9b16]">Phase {index + 1}</span>
-                              <span className="mt-1 block text-lg font-semibold">{formatDate(phase.dueDate)}</span>
-                            </span>
-                            <span className="min-w-0 px-5 py-5">
-                              <span className="block truncate text-lg font-semibold">{phase.name || "Untitled phase"}</span>
-                              <span className={`mt-1 block text-sm ${muted}`}>{phaseTasks.length} tasks · {phaseProgress}% complete</span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                </div>
-              )}
-
-              {detailTab === "table" && (
-                <section className={`overflow-hidden rounded-[18px] border ${panel}`}>
-                  <div className="flex items-center justify-between gap-4 px-5 py-5">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Tasks</p>
-                      <h3 className="text-2xl font-semibold">Project task register</h3>
-                    </div>
-                    {isSuperAdmin && <button type="button" onClick={() => quickAddTask(selectedProject)} className="rounded-full bg-[#171714] px-5 py-3 text-sm font-semibold text-white"><Plus className="mr-2 inline h-4 w-4" /> Add task</button>}
-                  </div>
-                  <div className="overflow-x-auto">
-                    <div className="min-w-[1020px]">
-                      <div className={`grid grid-cols-[minmax(260px,1.5fr)_170px_220px_140px_130px_140px_80px] gap-4 border-y px-5 py-4 text-[11px] font-bold uppercase tracking-[0.16em] ${darkMode ? "border-white/10 text-white/40" : "border-black/[0.06] bg-[#f7f8f5] text-black/45"}`}>
-                        <span>Task</span><span>Phase</span><span>People</span><span>Status</span><span>Priority</span><span>Deadline</span><span>Action</span>
-                      </div>
-                      {newTaskDraft && (
-                        <div className={`grid grid-cols-[minmax(260px,1.5fr)_170px_220px_140px_130px_140px_80px] gap-4 border-b px-5 py-4 ${darkMode ? "border-white/8 bg-emerald-400/5" : "border-black/[0.05] bg-emerald-50/70"}`}>
-                          <div className="space-y-2">
-                            <TextInput darkMode={darkMode} value={newTaskDraft.title} onChange={(value) => setNewTaskDraft((current) => ({ ...current, title: value }))} placeholder="Task title" />
-                            <TextInput darkMode={darkMode} value={newTaskDraft.description} onChange={(value) => setNewTaskDraft((current) => ({ ...current, description: value }))} placeholder="Short description / output" />
-                          </div>
-                          <SelectMenu darkMode={darkMode} value={newTaskDraft.phaseId} onChange={(value) => setNewTaskDraft((current) => ({ ...current, phaseId: value }))} options={newTaskPhaseOptions} />
-                          <UserPicker darkMode={darkMode} users={users} selectedIds={newTaskDraft.assigneeIds || []} onChange={(ids) => setNewTaskDraft((current) => ({ ...current, assigneeIds: ids }))} />
-                          <SelectMenu darkMode={darkMode} value={newTaskDraft.status} onChange={(value) => setNewTaskDraft((current) => ({ ...current, status: value }))} options={STATUS_OPTIONS} />
-                          <SelectMenu darkMode={darkMode} value={newTaskDraft.priority} onChange={(value) => setNewTaskDraft((current) => ({ ...current, priority: value }))} options={PRIORITY_OPTIONS} />
-                          <TextInput darkMode={darkMode} type="date" value={newTaskDraft.dueDate} onChange={(value) => setNewTaskDraft((current) => ({ ...current, dueDate: value }))} />
-                          <div className="flex flex-col gap-2">
-                            <button type="button" onClick={() => saveNewTask(selectedProject)} className="rounded-full bg-[#7bea2a] px-4 py-2 text-xs font-semibold text-black">Save</button>
-                            <button type="button" onClick={() => setNewTaskDraft(null)} className={`rounded-full px-4 py-2 text-xs font-semibold ${darkMode ? "bg-white/8 text-white/70" : "bg-black/[0.04] text-black/60"}`}>Cancel</button>
-                          </div>
-                        </div>
-                      )}
-                      {STATUS_OPTIONS.map((status) => {
-                        const items = selectedTasks.filter((task) => (task.status || "todo") === status.value);
-                        return (
-                          <div key={status.value}>
-                            <div className={`flex items-center justify-between px-5 py-3 text-sm font-semibold ${darkMode ? "bg-white/[0.025]" : "bg-[#fbfbf8]"}`}>
-                              <span>{status.label}</span>
-                              <span className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/8" : "bg-black/[0.05]"}`}>{items.length}</span>
-                            </div>
-                            {items.map((task) => {
-                              const assignees = (task.assigneeIds || []).map((id) => users.find((item) => item.id === id)?.displayName || id).filter(Boolean);
-                              return (
-                                <button type="button" onClick={() => openTaskDetail(task)} key={task.id} className={`grid w-full grid-cols-[minmax(260px,1.5fr)_170px_220px_140px_130px_140px_80px] items-center gap-4 border-t px-5 py-4 text-left text-sm transition ${darkMode ? "border-white/8 hover:bg-white/[0.035]" : "border-black/[0.05] hover:bg-[#f7fbff]"}`}>
-                                  <span className="min-w-0"><span className="block truncate font-semibold">{task.title || "Untitled task"}</span><span className={`mt-1 block truncate text-xs ${muted}`}>{task.description || "No description"}</span></span>
-                                  <span className={muted}>{phaseMap.get(task.phaseId)?.name || task.phaseName || "-"}</span>
-                                  <span className="flex min-w-0 flex-wrap gap-1.5">{assignees.length ? assignees.slice(0, 2).map((name) => <span key={name} className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/8 text-white/65" : "bg-[#eef4ec] text-black/60"}`}>{name}</span>) : <span className={muted}>Unassigned</span>}</span>
-                                  <span>{statusLabel(task.status)}</span>
-                                  <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${priorityClass(task.priority, darkMode)}`}>{task.priority || "medium"}</span>
-                                  <span>{formatDate(task.dueDate)}</span>
-                                  <span className="font-semibold text-emerald-600">Open</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
-                      {!selectedTasks.length && !newTaskDraft && <p className={`p-10 text-center text-sm ${muted}`}>No tasks added yet. Use Add task to create the first row.</p>}
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {detailTab === "phases" && (
-                <div className="space-y-5">
-                  {isSuperAdmin && <button type="button" onClick={quickAddPhase} className="rounded-full bg-[#171714] px-5 py-3 text-sm font-semibold text-white"><Layers3 className="mr-2 inline h-4 w-4" /> Add phase</button>}
-                  {phaseDraft && (
-                    <article className={`rounded-[18px] border p-5 ${darkMode ? "border-emerald-400/30 bg-emerald-400/5" : "border-emerald-200 bg-emerald-50/70"}`}>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-600">New phase</p>
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        <Field label="Phase name"><TextInput darkMode={darkMode} value={phaseDraft.name} onChange={(value) => setPhaseDraft((current) => ({ ...current, name: value }))} placeholder="e.g. Design approval" /></Field>
-                        <Field label="Due date"><TextInput darkMode={darkMode} type="date" value={phaseDraft.dueDate} onChange={(value) => setPhaseDraft((current) => ({ ...current, dueDate: value }))} /></Field>
-                        <div className="md:col-span-2"><Field label="Description"><TextArea darkMode={darkMode} value={phaseDraft.description} onChange={(value) => setPhaseDraft((current) => ({ ...current, description: value }))} placeholder="What this phase must complete..." rows={3} /></Field></div>
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => saveNewPhase(selectedProject)} className="rounded-full bg-[#7bea2a] px-5 py-2.5 text-sm font-semibold text-black">Save phase</button>
-                        <button type="button" onClick={() => setPhaseDraft(null)} className={`rounded-full px-5 py-2.5 text-sm font-semibold ${darkMode ? "bg-white/8 text-white/70" : "bg-white text-black/60"}`}>Cancel</button>
-                      </div>
-                    </article>
-                  )}
-                  {editablePhases.map((phase, index) => {
-                    const tasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                    const done = tasks.filter((task) => task.status === "done").length;
-                    const phaseProgress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
-                    return (
-                      <article key={phase.id || index} className={`grid overflow-hidden rounded-[18px] border ${panel} md:grid-cols-[220px_minmax(0,1fr)]`}>
-                        <div className={`p-6 ${darkMode ? "bg-white/[0.03]" : "bg-[#f6f6f2]"}`}>
-                          <p className="text-sm font-semibold text-[#4b9b16]">Phase {index + 1}</p>
-                          <h4 className="mt-3 text-2xl font-semibold">{phase.name || "Untitled phase"}</h4>
-                          <p className={`mt-2 text-sm ${muted}`}>{formatDate(phase.dueDate)}</p>
-                        </div>
-                        <div className="p-6">
-                          <div className="flex items-center justify-between gap-4">
-                            <p className={`text-sm ${muted}`}>{phase.description || "No description added."}</p>
-                            <span className="text-lg font-semibold">{phaseProgress}%</span>
-                          </div>
-                          <div className={`mt-4 h-2 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}><div className="h-full rounded-full bg-[#7bea2a]" style={{ width: `${phaseProgress}%` }} /></div>
-                          {isSuperAdmin && <button type="button" onClick={() => quickAddTask(selectedProject, phase.id)} className="mt-5 rounded-full bg-[#171714] px-4 py-2 text-xs font-semibold text-white"><Plus className="mr-1 inline h-3.5 w-3.5" /> Add task</button>}
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-
-              {detailTab === "documents" && (
-                <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
-                  <section className={`rounded-[18px] border p-6 ${panel}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Google Drive</p>
-                    <h4 className="mt-1 text-2xl font-semibold">Project documents</h4>
-                    <p className={`mt-2 text-sm leading-6 ${muted}`}>Files are read from the linked Drive folder. Uploads go into that same folder when it is shared with the service account.</p>
-                    {selectedProject.driveFolderId || selectedProject.driveFolderLink ? (
-                      <a href={selectedProject.driveFolderLink || `https://drive.google.com/drive/folders/${selectedProject.driveFolderId}`} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white">Open Drive folder <ArrowUpRight className="h-4 w-4" /></a>
-                    ) : (
-                      <p className="mt-4 rounded-2xl bg-amber-500/10 p-4 text-sm text-amber-700">Add a Google Drive folder link in project settings to enable Drive sync and uploads.</p>
-                    )}
-                    {isSuperAdmin && (
-                      <div className="mt-6 space-y-3">
-                        <Field label="Category"><SelectMenu darkMode={darkMode} value={docForm.category} onChange={(value) => setDocForm((current) => ({ ...current, category: value }))} options={DOC_CATEGORIES} /></Field>
-                        <Field label="Document name"><TextInput darkMode={darkMode} value={docForm.name} onChange={(value) => setDocForm((current) => ({ ...current, name: value }))} placeholder="e.g. Approved drawing" /></Field>
-                        <Field label="Drive/document link"><TextInput darkMode={darkMode} value={docForm.url} onChange={(value) => setDocForm((current) => ({ ...current, url: value }))} placeholder="https://drive.google.com/..." /></Field>
-                        <button type="button" onClick={addDocumentLink} className="flex h-11 w-full items-center justify-center gap-2 rounded-full border border-black/10 bg-white text-sm font-semibold text-black"><LinkIcon className="h-4 w-4" /> Add link</button>
-                        <label className={`flex h-11 cursor-pointer items-center justify-center gap-2 rounded-full text-sm font-semibold ${selectedProject.driveFolderId || selectedProject.driveFolderLink ? "bg-[#7bea2a] text-black" : "bg-black/5 text-black/35"}`}>
-                          {uploadingDoc ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload to Drive
-                          <input type="file" disabled={uploadingDoc || !(selectedProject.driveFolderId || selectedProject.driveFolderLink)} onChange={uploadProjectDocument} className="hidden" />
-                        </label>
-                      </div>
-                    )}
-                  </section>
-                  <section className="grid content-start gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {docs.map((doc) => (
-                      <a key={doc.driveFileId || doc.url || doc.id} href={doc.url} target="_blank" rel="noreferrer" className={`rounded-[18px] border p-4 transition hover:-translate-y-0.5 ${panel}`}>
-                        <div className="flex items-start gap-3">
-                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600"><FileText className="h-5 w-5" /></span>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold">{doc.name}</p>
-                            <p className={`mt-1 text-xs ${muted}`}>{doc.category || doc.source || "Document"} · {doc.uploadedAt ? formatDate(String(doc.uploadedAt).slice(0, 10)) : "Drive"}</p>
-                          </div>
-                        </div>
-                      </a>
-                    ))}
-                    {!docs.length && <p className={`rounded-[18px] border border-dashed p-10 text-center text-sm ${muted}`}>No project documents found yet.</p>}
-                  </section>
-                </div>
-              )}
-            </div>
-          </main>
-        </div>
-
-        {taskDetail && (
-          <div className="fixed inset-0 z-[80] flex justify-end bg-black/35 backdrop-blur-sm">
-            <aside className={`flex h-full w-full max-w-[620px] flex-col overflow-hidden border-l shadow-2xl ${darkMode ? "border-white/10 bg-[#111318] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
-              <header className={`flex items-center justify-between border-b px-6 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
-                <div className="flex items-center gap-3 text-sm">
-                  <button type="button" className={`rounded-full px-3 py-2 ${darkMode ? "bg-white/8" : "bg-black/[0.04]"}`}>Share</button>
-                  <button type="button" className={`rounded-full px-3 py-2 ${darkMode ? "bg-white/8" : "bg-black/[0.04]"}`}>Expand</button>
-                </div>
-                <button type="button" onClick={() => setTaskDetail(null)} className={`flex h-10 w-10 items-center justify-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.05]"}`}>
-                  <X className="h-5 w-5" />
-                </button>
-              </header>
-              <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-                <p className={`flex items-center gap-2 text-xs ${muted}`}><CalendarDays className="h-4 w-4" /> {phaseMap.get(taskDetail.phaseId)?.name || "Project task"}</p>
-                <input value={taskDetail.title || ""} onChange={(event) => setTaskDetail((current) => ({ ...current, title: event.target.value }))} className={`mt-3 w-full rounded-2xl border-0 bg-transparent text-3xl font-semibold leading-tight outline-none ${darkMode ? "placeholder:text-white/25" : "placeholder:text-black/25"}`} placeholder="Task title" />
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <SelectMenu darkMode={darkMode} value={taskDetail.priority || "medium"} onChange={(value) => setTaskDetail((current) => ({ ...current, priority: value }))} options={PRIORITY_OPTIONS} />
-                  <SelectMenu darkMode={darkMode} value={taskDetail.status || "todo"} onChange={(value) => setTaskDetail((current) => ({ ...current, status: value }))} options={STATUS_OPTIONS} />
-                  <TextInput darkMode={darkMode} type="date" value={taskDetail.dueDate} onChange={(value) => setTaskDetail((current) => ({ ...current, dueDate: value }))} />
-                </div>
-                <div className={`mt-6 flex items-center justify-between rounded-2xl px-4 py-4 ${darkMode ? "bg-violet-400/12" : "bg-gradient-to-r from-violet-100 to-pink-100"}`}>
-                  <span className="flex items-center gap-3 text-sm font-semibold"><Clock3 className="h-5 w-5" /> Time spent on this project</span>
-                  <span className="text-lg font-semibold">00:00:00</span>
-                </div>
-                <section className="mt-7">
-                  <h4 className="text-sm font-semibold">Description</h4>
-                  <TextArea darkMode={darkMode} value={taskDetail.description} onChange={(value) => setTaskDetail((current) => ({ ...current, description: value }))} placeholder="Write expected output, blockers, and completion notes..." rows={5} />
-                </section>
-                <section className="mt-7 grid gap-4 sm:grid-cols-2">
-                  <Field label="Phase"><SelectMenu darkMode={darkMode} value={taskDetail.phaseId} onChange={(value) => setTaskDetail((current) => ({ ...current, phaseId: value }))} options={newTaskPhaseOptions} /></Field>
-                  <Field label="People"><UserPicker darkMode={darkMode} users={users} selectedIds={taskDetail.assigneeIds || []} onChange={(ids) => setTaskDetail((current) => ({ ...current, assigneeIds: ids }))} /></Field>
-                </section>
-              </main>
-              <footer className={`flex justify-between gap-3 border-t px-6 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
-                <button type="button" onClick={() => deleteInlineTask(selectedProject, taskDetail.id)} className="rounded-full bg-rose-500/10 px-5 py-3 text-sm font-semibold text-rose-500">Delete task</button>
-                <button type="button" onClick={() => saveTaskDetail(selectedProject)} className="rounded-full bg-[#7bea2a] px-6 py-3 text-sm font-semibold text-black">Save task</button>
-              </footer>
-            </aside>
-          </div>
-        )}
-      </div>
-    );
-    return projectDetailView;
-    return (
-      <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#eef3f8] text-[#171714]"}`}>
-        <div className={`sticky top-0 z-20 border-b px-4 py-3 sm:px-6 lg:px-8 ${darkMode ? "border-white/10 bg-[#0c0d10]/95" : "border-black/[0.06] bg-[#eef3f8]/95"} backdrop-blur`}>
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 items-center gap-3">
-              <button type="button" onClick={() => setSelected(null)} className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}>
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <div className="min-w-0">
-                <h2 className="truncate text-2xl font-semibold">{selectedProject.name}</h2>
-                <p className={`truncate text-sm ${muted}`}>{selectedProject.client || selectedProject.location || "Project workspace"} · {progress}% complete</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {["board", "table", "phases", "documents"].map((tab) => (
-                <button key={tab} type="button" onClick={() => setDetailTab(tab)} className={`rounded-full px-5 py-3 text-sm font-semibold capitalize transition ${detailTab === tab ? "bg-[#171714] text-white shadow-sm" : darkMode ? "bg-white/5 text-white/60 hover:bg-white/10" : "bg-white text-black/60 hover:bg-black/[0.04]"}`}>{tab}</button>
-              ))}
-              {isSuperAdmin && (
-                <>
-                  <button type="button" onClick={() => quickAddTask(selectedProject)} className="rounded-full bg-[#171714] px-5 py-3 text-sm font-semibold text-white"><Plus className="mr-1 inline h-4 w-4" /> Add task</button>
-                  <button type="button" onClick={quickAddPhase} className={`rounded-full border px-5 py-3 text-sm font-semibold ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}><Layers3 className="mr-1 inline h-4 w-4" /> Add phase</button>
-                  <button type="button" onClick={() => { setSelected(null); openEditor(selectedProject); }} className="rounded-full bg-[#7bea2a] px-5 py-3 text-sm font-semibold text-black">Edit project</button>
-                  <button type="button" onClick={() => deleteProject(selectedProject)} className="rounded-full px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-500/10">Delete</button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="px-4 py-5 sm:px-6 lg:px-8">
-          <div className="mb-5 grid gap-4 xl:grid-cols-[1.15fr_1fr_1fr_1fr]">
-            <section className={`rounded-[32px] border p-5 ${panel}`}>
-              <div className="flex items-center justify-between gap-5">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600">Project Pulse</p>
-                  <h3 className="mt-2 text-2xl font-semibold">{selectedProject.name}</h3>
-                  <p className={`mt-1 text-sm ${muted}`}>{selectedProject.manager || "No manager"} · Target {formatDate(selectedProject.targetDate)}</p>
-                </div>
-                <div className="relative h-28 w-28 shrink-0">
-                  <svg className="h-full w-full -rotate-90" viewBox="0 0 110 110">
-                    <circle cx="55" cy="55" r="42" fill="none" stroke={darkMode ? "rgba(255,255,255,.08)" : "#e7edf2"} strokeWidth="13" />
-                    <circle cx="55" cy="55" r="42" fill="none" stroke="#6f4af6" strokeWidth="13" strokeLinecap="round" strokeDasharray={ringCircumference} strokeDashoffset={ringOffset} />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-semibold">{progress}%</span>
-                    <span className={`text-[10px] uppercase tracking-[0.12em] ${muted}`}>done</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className={`rounded-[32px] border p-5 ${panel}`}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-600">Status Mix</p>
-              <div className="mt-5 space-y-4">
-                {statusCounts.map((item) => {
-                  const width = totalTasks ? Math.max(8, Math.round((item.value / totalTasks) * 100)) : 0;
-                  return (
-                    <div key={item.label}>
-                      <div className="mb-1 flex justify-between text-xs"><span>{item.label}</span><span className={muted}>{item.value}</span></div>
-                      <div className={`h-2.5 rounded-full ${darkMode ? "bg-white/10" : "bg-slate-100"}`}>
-                        <div className={`h-full rounded-full ${item.color}`} style={{ width: `${width}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className={`rounded-[32px] border p-5 ${panel}`}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-500">Priority</p>
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                {priorityCounts.map((item) => (
-                  <div key={item.value} className={`rounded-2xl p-3 ${priorityClass(item.value, darkMode)}`}>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-70">{item.label}</p>
-                    <p className="mt-2 text-2xl font-semibold">{item.count}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className={`rounded-[32px] border p-5 ${panel}`}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-600">Readiness</p>
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#f8fbff]"}`}>
-                  <p className={`text-xs ${muted}`}>Health</p>
-                  <p className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-semibold capitalize ${healthClass(selectedProject.health, darkMode)}`}>{selectedProject.health || "green"}</p>
-                </div>
-                <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fff8ed]"}`}>
-                  <p className={`text-xs ${muted}`}>Documents</p>
-                  <p className="mt-2 text-2xl font-semibold">{docs.length || selectedProject.metrics?.documents || 0}</p>
-                </div>
-                <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fff3f4]"}`}>
-                  <p className={`text-xs ${muted}`}>Blocked</p>
-                  <p className="mt-2 text-2xl font-semibold text-rose-500">{blockedTasks}</p>
-                </div>
-                <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#f5fff5]"}`}>
-                  <p className={`text-xs ${muted}`}>Phases</p>
-                  <p className="mt-2 text-2xl font-semibold">{editablePhases.length}</p>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          {detailTab === "board" && (
-            <div className="grid gap-4 xl:grid-cols-4">
-              {STATUS_OPTIONS.map((status) => {
-                const items = selectedTasks.filter((task) => (task.status || "todo") === status.value);
-                return (
-                  <div key={status.value} className={`min-h-[420px] rounded-[28px] border p-4 ${panel}`}>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold">{status.label}</h4>
-                      <span className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/8" : "bg-black/[0.04]"}`}>{items.length}</span>
-                    </div>
-                    <div className="space-y-3">{items.map(renderTaskCard)}</div>
-                    {!items.length && <p className={`rounded-2xl border border-dashed p-8 text-center text-sm ${muted}`}>No tasks here.</p>}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {detailTab === "table" && (
-            <div className={`rounded-[28px] border ${panel}`}>
-              <div className={`grid grid-cols-[minmax(260px,1.5fr)_180px_220px_150px_130px_145px_96px] gap-3 border-b px-5 py-4 text-[11px] font-bold uppercase tracking-[0.16em] ${darkMode ? "border-white/10 text-white/40" : "border-black/[0.06] text-black/40"}`}>
-                <span>Task</span><span>Phase</span><span>People</span><span>Status</span><span>Priority</span><span>Deadline</span><span>Action</span>
-              </div>
-
-              {newTaskDraft && (
-                <div className={`grid grid-cols-[minmax(260px,1.5fr)_180px_220px_150px_130px_145px_96px] gap-3 border-b px-5 py-4 ${darkMode ? "border-white/8 bg-emerald-400/5" : "border-black/[0.05] bg-emerald-50/70"}`}>
-                  <div className="space-y-2">
-                    <TextInput darkMode={darkMode} value={newTaskDraft.title} onChange={(value) => setNewTaskDraft((current) => ({ ...current, title: value }))} placeholder="Task title" />
-                    <TextInput darkMode={darkMode} value={newTaskDraft.description} onChange={(value) => setNewTaskDraft((current) => ({ ...current, description: value }))} placeholder="Short description / output" />
-                  </div>
-                  <SelectMenu darkMode={darkMode} value={newTaskDraft.phaseId} onChange={(value) => setNewTaskDraft((current) => ({ ...current, phaseId: value }))} options={newTaskPhaseOptions} />
-                  <UserPicker darkMode={darkMode} users={users} selectedIds={newTaskDraft.assigneeIds || []} onChange={(ids) => setNewTaskDraft((current) => ({ ...current, assigneeIds: ids }))} />
-                  <SelectMenu darkMode={darkMode} value={newTaskDraft.status} onChange={(value) => setNewTaskDraft((current) => ({ ...current, status: value }))} options={STATUS_OPTIONS} />
-                  <SelectMenu darkMode={darkMode} value={newTaskDraft.priority} onChange={(value) => setNewTaskDraft((current) => ({ ...current, priority: value }))} options={PRIORITY_OPTIONS} />
-                  <TextInput darkMode={darkMode} type="date" value={newTaskDraft.dueDate} onChange={(value) => setNewTaskDraft((current) => ({ ...current, dueDate: value }))} />
-                  <div className="flex flex-col gap-2">
-                    <button type="button" onClick={() => saveNewTask(selectedProject)} className="rounded-full bg-[#7bea2a] px-4 py-2 text-xs font-semibold text-black">Save</button>
-                    <button type="button" onClick={() => setNewTaskDraft(null)} className={`rounded-full px-4 py-2 text-xs font-semibold ${darkMode ? "bg-white/8 text-white/70" : "bg-black/[0.04] text-black/60"}`}>Cancel</button>
-                  </div>
-                </div>
-              )}
-
-              {selectedTasks.map((task) => {
-                const assignees = (task.assigneeIds || []).map((id) => users.find((item) => item.id === id)?.displayName || id).filter(Boolean);
-                return (
-                  <button type="button" onClick={() => openTaskDetail(task)} key={task.id} className={`grid w-full grid-cols-[minmax(260px,1.5fr)_180px_220px_150px_130px_145px_96px] items-center gap-3 border-b px-5 py-4 text-left text-sm transition last:border-b-0 ${darkMode ? "border-white/8 hover:bg-white/[0.035]" : "border-black/[0.05] hover:bg-[#f7fbff]"}`}>
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{task.title || "Untitled task"}</p>
-                      <p className={`mt-1 truncate text-xs ${muted}`}>{task.description || "No description added"}</p>
-                    </div>
-                    <span className={muted}>{phaseMap.get(task.phaseId)?.name || task.phaseName || "-"}</span>
-                    <div className="flex min-w-0 flex-wrap gap-1.5">
-                      {assignees.length ? assignees.slice(0, 2).map((name) => <span key={name} className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/8 text-white/65" : "bg-[#eef4ec] text-black/60"}`}>{name}</span>) : <span className={muted}>Unassigned</span>}
-                      {assignees.length > 2 && <span className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/8 text-white/65" : "bg-black/[0.04] text-black/45"}`}>+{assignees.length - 2}</span>}
-                    </div>
-                    <span>{statusLabel(task.status)}</span>
-                    <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${priorityClass(task.priority, darkMode)}`}>{task.priority || "medium"}</span>
-                    <span>{formatDate(task.dueDate)}</span>
-                    <span className="font-semibold text-emerald-600">Open</span>
-                  </button>
-                );
-              })}
-              {!selectedTasks.length && !newTaskDraft && <p className={`p-10 text-center text-sm ${muted}`}>No tasks added yet. Use Add task to create the first row.</p>}
-            </div>
-          )}
-
-          {detailTab === "phases" && (
-            <div className="grid gap-4 xl:grid-cols-2">
-              {phaseDraft && (
-                <article className={`rounded-[28px] border p-5 ${darkMode ? "border-emerald-400/30 bg-emerald-400/5" : "border-emerald-200 bg-emerald-50/70"}`}>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-600">New phase</p>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <Field label="Phase name"><TextInput darkMode={darkMode} value={phaseDraft.name} onChange={(value) => setPhaseDraft((current) => ({ ...current, name: value }))} placeholder="e.g. Design approval" /></Field>
-                    <Field label="Due date"><TextInput darkMode={darkMode} type="date" value={phaseDraft.dueDate} onChange={(value) => setPhaseDraft((current) => ({ ...current, dueDate: value }))} /></Field>
-                    <div className="md:col-span-2"><Field label="Description"><TextArea darkMode={darkMode} value={phaseDraft.description} onChange={(value) => setPhaseDraft((current) => ({ ...current, description: value }))} placeholder="What this phase must complete..." rows={3} /></Field></div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => saveNewPhase(selectedProject)} className="rounded-full bg-[#7bea2a] px-5 py-2.5 text-sm font-semibold text-black">Save phase</button>
-                    <button type="button" onClick={() => setPhaseDraft(null)} className={`rounded-full px-5 py-2.5 text-sm font-semibold ${darkMode ? "bg-white/8 text-white/70" : "bg-white text-black/60"}`}>Cancel</button>
-                  </div>
-                </article>
-              )}
-              {(selectedProject.phases || []).map((phase, index) => {
-                const tasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                const done = tasks.filter((task) => task.status === "done").length;
-                const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
-                return (
-                  <article key={phase.id} className={`rounded-[28px] border p-5 ${panel}`}>
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Phase {index + 1}</p>
-                        <h4 className="mt-1 text-xl font-semibold">{phase.name}</h4>
-                        <p className={`mt-1 text-sm ${muted}`}>{phase.description || "No description added."}</p>
-                      </div>
-                      <div className="min-w-[220px]">
-                        <div className="mb-2 flex justify-between text-xs"><span>{tasks.length} tasks</span><span>{progress}%</span></div>
-                        <div className={`h-2 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}><div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} /></div>
-                        {isSuperAdmin && <button type="button" onClick={() => quickAddTask(selectedProject, phase.id)} className="mt-4 rounded-full bg-[#171714] px-4 py-2 text-xs font-semibold text-white"><Plus className="mr-1 inline h-3.5 w-3.5" /> Add task</button>}
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-
-          {detailTab === "documents" && (
-            <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-              <section className={`rounded-[28px] border p-5 ${panel}`}>
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Google Drive</p>
-                <h4 className="mt-1 text-xl font-semibold">Project documents</h4>
-                <p className={`mt-2 text-sm leading-6 ${muted}`}>Files are read from the linked Drive folder. Uploads go into that same folder when it is shared with the service account.</p>
-                {selectedProject.driveFolderId || selectedProject.driveFolderLink ? (
-                  <a href={selectedProject.driveFolderLink || `https://drive.google.com/drive/folders/${selectedProject.driveFolderId}`} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white">
-                    Open Drive folder <ArrowUpRight className="h-4 w-4" />
-                  </a>
-                ) : (
-                  <p className="mt-4 rounded-2xl bg-amber-500/10 p-4 text-sm text-amber-700">Add a Google Drive folder link in project settings to enable Drive sync and uploads.</p>
-                )}
-                {isSuperAdmin && (
-                  <div className="mt-6 space-y-3">
-                    <Field label="Category"><SelectMenu darkMode={darkMode} value={docForm.category} onChange={(value) => setDocForm((current) => ({ ...current, category: value }))} options={DOC_CATEGORIES} /></Field>
-                    <Field label="Document name"><TextInput darkMode={darkMode} value={docForm.name} onChange={(value) => setDocForm((current) => ({ ...current, name: value }))} placeholder="e.g. Approved drawing" /></Field>
-                    <Field label="Drive/document link"><TextInput darkMode={darkMode} value={docForm.url} onChange={(value) => setDocForm((current) => ({ ...current, url: value }))} placeholder="https://drive.google.com/..." /></Field>
-                    <button type="button" onClick={addDocumentLink} className="flex h-11 w-full items-center justify-center gap-2 rounded-full border border-black/10 bg-white text-sm font-semibold text-black"><LinkIcon className="h-4 w-4" /> Add link</button>
-                    <label className={`flex h-11 cursor-pointer items-center justify-center gap-2 rounded-full text-sm font-semibold ${selectedProject.driveFolderId || selectedProject.driveFolderLink ? "bg-[#7bea2a] text-black" : "bg-black/5 text-black/35"}`}>
-                      {uploadingDoc ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload to Drive
-                      <input type="file" disabled={uploadingDoc || !(selectedProject.driveFolderId || selectedProject.driveFolderLink)} onChange={uploadProjectDocument} className="hidden" />
-                    </label>
-                  </div>
-                )}
-              </section>
-              <section className="grid content-start gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {docs.map((doc) => (
-                  <a key={doc.driveFileId || doc.url || doc.id} href={doc.url} target="_blank" rel="noreferrer" className={`rounded-[24px] border p-4 transition hover:-translate-y-0.5 ${panel}`}>
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600"><FileText className="h-5 w-5" /></span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{doc.name}</p>
-                        <p className={`mt-1 text-xs ${muted}`}>{doc.category || doc.source || "Document"} · {doc.uploadedAt ? formatDate(String(doc.uploadedAt).slice(0, 10)) : "Drive"}</p>
-                      </div>
-                    </div>
-                  </a>
-                ))}
-                {!docs.length && <p className={`rounded-[24px] border border-dashed p-10 text-center text-sm ${muted}`}>No project documents found yet.</p>}
-              </section>
-            </div>
-          )}
-        </div>
-        {taskDetail && (
-          <div className="fixed inset-0 z-[80] flex justify-end bg-black/35 backdrop-blur-sm">
-            <aside className={`flex h-full w-full max-w-[620px] flex-col overflow-hidden border-l shadow-2xl ${darkMode ? "border-white/10 bg-[#111318] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
-              <header className={`flex items-center justify-between border-b px-6 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
-                <div className="flex items-center gap-3 text-sm">
-                  <button type="button" className={`rounded-full px-3 py-2 ${darkMode ? "bg-white/8" : "bg-black/[0.04]"}`}>Share</button>
-                  <button type="button" className={`rounded-full px-3 py-2 ${darkMode ? "bg-white/8" : "bg-black/[0.04]"}`}>Expand</button>
-                </div>
-                <button type="button" onClick={() => setTaskDetail(null)} className={`flex h-10 w-10 items-center justify-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.05]"}`}>
-                  <X className="h-5 w-5" />
-                </button>
-              </header>
-
-              <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-                <p className={`flex items-center gap-2 text-xs ${muted}`}><CalendarDays className="h-4 w-4" /> {phaseMap.get(taskDetail.phaseId)?.name || "Project task"}</p>
-                <input
-                  value={taskDetail.title || ""}
-                  onChange={(event) => setTaskDetail((current) => ({ ...current, title: event.target.value }))}
-                  className={`mt-3 w-full rounded-2xl border-0 bg-transparent text-3xl font-semibold leading-tight outline-none ${darkMode ? "placeholder:text-white/25" : "placeholder:text-black/25"}`}
-                  placeholder="Task title"
-                />
-
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <SelectMenu darkMode={darkMode} value={taskDetail.priority || "medium"} onChange={(value) => setTaskDetail((current) => ({ ...current, priority: value }))} options={PRIORITY_OPTIONS} />
-                  <SelectMenu darkMode={darkMode} value={taskDetail.status || "todo"} onChange={(value) => setTaskDetail((current) => ({ ...current, status: value }))} options={STATUS_OPTIONS} />
-                  <TextInput darkMode={darkMode} type="date" value={taskDetail.dueDate} onChange={(value) => setTaskDetail((current) => ({ ...current, dueDate: value }))} />
-                </div>
-
-                <div className={`mt-6 flex items-center justify-between rounded-2xl px-4 py-4 ${darkMode ? "bg-violet-400/12" : "bg-gradient-to-r from-violet-100 to-pink-100"}`}>
-                  <span className="flex items-center gap-3 text-sm font-semibold"><Clock3 className="h-5 w-5" /> Time spent on this project</span>
-                  <span className="text-lg font-semibold">00:00:00</span>
-                </div>
-
-                <section className="mt-7">
-                  <h4 className="text-sm font-semibold">Description</h4>
-                  <TextArea darkMode={darkMode} value={taskDetail.description} onChange={(value) => setTaskDetail((current) => ({ ...current, description: value }))} placeholder="Write expected output, blockers, and completion notes..." rows={5} />
-                </section>
-
-                <section className="mt-7 grid gap-4 sm:grid-cols-2">
-                  <Field label="Phase">
-                    <SelectMenu darkMode={darkMode} value={taskDetail.phaseId} onChange={(value) => setTaskDetail((current) => ({ ...current, phaseId: value }))} options={newTaskPhaseOptions} />
-                  </Field>
-                  <Field label="People">
-                    <UserPicker darkMode={darkMode} users={users} selectedIds={taskDetail.assigneeIds || []} onChange={(ids) => setTaskDetail((current) => ({ ...current, assigneeIds: ids }))} />
-                  </Field>
-                </section>
-
-                <section className="mt-8">
-                  <h4 className="text-sm font-semibold">Attachments</h4>
-                  <div className="mt-3 space-y-3">
-                    {docs.slice(0, 3).map((doc, index) => (
-                      <a key={doc.driveFileId || doc.url || doc.id || index} href={doc.url} target="_blank" rel="noreferrer" className={`flex items-center justify-between rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fa]"}`}>
-                        <span className="flex min-w-0 items-center gap-3">
-                          <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${index % 2 ? "bg-violet-100 text-violet-700" : "bg-rose-100 text-rose-700"}`}><FileText className="h-4 w-4" /></span>
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold">{doc.name}</span>
-                            <span className={`text-xs ${muted}`}>{doc.category || "Document"}</span>
-                          </span>
-                        </span>
-                        <span className="text-xs font-semibold">View</span>
-                      </a>
-                    ))}
-                    {!docs.length && <p className={`rounded-2xl border border-dashed p-5 text-center text-sm ${muted}`}>No attachments linked yet.</p>}
-                  </div>
-                </section>
-
-                <section className="mt-8">
-                  <div className="flex gap-5 border-b border-black/10 text-sm font-semibold">
-                    <span className="border-b-2 border-black pb-3">Comments</span>
-                    <span className={`pb-3 ${muted}`}>Updates</span>
-                  </div>
-                  <div className="mt-4 space-y-4">
-                    {(taskDetail.comments || []).slice(-3).map((comment, index) => (
-                      <div key={comment.id || index} className="flex gap-3">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">{(comment.author || "U").slice(0, 1)}</span>
-                        <div>
-                          <p className="text-sm font-semibold">{comment.author || "Team"} <span className={`font-normal ${muted}`}>· {comment.date || "Just now"}</span></p>
-                          <p className={`mt-1 text-sm ${muted}`}>{comment.text || comment.message}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {!(taskDetail.comments || []).length && <p className={`text-sm ${muted}`}>No comments yet.</p>}
-                    <input className={`h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} placeholder="Add a comment..." />
-                  </div>
-                </section>
-              </main>
-
-              <footer className={`flex justify-between gap-3 border-t px-6 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}>
-                <button type="button" onClick={() => deleteInlineTask(selectedProject, taskDetail.id)} className="rounded-full bg-rose-500/10 px-5 py-3 text-sm font-semibold text-rose-500">Delete task</button>
-                <button type="button" onClick={() => saveTaskDetail(selectedProject)} className="rounded-full bg-[#7bea2a] px-6 py-3 text-sm font-semibold text-black">Save task</button>
-              </footer>
-            </aside>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  const dashboardStats = [
-    ["In progress", projects.filter((project) => (project.metrics?.pending || 0) > 0).length],
-    ["Blocked", projects.filter((project) => (project.metrics?.blocked || 0) > 0).length],
-    ["Upcoming", projects.filter((project) => project.targetDate && project.targetDate >= today).length],
-    ["Total Project", projects.length],
-  ];
-  const cardThemes = [
-    { bg: "bg-white", bar: "bg-cyan-400", chip: "text-cyan-700 bg-cyan-50" },
-    { bg: "bg-[#ffe2c2]", bar: "bg-orange-500", chip: "text-orange-700 bg-white/70" },
-    { bg: "bg-[#b9f4d1]", bar: "bg-emerald-500", chip: "text-emerald-700 bg-white/70" },
-    { bg: "bg-[#ffc9db]", bar: "bg-pink-500", chip: "text-pink-700 bg-white/70" },
-    { bg: "bg-[#efe7ff]", bar: "bg-violet-500", chip: "text-violet-700 bg-white/70" },
-    { bg: "bg-[#dff4ff]", bar: "bg-sky-500", chip: "text-sky-700 bg-white/70" },
-  ];
+  const projectMemberNames = [...new Set([selectedProject.manager, ...tasks.flatMap((task) => (task.assigneeIds || []).map((id) => users.find((person) => person.id === id)?.displayName || id))].filter(Boolean))];
 
   return (
-    <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f3f7fb] text-[#171714]"}`}>
-      <div className="mx-auto w-full max-w-[1500px]">
-        <section className="mb-7 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold">Projects</h1>
-              <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/8 text-white/55" : "bg-white text-black/45"}`}>{new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</span>
-            </div>
-            <div className="mt-7 flex flex-wrap gap-8">
-              {dashboardStats.map(([label, value], index) => (
-                <div key={label} className="min-w-[86px]">
-                  <p className="text-xl font-semibold">{value}</p>
-                  <p className={`mt-1 flex items-center gap-2 text-xs ${muted}`}>{label} {index < dashboardStats.length - 1 && <span className="h-1 w-1 rounded-full bg-black/25" />}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            <label className="relative block w-full sm:w-[340px]">
-              <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search projects..." className={`h-12 w-full rounded-2xl border pl-11 pr-4 outline-none ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`} />
-            </label>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => load(true)} disabled={refreshing} className={`flex h-12 items-center gap-2 rounded-full border px-5 text-sm font-medium ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}>
-                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-              </button>
-              {isSuperAdmin && (
-                <button type="button" onClick={() => openEditor()} className="flex h-12 items-center gap-2 rounded-full bg-[#171714] px-6 text-sm font-semibold text-white">
-                  <Plus className="h-4 w-4" /> Add project
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {!projects.length ? (
-          <section className={`rounded-[30px] border p-14 text-center ${panel}`}>
-            <BriefcaseBusiness className={`mx-auto h-10 w-10 ${muted}`} />
-            <h3 className="mt-4 text-xl font-semibold">No projects yet</h3>
-            <p className={`mt-2 text-sm ${muted}`}>Add your first project, then create phases, tasks, dependencies, and linked Drive documents.</p>
-          </section>
-        ) : (
-          <section className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-            {projects.map((project, index) => {
-              const theme = cardThemes[index % cardThemes.length];
-              const progress = project.metrics?.progress || 0;
-              const due = project.targetDate ? Math.max(0, Math.ceil((new Date(`${project.targetDate}T00:00:00`) - new Date()) / 86400000)) : null;
-              const assigneeIds = [...new Set((project.manualTasks || []).flatMap((task) => task.assigneeIds || []))].slice(0, 3);
-              return (
-                <button
-                  key={project.id}
-                  type="button"
-                  onClick={() => openProject(project)}
-                  className={`min-h-[260px] rounded-[34px] p-5 text-left transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(33,48,80,0.14)] ${darkMode ? "bg-[#161a20]" : theme.bg}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <p className={`text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{formatDate(project.targetDate)}</p>
-                    <span className="rounded-full px-2 text-xl leading-none">...</span>
-                  </div>
-                  <div className="mt-9 text-center">
-                    <h3 className="text-xl font-semibold">{project.name}</h3>
-                    <p className={`mt-1 text-sm ${darkMode ? "text-white/50" : "text-black/55"}`}>{project.client || project.location || "Project workspace"}</p>
-                  </div>
-                  <div className="mt-8">
-                    <div className="mb-2 flex items-center justify-between text-xs font-semibold">
-                      <span>Progress</span>
-                      <span>{progress}%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-white/75">
-                      <div className={`h-full rounded-full ${theme.bar}`} style={{ width: `${progress}%` }} />
-                    </div>
-                  </div>
-                  <div className="mt-6 flex items-center justify-between gap-3">
-                    <div className="flex -space-x-2">
-                      {assigneeIds.map((id) => {
-                        const member = users.find((item) => item.id === id);
-                        return <span key={id} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-[10px] font-bold text-white">{(member?.displayName || id).slice(0, 1).toUpperCase()}</span>;
-                      })}
-                      <span className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white ${theme.chip}`}><Plus className="h-3.5 w-3.5" /></span>
-                    </div>
-                    <span className={`rounded-full px-4 py-2 text-xs font-semibold ${theme.chip}`}>{due === null ? "No date" : due === 0 ? "Due today" : `${due} days left`}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </section>
-        )}
+    <div className={cn("flex min-h-0 flex-1 overflow-hidden", darkMode ? "bg-[#11130f] text-white" : "bg-[#f7f8f5] text-[#20231f]")}>
+      <WorkspaceRail project={selectedProject} view={workspaceView} onView={setWorkspaceView} tasks={tasks} documents={documents} users={users} />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[#e0e4dd] bg-white px-3 sm:px-4 dark:border-white/10 dark:bg-[#171a16]">
+          <div className="flex min-w-0 items-center gap-2"><IconButton label="Back to projects" onClick={closeProject}><ArrowLeft className="h-4 w-4" /></IconButton><div className="hidden h-5 w-px bg-[#e0e4dd] sm:block dark:bg-white/10" /><div className="min-w-0"><div className="flex items-center gap-1.5 text-xs text-[#777d74] dark:text-white/45"><span className="hidden sm:inline">Projects</span><ChevronRight className="hidden h-3 w-3 sm:block" /><span className="truncate font-medium text-[#30342e] dark:text-white/75">{selectedProject.name}</span></div></div></div>
+          <div className="flex shrink-0 items-center gap-1.5"><div className="mr-1 hidden sm:block"><AvatarStack names={projectMemberNames} /></div><IconButton label="Refresh project" onClick={() => load(true)}><RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} /></IconButton>{isSuperAdmin && <Button variant="primary" onClick={() => editProject(selectedProject)}><Pencil className="h-4 w-4" /><span className="hidden sm:inline">Edit project</span></Button>}</div>
+        </header>
+        <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e0e4dd] bg-white px-3 py-2 md:hidden dark:border-white/10 dark:bg-[#171a16]">{WORKSPACE_NAV.map(({ value, label, icon: Icon }) => <button key={value} type="button" onClick={() => setWorkspaceView(value)} className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs", workspaceView === value ? "bg-[#20231f] font-semibold text-white dark:bg-[#78d455] dark:text-[#14200f]" : "text-[#676d64] dark:text-white/50")}><Icon className="h-3.5 w-3.5" />{label}</button>)}</nav>
+        <main className={cn("min-h-0 flex-1", workspaceView === "board" ? "overflow-auto" : "overflow-y-auto")}>
+          {workspaceView === "overview" && <OverviewView project={selectedProject} tasks={tasks} phases={phases} documents={documents} users={users} isSuperAdmin={isSuperAdmin} onOpenTask={openTask} onAddTask={() => addTask()} onOpenPhase={openPhase} />}
+          {workspaceView === "issues" && <IssuesView tasks={tasks} phases={phases} users={users} isSuperAdmin={isSuperAdmin} onOpenTask={openTask} onAddTask={addTask} />}
+          {workspaceView === "board" && <BoardView tasks={tasks} phases={phases} users={users} isSuperAdmin={isSuperAdmin} onOpenTask={openTask} onAddTask={addTask} />}
+          {workspaceView === "phases" && <PhasesView phases={phases} tasks={tasks} isSuperAdmin={isSuperAdmin} onOpenPhase={openPhase} onAddPhase={addPhase} onAddTask={addTask} />}
+          {workspaceView === "files" && <FilesView project={selectedProject} documents={documents} isSuperAdmin={isSuperAdmin} onAddFile={() => setFileDrawerOpen(true)} />}
+        </main>
       </div>
 
-      {selectedProject && (
-        <Drawer
-          darkMode={darkMode}
-          title={selectedProject.name}
-          subtitle={`${selectedProject.client || "Project"} · ${selectedProject.metrics?.progress || 0}% complete · ${selectedProject.metrics?.pending || 0} pending`}
-          onClose={() => setSelected(null)}
-          footer={
-            <div className="flex flex-wrap justify-between gap-3">
-              <div className="flex flex-wrap gap-2">
-                {["board", "table", "phases", "documents"].map((tab) => (
-                  <button key={tab} type="button" onClick={() => setDetailTab(tab)} className={`rounded-full px-4 py-2 text-sm font-semibold capitalize ${detailTab === tab ? "bg-[#171714] text-white" : darkMode ? "bg-white/5 text-white/60" : "bg-black/[0.04] text-black/60"}`}>{tab}</button>
-                ))}
-              </div>
-              {isSuperAdmin && (
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => deleteProject(selectedProject)} className="rounded-full px-4 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/10">Delete</button>
-                  <button type="button" onClick={() => openEditor(selectedProject)} className="rounded-full bg-[#7bea2a] px-5 py-2 text-sm font-semibold text-black">Edit project</button>
-                </div>
-              )}
-            </div>
-          }
-        >
-          <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-            <aside className="space-y-5">
-              <section className={`rounded-[28px] border p-5 ${panel}`}>
-                <div className="flex items-center gap-4">
-                  <span className="flex h-20 w-20 items-center justify-center rounded-[24px] bg-[#12ad72] text-3xl font-bold text-white">{selectedProject.name.slice(0, 2).toUpperCase()}</span>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#4b9b16]">Project workspace</p>
-                    <h3 className="mt-1 truncate text-2xl font-semibold">{selectedProject.name}</h3>
-                    <p className={`mt-1 text-sm ${muted}`}>{selectedProject.location || "Location not added"}</p>
-                  </div>
-                </div>
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                  {[
-                    ["Manager", selectedProject.manager || "Not assigned"],
-                    ["Target", formatDate(selectedProject.targetDate)],
-                    ["Priority", selectedProject.priority || "medium"],
-                    ["Health", selectedProject.health || "green"],
-                  ].map(([label, value]) => (
-                    <div key={label} className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.035]" : "bg-[#f5f7f3]"}`}>
-                      <p className={`text-[10px] uppercase tracking-[0.16em] ${muted}`}>{label}</p>
-                      <p className="mt-1 truncate text-sm font-semibold capitalize">{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-              <section className={`rounded-[28px] border p-5 ${panel}`}>
-                <p className="text-sm font-semibold">Deadline pulse</p>
-                <div className="mt-4 space-y-3">
-                  {[
-                    ["Due today", selectedProject.metrics?.dueToday || 0, Clock3],
-                    ["High priority", selectedProject.metrics?.highPriority || 0, ShieldAlert],
-                    ["Blocked", selectedProject.metrics?.blocked || 0, AlertTriangle],
-                    ["Documents", docs.length || selectedProject.metrics?.documents || 0, Paperclip],
-                  ].map(([label, value, Icon]) => (
-                    <div key={label} className="flex items-center justify-between gap-3">
-                      <span className="flex items-center gap-2 text-sm"><Icon className="h-4 w-4 text-emerald-600" /> {label}</span>
-                      <span className="text-sm font-semibold">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </aside>
-
-            <section className="min-w-0">
-              {detailTab === "board" && (
-                <div className="grid gap-4 xl:grid-cols-4">
-                  {STATUS_OPTIONS.map((status) => {
-                    const items = selectedTasks.filter((task) => (task.status || "todo") === status.value);
-                    return (
-                      <div key={status.value} className={`rounded-[28px] border p-4 ${panel}`}>
-                        <div className="mb-4 flex items-center justify-between">
-                          <h4 className="text-sm font-semibold">{status.label}</h4>
-                          <span className={`rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/8" : "bg-black/[0.04]"}`}>{items.length}</span>
-                        </div>
-                        <div className="space-y-3">{items.map(renderTaskCard)}</div>
-                        {!items.length && <p className={`rounded-2xl border border-dashed p-5 text-center text-xs ${muted}`}>No tasks here.</p>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {detailTab === "table" && (
-                <div className={`overflow-hidden rounded-[28px] border ${panel}`}>
-                  <div className={`grid grid-cols-[1.3fr_1fr_1fr_120px_120px_120px] gap-4 border-b px-5 py-4 text-[11px] font-bold uppercase tracking-[0.16em] ${darkMode ? "border-white/10 text-white/40" : "border-black/[0.06] text-black/40"}`}>
-                    <span>Task</span><span>Phase</span><span>Assignee</span><span>Status</span><span>Priority</span><span>Deadline</span>
-                  </div>
-                  {selectedTasks.map((task) => (
-                    <div key={task.id} className={`grid grid-cols-[1.3fr_1fr_1fr_120px_120px_120px] gap-4 border-b px-5 py-4 text-sm last:border-b-0 ${darkMode ? "border-white/8" : "border-black/[0.05]"}`}>
-                      <span className="font-semibold">{task.title}</span>
-                      <span className={muted}>{phaseMap.get(task.phaseId)?.name || task.phaseName || "-"}</span>
-                      <span className={muted}>{(task.assigneeIds || []).map((id) => users.find((item) => item.id === id)?.displayName || id).join(", ") || "-"}</span>
-                      <span>{statusLabel(task.status)}</span>
-                      <span className="capitalize">{task.priority}</span>
-                      <span>{formatDate(task.dueDate)}</span>
-                    </div>
-                  ))}
-                  {!selectedTasks.length && <p className={`p-10 text-center text-sm ${muted}`}>No tasks added yet.</p>}
-                </div>
-              )}
-
-              {detailTab === "phases" && (
-                <div className="space-y-4">
-                  {(selectedProject.phases || []).map((phase, index) => {
-                    const tasks = selectedTasks.filter((task) => task.phaseId === phase.id);
-                    const done = tasks.filter((task) => task.status === "done").length;
-                    const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
-                    return (
-                      <article key={phase.id} className={`rounded-[28px] border p-5 ${panel}`}>
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Phase {index + 1}</p>
-                            <h4 className="mt-1 text-xl font-semibold">{phase.name}</h4>
-                            <p className={`mt-1 text-sm ${muted}`}>{phase.description || "No description added."}</p>
-                          </div>
-                          <div className="min-w-[220px]">
-                            <div className="mb-2 flex justify-between text-xs"><span>{tasks.length} tasks</span><span>{progress}%</span></div>
-                            <div className={`h-2 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}><div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} /></div>
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-
-              {detailTab === "documents" && (
-                <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-                  <section className={`rounded-[28px] border p-5 ${panel}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Google Drive</p>
-                    <h4 className="mt-1 text-xl font-semibold">Project documents</h4>
-                    <p className={`mt-2 text-sm leading-6 ${muted}`}>Files are read from the linked Drive folder. Uploads go into that same folder when it is shared with the service account.</p>
-                    {selectedProject.driveFolderId || selectedProject.driveFolderLink ? (
-                      <a href={selectedProject.driveFolderLink || `https://drive.google.com/drive/folders/${selectedProject.driveFolderId}`} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white">
-                        Open Drive folder <ArrowUpRight className="h-4 w-4" />
-                      </a>
-                    ) : (
-                      <p className="mt-4 rounded-2xl bg-amber-500/10 p-4 text-sm text-amber-700">Add a Google Drive folder link in project settings to enable Drive sync and uploads.</p>
-                    )}
-                    {isSuperAdmin && (
-                      <div className="mt-6 space-y-3">
-                        <Field label="Category"><SelectMenu darkMode={darkMode} value={docForm.category} onChange={(value) => setDocForm((current) => ({ ...current, category: value }))} options={DOC_CATEGORIES} /></Field>
-                        <Field label="Document name"><TextInput darkMode={darkMode} value={docForm.name} onChange={(value) => setDocForm((current) => ({ ...current, name: value }))} placeholder="e.g. Approved drawing" /></Field>
-                        <Field label="Drive/document link"><TextInput darkMode={darkMode} value={docForm.url} onChange={(value) => setDocForm((current) => ({ ...current, url: value }))} placeholder="https://drive.google.com/..." /></Field>
-                        <button type="button" onClick={addDocumentLink} className="flex h-11 w-full items-center justify-center gap-2 rounded-full border border-black/10 bg-white text-sm font-semibold text-black"><LinkIcon className="h-4 w-4" /> Add link</button>
-                        <label className={`flex h-11 cursor-pointer items-center justify-center gap-2 rounded-full text-sm font-semibold ${selectedProject.driveFolderId || selectedProject.driveFolderLink ? "bg-[#7bea2a] text-black" : "bg-black/5 text-black/35"}`}>
-                          {uploadingDoc ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload to Drive
-                          <input type="file" disabled={uploadingDoc || !(selectedProject.driveFolderId || selectedProject.driveFolderLink)} onChange={uploadProjectDocument} className="hidden" />
-                        </label>
-                      </div>
-                    )}
-                  </section>
-                  <section className="grid content-start gap-3 md:grid-cols-2">
-                    {docs.map((doc) => (
-                      <a key={doc.driveFileId || doc.url || doc.id} href={doc.url} target="_blank" rel="noreferrer" className={`rounded-[24px] border p-4 transition hover:-translate-y-0.5 ${panel}`}>
-                        <div className="flex items-start gap-3">
-                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600"><FileText className="h-5 w-5" /></span>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold">{doc.name}</p>
-                            <p className={`mt-1 text-xs ${muted}`}>{doc.category || doc.source || "Document"} · {doc.uploadedAt ? formatDate(String(doc.uploadedAt).slice(0, 10)) : "Drive"}</p>
-                          </div>
-                        </div>
-                      </a>
-                    ))}
-                    {!docs.length && <p className={`rounded-[24px] border border-dashed p-10 text-center text-sm ${muted}`}>No project documents found yet.</p>}
-                  </section>
-                </div>
-              )}
-            </section>
-          </div>
-        </Drawer>
-      )}
-
-      {editor && (
-        <Drawer
-          darkMode={darkMode}
-          title={editor.id ? "Edit project" : "Add project"}
-          subtitle="Project details, phases, tasks, dependencies, and Drive documents"
-          onClose={() => setEditor(null)}
-          footer={
-            <div className="flex items-center justify-between gap-3">
-              <button type="button" onClick={() => setEditor(null)} className={`rounded-full border px-6 py-3 text-sm ${darkMode ? "border-white/10" : "border-black/10"}`}>Cancel</button>
-              <button type="submit" form="project-editor-form" disabled={saving} className="flex items-center gap-2 rounded-full bg-[#7bea2a] px-7 py-3 text-sm font-semibold text-black disabled:opacity-60">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save project
-              </button>
-            </div>
-          }
-        >
-          <form id="project-editor-form" onSubmit={saveProject} className="grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)]">
-            <aside className={`rounded-[28px] border p-4 ${panel}`}>
-              <div className="space-y-2">
-                {[
-                  ["project", "Project", BriefcaseBusiness],
-                  ["phases", "Phases", Layers3],
-                  ["tasks", "Tasks", ListChecks],
-                  ["documents", "Documents", Paperclip],
-                ].map(([value, label, Icon]) => (
-                  <button key={value} type="button" onClick={() => setEditorTab(value)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${editorTab === value ? "bg-[#171714] text-white" : darkMode ? "text-white/60 hover:bg-white/5" : "text-black/60 hover:bg-black/[0.04]"}`}>
-                    <Icon className="h-4 w-4" /> {label}
-                  </button>
-                ))}
-              </div>
-            </aside>
-
-            <section className={`rounded-[28px] border p-5 sm:p-7 ${panel}`}>
-              {editorTab === "project" && (
-                <div className="grid gap-5 md:grid-cols-2">
-                  <Field label="Project name"><TextInput darkMode={darkMode} required value={editor.name} onChange={(value) => updateEditor({ name: value })} placeholder="Kalhaar Residence" /></Field>
-                  <Field label="Project code"><TextInput darkMode={darkMode} value={editor.code} onChange={(value) => updateEditor({ code: value })} placeholder="KAL-01" /></Field>
-                  <Field label="Client"><TextInput darkMode={darkMode} value={editor.client} onChange={(value) => updateEditor({ client: value })} placeholder="Client name" /></Field>
-                  <Field label="Location"><TextInput darkMode={darkMode} value={editor.location} onChange={(value) => updateEditor({ location: value })} placeholder="Site location" /></Field>
-                  <Field label="Project manager"><TextInput darkMode={darkMode} value={editor.manager} onChange={(value) => updateEditor({ manager: value })} placeholder="Responsible person" /></Field>
-                  <Field label="Manager user"><SelectMenu darkMode={darkMode} value={editor.managerId || ""} onChange={(value) => updateEditor({ managerId: value, manager: users.find((item) => item.id === value)?.displayName || editor.manager })} options={[{ value: "", label: "No linked user" }, ...users.map((item) => ({ value: item.id, label: item.displayName || item.username }))]} /></Field>
-                  <Field label="Start date"><TextInput darkMode={darkMode} type="date" value={editor.startDate} onChange={(value) => updateEditor({ startDate: value })} /></Field>
-                  <Field label="Target date"><TextInput darkMode={darkMode} type="date" value={editor.targetDate} onChange={(value) => updateEditor({ targetDate: value })} /></Field>
-                  <Field label="Priority"><SelectMenu darkMode={darkMode} value={editor.priority} onChange={(value) => updateEditor({ priority: value })} options={PRIORITY_OPTIONS} /></Field>
-                  <Field label="Health"><SelectMenu darkMode={darkMode} value={editor.health} onChange={(value) => updateEditor({ health: value })} options={HEALTH_OPTIONS} /></Field>
-                  <div className="md:col-span-2"><Field label="Google Drive folder"><TextInput darkMode={darkMode} value={editor.driveFolderLink || editor.driveFolderId} onChange={(value) => updateEditor({ driveFolderLink: value })} placeholder="https://drive.google.com/drive/folders/..." /></Field></div>
-                  <div className="md:col-span-2"><Field label="Aliases"><TextInput darkMode={darkMode} value={(editor.aliases || []).join(", ")} onChange={(value) => updateEditor({ aliases: listFromText(value) })} placeholder="Alternate project names used in reports" /></Field></div>
-                </div>
-              )}
-
-              {editorTab === "phases" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div><h4 className="text-xl font-semibold">Project phases</h4><p className={`mt-1 text-sm ${muted}`}>Break the project into clear execution stages.</p></div>
-                    <button type="button" onClick={() => updateEditor({ phases: [...(editor.phases || []), blankPhase()] })} className="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white"><Plus className="mr-1 inline h-4 w-4" /> Add phase</button>
-                  </div>
-                  {(editor.phases || []).map((phase, index) => (
-                    <div key={phase.id} className={`rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/[0.06] bg-[#fbfbf8]"}`}>
-                      <div className="mb-4 flex items-center justify-between">
-                        <span className={`flex items-center gap-2 text-sm font-semibold ${muted}`}><GripVertical className="h-4 w-4" /> Phase {index + 1}</span>
-                        <button type="button" onClick={() => updateEditor({ phases: editor.phases.filter((_, phaseIndex) => phaseIndex !== index) })} className="rounded-full p-2 text-red-500 hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></button>
-                      </div>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <Field label="Phase name"><TextInput darkMode={darkMode} value={phase.name} onChange={(value) => updatePhase(index, { name: value })} placeholder="Design approval" /></Field>
-                        <Field label="Status"><SelectMenu darkMode={darkMode} value={phase.status} onChange={(value) => updatePhase(index, { status: value })} options={STATUS_OPTIONS} /></Field>
-                        <Field label="Start"><TextInput darkMode={darkMode} type="date" value={phase.startDate} onChange={(value) => updatePhase(index, { startDate: value })} /></Field>
-                        <Field label="Deadline"><TextInput darkMode={darkMode} type="date" value={phase.dueDate} onChange={(value) => updatePhase(index, { dueDate: value })} /></Field>
-                        <div className="md:col-span-2"><Field label="Description"><TextArea darkMode={darkMode} value={phase.description} onChange={(value) => updatePhase(index, { description: value })} placeholder="What this phase must complete..." rows={3} /></Field></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {editorTab === "tasks" && (
-                <div className="space-y-5">
-                  <div><h4 className="text-xl font-semibold">Phase tasks</h4><p className={`mt-1 text-sm ${muted}`}>Assign work, deadlines, priorities, and dependencies.</p></div>
-                  {(editor.phases || []).map((phase, phaseIndex) => (
-                    <section key={phase.id} className={`rounded-[26px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/[0.06] bg-[#fbfbf8]"}`}>
-                      <div className="mb-4 flex items-center justify-between">
-                        <div><p className="text-sm font-semibold">{phase.name || `Phase ${phaseIndex + 1}`}</p><p className={`text-xs ${muted}`}>{(phase.tasks || []).length} tasks</p></div>
-                        <button type="button" onClick={() => addTask(phaseIndex)} className="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white"><Plus className="mr-1 inline h-4 w-4" /> Add task</button>
-                      </div>
-                      <div className="space-y-4">
-                        {(phase.tasks || []).map((task) => {
-                          const dependencyOptions = (editor.phases || []).flatMap((item) => (item.tasks || [])).filter((item) => item.id !== task.id).map((item) => ({ value: item.id, label: item.title || "Untitled task" }));
-                          return (
-                            <div key={task.id} className={`rounded-[22px] border p-4 ${darkMode ? "border-white/10 bg-[#101216]" : "border-black/[0.06] bg-white"}`}>
-                              <div className="mb-3 flex items-center justify-between">
-                                <span className={`text-xs font-semibold uppercase tracking-[0.16em] ${muted}`}>Task</span>
-                                <button type="button" onClick={() => deleteTask(task.id)} className="rounded-full p-2 text-red-500 hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></button>
-                              </div>
-                              <div className="grid gap-4 lg:grid-cols-4">
-                                <div className="lg:col-span-2"><Field label="Title"><TextInput darkMode={darkMode} value={task.title} onChange={(value) => updateTask(task.id, { title: value })} placeholder="Task title" /></Field></div>
-                                <Field label="Status"><SelectMenu darkMode={darkMode} value={task.status} onChange={(value) => updateTask(task.id, { status: value })} options={STATUS_OPTIONS} /></Field>
-                                <Field label="Priority"><SelectMenu darkMode={darkMode} value={task.priority} onChange={(value) => updateTask(task.id, { priority: value })} options={PRIORITY_OPTIONS} /></Field>
-                                <Field label="Start"><TextInput darkMode={darkMode} type="date" value={task.startDate} onChange={(value) => updateTask(task.id, { startDate: value })} /></Field>
-                                <Field label="Deadline"><TextInput darkMode={darkMode} type="date" value={task.dueDate} onChange={(value) => updateTask(task.id, { dueDate: value })} /></Field>
-                                <div className="lg:col-span-2"><Field label="Assign members"><UserPicker darkMode={darkMode} users={users} selectedIds={task.assigneeIds || []} onChange={(ids) => updateTask(task.id, { assigneeIds: ids })} /></Field></div>
-                                <div className="lg:col-span-2"><Field label="Dependencies"><SelectMenu darkMode={darkMode} value="" onChange={(value) => value && updateTask(task.id, { dependencyIds: [...new Set([...(task.dependencyIds || []), value])] })} options={[{ value: "", label: "Add dependency" }, ...dependencyOptions]} /></Field></div>
-                                <div className="lg:col-span-2">
-                                  <p className={`mb-2 text-xs ${muted}`}>Selected dependencies</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {(task.dependencyIds || []).map((id) => <button key={id} type="button" onClick={() => updateTask(task.id, { dependencyIds: task.dependencyIds.filter((item) => item !== id) })} className="rounded-full bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700">{dependencyOptions.find((item) => item.value === id)?.label || id} ×</button>)}
-                                    {!(task.dependencyIds || []).length && <span className={`text-xs ${muted}`}>No dependencies.</span>}
-                                  </div>
-                                </div>
-                                <div className="lg:col-span-4"><Field label="Description"><TextArea darkMode={darkMode} value={task.description} onChange={(value) => updateTask(task.id, { description: value })} placeholder="What must be done, what is blocked, and expected output..." rows={3} /></Field></div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              )}
-
-              {editorTab === "documents" && (
-                <div className="grid gap-5 md:grid-cols-2">
-                  <div><h4 className="text-xl font-semibold">Document settings</h4><p className={`mt-2 text-sm leading-6 ${muted}`}>Paste a Google Drive folder link in the Project tab. Documents uploaded from the project drawer will be stored there.</p></div>
-                  <div className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.035]" : "bg-[#f5f7f3]"}`}>
-                    <p className="text-sm font-semibold">Current Drive folder</p>
-                    <p className={`mt-2 break-all text-sm ${muted}`}>{editor.driveFolderLink || editor.driveFolderId || "Not linked yet"}</p>
-                  </div>
-                </div>
-              )}
-            </section>
-          </form>
-        </Drawer>
-      )}
+      {taskEditor && <TaskDrawer task={taskEditor} project={selectedProject} users={users} phases={phases} documents={documents} allTasks={tasks} currentUser={user} saving={saving} editable={isSuperAdmin} onChange={(patch) => setTaskEditor((current) => ({ ...current, ...patch }))} onClose={() => setTaskEditor(null)} onSave={saveTask} onDelete={deleteTask} />}
+      {phaseEditor && <PhaseDrawer phase={phaseEditor} tasks={tasks.filter((task) => task.phaseId === phaseEditor.id)} users={users} saving={saving} editable={isSuperAdmin} onChange={(patch) => setPhaseEditor((current) => ({ ...current, ...patch }))} onClose={() => setPhaseEditor(null)} onSave={savePhase} onDelete={deletePhase} onAddTask={() => { const phaseId = phaseEditor.id; setPhaseEditor(null); addTask(phaseId); }} />}
+      {projectEditor && <ProjectEditor project={projectEditor} users={users} saving={saving} onChange={(patch) => setProjectEditor((current) => ({ ...current, ...patch }))} onClose={() => setProjectEditor(null)} onSave={saveProject} onDelete={deleteProject} />}
+      {fileDrawerOpen && <FileDrawer form={fileForm} canUpload={Boolean(selectedProject.driveFolderId || selectedProject.driveFolderLink)} uploading={uploading} onChange={(patch) => setFileForm((current) => ({ ...current, ...patch }))} onClose={() => setFileDrawerOpen(false)} onAddLink={addDocumentLink} onUpload={uploadDocument} />}
     </div>
   );
 }

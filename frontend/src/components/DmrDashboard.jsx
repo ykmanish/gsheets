@@ -130,6 +130,32 @@ function comparableTradeText(value = "") {
   return compact;
 }
 
+function manpowerBreakdown(records = [], field) {
+  return [
+    ...records
+      .reduce((result, record) => {
+        const label = String(record?.[field] || "Unassigned").trim() || "Unassigned";
+        const current = result.get(label) || {
+          label,
+          planned: 0,
+          actual: 0,
+          variance: 0,
+        };
+        current.planned += Number(record.planned) || 0;
+        current.actual += Number(record.actual) || 0;
+        current.variance = current.actual - current.planned;
+        result.set(label, current);
+        return result;
+      }, new Map())
+      .values(),
+  ].sort(
+    (a, b) =>
+      b.actual - a.actual ||
+      b.planned - a.planned ||
+      a.label.localeCompare(b.label),
+  );
+}
+
 function planActualStatus(plannedValue, actualValue) {
   const planned = Number(plannedValue) || 0;
   const actual = Number(actualValue) || 0;
@@ -1630,6 +1656,32 @@ export default function DmrDashboard({ darkMode }) {
     return lookup;
   }, [data?.todayPlan?.records]);
 
+  const displayRecords = useMemo(
+    () =>
+      records.map((record) => {
+        if (record.plannedFilled || Number(record.planned) > 0) return record;
+        const key = `${comparablePlanText(record.site)}|${comparableTradeText(record.agency)}`;
+        const planned = todayPlanLookup.get(key) || 0;
+        if (!planned) return record;
+        const actual = Number(record.actual) || 0;
+        return {
+          ...record,
+          planned,
+          variance: actual - planned,
+          plannedFromTodayPlan: true,
+        };
+      }),
+    [records, todayPlanLookup],
+  );
+  const siteManpowerBreakdown = useMemo(
+    () => manpowerBreakdown(displayRecords, "site"),
+    [displayRecords],
+  );
+  const agencyManpowerBreakdown = useMemo(
+    () => manpowerBreakdown(displayRecords, "agency"),
+    [displayRecords],
+  );
+
   const filteredRecords = useMemo(() => {
     const query = agencySearch.trim().toLowerCase();
     return records.filter((record) => {
@@ -1658,7 +1710,7 @@ export default function DmrDashboard({ darkMode }) {
   const projectManpowerCards = useMemo(() => {
     const query = agencySearch.trim().toLowerCase();
     return [
-      ...records
+      ...displayRecords
         .reduce((result, record) => {
           if (siteFilter !== "all" && record.site !== siteFilter) return result;
           const key = record.site || "Unassigned site";
@@ -1705,7 +1757,7 @@ export default function DmrDashboard({ darkMode }) {
           b.planned - a.planned ||
           a.site.localeCompare(b.site),
       );
-  }, [agencySearch, records, siteFilter]);
+  }, [agencySearch, displayRecords, siteFilter]);
 
   const activePlan =
     planMode === "today" ? data?.todayPlan || null : data?.tomorrowPlan || null;
@@ -1797,6 +1849,7 @@ export default function DmrDashboard({ darkMode }) {
       !canFillDmr ||
       !todayPlanLookup.size ||
       hasDraftKey(record, "planned") ||
+      record.plannedFilled ||
       Number(record.planned) > 0
     )
       return "";
@@ -2374,12 +2427,12 @@ export default function DmrDashboard({ darkMode }) {
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,.9fr)]">
           <WorkloadBars
             title="Site-wise actual manpower"
-            items={data?.today?.siteBreakdown || []}
+            items={siteManpowerBreakdown}
             darkMode={darkMode}
           />
           <WorkloadBars
             title="Top agencies today"
-            items={data?.today?.agencyBreakdown || []}
+            items={agencyManpowerBreakdown}
             darkMode={darkMode}
           />
         </div>

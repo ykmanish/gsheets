@@ -268,7 +268,7 @@ export function DateRangePicker({ darkMode, from, to, onChange, placeholder = "C
 
       {open && (
         <div
-          className={`absolute left-0 top-[calc(100%+10px)] z-50 w-[min(92vw,462px)] rounded-[22px] border p-3 shadow-2xl sm:p-4 ${
+          className={`absolute left-0 top-[calc(100%+10px)] z-[200] w-[min(92vw,462px)] rounded-[22px] border p-3 shadow-2xl sm:p-4 ${
             darkMode ? "bg-[#121317] border-white/10 text-white" : "bg-white border-black/10 text-black"
           }`}
         >
@@ -628,7 +628,7 @@ export function DateTimePicker({ darkMode, value, onChange, placeholder = "Choos
 
       {open === "date" && (
         <div
-          className={`absolute left-0 top-[calc(100%+10px)] z-50 w-[min(92vw,330px)] rounded-[18px] border p-3 shadow-2xl ${
+          className={`absolute left-0 top-[calc(100%+10px)] z-[200] w-[min(92vw,330px)] rounded-[18px] border p-3 shadow-2xl ${
             darkMode ? "bg-[#121317] border-white/10 text-white" : "bg-white border-orange-200 text-black"
           }`}
         >
@@ -703,7 +703,7 @@ export function DateTimePicker({ darkMode, value, onChange, placeholder = "Choos
       )}
 
       {open === "time" && (
-        <div className={`absolute right-0 top-[calc(100%+10px)] z-50 w-[180px] rounded-[18px] border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-orange-200 bg-white text-black"}`}>
+        <div className={`absolute right-0 top-[calc(100%+10px)] z-[200] w-[180px] rounded-[18px] border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-orange-200 bg-white text-black"}`}>
           <p className={`px-2 pb-2 pt-1 text-[11px] uppercase tracking-[0.2em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Select time</p>
           <div className="max-h-64 overflow-y-auto pr-1">
             {timeOptions.map((option) => {

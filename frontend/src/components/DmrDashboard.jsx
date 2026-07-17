@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { DatePicker, SelectMenu, useClickOutside } from "./ui";
+import { ConfirmModal, DatePicker, SelectMenu, useClickOutside } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -1466,6 +1466,7 @@ export default function DmrDashboard({ darkMode }) {
   const [dmrSheetLink, setDmrSheetLink] = useState("");
   const [dmrSheetSaving, setDmrSheetSaving] = useState(false);
   const [dmrSheetOpen, setDmrSheetOpen] = useState(false);
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportClosing, setReportClosing] = useState(false);
   const [reportExpanded, setReportExpanded] = useState(false);
@@ -1981,16 +1982,11 @@ export default function DmrDashboard({ darkMode }) {
   }
 
   async function unlinkDmrSheet() {
-    if (
-      !window.confirm(
-        "Unlink the current DMR sheet? Existing Google Sheet data will not be deleted.",
-      )
-    )
-      return;
     try {
       setDmrSheetSaving(true);
       const result = await api("/dmr-dashboard/settings", { method: "DELETE" });
       toast.success("DMR sheet unlinked");
+      setUnlinkConfirmOpen(false);
       setData((current) =>
         current ? { ...current, dmrSettings: result.settings } : current,
       );
@@ -5356,7 +5352,7 @@ export default function DmrDashboard({ darkMode }) {
                         <button
                           type="button"
                           disabled={dmrSheetSaving}
-                          onClick={unlinkDmrSheet}
+                          onClick={() => setUnlinkConfirmOpen(true)}
                           className={`h-12 rounded-2xl border px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "border-red-400/25 text-red-200 hover:bg-red-400/10" : "border-red-200 text-red-700 hover:bg-red-50"}`}
                         >
                           Unlink
@@ -5370,6 +5366,16 @@ export default function DmrDashboard({ darkMode }) {
           </div>
         </div>
       )}
+      <ConfirmModal
+        darkMode={darkMode}
+        open={unlinkConfirmOpen}
+        title="Unlink DMR sheet"
+        message="Unlink the current DMR sheet? Existing Google Sheet data will not be deleted."
+        confirmLabel="Unlink"
+        loading={dmrSheetSaving}
+        onCancel={() => setUnlinkConfirmOpen(false)}
+        onConfirm={unlinkDmrSheet}
+      />
     </div>
   );
 }

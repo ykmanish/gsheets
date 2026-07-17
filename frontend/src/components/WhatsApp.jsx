@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { SelectMenu } from "./ui";
+import { ConfirmModal, SelectMenu } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -207,6 +207,7 @@ export default function WhatsApp({ darkMode }) {
   const [groupForm, setGroupForm] = useState({ name: "", members: [] });
   const [groupMemberInput, setGroupMemberInput] = useState("");
   const [broadcastGroup, setBroadcastGroup] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const messagesEndRef = useRef(null);
   const messagesPaneRef = useRef(null);
@@ -515,15 +516,19 @@ export default function WhatsApp({ darkMode }) {
     }
   }
 
-  async function deleteContact(id) {
+  async function performDeleteContact(id) {
     try {
-      if (!window.confirm("Delete this WhatsApp contact? Conversation history will remain.")) return;
       await api(`/whatsapp/contacts/${id}`, { method: "DELETE" });
+      setDeleteConfirm(null);
       await loadData(true);
       toast.success("Contact removed");
     } catch (error) {
       toast.error(error.message);
     }
+  }
+
+  function deleteContact(id) {
+    setDeleteConfirm(id);
   }
 
   async function saveGroup(event) {
@@ -1504,6 +1509,14 @@ export default function WhatsApp({ darkMode }) {
           </button>
         </Modal>
       )}
+      <ConfirmModal
+        darkMode={darkMode}
+        open={Boolean(deleteConfirm)}
+        title="Delete contact"
+        message="Delete this WhatsApp contact? Conversation history will remain."
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => performDeleteContact(deleteConfirm)}
+      />
     </div>
   );
 }

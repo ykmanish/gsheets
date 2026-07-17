@@ -51,7 +51,7 @@ import {
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import MrnDetailDrawer from "./MrnDetailDrawer";
-import { DatePicker, SelectMenu } from "./ui";
+import { ConfirmModal, DatePicker, SelectMenu } from "./ui";
 
 const STATUS_OPTIONS = [
   { value: "todo", label: "Not started", color: "slate" },
@@ -82,6 +82,14 @@ const DOC_CATEGORIES = [
   "Site photo",
   "General",
 ];
+
+const STAT_TONES = {
+  green: "bg-[#eafbdc] text-[#3f7d16] dark:bg-[#17361e] dark:text-[#a9f27c]",
+  teal: "bg-[#e2faf6] text-[#137d6b] dark:bg-[#123936] dark:text-[#7de8d6]",
+  blue: "bg-[#edf2ff] text-[#2d55a1] dark:bg-[#172544] dark:text-[#9ebaff]",
+  amber: "bg-[#fff2cc] text-[#805b11] dark:bg-[#3b2d0d] dark:text-[#ffd872]",
+  rose: "bg-[#ffe2e7] text-[#9c2d43] dark:bg-[#431822] dark:text-[#ff9aaa]",
+};
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -998,6 +1006,7 @@ function TaskDrawer({
   onChange,
   onClose,
   onSave,
+  onSaveAddNew,
   onDelete,
 }) {
   const [tab, setTab] = useState("details");
@@ -1049,7 +1058,7 @@ function TaskDrawer({
       width="max-w-[590px]"
       footer={
         isEditing ? (
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             {task.__isNew ? (
               <span />
             ) : (
@@ -1072,6 +1081,20 @@ function TaskDrawer({
                 )}
                 Save task
               </Button>
+              {task.__isNew && (
+                <Button
+                  variant="primary"
+                  disabled={saving || !task.title.trim()}
+                  onClick={onSaveAddNew}
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  Save & add new
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -2556,10 +2579,10 @@ function OverviewView({
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              [Sparkles, "Progress", `${progress}%`, "bg-[#dff6d7] text-[#225f17] dark:bg-[#74d957]/18 dark:text-[#bdf5ab]"],
-              [CheckCircle2, "Tasks done", `${done}/${tasks.length}`, "bg-[#dfeaff] text-[#284b92] dark:bg-[#6c8dff]/18 dark:text-[#b9c9ff]"],
-              [AlertCircle, "Blocked", blocked, "bg-[#ffe2e7] text-[#9c2d43] dark:bg-rose-500/18 dark:text-rose-200"],
-              [CalendarDays, "Target", formatDate(project.targetDate), "bg-[#fff0c9] text-[#7a5511] dark:bg-amber-400/18 dark:text-amber-100"],
+              [Sparkles, "Progress", `${progress}%`, STAT_TONES.green],
+              [CheckCircle2, "Tasks done", `${done}/${tasks.length}`, STAT_TONES.blue],
+              [AlertCircle, "Blocked", blocked, STAT_TONES.rose],
+              [CalendarDays, "Target", formatDate(project.targetDate), STAT_TONES.amber],
             ].map(([Icon, label, value, badgeClass]) => (
               <div
                 key={label}
@@ -3249,10 +3272,10 @@ function ProjectManpowerView({ darkMode, project }) {
         <>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
-              ["Actual today", actual, "bg-[#e2faf6] text-[#137d6b]"],
-              ["Planned today", planned || planForToday, "bg-[#eafbdc] text-[#3f7d16]"],
-              ["Tomorrow plan", planForTomorrow, "bg-[#edf2ff] text-[#2d55a1]"],
-              ["Overall progress", `${progress}%`, "bg-[#fff2cc] text-[#805b11]"],
+              ["Actual today", actual, STAT_TONES.teal],
+              ["Planned today", planned || planForToday, STAT_TONES.green],
+              ["Tomorrow plan", planForTomorrow, STAT_TONES.blue],
+              ["Overall progress", `${progress}%`, STAT_TONES.amber],
             ].map(([label, value, className]) => (
               <div key={label} className={cn("rounded-2xl p-4", className)}>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">{label}</p>
@@ -3421,10 +3444,10 @@ function ProjectMrnView({ darkMode, project }) {
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          ["Total MRN", projectRecords.length, "bg-[#eafbdc] text-[#3f7d16]"],
-          ["Open", open, "bg-[#edf2ff] text-[#2d55a1]"],
-          ["Delivered", delivered, "bg-[#e2faf6] text-[#137d6b]"],
-          ["Quotation", mrnAmount(totalAmount), "bg-[#fff2cc] text-[#805b11]"],
+          ["Total MRN", projectRecords.length, STAT_TONES.green],
+          ["Open", open, STAT_TONES.blue],
+          ["Delivered", delivered, STAT_TONES.teal],
+          ["Quotation", mrnAmount(totalAmount), STAT_TONES.amber],
         ].map(([label, value, className]) => (
           <div key={label} className={cn("rounded-2xl p-4", className)}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
@@ -3728,6 +3751,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     category: "General",
     url: "",
   });
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -3870,8 +3894,10 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     setTaskEditor({ ...blankTask(resolvedPhase), status });
   }
 
-  async function saveTask() {
+  async function saveTask(addNew = false) {
     if (!selectedProject || !taskEditor?.title.trim()) return;
+    const nextPhaseId = taskEditor.phaseId;
+    const nextStatus = taskEditor.status || "todo";
     const source = JSON.parse(JSON.stringify(fullProject(selectedProject)));
     const cleanTask = { ...taskEditor };
     delete cleanTask.__isNew;
@@ -3893,16 +3919,15 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
       source,
       taskEditor.__isNew ? "Task created" : "Task updated",
     );
-    if (updated) setTaskEditor(null);
+    if (updated) {
+      setTaskEditor(
+        addNew ? { ...blankTask(nextPhaseId), status: nextStatus } : null,
+      );
+    }
   }
 
-  async function deleteTask() {
-    if (
-      !selectedProject ||
-      !taskEditor ||
-      !window.confirm(`Delete ${taskEditor.title}?`)
-    )
-      return;
+  async function performDeleteTask() {
+    if (!selectedProject || !taskEditor) return;
     const source = JSON.parse(JSON.stringify(fullProject(selectedProject)));
     source.phases = (source.phases || []).map((phase) => ({
       ...phase,
@@ -3913,6 +3938,15 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     );
     const updated = await patchProject(selectedProject, source, "Task deleted");
     if (updated) setTaskEditor(null);
+  }
+
+  function deleteTask() {
+    if (!selectedProject || !taskEditor) return;
+    setDeleteConfirm({
+      title: "Delete task",
+      message: `Delete "${taskEditor.title}"? This action cannot be undone.`,
+      onConfirm: performDeleteTask,
+    });
   }
 
   function openPhase(phase) {
@@ -3941,13 +3975,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     if (updated) setPhaseEditor(null);
   }
 
-  async function deletePhase() {
+  async function performDeletePhase() {
     if (!selectedProject || !phaseEditor) return;
-    if (tasks.some((task) => task.phaseId === phaseEditor.id))
-      return toast.error(
-        "Move or delete this phase's tasks before deleting the phase",
-      );
-    if (!window.confirm(`Delete ${phaseEditor.name}?`)) return;
     const source = JSON.parse(JSON.stringify(fullProject(selectedProject)));
     source.phases = (source.phases || []).filter(
       (phase) => phase.id !== phaseEditor.id,
@@ -3958,6 +3987,19 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
       "Phase deleted",
     );
     if (updated) setPhaseEditor(null);
+  }
+
+  function deletePhase() {
+    if (!selectedProject || !phaseEditor) return;
+    if (tasks.some((task) => task.phaseId === phaseEditor.id))
+      return toast.error(
+        "Move or delete this phase's tasks before deleting the phase",
+      );
+    setDeleteConfirm({
+      title: "Delete phase",
+      message: `Delete "${phaseEditor.name}"? This action cannot be undone.`,
+      onConfirm: performDeletePhase,
+    });
   }
 
   function editProject(project = null) {
@@ -3994,12 +4036,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     }
   }
 
-  async function deleteProject() {
-    if (
-      !projectEditor?.id ||
-      !window.confirm(`Delete ${projectEditor.name}? This cannot be undone.`)
-    )
-      return;
+  async function performDeleteProject() {
+    if (!projectEditor?.id) return;
     try {
       setSaving(true);
       await api(`/project-dashboard/projects/${projectEditor.id}`, {
@@ -4015,6 +4053,15 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function deleteProject() {
+    if (!projectEditor?.id) return;
+    setDeleteConfirm({
+      title: "Delete project",
+      message: `Delete "${projectEditor.name}"? This cannot be undone.`,
+      onConfirm: performDeleteProject,
+    });
   }
 
   function closeFileDrawer() {
@@ -4086,14 +4133,9 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     }
   }
 
-  async function deleteDocument(doc) {
+  async function performDeleteDocument(doc) {
     const documentId = doc?.id || doc?.driveFileId || doc?.url;
-    if (
-      !selectedProject ||
-      !documentId ||
-      !window.confirm(`Remove ${doc?.name || "this file"} from project files?`)
-    )
-      return;
+    if (!selectedProject || !documentId) return;
     try {
       setSaving(true);
       await api(
@@ -4107,6 +4149,17 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function deleteDocument(doc) {
+    const documentId = doc?.id || doc?.driveFileId || doc?.url;
+    if (!selectedProject || !documentId) return;
+    setDeleteConfirm({
+      title: "Remove file",
+      message: `Remove "${doc?.name || "this file"}" from project files?`,
+      confirmLabel: "Remove",
+      onConfirm: () => performDeleteDocument(doc),
+    });
   }
 
   if (loading) return <LoadingView darkMode={darkMode} />;
@@ -4287,6 +4340,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           }
           onClose={() => setTaskEditor(null)}
           onSave={saveTask}
+          onSaveAddNew={() => saveTask(true)}
           onDelete={deleteTask}
         />
       )}
@@ -4350,6 +4404,21 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           onUpload={uploadDocument}
         />
       )}
+      <ConfirmModal
+        darkMode={darkMode}
+        open={Boolean(deleteConfirm)}
+        title={deleteConfirm?.title}
+        message={deleteConfirm?.message}
+        confirmLabel={deleteConfirm?.confirmLabel || "Delete"}
+        loading={saving}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={async () => {
+          const action = deleteConfirm?.onConfirm;
+          if (!action) return;
+          await action();
+          setDeleteConfirm(null);
+        }}
+      />
     </div>
   );
 }

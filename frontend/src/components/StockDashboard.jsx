@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
+import { ConfirmModal } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -424,6 +425,7 @@ export default function StockDashboard({ darkMode }) {
   const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingSite, setEditingSite] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [selectedSite, setSelectedSite] = useState(null);
 
@@ -488,16 +490,21 @@ export default function StockDashboard({ darkMode }) {
     }
   }
 
-  async function deleteSite(site) {
-    if (!window.confirm(`Remove ${site.name} from Stock? The Google Sheet will not be deleted.`)) return;
+  async function performDeleteSite(site) {
+    if (!site?.id) return;
     try {
       await api(`/project-stock/sites/${site.id}`, { method: "DELETE" });
       toast.success("Stock site removed");
+      setDeleteConfirm(null);
       setSelectedSite((current) => current?.id === site.id ? null : current);
       await load(true);
     } catch (error) {
       toast.error(error.message || "Could not delete stock site");
     }
+  }
+
+  function deleteSite(site) {
+    setDeleteConfirm(site);
   }
 
   if (loading) {
@@ -560,6 +567,15 @@ export default function StockDashboard({ darkMode }) {
 
       <SiteFormDrawer darkMode={darkMode} open={formOpen} site={editingSite} saving={saving} onClose={() => { setFormOpen(false); setEditingSite(null); }} onSubmit={saveSite} />
       <SiteDetailDrawer darkMode={darkMode} site={selectedSite} open={Boolean(selectedSite)} onClose={() => setSelectedSite(null)} onEdit={openEdit} />
+      <ConfirmModal
+        darkMode={darkMode}
+        open={Boolean(deleteConfirm)}
+        title="Remove stock site"
+        message={`Remove ${deleteConfirm?.name || "this site"} from Stock? The Google Sheet will not be deleted.`}
+        confirmLabel="Remove"
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => performDeleteSite(deleteConfirm)}
+      />
     </main>
   );
 }

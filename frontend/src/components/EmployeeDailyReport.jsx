@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, ChevronDown, Clock3, Copy, Download, Eye, FileText, Heart, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Settings2, Sparkles, Star, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
-import { useClickOutside } from "./ui";
+import { ConfirmModal, useClickOutside } from "./ui";
 
 const employeeReportTestDateKey = "employee-report-test-date";
 
@@ -1227,6 +1227,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [submitting, setSubmitting] = useState(false);
   const [refreshingToday, setRefreshingToday] = useState(false);
   const [deletingReportId, setDeletingReportId] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [checkingReminder, setCheckingReminder] = useState(false);
   const [heroActionOpen, setHeroActionOpen] = useState(false);
   const heroActionRef = useRef(null);
@@ -1724,10 +1725,8 @@ export default function EmployeeDailyReport({ darkMode }) {
     }
   }
 
-  async function deleteEmployeeReport(report) {
+  async function performDeleteEmployeeReport(report) {
     if (!report?.reportDate || deletingReportId) return;
-    const confirmed = window.confirm(`Delete ${report.employeeName || "this employee"}'s report for ${report.reportDate}? This will remove it from _AppData and clear the matching Google Sheet rows.`);
-    if (!confirmed) return;
     try {
       setDeletingReportId(report.id);
       const params = new URLSearchParams();
@@ -1735,12 +1734,18 @@ export default function EmployeeDailyReport({ darkMode }) {
       await api(`/employee-daily-report/${encodeURIComponent(report.reportDate)}${params.toString() ? `?${params.toString()}` : ""}`, { method: "DELETE" });
       if (detail?.id === report.id) setDetail(null);
       toast.success("Employee report deleted");
+      setDeleteConfirm(null);
       await load();
     } catch (error) {
       toast.error(error.message || "Could not delete employee report");
     } finally {
       setDeletingReportId("");
     }
+  }
+
+  function deleteEmployeeReport(report) {
+    if (!report?.reportDate || deletingReportId) return;
+    setDeleteConfirm(report);
   }
 
   async function generateEmployeeReport() {
@@ -2864,6 +2869,15 @@ export default function EmployeeDailyReport({ darkMode }) {
 
       <SubmissionCelebrationModal darkMode={darkMode} celebration={submissionCelebration} onClose={() => setSubmissionCelebration(null)} />
       <ConfettiBurst active={confettiActive} onDone={() => setConfettiActive(false)} />
+      <ConfirmModal
+        darkMode={darkMode}
+        open={Boolean(deleteConfirm)}
+        title="Delete employee report"
+        message={`Delete ${deleteConfirm?.employeeName || "this employee"}'s report for ${deleteConfirm?.reportDate}? This will remove it from _AppData and clear the matching Google Sheet rows.`}
+        loading={Boolean(deletingReportId)}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => performDeleteEmployeeReport(deleteConfirm)}
+      />
     </main>
   );
 }

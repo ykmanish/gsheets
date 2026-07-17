@@ -3240,7 +3240,7 @@ function ProjectManpowerView({ darkMode, project }) {
             <ProgressBar value={progress} className="mt-3" />
           </section>
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <div className="mt-5 space-y-4">
             <PlanPanel title="Today Plan" date={data?.todayPlan?.date || data?.date} rows={todayPlanRows} showActual />
             <PlanPanel title="Tomorrow Plan" date={data?.tomorrowPlan?.date} rows={tomorrowPlanRows} />
           </div>
@@ -3267,26 +3267,26 @@ function PlanPanel({ title, date, rows, showActual = false }) {
           <h3 className="text-sm font-semibold">{title}</h3>
           <p className="mt-0.5 text-[11px] text-[#858b82]">{formatDate(date)} · {rows.length} item{rows.length === 1 ? "" : "s"}</p>
         </div>
-        <span className="rounded-lg bg-[#eafbdc] px-3 py-2 text-xs font-bold text-[#3f7d16]">
+        <span className="rounded-xl bg-[#eafbdc] px-4 py-2 text-sm font-bold text-[#3f7d16]">
           {showActual ? (
             <>
-              <span>{total}</span>
-              <span className="text-[#7b8178]">/</span>
-              <span className={actualClass(actual, total)}>{actual}</span>
+              <span className="text-2xl leading-none tabular-nums">{total}</span>
+              <span className="mx-1 text-[#7b8178]">/</span>
+              <span className={`text-2xl leading-none tabular-nums ${actualClass(actual, total)}`}>{actual}</span>
             </>
-          ) : total} manpower
+          ) : <span className="text-2xl leading-none tabular-nums">{total}</span>} <span className="align-middle text-xs">manpower</span>
         </span>
       </header>
-      <div className="divide-y divide-[#e9ebe7] dark:divide-white/10">
+      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {rows.map((row) => (
-          <div key={row.id} className="px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold">{row.trade}</p>
-              <span className="shrink-0 text-sm font-bold tabular-nums">
+          <div key={row.id} className="rounded-2xl border border-zinc-100 bg-[#fbfcf9] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+            <div className="flex items-start justify-between gap-3">
+              <p className="min-w-0 text-base font-semibold">{row.trade}</p>
+              <span className="shrink-0 text-2xl font-bold leading-none tabular-nums">
                 {showActual ? (
                   <>
                     <span>{row.plannedManpower}</span>
-                    <span className="text-[#7b8178]">/</span>
+                    <span className="mx-1 text-[#7b8178]">/</span>
                     <span className={actualClass(row.actualManpower, row.plannedManpower)}>
                       {row.actualManpower}
                     </span>
@@ -3299,7 +3299,7 @@ function PlanPanel({ title, date, rows, showActual = false }) {
           </div>
         ))}
         {!rows.length && (
-          <p className="px-4 py-12 text-center text-sm text-[#858b82]">No plan rows found for this site.</p>
+          <p className="py-12 text-center text-sm text-[#858b82] sm:col-span-2 xl:col-span-3 2xl:col-span-4">No plan rows found for this site.</p>
         )}
       </div>
     </section>

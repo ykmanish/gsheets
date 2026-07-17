@@ -231,7 +231,7 @@ function Button({ children, variant = "default", className = "", ...props }) {
     default:
       "border border-[#d9ddd6] bg-white text-[#20231f] hover:bg-[#f6f7f4] dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/10",
     primary:
-      "border border-[#20231f] bg-[#20231f] text-white hover:bg-[#30342e] dark:!border-[#7ddb58] dark:!bg-[#7ddb58] dark:!text-[#11150f] dark:hover:!bg-[#89ed3f]",
+      "border border-[#20231f] bg-[#20231f] text-white hover:bg-[#30342e] dark:!border-[#d8f36a] dark:!bg-[#d8f36a] dark:!text-[#11150f] dark:hover:!bg-[#cdea5e]",
     accent:
       "border border-[#71c94e] bg-[#78d455] text-[#13200e] hover:bg-[#6bc248]",
     ghost:
@@ -243,7 +243,7 @@ function Button({ children, variant = "default", className = "", ...props }) {
     <button
       type="button"
       className={cn(
-        "inline-flex h-12 items-center justify-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45",
+        "inline-flex h-8 items-center justify-center gap-2 rounded-full px-2.5 text-[11px] font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-45",
         variants[variant],
         className,
       )}
@@ -2772,8 +2772,12 @@ function TasksView({
           </p>
         </div>
         {isSuperAdmin && (
-          <Button variant="primary" onClick={() => onAddTask()}>
-            <Plus className="h-4 w-4" />
+          <Button
+            variant="primary"
+            className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
+            onClick={() => onAddTask()}
+          >
+            <Plus className="h-3 w-3" />
             New task
           </Button>
         )}
@@ -3336,7 +3340,7 @@ function PlanPanel({ title, date, rows, showActual = false }) {
       </header>
       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {rows.map((row) => (
-          <div key={row.id} className="rounded-2xl border border-zinc-100 bg-[#fbfcf9] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+          <div key={row.id} className="rounded-2xl  border-zinc-100 bg-[#fbfcf9] p-4 dark:border-white/10 dark:bg-white/[0.035]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-base  font-semibold">{row.trade}</p>
@@ -4260,7 +4264,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               className={cn(
                 "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs",
                 workspaceView === value
-                  ? "bg-[#20231f] font-semibold text-white dark:bg-[#78d455] dark:text-[#14200f]"
+                  ? "bg-[#20231f] font-semibold text-white dark:bg-[#d8f36a] dark:text-[#11150f]"
                   : "text-[#676d64] dark:text-white/50",
               )}
             >

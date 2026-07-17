@@ -2440,7 +2440,7 @@ const WORKSPACE_NAV = [
   { value: "files", label: "Files", icon: FolderOpen },
 ];
 
-function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenTeam }) {
+function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenTeam, navItems = WORKSPACE_NAV }) {
   const members = projectTeamMembers(project, tasks, users);
   const memberNames = members.map((member) => member.name);
   return (
@@ -2459,7 +2459,7 @@ function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenT
         </div>
       </div>
       <nav className="mt-6 space-y-1">
-        {WORKSPACE_NAV.map(({ value, label, icon: Icon }) => (
+        {navItems.map(({ value, label, icon: Icon }) => (
           <button
             key={value}
             type="button"
@@ -3278,7 +3278,7 @@ function PlanPanel({ title, date, rows, showActual = false }) {
         </span>
       </header>
       <div className="divide-y divide-[#e9ebe7] dark:divide-white/10">
-        {rows.slice(0, 8).map((row) => (
+        {rows.map((row) => (
           <div key={row.id} className="px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold">{row.trade}</p>
@@ -3659,6 +3659,17 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   const router = useRouter();
   const { user } = useAuth();
   const isSuperAdmin = Boolean(user?.isSuperAdmin);
+  const userMenus = user?.menus || [];
+  const canOpenProjectDmr = isSuperAdmin || userMenus.includes("project-dmr");
+  const canOpenProjectMrn = isSuperAdmin || userMenus.includes("project-mrn");
+  const workspaceNav = useMemo(
+    () => WORKSPACE_NAV.filter((item) => {
+      if (item.value === "manpower") return canOpenProjectDmr;
+      if (item.value === "mrn") return canOpenProjectMrn;
+      return true;
+    }),
+    [canOpenProjectDmr, canOpenProjectMrn],
+  );
   const [data, setData] = useState({ projects: [], totals: {} });
   const [config, setConfig] = useState({ projects: [], users: [] });
   const [loading, setLoading] = useState(true);
@@ -3735,6 +3746,12 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadProjectDocs(selectedProject?.id);
   }, [loadProjectDocs, selectedProject?.id]);
+
+  useEffect(() => {
+    if (!workspaceNav.some((item) => item.value === workspaceView)) {
+      setWorkspaceView("overview");
+    }
+  }, [workspaceNav, workspaceView]);
 
   const users = config.users || [];
   const projects = useMemo(() => {
@@ -4106,6 +4123,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
         documents={documents}
         users={users}
         onOpenTeam={() => setTeamDrawerOpen(true)}
+        navItems={workspaceNav}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[#e0e4dd] bg-white px-3 sm:px-4 dark:border-white/10 dark:bg-[#171a16]">
@@ -4142,7 +4160,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           </div>
         </header>
         <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e0e4dd] bg-white px-3 py-2 md:hidden dark:border-white/10 dark:bg-[#171a16]">
-          {WORKSPACE_NAV.map(({ value, label, icon: Icon }) => (
+          {workspaceNav.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
               type="button"

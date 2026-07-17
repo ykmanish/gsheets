@@ -64,7 +64,6 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     const assigned = [
       ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
     ];
-    if (user?.isSuperAdmin || assigned.some((menu) => ["projects", "sheet-dashboard", "site-images", "project-stock"].includes(menu))) assigned.push("site-images");
     const globallyDisabled = new Set(disabledModules || []);
     return Array.from(new Set(assigned)).filter((menu) => !["notifications", "settings"].includes(menu) && (!globallyDisabled.has(menu) || ["dashboard", "module-control"].includes(menu)));
   }, [disabledModules, menus, user?.isSuperAdmin]);

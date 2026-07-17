@@ -26,6 +26,7 @@ import { ConfirmModal, SelectMenu } from "./ui";
 const emptyRole = { id: "", name: "", description: "", menus: [], privileges: [] };
 const emptyUser = { username: "", displayName: "", password: "", roleId: "" };
 const emptyPassword = { userId: "", password: "", confirmPassword: "" };
+const PROJECT_PARENT_MENU = "projects";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -151,6 +152,18 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
     return !normalizedSearch || [user.displayName, user.username, role?.name, user.blacklisted ? "blacklisted" : "active"]
       .some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
   });
+  const projectMenuItems = useMemo(
+    () => menuItems.filter((menu) => menu.id === PROJECT_PARENT_MENU || menu.parent === PROJECT_PARENT_MENU),
+    [menuItems],
+  );
+  const projectChildMenuItems = useMemo(
+    () => projectMenuItems.filter((menu) => menu.parent === PROJECT_PARENT_MENU),
+    [projectMenuItems],
+  );
+  const topLevelMenuItems = useMemo(
+    () => menuItems.filter((menu) => menu.id !== PROJECT_PARENT_MENU && menu.parent !== PROJECT_PARENT_MENU),
+    [menuItems],
+  );
 
   useEffect(() => {
     void loadAdminData();
@@ -199,6 +212,25 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
         ? current[field].filter((item) => item !== value)
         : [...current[field], value],
     }));
+  }
+
+  function toggleRoleMenu(value) {
+    setRoleForm((current) => {
+      const currentMenus = current.menus || [];
+      const active = currentMenus.includes(value);
+      let menus;
+      if (value === PROJECT_PARENT_MENU) {
+        const projectIds = new Set(projectMenuItems.map((menu) => menu.id));
+        menus = active
+          ? currentMenus.filter((id) => !projectIds.has(id))
+          : [...new Set([...currentMenus, PROJECT_PARENT_MENU])];
+      } else {
+        menus = active
+          ? currentMenus.filter((id) => id !== value)
+          : [...new Set([...currentMenus, PROJECT_PARENT_MENU, value])];
+      }
+      return { ...current, menus };
+    });
   }
 
   async function saveRole(event) {
@@ -520,8 +552,44 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
                 <p className="text-sm font-semibold">Visible modules</p>
                 <p className={`mt-1 text-xs ${muted}`}>Choose the pages this role can open from the sidebar.</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {menuItems.map((menu) => <PermissionButton key={menu.id} darkMode={darkMode} active={roleForm.menus.includes(menu.id)} label={menu.label} onClick={() => toggleRoleField("menus", menu.id)} />)}
+              <div className="space-y-3">
+                {projectMenuItems.length > 0 && (
+                  <div className={`rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-black/10" : "border-black/10 bg-white/70"}`}>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <PermissionButton
+                        darkMode={darkMode}
+                        active={roleForm.menus.includes(PROJECT_PARENT_MENU)}
+                        label={projectMenuItems.find((menu) => menu.id === PROJECT_PARENT_MENU)?.label || "Project Control"}
+                        onClick={() => toggleRoleMenu(PROJECT_PARENT_MENU)}
+                      />
+                      <span className={`px-1 text-xs ${muted}`}>
+                        {projectChildMenuItems.filter((menu) => roleForm.menus.includes(menu.id)).length}/{projectChildMenuItems.length} submodules
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {projectChildMenuItems.map((menu) => (
+                        <PermissionButton
+                          key={menu.id}
+                          darkMode={darkMode}
+                          active={roleForm.menus.includes(menu.id)}
+                          label={menu.label}
+                          onClick={() => toggleRoleMenu(menu.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {topLevelMenuItems.map((menu) => (
+                    <PermissionButton
+                      key={menu.id}
+                      darkMode={darkMode}
+                      active={roleForm.menus.includes(menu.id)}
+                      label={menu.label}
+                      onClick={() => toggleRoleField("menus", menu.id)}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 

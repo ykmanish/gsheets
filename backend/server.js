@@ -64,11 +64,11 @@ const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "documents", label: "Documents" },
   { id: "forms", label: "Forms" },
-  { id: "projects", label: "Projects" },
-  { id: "project-dmr", label: "DMR" },
-  { id: "project-mrn", label: "MRN" },
-  { id: "project-stock", label: "Stock" },
-  { id: "site-images", label: "Site Images" },
+  { id: "projects", label: "Project Control", group: "projects" },
+  { id: "project-dmr", label: "DMR", parent: "projects", group: "projects" },
+  { id: "project-mrn", label: "MRN", parent: "projects", group: "projects" },
+  { id: "project-stock", label: "Stock", parent: "projects", group: "projects" },
+  { id: "site-images", label: "Site Images", parent: "projects", group: "projects" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
@@ -79,6 +79,9 @@ const MENU_ITEMS = [
 ];
 const SUPER_ADMIN_MENU_ITEMS = [{ id: "whatsapp", label: "WhatsApp" }, { id: "module-control", label: "Module Control" }];
 const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];
+const MENU_ITEM_IDS = new Set(ALL_MENU_ITEMS.map((item) => item.id));
+const ROLE_MENU_ITEM_IDS = new Set(MENU_ITEMS.map((item) => item.id));
+const PROJECT_CHILD_MENU_IDS = new Set(MENU_ITEMS.filter((item) => item.parent === "projects").map((item) => item.id));
 const PROTECTED_GLOBAL_MODULES = new Set(["dashboard", "module-control"]);
 const PRIVILEGE_ITEMS = [
   { id: "upload_documents", label: "Upload documents" },
@@ -132,7 +135,7 @@ async function getDisabledModules({ fresh = false } = {}) {
   if (!fresh && moduleControlCache.expiresAt > Date.now()) return [...moduleControlCache.disabledModules];
   const db = await connectAuthDb();
   const setting = await db.collection("platformSettings").findOne({ _id: "module-control" });
-  const disabledModules = (setting?.disabledModules || []).filter((id) => ALL_MENU_ITEMS.some((item) => item.id === id) && !PROTECTED_GLOBAL_MODULES.has(id));
+  const disabledModules = (setting?.disabledModules || []).filter((id) => MENU_ITEM_IDS.has(id) && !PROTECTED_GLOBAL_MODULES.has(id));
   moduleControlCache = { disabledModules, expiresAt: Date.now() + 5000 };
   return [...disabledModules];
 }
@@ -172,11 +175,21 @@ function isEffectiveSuperAdmin(user, role) {
 }
 
 function roleMenusForUser(user, role) {
-  return isEffectiveSuperAdmin(user, role) ? ALL_MENU_ITEMS.map((item) => item.id) : role?.menus || user?.menus || [];
+  return isEffectiveSuperAdmin(user, role) ? ALL_MENU_ITEMS.map((item) => item.id) : normalizeRoleMenus(role?.menus || user?.menus || [], { allowSuperAdminMenus: false });
 }
 
 function rolePrivilegesForUser(user, role) {
   return isEffectiveSuperAdmin(user, role) ? PRIVILEGE_ITEMS.map((item) => item.id) : role?.privileges || user?.privileges || [];
+}
+
+function normalizeRoleMenus(menus = [], { allowSuperAdminMenus = false } = {}) {
+  const validIds = allowSuperAdminMenus ? MENU_ITEM_IDS : ROLE_MENU_ITEM_IDS;
+  const normalized = [...new Set((Array.isArray(menus) ? menus : []).map(String))]
+    .filter((id) => validIds.has(id));
+  if (normalized.some((id) => PROJECT_CHILD_MENU_IDS.has(id)) && !normalized.includes("projects")) {
+    normalized.unshift("projects");
+  }
+  return normalized;
 }
 
 function sanitizeUser(user, role) {
@@ -3425,7 +3438,7 @@ app.get("/admin/module-control", requireSuperAdmin, async (req, res) => {
 app.put("/admin/module-control", requireSuperAdmin, async (req, res) => {
   try {
     const requested = Array.isArray(req.body?.disabledModules) ? req.body.disabledModules.map(String) : [];
-    const disabledModules = [...new Set(requested)].filter((id) => ALL_MENU_ITEMS.some((item) => item.id === id) && !PROTECTED_GLOBAL_MODULES.has(id));
+    const disabledModules = [...new Set(requested)].filter((id) => MENU_ITEM_IDS.has(id) && !PROTECTED_GLOBAL_MODULES.has(id));
     const db = await connectAuthDb();
     await db.collection("platformSettings").updateOne(
       { _id: "module-control" },
@@ -3449,7 +3462,7 @@ app.get("/admin/roles", requireSuperAdmin, async (req, res) => {
       id: String(role._id),
       name: role.name,
       description: role.description || "",
-      menus: role.menus || [],
+      menus: normalizeRoleMenus(role.menus || [], { allowSuperAdminMenus: Boolean(role.isSystem) }),
       privileges: role.privileges || [],
       isSystem: Boolean(role.isSystem),
       createdAt: role.createdAt,
@@ -3463,7 +3476,7 @@ app.post("/admin/roles", requireSuperAdmin, async (req, res) => {
     const db = await connectAuthDb();
     const { name, description, menus = [], privileges = [] } = req.body || {};
     if (!name?.trim()) return res.status(400).json({ error: "Role name is required" });
-    const allowedMenus = menus.filter((menu) => MENU_ITEMS.some((item) => item.id === menu));
+    const allowedMenus = normalizeRoleMenus(menus);
     const allowedPrivileges = privileges.filter((privilege) => PRIVILEGE_ITEMS.some((item) => item.id === privilege));
     const now = new Date();
     const result = await db.collection("roles").insertOne({
@@ -3491,7 +3504,7 @@ app.patch("/admin/roles/:id", requireSuperAdmin, async (req, res) => {
     if (!role) return res.status(404).json({ error: "Role not found" });
     res.locals.activityTarget = formatRoleTarget(role);
     const { name, description, menus = [], privileges = [] } = req.body || {};
-    const allowedMenus = menus.filter((menu) => MENU_ITEMS.some((item) => item.id === menu));
+    const allowedMenus = normalizeRoleMenus(menus);
     const allowedPrivileges = privileges.filter((privilege) => PRIVILEGE_ITEMS.some((item) => item.id === privilege));
     const update = {
       description: description || "",

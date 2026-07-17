@@ -726,7 +726,7 @@ function DetailBadge({ icon: Icon, label, children, className = "" }) {
 
 function DetailSection({ title, icon: Icon, children }) {
   return (
-    <section className="rounded-2xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+    <section className="rounded-2xl border border-zinc-100 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
         {Icon && <Icon className="h-4 w-4 text-[#6c7468]" />}
         {title}
@@ -2844,12 +2844,12 @@ function TasksView({
               key={task.id}
               type="button"
               onClick={() => onOpenTask(task)}
-              className="grid min-w-[920px] grid-cols-[minmax(260px,1.5fr)_150px_130px_120px_130px_36px] items-center gap-4 border-b border-[#eceeea] px-4 py-3.5 text-left text-sm last:border-0 hover:bg-[#fafbf9] dark:border-white/10 dark:hover:bg-white/[0.025]"
+              className="grid min-w-[920px] grid-cols-[minmax(260px,1.5fr)_150px_130px_120px_130px_36px] items-start gap-4 border-b border-[#eceeea] px-4 py-4 text-left text-sm last:border-0 hover:bg-[#fafbf9] dark:border-white/10 dark:hover:bg-white/[0.025]"
             >
               <span className="flex min-w-0 items-center gap-3">
                 <span
                   className={cn(
-                    "h-3.5 w-3.5 shrink-0 rounded-full border-2",
+                    "mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2",
                     task.status === "done"
                       ? "border-[#62bd43] bg-[#62bd43]"
                       : task.status === "blocked"
@@ -2863,31 +2863,40 @@ function TasksView({
                   <span className="block truncate font-medium">
                     {task.title || "Untitled task"}
                   </span>
-                  {task.description && (
-                    <span className="mt-0.5 block truncate text-[11px] text-[#858b82]">
-                      {task.description}
-                    </span>
-                  )}
+                  <span
+                    className={cn(
+                      "mt-0.5 block min-h-[16px] truncate text-[11px] text-[#858b82]",
+                      !task.description && "invisible",
+                    )}
+                  >
+                    {task.description || "No description"}
+                  </span>
                 </span>
               </span>
-              <span className="truncate text-xs text-[#6e746b] dark:text-white/50">
+              <span className="mt-1 truncate text-xs text-[#6e746b] dark:text-white/50">
                 {phases.find((phase) => phase.id === task.phaseId)?.name ||
                   "No phase"}
               </span>
-              <AvatarStack names={assigneeNames} limit={3} key={index} />
+              <span className="block min-h-8 min-w-0">
+                {assigneeNames.length ? (
+                  <AvatarStack names={assigneeNames} limit={3} key={index} />
+                ) : (
+                  <span className="invisible block h-8 w-8">Unassigned</span>
+                )}
+              </span>
               <span className="flex min-w-0 flex-col gap-1">
                 <StatusPill status={task.status || "todo"} compact />
                 <PriorityPill priority={task.priority} />
               </span>
               <span
                 className={cn(
-                  "text-xs",
+                  "mt-1 text-xs",
                   overdue ? "font-semibold text-rose-500" : "text-[#747a71]",
                 )}
               >
                 {formatDate(task.dueDate, "No date")}
               </span>
-              <ChevronRight className="h-4 w-4 text-[#a0a59d]" />
+              <ChevronRight className="mt-1 h-4 w-4 text-[#a0a59d]" />
             </button>
           );
         })}

@@ -770,7 +770,7 @@ function TaskDetailView({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <DetailBadge
           icon={Circle}
           label="Status"
@@ -914,7 +914,7 @@ function PhaseDetailView({ phase, tasks, users }) {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <DetailBadge
           icon={Sparkles}
           label="Progress"
@@ -2216,7 +2216,7 @@ function PortfolioView({
           </div>
         </header>
 
-        <section className="mt-7 grid overflow-hidden rounded-xl  border-[#dfe3dc] bg-white sm:grid-cols-2 xl:grid-cols-4 dark:border-white/10 dark:bg-white/[0.03]">
+        <section className="mt-7 grid grid-cols-2 overflow-hidden rounded-xl  border-[#dfe3dc] bg-white xl:grid-cols-4 dark:border-white/10 dark:bg-white/[0.03]">
           {[
             [FolderKanban, "Active projects", projects.length],
             [ListChecks, "Open tasks", Math.max(0, totalTasks - completed)],
@@ -2227,9 +2227,12 @@ function PortfolioView({
               key={label}
               className={cn(
                 "flex items-center gap-4 px-5 py-4",
-                index > 0 &&
-                  "border-t border-[#e6e9e3] sm:border-l sm:border-t-0",
-                index === 2 && "sm:border-l-0 xl:border-l",
+                index > 0 && "border-t border-[#e6e9e3]",
+                index % 2 === 1 && "border-l",
+                index > 1 && "border-t",
+                index === 1 && "border-t-0",
+                index === 2 && "border-l-0 xl:border-l xl:border-t-0",
+                index === 3 && "xl:border-t-0",
                 "dark:border-white/10",
               )}
             >
@@ -3283,7 +3286,7 @@ function ProjectManpowerView({ darkMode, project }) {
         </div>
       ) : (
         <>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
             {[
               ["Actual today", actual, STAT_TONES.teal],
               ["Planned today", planned || planForToday, STAT_TONES.green],
@@ -3455,7 +3458,7 @@ function ProjectMrnView({ darkMode, project }) {
         </Button>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
           ["Total MRN", projectRecords.length, STAT_TONES.green],
           ["Open", open, STAT_TONES.blue],

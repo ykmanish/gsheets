@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -12221,6 +12222,7 @@ app.post("/chat", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+const server = http.createServer(app);
 
 if (require.main === module) {
   refreshEmployeeReminderCron().catch((error) => {
@@ -12241,7 +12243,7 @@ if (require.main === module) {
     }
   }, { timezone: "Asia/Kolkata" });
 
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📁 Uploads: ${uploadsDir}`);
     console.log(`📁 Vectors: ${vectorsDir}`);

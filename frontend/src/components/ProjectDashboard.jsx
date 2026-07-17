@@ -13,7 +13,6 @@ import {
   ChevronRight,
   Circle,
   Clock3,
-  Columns3,
   ClipboardList,
   Download,
   Eye,
@@ -2435,7 +2434,7 @@ function PortfolioView({
 const WORKSPACE_NAV = [
   { value: "overview", label: "Overview", icon: LayoutDashboard },
   { value: "tasks", label: "Tasks", icon: ListChecks },
-  { value: "board", label: "Board", icon: Columns3 },
+  { value: "manpower", label: "Manpower", icon: Users },
   { value: "mrn", label: "MRN", icon: ClipboardList },
   { value: "phases", label: "Phases", icon: Layers3 },
   { value: "files", label: "Files", icon: FolderOpen },
@@ -2879,140 +2878,6 @@ function TasksView({
   );
 }
 
-function BoardView({
-  tasks,
-  phases,
-  users,
-  isSuperAdmin,
-  onOpenTask,
-  onAddTask,
-  onMoveTask,
-}) {
-  function handleDrop(event, status) {
-    event.preventDefault();
-    if (!isSuperAdmin) return;
-    const taskId =
-      event.dataTransfer.getData("application/x-project-task") ||
-      event.dataTransfer.getData("text/plain");
-    if (taskId) onMoveTask(taskId, status);
-  }
-
-  return (
-    <div className="min-w-max p-4 sm:p-6">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Project board</h2>
-          <p className="mt-0.5 text-xs text-[#7b8178]">
-            Work organized by status. Drag tasks between columns to update them.
-          </p>
-        </div>
-        {isSuperAdmin && (
-          <Button variant="primary" onClick={() => onAddTask()}>
-            <Plus className="h-4 w-4" />
-            New task
-          </Button>
-        )}
-      </div>
-      <div className="grid grid-cols-4 gap-4">
-        {STATUS_OPTIONS.map((status) => {
-          const items = tasks.filter(
-            (task) => (task.status || "todo") === status.value,
-          );
-          return (
-            <section
-              key={status.value}
-              onDragOver={(event) => isSuperAdmin && event.preventDefault()}
-              onDrop={(event) => handleDrop(event, status.value)}
-              className="min-h-[390px] w-[280px] rounded-2xl  border-[#e0e4dd] bg-[#eceee9] p-3 dark:border-white/10 dark:bg-white/[0.035]"
-            >
-              <header className="flex items-center justify-between px-1 py-1">
-                <StatusPill status={status.value} count={items.length} />
-                <div className="flex items-center">
-                  <IconButton
-                    label={`Add ${status.label} task`}
-                    onClick={() => onAddTask("", status.value)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </IconButton>
-                  <IconButton label="Column options">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </IconButton>
-                </div>
-              </header>
-              <div className="mt-3 space-y-2">
-                {items.map((task, index) => {
-                  const names = users
-                    .filter((person) =>
-                      (task.assigneeIds || []).includes(person.id),
-                    )
-                    .map((person) => person.displayName || person.username);
-                  return (
-                    <button
-                      key={task.id}
-                      type="button"
-                      draggable={isSuperAdmin}
-                      onDragStart={(event) => {
-                        event.dataTransfer.effectAllowed = "move";
-                        event.dataTransfer.setData(
-                          "application/x-project-task",
-                          task.id,
-                        );
-                        event.dataTransfer.setData("text/plain", task.id);
-                      }}
-                      onClick={() => onOpenTask(task)}
-                      className="w-full rounded-2xl  border-[#dfe3dc] bg-white p-3 text-left transition hover:-translate-y-0.5 hover:border-[#bbc6b6] active:cursor-grabbing dark:border-white/10 dark:bg-[#1a1d18]"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-[10px] font-medium text-[#858b82]">
-                          {phases.find((phase) => phase.id === task.phaseId)
-                            ?.name || "Project task"}
-                        </span>
-                        <MoreHorizontal className="h-4 w-4 text-[#a0a59d]" />
-                      </div>
-                      <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-5">
-                        {task.title}
-                      </h3>
-                      {task.description && (
-                        <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[#7b8178]">
-                          {task.description}
-                        </p>
-                      )}
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        <PriorityPill priority={task.priority} />
-                        {(task.dependencyIds || []).length > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-[#eef0ec] px-2 py-1 text-[10px] text-[#62685f]">
-                            <Link2 className="h-3 w-3" />
-                            {task.dependencyIds.length}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-4 flex items-center justify-between border-t border-[#eceeea] pt-2.5 dark:border-white/10">
-                        <AvatarStack names={names} limit={3} key={index} />
-                        <span className="flex items-center gap-1 text-[10px] text-[#777d74]">
-                          <CalendarDays className="h-3 w-3" />
-                          {formatDate(task.dueDate, "No date")}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => onAddTask("", status.value)}
-                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#c9cec6] text-xs font-medium text-[#747a71] hover:bg-white/70 dark:border-white/10 dark:hover:bg-white/[0.04]"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add task
-                </button>
-              </div>
-            </section>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function PhasesView({
   phases,
   tasks,
@@ -3141,6 +3006,41 @@ function compactProjectReference(value) {
   return normalizeProjectReference(value).replace(/\s+/g, "");
 }
 
+function comparableProjectText(value = "") {
+  const text = String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/\bfarm\s+house\b/g, "farmhouse")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const compact = text.replace(/\s+/g, "");
+  const aliases = {
+    kalhar: "kalhaar",
+    kalhaar: "kalhaar",
+    farmhouse: "serenitymeadowsfarmhouse",
+    serenitymeadowsfarm: "serenitymeadowsfarmhouse",
+    serenitymeadowsfarmhouse: "serenitymeadowsfarmhouse",
+    gharana: "gharana",
+    sgharana: "gharana",
+    sheetalgharana: "gharana",
+  };
+  return aliases[compact] || text;
+}
+
+function comparableTradeText(value = "") {
+  const text = comparableProjectText(value);
+  const compact = text.replace(/\s+/g, "");
+  const aliases = {
+    ac: "ac",
+    aircondition: "ac",
+    airconditioning: "ac",
+    airconditioner: "ac",
+    airconditioners: "ac",
+  };
+  return aliases[compact] || compact;
+}
+
 function mrnMatchesProject(row, project) {
   const rowProject = compactProjectReference(row.project);
   if (!rowProject) return false;
@@ -3155,9 +3055,255 @@ function mrnMatchesProject(row, project) {
   );
 }
 
+function dmrMatchesProject(value, project) {
+  const rowProject = comparableProjectText(value);
+  const compactRowProject = rowProject.replace(/\s+/g, "");
+  if (!rowProject) return false;
+  const candidates = [project.name, project.code, project.location]
+    .map(comparableProjectText)
+    .filter(Boolean);
+  return candidates.some(
+    (candidate) => {
+      const compactCandidate = candidate.replace(/\s+/g, "");
+      return (
+      rowProject === candidate ||
+        compactRowProject === compactCandidate ||
+        rowProject.includes(candidate) ||
+        candidate.includes(rowProject) ||
+        compactRowProject.includes(compactCandidate) ||
+        compactCandidate.includes(compactRowProject)
+      );
+    },
+  );
+}
+
 function mrnAmount(value) {
   const amount = Number(String(value || "").replace(/,/g, "")) || 0;
   return amount ? `Rs ${amount.toLocaleString("en-IN")}` : "Rs 0";
+}
+
+function manpowerNumber(value) {
+  return Number(value) || 0;
+}
+
+function manpowerProgress(planned, actual) {
+  const plannedValue = manpowerNumber(planned);
+  const actualValue = manpowerNumber(actual);
+  if (!plannedValue) return actualValue ? 100 : 0;
+  return Math.min(100, Math.round((actualValue / plannedValue) * 100));
+}
+
+function projectManpowerRows(records = [], project) {
+  const grouped = new Map();
+  records
+    .filter((record) => dmrMatchesProject(record.site, project))
+    .forEach((record) => {
+      const key = `${record.agency || "Agency not added"}|${record.trade || record.category || "Trade not added"}`;
+      const item = grouped.get(key) || {
+        agency: record.agency || "Agency not added",
+        trade: record.trade || record.category || "Trade not added",
+        planned: 0,
+        actual: 0,
+      };
+      item.planned += manpowerNumber(record.planned);
+      item.actual += manpowerNumber(record.actual);
+      grouped.set(key, item);
+    });
+  return [...grouped.values()].sort((a, b) => b.actual - a.actual || b.planned - a.planned);
+}
+
+function projectPlanRows(plan, project) {
+  const actualByTrade = new Map(
+    (plan?.actuals?.tradeSiteBreakdown || []).map((item) => [
+      `${comparableProjectText(item.site)}|${comparableTradeText(item.trade)}`,
+      manpowerNumber(item.actual),
+    ]),
+  );
+  return (plan?.records || [])
+    .filter((record) => dmrMatchesProject(record.site, project))
+    .map((record, index) => ({
+      id: record.id || `${plan?.date || "plan"}-${index}`,
+      site: record.site || "",
+      trade: record.trade || record.category || record.agency || "Work plan",
+      plannedManpower: manpowerNumber(record.plannedManpower ?? record.manpower ?? record.planned),
+      actualManpower: actualByTrade.get(`${comparableProjectText(record.site)}|${comparableTradeText(record.category || record.trade || record.agency)}`) || 0,
+      work: record.work || record.plannedWork || record.description || record.scope || "",
+      submittedBy: record.submittedBy || record.createdBy || "",
+    }));
+}
+
+function projectPlanActual(plan, project) {
+  return (plan?.actuals?.siteBreakdown || [])
+    .filter((item) => dmrMatchesProject(item.site, project))
+    .reduce((sum, item) => sum + manpowerNumber(item.actual), 0);
+}
+
+function ProjectManpowerView({ darkMode, project }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadDmr = useCallback(async (quiet = false) => {
+    try {
+      quiet ? setRefreshing(true) : setLoading(true);
+      setError("");
+      const result = await api("/dmr-dashboard");
+      setData(result);
+    } catch (loadError) {
+      setError(loadError.message || "Could not load project manpower");
+      setData(null);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadDmr();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadDmr]);
+
+  const todayRows = useMemo(
+    () => projectManpowerRows(data?.today?.records || [], project),
+    [data?.today?.records, project],
+  );
+  const todayPlanRows = useMemo(
+    () => projectPlanRows(data?.todayPlan, project),
+    [data?.todayPlan, project],
+  );
+  const tomorrowPlanRows = useMemo(
+    () => projectPlanRows(data?.tomorrowPlan, project),
+    [data?.tomorrowPlan, project],
+  );
+  const planForToday = todayPlanRows.reduce((sum, row) => sum + row.plannedManpower, 0);
+  const planForTomorrow = tomorrowPlanRows.reduce((sum, row) => sum + row.plannedManpower, 0);
+  const actualFromPlan = projectPlanActual(data?.todayPlan, project);
+  const planned = planForToday || todayRows.reduce((sum, row) => sum + row.planned, 0);
+  const actual = actualFromPlan || todayRows.reduce((sum, row) => sum + row.actual, 0);
+  const progress = manpowerProgress(planned || planForToday, actual);
+
+  return (
+    <div className="mx-auto max-w-[1250px] p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Project Manpower</h2>
+          <p className="mt-0.5 text-xs text-[#7b8178]">
+            DMR manpower, today plan, and tomorrow plan for {project.name}.
+          </p>
+        </div>
+        <Button onClick={() => loadDmr(true)}>
+          <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+          Refresh
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="mt-5 rounded-2xl border border-[#dfe3dc] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-white/[0.03]">
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" />
+          <p className="mt-3 text-sm text-[#7b8178]">Loading project manpower...</p>
+        </div>
+      ) : error ? (
+        <div className="mt-5 rounded-2xl border border-[#dfe3dc] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-white/[0.03]">
+          <AlertCircle className="mx-auto h-7 w-7 text-amber-500" />
+          <h3 className="mt-3 text-sm font-semibold">DMR records unavailable</h3>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#858b82]">{error}</p>
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["Actual today", actual, "bg-[#e2faf6] text-[#137d6b]"],
+              ["Planned today", planned || planForToday, "bg-[#eafbdc] text-[#3f7d16]"],
+              ["Tomorrow plan", planForTomorrow, "bg-[#edf2ff] text-[#2d55a1]"],
+              ["Overall progress", `${progress}%`, "bg-[#fff2cc] text-[#805b11]"],
+            ].map(([label, value, className]) => (
+              <div key={label} className={cn("rounded-2xl p-4", className)}>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">{label}</p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          <section className="mt-5 rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold">Overall progress</h3>
+                <p className="mt-0.5 text-[11px] text-[#858b82]">
+                  {actual} actual against {planned || planForToday} planned manpower
+                </p>
+              </div>
+              <span className="text-lg font-bold tabular-nums">{progress}%</span>
+            </div>
+            <ProgressBar value={progress} className="mt-3" />
+          </section>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+            <PlanPanel title="Today Plan" date={data?.todayPlan?.date || data?.date} rows={todayPlanRows} showActual />
+            <PlanPanel title="Tomorrow Plan" date={data?.tomorrowPlan?.date} rows={tomorrowPlanRows} />
+          </div>
+
+        </>
+      )}
+    </div>
+  );
+}
+
+function PlanPanel({ title, date, rows, showActual = false }) {
+  const total = rows.reduce((sum, row) => sum + row.plannedManpower, 0);
+  const actual = rows.reduce((sum, row) => sum + row.actualManpower, 0);
+  const actualClass = (actualValue, plannedValue) =>
+    !showActual
+      ? ""
+      : manpowerNumber(actualValue) >= manpowerNumber(plannedValue)
+        ? "text-emerald-600"
+        : "text-red-600";
+  return (
+    <section className="overflow-hidden rounded-2xl  border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
+      <header className="flex items-center justify-between gap-3 border-b border-[#e5e8e2] px-4 py-3 dark:border-white/10">
+        <div>
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <p className="mt-0.5 text-[11px] text-[#858b82]">{formatDate(date)} · {rows.length} item{rows.length === 1 ? "" : "s"}</p>
+        </div>
+        <span className="rounded-lg bg-[#eafbdc] px-3 py-2 text-xs font-bold text-[#3f7d16]">
+          {showActual ? (
+            <>
+              <span>{total}</span>
+              <span className="text-[#7b8178]">/</span>
+              <span className={actualClass(actual, total)}>{actual}</span>
+            </>
+          ) : total} manpower
+        </span>
+      </header>
+      <div className="divide-y divide-[#e9ebe7] dark:divide-white/10">
+        {rows.slice(0, 8).map((row) => (
+          <div key={row.id} className="px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold">{row.trade}</p>
+              <span className="shrink-0 text-sm font-bold tabular-nums">
+                {showActual ? (
+                  <>
+                    <span>{row.plannedManpower}</span>
+                    <span className="text-[#7b8178]">/</span>
+                    <span className={actualClass(row.actualManpower, row.plannedManpower)}>
+                      {row.actualManpower}
+                    </span>
+                  </>
+                ) : row.plannedManpower}
+              </span>
+            </div>
+            {row.work && <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#6f756c] dark:text-white/50">{row.work}</p>}
+            {row.submittedBy && <p className="mt-1 text-[10px] text-[#92988f]">By {row.submittedBy}</p>}
+          </div>
+        ))}
+        {!rows.length && (
+          <p className="px-4 py-12 text-center text-sm text-[#858b82]">No plan rows found for this site.</p>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function ProjectMrnView({ darkMode, project }) {
@@ -3714,28 +3860,6 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     if (updated) setTaskEditor(null);
   }
 
-  async function moveTaskStatus(taskId, status) {
-    if (!selectedProject || !isSuperAdmin) return;
-    const currentTask = tasks.find((task) => task.id === taskId);
-    if (!currentTask || (currentTask.status || "todo") === status) return;
-    const source = JSON.parse(JSON.stringify(fullProject(selectedProject)));
-    let moved = false;
-    source.phases = (source.phases || []).map((phase) => ({
-      ...phase,
-      tasks: (phase.tasks || []).map((task) => {
-        if (task.id !== taskId) return task;
-        moved = true;
-        return { ...task, status, phaseId: task.phaseId || phase.id };
-      }),
-    }));
-    source.tasks = (source.tasks || []).map((task) => {
-      if (task.id !== taskId) return task;
-      moved = true;
-      return { ...task, status };
-    });
-    if (moved) await patchProject(selectedProject, source);
-  }
-
   function openPhase(phase) {
     setPhaseEditor(JSON.parse(JSON.stringify(phase)));
   }
@@ -4035,12 +4159,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             </button>
           ))}
         </nav>
-        <main
-          className={cn(
-            "min-h-0 flex-1",
-            workspaceView === "board" ? "overflow-auto" : "overflow-y-auto",
-          )}
-        >
+        <main className="min-h-0 flex-1 overflow-y-auto">
           {workspaceView === "overview" && (
             <OverviewView
               project={selectedProject}
@@ -4065,16 +4184,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               onAddTask={addTask}
             />
           )}
-          {workspaceView === "board" && (
-            <BoardView
-              tasks={tasks}
-              phases={phases}
-              users={users}
-              isSuperAdmin={isSuperAdmin}
-              onOpenTask={openTask}
-              onAddTask={addTask}
-              onMoveTask={moveTaskStatus}
-            />
+          {workspaceView === "manpower" && (
+            <ProjectManpowerView darkMode={darkMode} project={selectedProject} />
           )}
           {workspaceView === "mrn" && (
             <ProjectMrnView darkMode={darkMode} project={selectedProject} />

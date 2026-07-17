@@ -3113,23 +3113,57 @@ function projectManpowerRows(records = [], project) {
 }
 
 function projectPlanRows(plan, project) {
-  const actualByTrade = new Map(
-    (plan?.actuals?.tradeSiteBreakdown || []).map((item) => [
-      `${comparableProjectText(item.site)}|${comparableTradeText(item.trade)}`,
-      manpowerNumber(item.actual),
-    ]),
-  );
-  return (plan?.records || [])
+  const rows = new Map();
+  const rowKey = (site, trade) => `${comparableProjectText(site)}|${comparableTradeText(trade)}`;
+
+  (plan?.records || [])
     .filter((record) => dmrMatchesProject(record.site, project))
-    .map((record, index) => ({
-      id: record.id || `${plan?.date || "plan"}-${index}`,
-      site: record.site || "",
-      trade: record.trade || record.category || record.agency || "Work plan",
-      plannedManpower: manpowerNumber(record.plannedManpower ?? record.manpower ?? record.planned),
-      actualManpower: actualByTrade.get(`${comparableProjectText(record.site)}|${comparableTradeText(record.category || record.trade || record.agency)}`) || 0,
-      work: record.work || record.plannedWork || record.description || record.scope || "",
-      submittedBy: record.submittedBy || record.createdBy || "",
-    }));
+    .forEach((record, index) => {
+      const trade = record.trade || record.category || record.agency || "Work plan";
+      const key = rowKey(record.site, trade);
+      const existing = rows.get(key) || {
+        id: `${plan?.date || "plan"}-${key || index}`,
+        site: record.site || "",
+        trade,
+        plannedManpower: 0,
+        actualManpower: 0,
+        workItems: [],
+        submitters: [],
+      };
+      existing.plannedManpower += manpowerNumber(record.plannedManpower ?? record.manpower ?? record.planned);
+      const work = record.work || record.plannedWork || record.description || record.scope || "";
+      if (work && !existing.workItems.includes(work)) existing.workItems.push(work);
+      const submittedBy = record.submittedBy || record.createdBy || "";
+      if (submittedBy && !existing.submitters.includes(submittedBy)) existing.submitters.push(submittedBy);
+      rows.set(key, existing);
+    });
+
+  (plan?.actuals?.tradeSiteBreakdown || [])
+    .filter((item) => dmrMatchesProject(item.site, project))
+    .forEach((item, index) => {
+      const trade = item.trade || "Actual manpower";
+      const key = rowKey(item.site, trade);
+      const existing = rows.get(key) || {
+        id: `${plan?.date || "actual"}-${key || index}`,
+        site: item.site || "",
+        trade,
+        plannedManpower: 0,
+        actualManpower: 0,
+        workItems: [],
+        submitters: [],
+      };
+      existing.actualManpower += manpowerNumber(item.actual);
+      rows.set(key, existing);
+    });
+
+  return [...rows.values()]
+    .map((row) => ({
+      ...row,
+      work: row.workItems.join("\n"),
+      submittedBy: row.submitters.join(", "),
+    }))
+    .filter((row) => manpowerNumber(row.plannedManpower) || manpowerNumber(row.actualManpower))
+    .sort((a, b) => b.plannedManpower - a.plannedManpower || b.actualManpower - a.actualManpower || a.trade.localeCompare(b.trade));
 }
 
 function projectPlanActual(plan, project) {

@@ -3281,7 +3281,10 @@ function PlanPanel({ title, date, rows, showActual = false }) {
         {rows.map((row) => (
           <div key={row.id} className="rounded-2xl border border-zinc-100 bg-[#fbfcf9] p-4 dark:border-white/10 dark:bg-white/[0.035]">
             <div className="flex items-start justify-between gap-3">
-              <p className="min-w-0 text-base font-semibold">{row.trade}</p>
+              <div className="min-w-0">
+                <p className="text-base font-semibold">{row.trade}</p>
+                {row.submittedBy && <p className="mt-1 text-[10px] text-[#92988f]">By {row.submittedBy}</p>}
+              </div>
               <span className="shrink-0 text-2xl font-bold leading-none tabular-nums">
                 {showActual ? (
                   <>
@@ -3294,8 +3297,7 @@ function PlanPanel({ title, date, rows, showActual = false }) {
                 ) : row.plannedManpower}
               </span>
             </div>
-            {row.work && <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#6f756c] dark:text-white/50">{row.work}</p>}
-            {row.submittedBy && <p className="mt-1 text-[10px] text-[#92988f]">By {row.submittedBy}</p>}
+            {row.work && <p className="mt-3 whitespace-pre-wrap break-words text-xs leading-5 text-[#6f756c] dark:text-white/50">{row.work}</p>}
           </div>
         ))}
         {!rows.length && (

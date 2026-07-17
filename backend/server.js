@@ -176,11 +176,13 @@ function isEffectiveSuperAdmin(user, role) {
 }
 
 function roleMenusForUser(user, role) {
-  return isEffectiveSuperAdmin(user, role) ? ALL_MENU_ITEMS.map((item) => item.id) : normalizeRoleMenus(role?.menus || user?.menus || [], { allowSuperAdminMenus: false });
+  if (isEffectiveSuperAdmin(user, role)) return ALL_MENU_ITEMS.map((item) => item.id);
+  return normalizeRoleMenus([...(role?.menus || []), ...(user?.menus || [])], { allowSuperAdminMenus: false });
 }
 
 function rolePrivilegesForUser(user, role) {
-  return isEffectiveSuperAdmin(user, role) ? PRIVILEGE_ITEMS.map((item) => item.id) : role?.privileges || user?.privileges || [];
+  if (isEffectiveSuperAdmin(user, role)) return PRIVILEGE_ITEMS.map((item) => item.id);
+  return normalizePrivileges([...(role?.privileges || []), ...(user?.privileges || [])]);
 }
 
 function normalizeRoleMenus(menus = [], { allowSuperAdminMenus = false } = {}) {
@@ -191,6 +193,12 @@ function normalizeRoleMenus(menus = [], { allowSuperAdminMenus = false } = {}) {
     normalized.unshift("projects");
   }
   return normalized;
+}
+
+function normalizePrivileges(privileges = []) {
+  const validIds = new Set(PRIVILEGE_ITEMS.map((item) => item.id));
+  return [...new Set((Array.isArray(privileges) ? privileges : []).map(String))]
+    .filter((id) => validIds.has(id));
 }
 
 function sanitizeUser(user, role) {
@@ -209,6 +217,8 @@ function sanitizeUser(user, role) {
     roleName: role?.name || user.roleName || null,
     menus: roleMenusForUser(user, role),
     privileges: rolePrivilegesForUser(user, role),
+    userMenus: normalizeRoleMenus(user.menus || []),
+    userPrivileges: normalizePrivileges(user.privileges || []),
     isSuperAdmin: superAdmin,
     blacklisted: Boolean(user.blacklisted),
     createdAt: user.createdAt,
@@ -3557,7 +3567,7 @@ app.get("/admin/users", requireSuperAdmin, async (req, res) => {
 app.post("/admin/users", requireSuperAdmin, async (req, res) => {
   try {
     const db = await connectAuthDb();
-    const { username, password, displayName, roleId } = req.body || {};
+    const { username, password, displayName, roleId, menus = [], privileges = [] } = req.body || {};
     if (!username?.trim() || !password || !roleId) return res.status(400).json({ error: "Username, password, and role are required" });
     const role = await db.collection("roles").findOne({ _id: new ObjectId(roleId) });
     if (!role) return res.status(404).json({ error: "Role not found" });
@@ -3570,6 +3580,8 @@ app.post("/admin/users", requireSuperAdmin, async (req, res) => {
       passwordHash: hashed.hash,
       passwordSalt: hashed.salt,
       roleId: role._id,
+      menus: normalizeRoleMenus(menus),
+      privileges: normalizePrivileges(privileges),
       isSuperAdmin: isSuperAdminRole(role),
       blacklisted: false,
       createdAt: now,
@@ -3586,7 +3598,7 @@ app.patch("/admin/users/:id", requireSuperAdmin, async (req, res) => {
   try {
     const db = await connectAuthDb();
     const userId = new ObjectId(req.params.id);
-    const { displayName, roleId, blacklisted } = req.body || {};
+    const { displayName, roleId, blacklisted, menus, privileges } = req.body || {};
     const user = await db.collection("users").findOne({ _id: userId });
     if (!user) return res.status(404).json({ error: "User not found" });
     res.locals.activityTarget = formatUserTarget(user);
@@ -3602,6 +3614,8 @@ app.patch("/admin/users/:id", requireSuperAdmin, async (req, res) => {
       update.isSuperAdmin = isSuperAdminRole(role);
     }
     if (blacklisted !== undefined) update.blacklisted = Boolean(blacklisted);
+    if (menus !== undefined) update.menus = normalizeRoleMenus(menus);
+    if (privileges !== undefined) update.privileges = normalizePrivileges(privileges);
     await db.collection("users").updateOne({ _id: userId }, { $set: update });
     if (blacklisted) await db.collection("sessions").deleteMany({ userId });
     res.json({ success: true });

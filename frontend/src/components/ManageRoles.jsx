@@ -24,7 +24,7 @@ import { API_URL } from "./AuthProvider";
 import { ConfirmModal, SelectMenu } from "./ui";
 
 const emptyRole = { id: "", name: "", description: "", menus: [], privileges: [] };
-const emptyUser = { username: "", displayName: "", password: "", roleId: "" };
+const emptyUser = { username: "", displayName: "", password: "", roleId: "", menus: [], privileges: [] };
 const emptyPassword = { userId: "", password: "", confirmPassword: "" };
 const PROJECT_PARENT_MENU = "projects";
 
@@ -119,6 +119,123 @@ function Badge({ darkMode, children, tone = "default" }) {
   return <span className={`inline-flex rounded-full px-3 py-1 text-xs ${tones[tone]}`}>{children}</span>;
 }
 
+function AccessEditor({
+  darkMode,
+  muted,
+  form,
+  setForm,
+  menuItems,
+  privilegeItems,
+  projectMenuItems,
+  projectChildMenuItems,
+  topLevelMenuItems,
+  toggleAccessField,
+  toggleAccessMenu,
+  setAccessProjectMode,
+  description = "Choose the pages this access profile can open from the sidebar.",
+}) {
+  return (
+    <>
+      <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f6f8]"}`}>
+        <div className="mb-4">
+          <p className="text-sm font-semibold">Visible modules</p>
+          <p className={`mt-1 text-xs ${muted}`}>{description}</p>
+        </div>
+        <div className="space-y-3">
+          {projectMenuItems.length > 0 && (
+            <div className={`rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-black/10" : "border-black/10 bg-white/70"}`}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <PermissionButton
+                  darkMode={darkMode}
+                  active={(form.menus || []).includes(PROJECT_PARENT_MENU)}
+                  label={projectMenuItems.find((menu) => menu.id === PROJECT_PARENT_MENU)?.label || "Project Control"}
+                  onClick={() => toggleAccessMenu(setForm, PROJECT_PARENT_MENU)}
+                />
+                <span className={`px-1 text-xs ${muted}`}>
+                  {projectChildMenuItems.filter((menu) => (form.menus || []).includes(menu.id)).length}/{projectChildMenuItems.length} submodules
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                {[
+                  ["none", "No access"],
+                  ["view", "View"],
+                  ["edit", "Edit"],
+                  ["all", "All"],
+                ].map(([mode, label]) => {
+                  const projectSelected = (form.menus || []).includes(PROJECT_PARENT_MENU);
+                  const editSelected = (form.privileges || []).includes("manage_project_control");
+                  const allSelected = projectChildMenuItems.every((menu) => (form.menus || []).includes(menu.id)) && editSelected;
+                  const active = mode === "none"
+                    ? !projectSelected
+                    : mode === "view"
+                      ? projectSelected && !editSelected && !projectChildMenuItems.some((menu) => (form.menus || []).includes(menu.id))
+                      : mode === "edit"
+                        ? projectSelected && editSelected && !allSelected
+                        : allSelected;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setAccessProjectMode(setForm, mode)}
+                      className={`h-10 rounded-xl border px-3 text-sm font-semibold transition ${
+                        active
+                          ? darkMode ? "border-[#d8f36a] bg-[#d8f36a] text-black" : "border-black bg-black text-white"
+                          : darkMode ? "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.07]" : "border-black/10 bg-white text-black/60 hover:bg-black/[0.03]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {projectChildMenuItems.map((menu) => (
+                  <PermissionButton
+                    key={menu.id}
+                    darkMode={darkMode}
+                    active={(form.menus || []).includes(menu.id)}
+                    label={menu.label}
+                    onClick={() => toggleAccessMenu(setForm, menu.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {topLevelMenuItems.map((menu) => (
+              <PermissionButton
+                key={menu.id}
+                darkMode={darkMode}
+                active={(form.menus || []).includes(menu.id)}
+                label={menu.label}
+                onClick={() => toggleAccessField(setForm, "menus", menu.id)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f6f8]"}`}>
+        <div className="mb-4">
+          <p className="text-sm font-semibold">Action permissions</p>
+          <p className={`mt-1 text-xs ${muted}`}>Control what this access profile can change or manage.</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {privilegeItems.map((privilege) => (
+            <PermissionButton
+              key={privilege.id}
+              darkMode={darkMode}
+              active={(form.privileges || []).includes(privilege.id)}
+              label={privilege.label}
+              onClick={() => toggleAccessField(setForm, "privileges", privilege.id)}
+            />
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function ManageRoles({ darkMode, mode = "roles" }) {
   const activeTab = mode === "users" ? "users" : "roles";
   const isRolesMode = activeTab === "roles";
@@ -134,6 +251,7 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
   const [passwordForm, setPasswordForm] = useState(emptyPassword);
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [userModalOpen, setUserModalOpen] = useState(false);
+  const [userAccessModal, setUserAccessModal] = useState(null);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [detailModal, setDetailModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -205,17 +323,17 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
     setRoleModalOpen(true);
   }
 
-  function toggleRoleField(field, value) {
-    setRoleForm((current) => ({
+  function toggleAccessField(setter, field, value) {
+    setter((current) => ({
       ...current,
-      [field]: current[field].includes(value)
-        ? current[field].filter((item) => item !== value)
-        : [...current[field], value],
+      [field]: (current[field] || []).includes(value)
+        ? (current[field] || []).filter((item) => item !== value)
+        : [...(current[field] || []), value],
     }));
   }
 
-  function toggleRoleMenu(value) {
-    setRoleForm((current) => {
+  function toggleAccessMenu(setter, value) {
+    setter((current) => {
       const currentMenus = current.menus || [];
       const active = currentMenus.includes(value);
       let menus;
@@ -233,8 +351,8 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
     });
   }
 
-  function setProjectAccessMode(mode) {
-    setRoleForm((current) => {
+  function setAccessProjectMode(setter, mode) {
+    setter((current) => {
       const projectIds = new Set(projectMenuItems.map((menu) => menu.id));
       const nonProjectMenus = (current.menus || []).filter((id) => !projectIds.has(id));
       const nonProjectPrivileges = (current.privileges || []).filter((id) => id !== "manage_project_control");
@@ -257,6 +375,38 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
         privileges: [...nonProjectPrivileges, "manage_project_control", "edit_project_dmr", "edit_project_mrn", "manage_project_stock"],
       };
     });
+  }
+
+  function openUserAccess(user) {
+    setUserAccessModal({
+      id: user.id,
+      displayName: user.displayName || user.username,
+      username: user.username,
+      menus: [...(user.userMenus || [])],
+      privileges: [...(user.userPrivileges || [])],
+    });
+  }
+
+  async function saveUserAccess(event) {
+    event.preventDefault();
+    if (!userAccessModal?.id) return;
+    try {
+      setSaving(true);
+      await api(`/admin/users/${userAccessModal.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          menus: userAccessModal.menus || [],
+          privileges: userAccessModal.privileges || [],
+        }),
+      });
+      toast.success("User access updated");
+      setUserAccessModal(null);
+      await loadAdminData();
+    } catch (error) {
+      toast.error(error.message || "Could not update user access");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function saveRole(event) {
@@ -514,8 +664,8 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
                           />
                         </td>
                         <td className="px-4 py-3"><Badge darkMode={darkMode} tone={user.blacklisted ? "danger" : "success"}>{user.blacklisted ? "Blacklisted" : "Active"}</Badge></td>
-                        <td className={`px-4 py-3 text-sm font-medium ${darkMode ? "text-white/80" : "text-slate-700"}`}>{role?.menus?.length || 0}</td>
-                        <td className={`px-4 py-3 text-sm font-medium ${darkMode ? "text-white/80" : "text-slate-700"}`}>{role?.privileges?.length || 0}</td>
+                        <td className={`px-4 py-3 text-sm font-medium ${darkMode ? "text-white/80" : "text-slate-700"}`}>{user.menus?.length || role?.menus?.length || 0}</td>
+                        <td className={`px-4 py-3 text-sm font-medium ${darkMode ? "text-white/80" : "text-slate-700"}`}>{user.privileges?.length || role?.privileges?.length || 0}</td>
                         <td className="rounded-r-xl px-4 py-3">
                           <div className="flex items-center justify-end gap-2">
                             <button onClick={() => setDetailModal({ type: "user", item: user })} className={`flex h-9 items-center rounded-lg border px-4 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/5 text-white/75" : "border-slate-200 bg-white text-slate-700"}`}>
@@ -524,6 +674,11 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
                             <button onClick={() => openPasswordModal(user)} className={`flex h-9 w-9 items-center justify-center rounded-lg ${darkMode ? "bg-[#d8f36a] text-black" : "bg-white text-slate-600 hover:bg-slate-100"}`} title="Reset password">
                               <KeyRound className="h-4 w-4" />
                             </button>
+                            {!user.isSuperAdmin && (
+                              <button onClick={() => openUserAccess(user)} className={`flex h-9 w-9 items-center justify-center rounded-lg ${darkMode ? "bg-white/5 text-white/60 hover:bg-white/10" : "bg-white text-slate-500 hover:bg-slate-100"}`} title="User module access">
+                                <ShieldCheck className="h-4 w-4" />
+                              </button>
+                            )}
                             {!user.isSuperAdmin && (
                               <button onClick={() => updateUser(user.id, { blacklisted: !user.blacklisted })} className={`flex h-9 w-9 items-center justify-center rounded-lg ${user.blacklisted ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`} title={user.blacklisted ? "Unblock user" : "Blacklist user"}>
                                 {user.blacklisted ? <Check className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
@@ -573,94 +728,20 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
               </label>
             </div>
 
-            <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f6f8]"}`}>
-              <div className="mb-4">
-                <p className="text-sm font-semibold">Visible modules</p>
-                <p className={`mt-1 text-xs ${muted}`}>Choose the pages this role can open from the sidebar.</p>
-              </div>
-              <div className="space-y-3">
-                {projectMenuItems.length > 0 && (
-                  <div className={`rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-black/10" : "border-black/10 bg-white/70"}`}>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <PermissionButton
-                        darkMode={darkMode}
-                        active={roleForm.menus.includes(PROJECT_PARENT_MENU)}
-                        label={projectMenuItems.find((menu) => menu.id === PROJECT_PARENT_MENU)?.label || "Project Control"}
-                        onClick={() => toggleRoleMenu(PROJECT_PARENT_MENU)}
-                      />
-                      <span className={`px-1 text-xs ${muted}`}>
-                        {projectChildMenuItems.filter((menu) => roleForm.menus.includes(menu.id)).length}/{projectChildMenuItems.length} submodules
-                      </span>
-                    </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                      {[
-                        ["none", "No access"],
-                        ["view", "View"],
-                        ["edit", "Edit"],
-                        ["all", "All"],
-                      ].map(([mode, label]) => {
-                        const projectSelected = roleForm.menus.includes(PROJECT_PARENT_MENU);
-                        const editSelected = roleForm.privileges.includes("manage_project_control");
-                        const allSelected = projectChildMenuItems.every((menu) => roleForm.menus.includes(menu.id)) && editSelected;
-                        const active = mode === "none"
-                          ? !projectSelected
-                          : mode === "view"
-                            ? projectSelected && !editSelected && !projectChildMenuItems.some((menu) => roleForm.menus.includes(menu.id))
-                            : mode === "edit"
-                              ? projectSelected && editSelected && !allSelected
-                              : allSelected;
-                        return (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setProjectAccessMode(mode)}
-                            className={`h-10 rounded-xl border px-3 text-sm font-semibold transition ${
-                              active
-                                ? darkMode ? "border-[#d8f36a] bg-[#d8f36a] text-black" : "border-black bg-black text-white"
-                                : darkMode ? "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.07]" : "border-black/10 bg-white text-black/60 hover:bg-black/[0.03]"
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {projectChildMenuItems.map((menu) => (
-                        <PermissionButton
-                          key={menu.id}
-                          darkMode={darkMode}
-                          active={roleForm.menus.includes(menu.id)}
-                          label={menu.label}
-                          onClick={() => toggleRoleMenu(menu.id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {topLevelMenuItems.map((menu) => (
-                    <PermissionButton
-                      key={menu.id}
-                      darkMode={darkMode}
-                      active={roleForm.menus.includes(menu.id)}
-                      label={menu.label}
-                      onClick={() => toggleRoleField("menus", menu.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f6f8]"}`}>
-              <div className="mb-4">
-                <p className="text-sm font-semibold">Action permissions</p>
-                <p className={`mt-1 text-xs ${muted}`}>Control what users assigned to this role can change or manage.</p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {privilegeItems.map((privilege) => <PermissionButton key={privilege.id} darkMode={darkMode} active={roleForm.privileges.includes(privilege.id)} label={privilege.label} onClick={() => toggleRoleField("privileges", privilege.id)} />)}
-              </div>
-            </div>
+            <AccessEditor
+              darkMode={darkMode}
+              muted={muted}
+              form={roleForm}
+              setForm={setRoleForm}
+              menuItems={menuItems}
+              privilegeItems={privilegeItems}
+              projectMenuItems={projectMenuItems}
+              projectChildMenuItems={projectChildMenuItems}
+              topLevelMenuItems={topLevelMenuItems}
+              toggleAccessField={toggleAccessField}
+              toggleAccessMenu={toggleAccessMenu}
+              setAccessProjectMode={setAccessProjectMode}
+            />
 
             <button disabled={saving} className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.99] disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#1f2c3a] text-white"}`}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
@@ -707,8 +788,52 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
               <SelectMenu darkMode={darkMode} value={userForm.roleId} options={roleOptions} onChange={(roleId) => setUserForm((current) => ({ ...current, roleId }))} />
             </div>
 
+            <AccessEditor
+              darkMode={darkMode}
+              muted={muted}
+              form={userForm}
+              setForm={setUserForm}
+              menuItems={menuItems}
+              privilegeItems={privilegeItems}
+              projectMenuItems={projectMenuItems}
+              projectChildMenuItems={projectChildMenuItems}
+              topLevelMenuItems={topLevelMenuItems}
+              toggleAccessField={toggleAccessField}
+              toggleAccessMenu={toggleAccessMenu}
+              setAccessProjectMode={setAccessProjectMode}
+              description="Optional extra access for this specific user on top of their role."
+            />
+
             <button disabled={saving} className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.99] disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#1f2c3a] text-white"}`}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Add user
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {userAccessModal && (
+        <Modal darkMode={darkMode} title={`Access for ${userAccessModal.displayName}`} eyebrow="User overrides" onClose={() => setUserAccessModal(null)} maxWidth="max-w-3xl">
+          <form onSubmit={saveUserAccess} className="space-y-5">
+            <div className={`rounded-2xl p-4 text-sm ${darkMode ? "bg-white/[0.045] text-white/65" : "bg-[#f5f6f8] text-slate-600"}`}>
+              User-specific access is added on top of the assigned role. Leave these empty to use only the role access for {userAccessModal.username}.
+            </div>
+            <AccessEditor
+              darkMode={darkMode}
+              muted={muted}
+              form={userAccessModal}
+              setForm={setUserAccessModal}
+              menuItems={menuItems}
+              privilegeItems={privilegeItems}
+              projectMenuItems={projectMenuItems}
+              projectChildMenuItems={projectChildMenuItems}
+              topLevelMenuItems={topLevelMenuItems}
+              toggleAccessField={toggleAccessField}
+              toggleAccessMenu={toggleAccessMenu}
+              setAccessProjectMode={setAccessProjectMode}
+              description="Choose extra pages this specific user can open in addition to their role."
+            />
+            <button disabled={saving} className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.99] disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#1f2c3a] text-white"}`}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Save user access
             </button>
           </form>
         </Modal>

@@ -95,6 +95,7 @@ const PRIVILEGE_ITEMS = [
   { id: "manage_reports", label: "Manage and delete reports" },
   { id: "view_employee_daily_reports", label: "View all employee daily reports" },
   { id: "view_activity_log", label: "View activity log" },
+  { id: "manage_project_control", label: "Edit Project Control tasks, phases, files, and projects" },
   { id: "edit_project_dmr", label: "Fill project DMR records" },
   { id: "edit_project_mrn", label: "Add MRN records" },
   { id: "manage_project_stock", label: "Manage project stock sheets" },
@@ -315,6 +316,11 @@ async function requireAuth(req, res, next) {
 function requireSuperAdmin(req, res, next) {
   if (!req.authUser?.isSuperAdmin) return res.status(403).json({ error: "Super Admin access required" });
   next();
+}
+
+function requireProjectControlEditor(req, res, next) {
+  if (req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_control")) return next();
+  return res.status(403).json({ error: "Project Control edit permission required" });
 }
 
 function hasPrivilege(req, privilege) {
@@ -9992,7 +9998,7 @@ function summarizeManualProject(project = {}, date = istDateKey(new Date())) {
   };
 }
 
-app.get("/project-dashboard/config", requireSuperAdmin, async (req, res) => {
+app.get("/project-dashboard/config", requireProjectControlEditor, async (req, res) => {
   const db = await connectAuthDb();
   const sheetDocs = documents.filter((doc) => doc.type === "sheet" && isDocumentVisible(doc, req));
   const sheets = [];
@@ -10033,7 +10039,7 @@ app.get("/project-dashboard/config", requireSuperAdmin, async (req, res) => {
   });
 });
 
-app.post("/project-dashboard/projects", requireSuperAdmin, (req, res) => {
+app.post("/project-dashboard/projects", requireProjectControlEditor, (req, res) => {
   try {
     const now = new Date().toISOString();
     const project = normalizeProjectInput(req.body, {
@@ -10049,7 +10055,7 @@ app.post("/project-dashboard/projects", requireSuperAdmin, (req, res) => {
   }
 });
 
-app.patch("/project-dashboard/projects/:id", requireSuperAdmin, (req, res) => {
+app.patch("/project-dashboard/projects/:id", requireProjectControlEditor, (req, res) => {
   try {
     const index = projectDashboardConfig.projects.findIndex((project) => project.id === req.params.id);
     if (index === -1) return res.status(404).json({ error: "Project not found" });
@@ -10061,7 +10067,7 @@ app.patch("/project-dashboard/projects/:id", requireSuperAdmin, (req, res) => {
   }
 });
 
-app.delete("/project-dashboard/projects/:id", requireSuperAdmin, (req, res) => {
+app.delete("/project-dashboard/projects/:id", requireProjectControlEditor, (req, res) => {
   const before = projectDashboardConfig.projects.length;
   projectDashboardConfig.projects = projectDashboardConfig.projects.filter((project) => project.id !== req.params.id);
   if (before === projectDashboardConfig.projects.length) return res.status(404).json({ error: "Project not found" });
@@ -10164,7 +10170,7 @@ function hideProjectDocument(project, doc = {}) {
   project.deletedProjectDocumentIds = [...new Set([...(project.deletedProjectDocumentIds || []).map(projectText).filter(Boolean), key])];
 }
 
-app.post("/project-dashboard/projects/:id/documents", requireSuperAdmin, (req, res) => {
+app.post("/project-dashboard/projects/:id/documents", requireProjectControlEditor, (req, res) => {
   try {
     const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
     if (!project) return res.status(404).json({ error: "Project not found" });
@@ -10191,7 +10197,7 @@ app.post("/project-dashboard/projects/:id/documents", requireSuperAdmin, (req, r
   }
 });
 
-app.patch("/project-dashboard/projects/:id/documents/:documentId", requireSuperAdmin, (req, res) => {
+app.patch("/project-dashboard/projects/:id/documents/:documentId", requireProjectControlEditor, (req, res) => {
   try {
     const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
     if (!project) return res.status(404).json({ error: "Project not found" });
@@ -10224,7 +10230,7 @@ app.patch("/project-dashboard/projects/:id/documents/:documentId", requireSuperA
   }
 });
 
-app.delete("/project-dashboard/projects/:id/documents/:documentId", requireSuperAdmin, (req, res) => {
+app.delete("/project-dashboard/projects/:id/documents/:documentId", requireProjectControlEditor, (req, res) => {
   const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
   if (!project) return res.status(404).json({ error: "Project not found" });
   const index = projectDocumentIndex(project, req.params.documentId);
@@ -10237,7 +10243,7 @@ app.delete("/project-dashboard/projects/:id/documents/:documentId", requireSuper
   res.json({ success: true, document: removed });
 });
 
-app.post("/project-dashboard/projects/:id/documents/upload", requireSuperAdmin, upload.single("file"), async (req, res) => {
+app.post("/project-dashboard/projects/:id/documents/upload", requireProjectControlEditor, upload.single("file"), async (req, res) => {
   try {
     const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
     if (!project) return res.status(404).json({ error: "Project not found" });

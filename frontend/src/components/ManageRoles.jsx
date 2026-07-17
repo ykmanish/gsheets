@@ -233,6 +233,32 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
     });
   }
 
+  function setProjectAccessMode(mode) {
+    setRoleForm((current) => {
+      const projectIds = new Set(projectMenuItems.map((menu) => menu.id));
+      const nonProjectMenus = (current.menus || []).filter((id) => !projectIds.has(id));
+      const nonProjectPrivileges = (current.privileges || []).filter((id) => id !== "manage_project_control");
+      if (mode === "none") {
+        return { ...current, menus: nonProjectMenus, privileges: nonProjectPrivileges };
+      }
+      if (mode === "view") {
+        return { ...current, menus: [...nonProjectMenus, PROJECT_PARENT_MENU], privileges: nonProjectPrivileges };
+      }
+      if (mode === "edit") {
+        return {
+          ...current,
+          menus: [...nonProjectMenus, PROJECT_PARENT_MENU],
+          privileges: [...nonProjectPrivileges, "manage_project_control"],
+        };
+      }
+      return {
+        ...current,
+        menus: [...nonProjectMenus, ...projectMenuItems.map((menu) => menu.id)],
+        privileges: [...nonProjectPrivileges, "manage_project_control", "edit_project_dmr", "edit_project_mrn", "manage_project_stock"],
+      };
+    });
+  }
+
   async function saveRole(event) {
     event.preventDefault();
     if (!roleForm.name.trim()) return toast.error("Role name is required");
@@ -565,6 +591,39 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
                       <span className={`px-1 text-xs ${muted}`}>
                         {projectChildMenuItems.filter((menu) => roleForm.menus.includes(menu.id)).length}/{projectChildMenuItems.length} submodules
                       </span>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                      {[
+                        ["none", "No access"],
+                        ["view", "View"],
+                        ["edit", "Edit"],
+                        ["all", "All"],
+                      ].map(([mode, label]) => {
+                        const projectSelected = roleForm.menus.includes(PROJECT_PARENT_MENU);
+                        const editSelected = roleForm.privileges.includes("manage_project_control");
+                        const allSelected = projectChildMenuItems.every((menu) => roleForm.menus.includes(menu.id)) && editSelected;
+                        const active = mode === "none"
+                          ? !projectSelected
+                          : mode === "view"
+                            ? projectSelected && !editSelected && !projectChildMenuItems.some((menu) => roleForm.menus.includes(menu.id))
+                            : mode === "edit"
+                              ? projectSelected && editSelected && !allSelected
+                              : allSelected;
+                        return (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setProjectAccessMode(mode)}
+                            className={`h-10 rounded-xl border px-3 text-sm font-semibold transition ${
+                              active
+                                ? darkMode ? "border-[#d8f36a] bg-[#d8f36a] text-black" : "border-black bg-black text-white"
+                                : darkMode ? "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.07]" : "border-black/10 bg-white text-black/60 hover:bg-black/[0.03]"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {projectChildMenuItems.map((menu) => (

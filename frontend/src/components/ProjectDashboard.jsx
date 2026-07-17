@@ -3660,6 +3660,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   const { user } = useAuth();
   const isSuperAdmin = Boolean(user?.isSuperAdmin);
   const userMenus = user?.menus || [];
+  const userPrivileges = user?.privileges || [];
+  const canEditProjectControl = isSuperAdmin || userPrivileges.includes("manage_project_control");
   const canOpenProjectDmr = isSuperAdmin || userMenus.includes("project-dmr");
   const canOpenProjectMrn = isSuperAdmin || userMenus.includes("project-mrn");
   const workspaceNav = useMemo(
@@ -3705,7 +3707,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               null
             : null,
         );
-        if (isSuperAdmin) setConfig(await api("/project-dashboard/config"));
+        if (canEditProjectControl) setConfig(await api("/project-dashboard/config"));
       } catch (error) {
         toast.error(error.message || "Could not load projects");
       } finally {
@@ -3713,7 +3715,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
         setRefreshing(false);
       }
     },
-    [isSuperAdmin],
+    [canEditProjectControl],
   );
 
   const loadProjectDocs = useCallback(async (id) => {
@@ -4085,7 +4087,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           layout={portfolioLayout}
           onLayout={setPortfolioLayout}
           refreshing={refreshing}
-          isSuperAdmin={isSuperAdmin}
+          isSuperAdmin={canEditProjectControl}
           onRefresh={() => load(true)}
           onCreate={() => editProject()}
           onOpen={openProject}
@@ -4148,7 +4150,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
                 className={cn("h-4 w-4", refreshing && "animate-spin")}
               />
             </IconButton>
-            {isSuperAdmin && (
+            {canEditProjectControl && (
               <Button
                 variant="primary"
                 onClick={() => editProject(selectedProject)}
@@ -4185,7 +4187,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               phases={phases}
               documents={documents}
               users={users}
-              isSuperAdmin={isSuperAdmin}
+              isSuperAdmin={canEditProjectControl}
               onOpenTask={openTask}
               onAddTask={() => addTask()}
               onOpenPhase={openPhase}
@@ -4197,7 +4199,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               tasks={tasks}
               phases={phases}
               users={users}
-              isSuperAdmin={isSuperAdmin}
+              isSuperAdmin={canEditProjectControl}
               onOpenTask={openTask}
               onAddTask={addTask}
             />
@@ -4212,7 +4214,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             <PhasesView
               phases={phases}
               tasks={tasks}
-              isSuperAdmin={isSuperAdmin}
+              isSuperAdmin={canEditProjectControl}
               onOpenPhase={openPhase}
               onAddPhase={addPhase}
               onAddTask={addTask}
@@ -4222,7 +4224,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             <FilesView
               project={selectedProject}
               documents={documents}
-              isSuperAdmin={isSuperAdmin}
+              isSuperAdmin={canEditProjectControl}
               onAddFile={() => openFileDrawer()}
               onEditFile={openFileDrawer}
               onDeleteFile={deleteDocument}
@@ -4242,7 +4244,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           allTasks={tasks}
           currentUser={user}
           saving={saving}
-          editable={isSuperAdmin}
+          editable={canEditProjectControl}
           onChange={(patch) =>
             setTaskEditor((current) => ({ ...current, ...patch }))
           }
@@ -4258,7 +4260,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           tasks={tasks.filter((task) => task.phaseId === phaseEditor.id)}
           users={users}
           saving={saving}
-          editable={isSuperAdmin}
+          editable={canEditProjectControl}
           onChange={(patch) =>
             setPhaseEditor((current) => ({ ...current, ...patch }))
           }

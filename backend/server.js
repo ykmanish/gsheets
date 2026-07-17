@@ -9874,6 +9874,18 @@ function normalizeProjectInput(body, existing = {}) {
       assignees: normalizeList(task.assignees),
       dependencyIds: normalizeList(task.dependencyIds),
       documentIds: normalizeList(task.documentIds),
+      subtasks: Array.isArray(task.subtasks)
+        ? task.subtasks.map((subtask) => ({
+          id: projectText(subtask.id) || crypto.randomUUID(),
+          title: projectText(subtask.title),
+          description: projectText(subtask.description),
+          dueDate: projectText(subtask.dueDate || subtask.deadline),
+          assigneeId: projectText(subtask.assigneeId),
+          done: Boolean(subtask.done),
+          createdAt: projectText(subtask.createdAt) || now,
+          updatedAt: projectText(subtask.updatedAt) || now,
+          })).filter((subtask) => subtask.title)
+        : [],
       comments: Array.isArray(task.comments)
         ? task.comments.map((comment) => ({
             id: projectText(comment.id) || crypto.randomUUID(),

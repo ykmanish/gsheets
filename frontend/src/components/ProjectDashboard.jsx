@@ -129,6 +129,7 @@ function blankTask(phaseId = "") {
     assignees: [],
     dependencyIds: [],
     documentIds: [],
+    subtasks: [],
     comments: [],
     __isNew: true,
   };
@@ -741,9 +742,12 @@ function TaskDetailView({
   project,
   phase,
   assignees,
+  users = [],
   attachments,
   dependencies,
 }) {
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+  const doneSubtasks = subtasks.filter((item) => item.done).length;
   return (
     <div className="space-y-5 px-6 pb-8 pt-6 sm:px-7">
       <div className="flex items-start gap-4">
@@ -827,6 +831,54 @@ function TaskDetailView({
         <p className="whitespace-pre-wrap text-sm leading-6 text-[#4f554c] dark:text-white/65">
           {task.description || "No description added."}
         </p>
+      </DetailSection>
+
+      <DetailSection title={`Subtasks (${doneSubtasks}/${subtasks.length})`} icon={ListChecks}>
+        <div className="space-y-2">
+          {subtasks.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-xl bg-[#f5f7f2] px-3 py-2.5 text-sm dark:bg-white/[0.05]"
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                    item.done
+                      ? "border-[#65bf45] bg-[#65bf45] text-white"
+                      : "border-[#a9afa5]",
+                  )}
+                >
+                  {item.done && <Check className="h-3 w-3" />}
+                </span>
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate font-medium",
+                    item.done && "text-[#8a8f87] line-through",
+                  )}
+                >
+                  {item.title || "Untitled subtask"}
+                </span>
+              </div>
+              {item.description && (
+                <p className="mt-2 pl-8 text-xs leading-5 text-[#747a71] dark:text-white/50">
+                  {item.description}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2 pl-8 text-[11px] text-[#747a71] dark:text-white/45">
+                <span>{formatDate(item.dueDate, "No deadline")}</span>
+                <span>
+                  {users.find((person) => person.id === item.assigneeId)?.displayName ||
+                    users.find((person) => person.id === item.assigneeId)?.username ||
+                    "No assignee"}
+                </span>
+              </div>
+            </div>
+          ))}
+          {!subtasks.length && (
+            <p className="text-sm text-[#858b82]">No subtasks added.</p>
+          )}
+        </div>
       </DetailSection>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -1009,9 +1061,10 @@ function TaskDrawer({
   onSaveAddNew,
   onDelete,
 }) {
-  const [tab, setTab] = useState("details");
+  const [tab, setTab] = useState("subtasks");
   const [editMode, setEditMode] = useState(Boolean(task.__isNew));
   const [comment, setComment] = useState("");
+  const [subtaskTitle, setSubtaskTitle] = useState("");
   const isEditing = Boolean(editable && (task.__isNew || editMode));
   const assignees = users.filter((person) =>
     (task.assigneeIds || []).includes(person.id),
@@ -1026,6 +1079,8 @@ function TaskDrawer({
   const dependencies = allTasks.filter((item) =>
     (task.dependencyIds || []).includes(item.id),
   );
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+  const doneSubtasks = subtasks.filter((item) => item.done).length;
   const phase = phases.find((item) => item.id === task.phaseId);
 
   function addComment() {
@@ -1044,6 +1099,37 @@ function TaskDrawer({
       ],
     });
     setComment("");
+  }
+
+  function addSubtask() {
+    if (!subtaskTitle.trim()) return;
+    onChange({
+      subtasks: [
+        ...subtasks,
+        {
+          id: uid("subtask"),
+          title: subtaskTitle.trim(),
+          description: "",
+          dueDate: "",
+          assigneeId: "",
+          done: false,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+    setSubtaskTitle("");
+  }
+
+  function updateSubtask(id, patch) {
+    onChange({
+      subtasks: subtasks.map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    });
+  }
+
+  function removeSubtask(id) {
+    onChange({ subtasks: subtasks.filter((item) => item.id !== id) });
   }
 
   return (
@@ -1120,6 +1206,7 @@ function TaskDrawer({
           project={project}
           phase={phase}
           assignees={assignees}
+          users={users}
           attachments={attachments}
           dependencies={dependencies}
         />
@@ -1299,7 +1386,8 @@ function TaskDrawer({
 
         <div className="mt-7 flex gap-6 border-b border-[#e1e5de] dark:border-white/10">
           {[
-            ["details", "Subtasks"],
+            ["subtasks", `Subtasks ${subtasks.length || ""}`],
+            ["details", `Dependencies ${dependencies.length || ""}`],
             ["comments", `Comments ${(task.comments || []).length || ""}`],
             ["activity", "Activities"],
           ].map(([value, label]) => (
@@ -1318,6 +1406,130 @@ function TaskDrawer({
             </button>
           ))}
         </div>
+
+        {tab === "subtasks" && (
+          <section className="pt-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-semibold">Subtasks</h4>
+                <p className="mt-0.5 text-xs text-[#858b82]">
+                  {doneSubtasks} of {subtasks.length} done
+                </p>
+              </div>
+              <span className="text-xs text-[#858b82]">
+                {subtasks.length ? Math.round((doneSubtasks / subtasks.length) * 100) : 0}%
+              </span>
+            </div>
+            <ProgressBar
+              value={subtasks.length ? Math.round((doneSubtasks / subtasks.length) * 100) : 0}
+              className="mt-3"
+            />
+            {isEditing && (
+              <div className="mt-4 flex gap-2">
+                <input
+                  value={subtaskTitle}
+                  onChange={(event) => setSubtaskTitle(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addSubtask();
+                    }
+                  }}
+                  placeholder="Add a subtask..."
+                  className={cn(inputClass, "h-10 flex-1 rounded-full")}
+                />
+                <Button variant="primary" onClick={addSubtask}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Add
+                </Button>
+              </div>
+            )}
+            <div className="mt-4 space-y-2">
+              {subtasks.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-[#e0e4dd] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                >
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={!isEditing}
+                      onClick={() => updateSubtask(item.id, { done: !item.done })}
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition disabled:cursor-default",
+                        item.done
+                          ? "border-[#65bf45] bg-[#65bf45] text-white"
+                          : "border-[#a9afa5] text-transparent hover:border-[#65bf45]",
+                      )}
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                    <input
+                      readOnly={!isEditing}
+                      value={item.title || ""}
+                      onChange={(event) =>
+                        updateSubtask(item.id, { title: event.target.value })
+                      }
+                      placeholder="Subtask title"
+                      className={cn(
+                        "min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none read-only:cursor-default",
+                        item.done && "text-[#8a8f87] line-through",
+                      )}
+                    />
+                    {isEditing && (
+                      <IconButton
+                        label="Remove subtask"
+                        onClick={() => removeSubtask(item.id)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </IconButton>
+                    )}
+                  </div>
+                  <textarea
+                    rows={2}
+                    readOnly={!isEditing}
+                    value={item.description || ""}
+                    onChange={(event) =>
+                      updateSubtask(item.id, { description: event.target.value })
+                    }
+                    placeholder="Subtask description"
+                    className={cn(
+                      textAreaClass,
+                      "mt-3 min-h-[58px] rounded-xl text-xs read-only:cursor-default read-only:bg-[#f4f5f2] dark:read-only:bg-white/[0.025]",
+                    )}
+                  />
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <DatePicker
+                      darkMode={darkMode}
+                      disabled={!isEditing}
+                      value={item.dueDate || ""}
+                      onChange={(value) => updateSubtask(item.id, { dueDate: value })}
+                      placeholder="No deadline"
+                    />
+                    <NativeSelect
+                      darkMode={darkMode}
+                      disabled={!isEditing}
+                      value={item.assigneeId || ""}
+                      onChange={(value) => updateSubtask(item.id, { assigneeId: value })}
+                      options={[
+                        { value: "", label: "No assignee" },
+                        ...users.map((person) => ({
+                          value: person.id,
+                          label: person.displayName || person.username,
+                        })),
+                      ]}
+                    />
+                  </div>
+                </div>
+              ))}
+              {!subtasks.length && (
+                <div className="rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">
+                  No subtasks yet. Break this task into smaller steps here.
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {tab === "details" && (
           <section className="pt-5">

@@ -3223,7 +3223,7 @@ function ProjectManpowerView({ darkMode, project }) {
     <div className="mx-auto max-w-[1250px] p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Project Manpower</h2>
+          <h2 className="text-xl  font-semibold">Project Manpower</h2>
           <p className="mt-0.5 text-xs text-[#7b8178]">
             DMR manpower, today plan, and tomorrow plan for {project.name}.
           </p>
@@ -3256,7 +3256,7 @@ function ProjectManpowerView({ darkMode, project }) {
             ].map(([label, value, className]) => (
               <div key={label} className={cn("rounded-2xl p-4", className)}>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">{label}</p>
-                <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
+                <p className="mt-1 text-2xl small font-bold tabular-nums">{value}</p>
               </div>
             ))}
           </div>
@@ -3269,7 +3269,7 @@ function ProjectManpowerView({ darkMode, project }) {
                   {actual} actual against {planned || planForToday} planned manpower
                 </p>
               </div>
-              <span className="text-lg font-bold tabular-nums">{progress}%</span>
+              <span className="text-lg small font-bold tabular-nums">{progress}%</span>
             </div>
             <ProgressBar value={progress} className="mt-3" />
           </section>
@@ -3299,9 +3299,9 @@ function PlanPanel({ title, date, rows, showActual = false }) {
       <header className="flex items-center justify-between gap-3 border-b border-[#e5e8e2] px-4 py-3 dark:border-white/10">
         <div>
           <h3 className="text-sm font-semibold">{title}</h3>
-          <p className="mt-0.5 text-[11px] text-[#858b82]">{formatDate(date)} · {rows.length} item{rows.length === 1 ? "" : "s"}</p>
+          <p className="mt-0.5 text-[11px]  text-[#858b82]">{formatDate(date)} · {rows.length} item{rows.length === 1 ? "" : "s"}</p>
         </div>
-        <span className="rounded-xl bg-[#eafbdc] px-4 py-2 text-sm font-bold text-[#3f7d16]">
+        <span className="rounded-xl small bg-[#eafbdc] px-4 py-2 text-sm font-bold text-[#3f7d16]">
           {showActual ? (
             <>
               <span className="text-2xl leading-none tabular-nums">{total}</span>
@@ -3316,10 +3316,10 @@ function PlanPanel({ title, date, rows, showActual = false }) {
           <div key={row.id} className="rounded-2xl border border-zinc-100 bg-[#fbfcf9] p-4 dark:border-white/10 dark:bg-white/[0.035]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-base font-semibold">{row.trade}</p>
-                {row.submittedBy && <p className="mt-1 text-[10px] text-[#92988f]">By {row.submittedBy}</p>}
+                <p className="text-base  font-semibold">{row.trade}</p>
+                {row.submittedBy && <p className="mt-1  text-[10px] text-[#92988f]">By {row.submittedBy}</p>}
               </div>
-              <span className="shrink-0 text-2xl font-bold leading-none tabular-nums">
+              <span className="shrink-0 text-2xl small font-bold leading-none tabular-nums">
                 {showActual ? (
                   <>
                     <span>{row.plannedManpower}</span>
@@ -4171,10 +4171,10 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             </IconButton>
             <div className="hidden h-5 w-px bg-[#e0e4dd] sm:block dark:bg-white/10" />
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-xs text-[#777d74] dark:text-white/45">
+              <div className="flex items-center gap-2 text-base text-[#777d74] dark:text-white/45">
                 <span className="hidden sm:inline">Projects</span>
-                <ChevronRight className="hidden h-3 w-3 sm:block" />
-                <span className="truncate font-medium text-[#30342e] dark:text-white/75">
+                <ChevronRight className="hidden h-4 w-4 sm:block" />
+                <span className="truncate font-semibold text-[#30342e] dark:text-white/80">
                   {selectedProject.name}
                 </span>
               </div>
@@ -4189,9 +4189,10 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             {canEditProjectControl && (
               <Button
                 variant="primary"
+                className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
                 onClick={() => editProject(selectedProject)}
               >
-                <Pencil className="h-4 w-4" />
+                <Pencil className="h-3 w-3" />
                 <span className="hidden sm:inline">Edit project</span>
               </Button>
             )}

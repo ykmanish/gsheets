@@ -3595,6 +3595,7 @@ app.post("/hr/leave-requests", async (req, res) => {
     const endDate = leaveDate(req.body?.endDate);
     const reason = projectText(req.body?.reason, 1200);
     if (!startDate || !endDate) return res.status(400).json({ error: "Start and end date are required" });
+    if (startDate < istDateKey(new Date())) return res.status(400).json({ error: "Leave cannot be applied for previous dates" });
     if (new Date(`${endDate}T00:00:00`) < new Date(`${startDate}T00:00:00`)) return res.status(400).json({ error: "End date cannot be before start date" });
     if (reason.length < 10) return res.status(400).json({ error: "Reason must be at least 10 characters" });
     const db = await connectAuthDb();

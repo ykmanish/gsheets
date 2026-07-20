@@ -112,18 +112,17 @@ function DrawerSelect({ darkMode, label, value, placeholder, options, onChange, 
   );
 }
 
-function DrawerDateRangePicker({ darkMode, from, to, onFromChange, onToChange }) {
+function DrawerDatePicker({ darkMode, label, value, placeholder, onChange, minDate }) {
   const pickerRef = useRef(null);
   const triggerRef = useRef(null);
   const [open, setOpen] = useState(false);
-  const [activeSide, setActiveSide] = useState("start");
-  const [monthDate, setMonthDate] = useState(() => from ? new Date(`${from}T00:00:00`) : to ? new Date(`${to}T00:00:00`) : new Date());
+  const [monthDate, setMonthDate] = useState(() => value ? new Date(`${value}T00:00:00`) : new Date());
   const [panelStyle, setPanelStyle] = useState({});
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
   const toInput = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  const label = from && to ? `${formatDateLabel(from)} - ${formatDateLabel(to)}` : from ? `${formatDateLabel(from)} - End date` : "Select leave date range";
+  const displayValue = value ? formatDateLabel(value) : placeholder;
   function monthDays(baseDate) {
     const first = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
     const start = new Date(first.getFullYear(), first.getMonth(), 1 - first.getDay());
@@ -131,18 +130,9 @@ function DrawerDateRangePicker({ darkMode, from, to, onFromChange, onToChange })
   }
   function chooseDate(day) {
     const value = toInput(day);
-    if (activeSide === "start") {
-      onFromChange(value);
-      if (to && value > to) onToChange(value);
-      setActiveSide("end");
-      return;
-    }
-    if (from && value < from) {
-      onFromChange(value);
-      onToChange(from);
-    } else {
-      onToChange(value);
-    }
+    if (minDate && value < minDate) return;
+    onChange(value);
+    setOpen(false);
   }
   function renderMonth(baseDate) {
     const baseMonth = baseDate.getMonth();
@@ -153,9 +143,8 @@ function DrawerDateRangePicker({ darkMode, from, to, onFromChange, onToChange })
           <div className="grid grid-cols-7 gap-y-1 text-center">
           {monthDays(baseDate).map((day) => {
             const key = toInput(day);
-            const isStart = key === from;
-            const isEnd = key === to;
-            const inRange = from && to && key > from && key < to;
+            const isSelected = key === value;
+            const disabled = minDate && key < minDate;
             const inMonth = day.getMonth() === baseMonth;
             return (
               <button
@@ -163,11 +152,11 @@ function DrawerDateRangePicker({ darkMode, from, to, onFromChange, onToChange })
                 type="button"
                 onClick={() => chooseDate(day)}
                 className={`grid h-8 place-items-center text-xs font-bold transition ${
-                  isStart || isEnd
+                  disabled
+                    ? darkMode ? "cursor-not-allowed text-white/16" : "cursor-not-allowed text-black/15"
+                    : isSelected
                     ? "rounded-full bg-blue-600 text-white shadow-sm"
-                    : inRange
-                      ? "bg-blue-50 text-blue-700"
-                      : inMonth
+                    : inMonth
                         ? darkMode ? "text-white hover:bg-white/10" : "text-black hover:bg-black/[0.04]"
                         : darkMode ? "text-white/22" : "text-black/18"
                 }`}
@@ -219,9 +208,9 @@ function DrawerDateRangePicker({ darkMode, from, to, onFromChange, onToChange })
 
   return (
     <div ref={pickerRef} className="relative">
-      <p className="text-xs font-semibold text-black/65 dark:text-white/60">Leave Range *</p>
+      <p className="text-xs font-semibold text-black/65 dark:text-white/60">{label} *</p>
       <button ref={triggerRef} type="button" onClick={() => setOpen((current) => !current)} className={`mt-2 flex h-10 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-bold outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]" : "border-black/10 bg-white text-[#171714] hover:bg-[#fafbf8]"}`}>
-        <span className={from || to ? "" : muted}>{label}</span>
+        <span className={value ? "" : muted}>{displayValue}</span>
         <CalendarDays className={`h-4 w-4 ${muted}`} />
       </button>
       {open && (
@@ -229,7 +218,7 @@ function DrawerDateRangePicker({ darkMode, from, to, onFromChange, onToChange })
           <div className="p-4 pb-3">
           <div className="mb-3 flex items-center justify-between">
             <button type="button" onClick={() => setMonthDate(new Date(year, month - 1, 1))} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.04]"}`}><ChevronLeft className="h-4 w-4" /></button>
-            <p className="text-xs font-bold text-blue-600">{activeSide === "start" ? "Choose start date" : "Choose end date"}</p>
+            <p className="text-xs font-bold text-blue-600">Choose {label.toLowerCase()}</p>
             <button type="button" onClick={() => setMonthDate(new Date(year, month + 1, 1))} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.04]"}`}><ChevronRight className="h-4 w-4" /></button>
           </div>
           <div className={`mb-1 grid grid-cols-7 text-center text-[10px] font-bold uppercase ${muted}`}>
@@ -695,8 +684,9 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 <p className={`mb-3 text-[11px] font-bold uppercase tracking-wide ${muted}`}>Leave details</p>
                 <DrawerSelect darkMode={darkMode} label="Leave Type" required value={leaveForm.leaveType} placeholder="Select leave type..." options={["Casual Leave", "Sick Leave", "Paid Leave", "Advance Leave"]} onChange={(leaveType) => setLeaveForm((current) => ({ ...current, leaveType }))} />
                 <p className={`mt-3 text-xs leading-5 ${muted}`}>Leave type is for reference. If policy balance is exceeded later, extra days can be marked as advance leave.</p>
-                <div className="mt-4">
-                  <DrawerDateRangePicker darkMode={darkMode} from={leaveForm.startDate} to={leaveForm.endDate} onFromChange={(startDate) => setLeaveForm((current) => ({ ...current, startDate }))} onToChange={(endDate) => setLeaveForm((current) => ({ ...current, endDate }))} />
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <DrawerDatePicker darkMode={darkMode} label="Start Date" value={leaveForm.startDate} placeholder="Select start date" minDate={todayInput()} onChange={(startDate) => setLeaveForm((current) => ({ ...current, startDate, endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate }))} />
+                  <DrawerDatePicker darkMode={darkMode} label="End Date" value={leaveForm.endDate} placeholder="Select end date" minDate={leaveForm.startDate || todayInput()} onChange={(endDate) => setLeaveForm((current) => ({ ...current, endDate }))} />
                 </div>
               </section>
               <div className={`mt-4 rounded-[22px] p-4 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>

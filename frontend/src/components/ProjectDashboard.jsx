@@ -3911,7 +3911,7 @@ function buildCalendarEvents({ project, phases = [], tasks = [], mrns = [] }) {
   return events.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type));
 }
 
-function ProjectCalendarView({ darkMode, project, phases, tasks, onOpenTask, onOpenPhase }) {
+function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, onOpenMrn }) {
   const [cursor, setCursor] = useState(() => {
     const seed = dateKeyFromValue(project.startDate) || new Date().toISOString().slice(0, 10);
     const date = new Date(`${seed}T00:00:00`);
@@ -3921,7 +3921,6 @@ function ProjectCalendarView({ darkMode, project, phases, tasks, onOpenTask, onO
   const [mrnError, setMrnError] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [fullscreenMounted, setFullscreenMounted] = useState(false);
-  const [selectedMrn, setSelectedMrn] = useState(null);
 
   const loadMrns = useCallback(async () => {
     try {
@@ -3958,7 +3957,7 @@ function ProjectCalendarView({ darkMode, project, phases, tasks, onOpenTask, onO
   function openEvent(event) {
     if (event.type === "task" || event.type === "subtask") return event.source && onOpenTask(event.source);
     if (event.type === "phase") return event.source && onOpenPhase(event.source);
-    if (event.type === "mrn") return event.source && setSelectedMrn(event.source);
+    if (event.type === "mrn") return event.source && onOpenMrn(event.source, mrnData);
   }
   function toggleCalendarExpand() {
     if (fullscreenMounted) {
@@ -4037,15 +4036,6 @@ function ProjectCalendarView({ darkMode, project, phases, tasks, onOpenTask, onO
         </section>
       </div>
       {mrnError && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-700">{mrnError}</p>}
-      {selectedMrn && (
-        <MrnDetailDrawer
-          darkMode={darkMode}
-          row={selectedMrn}
-          canViewHistory={Boolean(mrnData?.canViewMrnHistory)}
-          onClose={() => setSelectedMrn(null)}
-          onLoadHistory={(row) => api(`/mrn-dashboard/${encodeURIComponent(row.mrnNo)}/history`)}
-        />
-      )}
     </div>
   );
 }
@@ -4716,6 +4706,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   const [driveDocs, setDriveDocs] = useState([]);
   const [taskEditor, setTaskEditor] = useState(null);
   const [phaseEditor, setPhaseEditor] = useState(null);
+  const [calendarMrn, setCalendarMrn] = useState(null);
+  const [calendarMrnData, setCalendarMrnData] = useState(null);
   const [projectEditor, setProjectEditor] = useState(null);
   const [fileDrawerOpen, setFileDrawerOpen] = useState(false);
   const [teamDrawerOpen, setTeamDrawerOpen] = useState(false);
@@ -4840,6 +4832,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     setSelected(null);
     setTaskEditor(null);
     setPhaseEditor(null);
+    setCalendarMrn(null);
+    setCalendarMrnData(null);
     setFileDrawerOpen(false);
     setFileEditor(null);
     setTeamDrawerOpen(false);
@@ -4964,6 +4958,11 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
 
   function openPhase(phase) {
     setPhaseEditor(JSON.parse(JSON.stringify(phase)));
+  }
+
+  function openCalendarMrn(row, sourceData = null) {
+    setCalendarMrn(row);
+    setCalendarMrnData(sourceData);
   }
 
   function addPhase() {
@@ -5316,12 +5315,12 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           )}
           {workspaceView === "calendar" && (
             <ProjectCalendarView
-              darkMode={darkMode}
               project={selectedProject}
               phases={phases}
               tasks={tasks}
               onOpenTask={openTask}
               onOpenPhase={openPhase}
+              onOpenMrn={openCalendarMrn}
             />
           )}
           {workspaceView === "manpower" && (
@@ -5399,6 +5398,15 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             setPhaseEditor(null);
             addTask(phaseId);
           }}
+        />
+      )}
+      {calendarMrn && (
+        <MrnDetailDrawer
+          darkMode={darkMode}
+          row={calendarMrn}
+          canViewHistory={Boolean(calendarMrnData?.canViewMrnHistory)}
+          onClose={() => setCalendarMrn(null)}
+          onLoadHistory={(row) => api(`/mrn-dashboard/${encodeURIComponent(row.mrnNo)}/history`)}
         />
       )}
       {projectEditor && (

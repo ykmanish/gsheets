@@ -253,7 +253,7 @@ export default function MrnDetailDrawer({
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] ${closing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
+      className={`fixed inset-0 z-[120] bg-black/40 backdrop-blur-[2px] ${closing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) requestClose();
       }}

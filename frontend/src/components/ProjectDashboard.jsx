@@ -29,8 +29,11 @@ import {
   ListChecks,
   Loader2,
   MapPin,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   MoreHorizontal,
+  PackageSearch,
   Paperclip,
   Pencil,
   Plus,
@@ -157,6 +160,7 @@ function blankProject() {
     code: "",
     client: "",
     location: "",
+    budget: "",
     manager: "",
     managerId: "",
     status: "active",
@@ -748,6 +752,8 @@ function TaskDetailView({
 }) {
   const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
   const doneSubtasks = subtasks.filter((item) => item.done).length;
+  const blockedBy = task.blockedBy || dependencies.filter((item) => item.status !== "done");
+  const dependencyWarnings = task.dependencyWarnings || dependencies.filter((item) => item.dueDate && task.dueDate && task.dueDate < item.dueDate);
   return (
     <div className="space-y-5 px-6 pb-8 pt-6 sm:px-7">
       <div className="flex items-start gap-4">
@@ -833,6 +839,23 @@ function TaskDetailView({
         </p>
       </DetailSection>
 
+      {(blockedBy.length > 0 || dependencyWarnings.length > 0) && (
+        <DetailSection title="Dependency blocking" icon={AlertCircle}>
+          <div className="space-y-2">
+            {blockedBy.length > 0 && (
+              <div className="rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">
+                Blocked by {blockedBy.map((item) => item.title || "Untitled task").join(", ")}. This clears automatically when the blocking task is done.
+              </div>
+            )}
+            {dependencyWarnings.length > 0 && (
+              <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-700 dark:bg-amber-400/10 dark:text-amber-100">
+                Warning: this task is due before {dependencyWarnings.map((item) => item.title || "a dependency").join(", ")}.
+              </div>
+            )}
+          </div>
+        </DetailSection>
+      )}
+
       <DetailSection title={`Subtasks (${doneSubtasks}/${subtasks.length})`} icon={ListChecks}>
         <div className="space-y-2">
           {subtasks.map((item) => (
@@ -910,7 +933,10 @@ function TaskDetailView({
             {dependencies.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center gap-2 rounded-xl bg-[#f5f7f2] px-3 py-2.5 text-sm dark:bg-white/[0.05]"
+                className={cn(
+                  "flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm dark:bg-white/[0.05]",
+                  item.status === "done" ? "bg-[#f5f7f2]" : "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-200",
+                )}
               >
                 <StatusPill status={item.status || "todo"} compact />
                 <span className="min-w-0 flex-1 truncate font-medium">
@@ -1539,6 +1565,16 @@ function TaskDrawer({
                 {dependencies.length} linked
               </span>
             </div>
+            {(task.blockedBy || []).length > 0 && (
+              <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">
+                Blocked by {(task.blockedBy || []).map((item) => item.title || "Untitled task").join(", ")} until completed.
+              </div>
+            )}
+            {(task.dependencyWarnings || []).length > 0 && (
+              <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-100">
+                Due date warning: this task is scheduled before a dependency finishes.
+              </div>
+            )}
             {isEditing && (
               <NativeSelect
                 darkMode={darkMode}
@@ -2006,6 +2042,19 @@ function ProjectEditor({
                     className={inputClass}
                   />
                 </Field>
+                <Field label="Project budget">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={project.budget || ""}
+                    onChange={(event) =>
+                      onChange({ budget: event.target.value })
+                    }
+                    placeholder="e.g. 5000000"
+                    className={inputClass}
+                  />
+                </Field>
                 <Field label="Project manager">
                   <input
                     value={project.manager || ""}
@@ -2353,6 +2402,199 @@ function TeamDrawer({ project, tasks, users, onClose }) {
   );
 }
 
+function ProjectAccessDrawer({
+  project,
+  phases,
+  tasks,
+  users,
+  access,
+  canManage,
+  saving,
+  onSave,
+  onClose,
+}) {
+  const [draft, setDraft] = useState(access || []);
+  const [form, setForm] = useState({
+    userId: "",
+    scope: "project",
+    phaseId: "",
+    taskId: "",
+    permission: "view",
+  });
+  const userMap = new Map(users.map((user) => [user.id, user]));
+
+  function addAccess() {
+    if (!form.userId) return;
+    const entry = {
+      id: uid("access"),
+      userId: form.userId,
+      scope: form.scope,
+      phaseId: form.scope === "phase" ? form.phaseId : "",
+      taskId: form.scope === "task" ? form.taskId : "",
+      permission: form.permission,
+      createdAt: new Date().toISOString(),
+    };
+    setDraft((current) => [...current, entry]);
+    setForm({ userId: "", scope: "project", phaseId: "", taskId: "", permission: "view" });
+  }
+
+  function updateEntry(id, patch) {
+    setDraft((current) => current.map((entry) => entry.id === id ? { ...entry, ...patch } : entry));
+  }
+
+  function removeEntry(id) {
+    setDraft((current) => current.filter((entry) => entry.id !== id));
+  }
+
+  function scopeLabel(entry) {
+    if (entry.scope === "phase") return phases.find((phase) => phase.id === entry.phaseId)?.name || "Phase";
+    if (entry.scope === "task") return tasks.find((task) => task.id === entry.taskId)?.title || "Task";
+    return project.name;
+  }
+
+  return (
+    <SlideOver
+      title="Project access"
+      eyebrow={project.name}
+      onClose={onClose}
+      width="max-w-[620px]"
+      footer={
+        <div className="flex justify-between gap-3">
+          <Button onClick={onClose}>Close</Button>
+          {canManage && (
+            <Button variant="primary" disabled={saving} onClick={() => onSave(draft)}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save access
+            </Button>
+          )}
+        </div>
+      }
+    >
+      <div className="space-y-5 px-6 py-6">
+        <section className="rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#80ed99] text-[#000000]">
+              <ShieldCheck className="h-5 w-5" />
+            </span>
+            <div>
+              <h3 className="text-sm font-bold">Allowed people only</h3>
+              <p className="mt-1 text-xs leading-5 text-[#747a71] dark:text-white/50">
+                Task assignees automatically get access to their task and phase context. Use this panel to delegate broader project, phase, or task permissions.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {canManage && (
+          <section className="rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
+            <h3 className="text-sm font-bold">Add access</h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <NativeSelect
+                value={form.userId}
+                onChange={(userId) => setForm((current) => ({ ...current, userId }))}
+                options={[
+                  { value: "", label: "Select person" },
+                  ...users.map((user) => ({ value: user.id, label: user.displayName || user.username })),
+                ]}
+              />
+              <NativeSelect
+                value={form.permission}
+                onChange={(permission) => setForm((current) => ({ ...current, permission }))}
+                options={[
+                  { value: "view", label: "View" },
+                  { value: "edit", label: "Edit" },
+                  { value: "manage", label: "Manage access" },
+                ]}
+              />
+              <NativeSelect
+                value={form.scope}
+                onChange={(scope) => setForm((current) => ({ ...current, scope }))}
+                options={[
+                  { value: "project", label: "Full project" },
+                  { value: "phase", label: "Phase only" },
+                  { value: "task", label: "Task only" },
+                ]}
+              />
+              {form.scope === "phase" && (
+                <NativeSelect
+                  value={form.phaseId}
+                  onChange={(phaseId) => setForm((current) => ({ ...current, phaseId }))}
+                  options={[
+                    { value: "", label: "Select phase" },
+                    ...phases.map((phase) => ({ value: phase.id, label: phase.name || "Untitled phase" })),
+                  ]}
+                />
+              )}
+              {form.scope === "task" && (
+                <NativeSelect
+                  value={form.taskId}
+                  onChange={(taskId) => setForm((current) => ({ ...current, taskId }))}
+                  options={[
+                    { value: "", label: "Select task" },
+                    ...tasks.map((task) => ({ value: task.id, label: task.title || "Untitled task" })),
+                  ]}
+                />
+              )}
+            </div>
+            <Button
+              variant="primary"
+              className="mt-4"
+              disabled={!form.userId || (form.scope === "phase" && !form.phaseId) || (form.scope === "task" && !form.taskId)}
+              onClick={addAccess}
+            >
+              <UserPlus className="h-4 w-4" />
+              Add person
+            </Button>
+          </section>
+        )}
+
+        <section className="space-y-2">
+          {draft.map((entry, index) => {
+            const person = userMap.get(entry.userId);
+            return (
+              <div key={entry.id} className="rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                <div className="flex items-start gap-3">
+                  <Avatar name={person?.displayName || person?.username || "User"} index={index} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold">{person?.displayName || person?.username || entry.userId}</p>
+                    <p className="mt-1 text-xs text-[#747a71] dark:text-white/50">
+                      {entry.permission} access · {entry.scope} · {scopeLabel(entry)}
+                    </p>
+                    {canManage && (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <NativeSelect
+                          value={entry.permission}
+                          onChange={(permission) => updateEntry(entry.id, { permission })}
+                          options={[
+                            { value: "view", label: "View" },
+                            { value: "edit", label: "Edit" },
+                            { value: "manage", label: "Manage access" },
+                          ]}
+                        />
+                        <Button variant="danger" onClick={() => removeEntry(entry.id)}>
+                          <Trash2 className="h-4 w-4" />
+                          Remove
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {!draft.length && (
+            <div className="rounded-2xl border border-dashed border-[#d7dcd3] px-4 py-10 text-center dark:border-white/10">
+              <ShieldCheck className="mx-auto h-7 w-7 text-[#9ca199]" />
+              <p className="mt-3 text-sm font-semibold">No delegated access yet</p>
+              <p className="mt-1 text-xs text-[#858b82]">Task assignees still receive task-level access automatically.</p>
+            </div>
+          )}
+        </section>
+      </div>
+    </SlideOver>
+  );
+}
+
 function PortfolioView({
   darkMode,
   projects,
@@ -2671,10 +2913,13 @@ function PortfolioView({
 
 const WORKSPACE_NAV = [
   { value: "overview", label: "Overview", icon: LayoutDashboard },
+  { value: "phases", label: "Phases", icon: Layers3 },
   { value: "tasks", label: "Tasks", icon: ListChecks },
+  { value: "calendar", label: "Calendar", icon: CalendarDays },
   { value: "manpower", label: "Manpower", icon: Users },
   { value: "mrn", label: "MRN", icon: ClipboardList },
-  { value: "phases", label: "Phases", icon: Layers3 },
+  { value: "stock", label: "Stock", icon: PackageSearch },
+  { value: "activity", label: "Activity", icon: Clock3 },
   { value: "files", label: "Files", icon: FolderOpen },
 ];
 
@@ -2738,13 +2983,6 @@ function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenT
           {members.length || 0} active members
         </p>
       </button>
-      <div className="mt-auto rounded-2xl  border-[#dce0d8] bg-white/70 p-3 dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-[#777d74]">Overall progress</span>
-          <strong>{project.metrics?.progress || 0}%</strong>
-        </div>
-        <ProgressBar value={project.metrics?.progress || 0} className="mt-2" />
-      </div>
     </aside>
   );
 }
@@ -3054,6 +3292,8 @@ function TasksView({
             task.dueDate &&
             new Date(`${task.dueDate}T00:00:00`) < new Date() &&
             task.status !== "done";
+          const isBlockedByDependency = (task.blockedBy || []).length > 0;
+          const hasDependencyWarning = (task.dependencyWarnings || []).length > 0;
           return (
             <button
               key={task.id}
@@ -3081,10 +3321,16 @@ function TasksView({
                   <span
                     className={cn(
                       "mt-0.5 block min-h-[16px] truncate text-[11px] text-[#858b82]",
-                      !task.description && "invisible",
+                      !task.description && !isBlockedByDependency && !hasDependencyWarning && "invisible",
+                      isBlockedByDependency && "font-semibold text-rose-500",
+                      hasDependencyWarning && !isBlockedByDependency && "font-semibold text-amber-600",
                     )}
                   >
-                    {task.description || "No description"}
+                    {isBlockedByDependency
+                      ? `Blocked by ${(task.blockedBy || []).map((item) => item.title).join(", ")}`
+                      : hasDependencyWarning
+                        ? "Due date is before a dependency"
+                        : task.description || "No description"}
                   </span>
                 </span>
               </span>
@@ -3100,7 +3346,7 @@ function TasksView({
                 )}
               </span>
               <span className="flex min-w-0 flex-col gap-1">
-                <StatusPill status={task.status || "todo"} compact />
+                <StatusPill status={isBlockedByDependency ? "blocked" : task.status || "todo"} compact />
                 <PriorityPill priority={task.priority} />
               </span>
               <span
@@ -3593,6 +3839,217 @@ function PlanPanel({ title, date, rows, showActual = false }) {
   );
 }
 
+function dateKeyFromValue(value) {
+  if (!value) return "";
+  const text = String(value).trim();
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return iso[0];
+  const slash = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (slash) {
+    const [, day, month, year] = slash;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function addDays(date, amount) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+
+function monthLabel(date) {
+  return date.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+}
+
+function calendarTone(type, status = "") {
+  if (/blocked/i.test(status)) return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200";
+  if (/done|delivered|closed|complete/i.test(status)) return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200";
+  const tones = {
+    phase: "border-[#cde8bd] bg-[#effbe9] text-[#3f7d16] dark:border-green-400/20 dark:bg-green-400/10 dark:text-green-200",
+    task: "border-[#f4d38b] bg-[#fff6df] text-[#8a6312] dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+    subtask: "border-[#cbd8ff] bg-[#f0f4ff] text-[#3159a5] dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+    mrn: "border-[#f0c5cd] bg-[#fff0f2] text-[#9b3445] dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+    project: "border-[#cbd7cf] bg-white text-[#4c5349] dark:border-white/10 dark:bg-white/[0.06] dark:text-white/75",
+  };
+  return tones[type] || tones.project;
+}
+
+function buildCalendarEvents({ project, phases = [], tasks = [], mrns = [] }) {
+  const events = [];
+  const pushEvent = (event) => {
+    const date = dateKeyFromValue(event.date);
+    if (!date) return;
+    events.push({ ...event, date });
+  };
+
+  pushEvent({ id: `${project.id}-start`, date: project.startDate, title: "Project start", type: "project", meta: project.name });
+  pushEvent({ id: `${project.id}-target`, date: project.targetDate, title: "Project target", type: "project", meta: project.client || project.location });
+
+  phases.forEach((phase) => {
+    pushEvent({ id: `${phase.id}-start`, date: phase.startDate, title: `${phase.name || "Phase"} starts`, type: "phase", status: phase.status, meta: phase.ownerName || "Phase", source: phase });
+    pushEvent({ id: `${phase.id}-due`, date: phase.dueDate, title: `${phase.name || "Phase"} deadline`, type: "phase", status: phase.status, meta: statusLabel(phase.status), source: phase });
+  });
+
+  tasks.forEach((task) => {
+    const phaseName = phases.find((phase) => phase.id === task.phaseId)?.name;
+    pushEvent({ id: `${task.id}-start`, date: task.startDate, title: `${task.title || "Task"} starts`, type: "task", status: task.status, meta: phaseName || statusLabel(task.status), source: task });
+    pushEvent({ id: `${task.id}-due`, date: task.dueDate, title: task.title || "Task deadline", type: "task", status: task.status, meta: `${task.priority || "medium"} priority`, source: task });
+    (task.subtasks || []).forEach((subtask) => {
+      pushEvent({ id: `${task.id}-${subtask.id}-due`, date: subtask.dueDate || subtask.date, title: subtask.title || "Subtask deadline", type: "subtask", status: subtask.done ? "done" : task.status, meta: task.title, source: task });
+    });
+  });
+
+  mrns.forEach((row) => {
+    pushEvent({ id: `${row.id || row.mrnNo}-request`, date: row.materialRequestDate || row.date, title: `${row.mrnNo || "MRN"} requested`, type: "mrn", status: row.status, meta: row.materialRequirement || row.vendorName, source: row });
+    pushEvent({ id: `${row.id || row.mrnNo}-required`, date: row.requiredDate, title: `${row.mrnNo || "MRN"} required`, type: "mrn", status: row.status, meta: row.assignTo || row.vendorName, source: row });
+    pushEvent({ id: `${row.id || row.mrnNo}-invoice`, date: row.invoiceDate, title: `${row.mrnNo || "MRN"} invoice`, type: "mrn", status: row.status, meta: mrnAmount(row.quotationAmount), source: row });
+  });
+
+  return events.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type));
+}
+
+function ProjectCalendarView({ darkMode, project, phases, tasks, onOpenTask, onOpenPhase }) {
+  const [cursor, setCursor] = useState(() => {
+    const seed = dateKeyFromValue(project.startDate) || new Date().toISOString().slice(0, 10);
+    const date = new Date(`${seed}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? new Date() : date;
+  });
+  const [mrnData, setMrnData] = useState(null);
+  const [mrnError, setMrnError] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const [fullscreenMounted, setFullscreenMounted] = useState(false);
+  const [selectedMrn, setSelectedMrn] = useState(null);
+
+  const loadMrns = useCallback(async () => {
+    try {
+      setMrnError("");
+      const result = await api("/mrn-dashboard?all=true");
+      setMrnData(result);
+    } catch (error) {
+      setMrnError(error.message || "MRN dates unavailable");
+      setMrnData({ records: [] });
+    }
+  }, []);
+
+  useEffect(() => {
+    // Calendar MRN dates are loaded once when the project calendar opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadMrns();
+  }, [loadMrns]);
+
+  const projectMrns = useMemo(() => (mrnData?.records || []).filter((row) => mrnMatchesProject(row, project)), [mrnData?.records, project]);
+  const events = useMemo(() => buildCalendarEvents({ project, phases, tasks, mrns: projectMrns }), [project, phases, tasks, projectMrns]);
+  const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const firstCell = addDays(monthStart, -monthStart.getDay());
+  const days = Array.from({ length: 42 }, (_, index) => addDays(firstCell, index));
+  const eventMap = useMemo(() => {
+    const map = new Map();
+    events.forEach((event) => {
+      const list = map.get(event.date) || [];
+      list.push(event);
+      map.set(event.date, list);
+    });
+    return map;
+  }, [events]);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  function openEvent(event) {
+    if (event.type === "task" || event.type === "subtask") return event.source && onOpenTask(event.source);
+    if (event.type === "phase") return event.source && onOpenPhase(event.source);
+    if (event.type === "mrn") return event.source && setSelectedMrn(event.source);
+  }
+  function toggleCalendarExpand() {
+    if (fullscreenMounted) {
+      setExpanded(false);
+      window.setTimeout(() => setFullscreenMounted(false), 260);
+      return;
+    }
+    setFullscreenMounted(true);
+    window.requestAnimationFrame(() => setExpanded(true));
+  }
+  const compactCalendar = fullscreenMounted;
+
+  return (
+    <div
+      className={cn(
+        "mx-auto w-full max-w-[1600px] transform-gpu p-4 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] sm:p-6",
+        fullscreenMounted &&
+          "fixed inset-0 z-[70] max-w-none origin-center overflow-y-auto bg-[#f7f8f5] p-3 shadow-[0_24px_90px_rgba(15,23,42,0.18)] dark:bg-[#11130f] sm:p-4",
+        fullscreenMounted && (expanded ? "translate-y-0 scale-100 opacity-100" : "translate-y-3 scale-[0.97] opacity-0"),
+      )}
+    >
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-xl font-semibold"><CalendarDays className="h-5 w-5 text-[#4b9b16]" />Calendar</h2>
+          <p className="mt-0.5 text-xs text-[#7b8178]">Project, phase, task, subtask and MRN dates for {project.name}.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>Previous</Button>
+          <Button onClick={() => setCursor(new Date())}>Today</Button>
+          <Button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>Next</Button>
+          <IconButton label={fullscreenMounted ? "Exit full screen" : "Expand calendar"} onClick={toggleCalendarExpand}>
+            {fullscreenMounted ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </IconButton>
+        </div>
+      </div>
+
+      <div className={cn(compactCalendar ? "mt-3" : "mt-5", "transition-[margin] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]")}>
+        <section className="overflow-hidden rounded-2xl border border-[#dfe3dc] bg-white transition-shadow duration-500 dark:border-white/10 dark:bg-white/[0.03]">
+          <header className={cn("flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e7e1] px-4 transition-[padding] duration-500 dark:border-white/10", compactCalendar ? "py-2" : "py-3")}>
+            <h3 className="text-sm font-bold">{monthLabel(cursor)}</h3>
+            <div className="flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#71776e] dark:text-white/45">
+              {["Phase", "Task", "Subtask", "MRN"].map((label) => (
+                <span key={label} className="inline-flex items-center gap-1.5">
+                  <span className={cn("h-2.5 w-2.5 rounded-full", label === "Phase" ? "bg-green-400" : label === "Task" ? "bg-amber-400" : label === "Subtask" ? "bg-blue-400" : "bg-rose-400")} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          </header>
+          <div className="grid grid-cols-7 border-b border-[#e4e7e1] bg-[#f7f8f5] text-center text-[10px] font-bold uppercase tracking-[0.12em] text-[#858b82] dark:border-white/10 dark:bg-white/[0.025]">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day} className={cn("transition-[padding] duration-500", compactCalendar ? "py-2" : "py-3")}>{day}</span>)}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-7">
+            {days.map((day) => {
+              const key = day.toISOString().slice(0, 10);
+              const dayEvents = eventMap.get(key) || [];
+              const muted = day.getMonth() !== cursor.getMonth();
+              return (
+                <div key={key} className={cn(compactCalendar ? "h-[118px] p-1.5" : "min-h-[150px] p-2", "border-b border-r border-[#eef0eb] transition-[height,min-height,padding,background-color] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] last:border-r-0 dark:border-white/10", muted && "bg-[#fafbf8] text-[#a1a79e] dark:bg-white/[0.015]")}>
+                  <div className="flex items-center justify-between">
+                    <span className={cn("grid place-items-center rounded-full text-xs font-bold transition-[width,height] duration-500", compactCalendar ? "h-5 w-5" : "h-7 w-7", key === todayKey ? "bg-[#20231f] text-white dark:bg-[#d8f36a] dark:text-[#11150f]" : "")}>{day.getDate()}</span>
+                    {dayEvents.length > (compactCalendar ? 2 : 3) && <span className="text-[10px] font-semibold text-[#8a9087]">+{dayEvents.length - (compactCalendar ? 2 : 3)}</span>}
+                  </div>
+                  <div className={cn(compactCalendar ? "mt-1 space-y-1" : "mt-2 space-y-1.5", "transition-[margin] duration-500")}>
+                    {dayEvents.slice(0, compactCalendar ? 2 : 3).map((event) => (
+                      <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("block w-full rounded-lg border px-2 text-left text-[11px] leading-4 transition duration-200 hover:-translate-y-0.5", compactCalendar ? "py-1" : "py-1.5", calendarTone(event.type, event.status))}>
+                        <span className="block truncate font-bold">{event.title}</span>
+                        {event.meta && <span className="block truncate opacity-70">{event.meta}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+      {mrnError && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-700">{mrnError}</p>}
+      {selectedMrn && (
+        <MrnDetailDrawer
+          darkMode={darkMode}
+          row={selectedMrn}
+          canViewHistory={Boolean(mrnData?.canViewMrnHistory)}
+          onClose={() => setSelectedMrn(null)}
+          onLoadHistory={(row) => api(`/mrn-dashboard/${encodeURIComponent(row.mrnNo)}/history`)}
+        />
+      )}
+    </div>
+  );
+}
+
 function ProjectMrnView({ darkMode, project }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -3808,6 +4265,295 @@ function ProjectMrnView({ darkMode, project }) {
   );
 }
 
+function ProjectStockView({ darkMode, project }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const loadStock = useCallback(async (force = false) => {
+    try {
+      force ? setRefreshing(true) : setLoading(true);
+      const result = await api(`/project-dashboard/projects/${project.id}/stock${force ? "?force=true" : ""}`);
+      setData(result);
+    } catch (error) {
+      toast.error(error.message || "Could not load project stock");
+      setData({ sites: [], totals: {} });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [project.id]);
+
+  useEffect(() => {
+    // Project stock is loaded when the stock workspace opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadStock(false);
+  }, [loadStock]);
+
+  const sites = data?.sites || [];
+  const items = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const all = sites.flatMap((site) => (site.items || site.recentItems || []).map((item) => ({ ...item, siteName: site.name })));
+    if (!needle) return all;
+    return all.filter((item) => [item.siteName, item.itemName, item.category, item.sheetName, item.unit].join(" ").toLowerCase().includes(needle));
+  }, [query, sites]);
+
+  return (
+    <div className="mx-auto max-w-[1250px] p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <PackageSearch className="h-5 w-5 text-[#4b9b16]" />
+            Site stock
+          </h2>
+          <p className="mt-0.5 text-xs text-[#7b8178]">
+            Stock linked to {project.name} from the Projects Stock module.
+          </p>
+        </div>
+        <Button onClick={() => loadStock(true)}>
+          <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+          Refresh
+        </Button>
+      </div>
+
+      {loading ? (
+        <section className="mt-5 rounded-2xl border border-[#dfe3dc] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-white/[0.03]">
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" />
+          <p className="mt-3 text-sm text-[#7b8178]">Loading site stock...</p>
+        </section>
+      ) : (
+        <>
+          <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+            {[
+              ["Sites", data?.totals?.sites || sites.length, STAT_TONES.green],
+              ["Items", data?.totals?.items || 0, STAT_TONES.blue],
+              ["Quantity", fmtProjectStock(data?.totals?.quantity), STAT_TONES.teal],
+              ["Low stock", data?.totals?.lowStock || 0, STAT_TONES.rose],
+            ].map(([label, value, className]) => (
+              <div key={label} className={cn("rounded-2xl p-4", className)}>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">{label}</p>
+                <p className="mt-1 text-2xl small font-bold tabular-nums">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          <section className="mt-5 rounded-2xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Stock items</h3>
+                <p className="mt-0.5 text-[11px] text-[#858b82]">{items.length} visible item{items.length === 1 ? "" : "s"}</p>
+              </div>
+              <div className="relative min-w-[240px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#878d84]" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search item, category, sheet..." className={cn(inputClass, "pl-9")} />
+              </div>
+            </div>
+            {sites.length ? (
+              <div className="mt-4 overflow-auto rounded-xl">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead className="bg-[#f7f8f5] text-[10px] font-bold uppercase tracking-[0.12em] text-[#858b82] dark:bg-white/[0.025]">
+                    <tr>
+                      <th className="px-4 py-3">Item</th>
+                      <th className="px-4 py-3">Site</th>
+                      <th className="px-4 py-3">Category</th>
+                      <th className="px-4 py-3">Sheet</th>
+                      <th className="px-4 py-3 text-right">Qty</th>
+                      <th className="px-4 py-3">Unit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => {
+                      const isFinalSheet = /final\s*sheet/i.test(item.sheetName || "");
+                      return (
+                      <tr
+                        key={`${item.siteName}-${item.sheetName}-${item.rowNumber}-${item.itemName}`}
+                        className={cn(
+                          "border-b border-[#e9ebe7] last:border-0 dark:border-white/10",
+                          isFinalSheet && "bg-[#fff8dd] dark:bg-amber-400/10",
+                        )}
+                      >
+                        <td className="px-4 py-3 font-semibold">{item.itemName}</td>
+                        <td className="px-4 py-3 text-[#6d736a] dark:text-white/50">{item.siteName}</td>
+                        <td className="px-4 py-3 text-[#6d736a] dark:text-white/50">{item.category || "-"}</td>
+                        <td className="px-4 py-3 text-[#6d736a] dark:text-white/50">
+                          {isFinalSheet ? (
+                            <span className="rounded-full bg-[#ffe7a3] px-2.5 py-1 text-[11px] font-bold text-[#8a5a00] dark:bg-amber-300/20 dark:text-amber-100">
+                              {item.sheetName || "Final Sheet"}
+                            </span>
+                          ) : (
+                            item.sheetName || "-"
+                          )}
+                        </td>
+                        <td className={cn("px-4 py-3 text-right font-bold", item.quantity <= Math.max(0, item.reorderMin || 0) ? "text-rose-500" : "text-[#319000]")}>{fmtProjectStock(item.quantity)}</td>
+                        <td className="px-4 py-3 text-[#6d736a] dark:text-white/50">{item.unit || "-"}</td>
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {!items.length && (
+                  <div className="px-6 py-14 text-center text-sm text-[#858b82]">No stock items match your search.</div>
+                )}
+              </div>
+            ) : (
+              <div className="px-6 py-16 text-center">
+                <PackageSearch className="mx-auto h-7 w-7 text-[#9ca199]" />
+                <h3 className="mt-3 text-sm font-semibold">No stock linked to this site</h3>
+                <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#858b82]">
+                  Add a site in the Projects Stock module with a name matching {project.name}
+                  {project.code ? ` or ${project.code}` : ""}.
+                </p>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ProjectActivityView({ project }) {
+  const [activity, setActivity] = useState(project.projectActivity || []);
+  const [loading, setLoading] = useState(false);
+
+  const loadActivity = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await api(`/project-dashboard/projects/${project.id}/activity`);
+      setActivity(result.activity || []);
+    } catch (error) {
+      toast.error(error.message || "Could not load project activity");
+    } finally {
+      setLoading(false);
+    }
+  }, [project.id]);
+
+  useEffect(() => {
+    // Refresh when the activity tab opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadActivity();
+  }, [loadActivity]);
+  const groups = useMemo(() => groupProjectActivity(activity), [activity]);
+
+  return (
+    <div className="mx-auto max-w-[1050px] p-4 sm:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Clock3 className="h-5 w-5 text-[#4b9b16]" />
+            Project activity
+          </h2>
+          <p className="mt-0.5 text-xs text-[#7b8178]">
+            Task, phase, access, comment, and file changes for {project.name}.
+          </p>
+        </div>
+        <Button onClick={loadActivity}>
+          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+          Refresh
+        </Button>
+      </div>
+      <section className="mt-5 rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+        <div className="space-y-3">
+          {groups.map((group) => (
+            <div key={group.id} className="rounded-2xl bg-[#f7f8f5] p-4 dark:bg-white/[0.04]">
+              <div className="flex items-start gap-3">
+                <span className={cn("mt-1 h-3 w-3 shrink-0 rounded-full", group.type === "phase" ? "bg-[#72cf50]" : group.type === "task" ? "bg-amber-400" : group.type === "file" ? "bg-blue-400" : "bg-[#8a9087]")} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-bold">{group.label}</p>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#697066] dark:bg-white/10 dark:text-white/55">
+                      {group.entries.length} change{group.entries.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-[#858b82]">
+                    {group.firstUser || "System"} · {group.timeLabel}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 space-y-2 border-l border-[#dfe3dc] pl-5 dark:border-white/10">
+                {group.entries.map((entry) => (
+                  <div key={entry.id} className="rounded-xl bg-white px-3 py-2 dark:bg-white/[0.045]">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold">{entry.action}</span>
+                      {entry.target && entry.target !== group.label && <span className="truncate text-xs text-[#5f665c] dark:text-white/55">{entry.target}</span>}
+                    </div>
+                    <p className="mt-1 text-[11px] text-[#858b82]">
+                      {entry.userName || "System"} · {entry.createdAt ? new Date(entry.createdAt).toLocaleString("en-IN") : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {!groups.length && (
+            <div className="px-6 py-16 text-center">
+              <Clock3 className="mx-auto h-7 w-7 text-[#9ca199]" />
+              <h3 className="mt-3 text-sm font-semibold">No activity yet</h3>
+              <p className="mt-1 text-xs text-[#858b82]">New project changes will appear here.</p>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function groupProjectActivity(activity = []) {
+  const sorted = [...activity].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const groups = [];
+  const quickWindowMs = 2 * 60 * 60 * 1000;
+  sorted.forEach((entry) => {
+    const type = entry.type || entry.details?.type || inferActivityType(entry.action);
+    const parentId = entry.parentId || entry.details?.parentId || entry.details?.phaseId || entry.details?.taskId || entry.details?.documentId || type;
+    const label = entry.parentLabel || entry.details?.parentLabel || parentActivityLabel(entry, type);
+    const created = Date.parse(entry.createdAt || "") || Date.now();
+    const existing = groups.find((group) => group.type === type && group.parentId === parentId && Math.abs(group.latestMs - created) <= quickWindowMs);
+    if (existing) {
+      existing.entries.push(entry);
+      existing.latestMs = Math.max(existing.latestMs, created);
+      existing.earliestMs = Math.min(existing.earliestMs, created);
+      return;
+    }
+    groups.push({
+      id: `${type}-${parentId}-${created}`,
+      type,
+      parentId,
+      label,
+      entries: [entry],
+      latestMs: created,
+      earliestMs: created,
+      firstUser: entry.userName,
+    });
+  });
+  return groups.map((group) => ({
+    ...group,
+    entries: group.entries.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))),
+    timeLabel: group.latestMs === group.earliestMs
+      ? new Date(group.latestMs).toLocaleString("en-IN")
+      : `${new Date(group.earliestMs).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} - ${new Date(group.latestMs).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`,
+  }));
+}
+
+function inferActivityType(action = "") {
+  if (/phase/i.test(action)) return "phase";
+  if (/task|assignee|comment|due date|status/i.test(action)) return "task";
+  if (/file/i.test(action)) return "file";
+  if (/access/i.test(action)) return "access";
+  return "project";
+}
+
+function parentActivityLabel(entry, type) {
+  if (type === "access") return "Project access";
+  if (type === "file") return "Files";
+  return entry.target || "Project activity";
+}
+
+function fmtProjectStock(value, digits = 1) {
+  const number = Number(value) || 0;
+  return number.toLocaleString("en-IN", { maximumFractionDigits: digits });
+}
+
 function FilesView({
   project,
   documents,
@@ -3973,6 +4719,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   const [projectEditor, setProjectEditor] = useState(null);
   const [fileDrawerOpen, setFileDrawerOpen] = useState(false);
   const [teamDrawerOpen, setTeamDrawerOpen] = useState(false);
+  const [accessDrawerOpen, setAccessDrawerOpen] = useState(false);
+  const [accessData, setAccessData] = useState({ access: [], users: [], canManage: false });
   const [fileEditor, setFileEditor] = useState(null);
   const [fileForm, setFileForm] = useState({
     name: "",
@@ -3981,6 +4729,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [accessSaving, setAccessSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const load = useCallback(
@@ -3995,7 +4744,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               null
             : null,
         );
-        if (canEditProjectControl) setConfig(await api("/project-dashboard/config"));
+        setConfig(await api("/project-dashboard/config"));
       } catch (error) {
         toast.error(error.message || "Could not load projects");
       } finally {
@@ -4003,7 +4752,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
         setRefreshing(false);
       }
     },
-    [canEditProjectControl],
+    [],
   );
 
   const loadProjectDocs = useCallback(async (id) => {
@@ -4072,6 +4821,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     );
     return [...byKey.values()];
   }, [driveDocs, selectedProject?.projectDocuments]);
+  const canManageProjectAccess = Boolean(canEditProjectControl || selectedProject?.access?.canManage);
+  const canEditSelectedProject = Boolean(canEditProjectControl || selectedProject?.access?.canEdit);
 
   function fullProject(project) {
     return (
@@ -4092,7 +4843,41 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     setFileDrawerOpen(false);
     setFileEditor(null);
     setTeamDrawerOpen(false);
+    setAccessDrawerOpen(false);
     router.push("/projects");
+  }
+
+  async function openAccessDrawer() {
+    if (!selectedProject) return;
+    try {
+      const result = await api(`/project-dashboard/projects/${selectedProject.id}/access`);
+      setAccessData({
+        access: result.access || [],
+        users: result.users || [],
+        canManage: Boolean(result.canManage),
+      });
+      setAccessDrawerOpen(true);
+    } catch (error) {
+      toast.error(error.message || "Could not load project access");
+    }
+  }
+
+  async function saveProjectAccess(nextAccess) {
+    if (!selectedProject) return;
+    try {
+      setAccessSaving(true);
+      const result = await api(`/project-dashboard/projects/${selectedProject.id}/access`, {
+        method: "PATCH",
+        body: JSON.stringify({ access: nextAccess }),
+      });
+      setAccessData((current) => ({ ...current, access: result.access || [] }));
+      toast.success("Project access updated");
+      await load(true);
+    } catch (error) {
+      toast.error(error.message || "Could not update project access");
+    } finally {
+      setAccessSaving(false);
+    }
   }
 
   async function patchProject(project, payload, message) {
@@ -4467,7 +5252,14 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
                 className={cn("h-4 w-4", refreshing && "animate-spin")}
               />
             </IconButton>
-            {canEditProjectControl && (
+            <Button
+              className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
+              onClick={openAccessDrawer}
+            >
+              <ShieldCheck className="h-3 w-3" />
+              <span className="hidden sm:inline">Access</span>
+            </Button>
+            {canEditSelectedProject && (
               <Button
                 variant="primary"
                 className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
@@ -4505,7 +5297,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               phases={phases}
               documents={documents}
               users={users}
-              isSuperAdmin={canEditProjectControl}
+              isSuperAdmin={canEditSelectedProject}
               onOpenTask={openTask}
               onAddTask={() => addTask()}
               onOpenPhase={openPhase}
@@ -4517,9 +5309,19 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               tasks={tasks}
               phases={phases}
               users={users}
-              isSuperAdmin={canEditProjectControl}
+              isSuperAdmin={canEditSelectedProject}
               onOpenTask={openTask}
               onAddTask={addTask}
+            />
+          )}
+          {workspaceView === "calendar" && (
+            <ProjectCalendarView
+              darkMode={darkMode}
+              project={selectedProject}
+              phases={phases}
+              tasks={tasks}
+              onOpenTask={openTask}
+              onOpenPhase={openPhase}
             />
           )}
           {workspaceView === "manpower" && (
@@ -4528,11 +5330,17 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           {workspaceView === "mrn" && (
             <ProjectMrnView darkMode={darkMode} project={selectedProject} />
           )}
+          {workspaceView === "stock" && (
+            <ProjectStockView darkMode={darkMode} project={selectedProject} />
+          )}
+          {workspaceView === "activity" && (
+            <ProjectActivityView project={selectedProject} />
+          )}
           {workspaceView === "phases" && (
             <PhasesView
               phases={phases}
               tasks={tasks}
-              isSuperAdmin={canEditProjectControl}
+              isSuperAdmin={canEditSelectedProject}
               onOpenPhase={openPhase}
               onAddPhase={addPhase}
               onAddTask={addTask}
@@ -4542,7 +5350,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             <FilesView
               project={selectedProject}
               documents={documents}
-              isSuperAdmin={canEditProjectControl}
+              isSuperAdmin={canEditSelectedProject}
               onAddFile={() => openFileDrawer()}
               onEditFile={openFileDrawer}
               onDeleteFile={deleteDocument}
@@ -4562,7 +5370,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           allTasks={tasks}
           currentUser={user}
           saving={saving}
-          editable={canEditProjectControl}
+          editable={canEditSelectedProject}
           onChange={(patch) =>
             setTaskEditor((current) => ({ ...current, ...patch }))
           }
@@ -4579,7 +5387,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           tasks={tasks.filter((task) => task.phaseId === phaseEditor.id)}
           users={users}
           saving={saving}
-          editable={canEditProjectControl}
+          editable={canEditSelectedProject}
           onChange={(patch) =>
             setPhaseEditor((current) => ({ ...current, ...patch }))
           }
@@ -4613,6 +5421,19 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           tasks={tasks}
           users={users}
           onClose={() => setTeamDrawerOpen(false)}
+        />
+      )}
+      {accessDrawerOpen && (
+        <ProjectAccessDrawer
+          project={selectedProject}
+          phases={phases}
+          tasks={tasks}
+          users={accessData.users.length ? accessData.users : users}
+          access={accessData.access}
+          canManage={Boolean(accessData.canManage || canManageProjectAccess)}
+          saving={accessSaving}
+          onSave={saveProjectAccess}
+          onClose={() => setAccessDrawerOpen(false)}
         />
       )}
       {fileDrawerOpen && (

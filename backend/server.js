@@ -9897,6 +9897,7 @@ function normalizeProjectInput(body, existing = {}) {
         : [],
       createdAt: projectText(task.createdAt) || now,
       updatedAt: now,
+      dependencyWarning: "",
     };
   };
   const phases = Array.isArray(body?.phases ?? existing.phases)
@@ -9948,6 +9949,18 @@ function normalizeProjectInput(body, existing = {}) {
         ),
       })).filter((assignment) => assignment.documentId)
     : [];
+  const projectAccess = Array.isArray(body?.projectAccess ?? existing.projectAccess)
+    ? (body?.projectAccess ?? existing.projectAccess).map((entry) => ({
+        id: projectText(entry.id) || crypto.randomUUID(),
+        userId: projectText(entry.userId),
+        scope: ["project", "phase", "task"].includes(projectText(entry.scope)) ? projectText(entry.scope) : "project",
+        phaseId: projectText(entry.phaseId),
+        taskId: projectText(entry.taskId),
+        permission: ["view", "edit", "manage"].includes(projectText(entry.permission)) ? projectText(entry.permission) : "view",
+        createdAt: projectText(entry.createdAt) || now,
+        createdBy: projectText(entry.createdBy),
+      })).filter((entry) => entry.userId)
+    : [];
   const incomingDmr = body?.dmr !== undefined ? body.dmr : existing.dmr;
   const dmr = {
     ...(existing.dmr || {}),
@@ -9973,6 +9986,7 @@ function normalizeProjectInput(body, existing = {}) {
     code: projectText(body?.code ?? existing.code),
     client: projectText(body?.client ?? existing.client),
     location: projectText(body?.location ?? existing.location),
+    budget: projectText(body?.budget ?? existing.budget),
     manager: projectText(body?.manager ?? existing.manager),
     managerId: projectText(body?.managerId ?? existing.managerId),
     status: projectText(body?.status ?? existing.status) || "active",
@@ -9989,6 +10003,8 @@ function normalizeProjectInput(body, existing = {}) {
     tasks: looseTasks,
     projectDocuments: documentsList,
     assignments,
+    projectAccess,
+    projectActivity: Array.isArray(existing.projectActivity) ? existing.projectActivity : [],
     dmr,
     updatedAt: now,
   };
@@ -9999,6 +10015,262 @@ function projectManualTasks(project = {}) {
     ...(project.tasks || []),
     ...(project.phases || []).flatMap((phase) => (phase.tasks || []).map((task) => ({ ...task, phaseId: task.phaseId || phase.id, phaseName: phase.name }))),
   ];
+}
+
+function projectTaskIdsForUser(project = {}, userId = "") {
+  if (!userId) return new Set();
+  const ids = new Set();
+  for (const task of projectManualTasks(project)) {
+    if ((task.assigneeIds || []).map(String).includes(String(userId))) ids.add(task.id);
+    if ((task.subtasks || []).some((subtask) => String(subtask.assigneeId) === String(userId))) ids.add(task.id);
+  }
+  return ids;
+}
+
+function projectAccessEntriesForUser(project = {}, userId = "") {
+  return (project.projectAccess || []).filter((entry) => String(entry.userId) === String(userId));
+}
+
+function canManageProjectAccess(project = {}, req) {
+  if (req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_control")) return true;
+  return projectAccessEntriesForUser(project, req.authUser?.id).some((entry) => entry.permission === "manage");
+}
+
+function canEditScopedProject(project = {}, req) {
+  if (req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_control")) return true;
+  return projectAccessEntriesForUser(project, req.authUser?.id).some((entry) => ["edit", "manage"].includes(entry.permission));
+}
+
+function hasFullProjectEdit(project = {}, req) {
+  if (req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_control")) return true;
+  return projectAccessEntriesForUser(project, req.authUser?.id).some((entry) => entry.scope === "project" && ["edit", "manage"].includes(entry.permission));
+}
+
+function mergeScopedProjectPatch(existing = {}, incoming = {}, req) {
+  if (hasFullProjectEdit(existing, req)) return incoming;
+  const entries = projectAccessEntriesForUser(existing, req.authUser?.id).filter((entry) => ["edit", "manage"].includes(entry.permission));
+  const allowedPhaseIds = new Set(entries.filter((entry) => entry.scope === "phase").map((entry) => entry.phaseId));
+  const allowedTaskIds = new Set(entries.filter((entry) => entry.scope === "task").map((entry) => entry.taskId));
+  const incomingPhases = new Map((incoming.phases || []).map((phase) => [phase.id, phase]));
+  const incomingTasks = new Map([...(incoming.tasks || []), ...(incoming.phases || []).flatMap((phase) => phase.tasks || [])].map((task) => [task.id, task]));
+  return {
+    ...existing,
+    phases: (existing.phases || []).map((phase) => {
+      if (allowedPhaseIds.has(phase.id) && incomingPhases.has(phase.id)) return incomingPhases.get(phase.id);
+      return {
+        ...phase,
+        tasks: (phase.tasks || []).map((task) => allowedTaskIds.has(task.id) && incomingTasks.has(task.id) ? incomingTasks.get(task.id) : task),
+      };
+    }),
+    tasks: (existing.tasks || []).map((task) => allowedTaskIds.has(task.id) && incomingTasks.has(task.id) ? incomingTasks.get(task.id) : task),
+  };
+}
+
+function canViewProject(project = {}, req) {
+  const userId = req.authUser?.id;
+  if (req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_control")) return true;
+  if (project.managerId && String(project.managerId) === String(userId)) return true;
+  if (projectAccessEntriesForUser(project, userId).length) return true;
+  return projectTaskIdsForUser(project, userId).size > 0;
+}
+
+function scopedProjectForUser(project = {}, req) {
+  if (req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_control")) return project;
+  const userId = req.authUser?.id;
+  const entries = projectAccessEntriesForUser(project, userId);
+  if (project.managerId && String(project.managerId) === String(userId)) return project;
+  if (entries.some((entry) => entry.scope === "project")) return project;
+  const allowedPhaseIds = new Set(entries.filter((entry) => entry.scope === "phase").map((entry) => entry.phaseId));
+  const allowedTaskIds = new Set(entries.filter((entry) => entry.scope === "task").map((entry) => entry.taskId));
+  for (const id of projectTaskIdsForUser(project, userId)) allowedTaskIds.add(id);
+  return {
+    ...project,
+    phases: (project.phases || []).map((phase) => ({
+      ...phase,
+      tasks: (phase.tasks || []).filter((task) => allowedPhaseIds.has(phase.id) || allowedTaskIds.has(task.id)),
+    })).filter((phase) => allowedPhaseIds.has(phase.id) || (phase.tasks || []).length),
+    tasks: (project.tasks || []).filter((task) => allowedTaskIds.has(task.id)),
+    projectDocuments: entries.length ? project.projectDocuments || [] : [],
+    assignments: [],
+  };
+}
+
+function notifyProjectTaskAssignees({ beforeProject = {}, afterProject = {}, actorId = "" }) {
+  const beforeAssignees = new Map(projectManualTasks(beforeProject).map((task) => [task.id, new Set((task.assigneeIds || []).map(String))]));
+  for (const task of projectManualTasks(afterProject)) {
+    const previous = beforeAssignees.get(task.id) || new Set();
+    for (const userId of (task.assigneeIds || []).map(String)) {
+      if (userId === String(actorId) || previous.has(userId)) continue;
+      notifications.unshift({
+        id: crypto.randomUUID(),
+        userId,
+        title: `Task assigned: ${task.title}`,
+        message: `You have been assigned to "${task.title}" in ${afterProject.name}.`,
+        category: "Project Control",
+        severity: "info",
+        projectId: afterProject.id,
+        taskId: task.id,
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      });
+    }
+  }
+  notifications = notifications.slice(0, 1000);
+  saveNotifications();
+}
+
+function projectActivityEntry(req, action, target, details = {}) {
+  return {
+    id: crypto.randomUUID(),
+    action,
+    target: projectText(target),
+    type: projectText(details.type) || "project",
+    parentId: projectText(details.parentId || details.phaseId || details.taskId || details.documentId),
+    parentLabel: projectText(details.parentLabel || target),
+    details,
+    userId: req.authUser?.id || null,
+    userName: req.authUser?.displayName || req.authUser?.username || "System",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function compactProjectReference(value) {
+  return projectText(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function mrnMatchesProject(row = {}, project = {}) {
+  const rowProject = compactProjectReference(row.project);
+  if (!rowProject) return false;
+  const candidates = [project.name, project.code, project.location, ...(project.aliases || [])]
+    .map(compactProjectReference)
+    .filter(Boolean);
+  return candidates.some((candidate) => rowProject === candidate || rowProject.includes(candidate) || candidate.includes(rowProject));
+}
+
+function projectTaskMap(project = {}) {
+  return new Map(projectManualTasks(project).map((task) => [task.id, task]));
+}
+
+function appendProjectActivityFromDiff(project = {}, beforeProject = {}, req) {
+  const entries = [];
+  const beforeTasks = projectTaskMap(beforeProject);
+  const afterTasks = projectTaskMap(project);
+  const phaseByTaskId = new Map((project.phases || []).flatMap((phase) => (phase.tasks || []).map((task) => [task.id, phase])));
+  const phaseNameById = new Map((project.phases || []).map((phase) => [phase.id, phase.name]));
+  for (const [id, task] of afterTasks.entries()) {
+    const before = beforeTasks.get(id);
+    const parentPhase = phaseByTaskId.get(id);
+    const parentDetails = {
+      type: parentPhase ? "phase" : "task",
+      taskId: id,
+      phaseId: parentPhase?.id || task.phaseId || "",
+      parentId: parentPhase?.id || id,
+      parentLabel: parentPhase?.name || task.title,
+    };
+    if (!before) {
+      entries.push(projectActivityEntry(req, "Task created", task.title, parentDetails));
+      continue;
+    }
+    if (JSON.stringify(before.assigneeIds || []) !== JSON.stringify(task.assigneeIds || [])) {
+      entries.push(projectActivityEntry(req, "Assignee changed", task.title, { ...parentDetails, before: before.assigneeIds || [], after: task.assigneeIds || [] }));
+    }
+    if ((before.dueDate || "") !== (task.dueDate || "")) {
+      entries.push(projectActivityEntry(req, "Due date changed", task.title, { ...parentDetails, before: before.dueDate || "", after: task.dueDate || "" }));
+    }
+    if ((before.status || "") !== (task.status || "")) {
+      entries.push(projectActivityEntry(req, "Task status changed", task.title, { ...parentDetails, before: before.status || "", after: task.status || "" }));
+    }
+    if ((before.comments || []).length !== (task.comments || []).length) {
+      entries.push(projectActivityEntry(req, "Comment added", task.title, parentDetails));
+    }
+  }
+  const beforePhases = new Map((beforeProject.phases || []).map((phase) => [phase.id, phase]));
+  for (const phase of project.phases || []) {
+    const before = beforePhases.get(phase.id);
+    if (!before) entries.push(projectActivityEntry(req, "Phase created", phase.name, { type: "phase", phaseId: phase.id, parentId: phase.id, parentLabel: phase.name }));
+    else if (["name", "description", "status", "startDate", "dueDate", "ownerId"].some((field) => (before[field] || "") !== (phase[field] || ""))) {
+      entries.push(projectActivityEntry(req, "Phase edited", phase.name, { type: "phase", phaseId: phase.id, parentId: phase.id, parentLabel: phase.name }));
+    }
+  }
+  if (JSON.stringify(beforeProject.projectAccess || []) !== JSON.stringify(project.projectAccess || [])) {
+    entries.push(projectActivityEntry(req, "Access changed", project.name, { type: "access", parentId: "access", parentLabel: "Project access", count: (project.projectAccess || []).length }));
+  }
+  if (!entries.length) return project;
+  project.projectActivity = [...entries, ...(project.projectActivity || [])].slice(0, 300);
+  return project;
+}
+
+function taskDependencyState(task = {}, allTasksMap = new Map()) {
+  const blockers = (task.dependencyIds || []).map((id) => allTasksMap.get(id)).filter(Boolean);
+  const activeBlockers = blockers.filter((item) => !/done|complete|completed/i.test(item.status || ""));
+  const dueWarnings = blockers.filter((item) => item.dueDate && task.dueDate && task.dueDate < item.dueDate);
+  return { blockers, activeBlockers, dueWarnings };
+}
+
+function serializeProjectWithDependencyState(project = {}) {
+  const allTasksMap = projectTaskMap(project);
+  const decorate = (task) => {
+    const state = taskDependencyState(task, allTasksMap);
+    return {
+      ...task,
+      blockedBy: state.activeBlockers.map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate, status: item.status })),
+      dependencyWarnings: state.dueWarnings.map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate })),
+    };
+  };
+  return {
+    ...project,
+    tasks: (project.tasks || []).map(decorate),
+    phases: (project.phases || []).map((phase) => ({ ...phase, tasks: (phase.tasks || []).map(decorate) })),
+  };
+}
+
+async function sendProjectDailyDigest({ source = "manual", date = istDateKey(new Date()) } = {}) {
+  const runId = `project-daily-digest:${date}`;
+  if (source === "cron" && notifications.some((item) => item.digestRunId === runId)) return { status: "skipped", date, sent: 0 };
+  const db = await connectAuthDb();
+  const users = await db.collection("users").find({ blacklisted: { $ne: true } }).toArray();
+  const userMap = new Map(users.map((user) => [String(user._id), user]));
+  const sentUsers = new Set();
+  const weekEnd = addDaysToDateKey(date, 7) || date;
+  const mrnDashboard = await readMrnDashboard({ all: true }).catch(() => ({ records: [] }));
+  for (const project of projectDashboardConfig.projects.filter((item) => item.status !== "archived")) {
+    const tasks = projectManualTasks(project);
+    const recipients = new Set([
+      project.managerId,
+      ...(project.projectAccess || []).map((entry) => entry.userId),
+      ...tasks.flatMap((task) => task.assigneeIds || []),
+      ...tasks.flatMap((task) => (task.subtasks || []).map((subtask) => subtask.assigneeId)),
+    ].filter(Boolean).map(String));
+    const dueToday = tasks.filter((task) => task.dueDate === date && !/done|complete|completed/i.test(task.status || ""));
+    const overdue = tasks.filter((task) => task.dueDate && task.dueDate < date && !/done|complete|completed/i.test(task.status || ""));
+    const phaseDeadlines = (project.phases || []).filter((phase) => phase.dueDate && phase.dueDate >= date && phase.dueDate <= weekEnd);
+    const mrnsRequired = (mrnDashboard.records || []).filter((row) => mrnMatchesProject(row, project) && row.requiredDate === date);
+    if (!dueToday.length && !overdue.length && !phaseDeadlines.length && !mrnsRequired.length) continue;
+    for (const userId of recipients) {
+      if (!userMap.has(userId)) continue;
+      notifications.unshift({
+        id: crypto.randomUUID(),
+        userId,
+        title: `Daily digest: ${project.name}`,
+        message: [
+          dueToday.length ? `Tasks due today: ${dueToday.map((task) => task.title).join(", ")}` : "",
+          overdue.length ? `Overdue tasks: ${overdue.map((task) => task.title).join(", ")}` : "",
+          mrnsRequired.length ? `MRNs required today: ${mrnsRequired.map((row) => row.mrnNo).join(", ")}` : "",
+          phaseDeadlines.length ? `Phase deadlines this week: ${phaseDeadlines.map((phase) => `${phase.name} (${phase.dueDate})`).join(", ")}` : "",
+        ].filter(Boolean).join("\n"),
+        category: "Project Daily Digest",
+        severity: overdue.length ? "warning" : "info",
+        projectId: project.id,
+        digestRunId: runId,
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      });
+      sentUsers.add(userId);
+    }
+  }
+  notifications = notifications.slice(0, 1000);
+  saveNotifications();
+  return { status: "completed", date, sent: sentUsers.size };
 }
 
 function summarizeManualProject(project = {}, date = istDateKey(new Date())) {
@@ -10024,9 +10296,11 @@ function summarizeManualProject(project = {}, date = istDateKey(new Date())) {
   };
 }
 
-app.get("/project-dashboard/config", requireProjectControlEditor, async (req, res) => {
+app.get("/project-dashboard/config", async (req, res) => {
   const db = await connectAuthDb();
-  const sheetDocs = documents.filter((doc) => doc.type === "sheet" && isDocumentVisible(doc, req));
+  const sheetDocs = (req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_control"))
+    ? documents.filter((doc) => doc.type === "sheet" && isDocumentVisible(doc, req))
+    : [];
   const sheets = [];
   for (const doc of sheetDocs) {
     let architecture = doc.sheetArchitecture;
@@ -10054,7 +10328,7 @@ app.get("/project-dashboard/config", requireProjectControlEditor, async (req, re
   const roles = await db.collection("roles").find({}).toArray();
   const roleMap = new Map(roles.map((role) => [String(role._id), role]));
   res.json({
-    projects: projectDashboardConfig.projects,
+    projects: projectDashboardConfig.projects.filter((project) => canViewProject(project, req)).map((project) => scopedProjectForUser(project, req)),
     sheets,
     users: users.map((user) => ({
       id: String(user._id),
@@ -10081,15 +10355,69 @@ app.post("/project-dashboard/projects", requireProjectControlEditor, (req, res) 
   }
 });
 
-app.patch("/project-dashboard/projects/:id", requireProjectControlEditor, (req, res) => {
+app.patch("/project-dashboard/projects/:id", (req, res) => {
   try {
     const index = projectDashboardConfig.projects.findIndex((project) => project.id === req.params.id);
     if (index === -1) return res.status(404).json({ error: "Project not found" });
-    projectDashboardConfig.projects[index] = normalizeProjectInput(req.body, projectDashboardConfig.projects[index]);
+    const beforeProject = projectDashboardConfig.projects[index];
+    if (!canEditScopedProject(beforeProject, req)) return res.status(403).json({ error: "Project edit permission required" });
+    const patch = mergeScopedProjectPatch(beforeProject, req.body, req);
+    projectDashboardConfig.projects[index] = appendProjectActivityFromDiff(
+      normalizeProjectInput(patch, beforeProject),
+      beforeProject,
+      req,
+    );
     saveProjectDashboardConfig();
+    notifyProjectTaskAssignees({ beforeProject, afterProject: projectDashboardConfig.projects[index], actorId: req.authUser?.id });
     res.json({ success: true, project: projectDashboardConfig.projects[index] });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+app.get("/project-dashboard/projects/:id/access", async (req, res) => {
+  const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+  if (!project) return res.status(404).json({ error: "Project not found" });
+  if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
+  const db = await connectAuthDb();
+  const users = await db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1 }).toArray();
+  res.json({
+    access: project.projectAccess || [],
+    canManage: canManageProjectAccess(project, req),
+    users: users.map((user) => ({ id: String(user._id), displayName: user.displayName || user.username, username: user.username })),
+  });
+});
+
+app.patch("/project-dashboard/projects/:id/access", async (req, res) => {
+  const index = projectDashboardConfig.projects.findIndex((item) => item.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: "Project not found" });
+  const project = projectDashboardConfig.projects[index];
+  if (!canManageProjectAccess(project, req)) return res.status(403).json({ error: "Project access manager permission required" });
+  const nextAccess = Array.isArray(req.body?.access) ? req.body.access : [];
+  projectDashboardConfig.projects[index] = appendProjectActivityFromDiff(
+    normalizeProjectInput({ ...project, projectAccess: nextAccess }, project),
+    project,
+    req,
+  );
+  saveProjectDashboardConfig();
+  res.json({ success: true, access: projectDashboardConfig.projects[index].projectAccess || [] });
+});
+
+app.get("/project-dashboard/projects/:id/activity", async (req, res) => {
+  const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+  if (!project) return res.status(404).json({ error: "Project not found" });
+  if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
+  res.json({ activity: (project.projectActivity || []).slice(0, Math.min(300, Math.max(1, Number(req.query.limit) || 120))) });
+});
+
+app.post("/project-dashboard/daily-digest", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_project_control")) return res.status(403).json({ error: "Project control permission required" });
+    const result = await sendProjectDailyDigest({ source: "manual", date: /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || "")) ? String(req.body.date) : istDateKey(new Date()) });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Project daily digest error:", error);
+    res.status(500).json({ error: `Could not send project digest: ${error.message}` });
   }
 });
 
@@ -10215,6 +10543,7 @@ app.post("/project-dashboard/projects/:id/documents", requireProjectControlEdito
     };
     project.projectDocuments = [doc, ...(project.projectDocuments || [])];
     unhideProjectDocument(project, doc);
+    project.projectActivity = [projectActivityEntry(req, "File uploaded", doc.name, { type: "file", parentId: "files", parentLabel: "Files", documentId: doc.id }), ...(project.projectActivity || [])].slice(0, 300);
     project.updatedAt = new Date().toISOString();
     saveProjectDashboardConfig();
     res.json({ success: true, document: doc });
@@ -10248,6 +10577,7 @@ app.patch("/project-dashboard/projects/:id/documents/:documentId", requireProjec
       ? [updated, ...(project.projectDocuments || [])]
       : (project.projectDocuments || []).map((doc, docIndex) => docIndex === index ? updated : doc);
     unhideProjectDocument(project, updated);
+    project.projectActivity = [projectActivityEntry(req, index === -1 ? "File uploaded" : "File edited", updated.name, { type: "file", parentId: "files", parentLabel: "Files", documentId: updated.id }), ...(project.projectActivity || [])].slice(0, 300);
     project.updatedAt = now;
     saveProjectDashboardConfig();
     res.json({ success: true, document: updated });
@@ -10264,6 +10594,7 @@ app.delete("/project-dashboard/projects/:id/documents/:documentId", requireProje
     ? { id: projectText(req.params.documentId), driveFileId: projectText(req.params.documentId) }
     : project.projectDocuments.splice(index, 1)[0];
   hideProjectDocument(project, removed);
+  project.projectActivity = [projectActivityEntry(req, "File removed", removed.name || removed.driveFileId || removed.id, { type: "file", parentId: "files", parentLabel: "Files", documentId: removed.id || removed.driveFileId }), ...(project.projectActivity || [])].slice(0, 300);
   project.updatedAt = new Date().toISOString();
   saveProjectDashboardConfig();
   res.json({ success: true, document: removed });
@@ -10276,6 +10607,7 @@ app.post("/project-dashboard/projects/:id/documents/upload", requireProjectContr
     const doc = await uploadProjectFileToDrive(project, req.file, req.body?.category);
     project.projectDocuments = [doc, ...(project.projectDocuments || [])];
     unhideProjectDocument(project, doc);
+    project.projectActivity = [projectActivityEntry(req, "File uploaded", doc.name, { type: "file", parentId: "files", parentLabel: "Files", documentId: doc.id }), ...(project.projectActivity || [])].slice(0, 300);
     project.updatedAt = new Date().toISOString();
     saveProjectDashboardConfig();
     res.json({ success: true, document: doc });
@@ -11075,6 +11407,43 @@ app.get("/project-stock", async (req, res) => {
   }
 });
 
+function stockSiteMatchesProject(site = {}, project = {}) {
+  const haystack = stockText([site.name, site.linkedFileName, site.notes].join(" "), 500).toLowerCase();
+  const needles = [project.name, project.code, project.location, ...(project.aliases || [])]
+    .map((value) => stockText(value, 120).toLowerCase())
+    .filter((value) => value.length >= 2);
+  return needles.some((needle) => haystack.includes(needle) || needle.includes(stockText(site.name, 120).toLowerCase()));
+}
+
+app.get("/project-dashboard/projects/:id/stock", async (req, res) => {
+  try {
+    const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
+    const dashboard = await readStockDashboard({ force: ["1", "true", "yes"].includes(String(req.query.force || "").toLowerCase()) });
+    const sites = (dashboard.sites || []).filter((site) => stockSiteMatchesProject(site, project));
+    const totals = sites.reduce((result, site) => {
+      result.sites += 1;
+      result.items += Number(site.summary?.totalItems) || 0;
+      result.quantity += Number(site.summary?.totalQuantity) || 0;
+      result.lowStock += Number(site.summary?.lowStock) || 0;
+      result.value += Number(site.summary?.totalValue) || 0;
+      return result;
+    }, { sites: 0, items: 0, quantity: 0, lowStock: 0, value: 0 });
+    res.json({
+      projectId: project.id,
+      projectName: project.name,
+      sites,
+      totals,
+      generatedAt: dashboard.generatedAt || new Date().toISOString(),
+      canManage: Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_stock")),
+    });
+  } catch (error) {
+    console.error("Project stock read error:", error);
+    res.status(500).json({ error: `Could not load project stock: ${error.message}` });
+  }
+});
+
 app.post("/project-stock/sites", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "project-stock")) return res.status(403).json({ error: "Stock module access required" });
@@ -11787,7 +12156,8 @@ app.get("/project-dashboard", async (req, res) => {
     const datasetCache = new Map();
     const dashboardProjects = [];
 
-    for (const project of projectDashboardConfig.projects.filter((item) => item.status !== "archived")) {
+    for (const rawProject of projectDashboardConfig.projects.filter((item) => item.status !== "archived" && canViewProject(item, req))) {
+      const project = serializeProjectWithDependencyState(scopedProjectForUser(rawProject, req));
       const records = [];
       const sources = [];
       for (const assignment of project.assignments || []) {
@@ -11895,6 +12265,7 @@ app.get("/project-dashboard", async (req, res) => {
         code: project.code,
         client: project.client,
         location: project.location,
+        budget: project.budget || "",
         manager: project.manager,
         managerId: project.managerId,
         status: project.status,
@@ -11907,6 +12278,12 @@ app.get("/project-dashboard", async (req, res) => {
         phases: project.phases || [],
         tasks: project.tasks || [],
         projectDocuments: project.projectDocuments || [],
+        projectAccess: canManageProjectAccess(rawProject, req) ? rawProject.projectAccess || [] : [],
+        projectActivity: rawProject.projectActivity || [],
+        access: {
+          canManage: canManageProjectAccess(rawProject, req),
+          canEdit: canEditScopedProject(rawProject, req),
+        },
         manualTasks: manual.tasks,
         date,
         dmr: {
@@ -12285,6 +12662,15 @@ if (require.main === module) {
       console.log(`Generated scheduled DMR CEO PDF for ${date}`);
     } catch (error) {
       console.error("Scheduled DMR PDF generation error:", error);
+    }
+  }, { timezone: "Asia/Kolkata" });
+
+  cron.schedule(process.env.PROJECT_DAILY_DIGEST_CRON || "0 8 * * *", async () => {
+    try {
+      const result = await sendProjectDailyDigest({ source: "cron" });
+      if (result.sent) console.log(`Project daily digest sent to ${result.sent} users for ${result.date}`);
+    } catch (error) {
+      console.error("Project daily digest cron error:", error);
     }
   }, { timezone: "Asia/Kolkata" });
 

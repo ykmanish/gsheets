@@ -63,6 +63,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const allowedMenus = useMemo(() => {
     const assigned = [
       ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
+      "projects",
     ];
     const globallyDisabled = new Set(disabledModules || []);
     return Array.from(new Set(assigned)).filter((menu) => !["notifications", "settings"].includes(menu) && (!globallyDisabled.has(menu) || ["dashboard", "module-control"].includes(menu)));

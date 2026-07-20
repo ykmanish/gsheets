@@ -3498,7 +3498,14 @@ function normalizeProjectReference(value) {
 }
 
 function compactProjectReference(value) {
-  return comparableProjectText(value).replace(/\s+/g, "").replace(/([aeiou])\1+/g, "$1");
+  const compact = comparableProjectText(value).replace(/\s+/g, "").replace(/([aeiou])\1+/g, "$1");
+  const aliases = {
+    devsharnam: "devsharnam",
+    devsharanam: "devsharnam",
+    devssharnam: "devsharnam",
+    devsaranam: "devsharnam",
+  };
+  return aliases[compact] || compact;
 }
 
 function comparableProjectText(value = "") {

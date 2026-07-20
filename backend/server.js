@@ -5513,12 +5513,19 @@ function cleanDmrSiteName(value) {
 }
 
 function projectSiteMatchKey(value) {
-  return projectText(value)
+  const compact = projectText(value)
     .toLowerCase()
     .replace(/&/g, "and")
     .replace(/\bfarm\s+house\b/g, "farmhouse")
     .replace(/[^a-z0-9]+/g, "")
     .replace(/([aeiou])\1+/g, "");
+  const aliases = {
+    devsharnam: "devsharnam",
+    devsharanam: "devsharnam",
+    devssharnam: "devsharnam",
+    devsaranam: "devsharnam",
+  };
+  return aliases[compact] || compact;
 }
 
 function dmrValueNumber(value) {

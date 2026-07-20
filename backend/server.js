@@ -69,6 +69,11 @@ const MENU_ITEMS = [
   { id: "project-mrn", label: "MRN", parent: "projects", group: "projects" },
   { id: "project-stock", label: "Stock", parent: "projects", group: "projects" },
   { id: "site-images", label: "Site Images", parent: "projects", group: "projects" },
+  { id: "hr-dashboard", label: "HR Dashboard", group: "hr" },
+  { id: "hr-employees", label: "Employees", parent: "hr", group: "hr" },
+  { id: "hr-documents", label: "HR Documents", parent: "hr", group: "hr" },
+  { id: "hr-salary-slips", label: "Salary Slips", parent: "hr", group: "hr" },
+  { id: "hr-leave", label: "Leave", parent: "hr", group: "hr" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
@@ -82,6 +87,7 @@ const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];
 const MENU_ITEM_IDS = new Set(ALL_MENU_ITEMS.map((item) => item.id));
 const ROLE_MENU_ITEM_IDS = new Set(MENU_ITEMS.map((item) => item.id));
 const PROJECT_CHILD_MENU_IDS = new Set(MENU_ITEMS.filter((item) => item.parent === "projects").map((item) => item.id));
+const DEFAULT_EMPLOYEE_MENU_IDS = ["hr-leave"];
 const PROTECTED_GLOBAL_MODULES = new Set(["dashboard", "module-control"]);
 const PRIVILEGE_ITEMS = [
   { id: "upload_documents", label: "Upload documents" },
@@ -99,6 +105,7 @@ const PRIVILEGE_ITEMS = [
   { id: "edit_project_dmr", label: "Fill project DMR records" },
   { id: "edit_project_mrn", label: "Add MRN records" },
   { id: "manage_project_stock", label: "Manage project stock sheets" },
+  { id: "manage_hr", label: "Manage HR employees, documents, salary slips, and leave" },
 ];
 
 let mongoClient;
@@ -177,7 +184,7 @@ function isEffectiveSuperAdmin(user, role) {
 
 function roleMenusForUser(user, role) {
   if (isEffectiveSuperAdmin(user, role)) return ALL_MENU_ITEMS.map((item) => item.id);
-  return normalizeRoleMenus([...(role?.menus || []), ...(user?.menus || [])], { allowSuperAdminMenus: false });
+  return normalizeRoleMenus([...(role?.menus || []), ...(user?.menus || []), ...DEFAULT_EMPLOYEE_MENU_IDS], { allowSuperAdminMenus: false });
 }
 
 function rolePrivilegesForUser(user, role) {
@@ -3470,6 +3477,221 @@ app.put("/admin/module-control", requireSuperAdmin, async (req, res) => {
   }
 });
 
+app.get("/hr/overview", async (req, res) => {
+  try {
+    const hasHrDashboardAccess = hasMenuAccess(req, "hr-dashboard");
+    const hasHrLeaveAccess = hasMenuAccess(req, "hr-leave");
+    if (!hasHrDashboardAccess && !hasHrLeaveAccess) return res.status(403).json({ error: "HR access required" });
+    const db = await connectAuthDb();
+    const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
+    if (!hasHrDashboardAccess && hasHrLeaveAccess) {
+      return res.json({
+        canManageHr,
+        employees: [],
+        roles: [],
+        documents: [],
+        salarySlips: [],
+        leaveRequests: await loadHrLeaveRequests(req, db, canManageHr),
+      });
+    }
+    const query = canManageHr ? {} : { _id: new ObjectId(req.authUser.id) };
+    const users = await db.collection("users").find(query).sort({ displayName: 1, username: 1 }).toArray();
+    const roles = await db.collection("roles").find({}).toArray();
+    const roleMap = new Map(roles.map((role) => [String(role._id), role]));
+    const employees = users.map((user) => sanitizeUser(user, roleMap.get(String(user.roleId))));
+    res.json({
+      canManageHr,
+      employees,
+      roles: roles.map((role) => ({
+        id: String(role._id),
+        name: role.name,
+        description: role.description || "",
+        isSystem: Boolean(role.isSystem),
+      })),
+      documents: [],
+      salarySlips: [],
+      leaveRequests: await loadHrLeaveRequests(req, db, canManageHr),
+    });
+  } catch (error) {
+    console.error("HR overview error:", error);
+    res.status(500).json({ error: "Could not load HR overview" });
+  }
+});
+
+function leaveDate(value) {
+  const text = projectText(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const date = new Date(`${text}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : text;
+}
+
+function leaveDays(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  const diff = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+  return Math.max(1, diff);
+}
+
+function serializeLeaveRequest(item) {
+  return {
+    id: String(item._id),
+    userId: String(item.userId),
+    employeeName: item.employeeName || "Employee",
+    username: item.username || "",
+    department: item.department || "",
+    designation: item.designation || "",
+    leaveType: item.leaveType || "Casual Leave",
+    startDate: item.startDate,
+    endDate: item.endDate,
+    days: item.days || leaveDays(item.startDate, item.endDate),
+    reason: item.reason || "",
+    status: item.status || "pending",
+    adminComment: item.adminComment || "",
+    reviewedBy: item.reviewedBy || null,
+    reviewedAt: item.reviewedAt || null,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+async function loadHrLeaveRequests(req, db, canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"))) {
+  const query = canManageHr ? {} : { userId: new ObjectId(req.authUser.id) };
+  const items = await db.collection("hrLeaveRequests").find(query).sort({ createdAt: -1 }).limit(200).toArray();
+  return items.map(serializeLeaveRequest);
+}
+
+async function notifyHrManagers(db, notification, excludeUserId = "") {
+  const users = await db.collection("users").find({ blacklisted: { $ne: true } }).toArray();
+  const roles = await db.collection("roles").find({}).toArray();
+  const roleMap = new Map(roles.map((role) => [String(role._id), role]));
+  const managerIds = users
+    .filter((user) => {
+      const safe = sanitizeUser(user, roleMap.get(String(user.roleId)));
+      return safe?.id !== excludeUserId && (safe?.isSuperAdmin || safe?.privileges?.includes("manage_hr"));
+    })
+    .map((user) => String(user._id));
+  notifyUsers(managerIds, notification);
+}
+
+app.get("/hr/leave-requests", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-leave")) return res.status(403).json({ error: "HR leave access required" });
+    const db = await connectAuthDb();
+    res.json({
+      canManageHr: Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr")),
+      leaveRequests: await loadHrLeaveRequests(req, db),
+    });
+  } catch (error) {
+    console.error("HR leave load error:", error);
+    res.status(500).json({ error: "Could not load leave requests" });
+  }
+});
+
+app.post("/hr/leave-requests", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-leave")) return res.status(403).json({ error: "HR leave access required" });
+    const leaveType = projectText(req.body?.leaveType || "Casual Leave") || "Casual Leave";
+    const startDate = leaveDate(req.body?.startDate);
+    const endDate = leaveDate(req.body?.endDate);
+    const reason = projectText(req.body?.reason, 1200);
+    if (!startDate || !endDate) return res.status(400).json({ error: "Start and end date are required" });
+    if (new Date(`${endDate}T00:00:00`) < new Date(`${startDate}T00:00:00`)) return res.status(400).json({ error: "End date cannot be before start date" });
+    if (reason.length < 10) return res.status(400).json({ error: "Reason must be at least 10 characters" });
+    const db = await connectAuthDb();
+    const existingOverlap = await db.collection("hrLeaveRequests").findOne({
+      userId: new ObjectId(req.authUser.id),
+      status: { $in: ["pending", "approved"] },
+      startDate: { $lte: endDate },
+      endDate: { $gte: startDate },
+    });
+    if (existingOverlap) {
+      return res.status(409).json({
+        error: `You already have a ${existingOverlap.status} leave request from ${existingOverlap.startDate} to ${existingOverlap.endDate}.`,
+      });
+    }
+    const now = new Date();
+    const doc = {
+      userId: new ObjectId(req.authUser.id),
+      employeeName: req.authUser.displayName || req.authUser.username || "Employee",
+      username: req.authUser.username || "",
+      department: req.authUser.department || "",
+      designation: req.authUser.designation || "",
+      leaveType,
+      startDate,
+      endDate,
+      days: leaveDays(startDate, endDate),
+      reason,
+      status: "pending",
+      adminComment: "",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const result = await db.collection("hrLeaveRequests").insertOne(doc);
+    doc._id = result.insertedId;
+    await notifyHrManagers(db, {
+      title: "New leave request",
+      message: `${doc.employeeName} requested ${doc.days} day${doc.days === 1 ? "" : "s"} leave from ${doc.startDate} to ${doc.endDate}.`,
+      type: "hr-leave",
+    }, req.authUser.id);
+    addActivityLog({ req, action: "Created leave request", target: `${doc.employeeName} · ${doc.startDate} to ${doc.endDate}`, details: { leaveType, days: doc.days } });
+    res.json({ success: true, leaveRequest: serializeLeaveRequest(doc) });
+  } catch (error) {
+    console.error("HR leave create error:", error);
+    res.status(500).json({ error: "Could not submit leave request" });
+  }
+});
+
+app.delete("/hr/leave-requests/:id", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-leave")) return res.status(403).json({ error: "HR leave access required" });
+    const db = await connectAuthDb();
+    const _id = new ObjectId(req.params.id);
+    const existing = await db.collection("hrLeaveRequests").findOne({ _id });
+    if (!existing) return res.status(404).json({ error: "Leave request not found" });
+    if (String(existing.userId) !== String(req.authUser.id)) return res.status(403).json({ error: "Only the applicant can delete this leave request" });
+    if (existing.status !== "pending") return res.status(400).json({ error: "Only pending leave requests can be deleted" });
+    await db.collection("hrLeaveRequests").deleteOne({ _id });
+    addActivityLog({ req, action: "Deleted leave request", target: `${existing.employeeName} · ${existing.startDate} to ${existing.endDate}`, details: { leaveType: existing.leaveType, days: existing.days } });
+    res.json({ success: true, id: String(_id) });
+  } catch (error) {
+    console.error("HR leave delete error:", error);
+    res.status(500).json({ error: "Could not delete leave request" });
+  }
+});
+
+app.patch("/hr/leave-requests/:id/review", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-leave") || !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR approval permission required" });
+    const status = String(req.body?.status || "").toLowerCase();
+    if (!["approved", "declined"].includes(status)) return res.status(400).json({ error: "Use approved or declined status" });
+    const adminComment = projectText(req.body?.adminComment, 1200);
+    const db = await connectAuthDb();
+    const _id = new ObjectId(req.params.id);
+    const existing = await db.collection("hrLeaveRequests").findOne({ _id });
+    if (!existing) return res.status(404).json({ error: "Leave request not found" });
+    const now = new Date();
+    const update = {
+      status,
+      adminComment,
+      reviewedAt: now,
+      reviewedBy: { id: req.authUser.id, name: req.authUser.displayName || req.authUser.username || "Admin" },
+      updatedAt: now,
+    };
+    await db.collection("hrLeaveRequests").updateOne({ _id }, { $set: update });
+    const updated = { ...existing, ...update };
+    notifyUsers([String(existing.userId)], {
+      title: `Leave request ${status}`,
+      message: `${req.authUser.displayName || "Admin"} ${status} your leave from ${existing.startDate} to ${existing.endDate}${adminComment ? `: ${adminComment}` : "."}`,
+      type: "hr-leave",
+    });
+    addActivityLog({ req, action: status === "approved" ? "Approved leave request" : "Declined leave request", target: `${existing.employeeName} · ${existing.startDate} to ${existing.endDate}`, details: { adminComment } });
+    res.json({ success: true, leaveRequest: serializeLeaveRequest(updated) });
+  } catch (error) {
+    console.error("HR leave review error:", error);
+    res.status(500).json({ error: "Could not review leave request" });
+  }
+});
+
 app.get("/admin/roles", requireSuperAdmin, async (req, res) => {
   const db = await connectAuthDb();
   const roles = await db.collection("roles").find({}).sort({ createdAt: 1 }).toArray();
@@ -5290,6 +5512,15 @@ function cleanDmrSiteName(value) {
   return projectText(value).replace(/^\d+\s*[.)-]?\s*/, "").replace(/\s+/g, " ").trim();
 }
 
+function projectSiteMatchKey(value) {
+  return projectText(value)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/\bfarm\s+house\b/g, "farmhouse")
+    .replace(/[^a-z0-9]+/g, "")
+    .replace(/([aeiou])\1+/g, "");
+}
+
 function dmrValueNumber(value) {
   const text = projectText(value).replace(/,/g, "");
   if (!text) return 0;
@@ -5312,14 +5543,14 @@ function dmrCell(values, rowIndex, columnIndex) {
 }
 
 function dmrProjectMatchesSite(project, dmrConfig, siteName) {
-  const site = cleanDmrSiteName(siteName).toLowerCase();
+  const site = projectSiteMatchKey(cleanDmrSiteName(siteName));
   const accepted = [
     project.name,
     project.code,
     project.location,
     ...(project.aliases || []),
     ...(dmrConfig?.siteNames || []),
-  ].map((item) => cleanDmrSiteName(item).toLowerCase()).filter(Boolean);
+  ].map((item) => projectSiteMatchKey(cleanDmrSiteName(item))).filter(Boolean);
   if (!accepted.length) return true;
   return accepted.some((item) => site === item || site.includes(item) || item.includes(site));
 }
@@ -10135,7 +10366,7 @@ function projectActivityEntry(req, action, target, details = {}) {
 }
 
 function compactProjectReference(value) {
-  return projectText(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return projectSiteMatchKey(value);
 }
 
 function mrnMatchesProject(row = {}, project = {}) {
@@ -11408,11 +11639,13 @@ app.get("/project-stock", async (req, res) => {
 });
 
 function stockSiteMatchesProject(site = {}, project = {}) {
-  const haystack = stockText([site.name, site.linkedFileName, site.notes].join(" "), 500).toLowerCase();
-  const needles = [project.name, project.code, project.location, ...(project.aliases || [])]
-    .map((value) => stockText(value, 120).toLowerCase())
+  const siteKeys = [site.name, site.linkedFileName, site.notes]
+    .map((value) => projectSiteMatchKey(stockText(value, 160)))
     .filter((value) => value.length >= 2);
-  return needles.some((needle) => haystack.includes(needle) || needle.includes(stockText(site.name, 120).toLowerCase()));
+  const needles = [project.name, project.code, project.location, ...(project.aliases || [])]
+    .map((value) => projectSiteMatchKey(stockText(value, 120)))
+    .filter((value) => value.length >= 2);
+  return needles.some((needle) => siteKeys.some((siteKey) => siteKey.includes(needle) || needle.includes(siteKey)));
 }
 
 app.get("/project-dashboard/projects/:id/stock", async (req, res) => {
@@ -12473,7 +12706,7 @@ app.get("/notifications", (req, res) => {
   const limit = Math.max(1, Number(req.query.limit) || 100);
   const userId = req.authUser?.id;
   const result = notifications
-    .filter((item) => !item.userId || item.userId === userId || hasAllDocumentAccess(req))
+    .filter((item) => !item.userId || item.userId === userId)
     .slice(0, limit);
   res.json({
     notifications: result,
@@ -12482,7 +12715,8 @@ app.get("/notifications", (req, res) => {
 });
 
 app.patch("/notifications/:id/read", (req, res) => {
-  const notification = notifications.find((item) => item.id === req.params.id);
+  const userId = req.authUser?.id;
+  const notification = notifications.find((item) => item.id === req.params.id && (!item.userId || item.userId === userId));
   if (!notification) return res.status(404).json({ error: "Notification not found" });
   notification.readAt = notification.readAt || new Date().toISOString();
   saveNotifications();
@@ -12491,7 +12725,10 @@ app.patch("/notifications/:id/read", (req, res) => {
 
 app.post("/notifications/read-all", (req, res) => {
   const now = new Date().toISOString();
-  notifications = notifications.map((item) => ({ ...item, readAt: item.readAt || now }));
+  const userId = req.authUser?.id;
+  notifications = notifications.map((item) => (
+    !item.userId || item.userId === userId ? { ...item, readAt: item.readAt || now } : item
+  ));
   saveNotifications();
   res.json({ success: true });
 });
@@ -12499,8 +12736,9 @@ app.post("/notifications/read-all", (req, res) => {
 app.post("/notifications/read", (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
   const now = new Date().toISOString();
+  const userId = req.authUser?.id;
   notifications = notifications.map((item) => (
-    ids.includes(item.id) ? { ...item, readAt: item.readAt || now } : item
+    ids.includes(item.id) && (!item.userId || item.userId === userId) ? { ...item, readAt: item.readAt || now } : item
   ));
   saveNotifications();
   res.json({ success: true });
@@ -12509,14 +12747,16 @@ app.post("/notifications/read", (req, res) => {
 app.delete("/notifications", (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
   if (ids.length === 0) return res.status(400).json({ error: "No notifications selected" });
-  notifications = notifications.filter((item) => !ids.includes(item.id));
+  const userId = req.authUser?.id;
+  notifications = notifications.filter((item) => !(ids.includes(item.id) && (!item.userId || item.userId === userId)));
   saveNotifications();
   res.json({ success: true });
 });
 
 app.delete("/notifications/:id", (req, res) => {
+  const userId = req.authUser?.id;
   const before = notifications.length;
-  notifications = notifications.filter((item) => item.id !== req.params.id);
+  notifications = notifications.filter((item) => !(item.id === req.params.id && (!item.userId || item.userId === userId)));
   if (notifications.length === before) return res.status(404).json({ error: "Notification not found" });
   saveNotifications();
   res.json({ success: true });

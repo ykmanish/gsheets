@@ -14,6 +14,9 @@ export default function NotificationDrawer({ open, onClose, darkMode }) {
   const muted = darkMode ? "text-white/50" : "text-black/45";
   const unread = useMemo(() => notifications.filter((item) => !item.readAt).length, [notifications]);
   const allSelected = notifications.length > 0 && selected.length === notifications.length;
+  const notifyChanged = useCallback(() => {
+    window.dispatchEvent(new Event("uipl:notifications-changed"));
+  }, []);
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -32,9 +35,17 @@ export default function NotificationDrawer({ open, onClose, darkMode }) {
 
   useEffect(() => {
     if (!open) return;
-    const timeoutId = setTimeout(() => void loadNotifications(), 0);
+    const timeoutId = setTimeout(async () => {
+      await loadNotifications();
+      const response = await fetch(`${API_URL}/notifications/read-all`, { method: "POST" });
+      if (response.ok) {
+        const readAt = new Date().toISOString();
+        setNotifications((current) => current.map((item) => item.readAt ? item : { ...item, readAt }));
+        notifyChanged();
+      }
+    }, 0);
     return () => clearTimeout(timeoutId);
-  }, [open, loadNotifications]);
+  }, [open, loadNotifications, notifyChanged]);
 
   const toggleSelected = (id) => {
     setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
@@ -49,12 +60,14 @@ export default function NotificationDrawer({ open, onClose, darkMode }) {
     });
     toast.success("Selected notifications marked read");
     await loadNotifications();
+    notifyChanged();
   };
 
   const markAllRead = async () => {
     await fetch(`${API_URL}/notifications/read-all`, { method: "POST" });
     toast.success("All notifications marked read");
     await loadNotifications();
+    notifyChanged();
   };
 
   const deleteSelected = async () => {
@@ -71,6 +84,7 @@ export default function NotificationDrawer({ open, onClose, darkMode }) {
       setDeleteConfirm(false);
       setSelected([]);
       await loadNotifications();
+      notifyChanged();
     } catch {
       toast.error("Could not delete selected notifications");
     } finally {

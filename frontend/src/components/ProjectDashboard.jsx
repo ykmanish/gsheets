@@ -3276,13 +3276,12 @@ function TasksView({
         </Button>
       </div>
       <section className="mt-4 overflow-x-auto rounded-2xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="hidden min-w-[920px] grid-cols-[minmax(260px,1.5fr)_150px_130px_120px_130px_36px] gap-4 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">
+        <div className="hidden min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] gap-3 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">
           <span>Task</span>
           <span>Phase</span>
           <span>Assigned to</span>
           <span>Status</span>
           <span>Due date</span>
-          <span />
         </div>
         {filtered.map((task, index) => {
           const assigneeNames = users
@@ -3299,9 +3298,9 @@ function TasksView({
               key={task.id}
               type="button"
               onClick={() => onOpenTask(task)}
-              className="grid min-w-[920px] grid-cols-[minmax(260px,1.5fr)_150px_130px_120px_130px_36px] items-start gap-4 border-b border-[#eceeea] px-4 py-4 text-left text-sm last:border-0 hover:bg-[#fafbf9] dark:border-white/10 dark:hover:bg-white/[0.025]"
+              className="grid min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] items-start gap-3 border-b border-[#eceeea] px-4 py-5 text-left text-sm last:border-0 hover:bg-[#fafbf9] dark:border-white/10 dark:hover:bg-white/[0.025]"
             >
-              <span className="flex min-w-0 items-center gap-3">
+              <span className="flex min-w-0 items-start gap-3">
                 <span
                   className={cn(
                     "mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2",
@@ -3314,13 +3313,13 @@ function TasksView({
                           : "border-[#a5aaa1]",
                   )}
                 />
-                <span className="min-w-0">
+                <span className="flex min-h-[40px] min-w-0 flex-col">
                   <span className="block truncate font-medium">
                     {task.title || "Untitled task"}
                   </span>
                   <span
                     className={cn(
-                      "mt-0.5 block min-h-[16px] truncate text-[11px] text-[#858b82]",
+                      "mt-0.5 block h-4 max-w-[260px] truncate text-[11px] leading-4 text-[#858b82]",
                       !task.description && !isBlockedByDependency && !hasDependencyWarning && "invisible",
                       isBlockedByDependency && "font-semibold text-rose-500",
                       hasDependencyWarning && !isBlockedByDependency && "font-semibold text-amber-600",
@@ -3330,11 +3329,11 @@ function TasksView({
                       ? `Blocked by ${(task.blockedBy || []).map((item) => item.title).join(", ")}`
                       : hasDependencyWarning
                         ? "Due date is before a dependency"
-                        : task.description || "No description"}
+                        : task.description || "Description placeholder"}
                   </span>
                 </span>
               </span>
-              <span className="mt-1 truncate text-xs text-[#6e746b] dark:text-white/50">
+              <span className="truncate pt-0.5 text-xs text-[#6e746b] dark:text-white/50">
                 {phases.find((phase) => phase.id === task.phaseId)?.name ||
                   "No phase"}
               </span>
@@ -3351,13 +3350,12 @@ function TasksView({
               </span>
               <span
                 className={cn(
-                  "mt-1 text-xs",
+                  "pt-0.5 text-xs",
                   overdue ? "font-semibold text-rose-500" : "text-[#747a71]",
                 )}
               >
                 {formatDate(task.dueDate, "No date")}
               </span>
-              <ChevronRight className="mt-1 h-4 w-4 text-[#a0a59d]" />
             </button>
           );
         })}
@@ -3500,7 +3498,7 @@ function normalizeProjectReference(value) {
 }
 
 function compactProjectReference(value) {
-  return normalizeProjectReference(value).replace(/\s+/g, "");
+  return comparableProjectText(value).replace(/\s+/g, "").replace(/([aeiou])\1+/g, "$1");
 }
 
 function comparableProjectText(value = "") {

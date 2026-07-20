@@ -103,9 +103,7 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
         if (!response.ok) return;
         const data = await response.json();
         const notifications = data.notifications || [];
-        
-        const unread = notifications.filter(n => !n.readAt);
-        setUnreadCount(unread.length);
+        setUnreadCount(Number.isFinite(data.unreadCount) ? data.unreadCount : notifications.filter(n => !n.readAt).length);
         
         if (notifications.length > 0) {
           const topId = notifications[0].id;
@@ -122,7 +120,11 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
 
     checkNotifications();
     const interval = setInterval(checkNotifications, 15000);
-    return () => clearInterval(interval);
+    window.addEventListener("uipl:notifications-changed", checkNotifications);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("uipl:notifications-changed", checkNotifications);
+    };
   }, [user]);
 
   return (

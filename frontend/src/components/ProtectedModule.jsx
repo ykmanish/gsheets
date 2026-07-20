@@ -23,6 +23,7 @@ import StockDashboard from "./StockDashboard";
 import SiteImagesDashboard from "./SiteImagesDashboard";
 import EmployeeDailyReport from "./EmployeeDailyReport";
 import ModuleControl from "./ModuleControl";
+import HrDashboard from "./HrDashboard";
 
 const menuPaths = {
   dashboard: "/dashboard",
@@ -33,6 +34,11 @@ const menuPaths = {
   "project-mrn": "/projects/mrn",
   "project-stock": "/projects/stock",
   "site-images": "/projects/site-images",
+  "hr-dashboard": "/hr",
+  "hr-employees": "/hr/employees",
+  "hr-documents": "/hr/documents",
+  "hr-salary-slips": "/hr/salary-slips",
+  "hr-leave": "/hr/leave",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
@@ -62,7 +68,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-documents", "hr-salary-slips", "hr-leave", "whatsapp", "manage-users", "module-control"] : [...menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu)), "hr-leave"]),
       "projects",
     ];
     const globallyDisabled = new Set(disabledModules || []);
@@ -141,6 +147,11 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "project-mrn" && <MrnDashboard darkMode={darkMode} />}
         {moduleId === "project-stock" && <StockDashboard darkMode={darkMode} />}
         {moduleId === "site-images" && <SiteImagesDashboard darkMode={darkMode} />}
+        {moduleId === "hr-dashboard" && <HrDashboard darkMode={darkMode} section="dashboard" />}
+        {moduleId === "hr-employees" && <HrDashboard darkMode={darkMode} section="employees" />}
+        {moduleId === "hr-documents" && <HrDashboard darkMode={darkMode} section="documents" />}
+        {moduleId === "hr-salary-slips" && <HrDashboard darkMode={darkMode} section="salary" />}
+        {moduleId === "hr-leave" && <HrDashboard darkMode={darkMode} section="leave" />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}

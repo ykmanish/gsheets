@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, Phone, Mail, BriefcaseBusiness, Save, PackageSearch } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, Phone, Mail, BriefcaseBusiness, Save, PackageSearch, WalletCards, CalendarDays } from "lucide-react";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
@@ -15,6 +15,11 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "project-mrn", label: "MRN", icon: ClipboardList, parent: "projects" },
     { id: "project-stock", label: "Stock", icon: PackageSearch, parent: "projects" },
     { id: "site-images", label: "Site Images", icon: Images, parent: "projects" },
+    { id: "hr-dashboard", label: "HR", icon: BriefcaseBusiness },
+    { id: "hr-employees", label: "Employees", icon: Users, parent: "hr" },
+    { id: "hr-documents", label: "HR Documents", icon: FileText, parent: "hr" },
+    { id: "hr-salary-slips", label: "Salary Slips", icon: WalletCards, parent: "hr" },
+    { id: "hr-leave", label: "Leave", icon: CalendarDays, parent: "hr" },
     { id: "sheet-dashboard", label: "Sheet Dashboard", icon: Sheet },
     { id: "automations", label: "Automation", icon: Workflow },
     { id: "reports", label: "Reports", icon: ChartNoAxesCombined },
@@ -27,10 +32,12 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "module-control", label: "Module Control", icon: SlidersHorizontal, parent: "access-management" },
   ];
   const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn", "project-stock", "site-images"].includes(item.id) && allowedMenus.includes(item.id));
+  const hrSubMenu = menuItems.filter((item) => ["hr-dashboard", "hr-employees", "hr-documents", "hr-salary-slips", "hr-leave"].includes(item.id) && allowedMenus.includes(item.id));
   const accessSubMenu = menuItems.filter((item) => item.parent === "access-management" && allowedMenus.includes(item.id));
-  const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id) || (item.id === "projects" && projectSubMenu.length) || (item.id === "access-management" && accessSubMenu.length));
+  const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id) || (item.id === "hr-dashboard" && hrSubMenu.length) || (item.id === "projects" && projectSubMenu.length) || (item.id === "access-management" && accessSubMenu.length));
   const [openGroups, setOpenGroups] = useState(() => ({
     projects: projectSubMenu.some((item) => item.id === activeMenu),
+    hr: hrSubMenu.some((item) => item.id === activeMenu),
     access: accessSubMenu.some((item) => item.id === activeMenu),
   }));
   const [menuSearch, setMenuSearch] = useState("");
@@ -50,11 +57,13 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
   const profileRef = useRef(null);
   const searchTerm = menuSearch.trim().toLowerCase();
   const filteredProjectSubMenu = projectSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
+  const filteredHrSubMenu = hrSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
   const filteredAccessSubMenu = accessSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
   const filteredMenuItems = visibleMenuItems.filter((item) => {
     if (!searchTerm) return true;
     if (item.label.toLowerCase().includes(searchTerm)) return true;
     if (item.id === "projects") return filteredProjectSubMenu.length > 0;
+    if (item.id === "hr-dashboard") return filteredHrSubMenu.length > 0;
     if (item.id === "access-management") return filteredAccessSubMenu.length > 0;
     return false;
   });
@@ -233,6 +242,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           <div className={`space-y-1 ${collapsed ? "md:flex md:flex-col md:items-center md:gap-1 md:space-y-0" : ""}`}>
           {filteredMenuItems.map((item) => {
             if (item.parent === "projects") return null;
+            if (item.parent === "hr") return null;
             if (item.parent === "access-management") return null;
             if (item.id === "projects" && projectSubMenu.length) {
               const isOpen = Boolean(openGroups.projects);
@@ -272,6 +282,53 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                               </span>
                               <span className="max-w-full truncate text-[13px]">{child.label}</span>
                               {child.id === "site-images" && newSiteImages && <span className="ml-auto flex h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" title="New site photos" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (item.id === "hr-dashboard" && hrSubMenu.length) {
+              const isOpen = Boolean(openGroups.hr);
+              const childActive = hrSubMenu.some((child) => child.id === activeMenu);
+              return (
+                <div key="hr-group" className="transition-all duration-300">
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroups((current) => ({ ...current, hr: !current.hr }))}
+                    className={itemClass({ parentActive: childActive })}
+                  >
+                    <span className={iconClass({ parentActive: childActive })}>
+                      <BriefcaseBusiness className="h-4.5 w-4.5" />
+                    </span>
+                    <span className={`min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`}>HR</span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
+                  </button>
+
+                  <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:grid-rows-[0fr] md:opacity-0" : isOpen || searchTerm ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                    <div className="min-h-0 overflow-hidden">
+                      <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
+                        <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                        {(searchTerm ? filteredHrSubMenu : hrSubMenu).map((child) => {
+                          const ChildIcon = child.icon;
+                          const active = activeMenu === child.id;
+                          return (
+                            <button
+                              key={child.id}
+                              data-sidebar-menu={child.id}
+                              type="button"
+                              onClick={() => setActiveMenu(child.id)}
+                              className={itemClass({ active, child: true })}
+                            >
+                              <span className={`absolute left-0 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                              <span className={iconClass({ active, child: true })}>
+                                <ChildIcon className="h-4 w-4" />
+                              </span>
+                              <span className="max-w-full truncate text-[13px]">{child.label}</span>
                             </button>
                           );
                         })}

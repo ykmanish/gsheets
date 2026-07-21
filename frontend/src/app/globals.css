@@ -148,8 +148,16 @@
     max-width: 1240px;
   }
   .employee-report-drawer.hr-leave-drawer:not(.employee-report-shell-expanded) {
-    width: min(48vw, 560px);
-    max-width: 560px;
+    width: min(72vw, 900px);
+    max-width: 900px;
+  }
+  .employee-report-drawer.salary-slip-drawer:not(.employee-report-shell-expanded) {
+    width: min(72vw, 900px);
+    max-width: 900px;
+  }
+  .employee-report-drawer.hr-employee-drawer:not(.employee-report-shell-expanded) {
+    width: min(84vw, 1120px);
+    max-width: 1120px;
   }
   .employee-settings-shell { width: min(82vw, 720px); max-width: 720px; }
   .employee-status-shell { width: min(88vw, 1000px); max-width: 1000px; }

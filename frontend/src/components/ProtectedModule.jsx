@@ -68,7 +68,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-documents", "hr-salary-slips", "hr-leave", "whatsapp", "manage-users", "module-control"] : [...menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu)), "hr-leave"]),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-documents", "hr-salary-slips", "hr-leave", "whatsapp", "manage-users", "module-control"] : [...menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu)), "hr-leave", "hr-salary-slips"]),
       "projects",
     ];
     const globallyDisabled = new Set(disabledModules || []);

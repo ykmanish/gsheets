@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Activity, Bell, Menu, Wifi, WifiOff } from "lucide-react";
-import toast from "react-hot-toast";
 import { ThemeSwitch } from "./ui";
 import { API_URL } from "./AuthProvider";
+import { showAppToast } from "./ToastPill";
 
 export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNotificationsClick }) {
   const currentHour = new Date().getHours();
@@ -109,7 +109,15 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
           const topId = notifications[0].id;
           // If we already have a recorded topId, and the new topId is different, it means there's a new notification.
           if (lastNotificationIdRef.current && lastNotificationIdRef.current !== topId) {
-            toast(`New notification: ${notifications[0].title || 'You have a new message'}`, { icon: '🔔' });
+            showAppToast(notifications[0].title || "You have a new message", {
+              type: "notification",
+              darkMode,
+              detail: "New notification",
+              label: "Received",
+            });
+            if (notifications[0].type === "hr-leave") {
+              window.dispatchEvent(new Event("uipl:hr-data-changed"));
+            }
           }
           lastNotificationIdRef.current = topId;
         }

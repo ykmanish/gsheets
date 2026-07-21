@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -40,6 +40,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Send,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -50,6 +51,7 @@ import {
   UserRound,
   Users,
   X,
+  Reply,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
@@ -295,7 +297,7 @@ function Avatar({ name, index = 0, size = "md", className = "" }) {
       title={name}
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white dark:ring-[#171915]",
-        colors[index % colors.length],
+        colors[(String(name || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) || index) % colors.length],
         sizes,
         className,
       )}
@@ -754,93 +756,57 @@ function TaskDetailView({
   const doneSubtasks = subtasks.filter((item) => item.done).length;
   const blockedBy = task.blockedBy || dependencies.filter((item) => item.status !== "done");
   const dependencyWarnings = task.dependencyWarnings || dependencies.filter((item) => item.dueDate && task.dueDate && task.dueDate < item.dueDate);
+  const progress = subtasks.length ? Math.round((doneSubtasks / subtasks.length) * 100) : 0;
+  const [activeTab, setActiveTab] = useState("comments");
   return (
-    <div className="space-y-5 px-6 pb-8 pt-6 sm:px-7">
-      <div className="flex items-start gap-4">
-        <span
-          className={cn(
-            "mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full border-2",
-            task.status === "done"
-              ? "border-[#65bf45] bg-[#65bf45] text-white"
-              : "border-[#a9afa5] text-transparent",
-          )}
-        >
-          <Check className="h-4 w-4" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c8378] dark:text-white/45">
-            {project.code || "Project"} task
-          </p>
-          <h2 className="mt-1 text-3xl font-semibold tracking-[-0.03em] small">
-            {task.title || "Untitled task"}
-          </h2>
-          <p className="mt-2 text-sm text-[#737970] dark:text-white/50">
-            {phase?.name || "No phase assigned"}
-          </p>
-        </div>
-      </div>
+    <div className="px-6 pb-8 pt-6 sm:px-7">
+      <p className="text-sm text-[#7a8077] dark:text-white/45">
+        in list <span className="border-b border-[#aeb4aa] text-[#30352f] dark:border-white/30 dark:text-white/75">{phase?.name || "Unassigned"}</span>
+      </p>
+      <h2 className="mt-3 max-w-[520px] text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-[#101426] dark:text-white">
+        {task.title || "Untitled task"}
+      </h2>
 
-      <div className="grid grid-cols-2 gap-3">
-        <DetailBadge
-          icon={Circle}
-          label="Status"
-          className="bg-[#eef0ec] text-[#51564e] dark:bg-white/10 dark:text-white/75"
-        >
+      <div className="mt-6 space-y-4 border-b border-[#e5e8e2] pb-5 dark:border-white/10">
+        <PropertyRow icon={Circle} label="Status">
           <StatusPill status={task.status || "todo"} compact />
-        </DetailBadge>
-        <DetailBadge
-          icon={Flag}
-          label="Priority"
-          className="bg-[#fff2cc] text-[#805b11] dark:bg-amber-400/15 dark:text-amber-100"
-        >
-          <PriorityPill priority={task.priority || "medium"} />
-        </DetailBadge>
-        <DetailBadge
-          icon={CalendarDays}
-          label="Due date"
-          className="bg-[#e8f0ff] text-[#2d55a1] dark:bg-blue-400/15 dark:text-blue-100"
-        >
-          {formatDate(task.dueDate, "No date")}
-        </DetailBadge>
-        <DetailBadge
-          icon={Layers3}
-          label="Phase"
-          className="bg-[#eafbdc] text-[#3f7d16] dark:bg-green-400/15 dark:text-green-100"
-        >
-          <span className="block truncate">{phase?.name || "No phase"}</span>
-        </DetailBadge>
+        </PropertyRow>
+        <PropertyRow icon={Users} label="Assignee">
+          {assignees.length ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {assignees.map((person, index) => (
+                <span key={person.id} className="inline-flex items-center gap-2 rounded-full bg-[#f2f5f1] py-1 pl-1 pr-3 text-sm font-medium dark:bg-white/[0.06]">
+                  <Avatar name={person.displayName || person.username} index={index} size="sm" />
+                  {person.displayName || person.username}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-sm text-[#858b82]">No assignees added</span>
+          )}
+        </PropertyRow>
+        <PropertyRow icon={CalendarDays} label="Due date">
+          <span className="text-sm font-medium">{formatDate(task.dueDate, "No date")}</span>
+        </PropertyRow>
+        <PropertyRow icon={Tag} label="Label">
+          <div className="flex flex-wrap gap-2">
+            <PriorityPill priority={task.priority || "medium"} />
+            <span className="inline-flex rounded-full bg-[#f4f5f2] px-3 py-1 text-xs font-semibold text-[#4f554c] dark:bg-white/[0.06] dark:text-white/65">{phase?.name || "No phase"}</span>
+          </div>
+        </PropertyRow>
       </div>
 
-      <DetailSection title="Assignees" icon={Users}>
-        {assignees.length ? (
-          <div className="flex flex-wrap gap-2">
-            {assignees.map((person, index) => (
-              <span
-                key={person.id}
-                className="inline-flex items-center gap-2 rounded-full bg-[#f1f3ef] py-1 pl-1 pr-3 text-sm font-medium dark:bg-white/[0.06]"
-              >
-                <Avatar
-                  name={person.displayName || person.username}
-                  index={index}
-                  size="sm"
-                />
-                {person.displayName || person.username}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-[#858b82]">No assignees added.</p>
-        )}
-      </DetailSection>
-
-      <DetailSection title="Description" icon={FileText}>
+      <section className="mt-6">
+        <div className="mb-3 flex items-center gap-2">
+          <h3 className="text-lg font-semibold">Description</h3>
+        </div>
         <p className="whitespace-pre-wrap text-sm leading-6 text-[#4f554c] dark:text-white/65">
           {task.description || "No description added."}
         </p>
-      </DetailSection>
+      </section>
 
       {(blockedBy.length > 0 || dependencyWarnings.length > 0) && (
-        <DetailSection title="Dependency blocking" icon={AlertCircle}>
+        <section className="mt-6">
           <div className="space-y-2">
             {blockedBy.length > 0 && (
               <div className="rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">
@@ -853,196 +819,229 @@ function TaskDetailView({
               </div>
             )}
           </div>
-        </DetailSection>
+        </section>
       )}
 
-      <DetailSection title={`Subtasks (${doneSubtasks}/${subtasks.length})`} icon={ListChecks}>
-        <div className="space-y-2">
-          {subtasks.map((item) => (
-            <div
-              key={item.id}
-              className="rounded-xl bg-[#f5f7f2] px-3 py-2.5 text-sm dark:bg-white/[0.05]"
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                    item.done
-                      ? "border-[#65bf45] bg-[#65bf45] text-white"
-                      : "border-[#a9afa5]",
-                  )}
-                >
-                  {item.done && <Check className="h-3 w-3" />}
-                </span>
-                <span
-                  className={cn(
-                    "min-w-0 flex-1 truncate font-medium",
-                    item.done && "text-[#8a8f87] line-through",
-                  )}
-                >
-                  {item.title || "Untitled subtask"}
-                </span>
-              </div>
-              {item.description && (
-                <p className="mt-2 pl-8 text-xs leading-5 text-[#747a71] dark:text-white/50">
-                  {item.description}
-                </p>
-              )}
-              <div className="mt-2 flex flex-wrap gap-2 pl-8 text-[11px] text-[#747a71] dark:text-white/45">
-                <span>{formatDate(item.dueDate, "No deadline")}</span>
-                <span>
-                  {users.find((person) => person.id === item.assigneeId)?.displayName ||
-                    users.find((person) => person.id === item.assigneeId)?.username ||
-                    "No assignee"}
-                </span>
+      <div className="mt-7 flex gap-8 border-b border-[#e1e5de] dark:border-white/10">
+        {[
+          ["progress", "Progress"],
+          ["file", `File ${attachments.length || ""}`],
+          ["comments", `Comments ${(task.comments || []).length || ""}`],
+        ].map(([value, label]) => (
+          <button type="button" key={value} onClick={() => setActiveTab(value)} className={cn("border-b-2 px-1 pb-3 text-sm transition", activeTab === value ? "border-[#1683ff] font-semibold text-[#20231f] dark:border-[#7cb7ff] dark:text-white" : "border-transparent text-[#7c8278] hover:text-[#20231f] dark:text-white/45 dark:hover:text-white/75")}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "comments" && <section className="pt-5">
+        <h4 className="text-lg font-semibold">Comment</h4>
+        <div className="mt-4 space-y-4">
+          {(task.comments || []).map((item, index) => (
+            <div key={item.id || index} className="flex items-start gap-3">
+              <Avatar name={item.authorName || "User"} index={index} size="sm" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">{item.authorName || "User"}</span>
+                  <span className="text-xs text-[#8b9088]">
+                    {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ""}
+                  </span>
+                </div>
+                <p className="mt-1 rounded-xl bg-[#f5f6f8] px-3 py-2 text-sm leading-6 text-[#4f554c] dark:bg-white/[0.05] dark:text-white/65">{item.text}</p>
               </div>
             </div>
           ))}
-          {!subtasks.length && (
-            <p className="text-sm text-[#858b82]">No subtasks added.</p>
+          {!(task.comments || []).length && (
+            <p className="rounded-xl bg-[#f5f6f8] px-4 py-4 text-sm text-[#858b82] dark:bg-white/[0.04]">No comments yet.</p>
           )}
         </div>
-      </DetailSection>
+        <div className="mt-5 rounded-full bg-[#f5f6f8] px-4 py-3 text-sm text-[#a1a6a0] dark:bg-white/[0.05]">
+          Comment here ...
+        </div>
+      </section>}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DetailSection title={`Attachments (${attachments.length})`} icon={Paperclip}>
-          <div className="space-y-2">
-            {attachments.map((doc) => (
-              <a
-                key={doc.id || doc.driveFileId || doc.url}
-                href={doc.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-3 rounded-xl bg-[#f5f7f2] px-3 py-2.5 text-sm hover:bg-[#edf1e8] dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
-              >
-                <FileText className="h-4 w-4 text-[#6a73bd]" />
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {doc.name || "File"}
+      {activeTab === "progress" && <section className="pt-5">
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <span className="text-sm font-medium text-[#5f665b] dark:text-white/55">Progress {doneSubtasks}/{subtasks.length}</span>
+          <span className="text-xs text-[#858b82]">{progress}%</span>
+        </div>
+        <ProgressBar value={progress} className="mt-3" />
+        <div className="mt-4 space-y-3">
+          {subtasks.map((item) => (
+            <div key={item.id} className="rounded-xl border border-[#e0e4dd] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]">
+              <div className="flex items-center gap-3">
+                <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", item.done ? "border-[#6877f4] bg-[#6877f4] text-white" : "border-[#a9afa5]")}>
+                  {item.done && <Check className="h-3 w-3" />}
                 </span>
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </a>
-            ))}
-            {!attachments.length && (
-              <p className="text-sm text-[#858b82]">No files attached.</p>
-            )}
-          </div>
-        </DetailSection>
-
-        <DetailSection title={`Dependencies (${dependencies.length})`} icon={Link2}>
-          <div className="space-y-2">
-            {dependencies.map((item) => (
-              <div
-                key={item.id}
-                className={cn(
-                  "flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm dark:bg-white/[0.05]",
-                  item.status === "done" ? "bg-[#f5f7f2]" : "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-200",
-                )}
-              >
-                <StatusPill status={item.status || "todo"} compact />
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {item.title || "Untitled task"}
-                </span>
+                <span className={cn("min-w-0 flex-1 truncate text-sm font-medium", item.done && "text-[#8a8f87] line-through")}>{item.title || "Untitled subtask"}</span>
               </div>
-            ))}
-            {!dependencies.length && (
-              <p className="text-sm text-[#858b82]">No dependencies linked.</p>
-            )}
-          </div>
-        </DetailSection>
-      </div>
-
-      <DetailSection title="Activity" icon={Clock3}>
-        <div className="space-y-3 text-sm">
-          <div className="flex gap-3">
-            <span className="mt-1 h-2 w-2 rounded-full bg-[#72cf50]" />
-            <p>
-              Task is currently{" "}
-              <b>{statusLabel(task.status || "todo").toLowerCase()}</b>.
-            </p>
-          </div>
-          {(task.comments || []).length ? (
-            <p className="text-[#6f766c] dark:text-white/55">
-              {(task.comments || []).length} comment
-              {(task.comments || []).length === 1 ? "" : "s"} added.
-            </p>
-          ) : (
-            <p className="text-[#858b82]">No comments yet.</p>
-          )}
+            </div>
+          ))}
+          {!subtasks.length && <div className="rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">No subtasks added.</div>}
         </div>
-      </DetailSection>
+      </section>}
+
+      {activeTab === "file" && <section className="pt-5">
+        <div className="mb-3 flex items-center justify-between gap-3 text-xs font-medium text-[#72786f] dark:text-white/50">
+          <span className="flex items-center gap-2"><Paperclip className="h-3.5 w-3.5" />Attachment ({attachments.length})</span>
+          {attachments.length > 1 && <button type="button" className="inline-flex items-center gap-1 text-[#4b5fb8]"><Download className="h-3.5 w-3.5" />Download all</button>}
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {attachments.length ? attachments.map((doc) => (
+            <a key={doc.id || doc.driveFileId || doc.url} href={doc.url} target="_blank" rel="noreferrer" className="group flex min-w-0 items-center gap-2 rounded-lg border border-[#dfe3dc] bg-white p-2.5 hover:border-[#b8c4b3] dark:border-white/10 dark:bg-white/[0.03]">
+              <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded-md bg-rose-50 text-rose-500 dark:bg-rose-400/10"><FileText className="h-4 w-4" /></span>
+              <span className="min-w-0"><span className="block truncate text-xs font-semibold">{doc.name || "File"}</span><span className="mt-0.5 block truncate text-[10px] text-[#858b82]">{doc.category || "Document"} · Open</span></span>
+            </a>
+          )) : <div className="col-span-full rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">No files attached.</div>}
+        </div>
+      </section>}
+
+      {(dependencies.length > 0 || (task.comments || []).length > 0) && (
+        <section className="mt-6 grid gap-4 lg:grid-cols-2">
+          <DetailSection title={`Dependencies (${dependencies.length})`} icon={Link2}>
+            <div className="space-y-2">
+              {dependencies.map((item) => (
+                <div key={item.id} className={cn("flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm dark:bg-white/[0.05]", item.status === "done" ? "bg-[#f5f7f2]" : "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-200")}>
+                  <StatusPill status={item.status || "todo"} compact />
+                  <span className="min-w-0 flex-1 truncate font-medium">{item.title || "Untitled task"}</span>
+                </div>
+              ))}
+              {!dependencies.length && <p className="text-sm text-[#858b82]">No dependencies linked.</p>}
+            </div>
+          </DetailSection>
+          <DetailSection title="Activity" icon={Clock3}>
+            <div className="space-y-3 text-sm">
+              <div className="flex gap-3">
+                <span className="mt-1 h-2 w-2 rounded-full bg-[#72cf50]" />
+                <p>Task is currently <b>{statusLabel(task.status || "todo").toLowerCase()}</b>.</p>
+              </div>
+              {(task.comments || []).length ? (
+                <p className="text-[#6f766c] dark:text-white/55">{(task.comments || []).length} comment{(task.comments || []).length === 1 ? "" : "s"} added.</p>
+              ) : (
+                <p className="text-[#858b82]">No comments yet.</p>
+              )}
+            </div>
+          </DetailSection>
+        </section>
+      )}
     </div>
   );
 }
 
-function PhaseDetailView({ phase, tasks, users }) {
+function PhaseDetailView({ phase, tasks, users, onOpenTask }) {
   const done = tasks.filter((task) => task.status === "done").length;
   const blocked = tasks.filter((task) => task.status === "blocked").length;
   const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  const [activeTab, setActiveTab] = useState("tasks");
   return (
-    <div className="space-y-5 px-6 pb-8 pt-6 sm:px-7">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c8378] dark:text-white/45">
-          Delivery milestone
-        </p>
-        <h2 className="mt-2 text-3xl font-semibold tracking-[-0.03em] small">
-          {phase.name || "Untitled phase"}
-        </h2>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-[#737970] dark:text-white/50">
+    <div className="px-6 pb-8 pt-6 sm:px-7">
+      <p className="text-sm text-[#7a8077] dark:text-white/45">
+        in project <span className="border-b border-[#aeb4aa] text-[#30352f] dark:border-white/30 dark:text-white/75">Project schedule</span>
+      </p>
+      <h2 className="mt-3 max-w-[520px] text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-[#101426] dark:text-white">
+        {phase.name || "Untitled phase"}
+      </h2>
+
+      <div className="mt-6 space-y-4 border-b border-[#e5e8e2] pb-5 dark:border-white/10">
+        <PropertyRow icon={Sparkles} label="Progress">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold">{progress}% complete</span>
+            <span className="text-xs text-[#737970] dark:text-white/50">{done} of {tasks.length} tasks done</span>
+          </div>
+        </PropertyRow>
+        <PropertyRow icon={CalendarDays} label="Start date">
+          <span className="text-sm font-medium">{formatDate(phase.startDate, "No start date")}</span>
+        </PropertyRow>
+        <PropertyRow icon={CalendarDays} label="Target date">
+          <span className="text-sm font-medium">{formatDate(phase.dueDate, "No target date")}</span>
+        </PropertyRow>
+        <PropertyRow icon={Tag} label="Tags">
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-400/15 dark:text-violet-100">
+              <Layers3 className="h-3.5 w-3.5" />
+              Phase
+            </span>
+            <span className={cn("inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold", blocked ? "bg-rose-100 text-rose-700 dark:bg-rose-400/15 dark:text-rose-100" : "bg-[#eafbdc] text-[#3f7d16] dark:bg-green-400/15 dark:text-green-100")}>
+              <AlertCircle className="h-3.5 w-3.5" />
+              {blocked ? `${blocked} blocked` : "On track"}
+            </span>
+          </div>
+        </PropertyRow>
+      </div>
+
+      <section className="mt-6">
+        <div className="mb-3 flex items-center gap-2">
+          <h3 className="text-lg font-semibold">Description</h3>
+        </div>
+        <p className="whitespace-pre-wrap text-sm leading-6 text-[#4f554c] dark:text-white/65">
           {phase.description || "No description added for this phase."}
         </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <DetailBadge
-          icon={Sparkles}
-          label="Progress"
-          className="bg-[#dff6d7] text-[#225f17] dark:bg-[#74d957]/18 dark:text-[#bdf5ab]"
-        >
-          {progress}%
-        </DetailBadge>
-        <DetailBadge
-          icon={CheckCircle2}
-          label="Tasks done"
-          className="bg-[#dfeaff] text-[#284b92] dark:bg-[#6c8dff]/18 dark:text-[#b9c9ff]"
-        >
-          {done}/{tasks.length}
-        </DetailBadge>
-        <DetailBadge
-          icon={AlertCircle}
-          label="Blocked"
-          className="bg-[#ffe2e7] text-[#9c2d43] dark:bg-rose-500/18 dark:text-rose-200"
-        >
-          {blocked}
-        </DetailBadge>
-        <DetailBadge
-          icon={CalendarDays}
-          label="Target"
-          className="bg-[#fff0c9] text-[#7a5511] dark:bg-amber-400/18 dark:text-amber-100"
-        >
-          {formatDate(phase.dueDate)}
-        </DetailBadge>
-      </div>
-
-      <section className="rounded-2xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-semibold">Phase progress</span>
-          <span className="text-[#737970] dark:text-white/50">
-            {done} of {tasks.length} done
-          </span>
-        </div>
-        <ProgressBar value={progress} className="mt-3" />
       </section>
 
-      <DetailSection title="Tasks in this phase" icon={ListChecks}>
-        <div className="divide-y divide-[#e7eae4] overflow-hidden rounded-xl border border-[#e0e4dd] dark:divide-white/10 dark:border-white/10">
+      <div className="mt-7 flex gap-8 border-b border-[#e1e5de] dark:border-white/10">
+        {[
+          ["progress", "Progress"],
+          ["tasks", `Tasks ${tasks.length || ""}`],
+          ["activity", "Activities"],
+        ].map(([value, label]) => (
+          <button
+            type="button"
+            key={value}
+            onClick={() => setActiveTab(value)}
+            className={cn(
+              "border-b-2 px-1 pb-3 text-sm transition",
+              activeTab === value
+                ? "border-[#1683ff] font-semibold text-[#20231f] dark:border-[#7cb7ff] dark:text-white"
+                : "border-transparent text-[#7c8278] hover:text-[#20231f] dark:text-white/45 dark:hover:text-white/75",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "progress" && (
+        <section className="pt-5">
+          <div className="rounded-2xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-semibold">Phase progress</span>
+              <span className="text-[#737970] dark:text-white/50">{done} of {tasks.length} done</span>
+            </div>
+            <ProgressBar value={progress} className="mt-3" />
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl bg-[#f5f6f3] p-4 text-sm dark:bg-white/[0.04]">
+              <span className="text-xs font-medium uppercase text-[#858b82]">Completed</span>
+              <p className="mt-2 text-2xl font-semibold">{done}</p>
+            </div>
+            <div className="rounded-xl bg-[#f5f6f3] p-4 text-sm dark:bg-white/[0.04]">
+              <span className="text-xs font-medium uppercase text-[#858b82]">Blocked</span>
+              <p className="mt-2 text-2xl font-semibold">{blocked}</p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {activeTab === "tasks" && (
+      <section className="pt-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h4 className="text-lg font-semibold">Tasks in this phase</h4>
+          <span className="flex items-center gap-2 text-sm text-[#5f665b] dark:text-white/55">
+            <span className="relative grid h-5 w-5 place-items-center rounded-full border-2 border-[#e1e5de] after:absolute after:inset-0 after:rounded-full after:border-2 after:border-l-[#6e7bff] after:border-t-[#6e7bff] after:border-transparent" />
+            {done}/{tasks.length}
+          </span>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-[#e0e4dd] dark:border-white/10">
           {tasks.map((task, index) => {
             const names = users
               .filter((person) => (task.assigneeIds || []).includes(person.id))
               .map((person) => person.displayName || person.username);
             return (
-              <div
+              <button
+                type="button"
                 key={task.id}
-                className="grid gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                onClick={() => onOpenTask?.(task)}
+                className="grid w-full gap-3 border-b border-[#e7eae4] bg-white px-3 py-3 text-left transition last:border-b-0 hover:bg-[#f7f8f5] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
               >
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
@@ -1056,7 +1055,7 @@ function PhaseDetailView({ phase, tasks, users }) {
                   </p>
                 </div>
                 <AvatarStack names={names} limit={2} key={index} />
-              </div>
+              </button>
             );
           })}
           {!tasks.length && (
@@ -1065,7 +1064,28 @@ function PhaseDetailView({ phase, tasks, users }) {
             </p>
           )}
         </div>
-      </DetailSection>
+      </section>
+      )}
+
+      {activeTab === "activity" && (
+        <section className="pt-5">
+          <h4 className="text-lg font-semibold">Activities</h4>
+          <div className="mt-4 space-y-3 rounded-2xl border border-[#e0e4dd] bg-white p-4 text-sm dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="flex gap-3">
+              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#72cf50]" />
+              <p>{done} task{done === 1 ? "" : "s"} completed in this phase.</p>
+            </div>
+            <div className="flex gap-3">
+              <span className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", blocked ? "bg-rose-500" : "bg-[#d8ddd4]")} />
+              <p>{blocked ? `${blocked} task${blocked === 1 ? "" : "s"} blocked.` : "No blocked tasks."}</p>
+            </div>
+            <div className="flex gap-3">
+              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#1683ff]" />
+              <p>{tasks.length} total task{tasks.length === 1 ? "" : "s"} linked to this phase.</p>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -1167,7 +1187,7 @@ function TaskDrawer({
       }
       eyebrow={`${project.name} / ${phases.find((phase) => phase.id === task.phaseId)?.name || "Unassigned"}`}
       onClose={onClose}
-      width="max-w-[590px]"
+      width="max-w-[640px]"
       footer={
         isEditing ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1755,6 +1775,7 @@ function PhaseDrawer({
   onSave,
   onDelete,
   onAddTask,
+  onOpenTask,
 }) {
   const [editMode, setEditMode] = useState(Boolean(phase.__isNew));
   const isEditing = Boolean(editable && (phase.__isNew || editMode));
@@ -1765,7 +1786,7 @@ function PhaseDrawer({
       title={phase.__isNew ? "New phase" : "Phase details"}
       eyebrow="Project schedule"
       onClose={onClose}
-      width="max-w-[560px]"
+      width="max-w-[640px]"
       footer={
         isEditing ? (
           <div className="flex items-center justify-between">
@@ -1811,7 +1832,12 @@ function PhaseDrawer({
       }
     >
       {!isEditing ? (
-        <PhaseDetailView phase={phase} tasks={tasks} users={users} />
+        <PhaseDetailView
+          phase={phase}
+          tasks={tasks}
+          users={users}
+          onOpenTask={onOpenTask}
+        />
       ) : (
       <div className="px-6 pb-8 pt-6 sm:px-7">
         <p className="text-xs font-medium text-[#777d74]">Delivery milestone</p>
@@ -2919,11 +2945,12 @@ const WORKSPACE_NAV = [
   { value: "manpower", label: "Manpower", icon: Users },
   { value: "mrn", label: "MRN", icon: ClipboardList },
   { value: "stock", label: "Stock", icon: PackageSearch },
+  { value: "chat", label: "Chat", icon: MessageSquare },
   { value: "activity", label: "Activity", icon: Clock3 },
   { value: "files", label: "Files", icon: FolderOpen },
 ];
 
-function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenTeam, navItems = WORKSPACE_NAV }) {
+function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenTeam, navItems = WORKSPACE_NAV, unreadCounts = {} }) {
   const members = projectTeamMembers(project, tasks, users);
   const memberNames = members.map((member) => member.name);
   return (
@@ -2962,6 +2989,11 @@ function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenT
             {value === "files" && (
               <span className="text-[10px] text-[#8a9087]">
                 {documents.length}
+              </span>
+            )}
+            {value === "chat" && unreadCounts.chat > 0 && (
+              <span className={cn("grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-bold text-white", unreadCounts.chatMentions > 0 ? "bg-[#65bf45]" : "bg-[#2f7cff]")}>
+                {unreadCounts.chatMentions > 0 ? "@" : unreadCounts.chat > 99 ? "99+" : unreadCounts.chat}
               </span>
             )}
           </button>
@@ -4494,6 +4526,532 @@ function ProjectActivityView({ project }) {
   );
 }
 
+function getAuthToken() {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem("vectordocs_auth_token") || "";
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function prepareChatAttachment(file) {
+  if (file.type.startsWith("image/")) {
+    const dataUrl = await fileToDataUrl(file);
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+    const canvas = document.createElement("canvas");
+    const maxSide = 1280;
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const context = canvas.getContext("2d");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return {
+      name: file.name,
+      type: "image/jpeg",
+      size: file.size,
+      dataUrl: canvas.toDataURL("image/jpeg", 0.72),
+    };
+  }
+  if (file.size > 1024 * 1024 * 2) {
+    throw new Error(`${file.name} is too large. Keep files under 2 MB.`);
+  }
+  return {
+    name: file.name,
+    type: file.type || "application/octet-stream",
+    size: file.size,
+    dataUrl: await fileToDataUrl(file),
+  };
+}
+
+function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenTask, onOpenPhase }) {
+  const { user } = useAuth();
+  const [messages, setMessages] = useState(project.projectChat || []);
+  const [references, setReferences] = useState([]);
+  const [text, setText] = useState("");
+  const [pickedRefs, setPickedRefs] = useState([]);
+  const [pickedMentions, setPickedMentions] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+  const [commandType, setCommandType] = useState("");
+  const [sending, setSending] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [replyTo, setReplyTo] = useState(null);
+  const scrollRef = useRef(null);
+  const bottomRef = useRef(null);
+  const stickToBottomRef = useRef(true);
+  const messageRefs = useRef(new Map());
+  const [highlightedMessageId, setHighlightedMessageId] = useState("");
+
+  const loadChat = useCallback(async () => {
+    const result = await api(`/project-dashboard/projects/${project.id}/chat`);
+    setMessages(result.messages || []);
+    setReferences(result.references || []);
+  }, [project.id]);
+
+  useEffect(() => {
+    void loadChat().catch((error) => toast.error(error.message || "Could not load chat"));
+  }, [loadChat]);
+
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) return undefined;
+    const source = new EventSource(`${API_URL}/project-dashboard/projects/${project.id}/chat/stream?token=${encodeURIComponent(token)}`);
+    source.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data || "{}");
+      if (!message.id) return;
+      setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
+    });
+    source.addEventListener("message-updated", (event) => {
+      const message = JSON.parse(event.data || "{}");
+      if (!message.id) return;
+      setMessages((current) => current.map((item) => item.id === message.id ? message : item));
+    });
+    source.addEventListener("message-deleted", (event) => {
+      const message = JSON.parse(event.data || "{}");
+      if (!message.id) return;
+      setMessages((current) => current.map((item) => item.id === message.id ? { ...item, deletedAt: new Date().toISOString(), text: "", references: [], attachments: [] } : item));
+    });
+    source.onerror = () => source.close();
+    return () => source.close();
+  }, [project.id]);
+
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
+
+  function handleChatScroll(event) {
+    const target = event.currentTarget;
+    stickToBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 96;
+  }
+
+  const slashCommand = text.match(/(?:^|\s)\/([^\n]*)$/);
+  const commandQuery = editingMessage ? "" : (slashCommand?.[1] || "").trim();
+  const commandOpen = Boolean(slashCommand && !editingMessage);
+  const mentionCommand = text.match(/(?:^|\s)@([^\s@/]*)$/);
+  const mentionQuery = editingMessage ? "" : (mentionCommand?.[1] || "").trim().toLowerCase();
+  const mentionOpen = Boolean(mentionCommand && !editingMessage);
+  const mentionMembers = useMemo(() => projectTeamMembers(project, tasks, users), [project, tasks, users]);
+  const filteredRefs = useMemo(() => {
+    const needle = commandQuery.toLowerCase();
+    return references
+      .filter((item) => !commandType || item.type === commandType)
+      .filter((item) => !needle || `${item.title} ${item.meta}`.toLowerCase().includes(needle));
+  }, [references, commandType, commandQuery]);
+  const filteredMentions = useMemo(() => {
+    return mentionMembers
+      .filter((member) => String(member.id) !== String(user?.id || ""))
+      .filter((member) => !mentionQuery || `${member.name} ${member.username}`.toLowerCase().includes(mentionQuery));
+  }, [mentionMembers, mentionQuery, user?.id]);
+
+  async function addFiles(event) {
+    const files = Array.from(event.target.files || []).slice(0, 4);
+    event.target.value = "";
+    try {
+      const prepared = [];
+      for (const file of files) prepared.push(await prepareChatAttachment(file));
+      setAttachments((current) => [...current, ...prepared].slice(0, 4));
+    } catch (error) {
+      toast.error(error.message || "Could not attach file");
+    }
+  }
+
+  function toggleReference(ref) {
+    setPickedRefs((current) =>
+      current.some((item) => item.id === ref.id)
+        ? current.filter((item) => item.id !== ref.id)
+        : [...current, ref].slice(0, 5),
+    );
+    setText((current) => current.replace(/(?:^|\s)\/([^\n]*)$/, "").trimStart());
+    setCommandType("");
+  }
+
+  function addMention(member) {
+    setPickedMentions((current) =>
+      current.some((item) => item.id === member.id)
+        ? current
+        : [...current, { id: member.id, name: member.name, username: member.username }].slice(0, 10),
+    );
+    setText((current) => current.replace(/(?:^|\s)@([^\s@/]*)$/, "").trimStart());
+  }
+
+  function openReference(ref) {
+    if (ref.type === "phase") {
+      const phase = phases.find((item) => item.id === ref.id);
+      if (phase) onOpenPhase?.(phase);
+      return;
+    }
+    if (ref.type === "task") {
+      const task = tasks.find((item) => item.id === ref.id);
+      if (task) onOpenTask?.(task);
+    }
+  }
+
+  async function sendMessage() {
+    if (!text.trim() && !pickedRefs.length && !pickedMentions.length && !attachments.length) return;
+    try {
+      setSending(true);
+      stickToBottomRef.current = true;
+      if (editingMessage) {
+        const result = await api(`/project-dashboard/projects/${project.id}/chat/${editingMessage.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ text: text.trim() }),
+        });
+        setMessages((current) => current.map((item) => item.id === result.message.id ? result.message : item));
+        setEditingMessage(null);
+        setText("");
+        return;
+      }
+      const result = await api(`/project-dashboard/projects/${project.id}/chat`, {
+        method: "POST",
+        body: JSON.stringify({ text: text.trim(), references: pickedRefs, mentions: pickedMentions, attachments, replyToId: replyTo?.id }),
+      });
+      setMessages((current) => current.some((item) => item.id === result.message.id) ? current : [...current, result.message]);
+      setText("");
+      setPickedRefs([]);
+      setPickedMentions([]);
+      setAttachments([]);
+      setCommandType("");
+      setReplyTo(null);
+    } catch (error) {
+      toast.error(error.message || "Could not send message");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function referenceChipClass(type) {
+    return type === "phase"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100 dark:hover:bg-emerald-400/15"
+      : "border-blue-200 bg-blue-50 text-blue-800 hover:border-blue-300 hover:bg-blue-100 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-100 dark:hover:bg-blue-400/15";
+  }
+
+  function canModifyMessage(message) {
+    if (message.deletedAt) return false;
+    return String(message.userId || "") === String(user?.id || "") || user?.isSuperAdmin;
+  }
+
+  function isOwnMessage(message) {
+    return String(message.userId || "") === String(user?.id || "");
+  }
+
+  function chatTime(value) {
+    return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function scrollToMessage(messageId) {
+    const node = messageRefs.current.get(messageId);
+    if (!node) return toast.error("Original message is not available");
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedMessageId(messageId);
+    window.setTimeout(() => setHighlightedMessageId((current) => current === messageId ? "" : current), 1600);
+  }
+
+  function startEditMessage(message) {
+    setEditingMessage(message);
+    setReplyTo(null);
+    setPickedRefs([]);
+    setPickedMentions([]);
+    setAttachments([]);
+    setText(message.text || "");
+  }
+
+  async function deleteMessage(message) {
+    try {
+      const result = await api(`/project-dashboard/projects/${project.id}/chat/${message.id}`, { method: "DELETE" });
+      if (result.message) setMessages((current) => current.map((item) => item.id === result.message.id ? result.message : item));
+    } catch (error) {
+      toast.error(error.message || "Could not delete message");
+    }
+  }
+
+  return (
+    <section className="mx-auto flex h-full min-h-0 w-full max-w-[1200px] flex-col overflow-hidden bg-white dark:bg-[#11130f]">
+      <div ref={scrollRef} onScroll={handleChatScroll} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-6">
+        {messages.map((message, index) => {
+          const own = isOwnMessage(message);
+          const actions = (
+            <span className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+              <IconButton label="Reply" className="!h-7 !w-7 rounded-full" onClick={() => { setReplyTo(message); setEditingMessage(null); }}>
+                <Reply className="h-3.5 w-3.5" />
+              </IconButton>
+              {canModifyMessage(message) && (
+                <>
+                  <IconButton label="Edit message" className="!h-7 !w-7 rounded-full" onClick={() => startEditMessage(message)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </IconButton>
+                  <IconButton label="Delete for everyone" className="!h-7 !w-7 rounded-full text-rose-500" onClick={() => deleteMessage(message)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </IconButton>
+                </>
+              )}
+            </span>
+          );
+          return (
+            <article
+              key={message.id}
+              ref={(node) => {
+                if (node) messageRefs.current.set(message.id, node);
+                else messageRefs.current.delete(message.id);
+              }}
+              className={cn("group flex scroll-mt-24 items-end gap-3 transition-colors duration-500", own ? "justify-end" : "justify-start")}
+            >
+              {!own && <Avatar name={message.userName} index={index} />}
+              {own && actions}
+              <div className={cn(
+                message.attachments?.length && !message.text && !message.references?.length && !message.mentions?.length ? "max-w-[360px]" : "max-w-[min(680px,78%)]",
+                own ? "items-end" : "items-start",
+              )}>
+                <div className={cn(
+                  "rounded-2xl px-4 py-3 transition-[background-color,box-shadow] duration-500",
+                  highlightedMessageId === message.id && "ring-2 ring-[#65bf45]/45",
+                  own
+                    ? "rounded-br-md bg-[#e8f6df] text-[#172312] dark:bg-[#24401d] dark:text-white"
+                    : "rounded-bl-md bg-[#f5f6f3] text-[#20231f] dark:bg-white/[0.07] dark:text-white",
+                )}>
+                  <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-semibold">{own ? "You" : message.userName}</span>
+                    <span className={cn("text-[11px]", own ? "text-[#64755e] dark:text-white/55" : "text-[#8a9087]")}>{chatTime(message.createdAt)}</span>
+                  </div>
+                  {message.replyTo && (
+                    <button
+                      type="button"
+                      onClick={() => scrollToMessage(message.replyTo.id)}
+                      className={cn(
+                      "mb-2 block w-full rounded-xl px-3 py-2 text-left text-xs transition hover:bg-black/[0.04] dark:hover:bg-white/[0.08]",
+                      own
+                        ? "bg-white/55 text-[#42533d] dark:bg-white/10 dark:text-white/70"
+                        : "bg-white text-[#596158] dark:bg-black/15 dark:text-white/65",
+                    )}
+                    >
+                      <span className="block font-semibold">{message.replyTo.userName}</span>
+                      <span className="block truncate">{message.replyTo.text || message.replyTo.attachmentName || "Attachment"}</span>
+                    </button>
+                  )}
+                  {message.deletedAt ? (
+                    <p className="text-sm italic text-[#7b8376] dark:text-white/45">This message was deleted</p>
+                  ) : (
+                    <>
+                      {message.text && <p className="whitespace-pre-wrap text-sm leading-6">{message.text}</p>}
+                      {!!message.references?.length && (
+                        <div className="mt-3 flex max-w-full flex-wrap gap-2">
+                          {message.references.map((ref) => (
+                            <button
+                              key={`${message.id}-${ref.id}`}
+                              type="button"
+                              onClick={() => openReference(ref)}
+                              className={cn("max-w-full rounded-lg border px-3 py-2 text-left text-xs transition sm:max-w-[260px]", referenceChipClass(ref.type))}
+                            >
+                              <span className="block truncate">
+                                <b className="capitalize">{ref.type}</b> · {ref.title}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {!!message.mentions?.length && (
+                        <div className="mt-3 flex max-w-full flex-wrap gap-1.5">
+                          {message.mentions.map((mention) => (
+                            <span key={`${message.id}-mention-${mention.id}`} className="rounded-full bg-[#e8f1ff] px-2.5 py-1 text-xs font-semibold text-[#2864cc] dark:bg-blue-400/15 dark:text-blue-100">
+                              @{mention.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {!!message.attachments?.length && (
+                        <div className="mt-3 grid max-w-[560px] gap-2 sm:grid-cols-2">
+                          {message.attachments.map((file) => (
+                            <div key={file.id} className="overflow-hidden rounded-xl border border-[#dce2d8] bg-white dark:border-white/10 dark:bg-white/[0.03]">
+                              {file.type?.startsWith("image/") ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewImage(file)}
+                                  className="block h-44 w-full overflow-hidden bg-[#f1f3ef] text-left dark:bg-white/[0.04]"
+                                >
+                                  <img src={file.dataUrl} alt={file.name} className="h-full w-full object-cover" />
+                                </button>
+                              ) : (
+                                <a href={file.dataUrl} download={file.name} className="flex items-center gap-3 p-3 text-sm"><Paperclip className="h-4 w-4" />{file.name}</a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {message.editedAt && (
+                    <div className="mt-2 text-right text-[10px] text-[#7b8376] dark:text-white/45">
+                      edited {chatTime(message.editedAt)}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {!own && actions}
+            </article>
+          );
+        })}
+        {!messages.length && <p className="rounded-xl bg-[#f5f6f3] p-5 text-sm text-[#777d74] dark:bg-white/[0.04]">Start the project conversation here.</p>}
+        <div ref={bottomRef} className="h-px" />
+      </div>
+
+      <footer className="shrink-0 border-t border-[#e1e5de] bg-white p-2 dark:border-white/10 dark:bg-[#11130f]">
+        <div className="relative rounded-2xl bg-white px-3 py-2 dark:bg-white/[0.03]">
+          {(replyTo || editingMessage) && (
+            <div className="mb-2 flex flex-col gap-2">
+              {replyTo && (
+                <div className="flex items-start justify-between gap-3 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900 dark:bg-blue-400/10 dark:text-blue-100">
+                  <div className="min-w-0">
+                    <span className="block font-semibold">Replying to {replyTo.userName}</span>
+                    <span className="block truncate">{replyTo.text || replyTo.attachments?.[0]?.name || "Attachment"}</span>
+                  </div>
+                  <button type="button" onClick={() => setReplyTo(null)} className="shrink-0 text-blue-700 dark:text-blue-100">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              {editingMessage && (
+                <div className="flex items-start justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-400/10 dark:text-amber-100">
+                  <div className="min-w-0">
+                    <span className="block font-semibold">Editing message</span>
+                    <span className="block truncate">{editingMessage.text || editingMessage.attachments?.[0]?.name || "Attachment"}</span>
+                  </div>
+                  <button type="button" onClick={() => { setEditingMessage(null); setText(""); }} className="shrink-0 text-amber-700 dark:text-amber-100">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          <div className={cn("flex flex-wrap gap-2", (pickedRefs.length || pickedMentions.length || attachments.length) ? "mb-2" : "hidden")}>
+            {pickedRefs.map((ref) => (
+              <button key={ref.id} type="button" onClick={() => toggleReference(ref)} className="rounded-full bg-[#eafbdc] px-3 py-1 text-xs font-semibold text-[#3f7d16]">
+                {ref.type}: {ref.title} <X className="ml-1 inline h-3 w-3" />
+              </button>
+            ))}
+            {pickedMentions.map((mention) => (
+              <button key={mention.id} type="button" onClick={() => setPickedMentions((current) => current.filter((item) => item.id !== mention.id))} className="rounded-full bg-[#e8f1ff] px-3 py-1 text-xs font-semibold text-[#2864cc] dark:bg-blue-400/15 dark:text-blue-100">
+                @{mention.name} <X className="ml-1 inline h-3 w-3" />
+              </button>
+            ))}
+            {attachments.map((file, index) => (
+              <button key={`${file.name}-${index}`} type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded-full bg-[#f1f3ef] px-3 py-1 text-xs font-semibold text-[#555b52] dark:bg-white/[0.08] dark:text-white/70">
+                {file.name} <X className="ml-1 inline h-3 w-3" />
+              </button>
+            ))}
+          </div>
+          {commandOpen && (
+            <div className="absolute bottom-[calc(100%+8px)] left-3 z-10 w-[min(420px,calc(100vw-72px))] rounded-2xl border border-[#e0e5dc] bg-white p-2 shadow-xl dark:border-white/10 dark:bg-[#171a16]">
+              {!commandType ? (
+                <div className="grid gap-1">
+                  {[
+                    ["task", ListChecks, "Task"],
+                    ["phase", Layers3, "Phase"],
+                  ].map(([value, Icon, label]) => (
+                    <button key={value} type="button" onClick={() => setCommandType(value)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f2f5f1] dark:hover:bg-white/[0.06]">
+                      <Icon className="h-4 w-4 text-[#4d8c2f]" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div>
+                  <div className="mb-2 flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#7d8579]">
+                    <span>Select {commandType}</span>
+                    <button type="button" onClick={() => setCommandType("")} className="text-[#20231f] dark:text-white">Back</button>
+                  </div>
+                  <div className="max-h-52 space-y-1 overflow-y-auto">
+                    {filteredRefs.map((ref) => (
+                      <button key={ref.id} type="button" onClick={() => toggleReference(ref)} className={cn("flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-[#f2f5f1] dark:hover:bg-white/[0.06]", pickedRefs.some((item) => item.id === ref.id) && "bg-[#f2f5f1] dark:bg-white/[0.06]")}>
+                        <span className="min-w-0 truncate">{ref.title}</span>
+                        <span className="ml-3 shrink-0 text-xs text-[#858b82]">{ref.meta}</span>
+                      </button>
+                    ))}
+                    {!filteredRefs.length && <p className="px-3 py-4 text-center text-xs text-[#858b82]">No {commandType}s found.</p>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {mentionOpen && (
+            <div className="absolute bottom-[calc(100%+8px)] left-3 z-10 w-[min(360px,calc(100vw-72px))] rounded-2xl border border-[#e0e5dc] bg-white p-2 shadow-xl dark:border-white/10 dark:bg-[#171a16]">
+              <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#7d8579]">Tag person</div>
+              <div className="max-h-52 space-y-1 overflow-y-auto">
+                {filteredMentions.map((member) => (
+                  <button key={member.id} type="button" onClick={() => addMention(member)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f2f5f1] dark:hover:bg-white/[0.06]">
+                    <Avatar name={member.name} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{member.name}</span>
+                      <span className="block truncate text-xs text-[#858b82]">{member.role}</span>
+                    </span>
+                  </button>
+                ))}
+                {!filteredMentions.length && <p className="px-3 py-4 text-center text-xs text-[#858b82]">No people found.</p>}
+              </div>
+            </div>
+          )}
+          <textarea
+            value={text}
+            onChange={(event) => {
+              setText(event.target.value);
+              if (editingMessage || !/(?:^|\s)\/([^\n]*)$/.test(event.target.value)) setCommandType("");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void sendMessage();
+              }
+            }}
+            rows={1}
+            placeholder='Comment or type "/" for commands'
+            className="max-h-10 min-h-[32px] w-full resize-none border-0 bg-transparent px-1 py-1.5 pr-24 text-sm leading-5 outline-none placeholder:text-[#a0a69e] dark:text-white"
+          />
+          <div className="absolute bottom-2 right-3 flex items-center gap-2">
+              <label className="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-[#dce1d8] dark:border-white/10">
+                <Paperclip className="h-4 w-4" />
+                <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" onChange={addFiles} className="hidden" />
+              </label>
+            <Button variant="primary" className="h-9 px-4" disabled={sending} onClick={sendMessage}>
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Send
+            </Button>
+          </div>
+        </div>
+      </footer>
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            type="button"
+            className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white backdrop-blur hover:bg-white/20"
+            onClick={() => setPreviewImage(null)}
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={previewImage.dataUrl}
+            alt={previewImage.name}
+            className="max-h-[88vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
 function groupProjectActivity(activity = []) {
   const sorted = [...activity].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   const groups = [];
@@ -4711,6 +5269,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   const [driveDocs, setDriveDocs] = useState([]);
   const [taskEditor, setTaskEditor] = useState(null);
   const [phaseEditor, setPhaseEditor] = useState(null);
+  const [returnPhaseEditor, setReturnPhaseEditor] = useState(null);
   const [calendarMrn, setCalendarMrn] = useState(null);
   const [calendarMrnData, setCalendarMrnData] = useState(null);
   const [projectEditor, setProjectEditor] = useState(null);
@@ -4724,6 +5283,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     category: "General",
     url: "",
   });
+  const [chatUnread, setChatUnread] = useState(0);
+  const [chatMentionUnread, setChatMentionUnread] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [accessSaving, setAccessSaving] = useState(false);
@@ -4788,6 +5349,32 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
       setWorkspaceView("overview");
     }
   }, [workspaceNav, workspaceView]);
+
+  useEffect(() => {
+    if (workspaceView === "chat") {
+      setChatUnread(0);
+      setChatMentionUnread(0);
+    }
+  }, [workspaceView, selectedProject?.id]);
+
+  useEffect(() => {
+    if (!selectedProject?.id) return undefined;
+    const token = getAuthToken();
+    if (!token) return undefined;
+    const source = new EventSource(`${API_URL}/project-dashboard/projects/${selectedProject.id}/chat/stream?token=${encodeURIComponent(token)}`);
+    source.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data || "{}");
+      if (!message.id || String(message.userId || "") === String(user?.id || "")) return;
+      if (workspaceView !== "chat") {
+        setChatUnread((count) => count + 1);
+        if ((message.mentions || []).some((mention) => String(mention.id) === String(user?.id || ""))) {
+          setChatMentionUnread((count) => count + 1);
+        }
+      }
+    });
+    source.onerror = () => source.close();
+    return () => source.close();
+  }, [selectedProject?.id, user?.id, workspaceView]);
 
   const users = config.users || [];
   const projects = useMemo(() => {
@@ -4898,12 +5485,22 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   }
 
   function openTask(task) {
+    setReturnPhaseEditor(null);
     setTaskEditor(JSON.parse(JSON.stringify(task)));
   }
 
   function addTask(phaseId = "", status = "todo") {
     const resolvedPhase = phaseId || phases[0]?.id || "";
+    setReturnPhaseEditor(null);
     setTaskEditor({ ...blankTask(resolvedPhase), status });
+  }
+
+  function closeTaskDrawer() {
+    setTaskEditor(null);
+    if (returnPhaseEditor) {
+      setPhaseEditor(returnPhaseEditor);
+      setReturnPhaseEditor(null);
+    }
   }
 
   async function saveTask(addNew = false) {
@@ -4932,9 +5529,11 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
       taskEditor.__isNew ? "Task created" : "Task updated",
     );
     if (updated) {
-      setTaskEditor(
-        addNew ? { ...blankTask(nextPhaseId), status: nextStatus } : null,
-      );
+      if (addNew) {
+        setTaskEditor({ ...blankTask(nextPhaseId), status: nextStatus });
+      } else {
+        closeTaskDrawer();
+      }
     }
   }
 
@@ -4949,7 +5548,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
       (task) => task.id !== taskEditor.id,
     );
     const updated = await patchProject(selectedProject, source, "Task deleted");
-    if (updated) setTaskEditor(null);
+    if (updated) closeTaskDrawer();
   }
 
   function deleteTask() {
@@ -5232,6 +5831,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
         users={users}
         onOpenTeam={() => setTeamDrawerOpen(true)}
         navItems={workspaceNav}
+        unreadCounts={{ chat: chatUnread, chatMentions: chatMentionUnread }}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[#e0e4dd] bg-white px-3 sm:px-4 dark:border-white/10 dark:bg-[#171a16]">
@@ -5290,6 +5890,11 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             >
               <Icon className="h-3.5 w-3.5" />
               {label}
+              {value === "chat" && chatUnread > 0 && (
+                <span className={cn("ml-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[9px] font-bold text-white", chatMentionUnread > 0 ? "bg-[#65bf45]" : "bg-[#2f7cff]")}>
+                  {chatMentionUnread > 0 ? "@" : chatUnread > 99 ? "99+" : chatUnread}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -5337,6 +5942,16 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           {workspaceView === "stock" && (
             <ProjectStockView darkMode={darkMode} project={selectedProject} />
           )}
+          {workspaceView === "chat" && (
+            <ProjectChatView
+              project={selectedProject}
+              tasks={tasks}
+              phases={phases}
+              users={users}
+              onOpenTask={openTask}
+              onOpenPhase={openPhase}
+            />
+          )}
           {workspaceView === "activity" && (
             <ProjectActivityView project={selectedProject} />
           )}
@@ -5378,7 +5993,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           onChange={(patch) =>
             setTaskEditor((current) => ({ ...current, ...patch }))
           }
-          onClose={() => setTaskEditor(null)}
+          onClose={closeTaskDrawer}
           onSave={saveTask}
           onSaveAddNew={() => saveTask(true)}
           onDelete={deleteTask}
@@ -5402,6 +6017,11 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             const phaseId = phaseEditor.id;
             setPhaseEditor(null);
             addTask(phaseId);
+          }}
+          onOpenTask={(task) => {
+            setReturnPhaseEditor(phaseEditor ? JSON.parse(JSON.stringify(phaseEditor)) : null);
+            setPhaseEditor(null);
+            setTaskEditor({ ...task });
           }}
         />
       )}

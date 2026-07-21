@@ -87,7 +87,7 @@ const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];
 const MENU_ITEM_IDS = new Set(ALL_MENU_ITEMS.map((item) => item.id));
 const ROLE_MENU_ITEM_IDS = new Set(MENU_ITEMS.map((item) => item.id));
 const PROJECT_CHILD_MENU_IDS = new Set(MENU_ITEMS.filter((item) => item.parent === "projects").map((item) => item.id));
-const DEFAULT_EMPLOYEE_MENU_IDS = ["hr-leave"];
+const DEFAULT_EMPLOYEE_MENU_IDS = ["hr-leave", "hr-salary-slips"];
 const PROTECTED_GLOBAL_MODULES = new Set(["dashboard", "module-control"]);
 const PRIVILEGE_ITEMS = [
   { id: "upload_documents", label: "Upload documents" },
@@ -220,6 +220,8 @@ function sanitizeUser(user, role) {
     whatsappPhone: user.whatsappPhone || user.whatsappNumber || "",
     department: user.department || "",
     designation: user.designation || user.jobTitle || "",
+    employeeCode: user.employeeCode || user.employeeId || "",
+    joiningDate: user.joiningDate || user.dateOfJoining || user.joinDate || "",
     roleId: user.roleId ? String(user.roleId) : null,
     roleName: role?.name || user.roleName || null,
     menus: roleMenusForUser(user, role),
@@ -312,7 +314,11 @@ async function requireAuth(req, res, next) {
   try {
     const db = await connectAuthDb();
     const header = req.headers.authorization || "";
-    const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+    const streamToken =
+      req.method === "GET" && /^\/project-dashboard\/projects\/[^/]+\/chat\/stream$/.test(req.path)
+        ? String(req.query.token || "")
+        : "";
+    const token = header.startsWith("Bearer ") ? header.slice(7) : streamToken || null;
     if (!token) return res.status(401).json({ error: "Authentication required" });
     const session = await db.collection("sessions").findOne({ tokenHash: hashToken(token), expiresAt: { $gt: new Date() } });
     if (!session) return res.status(401).json({ error: "Session expired" });
@@ -3481,16 +3487,17 @@ app.get("/hr/overview", async (req, res) => {
   try {
     const hasHrDashboardAccess = hasMenuAccess(req, "hr-dashboard");
     const hasHrLeaveAccess = hasMenuAccess(req, "hr-leave");
-    if (!hasHrDashboardAccess && !hasHrLeaveAccess) return res.status(403).json({ error: "HR access required" });
+    const hasHrSalaryAccess = hasMenuAccess(req, "hr-salary-slips");
+    if (!hasHrDashboardAccess && !hasHrLeaveAccess && !hasHrSalaryAccess) return res.status(403).json({ error: "HR access required" });
     const db = await connectAuthDb();
     const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
-    if (!hasHrDashboardAccess && hasHrLeaveAccess) {
+    if (!hasHrDashboardAccess && (hasHrLeaveAccess || hasHrSalaryAccess)) {
       return res.json({
         canManageHr,
         employees: [],
         roles: [],
         documents: [],
-        salarySlips: [],
+        salarySlips: await loadHrSalarySlips(req, db, canManageHr),
         leaveRequests: await loadHrLeaveRequests(req, db, canManageHr),
       });
     }
@@ -3509,7 +3516,7 @@ app.get("/hr/overview", async (req, res) => {
         isSystem: Boolean(role.isSystem),
       })),
       documents: [],
-      salarySlips: [],
+      salarySlips: await loadHrSalarySlips(req, db, canManageHr),
       leaveRequests: await loadHrLeaveRequests(req, db, canManageHr),
     });
   } catch (error) {
@@ -3560,6 +3567,291 @@ async function loadHrLeaveRequests(req, db, canManageHr = Boolean(req.authUser?.
   return items.map(serializeLeaveRequest);
 }
 
+function moneyNumber(value) {
+  const number = Number(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(number) ? Math.max(0, number) : 0;
+}
+
+function monthLabel(month = "") {
+  if (!/^\d{4}-\d{2}$/.test(month)) return month || "";
+  return new Date(`${month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+}
+
+function salaryDate(value) {
+  const text = projectText(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
+function salaryMonth(value) {
+  const text = projectText(value);
+  return /^\d{4}-\d{2}$/.test(text) ? text : "";
+}
+
+function salaryMonthEndDate(month) {
+  if (!/^\d{4}-\d{2}$/.test(month)) return "";
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNumber, 0));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function salaryMonthBeforeJoining(month, joiningDate) {
+  if (!month || !joiningDate) return false;
+  return month < String(joiningDate).slice(0, 7);
+}
+
+function salaryComponents(items = []) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => ({ label: projectText(item.label, 80), amount: moneyNumber(item.amount) }))
+    .filter((item) => item.label && item.amount > 0);
+}
+
+async function getSalaryCompanySettings(db) {
+  const existing = await db.collection("hrSettings").findOne({ _id: "salary-company" });
+  return {
+    companyName: existing?.companyName || "UIPL Docs",
+    companyLocation: existing?.companyLocation || "India",
+    companyLogo: existing?.companyLogo || "",
+    pfAccountNumber: existing?.pfAccountNumber || "",
+    note: existing?.note || "This document has been automatically generated; therefore, a signature is not required.",
+  };
+}
+
+function serializeSalarySlip(item = {}) {
+  return {
+    id: String(item._id),
+    userId: String(item.userId),
+    employeeName: item.employeeName || "",
+    designation: item.designation || "",
+    employeeCode: item.employeeCode || "",
+    title: `Salary Slip - ${monthLabel(item.month)}`,
+    name: `Salary Slip - ${monthLabel(item.month)}`,
+    type: "Salary Slip",
+    month: item.month,
+    date: item.payDate || item.createdAt,
+    createdAt: item.createdAt,
+    netPay: item.netPay || 0,
+  };
+}
+
+async function loadHrSalarySlips(req, db, canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"))) {
+  const query = canManageHr ? {} : { userId: new ObjectId(req.authUser.id) };
+  const items = await db.collection("hrSalarySlips").find(query).sort({ month: -1, createdAt: -1 }).limit(200).toArray();
+  return items.map(serializeSalarySlip);
+}
+
+function registerSalaryPdfFonts(doc) {
+  const geistFontPath = path.join(__dirname, "..", "frontend", "src", "app", "font", "satre.ttf");
+  if (!fs.existsSync(geistFontPath)) return { regular: "Helvetica", bold: "Helvetica-Bold" };
+  try {
+    doc.registerFont("SalaryGeist", geistFontPath);
+    return { regular: "SalaryGeist", bold: "SalaryGeist" };
+  } catch (error) {
+    console.warn("Could not register salary slip PDF font:", error.message);
+    return { regular: "Helvetica", bold: "Helvetica-Bold" };
+  }
+}
+
+function drawSalarySlipPdfLegacy(doc, slip, settings) {
+  const rupee = "Rs ";
+  const currency = (value) => `${rupee}${moneyNumber(value).toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
+  const line = (x1, y, x2) => doc.moveTo(x1, y).lineTo(x2, y).strokeColor("#d8dde6").lineWidth(1).stroke();
+  const labelValue = (label, value, x, y, labelWidth = 118, valueWidth = 160) => {
+    doc.font("Helvetica").fontSize(10).fillColor("#626262").text(label, x, y, { width: labelWidth });
+    doc.fillColor("#626262").text(":", x + labelWidth + 5, y);
+    doc.font("Helvetica-Bold").fillColor("#111").text(value || "-", x + labelWidth + 20, y, { width: valueWidth });
+  };
+  if (/^data:image\/(png|jpe?g);base64,/i.test(settings.companyLogo || "")) {
+    try {
+      const logoBuffer = Buffer.from(String(settings.companyLogo).split(",")[1], "base64");
+      doc.image(logoBuffer, 58, 38, { fit: [62, 42] });
+    } catch {
+      doc.roundedRect(60, 42, 54, 32, 5).strokeColor("#d4dae5").stroke();
+    }
+  } else {
+    doc.roundedRect(60, 42, 54, 32, 5).strokeColor("#d4dae5").stroke();
+  }
+  doc.font("Helvetica-Bold").fontSize(21).fillColor("#222").text(settings.companyName, 130, 42, { width: 230 });
+  doc.font("Helvetica").fontSize(11).fillColor("#666").text(settings.companyLocation, 130, 68, { width: 230 });
+  doc.font("Helvetica").fontSize(12).fillColor("#666").text("Payslip For the Month", 382, 42, { width: 150, align: "right" });
+  doc.font("Helvetica-Bold").fontSize(18).fillColor("#111").text(monthLabel(slip.month), 382, 64, { width: 150, align: "right" });
+  line(50, 104, 545);
+
+  doc.font("Helvetica-Bold").fontSize(11).fillColor("#666").text("EMPLOYEE SUMMARY", 60, 128);
+  const summary = [
+    ["Employee Name", slip.employeeName],
+    ["Designation", slip.designation],
+    ["Employee ID", slip.employeeCode],
+    ["Date of Joining", slip.joiningDate],
+    ["Pay Period", monthLabel(slip.month)],
+    ["Pay Date", slip.payDate],
+  ];
+  summary.forEach(([label, value], index) => {
+    labelValue(label, value, 60, 156 + index * 21, 120, 135);
+  });
+
+  doc.roundedRect(350, 132, 180, 112, 8).strokeColor("#cfd6df").stroke();
+  doc.roundedRect(350, 132, 180, 56, 8).fill("#eefbf0");
+  doc.fillColor("#111").font("Helvetica-Bold").fontSize(21).text(currency(slip.netPay), 374, 154, { width: 135 });
+  doc.fillColor("#5c765c").fontSize(10).text("Employee Net Pay", 374, 181);
+  labelValue("Paid Days", String(slip.paidDays || 0), 374, 208, 78, 45);
+  labelValue("LOP Days", String(slip.lopDays || 0), 374, 229, 78, 45);
+
+  line(50, 292, 545);
+  labelValue("PF A/C Number", settings.pfAccountNumber || "-", 60, 315, 110, 180);
+  labelValue("UAN", slip.uan || "-", 345, 315, 45, 125);
+
+  const tableY = 360;
+  const tableHeight = 232;
+  doc.roundedRect(50, tableY, 495, tableHeight, 8).strokeColor("#d4dae5").stroke();
+  doc.font("Helvetica-Bold").fontSize(10).fillColor("#3b3b3b");
+  doc.text("EARNINGS", 65, tableY + 20);
+  doc.text("AMOUNT", 195, tableY + 20, { width: 82, align: "right" });
+  doc.text("DEDUCTIONS", 320, tableY + 20);
+  doc.text("AMOUNT", 448, tableY + 20, { width: 82, align: "right" });
+  line(65, tableY + 48, 530);
+  const maxRows = Math.max(slip.earnings.length, slip.deductions.length, 1);
+  const rowGap = maxRows > 5 ? 20 : 24;
+  for (let index = 0; index < maxRows; index += 1) {
+    const y = tableY + 68 + index * rowGap;
+    const earning = slip.earnings[index];
+    const deduction = slip.deductions[index];
+    if (earning) {
+      doc.font("Helvetica").fontSize(9).fillColor("#111").text(earning.label, 65, y, { width: 120 });
+      doc.font("Helvetica-Bold").fontSize(9).text(currency(earning.amount), 195, y, { width: 82, align: "right" });
+    }
+    if (deduction) {
+      doc.font("Helvetica").fontSize(9).fillColor("#111").text(deduction.label, 320, y, { width: 120 });
+      doc.font("Helvetica-Bold").fontSize(9).text(currency(deduction.amount), 448, y, { width: 82, align: "right" });
+    }
+  }
+  doc.rect(50, tableY + tableHeight - 35, 495, 35).fill("#f7f7fa");
+  doc.font("Helvetica-Bold").fontSize(10).fillColor("#333").text("Gross Earnings", 65, tableY + tableHeight - 23);
+  doc.text(currency(slip.grossEarnings), 195, tableY + tableHeight - 23, { width: 82, align: "right" });
+  doc.text("Total Deductions", 320, tableY + tableHeight - 23);
+  doc.text(currency(slip.totalDeductions), 448, tableY + tableHeight - 23, { width: 82, align: "right" });
+
+  doc.roundedRect(50, 630, 495, 44, 6).strokeColor("#d4dae5").stroke();
+  doc.font("Helvetica-Bold").fontSize(11).fillColor("#111").text("TOTAL NET PAYABLE", 65, 642);
+  doc.font("Helvetica").fontSize(9).fillColor("#666").text("Gross Earnings - Total Deductions", 65, 657);
+  doc.rect(430, 631, 114, 42).fill("#eefbf0");
+  doc.fillColor("#111").font("Helvetica-Bold").fontSize(13).text(currency(slip.netPay), 440, 644, { width: 90, align: "right" });
+  doc.font("Helvetica").fontSize(9).fillColor("#777").text(settings.note, 80, 735, { width: 435, align: "center" });
+}
+
+function drawSalarySlipPdf(doc, slip, settings) {
+  const fonts = registerSalaryPdfFonts(doc);
+  const currency = (value) => `Rs ${moneyNumber(value).toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
+  const teal = "#53c7bf";
+  const border = "#d9e0e8";
+  const text = "#171714";
+  const muted = "#626262";
+  const line = (x1, y, x2, color = border, width = 0.7) => doc.moveTo(x1, y).lineTo(x2, y).strokeColor(color).lineWidth(width).stroke();
+  const cellText = (value, x, y, options = {}) => doc.font(options.bold ? fonts.bold : fonts.regular).fontSize(options.size || 7.5).fillColor(options.color || text).text(value || "-", x, y, options);
+  const sectionTitle = (title, y, x = 50, width = 495) => {
+    cellText(title, x, y - 12, { bold: true, size: 7.4, color: "#9d5360", width });
+    line(x, y, x + width, teal, 2);
+  };
+  const detailStack = (title, rows, x, y, width) => {
+    cellText(title, x, y, { bold: true, size: 7.4, color: "#9d5360", width });
+    line(x, y + 12, x + width, teal, 1.4);
+    rows.forEach(([label, value], index) => {
+      const rowY = y + 22 + index * 11;
+      cellText(label, x, rowY, { size: 6.3, color: muted, width: 58 });
+      cellText(value || "-", x + 62, rowY, { bold: true, size: 6.5, width: width - 62 });
+    });
+  };
+  const tableHeader = (headers, widths, x, y) => {
+    let cursor = x;
+    headers.forEach((header, index) => {
+      cellText(header, cursor, y, { bold: true, size: 6.8, color: "#444", width: widths[index], align: index === 0 ? "left" : "right" });
+      cursor += widths[index];
+    });
+    line(x, y + 12, x + widths.reduce((sum, width) => sum + width, 0), "#e3e6ea");
+  };
+  const tableRows = (rows, widths, x, y, rowHeight = 15) => {
+    rows.forEach((row, rowIndex) => {
+      let cursor = x;
+      row.forEach((cell, index) => {
+        cellText(String(cell ?? "-"), cursor, y + rowIndex * rowHeight, { bold: Boolean(row.total), size: 6.9, width: widths[index], align: index === 0 ? "left" : "right" });
+        cursor += widths[index];
+      });
+      line(x, y + rowIndex * rowHeight + rowHeight - 4, x + widths.reduce((sum, width) => sum + width, 0), "#eff1f3", 0.4);
+    });
+  };
+
+  if (/^data:image\/(png|jpe?g);base64,/i.test(settings.companyLogo || "")) {
+    try {
+      const logoBuffer = Buffer.from(String(settings.companyLogo).split(",")[1], "base64");
+      doc.image(logoBuffer, 60, 42, { fit: [58, 34] });
+    } catch {
+      doc.roundedRect(60, 44, 52, 28, 4).strokeColor("#d4dae5").stroke();
+    }
+  } else {
+    doc.roundedRect(60, 44, 52, 28, 4).strokeColor("#d4dae5").stroke();
+  }
+
+  cellText("Earnings Statement", 60, 88, { bold: true, size: 20, width: 230 });
+  cellText(`Pay Period: ${monthLabel(slip.month)}   Pay Date: ${slip.payDate || "-"}`, 60, 120, { size: 8.2, color: muted, width: 250 });
+  detailStack("Company", [
+    ["Name", settings.companyName],
+    ["Location", settings.companyLocation],
+    ...(settings.pfAccountNumber ? [["PF A/C", settings.pfAccountNumber]] : []),
+  ], 275, 46, 135);
+  detailStack("Employee", [
+    ["Name", slip.employeeName],
+    ["Role", slip.designation || "Not added"],
+    ["ID", slip.employeeCode || "-"],
+    ["Joined", slip.joiningDate || "-"],
+    ...(slip.uan ? [["UAN", slip.uan]] : []),
+  ], 415, 46, 130);
+
+  const displayEarnings = slip.earnings.filter((item) => !/^basic(\s+salary)?$/i.test(String(item.label || "").trim()));
+  const grossRows = [
+    ["Basic Salary", String(slip.paidDays || 0), currency(slip.basic), currency(slip.basic)],
+    ...displayEarnings.map((item) => [item.label, "-", currency(item.amount), currency(item.amount)]),
+    Object.assign(["Gross Earnings", "", currency(slip.grossEarnings), currency(slip.grossEarnings)], { total: true }),
+  ];
+  sectionTitle("Employee Gross Earnings", 170);
+  tableHeader(["Salary Component", "Paid Days", "Amount", "YTD"], [220, 85, 95, 95], 50, 180);
+  tableRows(grossRows, [220, 85, 95, 95], 50, 200);
+
+  const hasDeductions = slip.deductions.length > 0;
+  if (hasDeductions) {
+    const deductionRows = slip.deductions.map((item) => [item.label, currency(item.amount), currency(item.amount)]);
+    deductionRows.push(Object.assign(["Total Deductions", currency(slip.totalDeductions), currency(slip.totalDeductions)], { total: true }));
+    sectionTitle("Deductions", 310, 50, 235);
+    tableHeader(["Description", "Amount", "YTD"], [105, 65, 65], 50, 320);
+    tableRows(deductionRows, [105, 65, 65], 50, 340);
+  }
+
+  const attendanceX = hasDeductions ? 310 : 50;
+  const attendanceWidth = hasDeductions ? 235 : 495;
+  const attendanceWidths = hasDeductions ? [105, 65, 65] : [260, 115, 120];
+  const attendanceRows = [
+    ["Paid Days", String(slip.paidDays || 0), String(slip.paidDays || 0)],
+    ["LOP Days", String(slip.lopDays || 0), String(slip.lopDays || 0)],
+    Object.assign(["Net Payable", currency(slip.netPay), currency(slip.netPay)], { total: true }),
+  ];
+  sectionTitle("Attendance & Net Pay", 310, attendanceX, attendanceWidth);
+  tableHeader(["Item", "Amount", "YTD"], attendanceWidths, attendanceX, 320);
+  tableRows(attendanceRows, attendanceWidths, attendanceX, 340);
+
+  sectionTitle("Summary", 430);
+  const summaryRows = [
+    ["Gross Earnings", currency(slip.grossEarnings), currency(slip.grossEarnings)],
+    ["Total Deductions", currency(slip.totalDeductions), currency(slip.totalDeductions)],
+    Object.assign(["Net Pay", currency(slip.netPay), currency(slip.netPay)], { total: true }),
+  ];
+  tableHeader(["Description", "Amount", "YTD"], [300, 95, 100], 50, 440);
+  tableRows(summaryRows, [300, 95, 100], 50, 460, 16);
+
+  doc.roundedRect(50, 535, 495, 34, 4).fillAndStroke("#eef8f6", "#d4eee9");
+  cellText("NET PAY", 65, 546, { bold: true, size: 10, width: 130 });
+  cellText(currency(slip.netPay), 395, 545, { bold: true, size: 13, width: 130, align: "right" });
+  line(50, 705, 545, "#d8dde6");
+  cellText(settings.note, 80, 724, { size: 7, color: "#777", width: 435, align: "center" });
+}
+
 async function notifyHrManagers(db, notification, excludeUserId = "") {
   const users = await db.collection("users").find({ blacklisted: { $ne: true } }).toArray();
   const roles = await db.collection("roles").find({}).toArray();
@@ -3584,6 +3876,213 @@ app.get("/hr/leave-requests", async (req, res) => {
   } catch (error) {
     console.error("HR leave load error:", error);
     res.status(500).json({ error: "Could not load leave requests" });
+  }
+});
+
+app.get("/hr/salary-slips/meta", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-salary-slips")) return res.status(403).json({ error: "Salary slip access required" });
+    const db = await connectAuthDb();
+    const canEditCompany = Boolean(req.authUser?.isSuperAdmin);
+    const targetUserId = canEditCompany && ObjectId.isValid(req.query?.userId || "") ? String(req.query.userId) : req.authUser.id;
+    const targetUser = await db.collection("users").findOne({ _id: new ObjectId(targetUserId) });
+    if (!targetUser) return res.status(404).json({ error: "Employee not found" });
+    const profile = await db.collection("hrSalaryProfiles").findOne({ userId: new ObjectId(targetUserId) });
+    const safeTarget = sanitizeUser(targetUser, null);
+    res.json({
+      canEditCompany,
+      company: await getSalaryCompanySettings(db),
+      profile: profile || {
+        userId: targetUserId,
+        employeeName: safeTarget.displayName || safeTarget.username || "",
+        designation: safeTarget.designation || "",
+        employeeCode: safeTarget.employeeCode || "",
+        joiningDate: safeTarget.joiningDate || "",
+        uan: "",
+        basic: 0,
+        paidDays: 30,
+        lopDays: 0,
+        earnings: [],
+        deductions: [],
+      },
+    });
+  } catch (error) {
+    console.error("Salary meta error:", error);
+    res.status(500).json({ error: "Could not load salary slip data" });
+  }
+});
+
+app.put("/hr/salary-slips/company", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin) return res.status(403).json({ error: "Only super admin can edit company salary settings" });
+    const db = await connectAuthDb();
+    const company = {
+      companyName: projectText(req.body?.companyName, 100) || "UIPL Docs",
+      companyLocation: projectText(req.body?.companyLocation, 140) || "India",
+      companyLogo: String(req.body?.companyLogo || "").slice(0, 600000),
+      pfAccountNumber: projectText(req.body?.pfAccountNumber, 80),
+      note: projectText(req.body?.note, 220) || "This document has been automatically generated; therefore, a signature is not required.",
+      updatedAt: new Date(),
+    };
+    await db.collection("hrSettings").updateOne({ _id: "salary-company" }, { $set: company }, { upsert: true });
+    res.json({ success: true, company });
+  } catch (error) {
+    console.error("Salary company settings error:", error);
+    res.status(500).json({ error: "Could not save company settings" });
+  }
+});
+
+app.post("/hr/salary-slips/generate", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-salary-slips")) return res.status(403).json({ error: "Salary slip access required" });
+    const db = await connectAuthDb();
+    const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
+    const targetUserId = canManageHr && ObjectId.isValid(req.body?.userId || "") ? String(req.body.userId) : req.authUser.id;
+    const targetUser = await db.collection("users").findOne({ _id: new ObjectId(targetUserId) });
+    if (!targetUser) return res.status(404).json({ error: "Employee not found" });
+    const safeTarget = sanitizeUser(targetUser, null);
+    const storedProfile = await db.collection("hrSalaryProfiles").findOne({ userId: new ObjectId(targetUserId) });
+    const source = canManageHr ? (req.body || {}) : (storedProfile || {});
+    const month = salaryMonth(req.body?.month);
+    const payDate = canManageHr ? salaryDate(req.body?.payDate) : salaryMonthEndDate(month);
+    if (!month) return res.status(400).json({ error: "Select salary month" });
+    if (!payDate) return res.status(400).json({ error: "Pay date is required" });
+    if (!canManageHr && !storedProfile) return res.status(400).json({ error: "Salary details are not configured yet. Please contact HR." });
+    const extraEarnings = salaryComponents(source?.earnings || []).filter((item) => !/^basic(\s+salary)?$/i.test(item.label.trim()));
+    const earnings = [
+      { label: "Basic Salary", amount: moneyNumber(source?.basic) },
+      ...extraEarnings,
+    ].filter((item) => item.amount > 0);
+    const deductions = salaryComponents(source?.deductions || []);
+    const profile = {
+      userId: new ObjectId(targetUserId),
+      employeeName: projectText(source?.employeeName, 100) || safeTarget.displayName || safeTarget.username || "Employee",
+      designation: projectText(source?.designation, 100) || safeTarget.designation || "",
+      employeeCode: projectText(source?.employeeCode, 50) || safeTarget.employeeCode || "",
+      joiningDate: salaryDate(source?.joiningDate) || salaryDate(safeTarget.joiningDate),
+      uan: projectText(source?.uan, 40),
+      basic: moneyNumber(source?.basic),
+      paidDays: Math.max(0, Math.round(moneyNumber(source?.paidDays || 30))),
+      lopDays: Math.max(0, Math.round(moneyNumber(source?.lopDays || 0))),
+      earnings: extraEarnings,
+      deductions,
+      updatedAt: new Date(),
+    };
+    if (!profile.joiningDate) return res.status(400).json({ error: "Joining date is required" });
+    if (salaryMonthBeforeJoining(month, profile.joiningDate)) return res.status(400).json({ error: "Salary slip cannot be generated before employee joining date" });
+    if (!earnings.length) return res.status(400).json({ error: "Add at least one earning amount" });
+    const duplicate = await db.collection("hrSalarySlips").findOne({ userId: profile.userId, month });
+    if (duplicate) return res.status(409).json({ error: "Salary slip already exists for this employee and month" });
+    const grossEarnings = earnings.reduce((sum, item) => sum + item.amount, 0);
+    const totalDeductions = deductions.reduce((sum, item) => sum + item.amount, 0);
+    const slip = {
+      ...profile,
+      month,
+      payDate,
+      earnings,
+      grossEarnings,
+      totalDeductions,
+      netPay: Math.max(0, grossEarnings - totalDeductions),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    if (canManageHr) await db.collection("hrSalaryProfiles").updateOne({ userId: profile.userId }, { $set: profile }, { upsert: true });
+    const result = await db.collection("hrSalarySlips").insertOne(slip);
+    slip._id = result.insertedId;
+    addActivityLog({ req, action: "Generated salary slip", target: `${slip.employeeName} · ${monthLabel(month)}`, details: { netPay: slip.netPay } });
+    res.json({ success: true, salarySlip: serializeSalarySlip(slip), profile });
+  } catch (error) {
+    console.error("Salary slip generate error:", error);
+    res.status(500).json({ error: "Could not generate salary slip" });
+  }
+});
+
+app.get("/hr/salary-slips/:id/pdf", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-salary-slips")) return res.status(403).json({ error: "Salary slip access required" });
+    const db = await connectAuthDb();
+    const slip = await db.collection("hrSalarySlips").findOne({ _id: new ObjectId(req.params.id) });
+    if (!slip) return res.status(404).json({ error: "Salary slip not found" });
+    if (String(slip.userId) !== String(req.authUser.id) && !req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "Salary slip access denied" });
+    const settings = await getSalaryCompanySettings(db);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="salary-slip-${slip.month || "month"}.pdf"`);
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    doc.pipe(res);
+    drawSalarySlipPdf(doc, slip, settings);
+    doc.end();
+  } catch (error) {
+    console.error("Salary slip PDF error:", error);
+    res.status(500).json({ error: "Could not generate salary slip PDF" });
+  }
+});
+
+app.get("/hr/salary-slips/:id", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-salary-slips")) return res.status(403).json({ error: "Salary slip access required" });
+    const db = await connectAuthDb();
+    const slip = await db.collection("hrSalarySlips").findOne({ _id: new ObjectId(req.params.id) });
+    if (!slip) return res.status(404).json({ error: "Salary slip not found" });
+    if (String(slip.userId) !== String(req.authUser.id) && !req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "Salary slip access denied" });
+    res.json({ salarySlip: { ...slip, id: String(slip._id), userId: String(slip.userId), _id: undefined } });
+  } catch (error) {
+    console.error("Salary slip detail error:", error);
+    res.status(500).json({ error: "Could not load salary slip" });
+  }
+});
+
+app.patch("/hr/salary-slips/:id", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
+    const db = await connectAuthDb();
+    const existing = await db.collection("hrSalarySlips").findOne({ _id: new ObjectId(req.params.id) });
+    if (!existing) return res.status(404).json({ error: "Salary slip not found" });
+    const month = salaryMonth(req.body?.month);
+    const payDate = salaryDate(req.body?.payDate);
+    const extraEarnings = salaryComponents(req.body?.earnings || []).filter((item) => !/^basic(\s+salary)?$/i.test(item.label.trim()));
+    const earnings = [{ label: "Basic Salary", amount: moneyNumber(req.body?.basic) }, ...extraEarnings].filter((item) => item.amount > 0);
+    const deductions = salaryComponents(req.body?.deductions || []);
+    const update = {
+      employeeName: projectText(req.body?.employeeName, 100) || existing.employeeName,
+      designation: projectText(req.body?.designation, 100),
+      employeeCode: projectText(req.body?.employeeCode, 50),
+      joiningDate: salaryDate(req.body?.joiningDate) || existing.joiningDate,
+      uan: projectText(req.body?.uan, 40),
+      basic: moneyNumber(req.body?.basic),
+      paidDays: Math.max(0, Math.round(moneyNumber(req.body?.paidDays || 30))),
+      lopDays: Math.max(0, Math.round(moneyNumber(req.body?.lopDays || 0))),
+      month: month || existing.month,
+      payDate: payDate || existing.payDate,
+      earnings,
+      deductions,
+      grossEarnings: earnings.reduce((sum, item) => sum + item.amount, 0),
+      totalDeductions: deductions.reduce((sum, item) => sum + item.amount, 0),
+      updatedAt: new Date(),
+    };
+    const duplicate = await db.collection("hrSalarySlips").findOne({ _id: { $ne: existing._id }, userId: existing.userId, month: update.month });
+    if (duplicate) return res.status(409).json({ error: "Salary slip already exists for this employee and month" });
+    update.netPay = Math.max(0, update.grossEarnings - update.totalDeductions);
+    await db.collection("hrSalarySlips").updateOne({ _id: existing._id }, { $set: update });
+    const salarySlip = serializeSalarySlip({ ...existing, ...update });
+    addActivityLog({ req, action: "Updated salary slip", target: `${update.employeeName} · ${monthLabel(update.month)}`, details: { netPay: update.netPay } });
+    res.json({ success: true, salarySlip });
+  } catch (error) {
+    console.error("Salary slip update error:", error);
+    res.status(500).json({ error: "Could not update salary slip" });
+  }
+});
+
+app.delete("/hr/salary-slips/:id", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
+    const db = await connectAuthDb();
+    const result = await db.collection("hrSalarySlips").deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!result.deletedCount) return res.status(404).json({ error: "Salary slip not found" });
+    addActivityLog({ req, action: "Deleted salary slip", target: req.params.id });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Salary slip delete error:", error);
+    res.status(500).json({ error: "Could not delete salary slip" });
   }
 });
 
@@ -3633,6 +4132,7 @@ app.post("/hr/leave-requests", async (req, res) => {
       title: "New leave request",
       message: `${doc.employeeName} requested ${doc.days} day${doc.days === 1 ? "" : "s"} leave from ${doc.startDate} to ${doc.endDate}.`,
       type: "hr-leave",
+      leaveRequestId: String(result.insertedId),
     }, req.authUser.id);
     addActivityLog({ req, action: "Created leave request", target: `${doc.employeeName} · ${doc.startDate} to ${doc.endDate}`, details: { leaveType, days: doc.days } });
     res.json({ success: true, leaveRequest: serializeLeaveRequest(doc) });
@@ -3652,6 +4152,13 @@ app.delete("/hr/leave-requests/:id", async (req, res) => {
     if (String(existing.userId) !== String(req.authUser.id)) return res.status(403).json({ error: "Only the applicant can delete this leave request" });
     if (existing.status !== "pending") return res.status(400).json({ error: "Only pending leave requests can be deleted" });
     await db.collection("hrLeaveRequests").deleteOne({ _id });
+    notifications = notifications.filter((item) => {
+      if (item.type !== "hr-leave") return true;
+      if (item.leaveRequestId === String(_id)) return false;
+      const message = String(item.message || "");
+      return !(message.includes(existing.employeeName || "") && message.includes(existing.startDate || "") && message.includes(existing.endDate || ""));
+    });
+    saveNotifications();
     addActivityLog({ req, action: "Deleted leave request", target: `${existing.employeeName} · ${existing.startDate} to ${existing.endDate}`, details: { leaveType: existing.leaveType, days: existing.days } });
     res.json({ success: true, id: String(_id) });
   } catch (error) {
@@ -3909,6 +4416,7 @@ const reportsPath = path.join(dataDir, "reports.json");
 const notificationsPath = path.join(dataDir, "notifications.json");
 const activityLogsPath = path.join(dataDir, "activity-logs.json");
 const projectDashboardPath = path.join(dataDir, "project-dashboard.json");
+const projectChatClients = new Map();
 const dmrHistoryPath = path.join(dataDir, "dmr-history.json");
 const mrnHistoryPath = path.join(dataDir, "mrn-history.json");
 const dmrSettingsPath = path.join(dataDir, "dmr-settings.json");
@@ -4624,6 +5132,7 @@ function notifyUsers(userIds, notification) {
       title: notification.title,
       message: notification.message,
       type: notification.type || "folder",
+      leaveRequestId: notification.leaveRequestId || null,
       createdAt: new Date().toISOString(),
       readAt: null,
     });
@@ -10241,6 +10750,7 @@ function normalizeProjectInput(body, existing = {}) {
     phases,
     tasks: looseTasks,
     projectDocuments: documentsList,
+    projectChat: Array.isArray(existing.projectChat) ? existing.projectChat : [],
     assignments,
     projectAccess,
     projectActivity: Array.isArray(existing.projectActivity) ? existing.projectActivity : [],
@@ -10647,6 +11157,158 @@ app.get("/project-dashboard/projects/:id/activity", async (req, res) => {
   if (!project) return res.status(404).json({ error: "Project not found" });
   if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
   res.json({ activity: (project.projectActivity || []).slice(0, Math.min(300, Math.max(1, Number(req.query.limit) || 120))) });
+});
+
+function projectChatPayload(project = {}) {
+  return (project.projectChat || []).slice(-200);
+}
+
+function broadcastProjectChat(projectId, payload) {
+  const clients = projectChatClients.get(projectId);
+  if (!clients?.size) return;
+  const data = `event: ${payload.event || "message"}\ndata: ${JSON.stringify(payload.data || payload)}\n\n`;
+  for (const client of clients) client.write(data);
+}
+
+function projectReferenceOptions(project = {}) {
+  const phaseItems = (project.phases || []).map((phase) => ({
+    id: phase.id,
+    type: "phase",
+    title: phase.name || "Untitled phase",
+    meta: phase.dueDate || phase.startDate || "",
+  }));
+  const taskItems = projectManualTasks(project).map((task) => ({
+    id: task.id,
+    type: "task",
+    title: task.title || "Untitled task",
+    meta: task.phaseName || task.priority || "",
+  }));
+  return [...phaseItems, ...taskItems];
+}
+
+app.get("/project-dashboard/projects/:id/chat", async (req, res) => {
+  const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+  if (!project) return res.status(404).json({ error: "Project not found" });
+  if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
+  res.json({
+    messages: projectChatPayload(project),
+    references: projectReferenceOptions(scopedProjectForUser(project, req)),
+  });
+});
+
+app.get("/project-dashboard/projects/:id/chat/stream", async (req, res) => {
+  const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+  if (!project) return res.status(404).json({ error: "Project not found" });
+  if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`);
+  const clients = projectChatClients.get(project.id) || new Set();
+  clients.add(res);
+  projectChatClients.set(project.id, clients);
+  req.on("close", () => {
+    clients.delete(res);
+    if (!clients.size) projectChatClients.delete(project.id);
+  });
+});
+
+app.post("/project-dashboard/projects/:id/chat", (req, res) => {
+  const index = projectDashboardConfig.projects.findIndex((item) => item.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: "Project not found" });
+  const project = projectDashboardConfig.projects[index];
+  if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
+  const text = projectText(req.body?.text).slice(0, 4000);
+  const references = Array.isArray(req.body?.references) ? req.body.references.slice(0, 5) : [];
+  const mentions = Array.isArray(req.body?.mentions)
+    ? req.body.mentions.slice(0, 10).map((mention) => ({
+        id: projectText(mention.id).slice(0, 80),
+        name: projectText(mention.name).slice(0, 120),
+        username: projectText(mention.username).slice(0, 80),
+      })).filter((mention) => mention.id && mention.name)
+    : [];
+  const attachments = Array.isArray(req.body?.attachments)
+    ? req.body.attachments.slice(0, 4).map((file) => ({
+        id: crypto.randomUUID(),
+        name: projectText(file.name || "Attachment").slice(0, 120),
+        type: projectText(file.type || "file").slice(0, 80),
+        size: Math.max(0, Number(file.size) || 0),
+        dataUrl: /^data:/i.test(String(file.dataUrl || "")) ? String(file.dataUrl) : "",
+      })).filter((file) => file.dataUrl)
+    : [];
+  if (!text && !references.length && !mentions.length && !attachments.length) return res.status(400).json({ error: "Message cannot be empty" });
+  const replySource = projectChatPayload(project).find((item) => item.id === projectText(req.body?.replyToId));
+  const message = {
+    id: crypto.randomUUID(),
+    text,
+    replyTo: replySource ? {
+      id: replySource.id,
+      userName: replySource.userName,
+      text: projectText(replySource.text).slice(0, 180),
+      attachmentName: replySource.attachments?.[0]?.name || "",
+    } : null,
+    references: references.map((ref) => ({
+      id: projectText(ref.id).slice(0, 80),
+      type: projectText(ref.type).slice(0, 20),
+      title: projectText(ref.title).slice(0, 180),
+      meta: projectText(ref.meta).slice(0, 180),
+    })),
+    mentions,
+    attachments,
+    userId: req.authUser?.id || null,
+    userName: req.authUser?.displayName || req.authUser?.username || "User",
+    createdAt: new Date().toISOString(),
+  };
+  project.projectChat = [...(project.projectChat || []), message].slice(-500);
+  project.projectActivity = [
+    projectActivityEntry(req, "Chat message added", project.name, { type: "chat", parentId: "chat", parentLabel: "Project chat", messageId: message.id }),
+    ...(project.projectActivity || []),
+  ].slice(0, 300);
+  saveProjectDashboardConfig();
+  broadcastProjectChat(project.id, { event: "message", data: message });
+  res.json({ success: true, message });
+});
+
+app.patch("/project-dashboard/projects/:id/chat/:messageId", (req, res) => {
+  const index = projectDashboardConfig.projects.findIndex((item) => item.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: "Project not found" });
+  const project = projectDashboardConfig.projects[index];
+  if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
+  const message = (project.projectChat || []).find((item) => item.id === req.params.messageId);
+  if (!message) return res.status(404).json({ error: "Message not found" });
+  if (message.deletedAt) return res.status(400).json({ error: "Deleted message cannot be edited" });
+  const canModify = String(message.userId || "") === String(req.authUser?.id || "") || req.authUser?.isSuperAdmin || canEditScopedProject(project, req);
+  if (!canModify) return res.status(403).json({ error: "Only the sender or project admin can edit this message" });
+  const text = projectText(req.body?.text).slice(0, 4000);
+  if (!text) return res.status(400).json({ error: "Message cannot be empty" });
+  message.text = text;
+  message.editedAt = new Date().toISOString();
+  saveProjectDashboardConfig();
+  broadcastProjectChat(project.id, { event: "message-updated", data: message });
+  res.json({ success: true, message });
+});
+
+app.delete("/project-dashboard/projects/:id/chat/:messageId", (req, res) => {
+  const index = projectDashboardConfig.projects.findIndex((item) => item.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: "Project not found" });
+  const project = projectDashboardConfig.projects[index];
+  if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
+  const message = (project.projectChat || []).find((item) => item.id === req.params.messageId);
+  if (!message) return res.status(404).json({ error: "Message not found" });
+  const canModify = String(message.userId || "") === String(req.authUser?.id || "") || req.authUser?.isSuperAdmin || canEditScopedProject(project, req);
+  if (!canModify) return res.status(403).json({ error: "Only the sender or project admin can delete this message" });
+  message.text = "";
+  message.references = [];
+  message.mentions = [];
+  message.attachments = [];
+  message.deletedAt = new Date().toISOString();
+  message.deletedBy = req.authUser?.displayName || req.authUser?.username || "User";
+  saveProjectDashboardConfig();
+  broadcastProjectChat(project.id, { event: "message-updated", data: message });
+  res.json({ success: true, message });
 });
 
 app.post("/project-dashboard/daily-digest", async (req, res) => {

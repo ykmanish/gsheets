@@ -8,7 +8,7 @@ function normalizePhone(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
-function textFromMessage(message = {}) {
+  function textFromMessage(message = {}) {
   if (message.text?.body) return message.text.body;
   if (message.button?.text) return message.button.text;
   if (message.interactive?.button_reply?.title) return message.interactive.button_reply.title;
@@ -37,6 +37,15 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
       console.error("Could not load WhatsApp data:", error.message);
       state = { ...DEFAULT_STATE };
     }
+  }
+
+  function replyIdFromMessage(message = {}) {
+    return message.button?.payload
+      || message.button?.text
+      || message.interactive?.button_reply?.id
+      || message.interactive?.button_reply?.title
+      || message.interactive?.list_reply?.id
+      || "";
   }
 
   function save() {
@@ -138,6 +147,7 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
       throw error;
     }
 
+    const received = [];
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
         const value = change.value || {};
@@ -147,19 +157,21 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
           const profileName = profileMap.get(from) || null;
           addOrUpdateContact({ phone: from, profileName, source: "whatsapp" });
           const media = message.image || message.document || message.audio || message.video || message.sticker || null;
-          storeMessage({
+          const record = storeMessage({
             wamid: message.id,
             direction: "inbound",
             from,
             to: normalizePhone(phoneNumberId),
             type: message.type || "text",
             text: textFromMessage(message),
+            replyId: replyIdFromMessage(message),
             mediaId: media?.id || null,
             mediaMimeType: media?.mime_type || null,
             mediaFilename: message.document?.filename || null,
             timestamp: message.timestamp ? new Date(Number(message.timestamp) * 1000).toISOString() : new Date().toISOString(),
             status: "received",
           });
+          received.push(record);
         }
         for (const status of value.statuses || []) {
           const record = state.messages.find((message) => message.wamid === status.id);
@@ -172,13 +184,14 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
       }
     }
     save();
+    return { received };
   }
 
   function templateParameter(text) {
     return { type: "text", text: String(text ?? "") };
   }
 
-  async function sendMessage({ to, text, templateName, language = "en_US", templateParams = [], buttonUrlParam = "" }, actor = null) {
+  async function sendMessage({ to, text, templateName, language = "en_US", templateParams = [], buttonUrlParam = "", templateButtons = [] }, actor = null) {
     const phone = normalizePhone(to);
     if (!phone) throw new Error("A valid recipient phone number is required");
     if (!text?.trim() && !templateName) throw new Error("Message text or template is required");
@@ -189,6 +202,18 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
     }
     if (templateName && buttonUrlParam) {
       components.push({ type: "button", sub_type: "url", index: "0", parameters: [templateParameter(buttonUrlParam)] });
+    }
+    if (templateName && Array.isArray(templateButtons)) {
+      templateButtons.forEach((button, index) => {
+        const payload = String(button?.payload || button?.id || button?.text || "").trim();
+        if (!payload) return;
+        components.push({
+          type: "button",
+          sub_type: "quick_reply",
+          index: String(button.index ?? index),
+          parameters: [{ type: "payload", payload }],
+        });
+      });
     }
     const payload = templateName
       ? {

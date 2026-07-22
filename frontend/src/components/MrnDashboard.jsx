@@ -15,6 +15,7 @@ import {
   IndianRupee,
   Loader2,
   Maximize2,
+  MessageSquare,
   Minimize2,
   PackageCheck,
   Pencil,
@@ -266,6 +267,238 @@ function FileButton({ darkMode, href, label }) {
   );
 }
 
+function MrnWhatsappAutomationDrawer({ darkMode, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+  const [contacts, setContacts] = useState([]);
+  const [settings, setSettings] = useState({
+    enabled: true,
+    approvalContactIds: [],
+    concernContactIds: [],
+    templates: {
+      actionRequest: "mrn_action_request",
+      approved: "mrn_approved_notification",
+      declined: "mrn_declined_notification",
+      comment: "mrn_comment_notification",
+    },
+    languages: {
+      actionRequest: "en",
+      approved: "en",
+      declined: "en",
+      comment: "en",
+    },
+  });
+  const muted = darkMode ? "text-white/45" : "text-black/48";
+  const panel = darkMode ? "border-white/10 bg-[#181a20]" : "border-black/[0.07] bg-white";
+  const inputClass = `h-10 w-full rounded-xl border px-3 text-sm outline-none transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white focus:border-[#d8f36a]" : "border-black/10 bg-white text-[#171714] focus:border-[#72cf50]"}`;
+  const lastRun = settings.lastRun || null;
+  const contactInitials = (value = "") =>
+    String(value)
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase() || "WA";
+
+  const loadSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await api("/mrn-dashboard/whatsapp/settings");
+      setContacts(result.contacts || []);
+      setSettings((current) => ({
+        ...current,
+        ...(result.settings || {}),
+        templates: { ...current.templates, ...(result.settings?.templates || {}) },
+        languages: { ...current.languages, ...(result.settings?.languages || {}) },
+      }));
+    } catch (error) {
+      toast.error(error.message || "Could not load MRN WhatsApp settings");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
+
+  function toggleContact(field, id) {
+    setSettings((current) => {
+      const list = current[field] || [];
+      return { ...current, [field]: list.includes(id) ? list.filter((item) => item !== id) : [...list, id] };
+    });
+  }
+
+  async function saveSettings() {
+    try {
+      setSaving(true);
+      const result = await api("/mrn-dashboard/whatsapp/settings", { method: "PATCH", body: JSON.stringify(settings) });
+      setSettings((current) => ({ ...current, ...(result.settings || {}) }));
+      toast.success("MRN WhatsApp automation saved");
+    } catch (error) {
+      toast.error(error.message || "Could not save WhatsApp automation");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function sendTest(event = "actionRequest") {
+    try {
+      setSendingTest(true);
+      const result = await api("/mrn-dashboard/whatsapp/send-test", {
+        method: "POST",
+        body: JSON.stringify({ event, settings }),
+      });
+      const run = result.result?.lastRun || null;
+      setSettings((current) => ({ ...current, lastRun: run || current.lastRun }));
+      if (result.result?.sent) {
+        toast.success(`${event === "actionRequest" ? "Action request" : event} sent to ${result.result.sent} contact${result.result.sent === 1 ? "" : "s"}`);
+      } else {
+        toast.error(result.result?.lastRun?.reason || result.result?.status || "Test did not send");
+      }
+    } catch (error) {
+      if (error.lastRun) setSettings((current) => ({ ...current, lastRun: error.lastRun }));
+      toast.error(error.message || "Could not send MRN WhatsApp test");
+    } finally {
+      setSendingTest(false);
+      void loadSettings();
+    }
+  }
+
+  const ContactSection = ({ title, description, field }) => (
+    <section className={`rounded-2xl border p-4 ${panel}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold">{title}</h3>
+          <p className={`mt-1 text-xs leading-5 ${muted}`}>{description}</p>
+        </div>
+        <span className="rounded-full bg-[#eafbdc] px-3 py-1 text-[11px] font-bold text-[#3f7d16]">{(settings[field] || []).length} selected</span>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
+        {contacts.map((contact) => {
+          const checked = (settings[field] || []).includes(contact.id);
+          return (
+            <button key={contact.id} type="button" onClick={() => toggleContact(field, contact.id)} className={`flex items-center gap-3 rounded-xl p-3 text-left transition ${checked ? "bg-[#eafbdc] text-[#2f641b]" : darkMode ? "bg-white/[0.05] hover:bg-white/[0.08]" : "bg-[#f5f6f3] hover:bg-[#eef2ea]"}`}>
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold ${checked ? "bg-[#65bf45] text-white" : "bg-white text-[#5f665b]"}`}>{contactInitials(contact.name || contact.phone)}</span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{contact.name || contact.phone}</span><span className="block truncate text-[11px] opacity-70">{contact.phone}</span></span>
+              <span className={`h-5 w-5 rounded-md border ${checked ? "border-[#65bf45] bg-[#65bf45]" : "border-[#b8bfb4]"}`} />
+            </button>
+          );
+        })}
+        {!contacts.length && <p className={`rounded-xl p-4 text-sm ${muted}`}>No WhatsApp contacts found. Add contacts in the WhatsApp module first.</p>}
+      </div>
+    </section>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <aside className={`mrn-detail-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
+        <header className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
+          <span><b>MRN</b> - WhatsApp automation</span>
+          <div className="flex items-center gap-2">
+            <button onClick={saveSettings} disabled={saving || loading} className="flex h-8 items-center gap-1.5 rounded-full bg-[#20231f] px-3 font-semibold text-white transition hover:bg-[#30342e] disabled:opacity-50">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Save</button>
+            <button onClick={onClose} className="px-1 font-semibold text-[#3f7d16]">Close</button>
+          </div>
+        </header>
+        <div className="grid min-h-0 flex-1 md:grid-cols-[290px_minmax(0,1fr)]">
+          <aside className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0 md:border-r ${darkMode ? "border-white/10" : "border-black/10"}`}>
+            <div className="flex gap-2"><span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#3f7d16]">WHATSAPP</span><span className="rounded bg-black/5 px-2 py-1 text-[10px] font-bold dark:bg-white/10">MRN</span></div>
+            <h2 className="mt-4 text-2xl font-bold">Automation flow</h2>
+            <p className={`mt-2 text-xs leading-5 ${muted}`}>New MRNs go to approval parties. Approval, decline and comment outcomes go to concern department recipients.</p>
+            <label className={`mt-5 flex items-center justify-between rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f6f3]"}`}><span><span className="block text-sm font-bold">Enable automation</span><span className={`text-[11px] ${muted}`}>Send approved templates automatically</span></span><input type="checkbox" checked={settings.enabled !== false} onChange={(event) => setSettings((current) => ({ ...current, enabled: event.target.checked }))} /></label>
+            <button
+              type="button"
+              onClick={() => sendTest("actionRequest")}
+              disabled={loading || sendingTest || !(settings.approvalContactIds || []).length}
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#89ed3f] text-sm font-bold text-black transition hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {sendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+              Send test
+            </button>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {[
+                ["approved", "Approve"],
+                ["declined", "Decline"],
+                ["comment", "Comment"],
+              ].map(([event, label]) => (
+                <button
+                  key={event}
+                  type="button"
+                  onClick={() => sendTest(event)}
+                  disabled={loading || sendingTest || !(settings.concernContactIds || []).length}
+                  className={`h-9 rounded-xl text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-45 ${
+                    event === "approved"
+                      ? "bg-[#eafbdc] text-[#3f7d16] hover:bg-[#dff7cc]"
+                      : event === "declined"
+                        ? "bg-[#ffe4e8] text-[#b4233f] hover:bg-[#ffd8df]"
+                        : "bg-[#e9f0ff] text-[#3159a6] hover:bg-[#dee8ff]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className={`mt-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f6f3]"}`}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-bold">Last run</span>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                  lastRun?.status === "sent"
+                    ? "bg-[#eafbdc] text-[#3f7d16]"
+                    : lastRun?.status === "failed"
+                      ? "bg-[#ffe4e8] text-[#b4233f]"
+                      : "bg-black/5 text-[#687066] dark:bg-white/10 dark:text-white/70"
+                }`}>
+                  {lastRun?.status || "Not run"}
+                </span>
+              </div>
+              {lastRun ? (
+                <div className={`mt-3 space-y-1 text-[11px] leading-5 ${muted}`}>
+                  <p>{formatMrnDateTime(lastRun.at).date} {formatMrnDateTime(lastRun.at).time}</p>
+                  <p>{lastRun.event || "run"} · {lastRun.sent || 0} sent · {lastRun.failed || 0} failed · {lastRun.recipients || 0} recipients</p>
+                  <p className="break-words">MRN: {lastRun.mrnNo || "-"} · Template: {lastRun.templateName || "-"}{lastRun.language ? ` · ${lastRun.language}` : ""}</p>
+                  {lastRun.reason && <p className="text-[#b4233f]">{lastRun.reason}</p>}
+                  {!!lastRun.results?.length && (
+                    <div className="mt-2 space-y-1">
+                      {lastRun.results.slice(0, 3).map((item, index) => (
+                        <p key={`${item.phone || "recipient"}-${index}`} className={item.status === "sent" ? "text-[#3f7d16]" : "text-[#b4233f]"}>
+                          {item.phone || "Recipient"}: {item.status}{item.reason ? ` - ${item.reason}` : ""}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className={`mt-2 text-[11px] ${muted}`}>No send attempt recorded yet.</p>
+              )}
+            </div>
+          </aside>
+          <main className={`min-h-0 overflow-y-auto p-5 ${darkMode ? "bg-[#101216]" : "bg-[#f7f8f5]"}`}>
+            {loading ? (
+              <div className={`rounded-2xl border px-6 py-16 text-center ${panel}`}><Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" /><p className={`mt-3 text-sm ${muted}`}>Loading WhatsApp contacts...</p></div>
+            ) : (
+              <div className="space-y-5">
+                <section className={`rounded-2xl border p-4 ${panel}`}>
+                  <h3 className="text-sm font-bold">Approved template names</h3>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {[["actionRequest", "New MRN action request"], ["approved", "MRN approved outcome"], ["declined", "MRN declined outcome"], ["comment", "MRN comment outcome"]].map(([key, label]) => (
+                      <div key={key} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_86px]">
+                        <label className="block"><span className={`mb-1 block text-[11px] font-semibold ${muted}`}>{label}</span><input value={settings.templates?.[key] || ""} onChange={(event) => setSettings((current) => ({ ...current, templates: { ...current.templates, [key]: event.target.value } }))} className={inputClass} /></label>
+                        <label className="block"><span className={`mb-1 block text-[11px] font-semibold ${muted}`}>Lang</span><input value={settings.languages?.[key] || "en"} onChange={(event) => setSettings((current) => ({ ...current, languages: { ...current.languages, [key]: event.target.value } }))} className={inputClass} /></label>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+                <ContactSection title="Approval / action parties" description="These numbers receive the new MRN action request with approve, decline and comment buttons." field="approvalContactIds" />
+                <ContactSection title="Concern department" description="These numbers receive approval, decline and comment outcomes." field="concernContactIds" />
+              </div>
+            )}
+          </main>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 export default function MrnDashboard({ darkMode }) {
   const [startDate, setStartDate] = useState(() => localDateKey(-6));
   const [endDate, setEndDate] = useState(() => localDateKey());
@@ -276,6 +509,7 @@ export default function MrnDashboard({ darkMode }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [sheetLink, setSheetLink] = useState("");
   const [folderLink, setFolderLink] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -636,6 +870,14 @@ export default function MrnDashboard({ darkMode }) {
             >
               <Plus className="h-4 w-4" /> Add MRN
             </button>
+            {canManage && (
+              <button
+                onClick={() => setWhatsappOpen(true)}
+                className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}
+              >
+                <MessageSquare className="h-4 w-4" /> WhatsApp automation
+              </button>
+            )}
             {canManage && (
               <button
                 onClick={() => setSettingsOpen(true)}
@@ -1679,6 +1921,10 @@ export default function MrnDashboard({ darkMode }) {
             </div>
           </div>
         </div>
+      )}
+
+      {whatsappOpen && (
+        <MrnWhatsappAutomationDrawer darkMode={darkMode} onClose={() => setWhatsappOpen(false)} />
       )}
 
       {addOpen && (

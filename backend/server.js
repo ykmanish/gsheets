@@ -495,21 +495,44 @@ const whatsappService = createWhatsAppService({
   graphVersion: process.env.META_GRAPH_API_VERSION || "v23.0",
 });
 
-app.get("/webhooks/whatsapp", (req, res) => {
+function verifyWhatsAppWebhook(req, res) {
   const challenge = whatsappService.verifyWebhook(req.query);
   if (challenge === null) return res.status(403).send("Webhook verification failed");
   return res.status(200).send(challenge);
-});
+}
 
-app.post("/webhooks/whatsapp", (req, res) => {
+function receiveWhatsAppWebhook(req, res) {
   try {
-    whatsappService.handleWebhook(req.body, req.rawBody, req.headers["x-hub-signature-256"]);
+    const result = whatsappService.handleWebhook(req.body, req.rawBody, req.headers["x-hub-signature-256"]);
+    if (result?.received?.length) {
+      addActivityLog({
+        action: "Received WhatsApp webhook",
+        target: `${result.received.length} message${result.received.length === 1 ? "" : "s"}`,
+        category: "whatsapp",
+        details: {
+          messages: result.received.map((message) => ({
+            from: normalizePhone(message.from),
+            type: message.type,
+            text: message.text,
+            replyId: message.replyId,
+          })),
+        },
+      });
+    }
+    for (const message of result?.received || []) {
+      void handleMrnWhatsappReply(message).catch((error) => console.error("MRN WhatsApp reply error:", error.message));
+    }
     res.sendStatus(200);
   } catch (error) {
     console.error("WhatsApp webhook error:", error.message);
     res.status(error.status || 500).json({ error: error.message });
   }
-});
+}
+
+app.get("/webhooks/whatsapp", verifyWhatsAppWebhook);
+app.post("/webhooks/whatsapp", receiveWhatsAppWebhook);
+app.get("/api/webhooks/whatsapp", verifyWhatsAppWebhook);
+app.post("/api/webhooks/whatsapp", receiveWhatsAppWebhook);
 
 app.get("/health", (req, res) => {
   res.json({ ok: true, status: "connected", timestamp: new Date().toISOString() });
@@ -12240,6 +12263,303 @@ app.post("/dmr-dashboard/reminders/send-now", requireSuperAdmin, async (req, res
   }
 });
 
+const MRN_WHATSAPP_SETTINGS_ID = "mrn-whatsapp-automation-settings";
+const MRN_WHATSAPP_DEFAULTS = {
+  enabled: true,
+  approvalContactIds: [],
+  concernContactIds: [],
+  templates: {
+    actionRequest: "mrn_action_request",
+    approved: "mrn_approved_notification",
+    declined: "mrn_declined_notification",
+    comment: "mrn_comment_notification",
+  },
+  languages: {
+    actionRequest: "en",
+    approved: "en",
+    declined: "en",
+    comment: "en",
+  },
+};
+
+function serializeWhatsappContact(contact = {}) {
+  return {
+    id: contact.id,
+    name: contact.name || contact.profileName || contact.phone,
+    profileName: contact.profileName || "",
+    phone: normalizePhone(contact.phone),
+    source: contact.source || "",
+  };
+}
+
+async function getMrnWhatsappSettings() {
+  const db = await connectAuthDb();
+  const saved = await db.collection("platformSettings").findOne({ _id: MRN_WHATSAPP_SETTINGS_ID });
+  return {
+    ...MRN_WHATSAPP_DEFAULTS,
+    ...(saved?.settings || {}),
+    templates: {
+      ...MRN_WHATSAPP_DEFAULTS.templates,
+      ...(saved?.settings?.templates || {}),
+    },
+    languages: {
+      ...MRN_WHATSAPP_DEFAULTS.languages,
+      ...(saved?.settings?.languages || {}),
+    },
+  };
+}
+
+async function saveMrnWhatsappSettings(input = {}) {
+  const current = await getMrnWhatsappSettings();
+  const contactIds = new Set(whatsappService.listContacts().map((contact) => String(contact.id)));
+  const cleanIds = (value) => Array.isArray(value) ? value.map((id) => projectText(id)).filter((id) => id && contactIds.has(id)) : [];
+  const settings = {
+    enabled: input.enabled !== false,
+    approvalContactIds: cleanIds(input.approvalContactIds),
+    concernContactIds: cleanIds(input.concernContactIds),
+    templates: {
+      actionRequest: projectText(input.templates?.actionRequest) || MRN_WHATSAPP_DEFAULTS.templates.actionRequest,
+      approved: projectText(input.templates?.approved) || MRN_WHATSAPP_DEFAULTS.templates.approved,
+      declined: projectText(input.templates?.declined) || MRN_WHATSAPP_DEFAULTS.templates.declined,
+      comment: projectText(input.templates?.comment) || MRN_WHATSAPP_DEFAULTS.templates.comment,
+    },
+    languages: {
+      actionRequest: projectText(input.languages?.actionRequest) || MRN_WHATSAPP_DEFAULTS.languages.actionRequest,
+      approved: projectText(input.languages?.approved) || MRN_WHATSAPP_DEFAULTS.languages.approved,
+      declined: projectText(input.languages?.declined) || MRN_WHATSAPP_DEFAULTS.languages.declined,
+      comment: projectText(input.languages?.comment) || MRN_WHATSAPP_DEFAULTS.languages.comment,
+    },
+    lastRun: current.lastRun || null,
+    updatedAt: new Date().toISOString(),
+  };
+  const db = await connectAuthDb();
+  await db.collection("platformSettings").updateOne(
+    { _id: MRN_WHATSAPP_SETTINGS_ID },
+    { $set: { _id: MRN_WHATSAPP_SETTINGS_ID, settings } },
+    { upsert: true },
+  );
+  return settings;
+}
+
+async function recordMrnWhatsappLastRun(run = {}) {
+  const db = await connectAuthDb();
+  const lastRun = {
+    at: new Date().toISOString(),
+    event: run.event || "actionRequest",
+    status: run.status || "unknown",
+    sent: Number(run.sent) || 0,
+    failed: Number(run.failed) || 0,
+    recipients: Number(run.recipients) || 0,
+    templateName: run.templateName || "",
+    language: run.language || "",
+    mrnNo: run.mrnNo || "",
+    reason: run.reason || run.results?.find((item) => item.reason)?.reason || "",
+    results: Array.isArray(run.results) ? run.results.slice(0, 20) : [],
+  };
+  await db.collection("platformSettings").updateOne(
+    { _id: MRN_WHATSAPP_SETTINGS_ID },
+    { $set: { "settings.lastRun": lastRun } },
+    { upsert: true },
+  );
+  return lastRun;
+}
+
+function mrnWhatsappParams(row = {}, actorName = "User", comment = "") {
+  const clean = (value, fallback = "-") => {
+    const text = projectText(value, 900).replace(/\s+/g, " ").trim();
+    return text || fallback;
+  };
+  const attachment = clean(row.mrnPhoto || row.quotationPhoto, "No attachment added");
+  return {
+    actionRequest: [
+      clean(row.mrnNo),
+      clean(row.project),
+      clean(actorName || row.issuedBy, "Submitted"),
+      clean(row.materialRequirement),
+      formatDateForMessage(row.requiredDate || row.materialRequestDate),
+      attachment,
+    ],
+    approved: [
+      clean(row.mrnNo),
+      clean(row.project),
+      clean(actorName, "Approved"),
+      clean(row.materialRequirement),
+      formatDateForMessage(row.requiredDate || row.materialRequestDate),
+    ],
+    declined: [
+      clean(row.mrnNo),
+      clean(row.project),
+      clean(actorName, "Declined"),
+      clean(comment || row.remark),
+    ],
+    comment: [
+      clean(row.mrnNo),
+      clean(row.project),
+      clean(actorName, "Commented"),
+      clean(comment || row.remark),
+    ],
+  };
+}
+
+function mrnActionButtons(row = {}) {
+  const mrnNo = projectText(row.mrnNo);
+  if (!mrnNo) return [];
+  return [
+    { index: 0, payload: `MRN_APPROVE:${mrnNo}` },
+    { index: 1, payload: `MRN_DECLINE:${mrnNo}` },
+    { index: 2, payload: `MRN_COMMENT:${mrnNo}` },
+  ];
+}
+
+function formatDateForMessage(value) {
+  const key = dmrDateKey(value);
+  if (!key) return projectText(value || "-");
+  return new Date(`${key}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+async function sendMrnWhatsappAutomation({ event = "actionRequest", row = {}, actor = null, comment = "" } = {}) {
+  const settings = await getMrnWhatsappSettings();
+  const eventName = event || "actionRequest";
+  if (!settings.enabled) {
+    const lastRun = await recordMrnWhatsappLastRun({ event: eventName, status: "disabled", mrnNo: row.mrnNo, reason: "Automation is disabled" });
+    return { status: "disabled", sent: 0, failed: 0, results: [], lastRun };
+  }
+  const contactIds = event === "actionRequest" ? settings.approvalContactIds : settings.concernContactIds;
+  const contacts = whatsappService.listContacts().filter((contact) => contactIds.includes(contact.id) && normalizePhone(contact.phone));
+  const templateName = settings.templates?.[event] || MRN_WHATSAPP_DEFAULTS.templates[event];
+  if (!templateName || !contacts.length) {
+    const reason = !templateName ? "Template name is missing" : "No selected WhatsApp contacts";
+    const lastRun = await recordMrnWhatsappLastRun({ event: eventName, status: "skipped", recipients: contacts.length, templateName, mrnNo: row.mrnNo, reason });
+    return { status: "skipped", sent: 0, failed: 0, results: [], lastRun };
+  }
+  const actorName = actor?.displayName || actor?.username || row.issuedBy || "User";
+  const params = mrnWhatsappParams(row, actorName, comment)[event] || [];
+  const language = settings.languages?.[event] || MRN_WHATSAPP_DEFAULTS.languages[event] || "en";
+  const results = [];
+  for (const contact of contacts) {
+    try {
+      const message = await whatsappService.sendMessage({
+        to: contact.phone,
+        templateName,
+        language,
+        templateParams: params,
+        templateButtons: eventName === "actionRequest" ? mrnActionButtons(row) : [],
+      }, actor || { id: "system", displayName: "MRN WhatsApp automation" });
+      results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "sent", messageId: message.id });
+    } catch (error) {
+      results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "failed", reason: error.message });
+    }
+  }
+  const sent = results.filter((item) => item.status === "sent").length;
+  const failed = results.length - sent;
+  const status = sent ? "sent" : "failed";
+  const lastRun = await recordMrnWhatsappLastRun({ event: eventName, status, sent, failed, recipients: contacts.length, templateName, language, mrnNo: row.mrnNo, results });
+  return { status, sent, failed, results, lastRun };
+}
+
+function parseMrnWhatsappAction(message = {}) {
+  const raw = projectText(message.replyId || message.text || "").trim();
+  const match = raw.match(/^MRN_(APPROVE|DECLINE|COMMENT):(.+)$/i);
+  if (match) {
+    const action = match[1].toLowerCase();
+    return {
+      event: action === "approve" ? "approved" : action === "decline" ? "declined" : "comment",
+      mrnNo: projectText(match[2]),
+      comment: action === "comment" ? "Comment requested from WhatsApp action" : "",
+    };
+  }
+  const text = raw.toLowerCase();
+  const labelMatch = text.match(/\b(mrn\d+)\b/i);
+  const mrnNo = labelMatch?.[1] || "";
+  if (/approve/.test(text)) return { event: "approved", mrnNo, comment: "" };
+  if (/decline|reject/.test(text)) return { event: "declined", mrnNo, comment: raw };
+  if (/comment/.test(text)) return { event: "comment", mrnNo, comment: raw };
+  return null;
+}
+
+async function handleMrnWhatsappReply(message = {}) {
+  const action = parseMrnWhatsappAction(message);
+  if (!action) return null;
+  addActivityLog({
+    action: "Received MRN WhatsApp action",
+    target: action.mrnNo || "MRN",
+    category: "whatsapp",
+    details: { event: action.event, from: normalizePhone(message.from), text: message.text, replyId: message.replyId },
+  });
+  const dashboard = await readMrnDashboard({ all: true });
+  const records = dashboard.records || [];
+  const row = action.mrnNo
+    ? records.find((record) => projectText(record.mrnNo).toLowerCase() === action.mrnNo.toLowerCase())
+    : records[0];
+  if (!row) {
+    await recordMrnWhatsappLastRun({ event: action.event, status: "failed", failed: 1, reason: `Could not find MRN ${action.mrnNo || "record"} from WhatsApp reply` });
+    return null;
+  }
+  const contact = whatsappService.listContacts().find((item) => normalizePhone(item.phone) === normalizePhone(message.from));
+  const actor = {
+    id: `whatsapp:${normalizePhone(message.from)}`,
+    displayName: contact?.name || contact?.profileName || normalizePhone(message.from) || "WhatsApp",
+    username: contact?.phone || normalizePhone(message.from),
+  };
+  const result = await sendMrnWhatsappAutomation({
+    event: action.event,
+    row,
+    actor,
+    comment: action.comment || projectText(message.text),
+  });
+  addActivityLog({
+    action: "Sent MRN WhatsApp outcome",
+    target: row.mrnNo || action.mrnNo || "MRN",
+    category: "whatsapp",
+    details: result.lastRun || result,
+  });
+  return result;
+}
+
+app.get("/mrn-dashboard/whatsapp/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    res.json({
+      settings: await getMrnWhatsappSettings(),
+      contacts: whatsappService.listContacts().map(serializeWhatsappContact).filter((contact) => contact.phone),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Could not load MRN WhatsApp settings" });
+  }
+});
+
+app.patch("/mrn-dashboard/whatsapp/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const settings = await saveMrnWhatsappSettings(req.body || {});
+    addActivityLog({ req, action: "Updated MRN WhatsApp automation", target: "MRN WhatsApp" });
+    res.json({ success: true, settings });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not save MRN WhatsApp settings" });
+  }
+});
+
+app.post("/mrn-dashboard/whatsapp/send-test", requireSuperAdmin, async (req, res) => {
+  try {
+    if (req.body?.settings) await saveMrnWhatsappSettings(req.body.settings);
+    const dashboard = await readMrnDashboard({ all: true });
+    const requestedMrn = projectText(req.body?.mrnNo);
+    const row = requestedMrn
+      ? (dashboard.records || []).find((record) => projectText(record.mrnNo).toLowerCase() === requestedMrn.toLowerCase())
+      : (dashboard.records || [])[0];
+    if (!row) return res.status(400).json({ error: "No MRN record found to send as test" });
+    const result = await sendMrnWhatsappAutomation({
+      event: req.body?.event || "actionRequest",
+      row,
+      actor: req.authUser,
+      comment: req.body?.comment || "Manual test",
+    });
+    addActivityLog({ req, action: "Sent MRN WhatsApp test", target: row.mrnNo || "MRN WhatsApp", details: result.lastRun || result });
+    res.json({ success: true, row, result });
+  } catch (error) {
+    const lastRun = await recordMrnWhatsappLastRun({ event: req.body?.event || "actionRequest", status: "failed", failed: 1, reason: error.message }).catch(() => null);
+    res.status(400).json({ error: error.message || "Could not send MRN WhatsApp test", lastRun });
+  }
+});
+
 app.get("/mrn-dashboard/settings", (req, res) => {
   if (!hasMenuAccess(req, "project-mrn")) return res.status(403).json({ error: "MRN module access required" });
   res.json({
@@ -12505,7 +12825,18 @@ app.post("/mrn-dashboard", upload.fields([
       target: result.mrnNo,
       details: { projectSite: req.body?.projectSite, materialRequirement: req.body?.materialRequirement },
     });
-    res.json({ success: true, ...result });
+    let whatsapp = null;
+    try {
+      whatsapp = await sendMrnWhatsappAutomation({
+        event: "actionRequest",
+        row: result.snapshot,
+        actor: req.authUser,
+      });
+    } catch (whatsappError) {
+      console.error("MRN WhatsApp automation error:", whatsappError.message);
+      whatsapp = { status: "failed", sent: 0, failed: 1, error: whatsappError.message };
+    }
+    res.json({ success: true, ...result, whatsapp });
   } catch (error) {
     console.error("MRN add error:", error);
     res.status(500).json({ error: `Could not add MRN: ${error.message}` });

@@ -100,17 +100,12 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   useEffect(() => {
     if (loading || !user) return;
     const isEmployee = !user?.isSuperAdmin && String(user?.roleName || "").trim().toLowerCase() === "employee";
-    if (moduleId === "employee-daily-report" && isEmployee) {
-      router.replace("/profile");
-      return;
-    }
     if (allowedMenus.includes(moduleId)) return;
     const fallback = isEmployee ? "profile" : allowedMenus[0] || "dashboard";
     router.replace(menuPaths[fallback] || "/dashboard");
   }, [allowedMenus, loading, moduleId, router, user]);
 
-  const isEmployeeProfileRedirect = !loading && user && moduleId === "employee-daily-report" && !user?.isSuperAdmin && String(user?.roleName || "").trim().toLowerCase() === "employee";
-  if (!isMounted || !user || isEmployeeProfileRedirect || (!loading && !allowedMenus.includes(moduleId))) {
+  if (!isMounted || !user || (!loading && !allowedMenus.includes(moduleId))) {
     return (
       <div className={`min-h-dvh ${darkMode ? "bg-[#0f1115]" : "bg-[#eef3f2]"}`} />
     );

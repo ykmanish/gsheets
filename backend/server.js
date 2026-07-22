@@ -10609,12 +10609,13 @@ function normalizeProjectInput(body, existing = {}) {
   const normalizeTask = (task = {}, phaseId = "") => {
     const id = projectText(task.id) || crypto.randomUUID();
     const title = projectText(task.title);
+    const status = projectText(task.status) || "todo";
     return {
       id,
       phaseId: projectText(task.phaseId || phaseId),
       title,
       description: projectText(task.description),
-      status: projectText(task.status) || "todo",
+      status,
       priority: projectText(task.priority) || "medium",
       startDate: projectText(task.startDate),
       dueDate: projectText(task.dueDate || task.deadline),
@@ -10629,7 +10630,7 @@ function normalizeProjectInput(body, existing = {}) {
           description: projectText(subtask.description),
           dueDate: projectText(subtask.dueDate || subtask.deadline),
           assigneeId: projectText(subtask.assigneeId),
-          done: Boolean(subtask.done),
+          done: status === "done" ? true : Boolean(subtask.done),
           createdAt: projectText(subtask.createdAt) || now,
           updatedAt: projectText(subtask.updatedAt) || now,
           })).filter((subtask) => subtask.title)

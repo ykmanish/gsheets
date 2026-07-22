@@ -138,6 +138,14 @@ function blankTask(phaseId = "") {
   };
 }
 
+function completeSubtasksWhenTaskDone(task = {}) {
+  if (task.status !== "done" || !Array.isArray(task.subtasks)) return task;
+  return {
+    ...task,
+    subtasks: task.subtasks.map((subtask) => ({ ...subtask, done: true })),
+  };
+}
+
 function blankPhase() {
   return {
     id: uid("phase"),
@@ -1218,6 +1226,10 @@ function TaskDrawer({
     onChange({ subtasks: subtasks.filter((item) => item.id !== id) });
   }
 
+  function updateTaskStatus(status) {
+    onChange(completeSubtasksWhenTaskDone({ ...task, status }));
+  }
+
   return (
     <SlideOver
       title={
@@ -1290,9 +1302,7 @@ function TaskDrawer({
           <button
             type="button"
             disabled={!isEditing}
-            onClick={() =>
-              onChange({ status: task.status === "done" ? "todo" : "done" })
-            }
+            onClick={() => updateTaskStatus(task.status === "done" ? "todo" : "done")}
             className={cn(
               "mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition disabled:cursor-default",
               task.status === "done"
@@ -1318,7 +1328,7 @@ function TaskDrawer({
               darkMode={darkMode}
               disabled={!isEditing}
               value={task.status || "todo"}
-              onChange={(value) => onChange({ status: value })}
+              onChange={updateTaskStatus}
               options={STATUS_OPTIONS}
             />
           </PropertyRow>
@@ -5520,7 +5530,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     const nextPhaseId = taskEditor.phaseId;
     const nextStatus = taskEditor.status || "todo";
     const source = JSON.parse(JSON.stringify(fullProject(selectedProject)));
-    const cleanTask = { ...taskEditor };
+    const cleanTask = completeSubtasksWhenTaskDone({ ...taskEditor });
     delete cleanTask.__isNew;
     source.phases = (source.phases || []).map((phase) => ({
       ...phase,

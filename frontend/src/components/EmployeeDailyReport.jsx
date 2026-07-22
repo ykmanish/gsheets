@@ -505,12 +505,28 @@ function taskRowValue(row, field) {
   return "";
 }
 
-function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], involvements = [], popularSites = [], popularCategories = [], popularInvolvements = [], showStatus = false, showInvolvement = false, onRowsChange, required = false, darkMode = false }) {
+function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], involvements = [], popularSites = [], popularCategories = [], popularInvolvements = [], showStatus = false, showInvolvement = false, onRowsChange, onRefineDescription, required = false, darkMode = false }) {
   const [expandedIndex, setExpandedIndex] = useState(0);
+  const [refiningIndex, setRefiningIndex] = useState(null);
   const activeExpandedIndex = Math.min(expandedIndex, Math.max(0, rows.length - 1));
 
   function updateRow(index, patch) {
     onRowsChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  }
+  async function refineRowDescription(index) {
+    const currentText = rows[index]?.description || "";
+    if (!currentText.trim()) {
+      toast.error("Add a description first");
+      return;
+    }
+    if (!onRefineDescription || refiningIndex !== null) return;
+    try {
+      setRefiningIndex(index);
+      const refined = await onRefineDescription(currentText);
+      if (refined) updateRow(index, { description: refined });
+    } finally {
+      setRefiningIndex(null);
+    }
   }
   function addRow() {
     setExpandedIndex(rows.length);
@@ -638,7 +654,27 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                     {required && index === 0 && !row.category && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
                   </div>
                   <div className="order-6 lg:col-span-full">
-                    <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Description</p>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Description</p>
+                      <button
+                        type="button"
+                        disabled={refiningIndex !== null || !row.description.trim()}
+                        onClick={() => refineRowDescription(index)}
+                        className={`ml-auto inline-flex h-9 min-w-[132px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-xs font-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black hover:bg-[#cdea5e]" : "bg-[#e8f6ee] text-[#15734d] hover:bg-[#dcfacb]"}`}
+                      >
+                        {refiningIndex === index ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            Refining...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Refine with AI
+                          </>
+                        )}
+                      </button>
+                    </div>
                     <textarea required={required && index === 0} value={row.description} onChange={(event) => updateRow(index, { description: event.target.value })} rows={2} placeholder="Describe this task..." className={`min-h-12 w-full rounded-2xl border px-4 py-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
                   </div>
                   <div className="order-5 flex flex-col lg:self-start">
@@ -1315,6 +1351,20 @@ export default function EmployeeDailyReport({ darkMode }) {
       toast.error(error.message || "Could not load daily reports");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refineDescription(text) {
+    try {
+      const result = await api("/employee-daily-report/refine-description", {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+      toast.success("Description refined");
+      return result.refined || "";
+    } catch (error) {
+      toast.error(error.message || "Could not refine description");
+      return "";
     }
   }
 
@@ -2374,6 +2424,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     showInvolvement
                     required
                     onRowsChange={(rows) => setForm((current) => ({ ...current, taskItems: rows }))}
+                    onRefineDescription={refineDescription}
                     darkMode={darkMode}
                   />
                   <TaskRowsEditor
@@ -2387,6 +2438,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     popularInvolvements={optionUsage.involvements}
                     showInvolvement
                     onRowsChange={(rows) => setForm((current) => ({ ...current, waitingTaskItems: rows }))}
+                    onRefineDescription={refineDescription}
                     darkMode={darkMode}
                   />
                   <div className="md:col-span-2"><label className={`mb-2 block text-xs font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/60" : "text-black/55"}`}>Note</label><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} rows={3} placeholder="Any extra note..." className={`w-full rounded-2xl border px-4 py-3 outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} /></div>

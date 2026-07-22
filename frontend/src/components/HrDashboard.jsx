@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, Mail, MessageCircle, Pencil, Phone, Plus, RefreshCw, Search, ShieldCheck, Trash2, UserRound, Users, WalletCards, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, Mail, MessageCircle, MessageSquare, Pencil, Phone, Plus, RefreshCw, Search, ShieldCheck, Trash2, UserRound, Users, WalletCards, X } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 

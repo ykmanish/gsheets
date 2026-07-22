@@ -757,7 +757,7 @@ function TaskDetailView({
   const blockedBy = task.blockedBy || dependencies.filter((item) => item.status !== "done");
   const dependencyWarnings = task.dependencyWarnings || dependencies.filter((item) => item.dueDate && task.dueDate && task.dueDate < item.dueDate);
   const progress = subtasks.length ? Math.round((doneSubtasks / subtasks.length) * 100) : 0;
-  const [activeTab, setActiveTab] = useState("comments");
+  const [activeTab, setActiveTab] = useState("progress");
   return (
     <div className="px-6 pb-8 pt-6 sm:px-7">
       <p className="text-sm text-[#7a8077] dark:text-white/45">
@@ -769,7 +769,13 @@ function TaskDetailView({
 
       <div className="mt-6 space-y-4 border-b border-[#e5e8e2] pb-5 dark:border-white/10">
         <PropertyRow icon={Circle} label="Status">
-          <StatusPill status={task.status || "todo"} compact />
+          <div className="flex flex-wrap items-center gap-4">
+            <StatusPill status={task.status || "todo"} compact />
+            <span className="inline-flex items-center gap-1.5 text-base font-semibold text-[#20231f] dark:text-white">
+              <CalendarDays className="h-4 w-4 text-[#777d74] dark:text-white/45" />
+              {formatDate(task.dueDate, "No date")}
+            </span>
+          </div>
         </PropertyRow>
         <PropertyRow icon={Users} label="Assignee">
           {assignees.length ? (
@@ -784,9 +790,6 @@ function TaskDetailView({
           ) : (
             <span className="text-sm text-[#858b82]">No assignees added</span>
           )}
-        </PropertyRow>
-        <PropertyRow icon={CalendarDays} label="Due date">
-          <span className="text-sm font-medium">{formatDate(task.dueDate, "No date")}</span>
         </PropertyRow>
         <PropertyRow icon={Tag} label="Label">
           <div className="flex flex-wrap gap-2">
@@ -867,16 +870,29 @@ function TaskDetailView({
         </div>
         <ProgressBar value={progress} className="mt-3" />
         <div className="mt-4 space-y-3">
-          {subtasks.map((item) => (
+          {subtasks.map((item) => {
+            const subtaskStatus = item.done ? "done" : item.status || "todo";
+            const subtaskDueDate = item.dueDate || item.deadline || item.date || "";
+            return (
             <div key={item.id} className="rounded-xl border border-[#e0e4dd] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", item.done ? "border-[#6877f4] bg-[#6877f4] text-white" : "border-[#a9afa5]")}>
                   {item.done && <Check className="h-3 w-3" />}
                 </span>
-                <span className={cn("min-w-0 flex-1 truncate text-sm font-medium", item.done && "text-[#8a8f87] line-through")}>{item.title || "Untitled subtask"}</span>
+                <span className={cn("min-w-[160px] flex-1 truncate text-sm font-medium", item.done && "text-[#8a8f87] line-through")}>{item.title || "Untitled subtask"}</span>
+                <div className="ml-auto flex shrink-0 items-center gap-3">
+                  <StatusPill status={subtaskStatus} compact />
+                  <span className="text-sm font-semibold text-[#20231f] dark:text-white">
+                    {formatDate(subtaskDueDate, "No deadline")}
+                  </span>
+                </div>
               </div>
+              <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-[#5f665b] dark:text-white/55">
+                {item.description || "No description added."}
+              </p>
             </div>
-          ))}
+            );
+          })}
           {!subtasks.length && <div className="rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">No subtasks added.</div>}
         </div>
       </section>}

@@ -390,7 +390,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           <button
             type="button"
             onClick={() => setProfileOpen((open) => !open)}
-            className={`flex items-center gap-3 text-left   transition-all duration-300 hover:-translate-y-0.5 ${collapsed ? "md:mx-auto md:grid md:h-14 md:w-14 md:place-items-center md:gap-0 md:rounded-[20px] md:p-0" : "h-14 w-full rounded-[18px] px-3"} ${darkMode ? "bg-white/[0.045] text-white ring-white/10 hover:bg-white/[0.075]" : "bg-white text-[#171714] ring-black/5 hover:bg-[#f8fbf9]"}`}
+            className={`flex items-center gap-3 text-left   transition-all duration-300 hover:-translate-y-0.5 ${collapsed ? "md:mx-auto md:grid md:h-14 md:w-14 md:place-items-center md:gap-0 md:rounded-[20px] md:p-0" : "h-14 w-full rounded-[18px] px-3"} ${darkMode ? "bg-white/[0.075] text-white ring-white/10" : "bg-[#f8fbf9] text-[#171714] ring-black/5"}`}
             aria-expanded={profileOpen}
           >
             <UserAvatar user={user} name={displayName} className={`h-9 w-9 ${collapsed ? "md:m-0 md:h-10 md:w-10 md:translate-y-[1px]" : ""}`} />

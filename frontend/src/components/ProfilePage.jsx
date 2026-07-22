@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { BriefcaseBusiness, Mail, MessageCircleMore, Pencil, Phone, Save, UserRound } from "lucide-react";
+import { BriefcaseBusiness, Mail, MessageCircleMore, Pencil, Phone, Save } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import UserAvatar, { beanheadPresetsForGender } from "./UserAvatar";
 import { SelectMenu } from "./ui";
@@ -96,7 +96,7 @@ export default function ProfilePage({ darkMode }) {
     <main className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f12] text-white" : "bg-[#f4f6f2] text-[#171714]"}`}>
       <form onSubmit={saveProfile} className="mx-auto max-w-6xl">
         <section className="pb-4">
-          <div className={`relative overflow-hidden rounded-[28px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#e3e8df] bg-white"}`}>
+          <div className={`relative rounded-[28px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#e3e8df] bg-white"}`}>
             <div
               className="relative h-32 overflow-hidden rounded-t-[28px] bg-cover bg-center sm:h-40"
               style={{ backgroundImage: "url('https://images.unsplash.com/photo-1623594845764-13991ac51774?q=80&w=1074&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')" }}
@@ -172,7 +172,7 @@ export default function ProfilePage({ darkMode }) {
                     )}
                   </div>
                 )}
-                <h1 className="mt-4 text-3xl font-black tracking-tight">{displayName}</h1>
+                <h1 className="mt-4 text-3xl small text-black dark:text-white font-black tracking-tight">{displayName}</h1>
                 <p className={`mt-1 text-sm ${darkMode ? "text-white/60" : "text-black/55"}`}>{form.designation || "Designation not added"}</p>
                 <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>{form.department || "Department not added"} · {user?.username || "username"}</p>
 
@@ -196,21 +196,6 @@ export default function ProfilePage({ darkMode }) {
               </aside>
             </div>
 
-            <div className={`grid gap-3 border-t p-4 sm:grid-cols-3 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#edf0eb] bg-[#fafbf8]"}`}>
-              {[
-                ["Profile status", form.whatsappPhone ? "Ready for reminders" : "WhatsApp needed", UserRound],
-                ["Department", form.department || "Not added", BriefcaseBusiness],
-                ["Reminder setup", "Country code without +", MessageCircleMore],
-              ].map(([title, value, Icon]) => (
-                <div key={title} className={`flex items-center justify-between gap-3 rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black">{title}</p>
-                    <p className={`truncate text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{value}</p>
-                  </div>
-                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#e8f6ee] text-[#0f6b49]"}`}><Icon className="h-4 w-4" /></span>
-                </div>
-              ))}
-            </div>
           </div>
         </section>
 

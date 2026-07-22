@@ -479,6 +479,7 @@ function AssigneePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const pickerRef = useRef(null);
   const selected = users.filter((item) => selectedIds.includes(item.id));
   const normalizedQuery = query.trim().toLowerCase();
   const filteredUsers = users.filter((person) => {
@@ -487,8 +488,19 @@ function AssigneePicker({
       .toLowerCase()
       .includes(normalizedQuery);
   });
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function closeOnOutside(event) {
+      if (pickerRef.current?.contains(event.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOnOutside);
+    return () => document.removeEventListener("pointerdown", closeOnOutside);
+  }, [open]);
+
   return (
-    <div className="relative">
+    <div ref={pickerRef} className="relative">
       <button
         type="button"
         disabled={disabled}
@@ -1255,7 +1267,7 @@ function TaskDrawer({
               <Button
                 variant="primary"
                 disabled={saving || !task.title.trim()}
-                onClick={onSave}
+                onClick={() => onSave()}
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -5972,10 +5984,12 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     setTaskEditor({ ...blankTask(resolvedPhase), status });
   }
 
-  function closeTaskDrawer() {
+  function closeTaskDrawer({ restorePhase = true } = {}) {
     setTaskEditor(null);
-    if (returnPhaseEditor) {
+    if (restorePhase && returnPhaseEditor) {
       setPhaseEditor(returnPhaseEditor);
+      setReturnPhaseEditor(null);
+    } else if (!restorePhase) {
       setReturnPhaseEditor(null);
     }
   }
@@ -6009,7 +6023,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
       if (addNew) {
         setTaskEditor({ ...blankTask(nextPhaseId), status: nextStatus });
       } else {
-        closeTaskDrawer();
+        closeTaskDrawer({ restorePhase: false });
       }
     }
   }
@@ -6025,7 +6039,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
       (task) => task.id !== taskEditor.id,
     );
     const updated = await patchProject(selectedProject, source, "Task deleted");
-    if (updated) closeTaskDrawer();
+    if (updated) closeTaskDrawer({ restorePhase: false });
   }
 
   function deleteTask() {

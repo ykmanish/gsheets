@@ -1813,6 +1813,21 @@ export default function EmployeeDailyReport({ darkMode }) {
   const sidebarCategoriesPreview = customPrefs.categories.slice(0, 3);
   const reportUsers = data?.reportUsers || [];
   const reportUserMap = new Map(reportUsers.map((item) => [String(item.userId || ""), item]));
+  const currentReportUser = {
+    ...user,
+    ...(data?.profile || {}),
+    userId: user?.id || data?.profile?.userId || data?.profile?.id,
+    displayName: data?.profile?.displayName || user?.displayName || user?.username,
+    employeeName: data?.profile?.displayName || user?.displayName || user?.username,
+  };
+  const reportAvatarUser = (report) => {
+    const reportUserId = String(report?.userId || "");
+    const mappedUser = reportUserMap.get(reportUserId);
+    if (mappedUser) return mappedUser;
+    if (reportUserId && reportUserId === String(user?.id || "")) return currentReportUser;
+    if (!data?.isAdmin) return currentReportUser;
+    return null;
+  };
   const todaySubmissionStatus = data?.todaySubmissionStatus || [];
   const filteredTodayStatus = todaySubmissionStatus.filter((item) => {
     const query = todayStatusSearch.trim().toLowerCase();
@@ -1994,7 +2009,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <UserAvatar user={reportUserMap.get(String(report.userId || ""))} name={report.employeeName} className="h-10 w-10" />
+                        <UserAvatar user={reportAvatarUser(report)} name={report.employeeName} className="h-10 w-10" />
                         <div>
                           <p className="font-semibold">{report.employeeName}</p>
                           <p className={`text-xs ${muted}`}>{report.reportDate || "-"}</p>

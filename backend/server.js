@@ -12369,13 +12369,26 @@ function mrnWhatsappParams(row = {}, actorName = "User", comment = "") {
     const text = projectText(value, 900).replace(/\s+/g, " ").trim();
     return text || fallback;
   };
+  const materialList = (value) => {
+    const text = projectText(value, 1000)
+      .replace(/\r/g, "\n")
+      .replace(/\s*\*\s*/g, "\n• ")
+      .replace(/\n{2,}/g, "\n")
+      .trim();
+    const items = text
+      .split(/\n+/)
+      .map((item) => item.replace(/^[•*\-\s]+/, "").trim())
+      .filter(Boolean);
+    return items.length ? items.map((item) => `• ${item}`).join("\n") : "-";
+  };
   const attachment = clean(row.mrnPhoto || row.quotationPhoto, "No attachment added");
+  const materials = materialList(row.materialRequirement);
   return {
     actionRequest: [
       clean(row.mrnNo),
       clean(row.project),
       clean(actorName || row.issuedBy, "Submitted"),
-      clean(row.materialRequirement),
+      materials,
       formatDateForMessage(row.requiredDate || row.materialRequestDate),
       attachment,
     ],
@@ -12383,7 +12396,7 @@ function mrnWhatsappParams(row = {}, actorName = "User", comment = "") {
       clean(row.mrnNo),
       clean(row.project),
       clean(actorName, "Approved"),
-      clean(row.materialRequirement),
+      materials,
       formatDateForMessage(row.requiredDate || row.materialRequestDate),
     ],
     declined: [

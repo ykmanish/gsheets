@@ -3728,6 +3728,417 @@ function projectPlanActual(plan, project) {
     .reduce((sum, item) => sum + manpowerNumber(item.actual), 0);
 }
 
+function inDateRange(value, start, end) {
+  const key = dateKeyFromValue(value);
+  if (!key) return false;
+  if (start && key < start) return false;
+  if (end && key > end) return false;
+  return true;
+}
+
+function MiniBarChart({ rows = [], color = "#6f55d8" }) {
+  if (!rows.length) {
+    return (
+      <div className="grid h-28 place-items-center rounded-2xl bg-[#f5f6f3] text-center text-xs text-[#858b82] dark:bg-white/[0.05] dark:text-white/45">
+        No chart data in this range.
+      </div>
+    );
+  }
+  const max = Math.max(1, ...rows.map((row) => Number(row.value) || 0));
+  return (
+    <div className="flex h-28 items-end gap-2">
+      {rows.map((row, index) => (
+        <div key={`${row.label || "bar"}-${index}`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+          <div className="flex h-24 w-full items-end rounded-full bg-[#eef0ec] px-1 dark:bg-white/10">
+            <span
+              className="block w-full rounded-full"
+              style={{ height: `${Math.max(8, ((Number(row.value) || 0) / max) * 100)}%`, background: color }}
+            />
+          </div>
+          <span className="max-w-full truncate text-[10px] text-[#858b82]">{row.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReportDonut({ value, size = 150, stroke = 18, color = "#39c6d8", track = "#edf0ec", children }) {
+  const safe = Math.max(0, Math.min(100, Number(value) || 0));
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const dash = (safe / 100) * circumference;
+  return (
+    <div className="relative grid place-items-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={track} strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${dash} ${circumference - dash}`} />
+      </svg>
+      <div className="absolute text-center">{children || <span className="text-2xl font-bold">{safe}%</span>}</div>
+    </div>
+  );
+}
+
+function ReportBars({ rows = [] }) {
+  const colors = ["#ff3f62", "#ffad1f", "#44c7d8", "#7446ee"];
+  const max = Math.max(1, ...rows.map((row) => Number(row.value) || 0));
+  return (
+    <div className="space-y-4">
+      {rows.map((row, index) => (
+        <div key={`${row.label}-${index}`}>
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="font-semibold text-[#30342e] dark:text-white">{row.label}</span>
+            <span className="text-[#777d74] dark:text-white/50">{row.value}</span>
+          </div>
+          <div className="h-3 overflow-hidden rounded-full bg-[#eef0ec] dark:bg-white/10">
+            <span className="block h-full rounded-full" style={{ width: `${Math.max(5, ((Number(row.value) || 0) / max) * 100)}%`, background: row.color || colors[index % colors.length] }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users = [], onClose }) {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const defaultStart = new Date();
+  defaultStart.setDate(defaultStart.getDate() - 30);
+  const [startDate, setStartDate] = useState(defaultStart.toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(todayKey);
+  const [mrnData, setMrnData] = useState(null);
+  const [dmrData, setDmrData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  function requestClose() {
+    if (closing) return;
+    setClosing(true);
+    window.setTimeout(onClose, 260);
+  }
+
+  const loadReportData = useCallback(async (quiet = false) => {
+    try {
+      quiet ? setRefreshing(true) : setLoading(true);
+      setError("");
+      const [mrnResult, dmrResult] = await Promise.all([
+        api("/mrn-dashboard?all=true").catch((loadError) => ({ records: [], error: loadError.message })),
+        api("/dmr-dashboard").catch((loadError) => ({ error: loadError.message })),
+      ]);
+      setMrnData(mrnResult);
+      setDmrData(dmrResult);
+      const messages = [mrnResult.error, dmrResult.error].filter(Boolean);
+      if (messages.length) setError(messages.join(" · "));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadReportData();
+  }, [loadReportData]);
+
+  const rangedTasks = useMemo(
+    () => tasks.filter((task) => inDateRange(task.dueDate || task.startDate, startDate, endDate)),
+    [tasks, startDate, endDate],
+  );
+  const taskBase = rangedTasks;
+  const doneTasks = taskBase.filter((task) => task.status === "done").length;
+  const blockedTasks = taskBase.filter((task) => task.status === "blocked").length;
+  const delayedTasks = taskBase.filter((task) => task.status !== "done" && task.dueDate && task.dueDate < todayKey);
+  const delayedBlockedTasks = [
+    ...taskBase.filter((task) => task.status === "blocked"),
+    ...delayedTasks,
+  ].filter((task, index, list) => list.findIndex((item) => item.id === task.id) === index);
+  const completedTasks = taskBase.filter((task) => task.status === "done");
+  const activeTasks = taskBase.filter((task) => task.status !== "done" && task.status !== "blocked" && !(task.dueDate && task.dueDate < todayKey));
+  const taskProgress = taskBase.length ? Math.round((doneTasks / taskBase.length) * 100) : 0;
+  const phaseRows = phases.map((phase) => {
+    const phaseTasks = taskBase.filter((task) => task.phaseId === phase.id);
+    const done = phaseTasks.filter((task) => task.status === "done").length;
+    const blocked = phaseTasks.filter((task) => task.status === "blocked").length;
+    const delayed = phaseTasks.filter((task) => task.status !== "done" && task.dueDate && task.dueDate < todayKey).length;
+    return {
+      id: phase.id,
+      label: phase.name || "Phase",
+      dueDate: phase.dueDate,
+      value: phaseTasks.length ? Math.round((done / phaseTasks.length) * 100) : 0,
+      total: phaseTasks.length,
+      done,
+      blocked,
+      delayed,
+      reason: blocked ? `${blocked} blocked task${blocked === 1 ? "" : "s"}` : delayed ? `${delayed} delayed task${delayed === 1 ? "" : "s"}` : phase.dueDate && phase.dueDate < todayKey && done < phaseTasks.length ? "Target date passed" : "On track",
+    };
+  }).filter((row) => row.total || inDateRange(row.dueDate, startDate, endDate));
+  const delayedPhases = phaseRows.filter((row) => row.blocked || row.delayed || /passed/i.test(row.reason));
+
+  const projectMrns = useMemo(
+    () => (mrnData?.records || []).filter((row) => mrnMatchesProject(row, project)),
+    [mrnData?.records, project],
+  );
+  const rangedMrns = projectMrns.filter((row) =>
+    [row.materialRequestDate, row.requiredDate, row.invoiceDate, row.date].some((value) => inDateRange(value, startDate, endDate)),
+  );
+  const deliveredMrns = rangedMrns.filter((row) => /delivered|closed|complete|received/i.test(row.status)).length;
+  const mrnValue = rangedMrns.reduce((sum, row) => sum + (Number(String(row.quotationAmount || "").replace(/,/g, "")) || 0), 0);
+
+  const todayInRange = inDateRange(todayKey, startDate, endDate);
+  const todayRows = projectManpowerRows(dmrData?.today?.records || [], project);
+  const todayPlanRows = projectPlanRows(dmrData?.todayPlan, project);
+  const actualFromPlan = projectPlanActual(dmrData?.todayPlan, project);
+  const plannedManpower = todayInRange ? todayPlanRows.reduce((sum, row) => sum + row.plannedManpower, 0) || todayRows.reduce((sum, row) => sum + row.planned, 0) : 0;
+  const actualManpower = todayInRange ? actualFromPlan || todayRows.reduce((sum, row) => sum + row.actual, 0) : 0;
+  const manpowerPct = manpowerProgress(plannedManpower, actualManpower);
+  const hasManpowerData = todayInRange && (plannedManpower > 0 || actualManpower > 0);
+  const assigneeRows = users.map((person) => {
+    const assigned = taskBase.filter((task) => (task.assigneeIds || []).includes(person.id));
+    return {
+      person,
+      total: assigned.length,
+      done: assigned.filter((task) => task.status === "done").length,
+      delayed: assigned.filter((task) => task.status !== "done" && task.dueDate && task.dueDate < todayKey).length,
+      blocked: assigned.filter((task) => task.status === "blocked").length,
+    };
+  }).filter((row) => row.total).sort((a, b) => b.total - a.total).slice(0, 4);
+  const muted = darkMode ? "text-white/50" : "text-[#777d74]";
+  const card = darkMode ? "border-white/10 bg-[#1b1e24]" : "border-[#e0e4dd] bg-white";
+  const soft = darkMode ? "bg-white/[0.05]" : "bg-[#f6f6f4]";
+  const reportCard = `rounded-[22px] border p-5 shadow-[0_10px_30px_rgba(18,24,18,0.04)] ${card}`;
+
+  const TaskLine = ({ task }) => {
+    const phaseName = phases.find((phase) => phase.id === task.phaseId)?.name || "No phase";
+    const assigneeNames = users.filter((person) => (task.assigneeIds || []).includes(person.id)).map((person) => person.displayName || person.username).join(", ");
+    return (
+      <div className={`rounded-xl border p-3 ${card}`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill status={task.status || "todo"} compact />
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{task.title || "Untitled task"}</span>
+          <span className={`text-xs ${muted}`}>{formatDate(task.dueDate || task.startDate, "No date")}</span>
+        </div>
+        <p className={`mt-2 text-xs leading-5 ${muted}`}>
+          {phaseName}{assigneeNames ? ` · ${assigneeNames}` : ""}{task.description ? ` · ${task.description}` : ""}
+        </p>
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className={`fixed inset-0 z-[120] bg-black/40 backdrop-blur-[2px] ${closing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) requestClose();
+      }}
+      role="presentation"
+    >
+      <aside
+        className={`mrn-detail-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${expanded ? "mrn-detail-shell-expanded" : ""} ${closing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${project.name} project report`}
+      >
+        <header className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
+          <span><b>{project.code || project.name}</b> - Project report</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => loadReportData(true)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f7ef] text-[#3f7d16] hover:bg-[#eafbdc]"}`}>
+              <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+              Refresh
+            </button>
+            <button onClick={() => setExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#eafbdc] text-[#3f7d16] hover:bg-[#ddf8c9]"}`}>
+              {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              {expanded ? "Restore" : "Expand"}
+            </button>
+            <button onClick={requestClose} className="px-1 font-semibold text-[#3f7d16]">Close</button>
+          </div>
+        </header>
+
+        <div className="grid min-h-0 flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0 md:border-r ${darkMode ? "border-white/10" : "border-black/10"}`}>
+            <div className="flex gap-2">
+              <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#3f7d16]">PROJECT</span>
+              <span className="rounded bg-black/5 px-2 py-1 text-[10px] font-bold dark:bg-white/10">REPORT</span>
+            </div>
+            <p className={`mt-4 text-xs ${muted}`}>Date range</p>
+            <h2 className="mt-1 text-2xl font-bold">{project.name}</h2>
+            <p className={`mt-2 text-xs leading-5 ${muted}`}>{formatDate(startDate)} to {formatDate(endDate)}</p>
+            <div className="mt-5 space-y-3">
+              <label className="block">
+                <span className={`mb-1.5 block text-[11px] font-semibold ${muted}`}>Start date</span>
+                <DatePicker darkMode={darkMode} value={startDate} onChange={setStartDate} placeholder="Start date" />
+              </label>
+              <label className="block">
+                <span className={`mb-1.5 block text-[11px] font-semibold ${muted}`}>End date</span>
+                <DatePicker darkMode={darkMode} value={endDate} onChange={setEndDate} placeholder="End date" />
+              </label>
+            </div>
+            <div className={`mt-5 rounded-2xl p-4 ${soft}`}>
+              <p className={`text-xs ${muted}`}>Overall efficiency</p>
+              <p className="mt-1 text-4xl font-bold tabular-nums">{taskProgress}%</p>
+              <ProgressBar value={taskProgress} className="mt-3 !h-2" />
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {[
+                ["Done", doneTasks],
+                ["Delayed", delayedTasks.length],
+                ["Blocked", blockedTasks],
+                ["MRN", rangedMrns.length],
+              ].map(([label, value]) => (
+                <div key={label} className={`rounded-xl p-3 ${soft}`}>
+                  <p className={`text-[11px] ${muted}`}>{label}</p>
+                  <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+                </div>
+              ))}
+            </div>
+          </aside>
+
+          <main className="min-h-0 overflow-y-auto bg-[#f4f5f2] p-5 dark:bg-[#101216]">
+            {loading ? (
+              <div className={`rounded-2xl border px-6 py-16 text-center ${card}`}>
+                <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" />
+                <p className={`mt-3 text-sm ${muted}`}>Preparing project report...</p>
+              </div>
+            ) : (
+              <>
+                {error && <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-700 dark:bg-amber-400/10 dark:text-amber-100">{error}</p>}
+                <section className={reportCard}>
+                  <div className="grid gap-6 xl:grid-cols-[1fr_300px] xl:items-center">
+                    <div>
+                      <p className={`text-xs ${muted}`}>Pipeline: <b className="text-[#171714] dark:text-white">Project Work</b> | Range: <b className="text-[#171714] dark:text-white">{formatDate(startDate)} - {formatDate(endDate)}</b></p>
+                      <h3 className="mt-2 text-2xl font-bold">Task report</h3>
+                      <div className="mt-6 max-w-xl">
+                        <ReportBars rows={[
+                          { label: "Completed", value: doneTasks, color: "#35c759" },
+                          { label: "Active", value: activeTasks.length, color: "#44c7d8" },
+                          { label: "Blocked", value: blockedTasks, color: "#ff3f62" },
+                          { label: "Delayed", value: delayedTasks.length, color: "#ffad1f" },
+                        ]} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-5 rounded-[20px] bg-[#f8f8f6] p-4 dark:bg-white/[0.04]">
+                      <ReportDonut value={taskProgress} color="#35c759" track={darkMode ? "rgba(255,255,255,.1)" : "#e9ebe7"}>
+                        <span className="text-2xl font-bold">{taskProgress}%</span>
+                      </ReportDonut>
+                      <div>
+                        <p className="text-xl font-bold">{doneTasks}/{taskBase.length}</p>
+                        <p className={`mt-1 text-xs leading-5 ${muted}`}>tasks completed in selected range</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <div className="mt-5 grid gap-5 xl:grid-cols-2">
+                  <section className={reportCard}>
+                    <h3 className="text-lg font-bold">Completed in Range</h3>
+                    <div className="mt-4 space-y-3">
+                      {completedTasks.slice(0, 6).map((task) => <TaskLine key={task.id} task={task} />)}
+                      {!completedTasks.length && <p className={`rounded-xl p-4 text-sm ${soft} ${muted}`}>No tasks completed in this date range.</p>}
+                    </div>
+                  </section>
+                  <section className={reportCard}>
+                    <h3 className="text-lg font-bold">Delayed / Blocked</h3>
+                    <div className="mt-4 space-y-3">
+                      {delayedBlockedTasks.slice(0, 6).map((task) => <TaskLine key={task.id} task={task} />)}
+                      {!delayedBlockedTasks.length && <p className={`rounded-xl p-4 text-sm ${soft} ${muted}`}>No delayed or blocked tasks in this date range.</p>}
+                    </div>
+                  </section>
+                </div>
+
+                <section className={`mt-5 ${reportCard}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-bold">Phase Delay and Completion</h3>
+                      <p className={`mt-1 text-xs ${muted}`}>Delayed phases show the reason from blocked/delayed tasks or passed target dates.</p>
+                    </div>
+                    <span className="text-2xl font-bold">{delayedPhases.length}</span>
+                  </div>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    {phaseRows.map((row) => (
+                      <div key={row.id} className={`rounded-[18px] p-4 ${soft}`}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="truncate text-sm font-bold">{row.label}</span>
+                          <span className="text-xs font-semibold">{row.value}%</span>
+                        </div>
+                        <ProgressBar value={row.value} className="!h-2" />
+                        <p className={`mt-2 text-xs ${row.reason === "On track" ? muted : "text-amber-700 dark:text-amber-200"}`}>{row.reason}</p>
+                      </div>
+                    ))}
+                    {!phaseRows.length && <p className={`rounded-xl p-4 text-sm ${soft} ${muted}`}>No phase activity in this date range.</p>}
+                  </div>
+                </section>
+
+                <div className="mt-5 grid gap-5 xl:grid-cols-3">
+                  <section className={reportCard}>
+                    <h3 className="text-lg font-bold">Manpower</h3>
+                    <p className={`mt-1 text-xs ${muted}`}>
+                      {hasManpowerData ? "Overall planned vs actual manpower" : "No manpower submitted in this range"}
+                    </p>
+                    <div className="mt-5 flex items-center gap-5">
+                      <ReportDonut value={manpowerPct} color="#44c7d8" track={darkMode ? "rgba(255,255,255,.1)" : "#e9ebe7"}>
+                        <span className="text-2xl font-bold">{manpowerPct}%</span>
+                      </ReportDonut>
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <div>
+                          <div className="mb-1 flex justify-between text-xs">
+                            <span className={muted}>Actual</span>
+                            <span className="font-bold">{actualManpower}</span>
+                          </div>
+                          <ProgressBar value={plannedManpower ? Math.min(100, Math.round((actualManpower / plannedManpower) * 100)) : actualManpower ? 100 : 0} className="!h-2" />
+                        </div>
+                        <div className={`grid grid-cols-2 gap-2 text-center`}>
+                          <div className={`rounded-xl p-3 ${soft}`}>
+                            <p className={`text-[11px] ${muted}`}>Planned</p>
+                            <p className="mt-1 text-xl font-bold">{plannedManpower}</p>
+                          </div>
+                          <div className={`rounded-xl p-3 ${soft}`}>
+                            <p className={`text-[11px] ${muted}`}>Actual</p>
+                            <p className="mt-1 text-xl font-bold">{actualManpower}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                  <section className={reportCard}>
+                    <h3 className="text-lg font-bold">MRN Received</h3>
+                    <div className="mt-5 flex items-center gap-5">
+                      <ReportDonut value={rangedMrns.length ? Math.round((deliveredMrns / rangedMrns.length) * 100) : 0} color="#ffad1f" track={darkMode ? "rgba(255,255,255,.1)" : "#e9ebe7"}>
+                        <span className="text-2xl font-bold">{rangedMrns.length ? Math.round((deliveredMrns / rangedMrns.length) * 100) : 0}%</span>
+                      </ReportDonut>
+                      <div>
+                        <p className="text-lg font-bold">{deliveredMrns}/{rangedMrns.length}</p>
+                        <p className={`text-xs ${muted}`}>delivered or received</p>
+                      </div>
+                    </div>
+                    <p className={`mt-4 text-xs ${muted}`}>Quotation value: <b>{mrnAmount(mrnValue)}</b></p>
+                  </section>
+                  <section className={reportCard}>
+                    <h3 className="text-lg font-bold">Team Output</h3>
+                    <div className="mt-4 space-y-3">
+                      {assigneeRows.map(({ person, total, done, delayed, blocked }, index) => (
+                        <div key={person.id} className={`rounded-[16px] p-3 ${soft}`}>
+                          <div className="flex items-center gap-3">
+                          <Avatar name={person.displayName || person.username} index={index} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex justify-between text-xs"><span className="truncate font-semibold">{person.displayName || person.username}</span><span className="font-bold">{done}/{total}</span></div>
+                            <ProgressBar value={total ? Math.round((done / total) * 100) : 0} className="mt-2 !h-2" />
+                            <p className={`mt-2 text-[11px] ${muted}`}>{delayed} delayed · {blocked} blocked</p>
+                          </div>
+                          </div>
+                        </div>
+                      ))}
+                      {!assigneeRows.length && <p className={`rounded-xl p-4 text-sm ${soft} ${muted}`}>No assigned task output in this range.</p>}
+                    </div>
+                  </section>
+                </div>
+              </>
+            )}
+          </main>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 function ProjectManpowerView({ darkMode, project }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -5298,6 +5709,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   const [fileDrawerOpen, setFileDrawerOpen] = useState(false);
   const [teamDrawerOpen, setTeamDrawerOpen] = useState(false);
   const [accessDrawerOpen, setAccessDrawerOpen] = useState(false);
+  const [projectReportOpen, setProjectReportOpen] = useState(false);
   const [accessData, setAccessData] = useState({ access: [], users: [], canManage: false });
   const [fileEditor, setFileEditor] = useState(null);
   const [fileForm, setFileForm] = useState({
@@ -5880,6 +6292,13 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             </IconButton>
             <Button
               className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
+              onClick={() => setProjectReportOpen(true)}
+            >
+              <BarChart3 className="h-3 w-3" />
+              <span className="hidden sm:inline">Project report</span>
+            </Button>
+            <Button
+              className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
               onClick={openAccessDrawer}
             >
               <ShieldCheck className="h-3 w-3" />
@@ -6089,6 +6508,16 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
           saving={accessSaving}
           onSave={saveProjectAccess}
           onClose={() => setAccessDrawerOpen(false)}
+        />
+      )}
+      {projectReportOpen && (
+        <ProjectReportDrawer
+          darkMode={darkMode}
+          project={selectedProject}
+          tasks={tasks}
+          phases={phases}
+          users={users}
+          onClose={() => setProjectReportOpen(false)}
         />
       )}
       {fileDrawerOpen && (

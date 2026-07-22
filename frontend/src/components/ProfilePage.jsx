@@ -107,7 +107,7 @@ export default function ProfilePage({ darkMode }) {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#171714] px-5 text-sm font-black text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#72ec31] px-6 text-sm font-black text-black transition hover:bg-[#66de29] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Save className="h-4 w-4" />
                     {saving ? "Saving..." : "Save"}
@@ -120,7 +120,7 @@ export default function ProfilePage({ darkMode }) {
                       event.stopPropagation();
                       setEditing(true);
                     }}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#171714] px-5 text-sm font-black text-white transition active:scale-[0.98]"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#72ec31] px-6 text-sm font-black text-black transition hover:bg-[#66de29] active:scale-[0.98]"
                   >
                     <Pencil className="h-4 w-4" />
                     Edit

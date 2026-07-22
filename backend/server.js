@@ -10644,6 +10644,7 @@ function normalizeProjectInput(body, existing = {}) {
             createdAt: projectText(comment.createdAt) || now,
           })).filter((comment) => comment.text)
         : [],
+      completedAt: status === "done" ? projectText(task.completedAt || task.doneAt) || now : "",
       createdAt: projectText(task.createdAt) || now,
       updatedAt: now,
       dependencyWarning: "",

@@ -140,8 +140,10 @@ function blankTask(phaseId = "") {
 
 function completeSubtasksWhenTaskDone(task = {}) {
   if (task.status !== "done" || !Array.isArray(task.subtasks)) return task;
+  const completedAt = task.completedAt || new Date().toISOString();
   return {
     ...task,
+    completedAt,
     subtasks: task.subtasks.map((subtask) => ({ ...subtask, done: true })),
   };
 }
@@ -3824,7 +3826,7 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
       setError("");
       const [mrnResult, dmrResult] = await Promise.all([
         api("/mrn-dashboard?all=true").catch((loadError) => ({ records: [], error: loadError.message })),
-        api("/dmr-dashboard").catch((loadError) => ({ error: loadError.message })),
+        api(`/dmr-dashboard/report?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&sections=summary,siteManpower,tradeSiteManpower,dailyProgress`).catch((loadError) => ({ error: loadError.message })),
       ]);
       setMrnData(mrnResult);
       setDmrData(dmrResult);
@@ -3834,14 +3836,17 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [endDate, startDate]);
 
   useEffect(() => {
     void loadReportData();
   }, [loadReportData]);
 
+  const taskDateForRange = (task) => task.status === "done"
+    ? task.completedAt || task.doneAt || task.updatedAt || ""
+    : task.dueDate || task.startDate || task.updatedAt || "";
   const rangedTasks = useMemo(
-    () => tasks.filter((task) => inDateRange(task.dueDate || task.startDate, startDate, endDate)),
+    () => tasks.filter((task) => inDateRange(taskDateForRange(task), startDate, endDate)),
     [tasks, startDate, endDate],
   );
   const taskBase = rangedTasks;
@@ -3852,7 +3857,7 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
     ...taskBase.filter((task) => task.status === "blocked"),
     ...delayedTasks,
   ].filter((task, index, list) => list.findIndex((item) => item.id === task.id) === index);
-  const completedTasks = taskBase.filter((task) => task.status === "done");
+  const completedTasks = taskBase.filter((task) => task.status === "done" && inDateRange(task.completedAt || task.doneAt || task.updatedAt, startDate, endDate));
   const activeTasks = taskBase.filter((task) => task.status !== "done" && task.status !== "blocked" && !(task.dueDate && task.dueDate < todayKey));
   const taskProgress = taskBase.length ? Math.round((doneTasks / taskBase.length) * 100) : 0;
   const phaseRows = phases.map((phase) => {
@@ -3878,20 +3883,17 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
     () => (mrnData?.records || []).filter((row) => mrnMatchesProject(row, project)),
     [mrnData?.records, project],
   );
-  const rangedMrns = projectMrns.filter((row) =>
-    [row.materialRequestDate, row.requiredDate, row.invoiceDate, row.date].some((value) => inDateRange(value, startDate, endDate)),
-  );
+  const rangedMrns = projectMrns.filter((row) => inDateRange(row.materialRequestDate || row.date, startDate, endDate));
   const deliveredMrns = rangedMrns.filter((row) => /delivered|closed|complete|received/i.test(row.status)).length;
   const mrnValue = rangedMrns.reduce((sum, row) => sum + (Number(String(row.quotationAmount || "").replace(/,/g, "")) || 0), 0);
 
-  const todayInRange = inDateRange(todayKey, startDate, endDate);
-  const todayRows = projectManpowerRows(dmrData?.today?.records || [], project);
-  const todayPlanRows = projectPlanRows(dmrData?.todayPlan, project);
-  const actualFromPlan = projectPlanActual(dmrData?.todayPlan, project);
-  const plannedManpower = todayInRange ? todayPlanRows.reduce((sum, row) => sum + row.plannedManpower, 0) || todayRows.reduce((sum, row) => sum + row.planned, 0) : 0;
-  const actualManpower = todayInRange ? actualFromPlan || todayRows.reduce((sum, row) => sum + row.actual, 0) : 0;
+  const manpowerRows = (dmrData?.tradeSiteManpower || dmrData?.siteManpower || [])
+    .filter((row) => dmrMatchesProject(row.site || row.label, project));
+  const plannedManpower = manpowerRows.reduce((sum, row) => sum + manpowerNumber(row.planned), 0);
+  const actualManpower = manpowerRows.reduce((sum, row) => sum + manpowerNumber(row.actual), 0);
   const manpowerPct = manpowerProgress(plannedManpower, actualManpower);
-  const hasManpowerData = todayInRange && (plannedManpower > 0 || actualManpower > 0);
+  const manpowerDatesWithData = dmrData?.summary?.datesWithData || 0;
+  const hasManpowerData = manpowerDatesWithData > 0 && (plannedManpower > 0 || actualManpower > 0);
   const assigneeRows = users.map((person) => {
     const assigned = taskBase.filter((task) => (task.assigneeIds || []).includes(person.id));
     return {
@@ -3910,12 +3912,15 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
   const TaskLine = ({ task }) => {
     const phaseName = phases.find((phase) => phase.id === task.phaseId)?.name || "No phase";
     const assigneeNames = users.filter((person) => (task.assigneeIds || []).includes(person.id)).map((person) => person.displayName || person.username).join(", ");
+    const displayDate = task.status === "done"
+      ? task.completedAt || task.doneAt || task.updatedAt || task.dueDate
+      : task.dueDate || task.startDate || task.updatedAt;
     return (
       <div className={`rounded-xl border p-3 ${card}`}>
         <div className="flex flex-wrap items-center gap-2">
           <StatusPill status={task.status || "todo"} compact />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">{task.title || "Untitled task"}</span>
-          <span className={`text-xs ${muted}`}>{formatDate(task.dueDate || task.startDate, "No date")}</span>
+          <span className={`text-xs ${muted}`}>{formatDate(displayDate, "No date")}</span>
         </div>
         <p className={`mt-2 text-xs leading-5 ${muted}`}>
           {phaseName}{assigneeNames ? ` · ${assigneeNames}` : ""}{task.description ? ` · ${task.description}` : ""}

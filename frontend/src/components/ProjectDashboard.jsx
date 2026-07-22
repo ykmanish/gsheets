@@ -4441,7 +4441,6 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
   }, [events]);
   const todayKey = new Date().toISOString().slice(0, 10);
   function openEvent(event) {
-    setCalendarPopover(null);
     if (event.type === "task" || event.type === "subtask") return event.source && onOpenTask(event.source);
     if (event.type === "phase") return event.source && onOpenPhase(event.source);
     if (event.type === "mrn") return event.source && onOpenMrn(event.source, mrnData);
@@ -4505,6 +4504,8 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
               const visibleCount = compactCalendar ? 2 : 3;
               const hiddenCount = Math.max(0, dayEvents.length - visibleCount);
               const popoverOpen = calendarPopover?.date === key;
+              const opensLeft = day.getDay() >= 4;
+              const opensUp = Math.floor((day - firstCell) / 86400000) >= 28;
               return (
                 <div key={key} className={cn(compactCalendar ? "h-[118px] p-1.5" : "min-h-[150px] p-2", "relative border-b border-r border-[#eef0eb] transition-[height,min-height,padding,background-color] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] last:border-r-0 dark:border-white/10", muted && "bg-[#fafbf8] text-[#a1a79e] dark:bg-white/[0.015]")}>
                   <div className="flex items-center justify-between">
@@ -4531,7 +4532,13 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
                     ))}
                   </div>
                   {popoverOpen && (
-                    <div className={cn("absolute left-2 right-2 top-9 z-30 rounded-[22px] bg-white p-3 text-[#171714] shadow-[0_18px_60px_rgba(15,23,42,0.22)] ring-1 ring-black/5 dark:bg-[#1b1e24] dark:text-white dark:ring-white/10", day.getDay() >= 5 && "left-auto right-2 w-[320px]", day.getDay() <= 1 && "left-2 right-auto w-[320px]")}>
+                    <div
+                      className={cn(
+                        "absolute z-30 w-[min(520px,calc(100vw-32px))] rounded-[24px] bg-white p-4 text-[#171714] shadow-[0_22px_70px_rgba(15,23,42,0.24)] ring-1 ring-black/5 dark:bg-[#1b1e24] dark:text-white dark:ring-white/10",
+                        opensLeft ? "right-2" : "left-2",
+                        opensUp ? "bottom-9" : "top-9",
+                      )}
+                    >
                       <div className="flex items-start justify-between gap-3 border-b border-[#e8ebe5] pb-3 dark:border-white/10">
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#7b8178]">{formatDate(key)}</p>
@@ -4541,14 +4548,14 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
                           <X className="h-4 w-4" />
                         </button>
                       </div>
-                      <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                      <div className="mt-3 grid max-h-[380px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
                         {dayEvents.map((event) => (
-                          <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("group w-full rounded-2xl border px-3 py-2.5 text-left text-xs transition hover:-translate-y-0.5 hover:shadow-sm", calendarTone(event.type, event.status))}>
+                          <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("group min-h-[86px] w-full rounded-2xl border px-3 py-2.5 text-left text-xs transition hover:-translate-y-0.5 hover:shadow-sm", calendarTone(event.type, event.status))}>
                             <div className="flex items-start gap-2">
                               <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-current" />
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-bold">{event.title}</span>
-                                {event.meta && <span className="mt-0.5 block text-[11px] opacity-75">{event.meta}</span>}
+                                {event.meta && <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 opacity-75">{event.meta}</span>}
                                 <span className="mt-1 inline-flex rounded-full bg-white/55 px-2 py-0.5 text-[10px] font-bold capitalize text-current dark:bg-black/15">{event.type}</span>
                               </span>
                             </div>

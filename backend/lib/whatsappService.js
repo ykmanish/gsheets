@@ -165,6 +165,7 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
             type: message.type || "text",
             text: textFromMessage(message),
             replyId: replyIdFromMessage(message),
+            contextId: message.context?.id || null,
             mediaId: media?.id || null,
             mediaMimeType: media?.mime_type || null,
             mediaFilename: message.document?.filename || null,
@@ -270,6 +271,11 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
       .sort((a, b) => new Date(a.timestamp || a.createdAt) - new Date(b.timestamp || b.createdAt));
   }
 
+  function findMessageByWamid(wamid) {
+    if (!wamid) return null;
+    return state.messages.find((message) => message.wamid === wamid) || null;
+  }
+
   function clearConversation(phone) {
     const normalized = normalizePhone(phone);
     if (!normalized) return 0;
@@ -360,6 +366,7 @@ function createWhatsAppService({ dataFile, accessToken, phoneNumberId, businessA
     sendMessage,
     listConversations,
     listMessages,
+    findMessageByWamid,
     clearConversation,
     listContacts,
     saveContact,

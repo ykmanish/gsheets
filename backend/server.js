@@ -12369,20 +12369,23 @@ function mrnWhatsappParams(row = {}, actorName = "User", comment = "") {
     const text = projectText(value, 900).replace(/\s+/g, " ").trim();
     return text || fallback;
   };
-  const materialList = (value) => {
-    const text = projectText(value, 1000)
+  const materialItemsForWhatsapp = (value) => {
+    const text = projectText(value)
       .replace(/\r/g, "\n")
-      .replace(/\s*\*\s*/g, "\n• ")
+      .replace(/\s*\*\s*/g, "\n")
       .replace(/\n{2,}/g, "\n")
       .trim();
-    const items = text
+    return text
       .split(/\n+/)
-      .map((item) => item.replace(/^[•*\-\s]+/, "").trim())
+      .map((item) => item.replace(/^[*\-\s]+/, "").replace(/\s+/g, " ").trim())
       .filter(Boolean);
-    return items.length ? items.map((item) => `• ${item}`).join("\n") : "-";
+  };
+  const materialSummary = (items = []) => {
+    return items.length ? "Sent separately" : "-";
   };
   const attachment = clean(row.mrnPhoto || row.quotationPhoto, "No attachment added");
-  const materials = materialList(row.materialRequirement);
+  const materialItems = materialItemsForWhatsapp(row.materialRequirement);
+  const materials = materialSummary(materialItems);
   return {
     actionRequest: [
       clean(row.mrnNo),
@@ -12414,14 +12417,18 @@ function mrnWhatsappParams(row = {}, actorName = "User", comment = "") {
   };
 }
 
-function mrnActionButtons(row = {}) {
-  const mrnNo = projectText(row.mrnNo);
-  if (!mrnNo) return [];
-  return [
-    { index: 0, payload: `MRN_APPROVE:${mrnNo}` },
-    { index: 1, payload: `MRN_DECLINE:${mrnNo}` },
-    { index: 2, payload: `MRN_COMMENT:${mrnNo}` },
-  ];
+function mrnMaterialFollowupText(row = {}) {
+  const text = projectText(row.materialRequirement)
+    .replace(/\r/g, "\n")
+    .replace(/\s*\*\s*/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+  const items = text
+    .split(/\n+/)
+    .map((item) => item.replace(/^[*\-\s]+/, "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  if (!items.length) return "";
+  return `Material Requirements for ${projectText(row.mrnNo || "MRN")}:\n${items.map((item) => `• ${item}`).join("\n")}`;
 }
 
 function formatDateForMessage(value) {
@@ -12456,9 +12463,16 @@ async function sendMrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
         templateName,
         language,
         templateParams: params,
-        templateButtons: eventName === "actionRequest" ? mrnActionButtons(row) : [],
       }, actor || { id: "system", displayName: "MRN WhatsApp automation" });
-      results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "sent", messageId: message.id });
+      const followupText = ["actionRequest", "approved"].includes(eventName) ? mrnMaterialFollowupText(row) : "";
+      let followupMessage = null;
+      if (followupText) {
+        followupMessage = await whatsappService.sendMessage({
+          to: contact.phone,
+          text: followupText,
+        }, actor || { id: "system", displayName: "MRN WhatsApp automation" });
+      }
+      results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "sent", messageId: message.id, followupMessageId: followupMessage?.id || null });
     } catch (error) {
       results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "failed", reason: error.message });
     }
@@ -12493,11 +12507,14 @@ function parseMrnWhatsappAction(message = {}) {
 async function handleMrnWhatsappReply(message = {}) {
   const action = parseMrnWhatsappAction(message);
   if (!action) return null;
+  const contextMessage = whatsappService.findMessageByWamid(message.contextId);
+  const contextMrnNo = projectText(contextMessage?.text || "").match(/\bMRN\s*\d+\b/i)?.[0] || "";
+  if (!action.mrnNo && contextMrnNo) action.mrnNo = contextMrnNo;
   addActivityLog({
     action: "Received MRN WhatsApp action",
     target: action.mrnNo || "MRN",
     category: "whatsapp",
-    details: { event: action.event, from: normalizePhone(message.from), text: message.text, replyId: message.replyId },
+    details: { event: action.event, from: normalizePhone(message.from), text: message.text, replyId: message.replyId, contextId: message.contextId },
   });
   const dashboard = await readMrnDashboard({ all: true });
   const records = dashboard.records || [];

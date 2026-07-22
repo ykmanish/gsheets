@@ -4406,6 +4406,7 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
   const [mrnError, setMrnError] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [fullscreenMounted, setFullscreenMounted] = useState(false);
+  const [calendarPopover, setCalendarPopover] = useState(null);
 
   const loadMrns = useCallback(async () => {
     try {
@@ -4440,6 +4441,7 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
   }, [events]);
   const todayKey = new Date().toISOString().slice(0, 10);
   function openEvent(event) {
+    setCalendarPopover(null);
     if (event.type === "task" || event.type === "subtask") return event.source && onOpenTask(event.source);
     if (event.type === "phase") return event.source && onOpenPhase(event.source);
     if (event.type === "mrn") return event.source && onOpenMrn(event.source, mrnData);
@@ -4500,20 +4502,61 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
               const key = day.toISOString().slice(0, 10);
               const dayEvents = eventMap.get(key) || [];
               const muted = day.getMonth() !== cursor.getMonth();
+              const visibleCount = compactCalendar ? 2 : 3;
+              const hiddenCount = Math.max(0, dayEvents.length - visibleCount);
+              const popoverOpen = calendarPopover?.date === key;
               return (
-                <div key={key} className={cn(compactCalendar ? "h-[118px] p-1.5" : "min-h-[150px] p-2", "border-b border-r border-[#eef0eb] transition-[height,min-height,padding,background-color] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] last:border-r-0 dark:border-white/10", muted && "bg-[#fafbf8] text-[#a1a79e] dark:bg-white/[0.015]")}>
+                <div key={key} className={cn(compactCalendar ? "h-[118px] p-1.5" : "min-h-[150px] p-2", "relative border-b border-r border-[#eef0eb] transition-[height,min-height,padding,background-color] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] last:border-r-0 dark:border-white/10", muted && "bg-[#fafbf8] text-[#a1a79e] dark:bg-white/[0.015]")}>
                   <div className="flex items-center justify-between">
                     <span className={cn("grid place-items-center rounded-full text-xs font-bold transition-[width,height] duration-500", compactCalendar ? "h-5 w-5" : "h-7 w-7", key === todayKey ? "bg-[#20231f] text-white dark:bg-[#d8f36a] dark:text-[#11150f]" : "")}>{day.getDate()}</span>
-                    {dayEvents.length > (compactCalendar ? 2 : 3) && <span className="text-[10px] font-semibold text-[#8a9087]">+{dayEvents.length - (compactCalendar ? 2 : 3)}</span>}
+                    {hiddenCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setCalendarPopover(popoverOpen ? null : { date: key, events: dayEvents });
+                        }}
+                        className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold transition", popoverOpen ? "bg-[#20231f] text-white" : "bg-[#eef0ec] text-[#5f665b] hover:bg-[#dfe4da]")}
+                      >
+                        +{hiddenCount}
+                      </button>
+                    )}
                   </div>
                   <div className={cn(compactCalendar ? "mt-1 space-y-1" : "mt-2 space-y-1.5", "transition-[margin] duration-500")}>
-                    {dayEvents.slice(0, compactCalendar ? 2 : 3).map((event) => (
+                    {dayEvents.slice(0, visibleCount).map((event) => (
                       <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("block w-full rounded-lg border px-2 text-left text-[11px] leading-4 transition duration-200 hover:-translate-y-0.5", compactCalendar ? "py-1" : "py-1.5", calendarTone(event.type, event.status))}>
                         <span className="block truncate font-bold">{event.title}</span>
                         {event.meta && <span className="block truncate opacity-70">{event.meta}</span>}
                       </button>
                     ))}
                   </div>
+                  {popoverOpen && (
+                    <div className={cn("absolute left-2 right-2 top-9 z-30 rounded-[22px] bg-white p-3 text-[#171714] shadow-[0_18px_60px_rgba(15,23,42,0.22)] ring-1 ring-black/5 dark:bg-[#1b1e24] dark:text-white dark:ring-white/10", day.getDay() >= 5 && "left-auto right-2 w-[320px]", day.getDay() <= 1 && "left-2 right-auto w-[320px]")}>
+                      <div className="flex items-start justify-between gap-3 border-b border-[#e8ebe5] pb-3 dark:border-white/10">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#7b8178]">{formatDate(key)}</p>
+                          <h4 className="mt-1 text-base font-bold">{dayEvents.length} calendar item{dayEvents.length === 1 ? "" : "s"}</h4>
+                        </div>
+                        <button type="button" onClick={() => setCalendarPopover(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f0f2ee] text-[#5f665b] hover:bg-[#e2e6de] dark:bg-white/10 dark:text-white/70">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                        {dayEvents.map((event) => (
+                          <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("group w-full rounded-2xl border px-3 py-2.5 text-left text-xs transition hover:-translate-y-0.5 hover:shadow-sm", calendarTone(event.type, event.status))}>
+                            <div className="flex items-start gap-2">
+                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-current" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-bold">{event.title}</span>
+                                {event.meta && <span className="mt-0.5 block text-[11px] opacity-75">{event.meta}</span>}
+                                <span className="mt-1 inline-flex rounded-full bg-white/55 px-2 py-0.5 text-[10px] font-bold capitalize text-current dark:bg-black/15">{event.type}</span>
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

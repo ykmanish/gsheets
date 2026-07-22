@@ -3852,6 +3852,9 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
   const taskBase = rangedTasks;
   const doneTasks = taskBase.filter((task) => task.status === "done").length;
   const blockedTasks = taskBase.filter((task) => task.status === "blocked").length;
+  const overallDoneTasks = tasks.filter((task) => task.status === "done").length;
+  const overallBlockedTasks = tasks.filter((task) => task.status === "blocked").length;
+  const overallProgress = tasks.length ? Math.round((overallDoneTasks / tasks.length) * 100) : project.metrics?.progress || 0;
   const delayedTasks = taskBase.filter((task) => task.status !== "done" && task.dueDate && task.dueDate < todayKey);
   const delayedBlockedTasks = [
     ...taskBase.filter((task) => task.status === "blocked"),
@@ -3859,7 +3862,7 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
   ].filter((task, index, list) => list.findIndex((item) => item.id === task.id) === index);
   const completedTasks = taskBase.filter((task) => task.status === "done" && inDateRange(task.completedAt || task.doneAt || task.updatedAt, startDate, endDate));
   const activeTasks = taskBase.filter((task) => task.status !== "done" && task.status !== "blocked" && !(task.dueDate && task.dueDate < todayKey));
-  const taskProgress = taskBase.length ? Math.round((doneTasks / taskBase.length) * 100) : 0;
+  const taskProgress = overallProgress;
   const phaseRows = phases.map((phase) => {
     const phaseTasks = taskBase.filter((task) => task.phaseId === phase.id);
     const done = phaseTasks.filter((task) => task.status === "done").length;
@@ -3905,9 +3908,9 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
     };
   }).filter((row) => row.total).sort((a, b) => b.total - a.total).slice(0, 4);
   const muted = darkMode ? "text-white/50" : "text-[#777d74]";
-  const card = darkMode ? "border-white/10 bg-[#1b1e24]" : "border-[#e0e4dd] bg-white";
+  const card = darkMode ? "bg-[#1b1e24]" : "bg-white";
   const soft = darkMode ? "bg-white/[0.05]" : "bg-[#f6f6f4]";
-  const reportCard = `rounded-[22px] border p-5 shadow-[0_10px_30px_rgba(18,24,18,0.04)] ${card}`;
+  const reportCard = `rounded-[22px] p-5 shadow-[0_10px_30px_rgba(18,24,18,0.05)] ${card}`;
 
   const TaskLine = ({ task }) => {
     const phaseName = phases.find((phase) => phase.id === task.phaseId)?.name || "No phase";
@@ -3916,7 +3919,7 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
       ? task.completedAt || task.doneAt || task.updatedAt || task.dueDate
       : task.dueDate || task.startDate || task.updatedAt;
     return (
-      <div className={`rounded-xl border p-3 ${card}`}>
+      <div className={`rounded-xl p-3 ${soft}`}>
         <div className="flex flex-wrap items-center gap-2">
           <StatusPill status={task.status || "todo"} compact />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">{task.title || "Untitled task"}</span>
@@ -3984,9 +3987,9 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {[
-                ["Done", doneTasks],
+                ["Done", overallDoneTasks],
                 ["Delayed", delayedTasks.length],
-                ["Blocked", blockedTasks],
+                ["Blocked", overallBlockedTasks],
                 ["MRN", rangedMrns.length],
               ].map(([label, value]) => (
                 <div key={label} className={`rounded-xl p-3 ${soft}`}>
@@ -3999,7 +4002,7 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
 
           <main className="min-h-0 overflow-y-auto bg-[#f4f5f2] p-5 dark:bg-[#101216]">
             {loading ? (
-              <div className={`rounded-2xl border px-6 py-16 text-center ${card}`}>
+              <div className={`rounded-2xl px-6 py-16 text-center ${card}`}>
                 <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" />
                 <p className={`mt-3 text-sm ${muted}`}>Preparing project report...</p>
               </div>
@@ -4025,8 +4028,8 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                         <span className="text-2xl font-bold">{taskProgress}%</span>
                       </ReportDonut>
                       <div>
-                        <p className="text-xl font-bold">{doneTasks}/{taskBase.length}</p>
-                        <p className={`mt-1 text-xs leading-5 ${muted}`}>tasks completed in selected range</p>
+                        <p className="text-xl font-bold">{overallDoneTasks}/{tasks.length}</p>
+                        <p className={`mt-1 text-xs leading-5 ${muted}`}>overall project tasks done</p>
                       </div>
                     </div>
                   </div>
@@ -4072,7 +4075,7 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                   </div>
                 </section>
 
-                <div className="mt-5 grid gap-5 xl:grid-cols-3">
+                <div className="mt-5 grid gap-5 xl:grid-cols-2">
                   <section className={reportCard}>
                     <h3 className="text-lg font-bold">Manpower</h3>
                     <p className={`mt-1 text-xs ${muted}`}>
@@ -4116,9 +4119,17 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                     </div>
                     <p className={`mt-4 text-xs ${muted}`}>Quotation value: <b>{mrnAmount(mrnValue)}</b></p>
                   </section>
-                  <section className={reportCard}>
-                    <h3 className="text-lg font-bold">Team Output</h3>
-                    <div className="mt-4 space-y-3">
+                </div>
+
+                <section className={`mt-5 ${reportCard}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-bold">Team Output</h3>
+                      <p className={`mt-1 text-xs ${muted}`}>Assigned task output in the selected range.</p>
+                    </div>
+                    <span className="text-2xl font-bold">{assigneeRows.length}</span>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {assigneeRows.map(({ person, total, done, delayed, blocked }, index) => (
                         <div key={person.id} className={`rounded-[16px] p-3 ${soft}`}>
                           <div className="flex items-center gap-3">
@@ -4132,9 +4143,8 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                         </div>
                       ))}
                       {!assigneeRows.length && <p className={`rounded-xl p-4 text-sm ${soft} ${muted}`}>No assigned task output in this range.</p>}
-                    </div>
-                  </section>
-                </div>
+                  </div>
+                </section>
               </>
             )}
           </main>

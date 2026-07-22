@@ -11263,10 +11263,6 @@ app.post("/project-dashboard/projects/:id/chat", (req, res) => {
     createdAt: new Date().toISOString(),
   };
   project.projectChat = [...(project.projectChat || []), message].slice(-500);
-  project.projectActivity = [
-    projectActivityEntry(req, "Chat message added", project.name, { type: "chat", parentId: "chat", parentLabel: "Project chat", messageId: message.id }),
-    ...(project.projectActivity || []),
-  ].slice(0, 300);
   saveProjectDashboardConfig();
   broadcastProjectChat(project.id, { event: "message", data: message });
   res.json({ success: true, message });

@@ -32,7 +32,6 @@ import {
   Maximize2,
   MessageSquare,
   Minimize2,
-  MoreHorizontal,
   PackageSearch,
   Paperclip,
   Pencil,
@@ -42,7 +41,6 @@ import {
   Search,
   Send,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
   Tag,
   Trash2,
@@ -666,9 +664,6 @@ function SlideOver({
             </span>
           </div>
           <div className="flex items-center gap-0.5">
-            <IconButton label="More actions">
-              <MoreHorizontal className="h-4 w-4" />
-            </IconButton>
             <IconButton label="Close" onClick={requestClose}>
               <X className="h-4 w-4" />
             </IconButton>
@@ -751,6 +746,8 @@ function TaskDetailView({
   users = [],
   attachments,
   dependencies,
+  editable,
+  onEdit,
 }) {
   const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
   const doneSubtasks = subtasks.filter((item) => item.done).length;
@@ -763,9 +760,19 @@ function TaskDetailView({
       <p className="text-sm text-[#7a8077] dark:text-white/45">
         in list <span className="border-b border-[#aeb4aa] text-[#30352f] dark:border-white/30 dark:text-white/75">{phase?.name || "Unassigned"}</span>
       </p>
-      <h2 className="mt-3 max-w-[520px] text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-[#101426] dark:text-white">
-        {task.title || "Untitled task"}
-      </h2>
+      <div className="mt-3 flex items-start justify-between gap-4">
+        <h2 className="max-w-[520px] min-w-0 text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-[#101426] dark:text-white">
+          {task.title || "Untitled task"}
+        </h2>
+        <div className="flex shrink-0 items-center gap-2 pt-1">
+          {editable && (
+            <Button variant="primary" onClick={onEdit}>
+              <Pencil className="h-4 w-4" />
+              Edit task
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="mt-6 space-y-4 border-b border-[#e5e8e2] pb-5 dark:border-white/10">
         <PropertyRow icon={Circle} label="Status">
@@ -773,6 +780,7 @@ function TaskDetailView({
             <StatusPill status={task.status || "todo"} compact />
             <span className="inline-flex items-center gap-1.5 text-base font-semibold text-[#20231f] dark:text-white">
               <CalendarDays className="h-4 w-4 text-[#777d74] dark:text-white/45" />
+              <span className="text-xs font-medium text-[#777d74] dark:text-white/45">Due date</span>
               {formatDate(task.dueDate, "No date")}
             </span>
           </div>
@@ -944,7 +952,7 @@ function TaskDetailView({
   );
 }
 
-function PhaseDetailView({ phase, tasks, users, onOpenTask }) {
+function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) {
   const done = tasks.filter((task) => task.status === "done").length;
   const blocked = tasks.filter((task) => task.status === "blocked").length;
   const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
@@ -954,9 +962,19 @@ function PhaseDetailView({ phase, tasks, users, onOpenTask }) {
       <p className="text-sm text-[#7a8077] dark:text-white/45">
         in project <span className="border-b border-[#aeb4aa] text-[#30352f] dark:border-white/30 dark:text-white/75">Project schedule</span>
       </p>
-      <h2 className="mt-3 max-w-[520px] text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-[#101426] dark:text-white">
-        {phase.name || "Untitled phase"}
-      </h2>
+      <div className="mt-3 flex items-start justify-between gap-4">
+        <h2 className="max-w-[520px] min-w-0 text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-[#101426] dark:text-white">
+          {phase.name || "Untitled phase"}
+        </h2>
+        <div className="flex shrink-0 items-center gap-2 pt-1">
+          {editable && (
+            <Button variant="primary" onClick={onEdit}>
+              <Pencil className="h-4 w-4" />
+              Edit phase
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="mt-6 space-y-4 border-b border-[#e5e8e2] pb-5 dark:border-white/10">
         <PropertyRow icon={Sparkles} label="Progress">
@@ -965,11 +983,17 @@ function PhaseDetailView({ phase, tasks, users, onOpenTask }) {
             <span className="text-xs text-[#737970] dark:text-white/50">{done} of {tasks.length} tasks done</span>
           </div>
         </PropertyRow>
-        <PropertyRow icon={CalendarDays} label="Start date">
-          <span className="text-sm font-medium">{formatDate(phase.startDate, "No start date")}</span>
-        </PropertyRow>
-        <PropertyRow icon={CalendarDays} label="Target date">
-          <span className="text-sm font-medium">{formatDate(phase.dueDate, "No target date")}</span>
+        <PropertyRow icon={CalendarDays} label="Dates">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="inline-flex items-center gap-1.5 text-base font-semibold text-[#20231f] dark:text-white">
+              <span className="text-xs font-medium text-[#777d74] dark:text-white/45">Start date</span>
+              {formatDate(phase.startDate, "No start date")}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-base font-semibold text-[#20231f] dark:text-white">
+              <span className="text-xs font-medium text-[#777d74] dark:text-white/45">Target date</span>
+              {formatDate(phase.dueDate, "No target date")}
+            </span>
+          </div>
         </PropertyRow>
         <PropertyRow icon={Tag} label="Tags">
           <div className="flex flex-wrap gap-2">
@@ -1245,21 +1269,7 @@ function TaskDrawer({
               )}
             </div>
           </div>
-        ) : (
-          <div className="flex items-center justify-between gap-3">
-            {editable ? (
-              <Button variant="primary" onClick={() => setEditMode(true)}>
-                <Pencil className="h-4 w-4" />
-                Edit task
-              </Button>
-            ) : (
-              <span />
-            )}
-            <Button onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        )
+        ) : null
       }
     >
       {!isEditing ? (
@@ -1271,6 +1281,8 @@ function TaskDrawer({
           users={users}
           attachments={attachments}
           dependencies={dependencies}
+          editable={editable}
+          onEdit={() => setEditMode(true)}
         />
       ) : (
       <div className="px-6 pb-8 pt-5 sm:px-7">
@@ -1830,21 +1842,7 @@ function PhaseDrawer({
               </Button>
             </div>
           </div>
-        ) : (
-          <div className="flex items-center justify-between gap-3">
-            {editable ? (
-              <Button variant="primary" onClick={() => setEditMode(true)}>
-                <Pencil className="h-4 w-4" />
-                Edit phase
-              </Button>
-            ) : (
-              <span />
-            )}
-            <Button onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        )
+        ) : null
       }
     >
       {!isEditing ? (
@@ -1852,6 +1850,8 @@ function PhaseDrawer({
           phase={phase}
           tasks={tasks}
           users={users}
+          editable={editable}
+          onEdit={() => setEditMode(true)}
           onOpenTask={onOpenTask}
         />
       ) : (
@@ -3318,10 +3318,6 @@ function TasksView({
             ]}
           />
         </div>
-        <Button>
-          <SlidersHorizontal className="h-4 w-4" />
-          More
-        </Button>
       </div>
       <section className="mt-4 overflow-x-auto rounded-2xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
         <div className="hidden min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] gap-3 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">

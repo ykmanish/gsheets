@@ -291,7 +291,6 @@ function MrnWhatsappAutomationDrawer({ darkMode, onClose }) {
   });
   const muted = darkMode ? "text-white/45" : "text-black/48";
   const panel = darkMode ? "border-white/10 bg-[#181a20]" : "border-black/[0.07] bg-white";
-  const inputClass = `h-10 w-full rounded-xl border px-3 text-sm outline-none transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white focus:border-[#d8f36a]" : "border-black/10 bg-white text-[#171714] focus:border-[#72cf50]"}`;
   const lastRun = settings.lastRun || null;
   const contactInitials = (value = "") =>
     String(value)
@@ -477,17 +476,6 @@ function MrnWhatsappAutomationDrawer({ darkMode, onClose }) {
               <div className={`rounded-2xl border px-6 py-16 text-center ${panel}`}><Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" /><p className={`mt-3 text-sm ${muted}`}>Loading WhatsApp contacts...</p></div>
             ) : (
               <div className="space-y-5">
-                <section className={`rounded-2xl border p-4 ${panel}`}>
-                  <h3 className="text-sm font-bold">Approved template names</h3>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    {[["actionRequest", "New MRN action request"], ["approved", "MRN approved outcome"], ["declined", "MRN declined outcome"], ["comment", "MRN comment outcome"]].map(([key, label]) => (
-                      <div key={key} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_86px]">
-                        <label className="block"><span className={`mb-1 block text-[11px] font-semibold ${muted}`}>{label}</span><input value={settings.templates?.[key] || ""} onChange={(event) => setSettings((current) => ({ ...current, templates: { ...current.templates, [key]: event.target.value } }))} className={inputClass} /></label>
-                        <label className="block"><span className={`mb-1 block text-[11px] font-semibold ${muted}`}>Lang</span><input value={settings.languages?.[key] || "en"} onChange={(event) => setSettings((current) => ({ ...current, languages: { ...current.languages, [key]: event.target.value } }))} className={inputClass} /></label>
-                      </div>
-                    ))}
-                  </div>
-                </section>
                 <ContactSection title="Approval / action parties" description="These numbers receive the new MRN action request with approve, decline and comment buttons." field="approvalContactIds" />
                 <ContactSection title="Concern department" description="These numbers receive approval, decline and comment outcomes." field="concernContactIds" />
               </div>

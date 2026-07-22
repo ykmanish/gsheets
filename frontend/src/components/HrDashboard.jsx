@@ -5,6 +5,7 @@ import Image from "next/image";
 import { BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, Mail, MessageCircle, MessageSquare, Pencil, Phone, Plus, RefreshCw, Search, ShieldCheck, Trash2, UserRound, Users, WalletCards, X } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
+import UserAvatar from "./UserAvatar";
 
 async function api(path) {
   const response = await fetch(`${API_URL}${path}`);
@@ -855,7 +856,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     <tr key={employee.id} className={`transition ${darkMode ? "bg-white/[0.035] hover:bg-white/[0.06]" : "bg-[#f8f9fc] hover:bg-[#f3f5f9]"}`}>
                       <td className="rounded-l-xl px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#10a66b] text-sm font-black text-white">{initials(employee.displayName || employee.username)}</span>
+                          <UserAvatar user={employee} name={employee.displayName || employee.username} className="h-10 w-10" />
                           <div>
                             <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>{employee.displayName || employee.username}</p>
                             <p className={`mt-0.5 text-xs ${muted}`}>{employee.username || "-"}</p>
@@ -1381,7 +1382,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 <aside className={`h-fit space-y-4 self-start rounded-[24px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-emerald-100 bg-[#f6fbf7]"}`}>
                   <span className={`inline-flex rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wide ${darkMode ? "bg-lime-300/15 text-lime-200" : "bg-[#dcfacb] text-[#4b9b16]"}`}>Employee</span>
                   <div className={`rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-emerald-100 bg-white"}`}>
-                    <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#10a66b] text-base font-black text-white">{initials(selectedEmployee.displayName || selectedEmployee.username)}</span>
+                    <UserAvatar user={selectedEmployee} name={selectedEmployee.displayName || selectedEmployee.username} size="lg" rounded="lg" />
                     <p className="mt-4 text-lg font-black">{selectedEmployee.displayName || selectedEmployee.username}</p>
                     <p className={`mt-1 text-xs ${muted}`}>{selectedEmployee.designation || "Designation not set"}</p>
                   </div>

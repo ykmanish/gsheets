@@ -220,6 +220,9 @@ function sanitizeUser(user, role) {
     whatsappPhone: user.whatsappPhone || user.whatsappNumber || "",
     department: user.department || "",
     designation: user.designation || user.jobTitle || "",
+    gender: user.gender || "",
+    avatarPreset: user.avatarPreset || "",
+    avatarUrl: user.avatarUrl || "",
     employeeCode: user.employeeCode || user.employeeId || "",
     joiningDate: user.joiningDate || user.dateOfJoining || user.joinDate || "",
     roleId: user.roleId ? String(user.roleId) : null,
@@ -463,6 +466,9 @@ app.patch("/profile", requireAuth, async (req, res) => {
       whatsappPhone: profilePhone(body.whatsappPhone || body.phone),
       department: profileText(body.department, 80),
       designation: profileText(body.designation, 80),
+      gender: ["male", "female"].includes(String(body.gender || "").toLowerCase()) ? String(body.gender || "").toLowerCase() : "male",
+      avatarPreset: profileText(body.avatarPreset, 80),
+      avatarUrl: "",
       updatedAt: new Date(),
     };
     if (!update.displayName) return res.status(400).json({ error: "Display name is required" });
@@ -2481,7 +2487,13 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   ])].map(projectText).filter(Boolean))];
   const dates = employeeReportDateRange();
   const heatmapReports = filterEmployeeReports(isAdmin ? allCachedReports : ownReports, { dateFrom: dates[0], dateTo: dates[dates.length - 1], userIds: isAdmin ? [] : [userId] });
-  const users = [{ userId, employeeName: req.authUser.displayName || req.authUser.username || "You" }];
+  const users = [{
+    userId,
+    employeeName: req.authUser.displayName || req.authUser.username || "You",
+    gender: req.authUser.gender || "",
+    avatarPreset: req.authUser.avatarPreset || "",
+    avatarUrl: req.authUser.avatarUrl || "",
+  }];
   const heatmap = users.map((user) => {
     const submitted = new Set(heatmapReports.filter((report) => String(report.userId) === user.userId).map((report) => report.reportDate));
     return {
@@ -2490,7 +2502,14 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     };
   });
   const reportUsers = isAdmin
-    ? linkedUsers.map((user) => ({ _id: String(user._id), employeeName: user.displayName || user.username || "Employee", department: user.department || "" }))
+    ? linkedUsers.map((user) => ({
+      _id: String(user._id),
+      employeeName: user.displayName || user.username || "Employee",
+      department: user.department || "",
+      gender: user.gender || "",
+      avatarPreset: user.avatarPreset || "",
+      avatarUrl: user.avatarUrl || "",
+    }))
     : [];
   const todaySubmissionStatus = isAdmin
     ? linkedUsers.map((user) => {
@@ -2500,6 +2519,9 @@ async function buildEmployeeReportDashboard(req, query = {}) {
         userId: linkedUserId,
         employeeName: user.displayName || user.username || "Employee",
         department: user.department || "",
+        gender: user.gender || "",
+        avatarPreset: user.avatarPreset || "",
+        avatarUrl: user.avatarUrl || "",
         submitted: Boolean(submitted),
         submittedAt: submitted?.submittedAt || null,
         taskType: submitted?.taskType || "",
@@ -2533,7 +2555,14 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     },
     options: { ...EMPLOYEE_REPORT_OPTIONS, sites: siteOptions },
     optionUsage,
-    reportUsers: reportUsers.map((user) => ({ userId: String(user._id), employeeName: user.employeeName || "Employee", department: user.department || "" })),
+    reportUsers: reportUsers.map((user) => ({
+      userId: String(user._id),
+      employeeName: user.employeeName || "Employee",
+      department: user.department || "",
+      gender: user.gender || "",
+      avatarPreset: user.avatarPreset || "",
+      avatarUrl: user.avatarUrl || "",
+    })),
     todaySubmissionStatus,
     reminderSettings,
     reports: reports.map(sanitizeEmployeeReport),
@@ -3199,7 +3228,7 @@ async function buildEmployeeReportExportData(req, query = {}) {
   const roleMap = new Map(roles.map((role) => [String(role._id), role]));
   const activeUsers = (await db.collection("users")
     .find({ blacklisted: { $ne: true }, usernameLower: { $ne: SUPER_ADMIN_USERNAME.toLowerCase() } })
-    .project({ displayName: 1, username: 1, usernameLower: 1, department: 1, roleId: 1, roleName: 1 })
+    .project({ displayName: 1, username: 1, usernameLower: 1, department: 1, roleId: 1, roleName: 1, gender: 1, avatarPreset: 1, avatarUrl: 1 })
     .sort({ displayName: 1, username: 1 })
     .limit(1000)
     .toArray())
@@ -3211,6 +3240,9 @@ async function buildEmployeeReportExportData(req, query = {}) {
         username: user.username || "",
         department: user.department || "",
         roleName: role?.name || user.roleName || "",
+        gender: user.gender || "",
+        avatarPreset: user.avatarPreset || "",
+        avatarUrl: user.avatarUrl || "",
       };
     })
     .filter((user) => projectText(user.roleName).toLowerCase() !== "dmr manager")
@@ -11108,6 +11140,9 @@ app.get("/project-dashboard/config", async (req, res) => {
       id: String(user._id),
       displayName: user.displayName || user.username,
       username: user.username,
+      gender: user.gender || "",
+      avatarPreset: user.avatarPreset || "",
+      avatarUrl: user.avatarUrl || "",
       isSuperAdmin: isEffectiveSuperAdmin(user, roleMap.get(String(user.roleId))),
     })),
   });
@@ -11158,7 +11193,7 @@ app.get("/project-dashboard/projects/:id/access", async (req, res) => {
   res.json({
     access: project.projectAccess || [],
     canManage: canManageProjectAccess(project, req),
-    users: users.map((user) => ({ id: String(user._id), displayName: user.displayName || user.username, username: user.username })),
+    users: users.map((user) => ({ id: String(user._id), displayName: user.displayName || user.username, username: user.username, gender: user.gender || "", avatarPreset: user.avatarPreset || "", avatarUrl: user.avatarUrl || "" })),
   });
 });
 

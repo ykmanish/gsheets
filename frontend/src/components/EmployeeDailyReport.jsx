@@ -5,6 +5,7 @@ import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, Chevr
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import { ConfirmModal, useClickOutside } from "./ui";
+import UserAvatar from "./UserAvatar";
 
 const employeeReportTestDateKey = "employee-report-test-date";
 
@@ -1811,6 +1812,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const sidebarSitesPreview = customPrefs.sites.slice(0, 3);
   const sidebarCategoriesPreview = customPrefs.categories.slice(0, 3);
   const reportUsers = data?.reportUsers || [];
+  const reportUserMap = new Map(reportUsers.map((item) => [String(item.userId || ""), item]));
   const todaySubmissionStatus = data?.todaySubmissionStatus || [];
   const filteredTodayStatus = todaySubmissionStatus.filter((item) => {
     const query = todayStatusSearch.trim().toLowerCase();
@@ -1992,7 +1994,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <span className={`grid h-10 w-10 place-items-center rounded-full text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-[#d5f3f0] text-[#145b39]"}`}>{(report.employeeName || "E").slice(0, 1).toUpperCase()}</span>
+                        <UserAvatar user={reportUserMap.get(String(report.userId || ""))} name={report.employeeName} className="h-10 w-10" />
                         <div>
                           <p className="font-semibold">{report.employeeName}</p>
                           <p className={`text-xs ${muted}`}>{report.reportDate || "-"}</p>
@@ -2178,7 +2180,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                         <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
-                            <span className={`grid h-10 w-10 place-items-center rounded-full text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-[#d5f3f0] text-[#145b39]"}`}>{(item.employeeName || "E").slice(0, 1).toUpperCase()}</span>
+                            <UserAvatar user={item} name={item.employeeName} className="h-10 w-10" />
                             <p className="font-semibold">{item.employeeName}</p>
                           </div>
                         </td>

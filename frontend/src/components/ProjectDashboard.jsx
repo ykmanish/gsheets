@@ -54,6 +54,7 @@ import {
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import MrnDetailDrawer from "./MrnDetailDrawer";
+import UserAvatar from "./UserAvatar";
 import { ConfirmModal, DatePicker, SelectMenu } from "./ui";
 
 const STATUS_OPTIONS = [
@@ -286,7 +287,7 @@ function IconButton({ label, className = "", children, ...props }) {
   );
 }
 
-function Avatar({ name, index = 0, size = "md", className = "" }) {
+function Avatar({ name, user, index = 0, size = "md", className = "" }) {
   const colors = [
     "bg-[#2e8b70]",
     "bg-[#637dd8]",
@@ -300,30 +301,22 @@ function Avatar({ name, index = 0, size = "md", className = "" }) {
       : size === "lg"
         ? "h-11 w-11 text-sm"
         : "h-8 w-8 text-[10px]";
-  return (
-    <span
-      title={name}
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white dark:ring-[#171915]",
-        colors[(String(name || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) || index) % colors.length],
-        sizes,
-        className,
-      )}
-    >
-      {initials(name)}
-    </span>
-  );
+  if (user?.avatarUrl || user?.avatarPreset || user?.gender) {
+    return <UserAvatar user={user} name={name} className={cn("ring-2 ring-white dark:ring-[#171915]", sizes, className)} />;
+  }
+  return <span title={name} className={cn("inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white dark:ring-[#171915]", colors[(String(name || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) || index) % colors.length], sizes, className)}>{initials(name)}</span>;
 }
 
-function AvatarStack({ names = [], limit = 4 }) {
+function AvatarStack({ names = [], people = [], limit = 4 }) {
+  const items = people.length ? people : names.map((name) => ({ name }));
   return (
     <span className="flex items-center -space-x-2">
-      {names.slice(0, limit).map((name, index) => (
-        <Avatar key={`${name}-${index}`} name={name} index={index} />
+      {items.slice(0, limit).map((person, index) => (
+        <Avatar key={`${person.id || person.name}-${index}`} name={person.name || person.displayName || person.username} user={person.id ? person : undefined} index={index} />
       ))}
-      {names.length > limit && (
+      {items.length > limit && (
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#eceee9] text-[10px] font-bold text-[#5f645c] ring-2 ring-white dark:bg-white/10 dark:text-white/70 dark:ring-[#171915]">
-          +{names.length - limit}
+          +{items.length - limit}
         </span>
       )}
     </span>
@@ -340,6 +333,10 @@ function projectTeamMembers(project = {}, tasks = [], users = []) {
       id: key,
       name,
       username: person.username || "",
+      displayName: person.displayName || name,
+      gender: person.gender || "",
+      avatarPreset: person.avatarPreset || "",
+      avatarUrl: person.avatarUrl || "",
       role,
       taskCount: tasks.filter((task) => (task.assigneeIds || []).includes(person.id)).length,
     });
@@ -519,6 +516,7 @@ function AssigneePicker({
               >
                 <Avatar
                   name={person.displayName || person.username}
+                  user={person}
                   index={index}
                   size="sm"
                 />
@@ -605,6 +603,7 @@ function AssigneePicker({
                 </span>
                 <Avatar
                   name={person.displayName || person.username}
+                  user={person}
                   index={index}
                   size="sm"
                 />
@@ -800,7 +799,7 @@ function TaskDetailView({
             <div className="flex flex-wrap items-center gap-2">
               {assignees.map((person, index) => (
                 <span key={person.id} className="inline-flex items-center gap-2 rounded-full bg-[#f2f5f1] py-1 pl-1 pr-3 text-sm font-medium dark:bg-white/[0.06]">
-                  <Avatar name={person.displayName || person.username} index={index} size="sm" />
+                  <Avatar name={person.displayName || person.username} user={person} index={index} size="sm" />
                   {person.displayName || person.username}
                 </span>
               ))}
@@ -1083,9 +1082,7 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
         </div>
         <div className="overflow-hidden rounded-xl border border-[#e0e4dd] dark:border-white/10">
           {tasks.map((task, index) => {
-            const names = users
-              .filter((person) => (task.assigneeIds || []).includes(person.id))
-              .map((person) => person.displayName || person.username);
+            const assignees = users.filter((person) => (task.assigneeIds || []).includes(person.id));
             return (
               <button
                 type="button"
@@ -1104,7 +1101,7 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
                     Due {formatDate(task.dueDate, "not set")}
                   </p>
                 </div>
-                <AvatarStack names={names} limit={2} key={index} />
+                <AvatarStack people={assignees} limit={2} key={index} />
               </button>
             );
           })}
@@ -1781,6 +1778,7 @@ function TaskDrawer({
                 <div key={person.id} className="flex gap-3">
                   <Avatar
                     name={person.displayName || person.username}
+                    user={person}
                     index={index}
                     size="sm"
                   />
@@ -1935,11 +1933,9 @@ function PhaseDrawer({
               </div>
               <div className="mt-3 divide-y divide-[#e4e7e1] overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:divide-white/10 dark:border-white/10 dark:bg-white/[0.03]">
                 {tasks.map((task, index) => {
-                  const names = users
-                    .filter((person) =>
-                      (task.assigneeIds || []).includes(person.id),
-                    )
-                    .map((person) => person.displayName || person.username);
+                  const assignees = users.filter((person) =>
+                    (task.assigneeIds || []).includes(person.id),
+                  );
                   return (
                     <div
                       key={task.id}
@@ -1965,7 +1961,7 @@ function PhaseDrawer({
                           {formatDate(task.dueDate)}
                         </span>
                       </span>
-                      <AvatarStack names={names} limit={2} key={index} />
+                      <AvatarStack people={assignees} limit={2} key={index} />
                     </div>
                   );
                 })}
@@ -2424,7 +2420,7 @@ function TeamDrawer({ project, tasks, users, onClose }) {
               key={member.id}
               className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.035]"
             >
-              <Avatar name={member.name} index={index} />
+              <Avatar name={member.name} user={member} index={index} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{member.name}</p>
                 <p className="mt-0.5 truncate text-xs text-[#7d837a] dark:text-white/45">
@@ -2608,7 +2604,7 @@ function ProjectAccessDrawer({
             return (
               <div key={entry.id} className="rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
                 <div className="flex items-start gap-3">
-                  <Avatar name={person?.displayName || person?.username || "User"} index={index} />
+                  <Avatar name={person?.displayName || person?.username || "User"} user={person} index={index} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold">{person?.displayName || person?.username || entry.userId}</p>
                     <p className="mt-1 text-xs text-[#747a71] dark:text-white/50">
@@ -2806,20 +2802,7 @@ function PortfolioView({
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {projects.map((project, projectIndex) => {
                 const tasks = project.manualTasks || [];
-                const memberNames = [
-                  ...new Set(
-                    [
-                      project.manager,
-                      ...tasks.flatMap((task) =>
-                        (task.assigneeIds || []).map(
-                          (id) =>
-                            users.find((person) => person.id === id)
-                              ?.displayName || id,
-                        ),
-                      ),
-                    ].filter(Boolean),
-                  ),
-                ];
+                const members = projectTeamMembers(project, tasks, users);
                 const projectProgress = project.metrics?.progress || 0;
                 return (
                   <button
@@ -2889,7 +2872,7 @@ function PortfolioView({
                       <ProgressBar value={projectProgress} />
                     </div>
                     <div className="mt-5 flex items-center justify-between border-t border-[#eceeea] pt-3 dark:border-white/10">
-                      <AvatarStack names={memberNames} />
+                      <AvatarStack people={members} />
                       <div className="flex items-center gap-3 text-[11px] text-[#7d837a]">
                         <span>{project.metrics?.totalTasks || 0} tasks</span>
                         <span>{project.metrics?.documents || 0} files</span>
@@ -2980,7 +2963,6 @@ const WORKSPACE_NAV = [
 
 function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenTeam, navItems = WORKSPACE_NAV, unreadCounts = {} }) {
   const members = projectTeamMembers(project, tasks, users);
-  const memberNames = members.map((member) => member.name);
   return (
     <aside className="hidden w-[220px] shrink-0 flex-col  border-[#e0e4dd] bg-[#f0f2ee] px-3 py-4 md:flex dark:border-white/10 dark:bg-[#121511]">
       <div className="px-2">
@@ -3036,7 +3018,7 @@ function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenT
           Project team
         </p>
         <div className="mt-3 flex items-center justify-between gap-3 px-3">
-          <AvatarStack names={memberNames} />
+          <AvatarStack people={members} />
           <UserPlus className="h-4 w-4 text-[#8a9087]" />
         </div>
         <p className="mt-2 px-3 text-[11px] text-[#7d837a]">
@@ -3137,11 +3119,9 @@ function OverviewView({
           </header>
           <div className="divide-y divide-[#e9ebe7] dark:divide-white/10">
             {recent.map((task, index) => {
-              const names = users
-                .filter((person) =>
-                  (task.assigneeIds || []).includes(person.id),
-                )
-                .map((person) => person.displayName || person.username);
+              const assignees = users.filter((person) =>
+                (task.assigneeIds || []).includes(person.id),
+              );
               return (
                 <button
                   key={task.id}
@@ -3176,7 +3156,7 @@ function OverviewView({
                       </span>
                     </span>
                   </span>
-                  <AvatarStack names={names} limit={3} key={index} />
+                  <AvatarStack people={assignees} limit={3} key={index} />
                   <span className="text-right text-[11px] text-[#777d74]">
                     {formatDate(task.dueDate, "No date")}
                   </span>
@@ -3340,9 +3320,7 @@ function TasksView({
           <span>Due date</span>
         </div>
         {filtered.map((task, index) => {
-          const assigneeNames = users
-            .filter((person) => (task.assigneeIds || []).includes(person.id))
-            .map((person) => person.displayName || person.username);
+          const assignees = users.filter((person) => (task.assigneeIds || []).includes(person.id));
           const overdue =
             task.dueDate &&
             new Date(`${task.dueDate}T00:00:00`) < new Date() &&
@@ -3394,8 +3372,8 @@ function TasksView({
                   "No phase"}
               </span>
               <span className="block min-h-8 min-w-0">
-                {assigneeNames.length ? (
-                  <AvatarStack names={assigneeNames} limit={3} key={index} />
+                {assignees.length ? (
+                  <AvatarStack people={assignees} limit={3} key={index} />
                 ) : (
                   <span className="invisible block h-8 w-8">Unassigned</span>
                 )}
@@ -4133,7 +4111,7 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                       {assigneeRows.map(({ person, total, done, delayed, blocked }, index) => (
                         <div key={person.id} className={`rounded-[16px] p-3 ${soft}`}>
                           <div className="flex items-center gap-3">
-                          <Avatar name={person.displayName || person.username} index={index} />
+                          <Avatar name={person.displayName || person.username} user={person} index={index} />
                           <div className="min-w-0 flex-1">
                             <div className="flex justify-between text-xs"><span className="truncate font-semibold">{person.displayName || person.username}</span><span className="font-bold">{done}/{total}</span></div>
                             <ProgressBar value={total ? Math.round((done / total) * 100) : 0} className="mt-2 !h-2" />
@@ -4350,14 +4328,14 @@ function monthLabel(date) {
 }
 
 function calendarTone(type, status = "") {
-  if (/blocked/i.test(status)) return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200";
-  if (/done|delivered|closed|complete/i.test(status)) return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200";
+  if (/blocked/i.test(status)) return "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-200";
+  if (/done|delivered|closed|complete/i.test(status)) return "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200";
   const tones = {
-    phase: "border-[#cde8bd] bg-[#effbe9] text-[#3f7d16] dark:border-green-400/20 dark:bg-green-400/10 dark:text-green-200",
-    task: "border-[#f4d38b] bg-[#fff6df] text-[#8a6312] dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
-    subtask: "border-[#cbd8ff] bg-[#f0f4ff] text-[#3159a5] dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
-    mrn: "border-[#f0c5cd] bg-[#fff0f2] text-[#9b3445] dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
-    project: "border-[#cbd7cf] bg-white text-[#4c5349] dark:border-white/10 dark:bg-white/[0.06] dark:text-white/75",
+    phase: "bg-[#effbe9] text-[#3f7d16] dark:bg-green-400/10 dark:text-green-200",
+    task: "bg-[#fff6df] text-[#8a6312] dark:bg-amber-400/10 dark:text-amber-200",
+    subtask: "bg-[#f0f4ff] text-[#3159a5] dark:bg-blue-400/10 dark:text-blue-200",
+    mrn: "bg-[#fff0f2] text-[#9b3445] dark:bg-rose-400/10 dark:text-rose-200",
+    project: "bg-white text-[#4c5349] dark:bg-white/[0.06] dark:text-white/75",
   };
   return tones[type] || tones.project;
 }
@@ -4525,7 +4503,7 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
                   </div>
                   <div className={cn(compactCalendar ? "mt-1 space-y-1" : "mt-2 space-y-1.5", "transition-[margin] duration-500")}>
                     {dayEvents.slice(0, visibleCount).map((event) => (
-                      <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("block w-full rounded-lg border px-2 text-left text-[11px] leading-4 transition duration-200 hover:-translate-y-0.5", compactCalendar ? "py-1" : "py-1.5", calendarTone(event.type, event.status))}>
+                      <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("block w-full rounded-lg px-2 text-left text-[11px] leading-4 transition duration-200 hover:-translate-y-0.5", compactCalendar ? "py-1" : "py-1.5", calendarTone(event.type, event.status))}>
                         <span className="block truncate font-bold">{event.title}</span>
                         {event.meta && <span className="block truncate opacity-70">{event.meta}</span>}
                       </button>
@@ -4550,7 +4528,7 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
                       </div>
                       <div className="mt-3 grid max-h-[380px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
                         {dayEvents.map((event) => (
-                          <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("group min-h-[86px] w-full rounded-2xl border px-3 py-2.5 text-left text-xs transition hover:-translate-y-0.5 hover:shadow-sm", calendarTone(event.type, event.status))}>
+                          <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("group min-h-[86px] w-full rounded-2xl px-3 py-2.5 text-left text-xs transition hover:-translate-y-0.5 hover:shadow-sm", calendarTone(event.type, event.status))}>
                             <div className="flex items-start gap-2">
                               <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-current" />
                               <span className="min-w-0 flex-1">
@@ -5487,7 +5465,7 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
               <div className="max-h-52 space-y-1 overflow-y-auto">
                 {filteredMentions.map((member) => (
                   <button key={member.id} type="button" onClick={() => addMention(member)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f2f5f1] dark:hover:bg-white/[0.06]">
-                    <Avatar name={member.name} size="sm" />
+                    <Avatar name={member.name} user={member} size="sm" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{member.name}</span>
                       <span className="block truncate text-xs text-[#858b82]">{member.role}</span>

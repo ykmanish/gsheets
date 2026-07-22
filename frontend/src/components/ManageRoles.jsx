@@ -22,6 +22,7 @@ import {
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 import { ConfirmModal, SelectMenu } from "./ui";
+import UserAvatar from "./UserAvatar";
 
 const emptyRole = { id: "", name: "", description: "", menus: [], privileges: [] };
 const emptyUser = { username: "", displayName: "", password: "", roleId: "", menus: [], privileges: [] };
@@ -644,9 +645,7 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
                       <tr key={user.id} className={`transition ${darkMode ? "bg-white/[0.035] hover:bg-white/[0.06]" : "bg-[#f8f9fc] hover:bg-[#f3f5f9]"}`}>
                         <td className="rounded-l-xl px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <span className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-cyan-100 text-cyan-700"}`}>
-                              {(user.displayName || user.username || "U").slice(0, 1).toUpperCase()}
-                            </span>
+                            <UserAvatar user={user} name={user.displayName || user.username} className="h-10 w-10" />
                             <div>
                               <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>{user.displayName}</p>
                               <p className={`mt-0.5 text-xs ${muted}`}>{user.username}</p>

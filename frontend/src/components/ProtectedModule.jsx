@@ -24,6 +24,7 @@ import SiteImagesDashboard from "./SiteImagesDashboard";
 import EmployeeDailyReport from "./EmployeeDailyReport";
 import ModuleControl from "./ModuleControl";
 import HrDashboard from "./HrDashboard";
+import ProfilePage from "./ProfilePage";
 
 const menuPaths = {
   dashboard: "/dashboard",
@@ -48,6 +49,7 @@ const menuPaths = {
   "manage-roles": "/manage-roles",
   "manage-users": "/manage-users",
   "module-control": "/module-control",
+  profile: "/profile",
 };
 
 function ProtectedModuleContent({ moduleId, projectId }) {
@@ -70,6 +72,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     const assigned = [
       ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-documents", "hr-salary-slips", "hr-leave", "whatsapp", "manage-users", "module-control"] : [...menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu)), "hr-leave", "hr-salary-slips"]),
       "projects",
+      "profile",
     ];
     const globallyDisabled = new Set(disabledModules || []);
     return Array.from(new Set(assigned)).filter((menu) => !["notifications", "settings"].includes(menu) && (!globallyDisabled.has(menu) || ["dashboard", "module-control"].includes(menu)));
@@ -96,12 +99,18 @@ function ProtectedModuleContent({ moduleId, projectId }) {
 
   useEffect(() => {
     if (loading || !user) return;
+    const isEmployee = !user?.isSuperAdmin && String(user?.roleName || "").trim().toLowerCase() === "employee";
+    if (moduleId === "employee-daily-report" && isEmployee) {
+      router.replace("/profile");
+      return;
+    }
     if (allowedMenus.includes(moduleId)) return;
-    const fallback = allowedMenus[0] || "dashboard";
+    const fallback = isEmployee ? "profile" : allowedMenus[0] || "dashboard";
     router.replace(menuPaths[fallback] || "/dashboard");
   }, [allowedMenus, loading, moduleId, router, user]);
 
-  if (!isMounted || !user || (!loading && !allowedMenus.includes(moduleId))) {
+  const isEmployeeProfileRedirect = !loading && user && moduleId === "employee-daily-report" && !user?.isSuperAdmin && String(user?.roleName || "").trim().toLowerCase() === "employee";
+  if (!isMounted || !user || isEmployeeProfileRedirect || (!loading && !allowedMenus.includes(moduleId))) {
     return (
       <div className={`min-h-dvh ${darkMode ? "bg-[#0f1115]" : "bg-[#eef3f2]"}`} />
     );
@@ -161,6 +170,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "manage-roles" && <ManageRoles darkMode={darkMode} mode="roles" />}
         {moduleId === "manage-users" && <ManageRoles darkMode={darkMode} mode="users" />}
         {moduleId === "module-control" && user?.isSuperAdmin && <ModuleControl darkMode={darkMode} />}
+        {moduleId === "profile" && <ProfilePage darkMode={darkMode} />}
       </div>
       <NotificationDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} darkMode={darkMode} />
     </div>

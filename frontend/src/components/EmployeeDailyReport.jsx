@@ -1097,7 +1097,7 @@ function ConfettiBurst({ active, onDone }) {
   return <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-[70]" />;
 }
 
-function SubmissionCelebrationModal({ darkMode, celebration, onClose }) {
+function SubmissionCelebrationModal({ darkMode, celebration, onClose, canClockOut, clockingOut, onClockOut }) {
   if (!celebration) return null;
   const saving = celebration.status === "saving";
   const firstName = String(celebration.name || "there").trim().split(/\s+/)[0];
@@ -1127,7 +1127,14 @@ function SubmissionCelebrationModal({ darkMode, celebration, onClose }) {
             </blockquote>
           )}
           {!saving && (
-            <button type="button" onClick={onClose} className="mt-6 h-11 rounded-full bg-[#89ed3f] px-8 text-sm font-bold text-black transition hover:bg-[#7dde35] active:scale-[0.98]">Done</button>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              {canClockOut && (
+                <button type="button" onClick={onClockOut} disabled={clockingOut} className="h-11 rounded-full bg-red-50 px-8 text-sm font-bold text-red-600 transition hover:bg-red-100 active:scale-[0.98] disabled:opacity-55">
+                  {clockingOut ? "Clocking out..." : "Clock out"}
+                </button>
+              )}
+              <button type="button" onClick={onClose} className="h-11 rounded-full bg-[#89ed3f] px-8 text-sm font-bold text-black transition hover:bg-[#7dde35] active:scale-[0.98]">Done</button>
+            </div>
           )}
         </div>
       </section>
@@ -1262,6 +1269,8 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [sheetInput, setSheetInput] = useState("");
   const [sheetSaving, setSheetSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [attendanceClockingOut, setAttendanceClockingOut] = useState(false);
   const [refreshingToday, setRefreshingToday] = useState(false);
   const [deletingReportId, setDeletingReportId] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -1347,10 +1356,62 @@ export default function EmployeeDailyReport({ darkMode }) {
       setCustomPrefs(normalizedPrefs);
       setCustomOptionsOpen(!(normalizedPrefs.sites.length || normalizedPrefs.categories.length));
       setForm((current) => ({ ...current, department: current.department || result.profile?.department || "" }));
+      void loadTodayAttendance();
     } catch (error) {
       toast.error(error.message || "Could not load daily reports");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function browserLocation() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Location is not supported in this browser"));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        }),
+        () => reject(new Error("Could not read your current location. Please allow location access.")),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      );
+    });
+  }
+
+  async function loadTodayAttendance() {
+    try {
+      const result = await api("/hr/attendance");
+      const records = result.records || [];
+      const ownToday = records.find((record) => String(record.userId || "") === String(user?.id || "") && record.date === todayInput()) || null;
+      setTodayAttendance(ownToday);
+    } catch {
+      setTodayAttendance(null);
+    }
+  }
+
+  async function clockOutFromReportModal() {
+    try {
+      setAttendanceClockingOut(true);
+      const location = await browserLocation();
+      const response = await fetch(`${API_URL}/hr/attendance/clock-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(location),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not clock out");
+      setTodayAttendance(result.record || null);
+      window.dispatchEvent(new Event("uipl:hr-data-changed"));
+      toast.success("Clocked out");
+      setSubmissionCelebration(null);
+    } catch (error) {
+      toast.error(error.message || "Could not clock out");
+    } finally {
+      setAttendanceClockingOut(false);
     }
   }
 
@@ -1592,6 +1653,8 @@ export default function EmployeeDailyReport({ darkMode }) {
       } else {
         toast.success("Today’s report updated");
       }
+      window.dispatchEvent(new Event("uipl:employee-daily-report-submitted"));
+      void loadTodayAttendance();
       closeFormDrawer();
       await load();
     } catch (error) {
@@ -2936,7 +2999,14 @@ export default function EmployeeDailyReport({ darkMode }) {
         </div>
       )}
 
-      <SubmissionCelebrationModal darkMode={darkMode} celebration={submissionCelebration} onClose={() => setSubmissionCelebration(null)} />
+      <SubmissionCelebrationModal
+        darkMode={darkMode}
+        celebration={submissionCelebration}
+        onClose={() => setSubmissionCelebration(null)}
+        canClockOut={Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt)}
+        clockingOut={attendanceClockingOut}
+        onClockOut={clockOutFromReportModal}
+      />
       <ConfettiBurst active={confettiActive} onDone={() => setConfettiActive(false)} />
       <ConfirmModal
         darkMode={darkMode}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, Mail, MessageCircle, MessageSquare, Pencil, Phone, Plus, RefreshCw, Search, ShieldCheck, Trash2, UserRound, Users, WalletCards, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, LogIn, LogOut, Mail, MapPin, MessageCircle, MessageSquare, Navigation, Pencil, Phone, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Users, WalletCards, X } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
@@ -120,6 +120,16 @@ function monthLabelFromInput(month = "") {
   return new Date(`${month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 }
 
+function leaveDaysInMonth(request, month) {
+  if (!request?.startDate || !request?.endDate || !/^\d{4}-\d{2}$/.test(month || "")) return 0;
+  const monthStartDate = `${month}-01`;
+  const monthEndDate = endOfMonthInput(month);
+  if (request.endDate < monthStartDate || request.startDate > monthEndDate) return 0;
+  const startDate = request.startDate > monthStartDate ? request.startDate : monthStartDate;
+  const endDate = request.endDate < monthEndDate ? request.endDate : monthEndDate;
+  return leaveDayCount(startDate, endDate);
+}
+
 function salaryMonthOptions(joiningDate = "") {
   const now = new Date();
   const options = [];
@@ -136,6 +146,10 @@ function salaryMonthOptions(joiningDate = "") {
 function moneyValue(value) {
   const number = Number(String(value || "").replace(/,/g, ""));
   return Number.isFinite(number) ? number : 0;
+}
+
+function roundedMoneyValue(value) {
+  return Math.round(moneyValue(value));
 }
 
 function DrawerSelect({ darkMode, label, value, placeholder, options, onChange, required, searchable = false, searchPlaceholder = "Search..." }) {
@@ -329,6 +343,17 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [salaryDeleteTarget, setSalaryDeleteTarget] = useState(null);
   const [selectedLeave, setSelectedLeave] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [employeeSaving, setEmployeeSaving] = useState(false);
+  const [employeeForm, setEmployeeForm] = useState({ employmentType: "probation", monthlyInHandSalary: "" });
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [attendanceClockAction, setAttendanceClockAction] = useState("");
+  const [attendanceLocating, setAttendanceLocating] = useState(false);
+  const [attendanceSettingsOpen, setAttendanceSettingsOpen] = useState(false);
+  const [attendanceSearchResults, setAttendanceSearchResults] = useState([]);
+  const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100 });
+  const [todayReportSubmitted, setTodayReportSubmitted] = useState(false);
+  const [todayReportChecking, setTodayReportChecking] = useState(false);
+  const attendanceSearchTimerRef = useRef(null);
   const [reviewComment, setReviewComment] = useState("");
   const [leaveForm, setLeaveForm] = useState({ leaveType: "", startDate: "", endDate: "", reason: "" });
   const [salaryForm, setSalaryForm] = useState({
@@ -339,14 +364,18 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     designation: user?.designation || "",
     employeeCode: user?.employeeCode || "",
     joiningDate: user?.joiningDate || "",
+    employmentType: user?.employmentType || "probation",
+    monthlyInHandSalary: user?.monthlyInHandSalary || "",
     uan: "",
     paidDays: 30,
     lopDays: 0,
-    basic: "",
+    basic: user?.monthlyInHandSalary || "",
     earnings: [{ label: "House Rent Allowance", amount: "" }, { label: "Conveyance Allowance", amount: "" }],
     deductions: [{ label: "EPF Contribution", amount: "" }, { label: "Professional Tax", amount: "" }],
     companyName: "UIPL Docs",
     companyLocation: "India",
+    companyPhone: "",
+    companyEmail: "",
     companyLogo: "",
     pfAccountNumber: "",
     note: "",
@@ -359,7 +388,17 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   async function loadHr() {
     try {
       setLoading(true);
-      setData(await api("/hr/overview"));
+      const overview = await api("/hr/overview");
+      setData(overview);
+      if (overview?.attendanceSettings) {
+        setAttendanceForm({
+          address: overview.attendanceSettings.address || "",
+          latitude: overview.attendanceSettings.latitude || "",
+          longitude: overview.attendanceSettings.longitude || "",
+          radiusMeters: overview.attendanceSettings.radiusMeters || 100,
+        });
+      }
+      if (section === "attendance") void loadTodayReportStatus();
     } catch (error) {
       hrToast.error(error.message || "Could not load HR");
     } finally {
@@ -382,20 +421,35 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     return () => window.removeEventListener("uipl:hr-data-changed", reloadHrData);
   }, []);
 
+  useEffect(() => {
+    if (section !== "attendance") return undefined;
+    function refreshReportStatus() {
+      void loadTodayReportStatus();
+    }
+    window.addEventListener("uipl:employee-daily-report-submitted", refreshReportStatus);
+    window.addEventListener("focus", refreshReportStatus);
+    return () => {
+      window.removeEventListener("uipl:employee-daily-report-submitted", refreshReportStatus);
+      window.removeEventListener("focus", refreshReportStatus);
+    };
+  }, [section]);
+
   const employees = data?.employees || [];
   const documents = data?.documents || [];
   const salarySlips = data?.salarySlips || [];
   const leaveRequests = data?.leaveRequests || [];
+  const attendanceRecords = data?.attendanceRecords || [];
+  const attendanceSettings = data?.attendanceSettings || {};
   const canManageSalary = Boolean(data?.canManageHr);
   const currentName = user?.displayName || user?.username || "Employee";
-  const muted = darkMode ? "text-white/58" : "text-black/58";
-  const panel = darkMode ? "border-white/10 bg-[#171a20]" : "border-[#dfe7e4] bg-white";
-  const salaryPanel = darkMode ? "border-white/[0.08] bg-[#0f1217] shadow-[0_24px_70px_rgba(0,0,0,0.35)]" : panel;
-  const salaryTableSurface = darkMode ? "bg-[#11151b]" : "bg-white";
-  const salaryRowBorder = darkMode ? "border-white/[0.075] hover:bg-[#151a22]" : "border-black/5 hover:bg-[#f8faf8]";
+  const muted = darkMode ? "text-slate-400" : "text-black/58";
+  const panel = darkMode ? "border-white/[0.075] bg-[#090d12]" : "border-[#dfe7e4] bg-white";
+  const salaryPanel = darkMode ? "border-white/[0.075] bg-[#090d12]" : "border-[#e7ebe4] bg-white";
+  const salaryTableSurface = darkMode ? "bg-[#0c1117]" : "bg-[#fbfcf9]";
+  const salaryRowBorder = darkMode ? "border-white/[0.06] bg-[#0f151c] hover:bg-[#141b24]" : "border-[#edf0ea] bg-white hover:bg-[#fbfcf7]";
   const salaryBadge = darkMode
     ? "border border-emerald-400/25 bg-emerald-400/14 text-emerald-200 shadow-[0_0_0_1px_rgba(52,211,153,0.04)]"
-    : "bg-emerald-500/10 text-emerald-700";
+    : "bg-[#e8f7ef] text-[#08764f]";
   const softPanel = darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]";
   const activeEmployees = employees.filter((employee) => !employee.blacklisted);
   const selectedDocs = section === "salary" ? salarySlips : documents;
@@ -412,6 +466,24 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const leavePreviewDays = leaveDayCount(leaveForm.startDate, leaveForm.endDate);
   const leavePeriodPreview = leaveForm.startDate && leaveForm.endDate ? `${formatDateLabel(leaveForm.startDate)} - ${formatDateLabel(leaveForm.endDate)}` : "Select dates";
   const myLeaveRequests = leaveRequests.filter((request) => data?.canManageHr || request.userId === user?.id);
+  const myAttendanceRecords = attendanceRecords.filter((record) => data?.canManageHr || record.userId === user?.id);
+  const todayAttendance = attendanceRecords.find((record) => record.userId === user?.id && record.date === todayInput());
+  const attendanceConfigured = Boolean(Number(attendanceSettings.latitude) && Number(attendanceSettings.longitude));
+  const todayAttendanceRecords = myAttendanceRecords.filter((record) => record.date === todayInput());
+  const todayAttendanceLabel = todayAttendance?.clockOutAt ? "Completed" : todayAttendance?.clockInAt ? "Checked in" : "Not marked";
+  const todayWorkMinutes = Number(todayAttendance?.workMinutes || 0);
+  const mustFillReportBeforeClockOut = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt && !todayReportSubmitted);
+  const currentLeaveMonth = currentMonthInput();
+  const currentMonthLeaveRequests = myLeaveRequests.filter((request) => leaveDaysInMonth(request, currentLeaveMonth) > 0);
+  const approvedMonthLeaveRequests = currentMonthLeaveRequests.filter((request) => request.status === "approved");
+  const monthlyPaidLeaveAllowance = data?.canManageHr
+    ? activeEmployees.reduce((sum, employee) => sum + (employee.employmentType === "permanent" ? 1 : 0), 0)
+    : ((employees.find((employee) => employee.id === user?.id)?.employmentType || user?.employmentType) === "permanent" ? 1 : 0);
+  const currentMonthLeaveTaken = approvedMonthLeaveRequests.reduce((sum, request) => sum + leaveDaysInMonth(request, currentLeaveMonth), 0);
+  const currentMonthPaidLeaves = approvedMonthLeaveRequests.reduce((sum, request) => sum + Math.min(leaveDaysInMonth(request, currentLeaveMonth), Number(request.paidLeaveDays || 0)), 0);
+  const currentMonthAdvanceLeaves = approvedMonthLeaveRequests.reduce((sum, request) => sum + Math.min(leaveDaysInMonth(request, currentLeaveMonth), Number(request.unpaidLeaveDays || 0)), 0);
+  const currentMonthPendingLeaves = currentMonthLeaveRequests.filter((request) => request.status === "pending").length;
+  const remainingPaidLeaves = Math.max(0, monthlyPaidLeaveAllowance - currentMonthPaidLeaves);
   const selectedEmployeeLeaveHistory = selectedEmployee ? leaveRequests.filter((request) => request.userId === selectedEmployee.id) : [];
   const filteredEmployees = activeEmployees.filter((employee) => {
     const search = query.trim().toLowerCase();
@@ -487,14 +559,18 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         designation: profile.designation || user?.designation || "",
         employeeCode: profile.employeeCode || user?.employeeCode || "",
         joiningDate: profile.joiningDate || user?.joiningDate || "",
+        employmentType: profile.employmentType || "probation",
+        monthlyInHandSalary: profile.monthlyInHandSalary || "",
         uan: profile.uan || "",
         paidDays: profile.paidDays || 30,
         lopDays: profile.lopDays || 0,
-        basic: profile.basic || "",
+        basic: profile.monthlyInHandSalary || profile.basic || "",
         earnings: profile.earnings?.length ? profile.earnings : current.earnings,
         deductions: profile.deductions?.length ? profile.deductions : current.deductions,
         companyName: company.companyName || "UIPL Docs",
         companyLocation: company.companyLocation || "India",
+        companyPhone: company.companyPhone || "",
+        companyEmail: company.companyEmail || "",
         companyLogo: company.companyLogo || "",
         pfAccountNumber: company.pfAccountNumber || "",
         note: company.note || "",
@@ -528,14 +604,18 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         designation: slip.designation || "",
         employeeCode: slip.employeeCode || "",
         joiningDate: slip.joiningDate || "",
+        employmentType: slip.employmentType || meta.profile?.employmentType || "probation",
+        monthlyInHandSalary: slip.monthlyInHandSalary || meta.profile?.monthlyInHandSalary || "",
         uan: slip.uan || "",
         paidDays: slip.paidDays || 30,
         lopDays: slip.lopDays || 0,
-        basic: slip.basic || "",
+        basic: slip.monthlyInHandSalary || slip.basic || "",
         earnings: slip.earnings?.filter((item) => !/^basic(\s+salary)?$/i.test(String(item.label || "").trim()))?.length ? slip.earnings.filter((item) => !/^basic(\s+salary)?$/i.test(String(item.label || "").trim())) : current.earnings,
         deductions: slip.deductions?.length ? slip.deductions : current.deductions,
         companyName: company.companyName || "UIPL Docs",
         companyLocation: company.companyLocation || "India",
+        companyPhone: company.companyPhone || "",
+        companyEmail: company.companyEmail || "",
         companyLogo: company.companyLogo || "",
         pfAccountNumber: company.pfAccountNumber || "",
         note: company.note || "",
@@ -569,6 +649,175 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
   function addSalaryComponent(type) {
     setSalaryForm((current) => ({ ...current, [type]: [...current[type], { label: "", amount: "" }] }));
+  }
+
+  function openEmployeeDetail(employee) {
+    setSelectedEmployee(employee);
+    setEmployeeForm({
+      employmentType: employee?.employmentType || "probation",
+      monthlyInHandSalary: employee?.monthlyInHandSalary || "",
+    });
+  }
+
+  async function saveEmployeeHrDetails(event) {
+    event.preventDefault();
+    if (!selectedEmployee?.id) return;
+    try {
+      setEmployeeSaving(true);
+      const response = await fetch(`${API_URL}/hr/employees/${selectedEmployee.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(employeeForm),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not update employee");
+      setData((current) => ({
+        ...(current || {}),
+        employees: (current?.employees || []).map((item) => item.id === result.employee.id ? result.employee : item),
+      }));
+      setSelectedEmployee(result.employee);
+      hrToast.success("Employee HR details updated");
+    } catch (error) {
+      hrToast.error(error.message || "Could not update employee");
+    } finally {
+      setEmployeeSaving(false);
+    }
+  }
+
+  async function loadTodayReportStatus() {
+    try {
+      setTodayReportChecking(true);
+      const response = await fetch(`${API_URL}/employee-daily-report`);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not load daily report status");
+      setTodayReportSubmitted(Boolean(result.todaySubmitted));
+    } catch {
+      setTodayReportSubmitted(false);
+    } finally {
+      setTodayReportChecking(false);
+    }
+  }
+
+  function browserLocation() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Location is not supported in this browser"));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        }),
+        () => reject(new Error("Could not read your current location. Please allow location access.")),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      );
+    });
+  }
+
+  async function findAttendanceAddress(searchText = attendanceForm.address, notify = true) {
+    const queryText = String(searchText || "").trim();
+    if (queryText.length < 3) {
+      setAttendanceSearchResults([]);
+      if (notify) hrToast.error("Type at least 3 characters to search");
+      return;
+    }
+    try {
+      setAttendanceLocating(true);
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(queryText)}`);
+      const results = await response.json().catch(() => []);
+      const matches = Array.isArray(results) ? results.filter((item) => item?.lat && item?.lon) : [];
+      if (!matches.length) {
+        setAttendanceSearchResults([]);
+        if (notify) throw new Error("Could not find this address");
+        return;
+      }
+      setAttendanceSearchResults(matches);
+      if (notify) hrToast.success(`${matches.length} location${matches.length === 1 ? "" : "s"} found`);
+    } catch (error) {
+      if (notify) hrToast.error(error.message || "Could not find location");
+    } finally {
+      setAttendanceLocating(false);
+    }
+  }
+
+  function handleAttendanceAddressInput(value) {
+    setAttendanceForm((current) => ({ ...current, address: value }));
+    if (attendanceSearchTimerRef.current) window.clearTimeout(attendanceSearchTimerRef.current);
+    const queryText = value.trim();
+    if (queryText.length < 3) {
+      setAttendanceSearchResults([]);
+      return;
+    }
+    attendanceSearchTimerRef.current = window.setTimeout(() => {
+      void findAttendanceAddress(queryText, false);
+    }, 450);
+  }
+
+  async function useCurrentAttendanceLocation() {
+    try {
+      setAttendanceLocating(true);
+      const location = await browserLocation();
+      setAttendanceForm((current) => ({ ...current, latitude: location.latitude, longitude: location.longitude }));
+      setAttendanceSearchResults([]);
+      hrToast.success("Current location captured");
+    } catch (error) {
+      hrToast.error(error.message || "Could not get location");
+    } finally {
+      setAttendanceLocating(false);
+    }
+  }
+
+  async function saveAttendanceSettings(event) {
+    event.preventDefault();
+    try {
+      setAttendanceSaving(true);
+      const response = await fetch(`${API_URL}/hr/attendance/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(attendanceForm),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not save attendance location");
+      setData((current) => ({ ...(current || {}), attendanceSettings: result.settings }));
+      setAttendanceSearchResults([]);
+      setAttendanceSettingsOpen(false);
+      hrToast.success("Attendance location saved");
+    } catch (error) {
+      hrToast.error(error.message || "Could not save attendance location");
+    } finally {
+      setAttendanceSaving(false);
+    }
+  }
+
+  async function submitAttendance(action) {
+    try {
+      setAttendanceClockAction(action);
+      setAttendanceSaving(true);
+      const location = await browserLocation();
+      const response = await fetch(`${API_URL}/hr/attendance/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(location),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not update attendance");
+      setData((current) => {
+        const records = current?.attendanceRecords || [];
+        const nextRecords = records.some((record) => record.id === result.record.id)
+          ? records.map((record) => record.id === result.record.id ? result.record : record)
+          : [result.record, ...records];
+        return { ...(current || {}), attendanceSettings: result.settings || current?.attendanceSettings, attendanceRecords: nextRecords };
+      });
+      if (action === "clock-in") void loadTodayReportStatus();
+      hrToast.success(action === "clock-in" ? "Clocked in" : "Clocked out");
+    } catch (error) {
+      hrToast.error(error.message || "Could not update attendance");
+    } finally {
+      setAttendanceClockAction("");
+      setAttendanceSaving(false);
+    }
   }
 
   async function downloadSalarySlip(doc) {
@@ -611,6 +860,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
           body: JSON.stringify({
             companyName: salaryForm.companyName,
             companyLocation: salaryForm.companyLocation,
+            companyPhone: salaryForm.companyPhone,
+            companyEmail: salaryForm.companyEmail,
             companyLogo: salaryForm.companyLogo,
             pfAccountNumber: salaryForm.pfAccountNumber,
             note: salaryForm.note,
@@ -743,10 +994,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     },
   }[section] || {};
   const HeroIcon = hero.icon || BriefcaseBusiness;
-  const showHero = section !== "dashboard" && section !== "employees" && section !== "documents" && section !== "salary" && section !== "leave";
+  const showHero = section !== "dashboard" && section !== "employees" && section !== "documents" && section !== "salary" && section !== "leave" && section !== "attendance";
 
   return (
-    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}>
+    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#05080c] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}>
       {showHero && <section className={`relative z-20 mb-5 overflow-hidden rounded-[30px] border p-6 sm:p-8 ${panel}`}>
         {!darkMode && (
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[30px]">
@@ -846,7 +1097,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               <table className="w-full min-w-[980px] border-separate border-spacing-y-2 text-left">
                 <thead className={darkMode ? "bg-[#15171c]" : "bg-white"}>
                   <tr>
-                    {["Employee", "Designation", "Department", "Role", "Contact", "Status", "Actions"].map((heading) => (
+                    {["Employee", "Designation", "Department", "Employment", "Salary", "Contact", "Actions"].map((heading) => (
                       <th key={heading} className={`px-4 py-3 text-[11px] font-semibold ${muted}`}>{heading}</th>
                     ))}
                   </tr>
@@ -865,11 +1116,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       </td>
                       <td className={`px-4 py-3 text-sm ${muted}`}>{employee.designation || "Not set"}</td>
                       <td className={`px-4 py-3 text-sm ${muted}`}>{employee.department || "Not set"}</td>
-                      <td className="px-4 py-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-black/[0.05] text-black/65"}`}>{employee.roleName || "No role"}</span></td>
+                      <td className="px-4 py-3"><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${employee.employmentType === "permanent" ? "bg-emerald-500/10 text-emerald-600" : darkMode ? "bg-amber-400/15 text-amber-200" : "bg-amber-50 text-amber-700"}`}>{employee.employmentType || "probation"}</span></td>
+                      <td className={`px-4 py-3 text-sm font-bold ${muted}`}>{employee.monthlyInHandSalary ? `₹${moneyValue(employee.monthlyInHandSalary).toLocaleString("en-IN")}` : "Not set"}</td>
                       <td className={`px-4 py-3 text-sm ${muted}`}>{employee.phone || employee.whatsappPhone || employee.email || "-"}</td>
-                      <td className="px-4 py-3"><span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600">Active</span></td>
                       <td className="rounded-r-xl px-4 py-3">
-                        <button onClick={() => setSelectedEmployee(employee)} className={`flex h-9 items-center gap-2 rounded-lg border px-4 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/5 text-white/75" : "border-slate-200 bg-white text-slate-700"}`}>
+                        <button onClick={() => openEmployeeDetail(employee)} className={`flex h-9 items-center gap-2 rounded-lg border px-4 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/5 text-white/75" : "border-slate-200 bg-white text-slate-700"}`}>
                           <Eye className="h-3.5 w-3.5" /> View Detail
                         </button>
                       </td>
@@ -885,11 +1136,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       )}
 
       {(section === "documents" || section === "salary") && (
-        <section className={`overflow-hidden rounded-[28px]  ${section === "salary" ? salaryPanel : panel}`}>
-          <div className="flex items-center justify-between gap-3 p-5">
+        <section className={`overflow-hidden rounded-[32px] ${section === "salary" ? salaryPanel : panel}`}>
+          <div className={`flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between ${section === "salary" && !darkMode ? "bg-white" : ""}`}>
             <div>
               <h2 className="text-2xl small text-black dark:text-white font-black">{section === "salary" ? "Salary Slips" : "HR Documents"}</h2>
-              <p className={`mt-1 text-sm ${muted}`}>Only real uploaded/generated PDFs are shown here.</p>
+              <p className={`mt-1 text-sm ${muted}`}>{section === "salary" ? "Generated payroll records with leave deductions and downloadable PDFs." : "Only real uploaded/generated PDFs are shown here."}</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {section === "documents" && (
@@ -901,61 +1152,68 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 <>
                   <div className="relative">
                     <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-                    <input value={salaryQuery} onChange={(event) => setSalaryQuery(event.target.value)} placeholder="Search salary slips..." className={`h-10 w-64 rounded-full border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/12 bg-[#171b22] text-white placeholder:text-white/42 focus:border-emerald-300/45" : "border-black/10 bg-white"}`} />
+                    <input value={salaryQuery} onChange={(event) => setSalaryQuery(event.target.value)} placeholder="Search salary slips..." className={`h-12 w-72 rounded-full border pl-11 pr-4 text-sm outline-none transition ${darkMode ? "border-white/12 bg-[#171b22] text-white placeholder:text-white/42 focus:border-emerald-300/45" : "border-[#e1e5df] bg-[#fbfcf9] text-[#171714] placeholder:text-black/35 focus:border-[#9cdabc] focus:bg-white"}`} />
                   </div>
-                  <button type="button" onClick={openSalaryDrawer} className="flex h-10 items-center gap-2 rounded-full bg-[#6ee72f] px-4 text-sm font-bold text-[#10210c] ">
+                  <button type="button" onClick={openSalaryDrawer} className="flex h-12 items-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f] transition hover:bg-[#d8f0e4]">
                     <Plus className="h-4 w-4" /> Generate salary slip
                   </button>
                 </>
               )}
-              <span className={`rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-black/[0.05] text-black/55"}`}>{section === "salary" ? filteredSalarySlips.length : selectedDocs.length} PDF{(section === "salary" ? filteredSalarySlips.length : selectedDocs.length) === 1 ? "" : "s"}</span>
+              <span className={`rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{section === "salary" ? filteredSalarySlips.length : selectedDocs.length} PDF{(section === "salary" ? filteredSalarySlips.length : selectedDocs.length) === 1 ? "" : "s"}</span>
             </div>
           </div>
           {section === "salary" && filteredSalarySlips.length ? (
-            <div className="overflow-x-auto px-5 pb-5">
-              <table className={`w-full min-w-[860px] table-fixed border-collapse text-left text-sm ${salaryTableSurface}`}>
+            <div className="px-6 pb-6">
+              <div className={`overflow-hidden rounded-[28px] border ${darkMode ? "border-white/10" : "border-[#edf0ea]"} ${salaryTableSurface}`}>
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
                 <colgroup>
                   <col className="w-[24%]" />
-                  <col className="w-[16%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[17%]" />
                   <col className="w-[14%]" />
-                  <col className="w-[13%]" />
-                  <col className="w-[13%]" />
-                  <col className="w-[20%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[18%]" />
                 </colgroup>
                 <thead className={muted}>
-                  <tr className={`border-b ${darkMode ? "border-white/[0.08] bg-[#151922] text-white/62" : "border-black/5"}`}>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Employee</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Salary month</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Pay date</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Net pay</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Status</th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Actions</th>
+                  <tr className={`border-b ${darkMode ? "border-white/[0.08] bg-[#151922] text-white/62" : "border-[#edf0ea] bg-[#fbfcf9]"}`}>
+                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Employee</th>
+                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Salary month</th>
+                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Leave</th>
+                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Net pay</th>
+                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Status</th>
+                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSalarySlips.map((doc) => (
-                    <tr key={doc.id || doc.title || doc.name} className={`h-[90px] border-b last:border-b-0 ${salaryRowBorder}`}>
-                      <td className="px-4 py-4 align-middle">
+                  {filteredSalarySlips.map((doc) => {
+                    const salaryEmployee = employees.find((employee) => String(employee.id || "") === String(doc.userId || ""));
+                    return (
+                    <tr key={doc.id || doc.title || doc.name} className={`h-[96px] border-b last:border-b-0 ${salaryRowBorder}`}>
+                      <td className="px-5 py-5 align-middle">
                         <div className="flex min-w-0 items-center gap-3">
-                          <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-black ${darkMode ? "bg-emerald-400/15 text-emerald-100" : "bg-emerald-50 text-emerald-700"}`}>{initials(doc.employeeName || currentName)}</span>
+                          <UserAvatar user={salaryEmployee || doc} name={doc.employeeName || currentName} className="h-11 w-11" />
                           <div className="min-w-0">
-                            <p className="truncate text-md newq ">{doc.employeeName || currentName}</p>
+                            <p className="truncate text-base font-black">{doc.employeeName || currentName}</p>
                             <p className={`truncate text-xs ${muted}`}>{doc.designation || doc.employeeCode || "Employee"}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 align-middle whitespace-nowrap">{doc.month ? monthLabelFromInput(doc.month) : doc.title?.replace("Salary Slip - ", "") || "-"}</td>
-                      <td className={`px-4 py-4 align-middle whitespace-nowrap ${muted}`}>{doc.date || "-"}</td>
-                      <td className="px-4 py-4 align-middle whitespace-nowrap font-black">₹{moneyValue(doc.netPay).toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-4 align-middle"><span className={`inline-flex h-8 items-center rounded-full px-3 text-xs ${salaryBadge}`}>Generated</span></td>
-                      <td className="px-4 py-4 align-middle">
+                      <td className="px-5 py-5 align-middle whitespace-nowrap font-semibold">{doc.month ? monthLabelFromInput(doc.month) : doc.title?.replace("Salary Slip - ", "") || "-"}</td>
+                      <td className={`px-5 py-5 align-middle whitespace-nowrap text-xs font-semibold ${muted}`}>
+                        <p>{doc.paidLeaveDays || 0} paid · {doc.advanceLeaveDays || 0} advance</p>
+                        {!!doc.leaveDeduction && <p className="mt-1 text-red-500">-₹{roundedMoneyValue(doc.leaveDeduction).toLocaleString("en-IN")}</p>}
+                      </td>
+                      <td className="px-5 py-5 align-middle whitespace-nowrap text-base font-black">₹{roundedMoneyValue(doc.netPay).toLocaleString("en-IN")}</td>
+                      <td className="px-5 py-5 align-middle"><span className={`inline-flex h-9 items-center rounded-full px-4 text-xs font-black ${salaryBadge}`}>Generated</span></td>
+                      <td className="px-5 py-5 align-middle">
                         <div className="flex h-10 items-center justify-start gap-2 whitespace-nowrap">
-                          <button type="button" onClick={() => downloadSalarySlip(doc).catch((error) => hrToast.error(error.message))} className={`flex h-10 items-center gap-2 rounded-full border px-4 text-sm transition ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-black/10 bg-white text-[#171714] hover:bg-[#f8faf8]"}`}>
-                            <Download className="h-4 w-4" /> Download
+                          <button type="button" title="Download salary slip" onClick={() => downloadSalarySlip(doc).catch((error) => hrToast.error(error.message))} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border transition ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-[#e1e5df] bg-white text-[#171714] hover:bg-[#fbfcf7]"}`}>
+                            <Download className="h-4 w-4" />
                           </button>
                           {data?.canManageHr && (
                             <>
-                              <button type="button" onClick={() => editSalarySlip(doc)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border ${darkMode ? "border-white/12 bg-[#171b22] text-white/80 hover:border-white/20 hover:bg-[#1d232d]" : "border-black/10 bg-white text-[#171714] hover:bg-[#f8faf8]"}`} title="Edit salary slip">
+                              <button type="button" onClick={() => editSalarySlip(doc)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border ${darkMode ? "border-white/12 bg-[#171b22] text-white/80 hover:border-white/20 hover:bg-[#1d232d]" : "border-[#e1e5df] bg-white text-[#171714] hover:bg-[#fbfcf7]"}`} title="Edit salary slip">
                                 <Pencil className="h-4 w-4" />
                               </button>
                               <button type="button" onClick={() => setSalaryDeleteTarget(doc)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border ${darkMode ? "border-red-400/20 bg-red-400/10 text-red-200" : "border-red-200 bg-red-50 text-red-600"}`} title="Delete salary slip">
@@ -966,9 +1224,12 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
+              </div>
+              </div>
             </div>
           ) : selectedDocs.length ? (
             <div className="space-y-3 px-4 pb-5">
@@ -994,62 +1255,102 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
       {section === "leave" && (
         <>
-          <section className={`overflow-hidden rounded-[28px] border ${panel}`}>
-            <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <section className={`overflow-hidden rounded-[32px] ${darkMode ? "bg-[#090d12]" : "bg-white"}`}>
+            <div className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-2xl font-black">{data?.canManageHr ? "Leave Requests" : "My Leave Applications"}</h2>
                 <p className={`mt-1 text-sm ${muted}`}>{data?.canManageHr ? "Approve or decline with a comment. The applicant gets notified." : "Track your submitted applications and admin response."}</p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <button onClick={loadHr} disabled={loading} className={`flex h-10 items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-black/10 bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
+                <button onClick={loadHr} disabled={loading} className={`flex h-12 items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-[#e1e5df] bg-white text-slate-700 hover:bg-[#fbfcf7]"}`}>
                   <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
                 </button>
-                <button type="button" onClick={() => setLeaveDrawerOpen(true)} className="flex h-10 items-center gap-2 rounded-full bg-[#6ee72f] px-4 text-sm font-bold text-[#10210c]">
+                <button type="button" onClick={() => setLeaveDrawerOpen(true)} className="flex h-12 items-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f] transition hover:bg-[#d8f0e4]">
                   <Plus className="h-4 w-4" /> Apply for Leave
                 </button>
-                <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-black/[0.05] text-black/55"}`}>{myLeaveRequests.length} request{myLeaveRequests.length === 1 ? "" : "s"}</span>
+                <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{myLeaveRequests.length} request{myLeaveRequests.length === 1 ? "" : "s"}</span>
               </div>
             </div>
+            <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { label: "Remaining paid leave", value: remainingPaidLeaves, note: `${monthlyPaidLeaveAllowance} allowed this month`, icon: CheckCircle2, tone: darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-50 text-emerald-700" },
+                { label: "Leave taken", value: currentMonthLeaveTaken, note: monthLabelFromInput(currentLeaveMonth), icon: CalendarDays, tone: darkMode ? "bg-sky-300/14 text-sky-200" : "bg-sky-50 text-sky-700" },
+                { label: "Advance leave", value: currentMonthAdvanceLeaves, note: "Deducted in salary slip", icon: WalletCards, tone: darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-50 text-amber-700" },
+                { label: "Pending approvals", value: currentMonthPendingLeaves, note: "Waiting for HR action", icon: MessageSquare, tone: darkMode ? "bg-violet-300/14 text-violet-200" : "bg-violet-50 text-violet-700" },
+              ].map(({ label, value, note, icon: Icon, tone }) => (
+                <div key={label} className={`rounded-[24px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfcf9]"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${tone}`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <p className="text-3xl font-black leading-none">{Number(value || 0).toLocaleString("en-IN")}</p>
+                  </div>
+                  <p className="mt-4 text-sm font-black">{label}</p>
+                  <p className={`mt-1 text-xs ${muted}`}>{note}</p>
+                </div>
+              ))}
+            </div>
             {myLeaveRequests.length ? (
-              <div className="overflow-x-auto px-5 pb-5">
-                <table className={`w-full min-w-[900px] border-collapse text-left text-sm ${darkMode ? "bg-white/[0.025]" : "bg-white"}`}>
+              <div className="px-6 pb-6">
+                <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/10 bg-white/[0.025]" : "bg-[#fbfcf9]"}`}>
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
+                  <colgroup>
+                    <col className="w-[23%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[22%]" />
+                    <col className="w-[15%]" />
+                  </colgroup>
                   <thead className={muted}>
-                    <tr className={`border-b ${darkMode ? "border-white/10" : "border-black/5"}`}>
-                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Leave type</th>
-                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Period</th>
-                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Breakdown</th>
-                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Status</th>
-                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Approval progress</th>
-                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">Actions</th>
+                    <tr className={`border-b ${darkMode ? "border-white/10" : "border-[#edf0ea] bg-[#fbfcf9]"}`}>
+                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Leave type</th>
+                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Period</th>
+                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Breakdown</th>
+                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Status</th>
+                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Approval</th>
+                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {myLeaveRequests.map((request) => (
-                      <tr key={request.id} className={`border-b last:border-b-0 ${darkMode ? "border-white/10 hover:bg-white/[0.04]" : "border-black/5 hover:bg-[#f8faf8]"}`}>
-                        <td className="px-4 py-4">
+                    {myLeaveRequests.map((request) => {
+                      const isCurrentLeaveUser = String(request.userId || "") === String(user?.id || "");
+                      const leaveEmployee = isCurrentLeaveUser ? user : employees.find((employee) => String(employee.id || "") === String(request.userId || ""));
+                      const leaveAvatarUser = leaveEmployee || {
+                        id: request.userId,
+                        username: request.username,
+                        displayName: request.employeeName,
+                        gender: request.gender,
+                        avatarPreset: request.avatarPreset,
+                        avatarUrl: request.avatarUrl,
+                      };
+                      return (
+                      <tr key={request.id} className={`h-[96px] border-b last:border-b-0 ${darkMode ? "border-white/10 hover:bg-white/[0.04]" : "border-[#edf0ea] bg-white hover:bg-[#fbfcf7]"}`}>
+                        <td className="px-5 py-5">
                           <div className="flex items-center gap-3">
-                            <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-black ${darkMode ? "bg-emerald-400/15 text-emerald-100" : "bg-emerald-50 text-emerald-700"}`}>{initials(data?.canManageHr ? request.employeeName : request.leaveType)}</span>
-                            <div>
-                              <p className="font-black">{request.leaveType}</p>
-                              {data?.canManageHr && <p className={`text-xs ${muted}`}>{request.employeeName}</p>}
+                            <UserAvatar user={leaveAvatarUser} name={request.employeeName || request.leaveType} className="h-11 w-11" />
+                            <div className="min-w-0">
+                              <p className="truncate font-black">{data?.canManageHr ? request.employeeName : currentName}</p>
+                              <p className={`truncate text-xs ${muted}`}>{request.leaveType}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="px-5 py-5">
                           <p className="font-semibold">{request.startDate}</p>
                           <p className={`text-xs ${muted}`}>to {request.endDate}</p>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="px-5 py-5">
                           <p className="font-bold">Total: {request.days} day{request.days === 1 ? "" : "s"}</p>
-                          <p className={`mt-1 line-clamp-1 text-xs ${muted}`}>{request.reason}</p>
+                          <p className={`mt-1 text-xs ${muted}`}>{request.paidLeaveDays || 0} paid · {request.unpaidLeaveDays || 0} unpaid</p>
                         </td>
-                        <td className="px-4 py-4"><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass(request.status)}`}>{request.status}</span></td>
-                        <td className="px-4 py-4">
+                        <td className="px-5 py-5"><span className={`inline-flex h-9 items-center rounded-full px-4 text-xs font-black capitalize ${statusClass(request.status)}`}>{request.status}</span></td>
+                        <td className="px-5 py-5">
                           <p className="text-sm font-medium">{request.status === "pending" ? "Waiting for approval" : `${request.status} by ${request.reviewedBy?.name || "Admin"}`}</p>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="px-5 py-5">
                           <div className="flex flex-wrap gap-2">
-                            <button onClick={() => { setSelectedLeave(request); setReviewComment(request.adminComment || ""); }} className={`flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition ${darkMode ? "border-white/12 bg-white/[0.04] text-white hover:bg-white/[0.08]" : "border-black/10 bg-white text-[#171714] hover:bg-[#f8faf8]"}`}>
+                            <button onClick={() => { setSelectedLeave(request); setReviewComment(request.adminComment || ""); }} className={`flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-bold transition ${darkMode ? "border-white/12 bg-white/[0.04] text-white hover:bg-white/[0.08]" : "border-[#e1e5df] bg-white text-[#171714] hover:bg-[#fbfcf7]"}`}>
                               <Eye className="h-4 w-4" /> View detail
                             </button>
                             {canDeleteLeave(request) && (
@@ -1060,9 +1361,12 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
+                </div>
+                </div>
               </div>
             ) : (
               <div className="p-4">
@@ -1071,6 +1375,232 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             )}
           </section>
         </>
+      )}
+
+      {section === "attendance" && (
+        <section className={`overflow-hidden rounded-[32px] ${darkMode ? "bg-[#090d12]" : "bg-white"}`}>
+          <div className="flex flex-col gap-4 px-7 pt-7 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-2xl font-black">{data?.canManageHr ? "Attendance" : "My Attendance"}</h2>
+              <p className={`mt-1 text-sm ${muted}`}>Geo-location based clock in and clock out for employees.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+              <button onClick={loadHr} disabled={loading} className={`flex h-12 items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/[0.08] bg-[#0f151c] text-slate-100 hover:border-emerald-300/25 hover:bg-[#141b24]" : "border-[#e1e5df] bg-white text-slate-700 hover:bg-[#fbfcf7]"}`}>
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+              </button>
+              {data?.canManageHr && (
+                <button type="button" onClick={() => setAttendanceSettingsOpen(true)} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f]">
+                  <SlidersHorizontal className="h-4 w-4" /> Settings
+                </button>
+              )}
+              <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{myAttendanceRecords.length} record{myAttendanceRecords.length === 1 ? "" : "s"}</span>
+            </div>
+          </div>
+
+          <div className="px-7 pb-7 pt-7">
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { icon: CheckCircle2, label: "Today status", value: todayAttendanceLabel, hint: todayAttendance?.clockInAt ? `In ${new Date(todayAttendance.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : "Awaiting clock in", tone: "emerald" },
+                  { icon: LogIn, label: "Clock in", value: todayAttendance?.clockInAt ? new Date(todayAttendance.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-", hint: attendanceConfigured ? "Location required" : "Geo fence not set", tone: "blue" },
+                  { icon: LogOut, label: "Clock out", value: todayAttendance?.clockOutAt ? new Date(todayAttendance.clockOutAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-", hint: todayAttendance?.clockOutAt ? "Completed today" : "Pending", tone: "orange" },
+                  { icon: CalendarDays, label: "Work time", value: todayWorkMinutes ? `${Math.floor(todayWorkMinutes / 60)}h ${todayWorkMinutes % 60}m` : "0h", hint: `${todayAttendanceRecords.length} marked today`, tone: "violet" },
+                ].map((stat) => {
+                  const Icon = stat.icon;
+                  const toneClass = darkMode
+                    ? stat.tone === "blue" ? "bg-sky-400/12 text-sky-300" : stat.tone === "orange" ? "bg-amber-400/12 text-amber-300" : stat.tone === "violet" ? "bg-violet-400/12 text-violet-300" : "bg-emerald-400/12 text-emerald-300"
+                    : stat.tone === "blue" ? "bg-sky-50 text-sky-600" : stat.tone === "orange" ? "bg-amber-50 text-orange-600" : stat.tone === "violet" ? "bg-violet-50 text-violet-600" : "bg-[#e9fbf2] text-[#008f69]";
+                  return (
+                    <div key={stat.label} className={`min-h-[140px] rounded-[24px] p-5 ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-[#fbfcf9]"}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <span className={`grid h-12 w-12 place-items-center rounded-full ${toneClass}`}>
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <strong className="max-w-[170px] truncate text-right text-3xl font-black">{stat.value}</strong>
+                      </div>
+                      <p className="mt-5 text-base font-black">{stat.label}</p>
+                      <p className={`mt-1 text-sm ${muted}`}>{stat.hint}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className={`rounded-[28px] p-5 ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-[#fbfcf9]"}`}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-lg font-black">{attendanceConfigured ? "Attendance location active" : "Attendance location not set"}</p>
+                    <p className={`mt-1 truncate text-sm ${muted}`}>{attendanceSettings.address || "HR must set the office/site location before employees can clock in."}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" disabled={!attendanceConfigured || attendanceSaving || todayAttendance?.clockInAt} onClick={() => submitAttendance("clock-in")} className={`flex h-11 min-w-[118px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-emerald-400/14 text-emerald-200 hover:bg-emerald-400/20" : "bg-[#e7f6ed] text-[#08764f]"}`}>
+                      {attendanceClockAction === "clock-in" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} {attendanceClockAction === "clock-in" ? "Clocking in" : "Clock in"}
+                    </button>
+                    {mustFillReportBeforeClockOut ? (
+                      <button type="button" disabled={todayReportChecking} onClick={() => { window.location.href = "/employee-daily-report"; }} className={`flex h-11 min-w-[178px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-55 ${darkMode ? "bg-sky-400/14 text-sky-200 hover:bg-sky-400/20" : "bg-sky-50 text-sky-700"}`}>
+                        {todayReportChecking ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Fill Employee Report
+                      </button>
+                    ) : (
+                      <button type="button" disabled={!attendanceConfigured || attendanceSaving || !todayAttendance?.clockInAt || todayAttendance?.clockOutAt} onClick={() => submitAttendance("clock-out")} className={`flex h-11 min-w-[124px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-red-400/14 text-red-200 hover:bg-red-400/20" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
+                        {attendanceClockAction === "clock-out" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} {attendanceClockAction === "clock-out" ? "Clocking out" : "Clock out"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/[0.06] bg-[#0c1117]" : "bg-[#fbfcf9]"}`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
+                    <colgroup>
+                      <col className="w-[24%]" />
+                      <col className="w-[15%]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[13%]" />
+                    </colgroup>
+                    <thead className={muted}>
+                      <tr className={`border-b ${darkMode ? "border-white/[0.06] bg-[#0b1016]" : "border-[#edf0ea] bg-[#fbfcf9]"}`}>
+                        {["Employee", "Date", "Clock in", "Clock out", "Hours", "Status"].map((heading) => (
+                          <th key={heading} className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">{heading}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {myAttendanceRecords.map((record) => {
+                        const attendanceEmployee = String(record.userId || "") === String(user?.id || "") ? user : employees.find((employee) => String(employee.id || "") === String(record.userId || ""));
+                        return (
+                          <tr key={record.id} className={`h-[92px] border-b last:border-b-0 ${darkMode ? "border-white/[0.06] bg-[#0f151c] hover:bg-[#141b24]" : "border-[#edf0ea] bg-white hover:bg-[#fbfcf7]"}`}>
+                            <td className="px-5 py-5">
+                              <div className="flex items-center gap-3">
+                                <UserAvatar user={attendanceEmployee || record} name={record.employeeName} className="h-11 w-11" />
+                                <div className="min-w-0">
+                                  <p className="truncate font-black">{record.employeeName}</p>
+                                  <p className={`truncate text-xs ${muted}`}>{record.designation || record.department || "Employee"}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-5 font-semibold">{record.date}</td>
+                            <td className={`px-5 py-5 ${muted}`}>{record.clockInAt ? new Date(record.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
+                            <td className={`px-5 py-5 ${muted}`}>{record.clockOutAt ? new Date(record.clockOutAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
+                            <td className="px-5 py-5 font-black">{record.workMinutes ? `${Math.floor(record.workMinutes / 60)}h ${record.workMinutes % 60}m` : "-"}</td>
+                            <td className="px-5 py-5"><span className={`inline-flex h-9 items-center rounded-full px-4 text-xs font-black capitalize ${record.status === "completed" ? salaryBadge : statusClass("pending")}`}>{record.status}</span></td>
+                          </tr>
+                        );
+                      })}
+                      {!myAttendanceRecords.length && (
+                        <tr><td colSpan={6} className={`px-5 py-12 text-center ${muted}`}>No attendance records yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {attendanceSettingsOpen && (
+        <div onMouseDown={() => setAttendanceSettingsOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
+          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={saveAttendanceSettings} className={`employee-report-drawer employee-report-shell relative flex h-full w-full flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.38)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex items-start justify-between border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <div>
+                <h2 className="text-xl font-black">Attendance settings</h2>
+                <p className={`mt-1 text-xs ${muted}`}>Set the allowed work location and radius.</p>
+              </div>
+              <button type="button" onClick={() => setAttendanceSettingsOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
+            </div>
+            <div className={`min-h-0 flex-1 overflow-hidden ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
+              <div className="grid h-full min-h-0 gap-5 p-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+                <aside className={`h-fit space-y-4 self-start rounded-[24px] border p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-black/5 bg-[#f0f3ec]"}`}>
+                  <span className={`inline-flex rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wide ${darkMode ? "bg-lime-300/15 text-lime-200" : "bg-[#dcfacb] text-[#4b9b16]"}`}>Geo fence</span>
+                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-[#111923]" : "bg-white/75"}`}>
+                    <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Current status</p>
+                    <p className="mt-2 text-lg font-black">{attendanceConfigured ? "Location active" : "Not configured"}</p>
+                    <p className={`mt-1 text-xs leading-5 ${muted}`}>{attendanceConfigured ? `${attendanceSettings.radiusMeters || 100}m radius` : "Employees cannot clock in until saved."}</p>
+                  </div>
+                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-[#111923]" : "bg-white/75"}`}>
+                    <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Selected location</p>
+                    <p className="mt-2 text-sm font-black leading-5">{attendanceForm.address || "Search and choose a location"}</p>
+                    <p className={`mt-2 text-xs leading-5 ${muted}`}>{attendanceForm.latitude && attendanceForm.longitude ? `${attendanceForm.latitude}, ${attendanceForm.longitude}` : "Coordinates pending"}</p>
+                  </div>
+                </aside>
+
+                <div className="min-h-0 space-y-5 overflow-y-auto pr-1">
+                  <section className={`rounded-[26px] p-5 ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-white"}`}>
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                      <label className="flex-1 text-xs font-bold uppercase tracking-[0.14em] text-black/45 dark:text-white/45">Search address
+                        <div className={`mt-2 flex h-12 items-center gap-2 rounded-full border px-4 ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
+                          <Search className={`h-4 w-4 ${muted}`} />
+                          <input value={attendanceForm.address} onChange={(event) => handleAttendanceAddressInput(event.target.value)} placeholder="Type office, site, city or landmark..." className="attendance-search-input min-w-0 flex-1 appearance-none border-0 bg-transparent text-sm font-semibold outline-none ring-0 placeholder:text-black/35 focus:border-0 focus:outline-none focus:ring-0 dark:placeholder:text-white/35" />
+                          {attendanceLocating && <RefreshCw className={`h-4 w-4 animate-spin ${muted}`} />}
+                        </div>
+                      </label>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={useCurrentAttendanceLocation} disabled={attendanceLocating} className={`h-12 rounded-full px-5 text-sm font-bold disabled:opacity-55 ${darkMode ? "bg-emerald-400/14 text-emerald-200 hover:bg-emerald-400/20" : "bg-[#e7f6ed] text-[#08764f]"}`}>Use current</button>
+                      </div>
+                    </div>
+
+                    {!!attendanceSearchResults.length && (
+                      <div className="mt-4 grid gap-2">
+                        {attendanceSearchResults.map((item) => {
+                          const selected = String(attendanceForm.latitude) === String(Number(item.lat)) && String(attendanceForm.longitude) === String(Number(item.lon));
+                          return (
+                            <button key={`${item.place_id}-${item.lat}-${item.lon}`} type="button" onClick={() => {
+                              setAttendanceForm((current) => ({
+                                ...current,
+                                address: item.display_name || current.address,
+                                latitude: Number(item.lat),
+                                longitude: Number(item.lon),
+                              }));
+                            }} className={`flex items-start gap-3 rounded-2xl border p-3 text-left transition ${selected ? darkMode ? "border-emerald-300/35 bg-emerald-400/10" : "border-[#8eea6a] bg-[#effbe9]" : darkMode ? "border-white/[0.07] bg-[#101720] hover:bg-[#151e29]" : "border-[#e7ebe4] bg-[#fbfcf9] hover:bg-[#f6faf2]"}`}>
+                              <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full ${selected ? darkMode ? "bg-emerald-300/18 text-emerald-200" : "bg-[#6ee72f] text-[#10210c]" : darkMode ? "bg-emerald-400/12 text-emerald-300" : "bg-[#e7f6ed] text-[#08764f]"}`}><MapPin className="h-4 w-4" /></span>
+                              <span className="min-w-0">
+                                <span className="block text-sm font-black">{item.name || item.display_name?.split(",")?.[0] || "Location"}</span>
+                                <span className={`mt-1 block text-xs leading-5 ${muted}`}>{item.display_name}</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+
+                  <section className={`grid gap-5 rounded-[26px] p-5 lg:grid-cols-[minmax(0,1fr)_280px] ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-white"}`}>
+                    <div className="overflow-hidden rounded-[24px] border border-black/5 bg-[#eef2ed] dark:border-white/[0.07] dark:bg-[#080d13]">
+                      {attendanceForm.latitude && attendanceForm.longitude ? (
+                        <iframe title="Attendance selected location map" className="h-[360px] w-full border-0" src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(attendanceForm.longitude) - 0.01}%2C${Number(attendanceForm.latitude) - 0.01}%2C${Number(attendanceForm.longitude) + 0.01}%2C${Number(attendanceForm.latitude) + 0.01}&layer=mapnik&marker=${attendanceForm.latitude}%2C${attendanceForm.longitude}`} />
+                      ) : (
+                        <div className={`grid h-[360px] place-items-center px-6 text-center text-sm ${muted}`}>Search an address or use current location to preview the map.</div>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                        <label className="text-xs font-medium">Latitude
+                          <input type="number" step="any" value={attendanceForm.latitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, latitude: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} />
+                        </label>
+                        <label className="text-xs font-medium">Longitude
+                          <input type="number" step="any" value={attendanceForm.longitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, longitude: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} />
+                        </label>
+                      </div>
+                      <label className="block text-xs font-medium">Allowed radius
+                        <div className={`mt-2 flex h-12 items-center rounded-2xl border px-3 ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
+                          <input type="number" min="25" value={attendanceForm.radiusMeters} onChange={(event) => setAttendanceForm((current) => ({ ...current, radiusMeters: event.target.value }))} className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none" />
+                          <span className={`text-xs font-bold ${muted}`}>meters</span>
+                        </div>
+                      </label>
+                      {attendanceForm.latitude && attendanceForm.longitude && <a className="inline-flex items-center gap-2 text-sm font-bold text-[#08764f]" href={`https://www.openstreetmap.org/?mlat=${attendanceForm.latitude}&mlon=${attendanceForm.longitude}#map=17/${attendanceForm.latitude}/${attendanceForm.longitude}`} target="_blank" rel="noreferrer"><Navigation className="h-4 w-4" /> Open map</a>}
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <div className={`flex shrink-0 items-center justify-between gap-6 border-t px-6 py-5 ${darkMode ? "border-white/[0.07] bg-[#080c11]" : "border-black/10 bg-white"}`}>
+              <button type="button" onClick={() => setAttendanceSettingsOpen(false)} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
+              <button disabled={attendanceSaving} className="h-11 min-w-[190px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">{attendanceSaving ? "Saving..." : "Save geo fence"}</button>
+            </div>
+          </form>
+        </div>
       )}
 
       {salaryDrawerOpen && (
@@ -1125,14 +1655,19 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       ["Designation", "designation", "text"],
                       ["Employee ID", "employeeCode", "text"],
                       ["UAN", "uan", "text"],
-                      ["Paid Days", "paidDays", "number"],
-                      ["LOP Days", "lopDays", "number"],
-                      ["Basic Salary", "basic", "number"],
+                      ["Monthly In-Hand Salary", "monthlyInHandSalary", "number"],
                     ].map(([label, key, type]) => (
-                      <label key={key} className="text-xs font-medium">{label}{["employeeName", "joiningDate", "basic"].includes(key) ? " *" : ""}
-                        <input required={["employeeName", "joiningDate", "basic"].includes(key)} type={type} value={salaryForm[key]} onChange={(event) => setSalaryForm((current) => ({ ...current, [key]: event.target.value }))} className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                      <label key={key} className="text-xs font-medium">{label}{["employeeName", "joiningDate", "monthlyInHandSalary"].includes(key) ? " *" : ""}
+                        <input required={["employeeName", "joiningDate", "monthlyInHandSalary"].includes(key)} type={type} value={salaryForm[key]} onChange={(event) => setSalaryForm((current) => ({ ...current, [key]: event.target.value, ...(key === "monthlyInHandSalary" ? { basic: event.target.value } : {}) }))} className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
                       </label>
                     ))}
+                    <DrawerSelect darkMode={darkMode} label="Employment Status" required value={salaryForm.employmentType === "permanent" ? "Permanent" : "Probation"} placeholder="Select status..." options={["Permanent", "Probation"]} onChange={(employmentType) => setSalaryForm((current) => ({ ...current, employmentType: employmentType.toLowerCase() }))} />
+                    <label className="text-xs font-medium">Paid Days
+                      <input readOnly value="Auto calculated from approved leave" className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.025] text-white/50" : "border-black/10 bg-slate-50 text-black/50"}`} />
+                    </label>
+                    <label className="text-xs font-medium">LOP Days
+                      <input readOnly value="Auto calculated from approved leave" className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.025] text-white/50" : "border-black/10 bg-slate-50 text-black/50"}`} />
+                    </label>
                     <DrawerDatePicker darkMode={darkMode} label="Joining Date" value={salaryForm.joiningDate} placeholder="Select joining date" onChange={(joiningDate) => setSalaryForm((current) => ({ ...current, joiningDate, month: current.month && current.month < joiningDate.slice(0, 7) ? joiningDate.slice(0, 7) : current.month }))} />
                   </div>
                 )]] : []),
@@ -1182,6 +1717,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     {[
                       ["Company Name", "companyName"],
                       ["Company Location", "companyLocation"],
+                      ["Phone Number", "companyPhone"],
+                      ["Email ID", "companyEmail"],
                       ["PF A/C Number", "pfAccountNumber"],
                     ].map(([label, key]) => (
                       <label key={key} className="text-xs font-medium">{label}
@@ -1281,6 +1818,18 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
       {selectedLeave && (
         <div onMouseDown={() => setSelectedLeave(null)} className="fixed inset-0 z-[90] flex justify-end bg-black/35 p-3 backdrop-blur-md sm:p-5">
+          {(() => {
+            const isCurrentLeaveUser = String(selectedLeave.userId || "") === String(user?.id || "");
+            const selectedLeaveEmployee = isCurrentLeaveUser ? user : employees.find((employee) => String(employee.id || "") === String(selectedLeave.userId || ""));
+            const selectedLeaveAvatarUser = selectedLeaveEmployee || {
+              id: selectedLeave.userId,
+              username: selectedLeave.username,
+              displayName: selectedLeave.employeeName,
+              gender: selectedLeave.gender,
+              avatarPreset: selectedLeave.avatarPreset,
+              avatarUrl: selectedLeave.avatarUrl,
+            };
+            return (
           <section onMouseDown={(event) => event.stopPropagation()} className={`flex h-full w-full max-w-md flex-col overflow-hidden rounded-[18px] border shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#111216] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
             <div className={`flex items-center justify-between border-b px-4 py-3 ${darkMode ? "border-white/10" : "border-black/10"}`}>
               <div className="flex min-w-0 items-center gap-3">
@@ -1292,7 +1841,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <div className="flex items-center gap-4 pb-4">
-                <span className="grid h-14 w-14 place-items-center rounded-full bg-[#10a66b] text-sm font-black text-white">{initials(selectedLeave.employeeName)}</span>
+                <UserAvatar user={selectedLeaveAvatarUser} name={selectedLeave.employeeName} size="lg" />
                 <div className="min-w-0">
                   <h2 className="truncate text-xl font-black">{selectedLeave.employeeName}</h2>
                   <p className={`mt-1 truncate text-sm ${muted}`}>{selectedLeave.department || "No department"}</p>
@@ -1300,7 +1849,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </div>
 
               <div className={`grid grid-cols-3 border-y py-3 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-                {[["Type", selectedLeave.leaveType], ["Days", selectedLeave.days], ["Status", selectedLeave.status]].map(([label, value]) => (
+                {[["Type", selectedLeave.leaveType], ["Paid", selectedLeave.paidLeaveDays || 0], ["Unpaid", selectedLeave.unpaidLeaveDays || 0]].map(([label, value]) => (
                   <div key={label}>
                     <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>{label}</p>
                     <p className="mt-1 text-sm font-black capitalize">{value}</p>
@@ -1364,6 +1913,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               )}
             </div>
           </section>
+            );
+          })()}
         </div>
       )}
 
@@ -1397,6 +1948,24 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                   </div>
                 </aside>
                 <div className="min-h-0 space-y-5 overflow-y-auto pr-1">
+                  {data?.canManageHr && (
+                    <form onSubmit={saveEmployeeHrDetails} className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                          <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Leave and salary policy</p>
+                          <h3 className="mt-1 text-xl font-black">Employee payroll setup</h3>
+                        </div>
+                        <button disabled={employeeSaving} className="h-10 rounded-full bg-[#6ee72f] px-5 text-sm font-bold text-[#10210c] disabled:opacity-60">{employeeSaving ? "Saving..." : "Save details"}</button>
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <DrawerSelect darkMode={darkMode} label="Employment Status" required value={employeeForm.employmentType === "permanent" ? "Permanent" : "Probation"} placeholder="Select status..." options={["Permanent", "Probation"]} onChange={(employmentType) => setEmployeeForm((current) => ({ ...current, employmentType: employmentType.toLowerCase() }))} />
+                        <label className="text-xs font-medium">Monthly In-Hand Salary *
+                          <input required type="number" min="0" value={employeeForm.monthlyInHandSalary} onChange={(event) => setEmployeeForm((current) => ({ ...current, monthlyInHandSalary: event.target.value }))} className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                        </label>
+                      </div>
+                      <p className={`mt-3 text-xs leading-5 ${muted}`}>Permanent employees get 1 paid leave per month. Probation employees have no paid leave; approved leave is deducted from monthly in-hand salary in salary slips.</p>
+                    </form>
+                  )}
                   <section className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
                     <p className={`mb-4 text-[11px] font-bold uppercase tracking-wide ${muted}`}>Profile information</p>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1404,6 +1973,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         { label: "Name", value: selectedEmployee.displayName || selectedEmployee.username || "-", icon: UserRound, tone: darkMode ? "bg-sky-300/14 text-sky-200" : "bg-sky-100 text-sky-700" },
                         { label: "Role", value: selectedEmployee.roleName || "No role", icon: ShieldCheck, tone: darkMode ? "bg-violet-300/14 text-violet-200" : "bg-violet-100 text-violet-700" },
                         { label: "Status", value: selectedEmployee.blacklisted ? "Blacklisted" : "Active", icon: CheckCircle2, tone: selectedEmployee.blacklisted ? (darkMode ? "bg-red-400/14 text-red-200" : "bg-red-100 text-red-700") : (darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700") },
+                        { label: "Employment", value: selectedEmployee.employmentType === "permanent" ? "Permanent" : "Probation", icon: BriefcaseBusiness, tone: darkMode ? "bg-lime-300/14 text-lime-200" : "bg-lime-100 text-lime-700" },
+                        { label: "In-Hand Salary", value: selectedEmployee.monthlyInHandSalary ? `₹${moneyValue(selectedEmployee.monthlyInHandSalary).toLocaleString("en-IN")}` : "Not set", icon: WalletCards, tone: darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700" },
                         { label: "Email", value: selectedEmployee.email || "Not set", icon: Mail, tone: darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-100 text-amber-700" },
                         { label: "Phone", value: selectedEmployee.phone || "Not set", icon: Phone, tone: darkMode ? "bg-blue-300/14 text-blue-200" : "bg-blue-100 text-blue-700" },
                         { label: "WhatsApp", value: selectedEmployee.whatsappPhone || "Not set", icon: MessageCircle, tone: darkMode ? "bg-green-300/14 text-green-200" : "bg-green-100 text-green-700" },

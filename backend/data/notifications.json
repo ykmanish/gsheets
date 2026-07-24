@@ -1,5 +1,215 @@
 [
   {
+    "id": "1784887645735-hw5t43",
+    "userId": "6a30f59093d1b8cdb26dce38",
+    "title": "Leave request approved",
+    "message": "Super Admin approved your leave from 2026-07-24 to 2026-07-27.",
+    "type": "hr-leave",
+    "leaveRequestId": null,
+    "createdAt": "2026-07-24T10:07:25.735Z",
+    "readAt": null
+  },
+  {
+    "id": "1784887633695-v2mtpk",
+    "userId": "6a46518db6542a18d0f73fc0",
+    "title": "New leave request",
+    "message": "Super Admin requested 4 days leave from 2026-07-24 to 2026-07-27.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a633951738ccb14017c93f1",
+    "createdAt": "2026-07-24T10:07:13.695Z",
+    "readAt": null
+  },
+  {
+    "id": "1784887633695-jrggfp",
+    "userId": "6a44bc5d8f389c1c08feb924",
+    "title": "New leave request",
+    "message": "Super Admin requested 4 days leave from 2026-07-24 to 2026-07-27.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a633951738ccb14017c93f1",
+    "createdAt": "2026-07-24T10:07:13.695Z",
+    "readAt": null
+  },
+  {
+    "id": "1784887633694-jhqfk3",
+    "userId": "6a33bdfa597e964faac131b6",
+    "title": "New leave request",
+    "message": "Super Admin requested 4 days leave from 2026-07-24 to 2026-07-27.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a633951738ccb14017c93f1",
+    "createdAt": "2026-07-24T10:07:13.694Z",
+    "readAt": null
+  },
+  {
+    "id": "1784802821437-kduecq",
+    "userId": "6a466516a96004fda93e80b3",
+    "title": "Leave request approved",
+    "message": "Super Admin approved your leave from 2026-07-23 to 2026-07-23.",
+    "type": "hr-leave",
+    "leaveRequestId": null,
+    "createdAt": "2026-07-23T10:33:41.437Z",
+    "readAt": "2026-07-23T11:14:30.460Z"
+  },
+  {
+    "id": "1784802583947-4b0kw6",
+    "userId": "6a46518db6542a18d0f73fc0",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 1 day leave from 2026-07-23 to 2026-07-23.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61ed176d3985659d9c9134",
+    "createdAt": "2026-07-23T10:29:43.947Z",
+    "readAt": null
+  },
+  {
+    "id": "1784802583947-w9nkil",
+    "userId": "6a44bc5d8f389c1c08feb924",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 1 day leave from 2026-07-23 to 2026-07-23.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61ed176d3985659d9c9134",
+    "createdAt": "2026-07-23T10:29:43.947Z",
+    "readAt": null
+  },
+  {
+    "id": "1784802583947-gy94bm",
+    "userId": "6a33bdfa597e964faac131b6",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 1 day leave from 2026-07-23 to 2026-07-23.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61ed176d3985659d9c9134",
+    "createdAt": "2026-07-23T10:29:43.947Z",
+    "readAt": null
+  },
+  {
+    "id": "1784802583947-x1cf9i",
+    "userId": "6a30f59093d1b8cdb26dce38",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 1 day leave from 2026-07-23 to 2026-07-23.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61ed176d3985659d9c9134",
+    "createdAt": "2026-07-23T10:29:43.947Z",
+    "readAt": "2026-07-23T10:42:29.538Z"
+  },
+  {
+    "id": "1784802259202-9xjzd0",
+    "userId": "6a46518db6542a18d0f73fc0",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 7 days leave from 2026-07-31 to 2026-08-06.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61ebd36d3985659d9c9133",
+    "createdAt": "2026-07-23T10:24:19.202Z",
+    "readAt": null
+  },
+  {
+    "id": "1784802259202-p39vop",
+    "userId": "6a44bc5d8f389c1c08feb924",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 7 days leave from 2026-07-31 to 2026-08-06.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61ebd36d3985659d9c9133",
+    "createdAt": "2026-07-23T10:24:19.202Z",
+    "readAt": null
+  },
+  {
+    "id": "1784802259202-e472nv",
+    "userId": "6a33bdfa597e964faac131b6",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 7 days leave from 2026-07-31 to 2026-08-06.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61ebd36d3985659d9c9133",
+    "createdAt": "2026-07-23T10:24:19.202Z",
+    "readAt": null
+  },
+  {
+    "id": "1784802259202-fjunj4",
+    "userId": "6a30f59093d1b8cdb26dce38",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 7 days leave from 2026-07-31 to 2026-08-06.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61ebd36d3985659d9c9133",
+    "createdAt": "2026-07-23T10:24:19.202Z",
+    "readAt": "2026-07-23T10:25:41.623Z"
+  },
+  {
+    "id": "1784798320049-xi7aju",
+    "userId": "6a46518db6542a18d0f73fc0",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 3 days leave from 2026-07-24 to 2026-07-26.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61dc6f25910349b6e3acbf",
+    "createdAt": "2026-07-23T09:18:40.049Z",
+    "readAt": null
+  },
+  {
+    "id": "1784798320049-uzo6y5",
+    "userId": "6a44bc5d8f389c1c08feb924",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 3 days leave from 2026-07-24 to 2026-07-26.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61dc6f25910349b6e3acbf",
+    "createdAt": "2026-07-23T09:18:40.049Z",
+    "readAt": null
+  },
+  {
+    "id": "1784798320049-8gipdo",
+    "userId": "6a33bdfa597e964faac131b6",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 3 days leave from 2026-07-24 to 2026-07-26.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61dc6f25910349b6e3acbf",
+    "createdAt": "2026-07-23T09:18:40.049Z",
+    "readAt": null
+  },
+  {
+    "id": "1784798320049-bjoyfa",
+    "userId": "6a30f59093d1b8cdb26dce38",
+    "title": "New leave request",
+    "message": "Manish Yadav requested 3 days leave from 2026-07-24 to 2026-07-26.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61dc6f25910349b6e3acbf",
+    "createdAt": "2026-07-23T09:18:40.049Z",
+    "readAt": "2026-07-23T10:04:48.753Z"
+  },
+  {
+    "id": "1784798116507-hioned",
+    "userId": "6a30f59093d1b8cdb26dce38",
+    "title": "Leave request approved",
+    "message": "Super Admin approved your leave from 2026-07-23 to 2026-07-27.",
+    "type": "hr-leave",
+    "leaveRequestId": null,
+    "createdAt": "2026-07-23T09:15:16.507Z",
+    "readAt": "2026-07-23T09:15:38.771Z"
+  },
+  {
+    "id": "1784798109802-xjt6c7",
+    "userId": "6a46518db6542a18d0f73fc0",
+    "title": "New leave request",
+    "message": "Super Admin requested 5 days leave from 2026-07-23 to 2026-07-27.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61db9d25910349b6e3acbd",
+    "createdAt": "2026-07-23T09:15:09.802Z",
+    "readAt": null
+  },
+  {
+    "id": "1784798109802-kijg4v",
+    "userId": "6a44bc5d8f389c1c08feb924",
+    "title": "New leave request",
+    "message": "Super Admin requested 5 days leave from 2026-07-23 to 2026-07-27.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61db9d25910349b6e3acbd",
+    "createdAt": "2026-07-23T09:15:09.802Z",
+    "readAt": null
+  },
+  {
+    "id": "1784798109802-9ang5c",
+    "userId": "6a33bdfa597e964faac131b6",
+    "title": "New leave request",
+    "message": "Super Admin requested 5 days leave from 2026-07-23 to 2026-07-27.",
+    "type": "hr-leave",
+    "leaveRequestId": "6a61db9d25910349b6e3acbd",
+    "createdAt": "2026-07-23T09:15:09.802Z",
+    "readAt": null
+  },
+  {
     "id": "1784620239869-5do8jf",
     "userId": "6a46518db6542a18d0f73fc0",
     "title": "New leave request",

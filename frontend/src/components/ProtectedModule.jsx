@@ -40,6 +40,7 @@ const menuPaths = {
   "hr-documents": "/hr/documents",
   "hr-salary-slips": "/hr/salary-slips",
   "hr-leave": "/hr/leave",
+  "hr-attendance": "/hr/attendance",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
@@ -70,7 +71,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-documents", "hr-salary-slips", "hr-leave", "whatsapp", "manage-users", "module-control"] : [...menus.filter((menu) => !["manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu)), "hr-leave", "hr-salary-slips"]),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-documents", "hr-salary-slips", "hr-leave", "hr-attendance", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
       "projects",
       "profile",
     ];
@@ -156,6 +157,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "hr-documents" && <HrDashboard darkMode={darkMode} section="documents" />}
         {moduleId === "hr-salary-slips" && <HrDashboard darkMode={darkMode} section="salary" />}
         {moduleId === "hr-leave" && <HrDashboard darkMode={darkMode} section="leave" />}
+        {moduleId === "hr-attendance" && <HrDashboard darkMode={darkMode} section="attendance" />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}

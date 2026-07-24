@@ -70,24 +70,26 @@ const MENU_ITEMS = [
   { id: "project-stock", label: "Stock", parent: "projects", group: "projects" },
   { id: "site-images", label: "Site Images", parent: "projects", group: "projects" },
   { id: "hr-dashboard", label: "HR Dashboard", group: "hr" },
-  { id: "hr-employees", label: "Employees", parent: "hr", group: "hr" },
-  { id: "hr-documents", label: "HR Documents", parent: "hr", group: "hr" },
-  { id: "hr-salary-slips", label: "Salary Slips", parent: "hr", group: "hr" },
-  { id: "hr-leave", label: "Leave", parent: "hr", group: "hr" },
+  { id: "hr-employees", label: "Employees", parent: "hr-dashboard", group: "hr" },
+  { id: "hr-documents", label: "HR Documents", parent: "hr-dashboard", group: "hr" },
+  { id: "hr-salary-slips", label: "Salary Slips", parent: "hr-dashboard", group: "hr" },
+  { id: "hr-leave", label: "Leave", parent: "hr-dashboard", group: "hr" },
+  { id: "hr-attendance", label: "Attendance", parent: "hr-dashboard", group: "hr" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
   { id: "employee-daily-report", label: "Employee Daily Report" },
   { id: "activity-log", label: "Activity Log" },
-  { id: "manage-roles", label: "Manage Roles" },
-  { id: "manage-users", label: "Manage Users" },
+  { id: "access-management", label: "Access Control" },
+  { id: "manage-roles", label: "Manage Roles", parent: "access-management", group: "access" },
+  { id: "manage-users", label: "Manage Users", parent: "access-management", group: "access" },
 ];
 const SUPER_ADMIN_MENU_ITEMS = [{ id: "whatsapp", label: "WhatsApp" }, { id: "module-control", label: "Module Control" }];
 const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];
 const MENU_ITEM_IDS = new Set(ALL_MENU_ITEMS.map((item) => item.id));
 const ROLE_MENU_ITEM_IDS = new Set(MENU_ITEMS.map((item) => item.id));
-const PROJECT_CHILD_MENU_IDS = new Set(MENU_ITEMS.filter((item) => item.parent === "projects").map((item) => item.id));
-const DEFAULT_EMPLOYEE_MENU_IDS = ["hr-leave", "hr-salary-slips"];
+const MENU_PARENT_BY_CHILD_ID = new Map(MENU_ITEMS.filter((item) => item.parent && ROLE_MENU_ITEM_IDS.has(item.parent)).map((item) => [item.id, item.parent]));
+const DEFAULT_EMPLOYEE_MENU_IDS = ["hr-leave", "hr-salary-slips", "hr-attendance"];
 const PROTECTED_GLOBAL_MODULES = new Set(["dashboard", "module-control"]);
 const PRIVILEGE_ITEMS = [
   { id: "upload_documents", label: "Upload documents" },
@@ -184,7 +186,8 @@ function isEffectiveSuperAdmin(user, role) {
 
 function roleMenusForUser(user, role) {
   if (isEffectiveSuperAdmin(user, role)) return ALL_MENU_ITEMS.map((item) => item.id);
-  return normalizeRoleMenus([...(role?.menus || []), ...(user?.menus || []), ...DEFAULT_EMPLOYEE_MENU_IDS], { allowSuperAdminMenus: false });
+  const assignedMenus = [...(role?.menus || []), ...(user?.menus || [])];
+  return normalizeRoleMenus(assignedMenus.length ? assignedMenus : DEFAULT_EMPLOYEE_MENU_IDS, { allowSuperAdminMenus: false });
 }
 
 function rolePrivilegesForUser(user, role) {
@@ -196,8 +199,9 @@ function normalizeRoleMenus(menus = [], { allowSuperAdminMenus = false } = {}) {
   const validIds = allowSuperAdminMenus ? MENU_ITEM_IDS : ROLE_MENU_ITEM_IDS;
   const normalized = [...new Set((Array.isArray(menus) ? menus : []).map(String))]
     .filter((id) => validIds.has(id));
-  if (normalized.some((id) => PROJECT_CHILD_MENU_IDS.has(id)) && !normalized.includes("projects")) {
-    normalized.unshift("projects");
+  for (const id of [...normalized]) {
+    const parent = MENU_PARENT_BY_CHILD_ID.get(id);
+    if (parent && validIds.has(parent) && !normalized.includes(parent)) normalized.unshift(parent);
   }
   return normalized;
 }
@@ -225,6 +229,8 @@ function sanitizeUser(user, role) {
     avatarUrl: user.avatarUrl || "",
     employeeCode: user.employeeCode || user.employeeId || "",
     joiningDate: user.joiningDate || user.dateOfJoining || user.joinDate || "",
+    employmentType: user.employmentType === "permanent" ? "permanent" : "probation",
+    monthlyInHandSalary: moneyNumber(user.monthlyInHandSalary),
     roleId: user.roleId ? String(user.roleId) : null,
     roleName: role?.name || user.roleName || null,
     menus: roleMenusForUser(user, role),
@@ -3584,12 +3590,14 @@ app.put("/admin/module-control", requireSuperAdmin, async (req, res) => {
 app.get("/hr/overview", async (req, res) => {
   try {
     const hasHrDashboardAccess = hasMenuAccess(req, "hr-dashboard");
+    const hasHrEmployeesAccess = hasMenuAccess(req, "hr-employees");
     const hasHrLeaveAccess = hasMenuAccess(req, "hr-leave");
     const hasHrSalaryAccess = hasMenuAccess(req, "hr-salary-slips");
-    if (!hasHrDashboardAccess && !hasHrLeaveAccess && !hasHrSalaryAccess) return res.status(403).json({ error: "HR access required" });
+    const hasHrAttendanceAccess = hasMenuAccess(req, "hr-attendance");
+    if (!hasHrDashboardAccess && !hasHrEmployeesAccess && !hasHrLeaveAccess && !hasHrSalaryAccess && !hasHrAttendanceAccess) return res.status(403).json({ error: "HR access required" });
     const db = await connectAuthDb();
     const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
-    if (!hasHrDashboardAccess && (hasHrLeaveAccess || hasHrSalaryAccess)) {
+    if (!hasHrDashboardAccess && !hasHrEmployeesAccess && (hasHrLeaveAccess || hasHrSalaryAccess || hasHrAttendanceAccess)) {
       return res.json({
         canManageHr,
         employees: [],
@@ -3597,6 +3605,8 @@ app.get("/hr/overview", async (req, res) => {
         documents: [],
         salarySlips: await loadHrSalarySlips(req, db, canManageHr),
         leaveRequests: await loadHrLeaveRequests(req, db, canManageHr),
+        attendanceSettings: await getAttendanceSettings(db),
+        attendanceRecords: await loadHrAttendanceRecords(req, db, canManageHr),
       });
     }
     const query = canManageHr ? {} : { _id: new ObjectId(req.authUser.id) };
@@ -3616,6 +3626,8 @@ app.get("/hr/overview", async (req, res) => {
       documents: [],
       salarySlips: await loadHrSalarySlips(req, db, canManageHr),
       leaveRequests: await loadHrLeaveRequests(req, db, canManageHr),
+      attendanceSettings: await getAttendanceSettings(db),
+      attendanceRecords: await loadHrAttendanceRecords(req, db, canManageHr),
     });
   } catch (error) {
     console.error("HR overview error:", error);
@@ -3637,6 +3649,10 @@ function leaveDays(startDate, endDate) {
   return Math.max(1, diff);
 }
 
+function leaveMonthKey(date = "") {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date || "") ? date.slice(0, 7) : "";
+}
+
 function serializeLeaveRequest(item) {
   return {
     id: String(item._id),
@@ -3645,10 +3661,16 @@ function serializeLeaveRequest(item) {
     username: item.username || "",
     department: item.department || "",
     designation: item.designation || "",
+    gender: item.gender || "",
+    avatarPreset: item.avatarPreset || "",
+    avatarUrl: item.avatarUrl || "",
+    employmentType: item.employmentType || "probation",
     leaveType: item.leaveType || "Casual Leave",
     startDate: item.startDate,
     endDate: item.endDate,
     days: item.days || leaveDays(item.startDate, item.endDate),
+    paidLeaveDays: item.paidLeaveDays || 0,
+    unpaidLeaveDays: item.unpaidLeaveDays || 0,
     reason: item.reason || "",
     status: item.status || "pending",
     adminComment: item.adminComment || "",
@@ -3662,12 +3684,16 @@ function serializeLeaveRequest(item) {
 async function loadHrLeaveRequests(req, db, canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"))) {
   const query = canManageHr ? {} : { userId: new ObjectId(req.authUser.id) };
   const items = await db.collection("hrLeaveRequests").find(query).sort({ createdAt: -1 }).limit(200).toArray();
-  return items.map(serializeLeaveRequest);
+  return applyLeavePolicyToRequests(items, await leavePolicyUsersForRequests(db, items)).map(serializeLeaveRequest);
 }
 
 function moneyNumber(value) {
   const number = Number(String(value ?? "").replace(/,/g, ""));
   return Number.isFinite(number) ? Math.max(0, number) : 0;
+}
+
+function roundedMoney(value) {
+  return Math.round(moneyNumber(value));
 }
 
 function monthLabel(month = "") {
@@ -3692,9 +3718,103 @@ function salaryMonthEndDate(month) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
+function salaryWorkingDays(month) {
+  if (!/^\d{4}-\d{2}$/.test(month || "")) return 26;
+  const [year, monthNumber] = month.split("-").map(Number);
+  const daysInMonth = Number(salaryMonthEndDate(month).slice(-2)) || 30;
+  let workingDays = 0;
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    if (new Date(Date.UTC(year, monthNumber - 1, day)).getUTCDay() !== 0) workingDays += 1;
+  }
+  return workingDays || 26;
+}
+
 function salaryMonthBeforeJoining(month, joiningDate) {
   if (!month || !joiningDate) return false;
   return month < String(joiningDate).slice(0, 7);
+}
+
+function normalizeEmploymentType(value) {
+  return String(value || "").trim().toLowerCase() === "permanent" ? "permanent" : "probation";
+}
+
+async function leavePolicyUsersForRequests(db, requests = []) {
+  const ids = [...new Set(requests.map((request) => String(request.userId || "")).filter(ObjectId.isValid))].map((id) => new ObjectId(id));
+  if (!ids.length) return new Map();
+  const users = await db.collection("users").find({ _id: { $in: ids } }).project({ employmentType: 1, gender: 1, avatarPreset: 1, avatarUrl: 1, displayName: 1, username: 1 }).toArray();
+  return new Map(users.map((user) => [String(user._id), user]));
+}
+
+function applyLeavePolicyToRequests(requests = [], userMap = new Map()) {
+  const enriched = requests.map((request) => ({
+    ...request,
+    days: request.days || leaveDays(request.startDate, request.endDate),
+    employeeName: userMap.get(String(request.userId))?.displayName || request.employeeName,
+    username: userMap.get(String(request.userId))?.username || request.username,
+    gender: userMap.get(String(request.userId))?.gender || request.gender,
+    avatarPreset: userMap.get(String(request.userId))?.avatarPreset || request.avatarPreset,
+    avatarUrl: userMap.get(String(request.userId))?.avatarUrl || request.avatarUrl,
+    employmentType: normalizeEmploymentType(userMap.get(String(request.userId))?.employmentType || request.employmentType),
+    paidLeaveDays: 0,
+    unpaidLeaveDays: request.days || leaveDays(request.startDate, request.endDate),
+  }));
+  const groups = new Map();
+  enriched
+    .filter((request) => request.status === "approved")
+    .forEach((request) => {
+      const key = `${String(request.userId)}:${leaveMonthKey(request.startDate)}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(request);
+    });
+  for (const group of groups.values()) {
+    group.sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    let remainingPaid = group[0]?.employmentType === "permanent" ? 1 : 0;
+    group.forEach((request) => {
+      const paid = Math.min(request.days, remainingPaid);
+      request.paidLeaveDays = paid;
+      request.unpaidLeaveDays = Math.max(0, request.days - paid);
+      remainingPaid = Math.max(0, remainingPaid - paid);
+    });
+  }
+  return enriched;
+}
+
+function salaryMonthBounds(month) {
+  if (!/^\d{4}-\d{2}$/.test(month || "")) return null;
+  return { startDate: `${month}-01`, endDate: salaryMonthEndDate(month) };
+}
+
+function overlapLeaveDaysInRange(request, startDate, endDate) {
+  if (!request?.startDate || !request?.endDate || request.endDate < startDate || request.startDate > endDate) return 0;
+  const start = request.startDate > startDate ? request.startDate : startDate;
+  const end = request.endDate < endDate ? request.endDate : endDate;
+  return leaveDays(start, end);
+}
+
+async function salaryLeaveSummary(db, userId, month, employmentType, monthlySalary) {
+  const bounds = salaryMonthBounds(month);
+  if (!bounds) return { monthDays: salaryWorkingDays(month), approvedLeaveDays: 0, paidLeaveDays: 0, unpaidLeaveDays: 0, leaveDeduction: 0, perDaySalary: 0 };
+  const leaveUserId = userId instanceof ObjectId ? userId : new ObjectId(userId);
+  const requests = await db.collection("hrLeaveRequests").find({
+    userId: leaveUserId,
+    status: "approved",
+    startDate: { $lte: bounds.endDate },
+    endDate: { $gte: bounds.startDate },
+  }).toArray();
+  const approvedLeaveDays = requests.reduce((sum, request) => sum + overlapLeaveDaysInRange(request, bounds.startDate, bounds.endDate), 0);
+  const paidLeaveAllowance = normalizeEmploymentType(employmentType) === "permanent" ? 1 : 0;
+  const paidLeaveDays = Math.min(approvedLeaveDays, paidLeaveAllowance);
+  const unpaidLeaveDays = Math.max(0, approvedLeaveDays - paidLeaveDays);
+  const monthDays = salaryWorkingDays(month);
+  const perDaySalary = monthDays ? moneyNumber(monthlySalary) / monthDays : 0;
+  return {
+    monthDays,
+    approvedLeaveDays,
+    paidLeaveDays,
+    unpaidLeaveDays,
+    perDaySalary: roundedMoney(perDaySalary),
+    leaveDeduction: roundedMoney(perDaySalary * unpaidLeaveDays),
+  };
 }
 
 function salaryComponents(items = []) {
@@ -3708,6 +3828,8 @@ async function getSalaryCompanySettings(db) {
   return {
     companyName: existing?.companyName || "UIPL Docs",
     companyLocation: existing?.companyLocation || "India",
+    companyPhone: existing?.companyPhone || "",
+    companyEmail: existing?.companyEmail || "",
     companyLogo: existing?.companyLogo || "",
     pfAccountNumber: existing?.pfAccountNumber || "",
     note: existing?.note || "This document has been automatically generated; therefore, a signature is not required.",
@@ -3728,6 +3850,10 @@ function serializeSalarySlip(item = {}) {
     date: item.payDate || item.createdAt,
     createdAt: item.createdAt,
     netPay: item.netPay || 0,
+    approvedLeaveDays: item.leaveSummary?.approvedLeaveDays || 0,
+    paidLeaveDays: item.leaveSummary?.paidLeaveDays || 0,
+    advanceLeaveDays: item.leaveSummary?.unpaidLeaveDays || item.lopDays || 0,
+    leaveDeduction: item.leaveSummary?.leaveDeduction || 0,
   };
 }
 
@@ -3751,7 +3877,7 @@ function registerSalaryPdfFonts(doc) {
 
 function drawSalarySlipPdfLegacy(doc, slip, settings) {
   const rupee = "Rs ";
-  const currency = (value) => `${rupee}${moneyNumber(value).toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
+  const currency = (value) => `${rupee}${roundedMoney(value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   const line = (x1, y, x2) => doc.moveTo(x1, y).lineTo(x2, y).strokeColor("#d8dde6").lineWidth(1).stroke();
   const labelValue = (label, value, x, y, labelWidth = 118, valueWidth = 160) => {
     doc.font("Helvetica").fontSize(10).fillColor("#626262").text(label, x, y, { width: labelWidth });
@@ -3838,7 +3964,8 @@ function drawSalarySlipPdfLegacy(doc, slip, settings) {
 
 function drawSalarySlipPdf(doc, slip, settings) {
   const fonts = registerSalaryPdfFonts(doc);
-  const currency = (value) => `Rs ${moneyNumber(value).toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
+  const currency = (value) => `Rs ${roundedMoney(value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const left = 50;
   const teal = "#53c7bf";
   const border = "#d9e0e8";
   const text = "#171714";
@@ -3849,13 +3976,13 @@ function drawSalarySlipPdf(doc, slip, settings) {
     cellText(title, x, y - 12, { bold: true, size: 7.4, color: "#9d5360", width });
     line(x, y, x + width, teal, 2);
   };
-  const detailStack = (title, rows, x, y, width) => {
+  const detailStack = (title, rows, x, y, width, labelWidth = 58) => {
     cellText(title, x, y, { bold: true, size: 7.4, color: "#9d5360", width });
     line(x, y + 12, x + width, teal, 1.4);
     rows.forEach(([label, value], index) => {
       const rowY = y + 22 + index * 11;
-      cellText(label, x, rowY, { size: 6.3, color: muted, width: 58 });
-      cellText(value || "-", x + 62, rowY, { bold: true, size: 6.5, width: width - 62 });
+      cellText(label, x, rowY, { size: 6.3, color: muted, width: labelWidth });
+      cellText(value || "-", x + labelWidth + 4, rowY, { bold: true, size: 6.5, width: width - labelWidth - 4 });
     });
   };
   const tableHeader = (headers, widths, x, y) => {
@@ -3877,75 +4004,89 @@ function drawSalarySlipPdf(doc, slip, settings) {
     });
   };
 
+  const headerTop = 32;
+  const logoWidth = 116;
+  const logoHeight = 42;
   if (/^data:image\/(png|jpe?g);base64,/i.test(settings.companyLogo || "")) {
     try {
       const logoBuffer = Buffer.from(String(settings.companyLogo).split(",")[1], "base64");
-      doc.image(logoBuffer, 60, 42, { fit: [58, 34] });
+      doc.image(logoBuffer, left, headerTop, { fit: [logoWidth, logoHeight] });
     } catch {
-      doc.roundedRect(60, 44, 52, 28, 4).strokeColor("#d4dae5").stroke();
+      doc.roundedRect(left, headerTop, logoWidth, logoHeight, 4).strokeColor("#d4dae5").stroke();
     }
   } else {
-    doc.roundedRect(60, 44, 52, 28, 4).strokeColor("#d4dae5").stroke();
+    doc.roundedRect(left, headerTop, logoWidth, logoHeight, 4).strokeColor("#d4dae5").stroke();
   }
-
-  cellText("Earnings Statement", 60, 88, { bold: true, size: 20, width: 230 });
-  cellText(`Pay Period: ${monthLabel(slip.month)}   Pay Date: ${slip.payDate || "-"}`, 60, 120, { size: 8.2, color: muted, width: 250 });
-  detailStack("Company", [
-    ["Name", settings.companyName],
-    ["Location", settings.companyLocation],
-    ...(settings.pfAccountNumber ? [["PF A/C", settings.pfAccountNumber]] : []),
-  ], 275, 46, 135);
-  detailStack("Employee", [
+  [
+    settings.companyName,
+    settings.companyLocation,
+    settings.companyPhone ? `Phone: ${settings.companyPhone}` : "",
+    settings.companyEmail ? `Email: ${settings.companyEmail}` : "",
+  ].filter(Boolean).forEach((lineText, index) => {
+    cellText(lineText, left, headerTop + logoHeight + 14 + index * 16, { bold: index === 0, size: index === 0 ? 13 : 7.4, color: index === 0 ? text : muted, width: 260 });
+  });
+  cellText("Earnings Statement", left, 158, { bold: true, size: 20, width: 260 });
+  cellText(`Pay Period: ${monthLabel(slip.month)}   Pay Date: ${slip.payDate || "-"}`, left, 190, { size: 8.2, color: muted, width: 280 });
+  const employeeRows = [
     ["Name", slip.employeeName],
-    ["Role", slip.designation || "Not added"],
-    ["ID", slip.employeeCode || "-"],
+    ["Designation", slip.designation || "Not added"],
+    ["Employee ID", slip.employeeCode || "-"],
     ["Joined", slip.joiningDate || "-"],
     ...(slip.uan ? [["UAN", slip.uan]] : []),
-  ], 415, 46, 130);
+  ];
+  const employeeDetailsY = 222;
+  detailStack("Employee Details", employeeRows, left, employeeDetailsY, 495, 74);
+  const earningsY = employeeDetailsY + 22 + employeeRows.length * 11 + 18;
 
-  const displayEarnings = slip.earnings.filter((item) => !/^basic(\s+salary)?$/i.test(String(item.label || "").trim()));
+  const displayEarnings = slip.earnings.filter((item) => !/^(basic(\s+salary)?|monthly\s+in-?hand\s+salary)$/i.test(String(item.label || "").trim()));
   const grossRows = [
-    ["Basic Salary", String(slip.paidDays || 0), currency(slip.basic), currency(slip.basic)],
+    ["Monthly In-Hand Salary", String(slip.paidDays || 0), currency(slip.basic), currency(slip.basic)],
     ...displayEarnings.map((item) => [item.label, "-", currency(item.amount), currency(item.amount)]),
     Object.assign(["Gross Earnings", "", currency(slip.grossEarnings), currency(slip.grossEarnings)], { total: true }),
   ];
-  sectionTitle("Employee Gross Earnings", 170);
-  tableHeader(["Salary Component", "Paid Days", "Amount", "YTD"], [220, 85, 95, 95], 50, 180);
-  tableRows(grossRows, [220, 85, 95, 95], 50, 200);
+  sectionTitle("Employee Gross Earnings", earningsY, left);
+  tableHeader(["Salary Component", "Payable Days", "Amount", "YTD"], [220, 85, 95, 95], left, earningsY + 10);
+  tableRows(grossRows, [220, 85, 95, 95], left, earningsY + 30);
 
   const hasDeductions = slip.deductions.length > 0;
+  const lowerSectionsY = earningsY + 125;
   if (hasDeductions) {
     const deductionRows = slip.deductions.map((item) => [item.label, currency(item.amount), currency(item.amount)]);
     deductionRows.push(Object.assign(["Total Deductions", currency(slip.totalDeductions), currency(slip.totalDeductions)], { total: true }));
-    sectionTitle("Deductions", 310, 50, 235);
-    tableHeader(["Description", "Amount", "YTD"], [105, 65, 65], 50, 320);
-    tableRows(deductionRows, [105, 65, 65], 50, 340);
+    sectionTitle("Deductions", lowerSectionsY, 50, 235);
+    tableHeader(["Description", "Amount", "YTD"], [105, 65, 65], 50, lowerSectionsY + 10);
+    tableRows(deductionRows, [105, 65, 65], 50, lowerSectionsY + 30);
   }
 
   const attendanceX = hasDeductions ? 310 : 50;
   const attendanceWidth = hasDeductions ? 235 : 495;
   const attendanceWidths = hasDeductions ? [105, 65, 65] : [260, 115, 120];
+  const leaveSummary = slip.leaveSummary || {};
   const attendanceRows = [
-    ["Paid Days", String(slip.paidDays || 0), String(slip.paidDays || 0)],
-    ["LOP Days", String(slip.lopDays || 0), String(slip.lopDays || 0)],
+    ["Working Days", String(leaveSummary.monthDays || salaryWorkingDays(slip.month)), String(leaveSummary.monthDays || salaryWorkingDays(slip.month))],
+    ["Approved Leave", String(leaveSummary.approvedLeaveDays || 0), String(leaveSummary.approvedLeaveDays || 0)],
+    ["Paid Leave", String(leaveSummary.paidLeaveDays || 0), String(leaveSummary.paidLeaveDays || 0)],
+    ["Advance Leave", String(leaveSummary.unpaidLeaveDays || slip.lopDays || 0), String(leaveSummary.unpaidLeaveDays || slip.lopDays || 0)],
     Object.assign(["Net Payable", currency(slip.netPay), currency(slip.netPay)], { total: true }),
   ];
-  sectionTitle("Attendance & Net Pay", 310, attendanceX, attendanceWidth);
-  tableHeader(["Item", "Amount", "YTD"], attendanceWidths, attendanceX, 320);
-  tableRows(attendanceRows, attendanceWidths, attendanceX, 340);
+  sectionTitle("Attendance & Net Pay", lowerSectionsY, attendanceX, attendanceWidth);
+  tableHeader(["Item", "Amount", "YTD"], attendanceWidths, attendanceX, lowerSectionsY + 10);
+  tableRows(attendanceRows, attendanceWidths, attendanceX, lowerSectionsY + 30);
 
-  sectionTitle("Summary", 430);
+  const summaryY = lowerSectionsY + 120;
+  sectionTitle("Summary", summaryY);
   const summaryRows = [
     ["Gross Earnings", currency(slip.grossEarnings), currency(slip.grossEarnings)],
     ["Total Deductions", currency(slip.totalDeductions), currency(slip.totalDeductions)],
     Object.assign(["Net Pay", currency(slip.netPay), currency(slip.netPay)], { total: true }),
   ];
-  tableHeader(["Description", "Amount", "YTD"], [300, 95, 100], 50, 440);
-  tableRows(summaryRows, [300, 95, 100], 50, 460, 16);
+  tableHeader(["Description", "Amount", "YTD"], [300, 95, 100], 50, summaryY + 10);
+  tableRows(summaryRows, [300, 95, 100], 50, summaryY + 30, 16);
 
-  doc.roundedRect(50, 535, 495, 34, 4).fillAndStroke("#eef8f6", "#d4eee9");
-  cellText("NET PAY", 65, 546, { bold: true, size: 10, width: 130 });
-  cellText(currency(slip.netPay), 395, 545, { bold: true, size: 13, width: 130, align: "right" });
+  const netPayY = summaryY + 105;
+  doc.roundedRect(50, netPayY, 495, 34, 4).fillAndStroke("#eef8f6", "#d4eee9");
+  cellText("NET PAY", 65, netPayY + 11, { bold: true, size: 10, width: 130 });
+  cellText(currency(slip.netPay), 395, netPayY + 10, { bold: true, size: 13, width: 130, align: "right" });
   line(50, 705, 545, "#d8dde6");
   cellText(settings.note, 80, 724, { size: 7, color: "#777", width: 435, align: "center" });
 }
@@ -3963,6 +4104,94 @@ async function notifyHrManagers(db, notification, excludeUserId = "") {
   notifyUsers(managerIds, notification);
 }
 
+function attendanceDateKey(date = new Date()) {
+  return istDateKey(date);
+}
+
+function attendanceDistanceMeters(a = {}, b = {}) {
+  const lat1 = Number(a.latitude);
+  const lon1 = Number(a.longitude);
+  const lat2 = Number(b.latitude);
+  const lon2 = Number(b.longitude);
+  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return Infinity;
+  const toRad = (value) => value * Math.PI / 180;
+  const earth = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const p1 = toRad(lat1);
+  const p2 = toRad(lat2);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dLon / 2) ** 2;
+  return Math.round(earth * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)));
+}
+
+async function getAttendanceSettings(db) {
+  const existing = await db.collection("hrSettings").findOne({ _id: "attendance-geofence" });
+  return {
+    address: existing?.address || "",
+    latitude: Number(existing?.latitude) || 0,
+    longitude: Number(existing?.longitude) || 0,
+    radiusMeters: Math.max(25, Number(existing?.radiusMeters) || 100),
+    updatedAt: existing?.updatedAt || null,
+    updatedBy: existing?.updatedBy || "",
+  };
+}
+
+function serializeAttendanceRecord(item = {}, user = null) {
+  return {
+    id: String(item._id),
+    userId: String(item.userId || ""),
+    employeeName: item.employeeName || user?.displayName || user?.username || "Employee",
+    designation: item.designation || user?.designation || "",
+    department: item.department || user?.department || "",
+    date: item.date || "",
+    status: item.status || "checked-in",
+    clockInAt: item.clockInAt || null,
+    clockOutAt: item.clockOutAt || null,
+    clockInLocation: item.clockInLocation || null,
+    clockOutLocation: item.clockOutLocation || null,
+    clockInDistanceMeters: item.clockInDistanceMeters ?? null,
+    clockOutDistanceMeters: item.clockOutDistanceMeters ?? null,
+    workMinutes: item.workMinutes || 0,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+async function loadHrAttendanceRecords(req, db, canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"))) {
+  const query = canManageHr ? {} : { userId: new ObjectId(req.authUser.id) };
+  const records = await db.collection("hrAttendanceRecords").find(query).sort({ date: -1, clockInAt: -1 }).limit(200).toArray();
+  return records.map((record) => serializeAttendanceRecord(record));
+}
+
+function attendanceLocationFromBody(body = {}) {
+  return {
+    latitude: Number(body.latitude),
+    longitude: Number(body.longitude),
+    accuracy: Number(body.accuracy) || null,
+  };
+}
+
+function assertAttendanceWithinGeofence(settings, location) {
+  if (!settings.latitude || !settings.longitude) {
+    const error = new Error("Attendance location is not configured yet. Please contact HR.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)) {
+    const error = new Error("Valid current location is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  const distance = attendanceDistanceMeters(location, settings);
+  if (distance > settings.radiusMeters) {
+    const error = new Error(`You are ${distance}m away from the allowed attendance location. Allowed radius is ${settings.radiusMeters}m.`);
+    error.statusCode = 403;
+    error.distanceMeters = distance;
+    throw error;
+  }
+  return distance;
+}
+
 app.get("/hr/leave-requests", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "hr-leave")) return res.status(403).json({ error: "HR leave access required" });
@@ -3977,6 +4206,143 @@ app.get("/hr/leave-requests", async (req, res) => {
   }
 });
 
+app.get("/hr/attendance", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-attendance")) return res.status(403).json({ error: "HR attendance access required" });
+    const db = await connectAuthDb();
+    const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
+    res.json({
+      canManageHr,
+      settings: await getAttendanceSettings(db),
+      records: await loadHrAttendanceRecords(req, db, canManageHr),
+    });
+  } catch (error) {
+    console.error("Attendance load error:", error);
+    res.status(500).json({ error: "Could not load attendance" });
+  }
+});
+
+app.put("/hr/attendance/settings", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
+    const latitude = Number(req.body?.latitude);
+    const longitude = Number(req.body?.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return res.status(400).json({ error: "Valid latitude and longitude are required" });
+    const db = await connectAuthDb();
+    const settings = {
+      address: projectText(req.body?.address, 240),
+      latitude,
+      longitude,
+      radiusMeters: Math.max(25, Math.round(moneyNumber(req.body?.radiusMeters || 100))),
+      updatedAt: new Date(),
+      updatedBy: String(req.authUser.id || ""),
+    };
+    await db.collection("hrSettings").updateOne({ _id: "attendance-geofence" }, { $set: settings }, { upsert: true });
+    addActivityLog({ req, action: "Updated attendance geofence", target: settings.address || `${latitude}, ${longitude}`, details: { radiusMeters: settings.radiusMeters } });
+    res.json({ success: true, settings });
+  } catch (error) {
+    console.error("Attendance settings error:", error);
+    res.status(500).json({ error: "Could not save attendance settings" });
+  }
+});
+
+app.post("/hr/attendance/clock-in", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-attendance")) return res.status(403).json({ error: "HR attendance access required" });
+    const db = await connectAuthDb();
+    const settings = await getAttendanceSettings(db);
+    const location = attendanceLocationFromBody(req.body || {});
+    const distance = assertAttendanceWithinGeofence(settings, location);
+    const userId = new ObjectId(req.authUser.id);
+    const date = attendanceDateKey();
+    const existing = await db.collection("hrAttendanceRecords").findOne({ userId, date });
+    if (existing?.clockInAt && !existing?.clockOutAt) return res.status(409).json({ error: "You are already clocked in for today" });
+    if (existing?.clockInAt && existing?.clockOutAt) return res.status(409).json({ error: "Attendance is already completed for today" });
+    const now = new Date();
+    const doc = {
+      userId,
+      employeeName: req.authUser.displayName || req.authUser.username || "Employee",
+      designation: req.authUser.designation || "",
+      department: req.authUser.department || "",
+      date,
+      status: "checked-in",
+      clockInAt: now,
+      clockInLocation: location,
+      clockInDistanceMeters: distance,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const result = await db.collection("hrAttendanceRecords").insertOne(doc);
+    doc._id = result.insertedId;
+    addActivityLog({ req, action: "Clocked in", target: `${doc.employeeName} · ${date}`, details: { distanceMeters: distance } });
+    res.json({ success: true, record: serializeAttendanceRecord(doc), settings });
+  } catch (error) {
+    console.error("Attendance clock-in error:", error);
+    res.status(error.statusCode || 500).json({ error: error.message || "Could not clock in", distanceMeters: error.distanceMeters });
+  }
+});
+
+app.post("/hr/attendance/clock-out", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-attendance")) return res.status(403).json({ error: "HR attendance access required" });
+    const db = await connectAuthDb();
+    const settings = await getAttendanceSettings(db);
+    const location = attendanceLocationFromBody(req.body || {});
+    const distance = assertAttendanceWithinGeofence(settings, location);
+    const userId = new ObjectId(req.authUser.id);
+    const date = attendanceDateKey();
+    const existing = await db.collection("hrAttendanceRecords").findOne({ userId, date });
+    if (!existing?.clockInAt) return res.status(400).json({ error: "Clock in first before clocking out" });
+    if (existing?.clockOutAt) return res.status(409).json({ error: "You are already clocked out for today" });
+    const now = new Date();
+    const workMinutes = Math.max(0, Math.round((now.getTime() - new Date(existing.clockInAt).getTime()) / 60000));
+    const update = {
+      status: "completed",
+      clockOutAt: now,
+      clockOutLocation: location,
+      clockOutDistanceMeters: distance,
+      workMinutes,
+      updatedAt: now,
+    };
+    await db.collection("hrAttendanceRecords").updateOne({ _id: existing._id }, { $set: update });
+    const record = { ...existing, ...update };
+    addActivityLog({ req, action: "Clocked out", target: `${record.employeeName} · ${date}`, details: { distanceMeters: distance, workMinutes } });
+    res.json({ success: true, record: serializeAttendanceRecord(record), settings });
+  } catch (error) {
+    console.error("Attendance clock-out error:", error);
+    res.status(error.statusCode || 500).json({ error: error.message || "Could not clock out", distanceMeters: error.distanceMeters });
+  }
+});
+
+app.patch("/hr/employees/:id", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
+    const db = await connectAuthDb();
+    const userId = new ObjectId(req.params.id);
+    const user = await db.collection("users").findOne({ _id: userId });
+    if (!user) return res.status(404).json({ error: "Employee not found" });
+    const update = {
+      employmentType: normalizeEmploymentType(req.body?.employmentType),
+      monthlyInHandSalary: moneyNumber(req.body?.monthlyInHandSalary),
+      updatedAt: new Date(),
+    };
+    await db.collection("users").updateOne({ _id: userId }, { $set: update });
+    await db.collection("hrSalaryProfiles").updateOne(
+      { userId },
+      { $set: { ...update, userId } },
+      { upsert: true },
+    );
+    const roles = await db.collection("roles").find({}).toArray();
+    const roleMap = new Map(roles.map((role) => [String(role._id), role]));
+    const updated = await db.collection("users").findOne({ _id: userId });
+    addActivityLog({ req, action: "Updated HR employee salary policy", target: updated.displayName || updated.username || String(userId), details: update });
+    res.json({ success: true, employee: sanitizeUser(updated, roleMap.get(String(updated.roleId))) });
+  } catch (error) {
+    console.error("HR employee update error:", error);
+    res.status(500).json({ error: "Could not update employee HR details" });
+  }
+});
+
 app.get("/hr/salary-slips/meta", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "hr-salary-slips")) return res.status(403).json({ error: "Salary slip access required" });
@@ -3987,22 +4353,25 @@ app.get("/hr/salary-slips/meta", async (req, res) => {
     if (!targetUser) return res.status(404).json({ error: "Employee not found" });
     const profile = await db.collection("hrSalaryProfiles").findOne({ userId: new ObjectId(targetUserId) });
     const safeTarget = sanitizeUser(targetUser, null);
+    const salaryProfile = {
+      userId: targetUserId,
+      employeeName: profile?.employeeName || safeTarget.displayName || safeTarget.username || "",
+      designation: profile?.designation || safeTarget.designation || "",
+      employeeCode: profile?.employeeCode || safeTarget.employeeCode || "",
+      joiningDate: profile?.joiningDate || safeTarget.joiningDate || "",
+      employmentType: profile?.employmentType || safeTarget.employmentType || "probation",
+      monthlyInHandSalary: moneyNumber(profile?.monthlyInHandSalary || safeTarget.monthlyInHandSalary),
+      uan: profile?.uan || "",
+      basic: moneyNumber(profile?.monthlyInHandSalary || profile?.basic || safeTarget.monthlyInHandSalary),
+      paidDays: profile?.paidDays || 30,
+      lopDays: profile?.lopDays || 0,
+      earnings: profile?.earnings || [],
+      deductions: profile?.deductions || [],
+    };
     res.json({
       canEditCompany,
       company: await getSalaryCompanySettings(db),
-      profile: profile || {
-        userId: targetUserId,
-        employeeName: safeTarget.displayName || safeTarget.username || "",
-        designation: safeTarget.designation || "",
-        employeeCode: safeTarget.employeeCode || "",
-        joiningDate: safeTarget.joiningDate || "",
-        uan: "",
-        basic: 0,
-        paidDays: 30,
-        lopDays: 0,
-        earnings: [],
-        deductions: [],
-      },
+      profile: salaryProfile,
     });
   } catch (error) {
     console.error("Salary meta error:", error);
@@ -4017,6 +4386,8 @@ app.put("/hr/salary-slips/company", async (req, res) => {
     const company = {
       companyName: projectText(req.body?.companyName, 100) || "UIPL Docs",
       companyLocation: projectText(req.body?.companyLocation, 140) || "India",
+      companyPhone: projectText(req.body?.companyPhone, 40),
+      companyEmail: projectText(req.body?.companyEmail, 100),
       companyLogo: String(req.body?.companyLogo || "").slice(0, 600000),
       pfAccountNumber: projectText(req.body?.pfAccountNumber, 80),
       note: projectText(req.body?.note, 220) || "This document has been automatically generated; therefore, a signature is not required.",
@@ -4046,22 +4417,32 @@ app.post("/hr/salary-slips/generate", async (req, res) => {
     if (!month) return res.status(400).json({ error: "Select salary month" });
     if (!payDate) return res.status(400).json({ error: "Pay date is required" });
     if (!canManageHr && !storedProfile) return res.status(400).json({ error: "Salary details are not configured yet. Please contact HR." });
+    const employmentType = normalizeEmploymentType(source?.employmentType || storedProfile?.employmentType || safeTarget.employmentType);
+    const monthlyInHandSalary = moneyNumber(source?.monthlyInHandSalary || storedProfile?.monthlyInHandSalary || safeTarget.monthlyInHandSalary);
+    const baseSalary = monthlyInHandSalary || moneyNumber(source?.basic);
+    const leaveSummary = await salaryLeaveSummary(db, targetUserId, month, employmentType, baseSalary);
     const extraEarnings = salaryComponents(source?.earnings || []).filter((item) => !/^basic(\s+salary)?$/i.test(item.label.trim()));
     const earnings = [
-      { label: "Basic Salary", amount: moneyNumber(source?.basic) },
+      { label: "Monthly In-Hand Salary", amount: baseSalary },
       ...extraEarnings,
     ].filter((item) => item.amount > 0);
-    const deductions = salaryComponents(source?.deductions || []);
+    const deductions = [
+      ...salaryComponents(source?.deductions || []).filter((item) => !/^leave deduction$/i.test(item.label.trim())),
+      ...(leaveSummary.leaveDeduction > 0 ? [{ label: "Leave Deduction", amount: leaveSummary.leaveDeduction }] : []),
+    ];
     const profile = {
       userId: new ObjectId(targetUserId),
       employeeName: projectText(source?.employeeName, 100) || safeTarget.displayName || safeTarget.username || "Employee",
       designation: projectText(source?.designation, 100) || safeTarget.designation || "",
       employeeCode: projectText(source?.employeeCode, 50) || safeTarget.employeeCode || "",
       joiningDate: salaryDate(source?.joiningDate) || salaryDate(safeTarget.joiningDate),
+      employmentType,
+      monthlyInHandSalary,
       uan: projectText(source?.uan, 40),
-      basic: moneyNumber(source?.basic),
-      paidDays: Math.max(0, Math.round(moneyNumber(source?.paidDays || 30))),
-      lopDays: Math.max(0, Math.round(moneyNumber(source?.lopDays || 0))),
+      basic: baseSalary,
+      paidDays: Math.max(0, leaveSummary.monthDays - leaveSummary.unpaidLeaveDays),
+      lopDays: leaveSummary.unpaidLeaveDays,
+      leaveSummary,
       earnings: extraEarnings,
       deductions,
       updatedAt: new Date(),
@@ -4071,8 +4452,8 @@ app.post("/hr/salary-slips/generate", async (req, res) => {
     if (!earnings.length) return res.status(400).json({ error: "Add at least one earning amount" });
     const duplicate = await db.collection("hrSalarySlips").findOne({ userId: profile.userId, month });
     if (duplicate) return res.status(409).json({ error: "Salary slip already exists for this employee and month" });
-    const grossEarnings = earnings.reduce((sum, item) => sum + item.amount, 0);
-    const totalDeductions = deductions.reduce((sum, item) => sum + item.amount, 0);
+    const grossEarnings = roundedMoney(earnings.reduce((sum, item) => sum + item.amount, 0));
+    const totalDeductions = roundedMoney(deductions.reduce((sum, item) => sum + item.amount, 0));
     const slip = {
       ...profile,
       month,
@@ -4080,7 +4461,7 @@ app.post("/hr/salary-slips/generate", async (req, res) => {
       earnings,
       grossEarnings,
       totalDeductions,
-      netPay: Math.max(0, grossEarnings - totalDeductions),
+      netPay: roundedMoney(Math.max(0, grossEarnings - totalDeductions)),
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -4105,7 +4486,20 @@ app.get("/hr/salary-slips/:id/pdf", async (req, res) => {
     const settings = await getSalaryCompanySettings(db);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="salary-slip-${slip.month || "month"}.pdf"`);
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    const producerName = settings.companyName || "UIPL Docs";
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 50,
+      info: {
+        Title: `Salary Slip - ${monthLabel(slip.month)}`,
+        Author: producerName,
+        Subject: `Salary slip for ${slip.employeeName || "Employee"}`,
+        Creator: producerName,
+        Producer: producerName,
+      },
+    });
+    doc.info.Producer = producerName;
+    doc.info.Creator = producerName;
     doc.pipe(res);
     drawSalarySlipPdf(doc, slip, settings);
     doc.end();
@@ -4137,29 +4531,39 @@ app.patch("/hr/salary-slips/:id", async (req, res) => {
     if (!existing) return res.status(404).json({ error: "Salary slip not found" });
     const month = salaryMonth(req.body?.month);
     const payDate = salaryDate(req.body?.payDate);
+    const employmentType = normalizeEmploymentType(req.body?.employmentType || existing.employmentType);
+    const monthlyInHandSalary = moneyNumber(req.body?.monthlyInHandSalary || existing.monthlyInHandSalary);
+    const baseSalary = monthlyInHandSalary || moneyNumber(req.body?.basic);
+    const leaveSummary = await salaryLeaveSummary(db, existing.userId, month || existing.month, employmentType, baseSalary);
     const extraEarnings = salaryComponents(req.body?.earnings || []).filter((item) => !/^basic(\s+salary)?$/i.test(item.label.trim()));
-    const earnings = [{ label: "Basic Salary", amount: moneyNumber(req.body?.basic) }, ...extraEarnings].filter((item) => item.amount > 0);
-    const deductions = salaryComponents(req.body?.deductions || []);
+    const earnings = [{ label: "Monthly In-Hand Salary", amount: baseSalary }, ...extraEarnings].filter((item) => item.amount > 0);
+    const deductions = [
+      ...salaryComponents(req.body?.deductions || []).filter((item) => !/^leave deduction$/i.test(item.label.trim())),
+      ...(leaveSummary.leaveDeduction > 0 ? [{ label: "Leave Deduction", amount: leaveSummary.leaveDeduction }] : []),
+    ];
     const update = {
       employeeName: projectText(req.body?.employeeName, 100) || existing.employeeName,
       designation: projectText(req.body?.designation, 100),
       employeeCode: projectText(req.body?.employeeCode, 50),
       joiningDate: salaryDate(req.body?.joiningDate) || existing.joiningDate,
+      employmentType,
+      monthlyInHandSalary,
       uan: projectText(req.body?.uan, 40),
-      basic: moneyNumber(req.body?.basic),
-      paidDays: Math.max(0, Math.round(moneyNumber(req.body?.paidDays || 30))),
-      lopDays: Math.max(0, Math.round(moneyNumber(req.body?.lopDays || 0))),
+      basic: baseSalary,
+      paidDays: Math.max(0, leaveSummary.monthDays - leaveSummary.unpaidLeaveDays),
+      lopDays: leaveSummary.unpaidLeaveDays,
+      leaveSummary,
       month: month || existing.month,
       payDate: payDate || existing.payDate,
       earnings,
       deductions,
-      grossEarnings: earnings.reduce((sum, item) => sum + item.amount, 0),
-      totalDeductions: deductions.reduce((sum, item) => sum + item.amount, 0),
+      grossEarnings: roundedMoney(earnings.reduce((sum, item) => sum + item.amount, 0)),
+      totalDeductions: roundedMoney(deductions.reduce((sum, item) => sum + item.amount, 0)),
       updatedAt: new Date(),
     };
     const duplicate = await db.collection("hrSalarySlips").findOne({ _id: { $ne: existing._id }, userId: existing.userId, month: update.month });
     if (duplicate) return res.status(409).json({ error: "Salary slip already exists for this employee and month" });
-    update.netPay = Math.max(0, update.grossEarnings - update.totalDeductions);
+    update.netPay = roundedMoney(Math.max(0, update.grossEarnings - update.totalDeductions));
     await db.collection("hrSalarySlips").updateOne({ _id: existing._id }, { $set: update });
     const salarySlip = serializeSalarySlip({ ...existing, ...update });
     addActivityLog({ req, action: "Updated salary slip", target: `${update.employeeName} · ${monthLabel(update.month)}`, details: { netPay: update.netPay } });
@@ -4207,17 +4611,24 @@ app.post("/hr/leave-requests", async (req, res) => {
         error: `You already have a ${existingOverlap.status} leave request from ${existingOverlap.startDate} to ${existingOverlap.endDate}.`,
       });
     }
+    const leaveUser = await db.collection("users").findOne({ _id: new ObjectId(req.authUser.id) });
     const now = new Date();
+    const employmentType = normalizeEmploymentType(leaveUser?.employmentType || req.authUser.employmentType);
+    const totalDays = leaveDays(startDate, endDate);
+    const paidLeaveDays = Math.min(totalDays, employmentType === "permanent" ? 1 : 0);
     const doc = {
       userId: new ObjectId(req.authUser.id),
       employeeName: req.authUser.displayName || req.authUser.username || "Employee",
       username: req.authUser.username || "",
       department: req.authUser.department || "",
       designation: req.authUser.designation || "",
+      employmentType,
       leaveType,
       startDate,
       endDate,
-      days: leaveDays(startDate, endDate),
+      days: totalDays,
+      paidLeaveDays,
+      unpaidLeaveDays: Math.max(0, totalDays - paidLeaveDays),
       reason,
       status: "pending",
       adminComment: "",
@@ -4291,7 +4702,8 @@ app.patch("/hr/leave-requests/:id/review", async (req, res) => {
       type: "hr-leave",
     });
     addActivityLog({ req, action: status === "approved" ? "Approved leave request" : "Declined leave request", target: `${existing.employeeName} · ${existing.startDate} to ${existing.endDate}`, details: { adminComment } });
-    res.json({ success: true, leaveRequest: serializeLeaveRequest(updated) });
+    const userMap = await leavePolicyUsersForRequests(db, [updated]);
+    res.json({ success: true, leaveRequest: serializeLeaveRequest(applyLeavePolicyToRequests([updated], userMap)[0]) });
   } catch (error) {
     console.error("HR leave review error:", error);
     res.status(500).json({ error: "Could not review leave request" });

@@ -27,7 +27,6 @@ import UserAvatar from "./UserAvatar";
 const emptyRole = { id: "", name: "", description: "", menus: [], privileges: [] };
 const emptyUser = { username: "", displayName: "", password: "", roleId: "", menus: [], privileges: [] };
 const emptyPassword = { userId: "", password: "", confirmPassword: "" };
-const PROJECT_PARENT_MENU = "projects";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -125,14 +124,11 @@ function AccessEditor({
   muted,
   form,
   setForm,
-  menuItems,
   privilegeItems,
-  projectMenuItems,
-  projectChildMenuItems,
-  topLevelMenuItems,
+  moduleGroups,
+  standaloneMenuItems,
   toggleAccessField,
   toggleAccessMenu,
-  setAccessProjectMode,
   description = "Choose the pages this access profile can open from the sidebar.",
 }) {
   return (
@@ -143,41 +139,47 @@ function AccessEditor({
           <p className={`mt-1 text-xs ${muted}`}>{description}</p>
         </div>
         <div className="space-y-3">
-          {projectMenuItems.length > 0 && (
-            <div className={`rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-black/10" : "border-black/10 bg-white/70"}`}>
+          {moduleGroups.map((group) => {
+            const parentActive = (form.menus || []).includes(group.parent.id);
+            const activeChildren = group.children.filter((menu) => (form.menus || []).includes(menu.id));
+            const allChildrenActive = group.children.length > 0 && activeChildren.length === group.children.length;
+            return (
+            <div key={group.parent.id} className={`rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-black/10" : "border-black/10 bg-white/70"}`}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <PermissionButton
                   darkMode={darkMode}
-                  active={(form.menus || []).includes(PROJECT_PARENT_MENU)}
-                  label={projectMenuItems.find((menu) => menu.id === PROJECT_PARENT_MENU)?.label || "Project Control"}
-                  onClick={() => toggleAccessMenu(setForm, PROJECT_PARENT_MENU)}
+                  active={parentActive}
+                  label={group.parent.label}
+                  onClick={() => toggleAccessMenu(setForm, group.parent.id)}
                 />
                 <span className={`px-1 text-xs ${muted}`}>
-                  {projectChildMenuItems.filter((menu) => (form.menus || []).includes(menu.id)).length}/{projectChildMenuItems.length} submodules
+                  {activeChildren.length}/{group.children.length} submodules
                 </span>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-4">
                 {[
                   ["none", "No access"],
-                  ["view", "View"],
-                  ["edit", "Edit"],
+                  ["parent", "Parent only"],
                   ["all", "All"],
                 ].map(([mode, label]) => {
-                  const projectSelected = (form.menus || []).includes(PROJECT_PARENT_MENU);
-                  const editSelected = (form.privileges || []).includes("manage_project_control");
-                  const allSelected = projectChildMenuItems.every((menu) => (form.menus || []).includes(menu.id)) && editSelected;
                   const active = mode === "none"
-                    ? !projectSelected
-                    : mode === "view"
-                      ? projectSelected && !editSelected && !projectChildMenuItems.some((menu) => (form.menus || []).includes(menu.id))
-                      : mode === "edit"
-                        ? projectSelected && editSelected && !allSelected
-                        : allSelected;
+                    ? !parentActive
+                    : mode === "parent"
+                      ? parentActive && !activeChildren.length
+                      : parentActive && allChildrenActive;
                   return (
                     <button
                       key={mode}
                       type="button"
-                      onClick={() => setAccessProjectMode(setForm, mode)}
+                      onClick={() => {
+                        setForm((current) => {
+                          const groupIds = new Set([group.parent.id, ...group.children.map((menu) => menu.id)]);
+                          const rest = (current.menus || []).filter((id) => !groupIds.has(id));
+                          if (mode === "none") return { ...current, menus: rest };
+                          if (mode === "parent") return { ...current, menus: [...rest, group.parent.id] };
+                          return { ...current, menus: [...rest, group.parent.id, ...group.children.map((menu) => menu.id)] };
+                        });
+                      }}
                       className={`h-10 rounded-xl border px-3 text-sm font-semibold transition ${
                         active
                           ? darkMode ? "border-[#d8f36a] bg-[#d8f36a] text-black" : "border-black bg-black text-white"
@@ -190,7 +192,7 @@ function AccessEditor({
                 })}
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {projectChildMenuItems.map((menu) => (
+                {group.children.map((menu) => (
                   <PermissionButton
                     key={menu.id}
                     darkMode={darkMode}
@@ -201,9 +203,10 @@ function AccessEditor({
                 ))}
               </div>
             </div>
-          )}
+            );
+          })}
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {topLevelMenuItems.map((menu) => (
+            {standaloneMenuItems.map((menu) => (
               <PermissionButton
                 key={menu.id}
                 darkMode={darkMode}
@@ -271,17 +274,17 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
     return !normalizedSearch || [user.displayName, user.username, role?.name, user.blacklisted ? "blacklisted" : "active"]
       .some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
   });
-  const projectMenuItems = useMemo(
-    () => menuItems.filter((menu) => menu.id === PROJECT_PARENT_MENU || menu.parent === PROJECT_PARENT_MENU),
-    [menuItems],
-  );
-  const projectChildMenuItems = useMemo(
-    () => projectMenuItems.filter((menu) => menu.parent === PROJECT_PARENT_MENU),
-    [projectMenuItems],
-  );
-  const topLevelMenuItems = useMemo(
-    () => menuItems.filter((menu) => menu.id !== PROJECT_PARENT_MENU && menu.parent !== PROJECT_PARENT_MENU),
-    [menuItems],
+  const menuById = useMemo(() => new Map(menuItems.map((menu) => [menu.id, menu])), [menuItems]);
+  const moduleGroups = useMemo(() => menuItems
+    .filter((menu) => menuItems.some((item) => item.parent === menu.id))
+    .map((parent) => ({
+      parent,
+      children: menuItems.filter((menu) => menu.parent === parent.id),
+    })), [menuItems]);
+  const groupedMenuIds = useMemo(() => new Set(moduleGroups.flatMap((group) => [group.parent.id, ...group.children.map((menu) => menu.id)])), [moduleGroups]);
+  const standaloneMenuItems = useMemo(
+    () => menuItems.filter((menu) => !menu.parent && !groupedMenuIds.has(menu.id)),
+    [groupedMenuIds, menuItems],
   );
 
   useEffect(() => {
@@ -337,44 +340,19 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
     setter((current) => {
       const currentMenus = current.menus || [];
       const active = currentMenus.includes(value);
-      let menus;
-      if (value === PROJECT_PARENT_MENU) {
-        const projectIds = new Set(projectMenuItems.map((menu) => menu.id));
-        menus = active
-          ? currentMenus.filter((id) => !projectIds.has(id))
-          : [...new Set([...currentMenus, PROJECT_PARENT_MENU])];
+      const item = menuById.get(value);
+      const childIds = menuItems.filter((menu) => menu.parent === value).map((menu) => menu.id);
+      const parentId = item?.parent;
+      let menus = currentMenus;
+      if (childIds.length) {
+        const groupIds = new Set([value, ...childIds]);
+        menus = active ? currentMenus.filter((id) => !groupIds.has(id)) : [...new Set([...currentMenus, value])];
       } else {
         menus = active
           ? currentMenus.filter((id) => id !== value)
-          : [...new Set([...currentMenus, PROJECT_PARENT_MENU, value])];
+          : [...new Set([...currentMenus, ...(parentId ? [parentId] : []), value])];
       }
       return { ...current, menus };
-    });
-  }
-
-  function setAccessProjectMode(setter, mode) {
-    setter((current) => {
-      const projectIds = new Set(projectMenuItems.map((menu) => menu.id));
-      const nonProjectMenus = (current.menus || []).filter((id) => !projectIds.has(id));
-      const nonProjectPrivileges = (current.privileges || []).filter((id) => id !== "manage_project_control");
-      if (mode === "none") {
-        return { ...current, menus: nonProjectMenus, privileges: nonProjectPrivileges };
-      }
-      if (mode === "view") {
-        return { ...current, menus: [...nonProjectMenus, PROJECT_PARENT_MENU], privileges: nonProjectPrivileges };
-      }
-      if (mode === "edit") {
-        return {
-          ...current,
-          menus: [...nonProjectMenus, PROJECT_PARENT_MENU],
-          privileges: [...nonProjectPrivileges, "manage_project_control"],
-        };
-      }
-      return {
-        ...current,
-        menus: [...nonProjectMenus, ...projectMenuItems.map((menu) => menu.id)],
-        privileges: [...nonProjectPrivileges, "manage_project_control", "edit_project_dmr", "edit_project_mrn", "manage_project_stock"],
-      };
     });
   }
 
@@ -732,14 +710,11 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
               muted={muted}
               form={roleForm}
               setForm={setRoleForm}
-              menuItems={menuItems}
               privilegeItems={privilegeItems}
-              projectMenuItems={projectMenuItems}
-              projectChildMenuItems={projectChildMenuItems}
-              topLevelMenuItems={topLevelMenuItems}
+              moduleGroups={moduleGroups}
+              standaloneMenuItems={standaloneMenuItems}
               toggleAccessField={toggleAccessField}
               toggleAccessMenu={toggleAccessMenu}
-              setAccessProjectMode={setAccessProjectMode}
             />
 
             <button disabled={saving} className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.99] disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#1f2c3a] text-white"}`}>
@@ -792,14 +767,11 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
               muted={muted}
               form={userForm}
               setForm={setUserForm}
-              menuItems={menuItems}
               privilegeItems={privilegeItems}
-              projectMenuItems={projectMenuItems}
-              projectChildMenuItems={projectChildMenuItems}
-              topLevelMenuItems={topLevelMenuItems}
+              moduleGroups={moduleGroups}
+              standaloneMenuItems={standaloneMenuItems}
               toggleAccessField={toggleAccessField}
               toggleAccessMenu={toggleAccessMenu}
-              setAccessProjectMode={setAccessProjectMode}
               description="Optional extra access for this specific user on top of their role."
             />
 
@@ -821,14 +793,11 @@ export default function ManageRoles({ darkMode, mode = "roles" }) {
               muted={muted}
               form={userAccessModal}
               setForm={setUserAccessModal}
-              menuItems={menuItems}
               privilegeItems={privilegeItems}
-              projectMenuItems={projectMenuItems}
-              projectChildMenuItems={projectChildMenuItems}
-              topLevelMenuItems={topLevelMenuItems}
+              moduleGroups={moduleGroups}
+              standaloneMenuItems={standaloneMenuItems}
               toggleAccessField={toggleAccessField}
               toggleAccessMenu={toggleAccessMenu}
-              setAccessProjectMode={setAccessProjectMode}
               description="Choose extra pages this specific user can open in addition to their role."
             />
             <button disabled={saving} className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.99] disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#1f2c3a] text-white"}`}>

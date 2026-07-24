@@ -106,6 +106,14 @@
   box-shadow: 0 0 0 3px rgba(137, 237, 63, 0.12);
 }
 
+.employee-report-drawer .attendance-search-input,
+.employee-report-drawer .attendance-search-input:focus,
+.employee-report-drawer .attendance-search-input:focus-visible {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
 .employee-report-shell {
   top: 0;
   right: 0;

@@ -12770,7 +12770,9 @@ app.post("/dmr-dashboard/reminders/send-now", requireSuperAdmin, async (req, res
 });
 
 const MRN_WHATSAPP_SETTINGS_ID = "mrn-whatsapp-automation-settings";
-const MRN_WHATSAPP_WATCH_INTERVAL_MS = Math.max(30_000, Number(process.env.MRN_WHATSAPP_WATCH_INTERVAL_MS) || 60_000);
+const MRN_WHATSAPP_WATCH_INTERVAL_MS = Math.max(60_000, Number(process.env.MRN_WHATSAPP_WATCH_INTERVAL_MS) || 120_000);
+const MRN_WHATSAPP_WATCH_MAX_SENDS = Math.max(1, Number(process.env.MRN_WHATSAPP_WATCH_MAX_SENDS) || 1);
+const MRN_WHATSAPP_WATCHER_BASELINE_VERSION = "2026-07-27T17:20:00+05:30";
 let mrnWhatsappWatcherTimer = null;
 let mrnWhatsappWatcherRunning = false;
 const MRN_WHATSAPP_DEFAULTS = {
@@ -12778,6 +12780,9 @@ const MRN_WHATSAPP_DEFAULTS = {
   approvalContactIds: [],
   concernContactIds: [],
   processedActionRequestMrns: [],
+  watcherBaselineRowNumber: 0,
+  watcherBaselineEpochMs: 0,
+  watcherBaselineVersion: "",
   templates: {
     actionRequest: "mrn_action_request",
     approved: "mrn_approved_notification",
@@ -12820,6 +12825,9 @@ async function getMrnWhatsappSettings() {
       ? saved.settings.processedActionRequestMrns.map((item) => projectText(item)).filter(Boolean).slice(-1000)
       : [],
     watcherBaselineAt: saved?.settings?.watcherBaselineAt || "",
+    watcherBaselineRowNumber: Number(saved?.settings?.watcherBaselineRowNumber) || 0,
+    watcherBaselineEpochMs: Number(saved?.settings?.watcherBaselineEpochMs) || 0,
+    watcherBaselineVersion: saved?.settings?.watcherBaselineVersion || "",
   };
 }
 
@@ -12845,6 +12853,9 @@ async function saveMrnWhatsappSettings(input = {}) {
     },
     processedActionRequestMrns: Array.isArray(current.processedActionRequestMrns) ? current.processedActionRequestMrns : [],
     watcherBaselineAt: current.watcherBaselineAt || "",
+    watcherBaselineRowNumber: Number(current.watcherBaselineRowNumber) || 0,
+    watcherBaselineEpochMs: Number(current.watcherBaselineEpochMs) || 0,
+    watcherBaselineVersion: current.watcherBaselineVersion || "",
     lastRun: current.lastRun || null,
     updatedAt: new Date().toISOString(),
   };
@@ -12884,23 +12895,50 @@ function mrnWhatsappKey(value) {
   return normalizedMrnNumber(value) || projectText(value).toLowerCase();
 }
 
-async function markMrnWhatsappActionRequestProcessed(mrnNo) {
+function mrnTimestampMs(value) {
+  const text = projectText(value).trim();
+  if (!text) return 0;
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if (match) {
+    let [, first, second, year, hour, minute, secondPart = "0", meridiem = ""] = match;
+    first = Number(first);
+    second = Number(second);
+    hour = Number(hour);
+    if (meridiem) {
+      const upper = meridiem.toUpperCase();
+      if (upper === "PM" && hour < 12) hour += 12;
+      if (upper === "AM" && hour === 12) hour = 0;
+    }
+    const month = first;
+    const day = second;
+    const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${minute}:${String(secondPart).padStart(2, "0")}+05:30`;
+    const parsed = new Date(iso).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  const parsed = new Date(text).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+async function markMrnWhatsappActionRequestProcessed(mrnNo, rowNumber = 0) {
   const key = mrnWhatsappKey(mrnNo);
   if (!key) return;
   const db = await connectAuthDb();
+  const update = {
+    $addToSet: { "settings.processedActionRequestMrns": key },
+    $set: { "settings.lastCheckedAt": new Date().toISOString() },
+  };
+  if (Number(rowNumber) > 0) update.$max = { "settings.watcherBaselineRowNumber": Number(rowNumber) };
   await db.collection("platformSettings").updateOne(
     { _id: MRN_WHATSAPP_SETTINGS_ID },
-    {
-      $addToSet: { "settings.processedActionRequestMrns": key },
-      $set: { "settings.lastCheckedAt": new Date().toISOString() },
-    },
+    update,
     { upsert: true },
   );
 }
 
-async function setMrnWhatsappProcessedKeys(keys = []) {
+async function setMrnWhatsappProcessedKeys(keys = [], baselineRowNumber = 0) {
   const clean = [...new Set(keys.map((key) => mrnWhatsappKey(key)).filter(Boolean))].slice(-1000);
   const now = new Date().toISOString();
+  const nowMs = Date.now();
   const db = await connectAuthDb();
   await db.collection("platformSettings").updateOne(
     { _id: MRN_WHATSAPP_SETTINGS_ID },
@@ -12909,6 +12947,9 @@ async function setMrnWhatsappProcessedKeys(keys = []) {
         "settings.processedActionRequestMrns": clean,
         "settings.lastCheckedAt": now,
         "settings.watcherBaselineAt": now,
+        "settings.watcherBaselineRowNumber": Number(baselineRowNumber) || 0,
+        "settings.watcherBaselineEpochMs": nowMs,
+        "settings.watcherBaselineVersion": MRN_WHATSAPP_WATCHER_BASELINE_VERSION,
       },
     },
     { upsert: true },
@@ -13048,14 +13089,24 @@ async function checkMrnWhatsappAutomationQueue({ source = "watcher" } = {}) {
     const records = (dashboard.records || [])
       .filter((row) => projectText(row.mrnNo))
       .sort((a, b) => (Number(a.rowNumber) || 0) - (Number(b.rowNumber) || 0));
+    const maxRowNumber = records.reduce((max, row) => Math.max(max, Number(row.rowNumber) || 0), 0);
     const processed = new Set((settings.processedActionRequestMrns || []).map((item) => mrnWhatsappKey(item)).filter(Boolean));
 
-    if (!settings.watcherBaselineAt) {
-      await setMrnWhatsappProcessedKeys(records.map((row) => row.mrnNo));
+    if (settings.watcherBaselineVersion !== MRN_WHATSAPP_WATCHER_BASELINE_VERSION) {
+      await setMrnWhatsappProcessedKeys(records.map((row) => row.mrnNo), maxRowNumber);
       return { status: "initialized", sent: 0, checked: records.length, pending: 0 };
     }
 
-    const pending = records.filter((row) => !processed.has(mrnWhatsappKey(row.mrnNo)));
+    const baselineRowNumber = Number(settings.watcherBaselineRowNumber) || 0;
+    const baselineEpochMs = Number(settings.watcherBaselineEpochMs) || Date.now();
+    const pending = records
+      .filter((row) => (Number(row.rowNumber) || 0) > baselineRowNumber)
+      .filter((row) => {
+        const createdAtMs = mrnTimestampMs(row.timestamp);
+        return createdAtMs > baselineEpochMs;
+      })
+      .filter((row) => !processed.has(mrnWhatsappKey(row.mrnNo)))
+      .slice(0, MRN_WHATSAPP_WATCH_MAX_SENDS);
     let sent = 0;
     let failed = 0;
     for (const row of pending) {
@@ -13064,7 +13115,7 @@ async function checkMrnWhatsappAutomationQueue({ source = "watcher" } = {}) {
         row,
         actor: { id: "system", displayName: "MRN WhatsApp watcher", username: source },
       });
-      await markMrnWhatsappActionRequestProcessed(row.mrnNo);
+      await markMrnWhatsappActionRequestProcessed(row.mrnNo, row.rowNumber);
       if (result.sent) sent += result.sent;
       failed += result.failed || 0;
       addActivityLog({
@@ -13194,7 +13245,7 @@ app.post("/mrn-dashboard/whatsapp/send-test", requireSuperAdmin, async (req, res
       actor: req.authUser,
       comment: req.body?.comment || "Manual test",
     });
-    if ((req.body?.event || "actionRequest") === "actionRequest") await markMrnWhatsappActionRequestProcessed(row.mrnNo);
+    if ((req.body?.event || "actionRequest") === "actionRequest") await markMrnWhatsappActionRequestProcessed(row.mrnNo, row.rowNumber);
     addActivityLog({ req, action: "Sent MRN WhatsApp test", target: row.mrnNo || "MRN WhatsApp", details: result.lastRun || result });
     res.json({ success: true, row, result });
   } catch (error) {
@@ -13475,7 +13526,7 @@ app.post("/mrn-dashboard", upload.fields([
         row: result.snapshot,
         actor: req.authUser,
       });
-      await markMrnWhatsappActionRequestProcessed(result.mrnNo);
+      await markMrnWhatsappActionRequestProcessed(result.mrnNo, result.rowNumber);
     } catch (whatsappError) {
       console.error("MRN WhatsApp automation error:", whatsappError.message);
       whatsapp = { status: "failed", sent: 0, failed: 1, error: whatsappError.message };

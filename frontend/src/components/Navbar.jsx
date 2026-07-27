@@ -4,7 +4,7 @@ import { ThemeSwitch } from "./ui";
 import { API_URL } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 
-export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNotificationsClick }) {
+export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNotificationsClick, onNewNotification }) {
   const currentHour = new Date().getHours();
   const greeting =
     currentHour < 12 ? "Good morning" : currentHour < 17 ? "Good afternoon" : "Good evening";
@@ -104,11 +104,13 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
         const data = await response.json();
         const notifications = data.notifications || [];
         setUnreadCount(Number.isFinite(data.unreadCount) ? data.unreadCount : notifications.filter(n => !n.readAt).length);
+        onNewNotification?.(notifications.find((notification) => !notification.readAt) || null);
         
         if (notifications.length > 0) {
           const topId = notifications[0].id;
           // If we already have a recorded topId, and the new topId is different, it means there's a new notification.
           if (lastNotificationIdRef.current && lastNotificationIdRef.current !== topId) {
+            onNewNotification?.(notifications[0]);
             showAppToast(notifications[0].title || "You have a new message", {
               type: "notification",
               darkMode,
@@ -133,7 +135,7 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
       clearInterval(interval);
       window.removeEventListener("uipl:notifications-changed", checkNotifications);
     };
-  }, [user]);
+  }, [darkMode, onNewNotification, user]);
 
   return (
     <div

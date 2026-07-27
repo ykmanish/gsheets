@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Toaster } from "react-hot-toast";
-import { AuthProvider, getStoredAuth, useAuth } from "./AuthProvider";
+import { BellRing, X } from "lucide-react";
+import { API_URL, AuthProvider, getStoredAuth, useAuth } from "./AuthProvider";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import Dashboard from "./Dashboard";
@@ -53,6 +54,41 @@ const menuPaths = {
   profile: "/profile",
 };
 
+function notificationPath(notification = {}) {
+  if (notification.path || notification.href || notification.url) return notification.path || notification.href || notification.url;
+  if (notification.type === "hr-leave") return "/hr/leave";
+  if (notification.type === "folder" || notification.type === "document") return "/documents";
+  if (notification.type === "automation") return "/automations";
+  if (notification.type === "report") return "/reports";
+  if (notification.type === "employee-report") return "/employee-daily-report";
+  if (notification.type === "dmr") return "/projects/dmr";
+  if (notification.type === "mrn") return "/projects/mrn";
+  return null;
+}
+
+function NotificationStrip({ notification, darkMode, onClose, onView }) {
+  if (!notification) return null;
+  return (
+    <div className={`border-b px-4 py-3 sm:px-6 lg:px-8 ${darkMode ? "border-white/10 bg-[#101820] text-white" : "border-emerald-100 bg-[#ecfff5] text-[#10210c]"}`}>
+      <div className="flex items-center gap-3">
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-emerald-400/14 text-emerald-200" : "bg-white text-[#08764f]"}`}>
+          <BellRing className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-black">{notification.title || "New notification"}</p>
+          <p className={`mt-0.5 truncate text-xs ${darkMode ? "text-white/55" : "text-black/55"}`}>{notification.message || "You have a new update."}</p>
+        </div>
+        <button type="button" onClick={onView} className={`h-10 shrink-0 rounded-full px-5 text-sm font-black ${darkMode ? "bg-white text-black" : "bg-[#08764f] text-white"}`}>
+          View detail
+        </button>
+        <button type="button" onClick={onClose} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close notification strip">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedModuleContent({ moduleId, projectId }) {
   const router = useRouter();
   const { user, menus, disabledModules, loading, logout } = useAuth();
@@ -69,6 +105,8 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     return window.localStorage.getItem("uipl_docs_sidebar_collapsed") === "true";
   });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [latestNotification, setLatestNotification] = useState(null);
+  const [dismissedNotificationId, setDismissedNotificationId] = useState(null);
   const allowedMenus = useMemo(() => {
     const assigned = [
       ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-documents", "hr-salary-slips", "hr-leave", "hr-attendance", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
@@ -106,6 +144,35 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     router.replace(menuPaths[fallback] || "/dashboard");
   }, [allowedMenus, loading, moduleId, router, user]);
 
+  const showLatestUnreadNotification = useCallback((notification) => {
+    if (!notification) {
+      setLatestNotification(null);
+      return;
+    }
+    if (notification.id === dismissedNotificationId) return;
+    setLatestNotification(notification);
+  }, [dismissedNotificationId]);
+
+  const closeNotificationStrip = useCallback(() => {
+    setDismissedNotificationId(latestNotification?.id || null);
+    setLatestNotification(null);
+  }, [latestNotification?.id]);
+
+  const viewLatestNotification = useCallback(async () => {
+    if (!latestNotification) return;
+    try {
+      await fetch(`${API_URL}/notifications/${latestNotification.id}/read`, { method: "PATCH" });
+      window.dispatchEvent(new Event("uipl:notifications-changed"));
+    } catch {
+      // Navigation still matters more than read sync here.
+    }
+    const path = notificationPath(latestNotification);
+    setDismissedNotificationId(latestNotification.id);
+    setLatestNotification(null);
+    if (path) router.push(path);
+    else setNotificationsOpen(true);
+  }, [latestNotification, router]);
+
   if (!isMounted || !user || (!loading && !allowedMenus.includes(moduleId))) {
     return (
       <div className={`min-h-dvh ${darkMode ? "bg-[#0f1115]" : "bg-[#eef3f2]"}`} />
@@ -139,6 +206,13 @@ function ProtectedModuleContent({ moduleId, projectId }) {
           user={user}
           onMenuClick={() => setSidebarOpen(true)}
           onNotificationsClick={() => setNotificationsOpen(true)}
+          onNewNotification={showLatestUnreadNotification}
+        />
+        <NotificationStrip
+          notification={latestNotification}
+          darkMode={darkMode}
+          onClose={closeNotificationStrip}
+          onView={viewLatestNotification}
         />
         {moduleId === "dashboard" && (
           <Dashboard darkMode={darkMode} selectedDocs={selectedDocs} setSelectedDocs={setSelectedDocs} />

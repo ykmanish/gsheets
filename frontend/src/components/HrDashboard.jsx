@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, LogIn, LogOut, Mail, MapPin, MessageCircle, MessageSquare, Navigation, Pencil, Phone, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Users, WalletCards, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, LogIn, LogOut, Mail, MapPin, Maximize2, MessageCircle, MessageSquare, Minimize2, Navigation, Pencil, Phone, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Users, WalletCards, X } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
@@ -13,6 +13,34 @@ async function api(path) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
+}
+
+const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+let googleMapsPromise = null;
+
+function loadGoogleMaps() {
+  if (typeof window === "undefined") return Promise.reject(new Error("Google Maps requires a browser"));
+  if (window.google?.maps) return Promise.resolve(window.google.maps);
+  if (!GOOGLE_MAPS_API_KEY) return Promise.reject(new Error("Google Maps API key is not configured"));
+  if (!googleMapsPromise) {
+    googleMapsPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector("script[data-uipl-google-maps]");
+      if (existing) {
+        existing.addEventListener("load", () => resolve(window.google.maps), { once: true });
+        existing.addEventListener("error", () => reject(new Error("Could not load Google Maps")), { once: true });
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.dataset.uiplGoogleMaps = "true";
+      script.onload = () => resolve(window.google.maps);
+      script.onerror = () => reject(new Error("Could not load Google Maps"));
+      document.head.appendChild(script);
+    });
+  }
+  return googleMapsPromise;
 }
 
 function initials(name = "U") {
@@ -352,11 +380,13 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceClockAction, setAttendanceClockAction] = useState("");
   const [attendanceLocating, setAttendanceLocating] = useState(false);
   const [attendanceSettingsOpen, setAttendanceSettingsOpen] = useState(false);
+  const [attendanceSettingsExpanded, setAttendanceSettingsExpanded] = useState(false);
   const [attendanceSearchResults, setAttendanceSearchResults] = useState([]);
   const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100 });
   const [todayReportSubmitted, setTodayReportSubmitted] = useState(false);
   const [todayReportChecking, setTodayReportChecking] = useState(false);
   const attendanceSearchTimerRef = useRef(null);
+  const attendanceGoogleGeocoderRef = useRef(null);
   const [reviewComment, setReviewComment] = useState("");
   const [leaveForm, setLeaveForm] = useState({ leaveType: "", startDate: "", endDate: "", reason: "" });
   const [salaryForm, setSalaryForm] = useState({
@@ -791,9 +821,36 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     }
     try {
       setAttendanceLocating(true);
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(queryText)}`);
-      const results = await response.json().catch(() => []);
-      const matches = Array.isArray(results) ? results.filter((item) => item?.lat && item?.lon) : [];
+      const maps = await loadGoogleMaps();
+      let matches = [];
+      if (maps.places?.AutocompleteService) {
+        const service = new maps.places.AutocompleteService();
+        const predictions = await new Promise((resolve) => {
+          service.getPlacePredictions({ input: queryText, componentRestrictions: { country: "in" } }, (items, status) => {
+            resolve(status === maps.places.PlacesServiceStatus.OK && Array.isArray(items) ? items : []);
+          });
+        });
+        matches = predictions.slice(0, 7).map((item) => ({
+          place_id: item.place_id,
+          name: item.structured_formatting?.main_text || item.description?.split(",")?.[0] || "Location",
+          display_name: item.description,
+          lat: null,
+          lon: null,
+          prediction: true,
+        }));
+      }
+      if (!matches.length) {
+        const geocoder = attendanceGoogleGeocoderRef.current || new maps.Geocoder();
+        attendanceGoogleGeocoderRef.current = geocoder;
+        const response = await geocoder.geocode({ address: queryText });
+        matches = (response.results || []).slice(0, 7).map((item) => ({
+          place_id: item.place_id,
+          name: item.address_components?.[0]?.long_name || item.formatted_address?.split(",")?.[0] || "Location",
+          display_name: item.formatted_address,
+          lat: item.geometry.location.lat(),
+          lon: item.geometry.location.lng(),
+        }));
+      }
       if (!matches.length) {
         setAttendanceSearchResults([]);
         if (notify) throw new Error("Could not find this address");
@@ -821,6 +878,91 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     }, 450);
   }
 
+  async function searchTypedAttendanceAddress() {
+    const queryText = String(attendanceForm.address || "").trim();
+    if (queryText.length < 3) {
+      hrToast.error("Type at least 3 characters to search");
+      return;
+    }
+    try {
+      setAttendanceLocating(true);
+      const maps = await loadGoogleMaps();
+      const geocoder = attendanceGoogleGeocoderRef.current || new maps.Geocoder();
+      attendanceGoogleGeocoderRef.current = geocoder;
+      const response = await geocoder.geocode({ address: queryText, componentRestrictions: { country: "IN" } });
+      const match = response.results?.[0];
+      if (!match?.geometry?.location) throw new Error("Could not find this address");
+      setAttendanceForm((current) => ({
+        ...current,
+        address: match.formatted_address || queryText,
+        latitude: match.geometry.location.lat(),
+        longitude: match.geometry.location.lng(),
+      }));
+      setAttendanceSearchResults([]);
+    } catch (error) {
+      hrToast.error(error.message || "Could not find location");
+    } finally {
+      setAttendanceLocating(false);
+    }
+  }
+
+  async function selectAttendanceSearchResult(item) {
+    try {
+      setAttendanceLocating(true);
+      let nextLocation = item;
+      const hasCoordinates = item.lat !== null && item.lat !== undefined && item.lon !== null && item.lon !== undefined && Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon));
+      if (!hasCoordinates && item.place_id) {
+        const maps = await loadGoogleMaps();
+        let resolved = null;
+        if (maps.places?.PlacesService) {
+          const serviceNode = document.createElement("div");
+          const placesService = new maps.places.PlacesService(serviceNode);
+          resolved = await new Promise((resolve) => {
+            placesService.getDetails({ placeId: item.place_id, fields: ["formatted_address", "geometry", "name"] }, (place, status) => {
+              resolve(status === maps.places.PlacesServiceStatus.OK ? place : null);
+            });
+          });
+        }
+        if (resolved?.geometry?.location) {
+          nextLocation = {
+            ...item,
+            name: resolved.name || item.name,
+            display_name: resolved.formatted_address || item.display_name,
+            lat: resolved.geometry.location.lat(),
+            lon: resolved.geometry.location.lng(),
+          };
+        } else {
+          const geocoder = attendanceGoogleGeocoderRef.current || new maps.Geocoder();
+          attendanceGoogleGeocoderRef.current = geocoder;
+          const response = await geocoder.geocode({ placeId: item.place_id });
+          const match = response.results?.[0];
+          if (match?.geometry?.location) {
+            nextLocation = {
+              ...item,
+              display_name: match.formatted_address || item.display_name,
+              lat: match.geometry.location.lat(),
+              lon: match.geometry.location.lng(),
+            };
+          }
+        }
+      }
+      if (nextLocation.lat === null || nextLocation.lat === undefined || nextLocation.lon === null || nextLocation.lon === undefined || !Number.isFinite(Number(nextLocation.lat)) || !Number.isFinite(Number(nextLocation.lon))) {
+        throw new Error("Could not get coordinates for this place");
+      }
+      setAttendanceForm((current) => ({
+        ...current,
+        address: nextLocation.display_name || current.address,
+        latitude: Number(nextLocation.lat),
+        longitude: Number(nextLocation.lon),
+      }));
+      setAttendanceSearchResults([]);
+    } catch (error) {
+      hrToast.error(error.message || "Could not select location");
+    } finally {
+      setAttendanceLocating(false);
+    }
+  }
+
   async function useCurrentAttendanceLocation() {
     try {
       setAttendanceLocating(true);
@@ -833,6 +975,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     } finally {
       setAttendanceLocating(false);
     }
+  }
+
+  function closeAttendanceSettings() {
+    setAttendanceSettingsOpen(false);
+    setAttendanceSettingsExpanded(false);
   }
 
   async function saveAttendanceSettings(event) {
@@ -848,7 +995,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       if (!response.ok) throw new Error(result.error || "Could not save attendance location");
       setData((current) => ({ ...(current || {}), attendanceSettings: result.settings }));
       setAttendanceSearchResults([]);
-      setAttendanceSettingsOpen(false);
+      closeAttendanceSettings();
       hrToast.success("Attendance location saved");
     } catch (error) {
       hrToast.error(error.message || "Could not save attendance location");
@@ -1470,7 +1617,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
               </button>
               {data?.canManageHr && (
-                <button type="button" onClick={() => setAttendanceSettingsOpen(true)} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f]">
+                <button type="button" onClick={() => { setAttendanceSettingsExpanded(false); setAttendanceSettingsOpen(true); }} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f]">
                   <SlidersHorizontal className="h-4 w-4" /> Settings
                 </button>
               )}
@@ -1508,11 +1655,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
               <div className={`rounded-[28px] p-5 ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-[#fbfcf9]"}`}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     <p className="text-lg font-black">{remoteWorkEnabled ? "Remote attendance enabled" : attendanceConfigured ? "Attendance location active" : "Attendance location not set"}</p>
-                    <p className={`mt-1 truncate text-sm ${muted}`}>{remoteWorkEnabled ? "Office geofence is skipped for your clock in and clock out." : attendanceSettings.address || "HR must set the office/site location before employees can clock in."}</p>
+                    <p className={`mt-1 block max-w-full overflow-hidden truncate whitespace-nowrap text-sm ${muted}`}>{remoteWorkEnabled ? "Office geofence is skipped for your clock in and clock out." : attendanceSettings.address || "HR must set the office/site location before employees can clock in."}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex shrink-0 flex-wrap gap-2">
                     <button type="button" disabled={!attendanceReady || attendanceSaving || todayAttendance?.clockInAt} onClick={() => submitAttendance("clock-in")} className={`flex h-11 min-w-[118px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-emerald-400/14 text-emerald-200 hover:bg-emerald-400/20" : "bg-[#e7f6ed] text-[#08764f]"}`}>
                       {attendanceClockAction === "clock-in" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} {attendanceClockAction === "clock-in" ? "Clocking in" : "Clock in"}
                     </button>
@@ -1584,103 +1731,100 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       )}
 
       {attendanceSettingsOpen && (
-        <div onMouseDown={() => setAttendanceSettingsOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
-          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={saveAttendanceSettings} className={`employee-report-drawer employee-report-shell relative flex h-full w-full flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.38)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex items-start justify-between border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+        <div onMouseDown={closeAttendanceSettings} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
+          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={saveAttendanceSettings} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.38)] ${attendanceSettingsExpanded ? "employee-report-shell-expanded" : ""} animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex items-center justify-between border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
               <div>
                 <h2 className="text-xl font-black">Attendance settings</h2>
                 <p className={`mt-1 text-xs ${muted}`}>Set the allowed work location and radius.</p>
               </div>
-              <button type="button" onClick={() => setAttendanceSettingsOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setAttendanceSettingsExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={attendanceSettingsExpanded ? "Restore drawer size" : "Expand attendance settings"}>
+                  {attendanceSettingsExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{attendanceSettingsExpanded ? "Restore" : "Expand"}</span>
+                </button>
+                <button type="button" onClick={closeAttendanceSettings} className={`h-8 rounded-full px-3 text-xs font-bold transition ${darkMode ? "text-emerald-300 hover:bg-white/10" : "text-[#08764f] hover:bg-[#e7f6ed]"}`}>Close</button>
+              </div>
             </div>
             <div className={`min-h-0 flex-1 overflow-hidden ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
-              <div className="grid h-full min-h-0 gap-5 p-5 lg:grid-cols-[260px_minmax(0,1fr)]">
-                <aside className={`h-fit space-y-4 self-start rounded-[24px] border p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-black/5 bg-[#f0f3ec]"}`}>
-                  <span className={`inline-flex rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wide ${darkMode ? "bg-lime-300/15 text-lime-200" : "bg-[#dcfacb] text-[#4b9b16]"}`}>Geo fence</span>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-[#111923]" : "bg-white/75"}`}>
-                    <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Current status</p>
-                    <p className="mt-2 text-lg font-black">{attendanceConfigured ? "Location active" : "Not configured"}</p>
-                    <p className={`mt-1 text-xs leading-5 ${muted}`}>{attendanceConfigured ? `${attendanceSettings.radiusMeters || 100}m radius` : "Employees cannot clock in until saved."}</p>
-                  </div>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-[#111923]" : "bg-white/75"}`}>
-                    <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Selected location</p>
-                    <p className="mt-2 text-sm font-black leading-5">{attendanceForm.address || "Search and choose a location"}</p>
-                    <p className={`mt-2 text-xs leading-5 ${muted}`}>{attendanceForm.latitude && attendanceForm.longitude ? `${attendanceForm.latitude}, ${attendanceForm.longitude}` : "Coordinates pending"}</p>
-                  </div>
-                </aside>
-
-                <div className="min-h-0 space-y-5 overflow-y-auto pr-1">
-                  <section className={`rounded-[26px] p-5 ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-white"}`}>
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                      <label className="flex-1 text-xs font-bold uppercase tracking-[0.14em] text-black/45 dark:text-white/45">Search address
-                        <div className={`mt-2 flex h-12 items-center gap-2 rounded-full border px-4 ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
+              <div className="grid h-full min-h-0 gap-5 overflow-y-auto p-5 xl:grid-cols-[minmax(360px,0.48fr)_minmax(0,0.52fr)]">
+                <div className="min-w-0 space-y-5">
+                  <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
+                    <div className="flex flex-col gap-3">
+                      <label className="newq relative text-xs font-bold uppercase tracking-[0.14em] text-black/45 dark:text-white/45">Search address
+                        <div className={`mt-2 flex h-12 items-center gap-3 rounded-full border px-5 ${darkMode ? "border-white/[0.1] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
                           <Search className={`h-4 w-4 ${muted}`} />
-                          <input value={attendanceForm.address} onChange={(event) => handleAttendanceAddressInput(event.target.value)} placeholder="Type office, site, city or landmark..." className="attendance-search-input min-w-0 flex-1 appearance-none border-0 bg-transparent text-sm font-semibold outline-none ring-0 placeholder:text-black/35 focus:border-0 focus:outline-none focus:ring-0 dark:placeholder:text-white/35" />
+                          <input value={attendanceForm.address} onChange={(event) => handleAttendanceAddressInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void searchTypedAttendanceAddress(); } }} placeholder="Type office, site, city or landmark..." className="attendance-search-input newq min-w-0 flex-1 appearance-none border-0 bg-transparent text-sm font-semibold outline-none ring-0 placeholder:text-black/35 focus:border-0 focus:outline-none focus:ring-0 dark:placeholder:text-white/35" />
                           {attendanceLocating && <RefreshCw className={`h-4 w-4 animate-spin ${muted}`} />}
                         </div>
+                        {!!attendanceSearchResults.length && (
+                          <div className={`absolute left-0 right-0 top-[calc(100%+8px)] z-[95] max-h-[360px] overflow-y-auto rounded-3xl border p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/[0.08] bg-[#101720]" : "border-[#e1e5df] bg-white"}`}>
+                            {attendanceSearchResults.map((item) => {
+                              const selected = item.lat !== null && item.lat !== undefined && item.lon !== null && item.lon !== undefined && Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon)) && String(Number(attendanceForm.latitude)) === String(Number(item.lat)) && String(Number(attendanceForm.longitude)) === String(Number(item.lon));
+                              return (
+                                <button key={`${item.place_id}-${item.display_name}`} type="button" onClick={() => selectAttendanceSearchResult(item)} className={`flex w-full items-start gap-3 rounded-2xl p-3 text-left normal-case tracking-normal transition ${selected ? darkMode ? "bg-emerald-400/10" : "bg-[#effbe9]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f6faf2]"}`}>
+                                  <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full ${selected ? darkMode ? "bg-emerald-300/18 text-emerald-200" : "bg-[#6ee72f] text-[#10210c]" : darkMode ? "bg-emerald-400/12 text-emerald-300" : "bg-[#e7f6ed] text-[#08764f]"}`}><MapPin className="h-4 w-4" /></span>
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-sm font-black text-[#171714] dark:text-white">{item.name || item.display_name?.split(",")?.[0] || "Location"}</span>
+                                    <span className={`mt-1 block line-clamp-2 text-xs leading-5 ${muted}`}>{item.display_name}</span>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </label>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={useCurrentAttendanceLocation} disabled={attendanceLocating} className={`h-12 rounded-full px-5 text-sm font-bold disabled:opacity-55 ${darkMode ? "bg-emerald-400/14 text-emerald-200 hover:bg-emerald-400/20" : "bg-[#e7f6ed] text-[#08764f]"}`}>Use current</button>
-                      </div>
+                      <button type="button" onClick={useCurrentAttendanceLocation} disabled={attendanceLocating} className={`newq h-12 w-fit rounded-full px-6 text-sm font-bold disabled:opacity-55 ${darkMode ? "bg-emerald-400/14 text-emerald-200 hover:bg-emerald-400/20" : "bg-[#e7f6ed] text-[#08764f]"}`}>Use current</button>
                     </div>
-
-                    {!!attendanceSearchResults.length && (
-                      <div className="mt-4 grid gap-2">
-                        {attendanceSearchResults.map((item) => {
-                          const selected = String(attendanceForm.latitude) === String(Number(item.lat)) && String(attendanceForm.longitude) === String(Number(item.lon));
-                          return (
-                            <button key={`${item.place_id}-${item.lat}-${item.lon}`} type="button" onClick={() => {
-                              setAttendanceForm((current) => ({
-                                ...current,
-                                address: item.display_name || current.address,
-                                latitude: Number(item.lat),
-                                longitude: Number(item.lon),
-                              }));
-                            }} className={`flex items-start gap-3 rounded-2xl border p-3 text-left transition ${selected ? darkMode ? "border-emerald-300/35 bg-emerald-400/10" : "border-[#8eea6a] bg-[#effbe9]" : darkMode ? "border-white/[0.07] bg-[#101720] hover:bg-[#151e29]" : "border-[#e7ebe4] bg-[#fbfcf9] hover:bg-[#f6faf2]"}`}>
-                              <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full ${selected ? darkMode ? "bg-emerald-300/18 text-emerald-200" : "bg-[#6ee72f] text-[#10210c]" : darkMode ? "bg-emerald-400/12 text-emerald-300" : "bg-[#e7f6ed] text-[#08764f]"}`}><MapPin className="h-4 w-4" /></span>
-                              <span className="min-w-0">
-                                <span className="block text-sm font-black">{item.name || item.display_name?.split(",")?.[0] || "Location"}</span>
-                                <span className={`mt-1 block text-xs leading-5 ${muted}`}>{item.display_name}</span>
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
                   </section>
 
-                  <section className={`grid gap-5 rounded-[26px] p-5 lg:grid-cols-[minmax(0,1fr)_280px] ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-white"}`}>
-                    <div className="overflow-hidden rounded-[24px] border border-black/5 bg-[#eef2ed] dark:border-white/[0.07] dark:bg-[#080d13]">
-                      {attendanceForm.latitude && attendanceForm.longitude ? (
-                        <iframe title="Attendance selected location map" className="h-[360px] w-full border-0" src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(attendanceForm.longitude) - 0.01}%2C${Number(attendanceForm.latitude) - 0.01}%2C${Number(attendanceForm.longitude) + 0.01}%2C${Number(attendanceForm.latitude) + 0.01}&layer=mapnik&marker=${attendanceForm.latitude}%2C${attendanceForm.longitude}`} />
-                      ) : (
-                        <div className={`grid h-[360px] place-items-center px-6 text-center text-sm ${muted}`}>Search an address or use current location to preview the map.</div>
-                      )}
-                    </div>
-                    <div className="space-y-3">
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                        <label className="text-xs font-medium">Latitude
-                          <input type="number" step="any" value={attendanceForm.latitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, latitude: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} />
-                        </label>
-                        <label className="text-xs font-medium">Longitude
-                          <input type="number" step="any" value={attendanceForm.longitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, longitude: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} />
-                        </label>
+                  <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
+                    {attendanceForm.latitude && attendanceForm.longitude ? (
+                      <>
+                    <div className="flex flex-col gap-4">
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Selected location</p>
+                        <p className="mt-2 block max-w-full overflow-hidden truncate whitespace-nowrap text-lg font-black">{attendanceForm.address || "Pinned location"}</p>
+                        <p className={`mt-1 text-xs ${muted}`}>{attendanceForm.latitude}, {attendanceForm.longitude}</p>
                       </div>
+                      <a className={`inline-flex h-11 w-fit shrink-0 items-center gap-2 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-emerald-400/14 text-emerald-200" : "bg-[#e7f6ed] text-[#08764f]"}`} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${attendanceForm.latitude},${attendanceForm.longitude}`)}`} target="_blank" rel="noreferrer"><Navigation className="h-4 w-4" /> Open map</a>
+                    </div>
+                    <div className="mt-5 grid gap-3">
+                      <label className="text-xs font-medium">Latitude
+                        <input type="number" step="any" value={attendanceForm.latitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, latitude: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} />
+                      </label>
+                      <label className="text-xs font-medium">Longitude
+                        <input type="number" step="any" value={attendanceForm.longitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, longitude: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} />
+                      </label>
                       <label className="block text-xs font-medium">Allowed radius
-                        <div className={`mt-2 flex h-12 items-center rounded-2xl border px-3 ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
+                        <div className={`mt-2 flex h-11 items-center rounded-2xl border px-3 ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
                           <input type="number" min="25" value={attendanceForm.radiusMeters} onChange={(event) => setAttendanceForm((current) => ({ ...current, radiusMeters: event.target.value }))} className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none" />
                           <span className={`text-xs font-bold ${muted}`}>meters</span>
                         </div>
                       </label>
-                      {attendanceForm.latitude && attendanceForm.longitude && <a className="inline-flex items-center gap-2 text-sm font-bold text-[#08764f]" href={`https://www.openstreetmap.org/?mlat=${attendanceForm.latitude}&mlon=${attendanceForm.longitude}#map=17/${attendanceForm.latitude}/${attendanceForm.longitude}`} target="_blank" rel="noreferrer"><Navigation className="h-4 w-4" /> Open map</a>}
                     </div>
+                    </>
+                    ) : (
+                      <div className={`rounded-2xl border border-dashed p-5 text-sm ${darkMode ? "border-white/10 text-white/45" : "border-black/10 text-black/45"}`}>Choose a location to show coordinates and radius.</div>
+                    )}
                   </section>
                 </div>
+                <section className={`min-h-[420px] rounded-[26px] border p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
+                  <div className="h-full overflow-hidden rounded-[24px] border border-black/5 bg-[#eef2ed] dark:border-white/[0.07] dark:bg-[#080d13]">
+                    {attendanceForm.latitude && attendanceForm.longitude ? (
+                      <iframe title="Attendance Google map" className="h-full min-h-[420px] w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" src={`https://www.google.com/maps?q=${encodeURIComponent(`${attendanceForm.latitude},${attendanceForm.longitude}`)}&z=17&output=embed`} />
+                    ) : attendanceForm.address ? (
+                      <iframe title="Attendance Google map search" className="h-full min-h-[420px] w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" src={`https://www.google.com/maps?q=${encodeURIComponent(attendanceForm.address)}&z=14&output=embed`} />
+                    ) : (
+                      <div className={`grid h-full min-h-[420px] place-items-center px-6 text-center text-sm ${muted}`}>Search an address or use current location to preview Google Maps.</div>
+                    )}
+                  </div>
+                </section>
               </div>
             </div>
             <div className={`flex shrink-0 items-center justify-between gap-6 border-t px-6 py-5 ${darkMode ? "border-white/[0.07] bg-[#080c11]" : "border-black/10 bg-white"}`}>
-              <button type="button" onClick={() => setAttendanceSettingsOpen(false)} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
-              <button disabled={attendanceSaving} className="h-11 min-w-[190px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">{attendanceSaving ? "Saving..." : "Save geo fence"}</button>
+              <button type="button" onClick={closeAttendanceSettings} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
+              <button disabled={attendanceSaving || !attendanceForm.latitude || !attendanceForm.longitude} className="h-11 min-w-[190px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">{attendanceSaving ? "Saving..." : "Save geo fence"}</button>
             </div>
           </form>
         </div>
@@ -2126,4 +2270,3 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     </main>
   );
 }
-

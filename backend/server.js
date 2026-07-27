@@ -12770,10 +12770,14 @@ app.post("/dmr-dashboard/reminders/send-now", requireSuperAdmin, async (req, res
 });
 
 const MRN_WHATSAPP_SETTINGS_ID = "mrn-whatsapp-automation-settings";
+const MRN_WHATSAPP_WATCH_INTERVAL_MS = Math.max(30_000, Number(process.env.MRN_WHATSAPP_WATCH_INTERVAL_MS) || 60_000);
+let mrnWhatsappWatcherTimer = null;
+let mrnWhatsappWatcherRunning = false;
 const MRN_WHATSAPP_DEFAULTS = {
   enabled: true,
   approvalContactIds: [],
   concernContactIds: [],
+  processedActionRequestMrns: [],
   templates: {
     actionRequest: "mrn_action_request",
     approved: "mrn_approved_notification",
@@ -12812,6 +12816,10 @@ async function getMrnWhatsappSettings() {
       ...MRN_WHATSAPP_DEFAULTS.languages,
       ...(saved?.settings?.languages || {}),
     },
+    processedActionRequestMrns: Array.isArray(saved?.settings?.processedActionRequestMrns)
+      ? saved.settings.processedActionRequestMrns.map((item) => projectText(item)).filter(Boolean).slice(-1000)
+      : [],
+    watcherBaselineAt: saved?.settings?.watcherBaselineAt || "",
   };
 }
 
@@ -12835,6 +12843,8 @@ async function saveMrnWhatsappSettings(input = {}) {
       declined: projectText(input.languages?.declined) || MRN_WHATSAPP_DEFAULTS.languages.declined,
       comment: projectText(input.languages?.comment) || MRN_WHATSAPP_DEFAULTS.languages.comment,
     },
+    processedActionRequestMrns: Array.isArray(current.processedActionRequestMrns) ? current.processedActionRequestMrns : [],
+    watcherBaselineAt: current.watcherBaselineAt || "",
     lastRun: current.lastRun || null,
     updatedAt: new Date().toISOString(),
   };
@@ -12868,6 +12878,41 @@ async function recordMrnWhatsappLastRun(run = {}) {
     { upsert: true },
   );
   return lastRun;
+}
+
+function mrnWhatsappKey(value) {
+  return normalizedMrnNumber(value) || projectText(value).toLowerCase();
+}
+
+async function markMrnWhatsappActionRequestProcessed(mrnNo) {
+  const key = mrnWhatsappKey(mrnNo);
+  if (!key) return;
+  const db = await connectAuthDb();
+  await db.collection("platformSettings").updateOne(
+    { _id: MRN_WHATSAPP_SETTINGS_ID },
+    {
+      $addToSet: { "settings.processedActionRequestMrns": key },
+      $set: { "settings.lastCheckedAt": new Date().toISOString() },
+    },
+    { upsert: true },
+  );
+}
+
+async function setMrnWhatsappProcessedKeys(keys = []) {
+  const clean = [...new Set(keys.map((key) => mrnWhatsappKey(key)).filter(Boolean))].slice(-1000);
+  const now = new Date().toISOString();
+  const db = await connectAuthDb();
+  await db.collection("platformSettings").updateOne(
+    { _id: MRN_WHATSAPP_SETTINGS_ID },
+    {
+      $set: {
+        "settings.processedActionRequestMrns": clean,
+        "settings.lastCheckedAt": now,
+        "settings.watcherBaselineAt": now,
+      },
+    },
+    { upsert: true },
+  );
 }
 
 function mrnWhatsappParams(row = {}, actorName = "User", comment = "") {
@@ -12990,6 +13035,67 @@ async function sendMrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
   return { status, sent, failed, results, lastRun };
 }
 
+async function checkMrnWhatsappAutomationQueue({ source = "watcher" } = {}) {
+  if (mrnWhatsappWatcherRunning) return { status: "busy", sent: 0, checked: 0 };
+  mrnWhatsappWatcherRunning = true;
+  try {
+    const settings = await getMrnWhatsappSettings();
+    if (!settings.enabled) return { status: "disabled", sent: 0, checked: 0 };
+    if (!settings.approvalContactIds?.length) return { status: "skipped", sent: 0, checked: 0, reason: "No approval contacts selected" };
+    if (!publicMrnSettings().linked) return { status: "skipped", sent: 0, checked: 0, reason: "MRN sheet is not linked" };
+
+    const dashboard = await readMrnDashboard({ all: true });
+    const records = (dashboard.records || [])
+      .filter((row) => projectText(row.mrnNo))
+      .sort((a, b) => (Number(a.rowNumber) || 0) - (Number(b.rowNumber) || 0));
+    const processed = new Set((settings.processedActionRequestMrns || []).map((item) => mrnWhatsappKey(item)).filter(Boolean));
+
+    if (!settings.watcherBaselineAt) {
+      await setMrnWhatsappProcessedKeys(records.map((row) => row.mrnNo));
+      return { status: "initialized", sent: 0, checked: records.length, pending: 0 };
+    }
+
+    const pending = records.filter((row) => !processed.has(mrnWhatsappKey(row.mrnNo)));
+    let sent = 0;
+    let failed = 0;
+    for (const row of pending) {
+      const result = await sendMrnWhatsappAutomation({
+        event: "actionRequest",
+        row,
+        actor: { id: "system", displayName: "MRN WhatsApp watcher", username: source },
+      });
+      await markMrnWhatsappActionRequestProcessed(row.mrnNo);
+      if (result.sent) sent += result.sent;
+      failed += result.failed || 0;
+      addActivityLog({
+        action: "Sent MRN WhatsApp action request",
+        target: row.mrnNo || "MRN",
+        category: "whatsapp",
+        details: { source, status: result.status, sent: result.sent, failed: result.failed },
+      });
+    }
+    return { status: pending.length ? "processed" : "idle", checked: records.length, pending: pending.length, sent, failed };
+  } finally {
+    mrnWhatsappWatcherRunning = false;
+  }
+}
+
+function startMrnWhatsappWatcher() {
+  if (mrnWhatsappWatcherTimer || process.env.MRN_WHATSAPP_WATCHER_ENABLED === "false") return;
+  const run = () => {
+    checkMrnWhatsappAutomationQueue({ source: "watcher" })
+      .then((result) => {
+        if (result.pending || result.sent || result.failed) {
+          console.log(`MRN WhatsApp watcher ${result.status}: ${result.pending || 0} pending, ${result.sent || 0} sent, ${result.failed || 0} failed`);
+        }
+      })
+      .catch((error) => console.error("MRN WhatsApp watcher error:", error.message));
+  };
+  mrnWhatsappWatcherTimer = setInterval(run, MRN_WHATSAPP_WATCH_INTERVAL_MS);
+  setTimeout(run, 10_000);
+  console.log(`MRN WhatsApp watcher scheduled every ${Math.round(MRN_WHATSAPP_WATCH_INTERVAL_MS / 1000)}s`);
+}
+
 function parseMrnWhatsappAction(message = {}) {
   const raw = projectText(message.replyId || message.text || "").trim();
   const match = raw.match(/^MRN_(APPROVE|DECLINE|COMMENT):(.+)$/i);
@@ -13088,6 +13194,7 @@ app.post("/mrn-dashboard/whatsapp/send-test", requireSuperAdmin, async (req, res
       actor: req.authUser,
       comment: req.body?.comment || "Manual test",
     });
+    if ((req.body?.event || "actionRequest") === "actionRequest") await markMrnWhatsappActionRequestProcessed(row.mrnNo);
     addActivityLog({ req, action: "Sent MRN WhatsApp test", target: row.mrnNo || "MRN WhatsApp", details: result.lastRun || result });
     res.json({ success: true, row, result });
   } catch (error) {
@@ -13368,6 +13475,7 @@ app.post("/mrn-dashboard", upload.fields([
         row: result.snapshot,
         actor: req.authUser,
       });
+      await markMrnWhatsappActionRequestProcessed(result.mrnNo);
     } catch (whatsappError) {
       console.error("MRN WhatsApp automation error:", whatsappError.message);
       whatsapp = { status: "failed", sent: 0, failed: 1, error: whatsappError.message };
@@ -14428,6 +14536,7 @@ if (require.main === module) {
   refreshDmrReminderCrons().catch((error) => {
     console.error("DMR WhatsApp reminder cron setup error:", error);
   });
+  startMrnWhatsappWatcher();
 
   cron.schedule("0 12 * * *", async () => {
     try {

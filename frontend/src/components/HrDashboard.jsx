@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, LogIn, LogOut, Mail, MapPin, MessageCircle, MessageSquare, Navigation, Pencil, Phone, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Users, WalletCards, X } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
@@ -328,6 +329,7 @@ function DrawerDatePicker({ darkMode, label, value, placeholder, onChange, minDa
 
 export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const { user } = useAuth();
+  const router = useRouter();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -344,7 +346,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [selectedLeave, setSelectedLeave] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employeeSaving, setEmployeeSaving] = useState(false);
-  const [employeeForm, setEmployeeForm] = useState({ employmentType: "probation", monthlyInHandSalary: "" });
+  const [employeeForm, setEmployeeForm] = useState({ employmentType: "probation", monthlyInHandSalary: "", remoteWorkEnabled: false });
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [attendanceClockAction, setAttendanceClockAction] = useState("");
   const [attendanceLocating, setAttendanceLocating] = useState(false);
@@ -467,8 +469,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const leavePeriodPreview = leaveForm.startDate && leaveForm.endDate ? `${formatDateLabel(leaveForm.startDate)} - ${formatDateLabel(leaveForm.endDate)}` : "Select dates";
   const myLeaveRequests = leaveRequests.filter((request) => data?.canManageHr || request.userId === user?.id);
   const myAttendanceRecords = attendanceRecords.filter((record) => data?.canManageHr || record.userId === user?.id);
+  const currentEmployeeProfile = employees.find((employee) => employee.id === user?.id);
+  const remoteWorkEnabled = Boolean(currentEmployeeProfile?.remoteWorkEnabled || data?.remoteWorkEnabled || user?.remoteWorkEnabled);
   const todayAttendance = attendanceRecords.find((record) => record.userId === user?.id && record.date === todayInput());
   const attendanceConfigured = Boolean(Number(attendanceSettings.latitude) && Number(attendanceSettings.longitude));
+  const attendanceReady = attendanceConfigured || remoteWorkEnabled;
   const todayAttendanceRecords = myAttendanceRecords.filter((record) => record.date === todayInput());
   const todayAttendanceLabel = todayAttendance?.clockOutAt ? "Completed" : todayAttendance?.clockInAt ? "Checked in" : "Not marked";
   const todayWorkMinutes = Number(todayAttendance?.workMinutes || 0);
@@ -656,6 +661,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     setEmployeeForm({
       employmentType: employee?.employmentType || "probation",
       monthlyInHandSalary: employee?.monthlyInHandSalary || "",
+      remoteWorkEnabled: Boolean(employee?.remoteWorkEnabled),
     });
   }
 
@@ -795,7 +801,12 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     try {
       setAttendanceClockAction(action);
       setAttendanceSaving(true);
-      const location = await browserLocation();
+      let location = {};
+      try {
+        location = await browserLocation();
+      } catch (error) {
+        if (!remoteWorkEnabled) throw error;
+      }
       const response = await fetch(`${API_URL}/hr/attendance/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1402,7 +1413,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {[
                   { icon: CheckCircle2, label: "Today status", value: todayAttendanceLabel, hint: todayAttendance?.clockInAt ? `In ${new Date(todayAttendance.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : "Awaiting clock in", tone: "emerald" },
-                  { icon: LogIn, label: "Clock in", value: todayAttendance?.clockInAt ? new Date(todayAttendance.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-", hint: attendanceConfigured ? "Location required" : "Geo fence not set", tone: "blue" },
+                  { icon: LogIn, label: "Clock in", value: todayAttendance?.clockInAt ? new Date(todayAttendance.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-", hint: remoteWorkEnabled ? "Remote enabled" : attendanceConfigured ? "Location required" : "Geo fence not set", tone: "blue" },
                   { icon: LogOut, label: "Clock out", value: todayAttendance?.clockOutAt ? new Date(todayAttendance.clockOutAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-", hint: todayAttendance?.clockOutAt ? "Completed today" : "Pending", tone: "orange" },
                   { icon: CalendarDays, label: "Work time", value: todayWorkMinutes ? `${Math.floor(todayWorkMinutes / 60)}h ${todayWorkMinutes % 60}m` : "0h", hint: `${todayAttendanceRecords.length} marked today`, tone: "violet" },
                 ].map((stat) => {
@@ -1428,19 +1439,19 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               <div className={`rounded-[28px] p-5 ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-[#fbfcf9]"}`}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
-                    <p className="text-lg font-black">{attendanceConfigured ? "Attendance location active" : "Attendance location not set"}</p>
-                    <p className={`mt-1 truncate text-sm ${muted}`}>{attendanceSettings.address || "HR must set the office/site location before employees can clock in."}</p>
+                    <p className="text-lg font-black">{remoteWorkEnabled ? "Remote attendance enabled" : attendanceConfigured ? "Attendance location active" : "Attendance location not set"}</p>
+                    <p className={`mt-1 truncate text-sm ${muted}`}>{remoteWorkEnabled ? "Office geofence is skipped for your clock in and clock out." : attendanceSettings.address || "HR must set the office/site location before employees can clock in."}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" disabled={!attendanceConfigured || attendanceSaving || todayAttendance?.clockInAt} onClick={() => submitAttendance("clock-in")} className={`flex h-11 min-w-[118px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-emerald-400/14 text-emerald-200 hover:bg-emerald-400/20" : "bg-[#e7f6ed] text-[#08764f]"}`}>
+                    <button type="button" disabled={!attendanceReady || attendanceSaving || todayAttendance?.clockInAt} onClick={() => submitAttendance("clock-in")} className={`flex h-11 min-w-[118px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-emerald-400/14 text-emerald-200 hover:bg-emerald-400/20" : "bg-[#e7f6ed] text-[#08764f]"}`}>
                       {attendanceClockAction === "clock-in" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} {attendanceClockAction === "clock-in" ? "Clocking in" : "Clock in"}
                     </button>
                     {mustFillReportBeforeClockOut ? (
-                      <button type="button" disabled={todayReportChecking} onClick={() => { window.location.href = "/employee-daily-report"; }} className={`flex h-11 min-w-[178px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-55 ${darkMode ? "bg-sky-400/14 text-sky-200 hover:bg-sky-400/20" : "bg-sky-50 text-sky-700"}`}>
+                      <button type="button" disabled={todayReportChecking} onClick={() => router.push("/employee-daily-report")} className={`flex h-11 min-w-[178px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-55 ${darkMode ? "bg-sky-400/14 text-sky-200 hover:bg-sky-400/20" : "bg-sky-50 text-sky-700"}`}>
                         {todayReportChecking ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Fill Employee Report
                       </button>
                     ) : (
-                      <button type="button" disabled={!attendanceConfigured || attendanceSaving || !todayAttendance?.clockInAt || todayAttendance?.clockOutAt} onClick={() => submitAttendance("clock-out")} className={`flex h-11 min-w-[124px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-red-400/14 text-red-200 hover:bg-red-400/20" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
+                      <button type="button" disabled={!attendanceReady || attendanceSaving || !todayAttendance?.clockInAt || todayAttendance?.clockOutAt} onClick={() => submitAttendance("clock-out")} className={`flex h-11 min-w-[124px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-red-400/14 text-red-200 hover:bg-red-400/20" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
                         {attendanceClockAction === "clock-out" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} {attendanceClockAction === "clock-out" ? "Clocking out" : "Clock out"}
                       </button>
                     )}
@@ -1452,16 +1463,17 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
-                      <col className="w-[24%]" />
+                      <col className="w-[22%]" />
+                      <col className="w-[13%]" />
                       <col className="w-[15%]" />
-                      <col className="w-[18%]" />
-                      <col className="w-[18%]" />
-                      <col className="w-[12%]" />
+                      <col className="w-[15%]" />
+                      <col className="w-[11%]" />
+                      <col className="w-[11%]" />
                       <col className="w-[13%]" />
                     </colgroup>
                     <thead className={muted}>
                       <tr className={`border-b ${darkMode ? "border-white/[0.06] bg-[#0b1016]" : "border-[#edf0ea] bg-[#fbfcf9]"}`}>
-                        {["Employee", "Date", "Clock in", "Clock out", "Hours", "Status"].map((heading) => (
+                        {["Employee", "Date", "Clock in", "Clock out", "Mode", "Hours", "Status"].map((heading) => (
                           <th key={heading} className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">{heading}</th>
                         ))}
                       </tr>
@@ -1483,13 +1495,14 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                             <td className="px-5 py-5 font-semibold">{record.date}</td>
                             <td className={`px-5 py-5 ${muted}`}>{record.clockInAt ? new Date(record.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
                             <td className={`px-5 py-5 ${muted}`}>{record.clockOutAt ? new Date(record.clockOutAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
+                            <td className="px-5 py-5"><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${record.workMode === "remote" ? "bg-sky-100 text-sky-700" : "bg-emerald-100 text-emerald-700"}`}>{record.workMode || "office"}</span></td>
                             <td className="px-5 py-5 font-black">{record.workMinutes ? `${Math.floor(record.workMinutes / 60)}h ${record.workMinutes % 60}m` : "-"}</td>
                             <td className="px-5 py-5"><span className={`inline-flex h-9 items-center rounded-full px-4 text-xs font-black capitalize ${record.status === "completed" ? salaryBadge : statusClass("pending")}`}>{record.status}</span></td>
                           </tr>
                         );
                       })}
                       {!myAttendanceRecords.length && (
-                        <tr><td colSpan={6} className={`px-5 py-12 text-center ${muted}`}>No attendance records yet.</td></tr>
+                        <tr><td colSpan={7} className={`px-5 py-12 text-center ${muted}`}>No attendance records yet.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1952,8 +1965,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     <form onSubmit={saveEmployeeHrDetails} className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <div>
-                          <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Leave and salary policy</p>
-                          <h3 className="mt-1 text-xl font-black">Employee payroll setup</h3>
+                          <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Leave, salary, and attendance policy</p>
+                          <h3 className="mt-1 text-xl font-black">Employee HR setup</h3>
                         </div>
                         <button disabled={employeeSaving} className="h-10 rounded-full bg-[#6ee72f] px-5 text-sm font-bold text-[#10210c] disabled:opacity-60">{employeeSaving ? "Saving..." : "Save details"}</button>
                       </div>
@@ -1963,6 +1976,13 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                           <input required type="number" min="0" value={employeeForm.monthlyInHandSalary} onChange={(event) => setEmployeeForm((current) => ({ ...current, monthlyInHandSalary: event.target.value }))} className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
                         </label>
                       </div>
+                      <label className={`mt-4 flex items-start gap-3 rounded-2xl border p-4 ${darkMode ? "border-sky-300/15 bg-sky-300/8" : "border-sky-100 bg-sky-50"}`}>
+                        <input type="checkbox" checked={employeeForm.remoteWorkEnabled} onChange={(event) => setEmployeeForm((current) => ({ ...current, remoteWorkEnabled: event.target.checked }))} className="mt-1 h-4 w-4 rounded border-sky-300 accent-[#08764f]" />
+                        <span>
+                          <span className="block text-sm font-black">Remote Work</span>
+                          <span className={`mt-1 block text-xs leading-5 ${muted}`}>Allow this employee to mark attendance from remote locations without matching the office geofence.</span>
+                        </span>
+                      </label>
                       <p className={`mt-3 text-xs leading-5 ${muted}`}>Permanent employees get 1 paid leave per month. Probation employees have no paid leave; approved leave is deducted from monthly in-hand salary in salary slips.</p>
                     </form>
                   )}
@@ -1974,6 +1994,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         { label: "Role", value: selectedEmployee.roleName || "No role", icon: ShieldCheck, tone: darkMode ? "bg-violet-300/14 text-violet-200" : "bg-violet-100 text-violet-700" },
                         { label: "Status", value: selectedEmployee.blacklisted ? "Blacklisted" : "Active", icon: CheckCircle2, tone: selectedEmployee.blacklisted ? (darkMode ? "bg-red-400/14 text-red-200" : "bg-red-100 text-red-700") : (darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700") },
                         { label: "Employment", value: selectedEmployee.employmentType === "permanent" ? "Permanent" : "Probation", icon: BriefcaseBusiness, tone: darkMode ? "bg-lime-300/14 text-lime-200" : "bg-lime-100 text-lime-700" },
+                        { label: "Work Mode", value: selectedEmployee.remoteWorkEnabled ? "Remote" : "Office", icon: MapPin, tone: selectedEmployee.remoteWorkEnabled ? (darkMode ? "bg-sky-300/14 text-sky-200" : "bg-sky-100 text-sky-700") : (darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700") },
                         { label: "In-Hand Salary", value: selectedEmployee.monthlyInHandSalary ? `₹${moneyValue(selectedEmployee.monthlyInHandSalary).toLocaleString("en-IN")}` : "Not set", icon: WalletCards, tone: darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700" },
                         { label: "Email", value: selectedEmployee.email || "Not set", icon: Mail, tone: darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-100 text-amber-700" },
                         { label: "Phone", value: selectedEmployee.phone || "Not set", icon: Phone, tone: darkMode ? "bg-blue-300/14 text-blue-200" : "bg-blue-100 text-blue-700" },

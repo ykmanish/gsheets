@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { BriefcaseBusiness, Mail, MessageCircleMore, Pencil, Phone, Save } from "lucide-react";
+import { BriefcaseBusiness, CheckCircle2, LogIn, Mail, MessageCircleMore, Pencil, Phone, RefreshCw, Save } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import UserAvatar, { beanheadPresetsForGender } from "./UserAvatar";
 import { SelectMenu } from "./ui";
@@ -25,10 +25,19 @@ function ProfileField({ darkMode, label, value, onChange, icon: Icon, className 
   );
 }
 
+function todayInput() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+}
+
 export default function ProfilePage({ darkMode }) {
   const { user, refreshUser } = useAuth();
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [attendanceData, setAttendanceData] = useState({ settings: {}, records: [], remoteWorkEnabled: false });
   const [avatarDrawerOpen, setAvatarDrawerOpen] = useState(false);
   const avatarPickerRef = useRef(null);
   const [form, setForm] = useState({
@@ -43,21 +52,93 @@ export default function ProfilePage({ darkMode }) {
   });
 
   useEffect(() => {
-    setForm({
-      displayName: user?.displayName || "",
-      email: user?.email || "",
-      phone: user?.phone || "",
-      whatsappPhone: user?.whatsappPhone || user?.phone || "",
-      department: user?.department || "",
-      designation: user?.designation || "",
-      gender: user?.gender || "",
-      avatarPreset: user?.avatarPreset || "",
-    });
+    const timer = window.setTimeout(() => {
+      setForm({
+        displayName: user?.displayName || "",
+        email: user?.email || "",
+        phone: user?.phone || "",
+        whatsappPhone: user?.whatsappPhone || user?.phone || "",
+        department: user?.department || "",
+        designation: user?.designation || "",
+        gender: user?.gender || "",
+        avatarPreset: user?.avatarPreset || "",
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [user]);
 
   const displayName = form.displayName || user?.displayName || user?.username || "User";
   const avatarUser = { ...user, ...form, displayName };
   const avatarPresets = beanheadPresetsForGender("all");
+  const todayAttendance = attendanceData.records.find((record) => record.userId === user?.id && record.date === todayInput());
+  const attendanceConfigured = Boolean(Number(attendanceData.settings?.latitude) && Number(attendanceData.settings?.longitude));
+  const remoteWorkEnabled = Boolean(attendanceData.remoteWorkEnabled || user?.remoteWorkEnabled);
+  const canClockIn = !todayAttendance?.clockInAt && (attendanceConfigured || remoteWorkEnabled);
+
+  async function loadAttendance() {
+    try {
+      const response = await fetch(`${API_URL}/hr/attendance`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not load attendance");
+      setAttendanceData({
+        settings: data.settings || {},
+        records: data.records || [],
+        remoteWorkEnabled: Boolean(data.remoteWorkEnabled),
+      });
+    } catch {
+      setAttendanceData({ settings: {}, records: [], remoteWorkEnabled: false });
+    } finally {
+      setAttendanceLoading(false);
+    }
+  }
+
+  function browserLocation() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Location is not supported in this browser"));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        }),
+        () => reject(new Error("Could not read your current location. Please allow location access.")),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      );
+    });
+  }
+
+  async function clockInFromProfile() {
+    if (attendanceSaving || !canClockIn) return;
+    try {
+      setAttendanceSaving(true);
+      let location = {};
+      try {
+        location = await browserLocation();
+      } catch (error) {
+        if (!remoteWorkEnabled) throw error;
+      }
+      const response = await fetch(`${API_URL}/hr/attendance/clock-in`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(location),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not clock in");
+      setAttendanceData((current) => ({
+        ...current,
+        settings: data.settings || current.settings,
+        records: [data.record, ...current.records.filter((record) => record.id !== data.record?.id)],
+      }));
+      toast.success("Clocked in");
+    } catch (error) {
+      toast.error(error.message || "Could not clock in");
+    } finally {
+      setAttendanceSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!avatarDrawerOpen) return undefined;
@@ -68,6 +149,13 @@ export default function ProfilePage({ darkMode }) {
     document.addEventListener("pointerdown", closeOnOutside);
     return () => document.removeEventListener("pointerdown", closeOnOutside);
   }, [avatarDrawerOpen]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadAttendance();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   async function saveProfile(event) {
     event.preventDefault();
@@ -172,7 +260,18 @@ export default function ProfilePage({ darkMode }) {
                     )}
                   </div>
                 )}
-                <h1 className="mt-4 text-3xl small text-black dark:text-white font-black tracking-tight">{displayName}</h1>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <h1 className="text-3xl small text-black dark:text-white font-black tracking-tight">{displayName}</h1>
+                  <button
+                    type="button"
+                    onClick={clockInFromProfile}
+                    disabled={attendanceLoading || attendanceSaving || !canClockIn}
+                    className={`inline-flex h-12 w-fit min-w-[142px] items-center justify-center gap-2 rounded-full px-6 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${todayAttendance?.clockInAt ? (darkMode ? "bg-emerald-400/16 text-emerald-100" : "bg-[#e8f6ee] text-[#15734d]") : "bg-green-500 text-white hover:bg-green-600"}`}
+                  >
+                    {attendanceLoading || attendanceSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : todayAttendance?.clockInAt ? <CheckCircle2 className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+                    {attendanceLoading ? "Checking" : attendanceSaving ? "Clocking in" : todayAttendance?.clockInAt ? "Clocked in" : "Clock in"}
+                  </button>
+                </div>
                 <p className={`mt-1 text-sm ${darkMode ? "text-white/60" : "text-black/55"}`}>{form.designation || "Designation not added"}</p>
                 <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>{form.department || "Department not added"} · {user?.username || "username"}</p>
 
@@ -187,9 +286,9 @@ export default function ProfilePage({ darkMode }) {
                 <p className={`ml-auto mt-2 w-fit rounded-full px-3 py-1.5 text-xs font-black ${darkMode ? "bg-white/10 text-white" : "bg-[#f2f4ef] text-[#171714]"}`}>{user?.roleName || "Team member"}</p>
                 <div className="mt-8">
                   <p className={`text-right text-xs font-semibold ${darkMode ? "text-white/50" : "text-black/45"}`}>Contact</p>
-                  <div className="mt-3 flex flex-wrap justify-end gap-2">
+                  <div className="mt-4 flex flex-wrap justify-end gap-3">
                     {[form.email || "No email", form.whatsappPhone ? `+${form.whatsappPhone}` : "WhatsApp required"].map((item) => (
-                      <span key={item} className={`rounded-full px-3 py-1.5 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-[#f5eee8] text-[#5b524c]"}`}>{item}</span>
+                      <span key={item} className={`rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-[#f5eee8] text-[#5b524c]"}`}>{item}</span>
                     ))}
                   </div>
                 </div>

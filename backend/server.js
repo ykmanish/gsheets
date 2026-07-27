@@ -231,6 +231,7 @@ function sanitizeUser(user, role) {
     joiningDate: user.joiningDate || user.dateOfJoining || user.joinDate || "",
     employmentType: user.employmentType === "permanent" ? "permanent" : "probation",
     monthlyInHandSalary: moneyNumber(user.monthlyInHandSalary),
+    remoteWorkEnabled: Boolean(user.remoteWorkEnabled),
     roleId: user.roleId ? String(user.roleId) : null,
     roleName: role?.name || user.roleName || null,
     menus: roleMenusForUser(user, role),
@@ -3598,9 +3599,11 @@ app.get("/hr/overview", async (req, res) => {
     const db = await connectAuthDb();
     const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
     if (!hasHrDashboardAccess && !hasHrEmployeesAccess && (hasHrLeaveAccess || hasHrSalaryAccess || hasHrAttendanceAccess)) {
+      const selfUser = await db.collection("users").findOne({ _id: new ObjectId(req.authUser.id) });
+      const selfRole = selfUser?.roleId ? await getRole(selfUser.roleId) : null;
       return res.json({
         canManageHr,
-        employees: [],
+        employees: selfUser ? [sanitizeUser(selfUser, selfRole)] : [],
         roles: [],
         documents: [],
         salarySlips: await loadHrSalarySlips(req, db, canManageHr),
@@ -4151,6 +4154,7 @@ function serializeAttendanceRecord(item = {}, user = null) {
     clockOutLocation: item.clockOutLocation || null,
     clockInDistanceMeters: item.clockInDistanceMeters ?? null,
     clockOutDistanceMeters: item.clockOutDistanceMeters ?? null,
+    workMode: item.workMode || "office",
     workMinutes: item.workMinutes || 0,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -4192,6 +4196,12 @@ function assertAttendanceWithinGeofence(settings, location) {
   return distance;
 }
 
+async function remoteWorkEnabledForUser(db, userId) {
+  if (!ObjectId.isValid(String(userId || ""))) return false;
+  const user = await db.collection("users").findOne({ _id: new ObjectId(String(userId)) }, { projection: { remoteWorkEnabled: 1 } });
+  return Boolean(user?.remoteWorkEnabled);
+}
+
 app.get("/hr/leave-requests", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "hr-leave")) return res.status(403).json({ error: "HR leave access required" });
@@ -4213,6 +4223,7 @@ app.get("/hr/attendance", async (req, res) => {
     const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
     res.json({
       canManageHr,
+      remoteWorkEnabled: await remoteWorkEnabledForUser(db, req.authUser.id),
       settings: await getAttendanceSettings(db),
       records: await loadHrAttendanceRecords(req, db, canManageHr),
     });
@@ -4252,8 +4263,9 @@ app.post("/hr/attendance/clock-in", async (req, res) => {
     const db = await connectAuthDb();
     const settings = await getAttendanceSettings(db);
     const location = attendanceLocationFromBody(req.body || {});
-    const distance = assertAttendanceWithinGeofence(settings, location);
     const userId = new ObjectId(req.authUser.id);
+    const remoteWorkEnabled = await remoteWorkEnabledForUser(db, userId);
+    const distance = remoteWorkEnabled ? null : assertAttendanceWithinGeofence(settings, location);
     const date = attendanceDateKey();
     const existing = await db.collection("hrAttendanceRecords").findOne({ userId, date });
     if (existing?.clockInAt && !existing?.clockOutAt) return res.status(409).json({ error: "You are already clocked in for today" });
@@ -4266,6 +4278,7 @@ app.post("/hr/attendance/clock-in", async (req, res) => {
       department: req.authUser.department || "",
       date,
       status: "checked-in",
+      workMode: remoteWorkEnabled ? "remote" : "office",
       clockInAt: now,
       clockInLocation: location,
       clockInDistanceMeters: distance,
@@ -4274,7 +4287,7 @@ app.post("/hr/attendance/clock-in", async (req, res) => {
     };
     const result = await db.collection("hrAttendanceRecords").insertOne(doc);
     doc._id = result.insertedId;
-    addActivityLog({ req, action: "Clocked in", target: `${doc.employeeName} · ${date}`, details: { distanceMeters: distance } });
+    addActivityLog({ req, action: "Clocked in", target: `${doc.employeeName} · ${date}`, details: { distanceMeters: distance, workMode: doc.workMode } });
     res.json({ success: true, record: serializeAttendanceRecord(doc), settings });
   } catch (error) {
     console.error("Attendance clock-in error:", error);
@@ -4288,8 +4301,9 @@ app.post("/hr/attendance/clock-out", async (req, res) => {
     const db = await connectAuthDb();
     const settings = await getAttendanceSettings(db);
     const location = attendanceLocationFromBody(req.body || {});
-    const distance = assertAttendanceWithinGeofence(settings, location);
     const userId = new ObjectId(req.authUser.id);
+    const remoteWorkEnabled = await remoteWorkEnabledForUser(db, userId);
+    const distance = remoteWorkEnabled ? null : assertAttendanceWithinGeofence(settings, location);
     const date = attendanceDateKey();
     const existing = await db.collection("hrAttendanceRecords").findOne({ userId, date });
     if (!existing?.clockInAt) return res.status(400).json({ error: "Clock in first before clocking out" });
@@ -4298,6 +4312,7 @@ app.post("/hr/attendance/clock-out", async (req, res) => {
     const workMinutes = Math.max(0, Math.round((now.getTime() - new Date(existing.clockInAt).getTime()) / 60000));
     const update = {
       status: "completed",
+      workMode: existing.workMode || (remoteWorkEnabled ? "remote" : "office"),
       clockOutAt: now,
       clockOutLocation: location,
       clockOutDistanceMeters: distance,
@@ -4306,7 +4321,7 @@ app.post("/hr/attendance/clock-out", async (req, res) => {
     };
     await db.collection("hrAttendanceRecords").updateOne({ _id: existing._id }, { $set: update });
     const record = { ...existing, ...update };
-    addActivityLog({ req, action: "Clocked out", target: `${record.employeeName} · ${date}`, details: { distanceMeters: distance, workMinutes } });
+    addActivityLog({ req, action: "Clocked out", target: `${record.employeeName} · ${date}`, details: { distanceMeters: distance, workMinutes, workMode: update.workMode } });
     res.json({ success: true, record: serializeAttendanceRecord(record), settings });
   } catch (error) {
     console.error("Attendance clock-out error:", error);
@@ -4324,12 +4339,13 @@ app.patch("/hr/employees/:id", async (req, res) => {
     const update = {
       employmentType: normalizeEmploymentType(req.body?.employmentType),
       monthlyInHandSalary: moneyNumber(req.body?.monthlyInHandSalary),
+      remoteWorkEnabled: Boolean(req.body?.remoteWorkEnabled),
       updatedAt: new Date(),
     };
     await db.collection("users").updateOne({ _id: userId }, { $set: update });
     await db.collection("hrSalaryProfiles").updateOne(
       { userId },
-      { $set: { ...update, userId } },
+      { $set: { employmentType: update.employmentType, monthlyInHandSalary: update.monthlyInHandSalary, updatedAt: update.updatedAt, userId } },
       { upsert: true },
     );
     const roles = await db.collection("roles").find({}).toArray();

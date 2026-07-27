@@ -346,7 +346,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [selectedLeave, setSelectedLeave] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employeeSaving, setEmployeeSaving] = useState(false);
-  const [employeeRemoteSaving, setEmployeeRemoteSaving] = useState(false);
+  const [employeeRemoteSavingId, setEmployeeRemoteSavingId] = useState("");
   const [employeeForm, setEmployeeForm] = useState({ employmentType: "probation", monthlyInHandSalary: "", remoteWorkEnabled: false });
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [attendanceClockAction, setAttendanceClockAction] = useState("");
@@ -692,11 +692,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   }
 
   async function saveEmployeeRemoteWork(remoteWorkEnabled) {
-    if (!selectedEmployee?.id || employeeRemoteSaving) return;
+    if (!selectedEmployee?.id || employeeRemoteSavingId) return;
     const nextForm = { ...employeeForm, remoteWorkEnabled };
     setEmployeeForm(nextForm);
     try {
-      setEmployeeRemoteSaving(true);
+      setEmployeeRemoteSavingId(selectedEmployee.id);
       const response = await fetch(`${API_URL}/hr/employees/${selectedEmployee.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -714,19 +714,19 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       setEmployeeForm((current) => ({ ...current, remoteWorkEnabled: Boolean(selectedEmployee?.remoteWorkEnabled) }));
       hrToast.error(error.message || "Could not update remote work");
     } finally {
-      setEmployeeRemoteSaving(false);
+      setEmployeeRemoteSavingId("");
     }
   }
 
   async function saveEmployeeRemoteWorkFor(employee, remoteWorkEnabled) {
-    if (!employee?.id || employeeRemoteSaving) return;
+    if (!employee?.id || employeeRemoteSavingId) return;
     const patch = {
       employmentType: employee.employmentType || "probation",
       monthlyInHandSalary: employee.monthlyInHandSalary || 0,
       remoteWorkEnabled,
     };
     try {
-      setEmployeeRemoteSaving(true);
+      setEmployeeRemoteSavingId(employee.id);
       const response = await fetch(`${API_URL}/hr/employees/${employee.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -746,7 +746,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     } catch (error) {
       hrToast.error(error.message || "Could not update remote work");
     } finally {
-      setEmployeeRemoteSaving(false);
+      setEmployeeRemoteSavingId("");
     }
   }
 
@@ -1191,12 +1191,12 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       <td className="px-4 py-3">
                         <button
                           type="button"
-                          disabled={employeeRemoteSaving}
+                          disabled={Boolean(employeeRemoteSavingId)}
                           onClick={() => saveEmployeeRemoteWorkFor(employee, !employee.remoteWorkEnabled)}
                           className={`grid h-7 w-7 place-items-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-60 ${employee.remoteWorkEnabled ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white hover:border-emerald-300"}`}
                           title={employee.remoteWorkEnabled ? "Disable remote today" : "Mark remote today"}
                         >
-                          {employee.remoteWorkEnabled && <Check className="h-4 w-4" />}
+                          {employeeRemoteSavingId === employee.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : employee.remoteWorkEnabled && <Check className="h-4 w-4" />}
                         </button>
                       </td>
                       <td className={`px-4 py-3 text-sm ${muted}`}>{employee.phone || employee.whatsappPhone || employee.email || "-"}</td>
@@ -2049,14 +2049,14 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       <label className={`mt-4 flex items-start gap-3 rounded-2xl border p-4 ${darkMode ? "border-sky-300/15 bg-sky-300/8" : "border-sky-100 bg-sky-50"}`}>
                         <button
                           type="button"
-                          disabled={employeeRemoteSaving}
+                          disabled={Boolean(employeeRemoteSavingId)}
                           onClick={() => saveEmployeeRemoteWork(!employeeForm.remoteWorkEnabled)}
                           className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-60 ${employeeForm.remoteWorkEnabled ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white hover:border-emerald-300"}`}
                         >
-                          {employeeForm.remoteWorkEnabled && <Check className="h-4 w-4" />}
+                          {employeeRemoteSavingId === selectedEmployee?.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : employeeForm.remoteWorkEnabled && <Check className="h-4 w-4" />}
                         </button>
                         <span>
-                          <span className="block text-sm font-black">Remote Today {employeeRemoteSaving ? "· Saving..." : ""}</span>
+                          <span className="block text-sm font-black">Remote Today {employeeRemoteSavingId === selectedEmployee?.id ? "· Saving..." : ""}</span>
                           <span className={`mt-1 block text-xs leading-5 ${muted}`}>When this is checked, this employee attendance is marked as remote and skips the office geofence.</span>
                         </span>
                       </label>

@@ -2948,7 +2948,7 @@ export default function DmrDashboard({ darkMode }) {
                                   Submission timing
                                 </p>
                                 <p className={`mt-1 text-xs ${muted}`}>
-                                  Cutoff: 11:30 AM IST
+                                  Cutoff: 3:30 PM IST
                                 </p>
                               </div>
                               <span

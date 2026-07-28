@@ -71,8 +71,6 @@ const MENU_ITEMS = [
   { id: "site-images", label: "Site Images", parent: "projects", group: "projects" },
   { id: "hr-dashboard", label: "HR Dashboard", group: "hr" },
   { id: "hr-employees", label: "Employees", parent: "hr-dashboard", group: "hr" },
-  { id: "hr-documents", label: "HR Documents", parent: "hr-dashboard", group: "hr" },
-  { id: "hr-salary-slips", label: "Salary Slips", parent: "hr-dashboard", group: "hr" },
   { id: "hr-leave", label: "Leave", parent: "hr-dashboard", group: "hr" },
   { id: "hr-attendance", label: "Attendance", parent: "hr-dashboard", group: "hr" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
@@ -89,7 +87,7 @@ const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];
 const MENU_ITEM_IDS = new Set(ALL_MENU_ITEMS.map((item) => item.id));
 const ROLE_MENU_ITEM_IDS = new Set(MENU_ITEMS.map((item) => item.id));
 const MENU_PARENT_BY_CHILD_ID = new Map(MENU_ITEMS.filter((item) => item.parent && ROLE_MENU_ITEM_IDS.has(item.parent)).map((item) => [item.id, item.parent]));
-const DEFAULT_EMPLOYEE_MENU_IDS = ["hr-leave", "hr-salary-slips", "hr-attendance"];
+const DEFAULT_EMPLOYEE_MENU_IDS = ["hr-leave", "hr-attendance"];
 const PROTECTED_GLOBAL_MODULES = new Set(["dashboard", "module-control"]);
 const PRIVILEGE_ITEMS = [
   { id: "upload_documents", label: "Upload documents" },
@@ -232,6 +230,8 @@ function sanitizeUser(user, role) {
     employmentType: user.employmentType === "permanent" ? "permanent" : "probation",
     monthlyInHandSalary: moneyNumber(user.monthlyInHandSalary),
     remoteWorkEnabled: Boolean(user.remoteWorkEnabled),
+    employeeDocumentsFolderId: user.employeeDocumentsFolderId || "",
+    employeeDocuments: Array.isArray(user.employeeDocuments) ? user.employeeDocuments : [],
     roleId: user.roleId ? String(user.roleId) : null,
     roleName: role?.name || user.roleName || null,
     menus: roleMenusForUser(user, role),
@@ -3593,12 +3593,11 @@ app.get("/hr/overview", async (req, res) => {
     const hasHrDashboardAccess = hasMenuAccess(req, "hr-dashboard");
     const hasHrEmployeesAccess = hasMenuAccess(req, "hr-employees");
     const hasHrLeaveAccess = hasMenuAccess(req, "hr-leave");
-    const hasHrSalaryAccess = hasMenuAccess(req, "hr-salary-slips");
     const hasHrAttendanceAccess = hasMenuAccess(req, "hr-attendance");
-    if (!hasHrDashboardAccess && !hasHrEmployeesAccess && !hasHrLeaveAccess && !hasHrSalaryAccess && !hasHrAttendanceAccess) return res.status(403).json({ error: "HR access required" });
+    if (!hasHrDashboardAccess && !hasHrEmployeesAccess && !hasHrLeaveAccess && !hasHrAttendanceAccess) return res.status(403).json({ error: "HR access required" });
     const db = await connectAuthDb();
     const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
-    if (!hasHrDashboardAccess && !hasHrEmployeesAccess && (hasHrLeaveAccess || hasHrSalaryAccess || hasHrAttendanceAccess)) {
+    if (!hasHrDashboardAccess && !hasHrEmployeesAccess && (hasHrLeaveAccess || hasHrAttendanceAccess)) {
       const selfUser = await db.collection("users").findOne({ _id: new ObjectId(req.authUser.id) });
       const selfRole = selfUser?.roleId ? await getRole(selfUser.roleId) : null;
       return res.json({
@@ -3606,7 +3605,7 @@ app.get("/hr/overview", async (req, res) => {
         employees: selfUser ? [sanitizeUser(selfUser, selfRole)] : [],
         roles: [],
         documents: [],
-        salarySlips: await loadHrSalarySlips(req, db, canManageHr),
+        salarySlips: [],
         leaveRequests: await loadHrLeaveRequests(req, db, canManageHr),
         attendanceSettings: await getAttendanceSettings(db),
         attendanceRecords: await loadHrAttendanceRecords(req, db, canManageHr),
@@ -4361,7 +4360,7 @@ app.patch("/hr/employees/:id", async (req, res) => {
 
 app.get("/hr/salary-slips/meta", async (req, res) => {
   try {
-    if (!hasMenuAccess(req, "hr-salary-slips")) return res.status(403).json({ error: "Salary slip access required" });
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
     const db = await connectAuthDb();
     const canEditCompany = Boolean(req.authUser?.isSuperAdmin);
     const targetUserId = canEditCompany && ObjectId.isValid(req.query?.userId || "") ? String(req.query.userId) : req.authUser.id;
@@ -4419,7 +4418,7 @@ app.put("/hr/salary-slips/company", async (req, res) => {
 
 app.post("/hr/salary-slips/generate", async (req, res) => {
   try {
-    if (!hasMenuAccess(req, "hr-salary-slips")) return res.status(403).json({ error: "Salary slip access required" });
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
     const db = await connectAuthDb();
     const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
     const targetUserId = canManageHr && ObjectId.isValid(req.body?.userId || "") ? String(req.body.userId) : req.authUser.id;
@@ -4494,7 +4493,7 @@ app.post("/hr/salary-slips/generate", async (req, res) => {
 
 app.get("/hr/salary-slips/:id/pdf", async (req, res) => {
   try {
-    if (!hasMenuAccess(req, "hr-salary-slips")) return res.status(403).json({ error: "Salary slip access required" });
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
     const db = await connectAuthDb();
     const slip = await db.collection("hrSalarySlips").findOne({ _id: new ObjectId(req.params.id) });
     if (!slip) return res.status(404).json({ error: "Salary slip not found" });
@@ -4527,7 +4526,7 @@ app.get("/hr/salary-slips/:id/pdf", async (req, res) => {
 
 app.get("/hr/salary-slips/:id", async (req, res) => {
   try {
-    if (!hasMenuAccess(req, "hr-salary-slips")) return res.status(403).json({ error: "Salary slip access required" });
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
     const db = await connectAuthDb();
     const slip = await db.collection("hrSalarySlips").findOne({ _id: new ObjectId(req.params.id) });
     if (!slip) return res.status(404).json({ error: "Salary slip not found" });
@@ -5802,6 +5801,252 @@ function safeFileName(name = "drive-document") {
     .trim();
   return cleaned || "drive-document";
 }
+
+const EMPLOYEE_DOCUMENT_PARENT_FOLDER_ID = process.env.HR_EMPLOYEE_DOCUMENT_PARENT_FOLDER_ID || "1pVASUud8Bmp1eCdcG3rQ4mmGtOj9mw7j";
+const EMPLOYEE_DOCUMENT_TYPES = [
+  { id: "aadhar_card_copy", label: "Aadhar card copy" },
+  { id: "pan_card_copy", label: "Pan card copy" },
+  { id: "last_3_months_pay_slip", label: "Last 3 months pay slip" },
+  { id: "educational_certificates", label: "Educational certificates - 10th, 12th, Graduation and PG(if applicable)" },
+  { id: "last_company_letters", label: "Last company appointment letter and experience relieving letter" },
+  { id: "medical_certificate", label: "Medical certificate from your doctor" },
+];
+const MULTI_EMPLOYEE_DOCUMENT_TYPES = new Set(["last_3_months_pay_slip", "educational_certificates", "last_company_letters"]);
+
+function employeeDocumentType(type) {
+  const normalized = projectText(type);
+  return EMPLOYEE_DOCUMENT_TYPES.find((item) => item.id === normalized) || EMPLOYEE_DOCUMENT_TYPES[0];
+}
+
+function mergeEmployeeDocuments(currentDocuments = [], document = {}) {
+  const current = Array.isArray(currentDocuments) ? currentDocuments : [];
+  if (MULTI_EMPLOYEE_DOCUMENT_TYPES.has(document.type)) return [document, ...current];
+  return [document, ...current.filter((item) => item.type !== document.type)];
+}
+
+function driveQueryText(value = "") {
+  return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function employeeDocumentPayload({ type, name, url, uploadedBy, source = "drive-link" } = {}) {
+  const documentType = employeeDocumentType(type);
+  const cleanUrl = projectText(url);
+  if (!cleanUrl) throw new Error("Document link is required.");
+  return {
+    id: crypto.randomUUID(),
+    type: documentType.id,
+    label: documentType.label,
+    name: projectText(name) || documentType.label,
+    url: cleanUrl,
+    driveFileId: extractDriveFileId(cleanUrl) || "",
+    mimeType: "",
+    size: null,
+    source,
+    uploadedBy: uploadedBy || "User",
+    uploadedAt: new Date().toISOString(),
+  };
+}
+
+async function ensureEmployeeDriveFolder(employee) {
+  const auth = await getGoogleAuth();
+  const drive = google.drive({ version: "v3", auth });
+  const folderName = safeFileName(employee.displayName || employee.username || `Employee-${employee._id}`);
+  if (employee?.employeeDocumentsFolderId) {
+    try {
+      const current = await drive.files.get({
+        fileId: employee.employeeDocumentsFolderId,
+        fields: "id,parents,trashed",
+        supportsAllDrives: true,
+      });
+      if (!current.data.trashed && (current.data.parents || []).includes(EMPLOYEE_DOCUMENT_PARENT_FOLDER_ID)) {
+        return employee.employeeDocumentsFolderId;
+      }
+    } catch {
+      // If the saved folder is no longer accessible, fall through and create/find one under the current parent.
+    }
+  }
+  try {
+    const response = await drive.files.list({
+      q: `'${EMPLOYEE_DOCUMENT_PARENT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and name='${driveQueryText(folderName)}' and trashed=false`,
+      fields: "files(id,name)",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      pageSize: 1,
+    });
+    const existing = response.data.files?.[0];
+    if (existing?.id) return existing.id;
+    const created = await drive.files.create({
+      requestBody: {
+        name: folderName,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: [EMPLOYEE_DOCUMENT_PARENT_FOLDER_ID],
+      },
+      fields: "id",
+      supportsAllDrives: true,
+    });
+    return created.data.id;
+  } catch (error) {
+    const message = String(error?.message || "");
+    if (/storage quota|Service Accounts do not have storage quota/i.test(message)) {
+      throw new Error("Employee documents must upload to a Google Shared Drive folder. Move the HR employee documents parent folder into a Shared Drive and share it with the service account email.");
+    }
+    throw error;
+  }
+}
+
+async function ensureEmployeeDocumentTypeFolder(drive, parentFolderId, documentType) {
+  const folderName = safeFileName(documentType.label);
+  const response = await drive.files.list({
+    q: `'${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and name='${driveQueryText(folderName)}' and trashed=false`,
+    fields: "files(id,name)",
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+    pageSize: 1,
+  });
+  const existing = response.data.files?.[0];
+  if (existing?.id) return existing.id;
+  const created = await drive.files.create({
+    requestBody: {
+      name: folderName,
+      mimeType: "application/vnd.google-apps.folder",
+      parents: [parentFolderId],
+    },
+    fields: "id",
+    supportsAllDrives: true,
+  });
+  return created.data.id;
+}
+
+async function uploadEmployeeDocumentToDrive(employee, file, type) {
+  if (!file?.path) throw new Error("Choose a file to upload.");
+  const employeeFolderId = await ensureEmployeeDriveFolder(employee);
+  const documentType = employeeDocumentType(type);
+  const auth = await getGoogleAuth();
+  const drive = google.drive({ version: "v3", auth });
+  const folderId = MULTI_EMPLOYEE_DOCUMENT_TYPES.has(documentType.id)
+    ? await ensureEmployeeDocumentTypeFolder(drive, employeeFolderId, documentType)
+    : employeeFolderId;
+  const safeName = safeFileName(`${documentType.label} - ${file.originalname || "upload"}`);
+  let response;
+  try {
+    response = await drive.files.create({
+      requestBody: { name: safeName, parents: [folderId] },
+      media: { mimeType: file.mimetype || "application/octet-stream", body: fs.createReadStream(file.path) },
+      fields: "id,name,mimeType,webViewLink,modifiedTime,size",
+      supportsAllDrives: true,
+    });
+  } catch (error) {
+    const message = String(error?.message || "");
+    if (/storage quota|Service Accounts do not have storage quota/i.test(message)) {
+      throw new Error("Employee documents must upload to a Google Shared Drive folder. Move the HR employee documents parent folder into a Shared Drive and share it with the service account email.");
+    }
+    throw error;
+  }
+  return {
+    id: crypto.randomUUID(),
+    type: documentType.id,
+    label: documentType.label,
+    name: response.data.name || safeName,
+    url: response.data.webViewLink || `https://drive.google.com/open?id=${response.data.id}`,
+    driveFileId: response.data.id,
+    folderId,
+    employeeFolderId,
+    mimeType: response.data.mimeType || file.mimetype || "",
+    size: response.data.size || file.size || null,
+    source: "drive-upload",
+    uploadedAt: response.data.modifiedTime || new Date().toISOString(),
+  };
+}
+
+app.get("/hr/employees/:id/documents", async (req, res) => {
+  try {
+    const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
+    if (!canManageHr && String(req.authUser?.id) !== String(req.params.id)) return res.status(403).json({ error: "HR access required" });
+    const db = await connectAuthDb();
+    const userId = new ObjectId(req.params.id);
+    const user = await db.collection("users").findOne({ _id: userId });
+    if (!user) return res.status(404).json({ error: "Employee not found" });
+    res.json({
+      documentTypes: EMPLOYEE_DOCUMENT_TYPES,
+      folderId: user.employeeDocumentsFolderId || "",
+      folderUrl: user.employeeDocumentsFolderId ? `https://drive.google.com/drive/folders/${user.employeeDocumentsFolderId}` : "",
+      documents: Array.isArray(user.employeeDocuments) ? user.employeeDocuments : [],
+    });
+  } catch (error) {
+    console.error("HR employee documents load error:", error);
+    res.status(500).json({ error: "Could not load employee documents" });
+  }
+});
+
+app.post("/hr/employees/:id/documents/upload", upload.single("file"), async (req, res) => {
+  try {
+    const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
+    if (!canManageHr && String(req.authUser?.id) !== String(req.params.id)) return res.status(403).json({ error: "HR access required" });
+    const db = await connectAuthDb();
+    const userId = new ObjectId(req.params.id);
+    const user = await db.collection("users").findOne({ _id: userId });
+    if (!user) return res.status(404).json({ error: "Employee not found" });
+    const document = {
+      ...(await uploadEmployeeDocumentToDrive(user, req.file, req.body?.type)),
+      uploadedBy: req.authUser?.displayName || req.authUser?.username || "User",
+    };
+    const folderId = document.employeeFolderId || document.folderId || await ensureEmployeeDriveFolder(user);
+    const currentDocuments = Array.isArray(user.employeeDocuments) ? user.employeeDocuments : [];
+    const documents = mergeEmployeeDocuments(currentDocuments, document);
+    await db.collection("users").updateOne(
+      { _id: userId },
+      { $set: { employeeDocumentsFolderId: folderId, employeeDocuments: documents, updatedAt: new Date() } },
+    );
+    const updated = await db.collection("users").findOne({ _id: userId });
+    const role = await getRole(updated?.roleId);
+    addActivityLog({ req, action: "Uploaded employee document", target: `${updated.displayName || updated.username || String(userId)} · ${document.label}`, details: { documentId: document.driveFileId } });
+    res.json({
+      success: true,
+      document,
+      documents,
+      folderId,
+      folderUrl: `https://drive.google.com/drive/folders/${folderId}`,
+      employee: sanitizeUser(updated, role),
+    });
+  } catch (error) {
+    console.error("HR employee document upload error:", error);
+    res.status(400).json({ error: error.message || "Could not upload employee document" });
+  } finally {
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+    }
+  }
+});
+
+app.post("/hr/employees/:id/documents/link", async (req, res) => {
+  try {
+    const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
+    if (!canManageHr && String(req.authUser?.id) !== String(req.params.id)) return res.status(403).json({ error: "HR access required" });
+    const db = await connectAuthDb();
+    const userId = new ObjectId(req.params.id);
+    const user = await db.collection("users").findOne({ _id: userId });
+    if (!user) return res.status(404).json({ error: "Employee not found" });
+    const document = employeeDocumentPayload({
+      type: req.body?.type,
+      name: req.body?.name,
+      url: req.body?.url,
+      uploadedBy: req.authUser?.displayName || req.authUser?.username || "User",
+    });
+    const currentDocuments = Array.isArray(user.employeeDocuments) ? user.employeeDocuments : [];
+    const documents = mergeEmployeeDocuments(currentDocuments, document);
+    await db.collection("users").updateOne(
+      { _id: userId },
+      { $set: { employeeDocuments: documents, updatedAt: new Date() } },
+    );
+    const updated = await db.collection("users").findOne({ _id: userId });
+    const role = await getRole(updated?.roleId);
+    addActivityLog({ req, action: "Linked employee document", target: `${updated.displayName || updated.username || String(userId)} · ${document.label}`, details: { url: document.url } });
+    res.json({ success: true, document, documents, employee: sanitizeUser(updated, role) });
+  } catch (error) {
+    console.error("HR employee document link error:", error);
+    res.status(400).json({ error: error.message || "Could not save employee document link" });
+  }
+});
 
 function driveExportInfo(mimeType) {
   const exports = {

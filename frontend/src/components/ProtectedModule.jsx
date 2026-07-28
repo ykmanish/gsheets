@@ -38,8 +38,6 @@ const menuPaths = {
   "site-images": "/projects/site-images",
   "hr-dashboard": "/hr",
   "hr-employees": "/hr/employees",
-  "hr-documents": "/hr/documents",
-  "hr-salary-slips": "/hr/salary-slips",
   "hr-leave": "/hr/leave",
   "hr-attendance": "/hr/attendance",
   "sheet-dashboard": "/sheet-dashboard",
@@ -109,7 +107,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const [dismissedNotificationId, setDismissedNotificationId] = useState(null);
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-documents", "hr-salary-slips", "hr-leave", "hr-attendance", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
       "projects",
       "profile",
     ];
@@ -228,8 +226,6 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "site-images" && <SiteImagesDashboard darkMode={darkMode} />}
         {moduleId === "hr-dashboard" && <HrDashboard darkMode={darkMode} section="dashboard" />}
         {moduleId === "hr-employees" && <HrDashboard darkMode={darkMode} section="employees" />}
-        {moduleId === "hr-documents" && <HrDashboard darkMode={darkMode} section="documents" />}
-        {moduleId === "hr-salary-slips" && <HrDashboard darkMode={darkMode} section="salary" />}
         {moduleId === "hr-leave" && <HrDashboard darkMode={darkMode} section="leave" />}
         {moduleId === "hr-attendance" && <HrDashboard darkMode={darkMode} section="attendance" />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}

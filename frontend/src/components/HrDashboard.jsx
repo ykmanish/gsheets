@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, Eye, FileText, LogIn, LogOut, Mail, MapPin, Maximize2, MessageCircle, MessageSquare, Minimize2, Navigation, Pencil, Phone, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Users, WalletCards, X } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, Eye, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, LogIn, LogOut, Mail, MapPin, Maximize2, MessageCircle, MessageSquare, Minimize2, Navigation, Pencil, Phone, Plus, ReceiptText, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserRound, Users, WalletCards, X } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
@@ -17,6 +17,25 @@ async function api(path) {
 
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 let googleMapsPromise = null;
+
+const EMPLOYEE_DOCUMENT_TYPES = [
+  { id: "aadhar_card_copy", label: "Aadhar card copy" },
+  { id: "pan_card_copy", label: "Pan card copy" },
+  { id: "last_3_months_pay_slip", label: "Last 3 months pay slip" },
+  { id: "educational_certificates", label: "Educational certificates - 10th, 12th, Graduation and PG(if applicable)" },
+  { id: "last_company_letters", label: "Last company appointment letter and experience relieving letter" },
+  { id: "medical_certificate", label: "Medical certificate from your doctor" },
+];
+const MULTI_EMPLOYEE_DOCUMENT_TYPES = new Set(["last_3_months_pay_slip", "educational_certificates", "last_company_letters"]);
+
+const DOCUMENT_CARD_META = {
+  aadhar_card_copy: { Icon: IdCard, card: "bg-orange-100 text-[#171714]", icon: "bg-orange-50 text-orange-600" },
+  pan_card_copy: { Icon: BadgeCheck, card: "bg-blue-100 text-[#171714]", icon: "bg-blue-50 text-blue-600" },
+  educational_certificates: { Icon: GraduationCap, card: "bg-cyan-100 text-[#171714]", icon: "bg-cyan-50 text-cyan-600" },
+  last_3_months_pay_slip: { Icon: ReceiptText, card: "bg-violet-100 text-[#171714]", icon: "bg-violet-50 text-violet-600" },
+  last_company_letters: { Icon: Building2, card: "bg-rose-100 text-[#171714]", icon: "bg-rose-50 text-rose-600" },
+  medical_certificate: { Icon: HeartPulse, card: "bg-green-100 text-[#171714]", icon: "bg-green-50 text-green-600" },
+};
 
 function loadGoogleMaps() {
   if (typeof window === "undefined") return Promise.reject(new Error("Google Maps requires a browser"));
@@ -201,9 +220,9 @@ function DrawerSelect({ darkMode, label, value, placeholder, options, onChange, 
   }, [open]);
 
   return (
-    <label ref={selectRef} className="relative block text-xs font-medium text-black/65 dark:text-white/60">
+    <label ref={selectRef} className="relative block text-xs font-normal text-black/65 dark:text-white/60">
       {label}{required ? " *" : ""}
-      <button type="button" onClick={() => { setOpen((current) => !current); setSearch(""); }} className={`mt-2 flex h-10 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-semibold outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]" : "border-black/10 bg-white text-[#171714] hover:bg-[#fafbf8]"}`}>
+      <button type="button" onClick={() => { setOpen((current) => !current); setSearch(""); }} className={`mt-2 flex h-10 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-normal outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]" : "border-black/10 bg-white text-[#171714] hover:bg-[#fafbf8]"}`}>
         <span className={value ? "" : muted}>{value || placeholder}</span>
         <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""} ${muted}`} />
       </button>
@@ -212,16 +231,16 @@ function DrawerSelect({ darkMode, label, value, placeholder, options, onChange, 
           {searchable && (
             <div className="relative mb-1.5">
               <Search className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={searchPlaceholder} className={`h-10 w-full rounded-xl border pl-9 pr-3 text-sm font-medium outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white text-[#171714]"}`} />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={searchPlaceholder} className={`h-10 w-full rounded-xl border pl-9 pr-3 text-sm font-normal outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white text-[#171714]"}`} />
             </div>
           )}
           <div className="max-h-72 overflow-y-auto">
           {filteredOptions.map((option) => (
-            <button key={option} type="button" onClick={() => { onChange(option); setOpen(false); }} className={`flex h-9 w-full items-center rounded-xl px-3 text-left text-sm font-medium transition ${value === option ? "bg-[#171714] text-white" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}>
+            <button key={option} type="button" onClick={() => { onChange(option); setOpen(false); }} className={`flex h-9 w-full items-center rounded-xl px-3 text-left text-sm font-normal transition ${value === option ? "bg-[#171714] text-white" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}>
               {option}
             </button>
           ))}
-          {!filteredOptions.length && <p className={`px-3 py-3 text-sm font-medium ${muted}`}>No employee found</p>}
+          {!filteredOptions.length && <p className={`px-3 py-3 text-sm font-normal ${muted}`}>No employee found</p>}
           </div>
         </div>
       )}
@@ -361,6 +380,9 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [requestTypeFilter, setRequestTypeFilter] = useState("All");
+  const [requestEmployeeFilter, setRequestEmployeeFilter] = useState("All employees");
+  const [requestDateFilter, setRequestDateFilter] = useState({ startDate: "", endDate: "" });
   const [salaryQuery, setSalaryQuery] = useState("");
   const [leaveDrawerOpen, setLeaveDrawerOpen] = useState(false);
   const [leaveSaving, setLeaveSaving] = useState(false);
@@ -373,8 +395,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [salaryDeleteTarget, setSalaryDeleteTarget] = useState(null);
   const [selectedLeave, setSelectedLeave] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [employeeDetailExpanded, setEmployeeDetailExpanded] = useState(false);
   const [employeeSaving, setEmployeeSaving] = useState(false);
   const [employeeRemoteSavingId, setEmployeeRemoteSavingId] = useState("");
+  const [employeeDocumentUploading, setEmployeeDocumentUploading] = useState("");
+  const [employeeDocumentUploadProgress, setEmployeeDocumentUploadProgress] = useState({});
   const [employeeForm, setEmployeeForm] = useState({ employmentType: "probation", monthlyInHandSalary: "", remoteWorkEnabled: false });
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [attendanceClockAction, setAttendanceClockAction] = useState("");
@@ -521,33 +546,68 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const currentMonthPendingLeaves = currentMonthLeaveRequests.filter((request) => request.status === "pending").length;
   const remainingPaidLeaves = Math.max(0, monthlyPaidLeaveAllowance - currentMonthPaidLeaves);
   const selectedEmployeeLeaveHistory = selectedEmployee ? leaveRequests.filter((request) => request.userId === selectedEmployee.id) : [];
+  const selectedEmployeeApprovedLeaves = selectedEmployeeLeaveHistory.filter((request) => request.status === "approved");
+  const selectedEmployeeCurrentMonthLeaves = selectedEmployeeApprovedLeaves.filter((request) => leaveDaysInMonth(request, currentLeaveMonth) > 0);
+  const selectedEmployeeMonthlyAllowance = selectedEmployee?.employmentType === "permanent" ? 1 : 0;
+  const selectedEmployeeCurrentMonthPaidLeaves = selectedEmployeeCurrentMonthLeaves.reduce((sum, request) => sum + Math.min(leaveDaysInMonth(request, currentLeaveMonth), Number(request.paidLeaveDays || 0)), 0);
+  const selectedEmployeePaidLeavesRemaining = Math.max(0, selectedEmployeeMonthlyAllowance - selectedEmployeeCurrentMonthPaidLeaves);
+  const selectedEmployeeTotalLeavesTaken = selectedEmployeeApprovedLeaves.reduce((sum, request) => sum + (Number(request.days) || leaveDayCount(request.startDate, request.endDate)), 0);
   const filteredEmployees = activeEmployees.filter((employee) => {
     const search = query.trim().toLowerCase();
     if (!search) return true;
     return [employee.displayName, employee.username, employee.department, employee.designation, employee.roleName].some((value) => String(value || "").toLowerCase().includes(search));
   });
 
-  const recentLeaveRequests = myLeaveRequests.slice(0, 6);
+  const requestEmployeeOptions = ["All employees", ...activeEmployees.map((employee) => employee.displayName || employee.username).filter(Boolean)];
+  const selectedRequestEmployee = requestEmployeeFilter === "All employees" ? null : activeEmployees.find((employee) => (employee.displayName || employee.username) === requestEmployeeFilter);
+  const recentLeaveRequests = myLeaveRequests;
   const pendingSalaryRequests = [];
   const pendingDocumentRequests = [];
-  const dashboardRequests = [
+  const dashboardRequestItems = [
     ...recentLeaveRequests.map((request) => ({
       id: `leave-${request.id}`,
       kind: "Leave",
+      userId: request.userId,
       employeeName: request.employeeName,
       department: request.department,
       title: request.leaveType,
       detail: `${request.days} day${request.days === 1 ? "" : "s"}`,
       period: `${request.startDate} to ${request.endDate}`,
+      startDate: request.startDate,
+      endDate: request.endDate,
       status: request.status,
       onView: () => {
         setSelectedLeave(request);
         setReviewComment(request.adminComment || "");
       },
     })),
+    ...myAttendanceRecords.map((record) => ({
+      id: `attendance-${record.id || `${record.userId}-${record.date}`}`,
+      kind: "Attendance",
+      userId: record.userId,
+      employeeName: record.employeeName,
+      department: record.department,
+      title: record.workMode === "remote" ? "Remote attendance" : "Office attendance",
+      detail: record.clockInAt ? `${record.clockOutAt ? "Completed" : "Checked in"} · ${record.workMinutes ? `${Math.floor(record.workMinutes / 60)}h ${record.workMinutes % 60}m` : "0h"}` : "Not marked",
+      period: record.date,
+      startDate: record.date,
+      endDate: record.date,
+      status: record.status || "pending",
+      onView: () => {
+        const employee = employees.find((item) => String(item.id || "") === String(record.userId || ""));
+        if (employee) openEmployeeDetail(employee);
+      },
+    })),
     ...pendingSalaryRequests,
     ...pendingDocumentRequests,
   ];
+  const dashboardRequests = dashboardRequestItems.filter((request) => {
+    if (requestTypeFilter !== "All" && request.kind !== requestTypeFilter) return false;
+    if (selectedRequestEmployee && String(request.userId || "") !== String(selectedRequestEmployee.id || "")) return false;
+    if (requestDateFilter.startDate && (request.endDate || request.startDate || "") < requestDateFilter.startDate) return false;
+    if (requestDateFilter.endDate && (request.startDate || request.endDate || "") > requestDateFilter.endDate) return false;
+    return true;
+  });
   async function submitLeave(event) {
     event.preventDefault();
     try {
@@ -689,6 +749,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
   function openEmployeeDetail(employee) {
     setSelectedEmployee(employee);
+    setEmployeeDetailExpanded(false);
     setEmployeeForm({
       employmentType: employee?.employmentType || "probation",
       monthlyInHandSalary: employee?.monthlyInHandSalary || "",
@@ -777,6 +838,72 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       hrToast.error(error.message || "Could not update remote work");
     } finally {
       setEmployeeRemoteSavingId("");
+    }
+  }
+
+  async function uploadEmployeeDocument(type, files) {
+    const selectedFiles = Array.from(files || []).filter(Boolean);
+    if (!selectedEmployee?.id || !selectedFiles.length) return;
+    const formData = new FormData();
+    try {
+      setEmployeeDocumentUploading(type);
+      let result = null;
+      for (const [index, file] of selectedFiles.entries()) {
+        setEmployeeDocumentUploadProgress((current) => ({ ...current, [type]: { current: index + 1, total: selectedFiles.length, name: file.name } }));
+        formData.delete("file");
+        formData.delete("type");
+        formData.append("file", file);
+        formData.append("type", type);
+        const response = await fetch(`${API_URL}/hr/employees/${selectedEmployee.id}/documents/upload`, {
+          method: "POST",
+          body: formData,
+        });
+        result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "Could not upload document");
+      }
+      if (!result?.employee) throw new Error("Could not upload document");
+      setData((current) => ({
+        ...(current || {}),
+        employees: (current?.employees || []).map((item) => item.id === result.employee.id ? result.employee : item),
+      }));
+      setSelectedEmployee(result.employee);
+      hrToast.success(selectedFiles.length > 1 ? "Documents uploaded to Drive" : "Document uploaded to Drive");
+    } catch (error) {
+      hrToast.error(error.message || "Could not upload document");
+    } finally {
+      setEmployeeDocumentUploading("");
+      setEmployeeDocumentUploadProgress((current) => {
+        const next = { ...current };
+        delete next[type];
+        return next;
+      });
+    }
+  }
+
+  async function saveEmployeeDocumentLink(docType) {
+    if (!selectedEmployee?.id) return;
+    const url = window.prompt(`Paste Drive link for ${docType.label}`);
+    if (!url?.trim()) return;
+    const name = window.prompt("Document name", docType.label) || docType.label;
+    try {
+      setEmployeeDocumentUploading(docType.id);
+      const response = await fetch(`${API_URL}/hr/employees/${selectedEmployee.id}/documents/link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: docType.id, name, url }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not save document link");
+      setData((current) => ({
+        ...(current || {}),
+        employees: (current?.employees || []).map((item) => item.id === result.employee.id ? result.employee : item),
+      }));
+      setSelectedEmployee(result.employee);
+      hrToast.success("Document link saved");
+    } catch (error) {
+      hrToast.error(error.message || "Could not save document link");
+    } finally {
+      setEmployeeDocumentUploading("");
     }
   }
 
@@ -1184,25 +1311,13 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       eyebrow: "HR Workspace",
       icon: BriefcaseBusiness,
       title: "HR requests and approvals.",
-      text: "Review employee leave applications, salary slip requests, and HR document requests from one clean workspace.",
+      text: "Review employee records, leave applications, attendance, and profile documents from one clean workspace.",
     },
     employees: {
       eyebrow: "Employee Records",
       icon: Users,
       title: "Employee directory.",
       text: "View real employee profiles, departments, designations, roles, and contact details from backend users.",
-    },
-    documents: {
-      eyebrow: "HR Documents",
-      icon: FileText,
-      title: "Employee document library.",
-      text: "Offer letters, appointment letters, experience letters, and other HR PDFs appear here when connected.",
-    },
-    salary: {
-      eyebrow: "Salary Slips",
-      icon: WalletCards,
-      title: "Salary slip downloads.",
-      text: "Employees can download available payslips, and HR can track salary slip requests here.",
     },
     leave: {
       eyebrow: "Leave Management",
@@ -1212,7 +1327,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     },
   }[section] || {};
   const HeroIcon = hero.icon || BriefcaseBusiness;
-  const showHero = section !== "dashboard" && section !== "employees" && section !== "documents" && section !== "salary" && section !== "leave" && section !== "attendance";
+  const showHero = section !== "dashboard" && section !== "employees" && section !== "leave" && section !== "attendance";
 
   return (
     <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#05080c] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}>
@@ -1235,11 +1350,6 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             <button onClick={loadHr} disabled={loading} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/10 bg-white/10 text-white hover:bg-white/15" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
             </button>
-            {section === "salary" && (
-              <button type="button" disabled={!salarySlips[0]} onClick={() => downloadSalarySlip(salarySlips[0]).catch((error) => hrToast.error(error.message))} className="flex h-12 items-center gap-2 rounded-3xl bg-[#171714] px-5 text-sm font-bold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-45">
-                <Download className="h-4 w-4" /> Download latest salary slip
-              </button>
-            )}
             {section === "leave" && (
               <button type="button" onClick={() => setLeaveDrawerOpen(true)} className="flex h-12 items-center gap-2 rounded-3xl bg-[#171714] px-5 text-sm font-bold text-white shadow-sm">
                 <Plus className="h-4 w-4" /> Apply for Leave
@@ -1250,11 +1360,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       </section>}
 
       {section === "dashboard" && (
-        <section className={`w-full overflow-hidden rounded-[28px]  ${panel}`}>
+        <section className={`w-full rounded-[28px] ${panel}`}>
           <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-2xl font-black">HR request records</h2>
-              <p className={`mt-1 text-sm ${muted}`}>Leave, salary slip, and HR document requests in one full-width table.</p>
+              <p className={`mt-1 text-sm ${muted}`}>Leave and attendance requests in one full-width table.</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button onClick={loadHr} disabled={loading} className={`flex h-10 items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-black/10 bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
@@ -1262,6 +1372,15 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </button>
               <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-black/[0.05] text-black/55"}`}>{dashboardRequests.length} request{dashboardRequests.length === 1 ? "" : "s"}</span>
             </div>
+          </div>
+          <div className="grid gap-3 px-5 pb-5 md:grid-cols-2 xl:grid-cols-[minmax(180px,0.8fr)_minmax(220px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_auto]">
+            <DrawerSelect darkMode={darkMode} label="Request Type" value={requestTypeFilter} placeholder="Select type..." options={["All", "Leave", "Attendance"]} onChange={setRequestTypeFilter} />
+            <DrawerSelect darkMode={darkMode} label="Employee" searchable searchPlaceholder="Search employee..." value={requestEmployeeFilter} placeholder="Select employee..." options={requestEmployeeOptions} onChange={setRequestEmployeeFilter} />
+            <DrawerDatePicker darkMode={darkMode} label="From Date" value={requestDateFilter.startDate} placeholder="Start date" onChange={(startDate) => setRequestDateFilter((current) => ({ ...current, startDate, endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate }))} />
+            <DrawerDatePicker darkMode={darkMode} label="To Date" value={requestDateFilter.endDate} placeholder="End date" minDate={requestDateFilter.startDate} onChange={(endDate) => setRequestDateFilter((current) => ({ ...current, endDate }))} />
+            <button type="button" onClick={() => { setRequestTypeFilter("All"); setRequestEmployeeFilter("All employees"); setRequestDateFilter({ startDate: "", endDate: "" }); }} className={`mt-auto h-10 rounded-2xl border px-4 text-xs font-black transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white/70 hover:bg-white/[0.07]" : "border-black/10 bg-white text-black/60 hover:bg-[#fafbf8]"}`}>
+              Clear
+            </button>
           </div>
           {dashboardRequests.length ? (
             <div className="overflow-x-auto px-3 pb-4">
@@ -1288,7 +1407,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </table>
             </div>
           ) : (
-            <div className="p-4"><EmptyState darkMode={darkMode} icon={MessageSquare} title={loading ? "Loading HR requests" : "No HR requests yet"} text="Leave, salary slip, and HR document requests will appear here in one table." /></div>
+            <div className="p-4"><EmptyState darkMode={darkMode} icon={MessageSquare} title={loading ? "Loading HR requests" : "No HR requests yet"} text="Leave and attendance requests will appear here in one table." /></div>
           )}
         </section>
       )}
@@ -1359,124 +1478,6 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             </div>
           ) : (
             <div className="p-4"><EmptyState darkMode={darkMode} icon={Users} title={loading ? "Loading employees" : "No employees found"} text="Employees will appear here from real UIPL user accounts." /></div>
-          )}
-        </section>
-      )}
-
-      {(section === "documents" || section === "salary") && (
-        <section className={`overflow-hidden rounded-[32px] ${section === "salary" ? salaryPanel : panel}`}>
-          <div className={`flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between ${section === "salary" && !darkMode ? "bg-white" : ""}`}>
-            <div>
-              <h2 className="text-2xl small text-black dark:text-white font-black">{section === "salary" ? "Salary Slips" : "HR Documents"}</h2>
-              <p className={`mt-1 text-sm ${muted}`}>{section === "salary" ? "Generated payroll records with leave deductions and downloadable PDFs." : "Only real uploaded/generated PDFs are shown here."}</p>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {section === "documents" && (
-                <button onClick={loadHr} disabled={loading} className={`flex h-10 items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-black/10 bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-                </button>
-              )}
-              {section === "salary" && (
-                <>
-                  <div className="relative">
-                    <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-                    <input value={salaryQuery} onChange={(event) => setSalaryQuery(event.target.value)} placeholder="Search salary slips..." className={`h-12 w-72 rounded-full border pl-11 pr-4 text-sm outline-none transition ${darkMode ? "border-white/12 bg-[#171b22] text-white placeholder:text-white/42 focus:border-emerald-300/45" : "border-[#e1e5df] bg-[#fbfcf9] text-[#171714] placeholder:text-black/35 focus:border-[#9cdabc] focus:bg-white"}`} />
-                  </div>
-                  <button type="button" onClick={openSalaryDrawer} className="flex h-12 items-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f] transition hover:bg-[#d8f0e4]">
-                    <Plus className="h-4 w-4" /> Generate salary slip
-                  </button>
-                </>
-              )}
-              <span className={`rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{section === "salary" ? filteredSalarySlips.length : selectedDocs.length} PDF{(section === "salary" ? filteredSalarySlips.length : selectedDocs.length) === 1 ? "" : "s"}</span>
-            </div>
-          </div>
-          {section === "salary" && filteredSalarySlips.length ? (
-            <div className="px-6 pb-6">
-              <div className={`overflow-hidden rounded-[28px] border ${darkMode ? "border-white/10" : "border-[#edf0ea]"} ${salaryTableSurface}`}>
-                <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
-                <colgroup>
-                  <col className="w-[24%]" />
-                  <col className="w-[15%]" />
-                  <col className="w-[17%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[18%]" />
-                </colgroup>
-                <thead className={muted}>
-                  <tr className={`border-b ${darkMode ? "border-white/[0.08] bg-[#151922] text-white/62" : "border-[#edf0ea] bg-[#fbfcf9]"}`}>
-                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Employee</th>
-                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Salary month</th>
-                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Leave</th>
-                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Net pay</th>
-                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Status</th>
-                    <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSalarySlips.map((doc) => {
-                    const salaryEmployee = employees.find((employee) => String(employee.id || "") === String(doc.userId || ""));
-                    return (
-                    <tr key={doc.id || doc.title || doc.name} className={`h-[96px] border-b last:border-b-0 ${salaryRowBorder}`}>
-                      <td className="px-5 py-5 align-middle">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <UserAvatar user={salaryEmployee || doc} name={doc.employeeName || currentName} className="h-11 w-11" />
-                          <div className="min-w-0">
-                            <p className="truncate text-base font-black">{doc.employeeName || currentName}</p>
-                            <p className={`truncate text-xs ${muted}`}>{doc.designation || doc.employeeCode || "Employee"}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-5 align-middle whitespace-nowrap font-semibold">{doc.month ? monthLabelFromInput(doc.month) : doc.title?.replace("Salary Slip - ", "") || "-"}</td>
-                      <td className={`px-5 py-5 align-middle whitespace-nowrap text-xs font-semibold ${muted}`}>
-                        <p>{doc.paidLeaveDays || 0} paid · {doc.advanceLeaveDays || 0} advance</p>
-                        {!!doc.leaveDeduction && <p className="mt-1 text-red-500">-₹{roundedMoneyValue(doc.leaveDeduction).toLocaleString("en-IN")}</p>}
-                      </td>
-                      <td className="px-5 py-5 align-middle whitespace-nowrap text-base font-black">₹{roundedMoneyValue(doc.netPay).toLocaleString("en-IN")}</td>
-                      <td className="px-5 py-5 align-middle"><span className={`inline-flex h-9 items-center rounded-full px-4 text-xs font-black ${salaryBadge}`}>Generated</span></td>
-                      <td className="px-5 py-5 align-middle">
-                        <div className="flex h-10 items-center justify-start gap-2 whitespace-nowrap">
-                          <button type="button" title="Download salary slip" onClick={() => downloadSalarySlip(doc).catch((error) => hrToast.error(error.message))} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border transition ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-[#e1e5df] bg-white text-[#171714] hover:bg-[#fbfcf7]"}`}>
-                            <Download className="h-4 w-4" />
-                          </button>
-                          {data?.canManageHr && (
-                            <>
-                              <button type="button" onClick={() => editSalarySlip(doc)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border ${darkMode ? "border-white/12 bg-[#171b22] text-white/80 hover:border-white/20 hover:bg-[#1d232d]" : "border-[#e1e5df] bg-white text-[#171714] hover:bg-[#fbfcf7]"}`} title="Edit salary slip">
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button type="button" onClick={() => setSalaryDeleteTarget(doc)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border ${darkMode ? "border-red-400/20 bg-red-400/10 text-red-200" : "border-red-200 bg-red-50 text-red-600"}`} title="Delete salary slip">
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              </div>
-              </div>
-            </div>
-          ) : selectedDocs.length ? (
-            <div className="space-y-3 px-4 pb-5">
-              {selectedDocs.map((doc) => (
-                <div key={doc.id || doc.title || doc.name} className={`flex flex-wrap items-center justify-between gap-3 rounded-[22px] p-4 ${softPanel}`}>
-                  <div>
-                    <h3 className="font-black">{doc.title || doc.name}</h3>
-                    <p className={`text-sm ${muted}`}>{doc.type || "PDF"} · {doc.date || doc.createdAt || "-"}</p>
-                  </div>
-                  <button type="button" onClick={() => section === "salary" ? downloadSalarySlip(doc).catch((error) => hrToast.error(error.message)) : downloadPdf(doc, currentName, darkMode)} className="flex h-10 items-center gap-2 rounded-full bg-[#171714] px-4 text-sm font-bold text-white">
-                    <Download className="h-4 w-4" /> Download PDF
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-4">
-              <EmptyState darkMode={darkMode} icon={section === "salary" ? WalletCards : FileText} title={section === "salary" ? "No salary slips generated yet" : "No HR documents uploaded yet"} text={section === "salary" ? "Generate your salary slip for an eligible month. Saved salary details will prefill next time." : "Offer letters, appointment letters, experience letters, and other employee PDFs will appear here after real records are connected."} />
-            </div>
           )}
         </section>
       )}
@@ -2146,18 +2147,24 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       )}
 
       {selectedEmployee && (
-        <div onMouseDown={() => setSelectedEmployee(null)} className="fixed inset-0 z-[90] flex justify-end bg-[#10231c]/55 backdrop-blur-sm">
-          <section onMouseDown={(event) => event.stopPropagation()} className={`employee-report-drawer employee-report-shell hr-employee-drawer relative flex h-full w-full flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex items-center justify-between border-b p-6 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+        <div onMouseDown={() => { setSelectedEmployee(null); setEmployeeDetailExpanded(false); }} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
+          <section onMouseDown={(event) => event.stopPropagation()} className={`employee-report-drawer employee-report-shell hr-employee-drawer absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.28)] ${employeeDetailExpanded ? "employee-report-shell-expanded" : ""} animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#101216] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex items-center justify-between border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
               <div className="min-w-0">
-                <h2 className="truncate text-2xl font-black">Employee details</h2>
-                <p className={`mt-1 truncate text-sm ${muted}`}>Profile, access, contact, and HR request history.</p>
+                <h2 className="truncate text-xl font-black">Employee profile · {selectedEmployee.displayName || selectedEmployee.username}</h2>
+                <p className={`mt-1 truncate text-xs ${muted}`}>Profile, HR setup, employee documents, and request history.</p>
               </div>
-              <button type="button" onClick={() => setSelectedEmployee(null)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setEmployeeDetailExpanded((current) => !current)} className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={employeeDetailExpanded ? "Restore drawer size" : "Expand employee profile"}>
+                  {employeeDetailExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{employeeDetailExpanded ? "Restore" : "Expand"}</span>
+                </button>
+                <button type="button" onClick={() => { setSelectedEmployee(null); setEmployeeDetailExpanded(false); }} className={`h-9 rounded-full px-3 text-xs font-bold transition ${darkMode ? "text-emerald-300 hover:bg-white/10" : "text-[#08764f] hover:bg-[#e7f6ed]"}`}>Close</button>
+              </div>
             </div>
-            <div className={`min-h-0 flex-1 overflow-hidden ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-              <div className="grid h-full min-h-0 gap-5 p-5 lg:grid-cols-[230px_minmax(0,1fr)]">
-                <aside className={`h-fit space-y-4 self-start rounded-[24px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-emerald-100 bg-[#f6fbf7]"}`}>
+            <div className={`min-h-0 flex-1 overflow-hidden ${darkMode ? "bg-[#0a0d12]" : "bg-[#f5f7f2]"}`}>
+              <div className={`grid h-full min-h-0 gap-5 overflow-y-auto p-5 ${employeeDetailExpanded ? "xl:grid-cols-[280px_minmax(0,1fr)]" : "xl:grid-cols-[250px_minmax(0,1fr)]"}`}>
+                <aside className={`h-fit space-y-4 self-start rounded-[26px] border p-5 xl:sticky xl:top-0 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
                   <span className={`inline-flex rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wide ${darkMode ? "bg-lime-300/15 text-lime-200" : "bg-[#dcfacb] text-[#4b9b16]"}`}>Employee</span>
                   <div className={`rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-emerald-100 bg-white"}`}>
                     <UserAvatar user={selectedEmployee} name={selectedEmployee.displayName || selectedEmployee.username} size="lg" rounded="lg" />
@@ -2174,21 +2181,18 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     <p className={`mt-1 text-xs ${darkMode ? "text-emerald-100/70" : "text-black/55"}`}>{selectedEmployee.privileges?.length || 0} permissions</p>
                   </div>
                 </aside>
-                <div className="min-h-0 space-y-5 overflow-y-auto pr-1">
+                <div className="min-w-0 space-y-5">
                   {data?.canManageHr && (
-                    <form onSubmit={saveEmployeeHrDetails} className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
+                    <form onSubmit={saveEmployeeHrDetails} className={`rounded-[28px] border p-6 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <div>
-                          <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Leave, salary, and attendance policy</p>
+                          <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Leave and attendance policy</p>
                           <h3 className="mt-1 text-xl font-black">Employee HR setup</h3>
                         </div>
                         <button disabled={employeeSaving} className="h-10 rounded-full bg-[#6ee72f] px-5 text-sm font-bold text-[#10210c] disabled:opacity-60">{employeeSaving ? "Saving..." : "Save details"}</button>
                       </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="mt-4 grid gap-3">
                         <DrawerSelect darkMode={darkMode} label="Employment Status" required value={employeeForm.employmentType === "permanent" ? "Permanent" : "Probation"} placeholder="Select status..." options={["Permanent", "Probation"]} onChange={(employmentType) => setEmployeeForm((current) => ({ ...current, employmentType: employmentType.toLowerCase() }))} />
-                        <label className="text-xs font-medium">Monthly In-Hand Salary *
-                          <input required type="number" min="0" value={employeeForm.monthlyInHandSalary} onChange={(event) => setEmployeeForm((current) => ({ ...current, monthlyInHandSalary: event.target.value }))} className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
-                        </label>
                       </div>
                       <label className={`mt-4 flex items-start gap-3 rounded-2xl border p-4 ${darkMode ? "border-sky-300/15 bg-sky-300/8" : "border-sky-100 bg-sky-50"}`}>
                         <button
@@ -2204,38 +2208,103 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                           <span className={`mt-1 block text-xs leading-5 ${muted}`}>When this is checked, this employee attendance is marked as remote and skips the office geofence.</span>
                         </span>
                       </label>
-                      <p className={`mt-3 text-xs leading-5 ${muted}`}>Permanent employees get 1 paid leave per month. Probation employees have no paid leave; approved leave is deducted from monthly in-hand salary in salary slips.</p>
+                      <p className={`mt-3 text-xs leading-5 ${muted}`}>Permanent employees get 1 paid leave per month. Probation employees have no paid leave.</p>
                     </form>
                   )}
-                  <section className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
-                    <p className={`mb-4 text-[11px] font-bold uppercase tracking-wide ${muted}`}>Profile information</p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {[
-                        { label: "Name", value: selectedEmployee.displayName || selectedEmployee.username || "-", icon: UserRound, tone: darkMode ? "bg-sky-300/14 text-sky-200" : "bg-sky-100 text-sky-700" },
-                        { label: "Role", value: selectedEmployee.roleName || "No role", icon: ShieldCheck, tone: darkMode ? "bg-violet-300/14 text-violet-200" : "bg-violet-100 text-violet-700" },
-                        { label: "Status", value: selectedEmployee.blacklisted ? "Blacklisted" : "Active", icon: CheckCircle2, tone: selectedEmployee.blacklisted ? (darkMode ? "bg-red-400/14 text-red-200" : "bg-red-100 text-red-700") : (darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700") },
-                        { label: "Employment", value: selectedEmployee.employmentType === "permanent" ? "Permanent" : "Probation", icon: BriefcaseBusiness, tone: darkMode ? "bg-lime-300/14 text-lime-200" : "bg-lime-100 text-lime-700" },
-                        { label: "Work Mode", value: selectedEmployee.remoteWorkEnabled ? "Remote" : "Office", icon: MapPin, tone: selectedEmployee.remoteWorkEnabled ? (darkMode ? "bg-sky-300/14 text-sky-200" : "bg-sky-100 text-sky-700") : (darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700") },
-                        { label: "In-Hand Salary", value: selectedEmployee.monthlyInHandSalary ? `₹${moneyValue(selectedEmployee.monthlyInHandSalary).toLocaleString("en-IN")}` : "Not set", icon: WalletCards, tone: darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700" },
-                        { label: "Email", value: selectedEmployee.email || "Not set", icon: Mail, tone: darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-100 text-amber-700" },
-                        { label: "Phone", value: selectedEmployee.phone || "Not set", icon: Phone, tone: darkMode ? "bg-blue-300/14 text-blue-200" : "bg-blue-100 text-blue-700" },
-                        { label: "WhatsApp", value: selectedEmployee.whatsappPhone || "Not set", icon: MessageCircle, tone: darkMode ? "bg-green-300/14 text-green-200" : "bg-green-100 text-green-700" },
-                      ].map(({ label, value, icon: Icon, tone }) => (
-                        <div key={label} className={`rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-emerald-100 bg-white"}`}>
-                          <div className="flex items-center gap-3">
-                            <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`}>
-                              <Icon className="h-4 w-4" />
-                            </span>
-                            <div className="min-w-0">
-                              <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>{label}</p>
-                              <p className="mt-1 truncate text-sm font-black">{value}</p>
+                  <section className={`rounded-[28px] border p-6 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
+                    <div className="flex flex-col gap-1">
+                      <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Profile information</p>
+                      <h3 className="text-xl font-black">Contact & work details</h3>
+                    </div>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {[
+                          { label: "Work mode", value: selectedEmployee.remoteWorkEnabled ? "Remote" : "Office", icon: MapPin, tone: selectedEmployee.remoteWorkEnabled ? (darkMode ? "bg-sky-300/14 text-sky-200" : "bg-sky-100 text-sky-700") : (darkMode ? "bg-white/10 text-white/70" : "bg-black/5 text-black/60") },
+                          { label: "Status", value: selectedEmployee.blacklisted ? "Blacklisted" : "Active", icon: CheckCircle2, tone: selectedEmployee.blacklisted ? (darkMode ? "bg-red-400/14 text-red-200" : "bg-red-100 text-red-700") : (darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700") },
+                          { label: "Paid leave remaining", value: `${selectedEmployeePaidLeavesRemaining} day${selectedEmployeePaidLeavesRemaining === 1 ? "" : "s"}`, icon: CalendarCheck, tone: darkMode ? "bg-lime-300/14 text-lime-200" : "bg-lime-100 text-lime-700" },
+                          { label: "Total leaves taken", value: `${selectedEmployeeTotalLeavesTaken} day${selectedEmployeeTotalLeavesTaken === 1 ? "" : "s"}`, icon: CalendarDays, tone: darkMode ? "bg-rose-300/14 text-rose-200" : "bg-rose-100 text-rose-700" },
+                          { label: "Email", value: selectedEmployee.email || "Not set", icon: Mail, tone: darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-100 text-amber-700" },
+                          { label: "Phone", value: selectedEmployee.phone || "Not set", icon: Phone, tone: darkMode ? "bg-blue-300/14 text-blue-200" : "bg-blue-100 text-blue-700" },
+                          { label: "WhatsApp", value: selectedEmployee.whatsappPhone || "Not set", icon: MessageCircle, tone: darkMode ? "bg-green-300/14 text-green-200" : "bg-green-100 text-green-700" },
+                        ].map(({ label, value, icon: Icon, tone }) => (
+                          <div key={label} className={`min-w-0 rounded-[20px] p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f7f2]"}`}>
+                            <div className="flex items-start gap-3">
+                              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`}>
+                                <Icon className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0">
+                                <span className={`block text-[10px] font-bold uppercase tracking-wide ${muted}`}>{label}</span>
+                                <span className="mt-1 block truncate text-sm font-black">{value}</span>
+                              </span>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   </section>
-                  <section className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
+                  <section className={`rounded-[28px] border p-6 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h3 className="text-xl font-black">Documents</h3>
+                        <p className={`mt-1 text-sm ${muted}`}>Employee document links stored in their Google Drive folder.</p>
+                      </div>
+                      {selectedEmployee.employeeDocumentsFolderId && (
+                        <a href={`https://drive.google.com/drive/folders/${selectedEmployee.employeeDocumentsFolderId}`} target="_blank" rel="noreferrer" className={`inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-xs font-black ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#eef8e8] text-[#39710f] hover:bg-[#e1f7d3]"}`}>
+                          <FolderOpen className="h-4 w-4" />
+                          Open folder
+                        </a>
+                      )}
+                    </div>
+                    <div className={`mt-5 grid gap-4 ${employeeDetailExpanded ? "lg:grid-cols-2 2xl:grid-cols-3" : "lg:grid-cols-2"}`}>
+                      {EMPLOYEE_DOCUMENT_TYPES.map((docType) => {
+                        const documents = (selectedEmployee.employeeDocuments || []).filter((item) => item.type === docType.id);
+                        const document = documents[0];
+                        const multiple = MULTI_EMPLOYEE_DOCUMENT_TYPES.has(docType.id);
+                        const uploading = employeeDocumentUploading === docType.id;
+                        const progress = employeeDocumentUploadProgress[docType.id];
+                        const meta = DOCUMENT_CARD_META[docType.id] || DOCUMENT_CARD_META.aadhar_card_copy;
+                        const Icon = meta.Icon;
+                        return (
+                          <div key={docType.id} className={`rounded-[24px] border p-4 transition hover:-translate-y-0.5 ${darkMode ? "border-white/10 bg-[#191b20]" : "border-black/5 bg-white"}`}>
+                            <div className="mb-4 flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/10 text-white" : meta.icon}`}>
+                                  <Icon className="h-5 w-5" />
+                                </span>
+                                <div className="min-w-0">
+                                  <p className={`text-[11px] font-semibold ${darkMode ? "text-white/55" : "text-black/50"}`}>HR Document</p>
+                                  <p className="truncate text-sm font-black text-[#171714] dark:text-white">{docType.label}</p>
+                                </div>
+                              </div>
+                              <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${document ? (darkMode ? "bg-emerald-400/18 text-emerald-100" : "bg-emerald-100 text-emerald-700") : (darkMode ? "bg-red-400/18 text-red-100" : "bg-red-100 text-red-700")}`}>{document ? `${documents.length} uploaded` : "Missing"}</span>
+                            </div>
+                            <div className={`relative min-h-[200px] overflow-hidden rounded-[18px] p-6 ${darkMode ? "bg-white/10 text-white" : meta.card}`}>
+                              <p className="text-sm font-semibold opacity-80">{document ? "Verified file" : "Pending upload"}</p>
+                              <h4 className="mt-5 max-w-[15rem] text-[22px] font-black leading-[1.08] text-[#171714] dark:text-white">{docType.label}</h4>
+                              <p className={`mt-2 text-xs font-semibold ${darkMode ? "text-white/70" : "text-black/55"}`}>{progress ? `Uploading ${progress.current} of ${progress.total}` : document ? `${documents.length} file${documents.length === 1 ? "" : "s"} ready for HR review` : multiple ? "Multiple files accepted" : "No document uploaded yet"}</p>
+                              {progress && (
+                                <div className="mt-3">
+                                  <p className={`truncate text-[10px] font-semibold ${darkMode ? "text-white/60" : "text-black/45"}`}>{progress.name}</p>
+                                  <div className={`mt-2 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/15" : "bg-black/10"}`}>
+                                    <div className={`h-full rounded-full transition-all duration-300 ${darkMode ? "bg-white" : "bg-black"}`} style={{ width: `${Math.max(8, Math.round((progress.current / progress.total) * 100))}%` }} />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-4 flex items-center gap-2">
+                              <label className={`inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl text-xs font-black transition ${uploading ? "pointer-events-none opacity-60" : ""} ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f5f6f2] text-[#171714] hover:bg-[#ecefe8]"}`}>
+                                {uploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                                {progress ? `Uploading ${progress.current}/${progress.total}` : uploading ? "Uploading" : multiple && document ? "Add files" : document ? "Replace" : "Upload"}
+                                <input type="file" className="hidden" multiple={multiple} disabled={uploading} onChange={(event) => uploadEmployeeDocument(docType.id, event.target.files)} />
+                              </label>
+                              <a href={document?.url || "#"} target={document ? "_blank" : undefined} rel="noreferrer" onClick={(event) => { if (!document) event.preventDefault(); }} className={`grid h-10 w-12 place-items-center rounded-xl ${darkMode ? "bg-white/10 text-white" : "bg-[#f5f6f2] text-[#171714]"}`}>
+                                {document ? <ExternalLink className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                  <section className={`rounded-[28px] border p-6 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <h3 className="text-xl font-black">HR request history</h3>

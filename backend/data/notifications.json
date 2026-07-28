@@ -40,26 +40,6 @@
     "readAt": null
   },
   {
-    "id": "1785147672216-b95lg6",
-    "userId": "6a30f59093d1b8cdb26dce38",
-    "title": "New leave request",
-    "message": "Manish Yadav requested 2 days leave from 2026-07-27 to 2026-07-28.",
-    "type": "hr-leave",
-    "leaveRequestId": "6a6731186963247c447642ae",
-    "createdAt": "2026-07-27T10:21:12.216Z",
-    "readAt": "2026-07-27T10:21:33.917Z"
-  },
-  {
-    "id": "1785147575414-t6ifah",
-    "userId": "6a30f59093d1b8cdb26dce38",
-    "title": "Leave request approved",
-    "message": "Super Admin approved your leave from 2026-08-01 to 2026-08-04.",
-    "type": "hr-leave",
-    "leaveRequestId": null,
-    "createdAt": "2026-07-27T10:19:35.414Z",
-    "readAt": "2026-07-27T10:19:42.620Z"
-  },
-  {
     "id": "1785147560895-uljx4c",
     "userId": "6a46518db6542a18d0f73fc0",
     "title": "New leave request",

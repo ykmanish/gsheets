@@ -2,10 +2,29 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { BriefcaseBusiness, CheckCircle2, LogIn, Mail, MessageCircleMore, Pencil, Phone, RefreshCw, Save } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, ExternalLink, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, LogIn, Mail, MessageCircleMore, Pencil, Phone, ReceiptText, RefreshCw, Save, Upload } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import UserAvatar, { beanheadPresetsForGender } from "./UserAvatar";
 import { SelectMenu } from "./ui";
+
+const EMPLOYEE_DOCUMENT_TYPES = [
+  { id: "aadhar_card_copy", label: "Aadhar card copy" },
+  { id: "pan_card_copy", label: "Pan card copy" },
+  { id: "last_3_months_pay_slip", label: "Last 3 months pay slip" },
+  { id: "educational_certificates", label: "Educational certificates - 10th, 12th, Graduation and PG(if applicable)" },
+  { id: "last_company_letters", label: "Last company appointment letter and experience relieving letter" },
+  { id: "medical_certificate", label: "Medical certificate from your doctor" },
+];
+const MULTI_EMPLOYEE_DOCUMENT_TYPES = new Set(["last_3_months_pay_slip", "educational_certificates", "last_company_letters"]);
+
+const DOCUMENT_CARD_META = {
+  aadhar_card_copy: { Icon: IdCard, card: "bg-orange-100 text-[#171714]", icon: "bg-orange-50 text-orange-600" },
+  pan_card_copy: { Icon: BadgeCheck, card: "bg-blue-100 text-[#171714]", icon: "bg-blue-50 text-blue-600" },
+  educational_certificates: { Icon: GraduationCap, card: "bg-cyan-100 text-[#171714]", icon: "bg-cyan-50 text-cyan-600" },
+  last_3_months_pay_slip: { Icon: ReceiptText, card: "bg-violet-100 text-[#171714]", icon: "bg-violet-50 text-violet-600" },
+  last_company_letters: { Icon: Building2, card: "bg-rose-100 text-[#171714]", icon: "bg-rose-50 text-rose-600" },
+  medical_certificate: { Icon: HeartPulse, card: "bg-green-100 text-[#171714]", icon: "bg-green-50 text-green-600" },
+};
 
 function ProfileField({ darkMode, label, value, onChange, icon: Icon, className = "", ...props }) {
   const disabled = Boolean(props.disabled);
@@ -37,6 +56,8 @@ export default function ProfilePage({ darkMode }) {
   const [editing, setEditing] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(true);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [documentUploading, setDocumentUploading] = useState("");
+  const [documentUploadProgress, setDocumentUploadProgress] = useState({});
   const [attendanceData, setAttendanceData] = useState({ settings: {}, records: [], remoteWorkEnabled: false });
   const [avatarDrawerOpen, setAvatarDrawerOpen] = useState(false);
   const avatarPickerRef = useRef(null);
@@ -177,6 +198,62 @@ export default function ProfilePage({ darkMode }) {
       toast.error(error.message || "Could not save profile");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function uploadProfileDocument(type, files) {
+    const selectedFiles = Array.from(files || []).filter(Boolean);
+    if (!user?.id || !selectedFiles.length) return;
+    const formData = new FormData();
+    try {
+      setDocumentUploading(type);
+      for (const [index, file] of selectedFiles.entries()) {
+        setDocumentUploadProgress((current) => ({ ...current, [type]: { current: index + 1, total: selectedFiles.length, name: file.name } }));
+        formData.delete("file");
+        formData.delete("type");
+        formData.append("file", file);
+        formData.append("type", type);
+        const response = await fetch(`${API_URL}/hr/employees/${user.id}/documents/upload`, {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "Could not upload document");
+      }
+      await refreshUser?.();
+      toast.success(selectedFiles.length > 1 ? "Documents uploaded to Drive" : "Document uploaded to Drive");
+    } catch (error) {
+      toast.error(error.message || "Could not upload document");
+    } finally {
+      setDocumentUploading("");
+      setDocumentUploadProgress((current) => {
+        const next = { ...current };
+        delete next[type];
+        return next;
+      });
+    }
+  }
+
+  async function saveProfileDocumentLink(docType) {
+    if (!user?.id) return;
+    const url = window.prompt(`Paste Drive link for ${docType.label}`);
+    if (!url?.trim()) return;
+    const name = window.prompt("Document name", docType.label) || docType.label;
+    try {
+      setDocumentUploading(docType.id);
+      const response = await fetch(`${API_URL}/hr/employees/${user.id}/documents/link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: docType.id, name, url }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not save document link");
+      await refreshUser?.();
+      toast.success("Document link saved");
+    } catch (error) {
+      toast.error(error.message || "Could not save document link");
+    } finally {
+      setDocumentUploading("");
     }
   }
 
@@ -329,6 +406,71 @@ export default function ProfilePage({ darkMode }) {
               <ProfileField darkMode={darkMode} label="Phone number" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value.replace(/\D/g, "") }))} disabled={!editing} placeholder="919898892887" icon={Phone} inputMode="numeric" />
               <ProfileField darkMode={darkMode} label="WhatsApp number" value={form.whatsappPhone} onChange={(value) => setForm((current) => ({ ...current, whatsappPhone: value.replace(/\D/g, "") }))} disabled={!editing} placeholder="919898892887" icon={MessageCircleMore} inputMode="numeric" />
             </div>
+          </div>
+        </section>
+
+        <section className={`mb-6 rounded-[26px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-lg font-black">Documents</h3>
+              <p className={`mt-1 text-sm ${darkMode ? "text-white/55" : "text-black/55"}`}>Upload required HR documents. Files are saved to your Google Drive employee folder.</p>
+            </div>
+            {user?.employeeDocumentsFolderId && (
+              <a href={`https://drive.google.com/drive/folders/${user.employeeDocumentsFolderId}`} target="_blank" rel="noreferrer" className={`inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-xs font-black ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#eef8e8] text-[#39710f] hover:bg-[#e1f7d3]"}`}>
+                <FolderOpen className="h-4 w-4" />
+                Open folder
+              </a>
+            )}
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {EMPLOYEE_DOCUMENT_TYPES.map((docType) => {
+              const documents = (user?.employeeDocuments || []).filter((item) => item.type === docType.id);
+              const document = documents[0];
+              const multiple = MULTI_EMPLOYEE_DOCUMENT_TYPES.has(docType.id);
+              const uploading = documentUploading === docType.id;
+              const progress = documentUploadProgress[docType.id];
+              const meta = DOCUMENT_CARD_META[docType.id] || DOCUMENT_CARD_META.aadhar_card_copy;
+              const Icon = meta.Icon;
+              return (
+                <div key={docType.id} className={`rounded-[24px] border p-4 transition hover:-translate-y-0.5 ${darkMode ? "border-white/10 bg-[#191b20]" : "border-black/5 bg-white"}`}>
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/10 text-white" : meta.icon}`}>
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className={`text-[11px] font-semibold ${darkMode ? "text-white/55" : "text-black/50"}`}>HR Document</p>
+                        <p className="truncate text-sm font-black text-[#171714] dark:text-white">{docType.label}</p>
+                      </div>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${document ? (darkMode ? "bg-emerald-400/18 text-emerald-100" : "bg-emerald-100 text-emerald-700") : (darkMode ? "bg-red-400/18 text-red-100" : "bg-red-100 text-red-700")}`}>{document ? `${documents.length} uploaded` : "Missing"}</span>
+                  </div>
+                  <div className={`relative min-h-[200px] overflow-hidden rounded-[18px] p-6 ${darkMode ? "bg-white/10 text-white" : meta.card}`}>
+                    <p className="text-sm font-semibold opacity-80">{document ? "Verified file" : "Pending upload"}</p>
+                    <h4 className="mt-5 max-w-[15rem] text-[22px] font-black leading-[1.08] text-[#171714] dark:text-white">{docType.label}</h4>
+                    <p className={`mt-2 text-xs font-semibold ${darkMode ? "text-white/70" : "text-black/55"}`}>{progress ? `Uploading ${progress.current} of ${progress.total}` : document ? `${documents.length} file${documents.length === 1 ? "" : "s"} ready for HR review` : multiple ? "Multiple files accepted" : "No document uploaded yet"}</p>
+                    {progress && (
+                      <div className="mt-3">
+                        <p className={`truncate text-[10px] font-semibold ${darkMode ? "text-white/60" : "text-black/45"}`}>{progress.name}</p>
+                        <div className={`mt-2 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/15" : "bg-black/10"}`}>
+                          <div className={`h-full rounded-full transition-all duration-300 ${darkMode ? "bg-white" : "bg-black"}`} style={{ width: `${Math.max(8, Math.round((progress.current / progress.total) * 100))}%` }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-4 flex items-center gap-2">
+                    <label className={`inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl text-xs font-black transition ${uploading ? "pointer-events-none opacity-60" : ""} ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f5f6f2] text-[#171714] hover:bg-[#ecefe8]"}`}>
+                      {uploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      {progress ? `Uploading ${progress.current}/${progress.total}` : uploading ? "Uploading" : multiple && document ? "Add files" : document ? "Replace" : "Upload"}
+                      <input type="file" className="hidden" multiple={multiple} disabled={uploading} onChange={(event) => uploadProfileDocument(docType.id, event.target.files)} />
+                    </label>
+                    <a href={document?.url || "#"} target={document ? "_blank" : undefined} rel="noreferrer" onClick={(event) => { if (!document) event.preventDefault(); }} className={`grid h-10 w-12 place-items-center rounded-xl ${darkMode ? "bg-white/10 text-white" : "bg-[#f5f6f2] text-[#171714]"}`}>
+                      {document ? <ExternalLink className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
       </form>

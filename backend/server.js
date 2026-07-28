@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+require("dotenv").config({ path: path.join(__dirname, ".env"), override: true });
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
@@ -5806,6 +5806,7 @@ function safeFileName(name = "drive-document") {
 }
 
 const EMPLOYEE_DOCUMENT_PARENT_FOLDER_ID = process.env.HR_EMPLOYEE_DOCUMENT_PARENT_FOLDER_ID || "1pVASUud8Bmp1eCdcG3rQ4mmGtOj9mw7j";
+console.log(`HR employee document parent folder: ${EMPLOYEE_DOCUMENT_PARENT_FOLDER_ID}`);
 const EMPLOYEE_DOCUMENT_TYPES = [
   { id: "aadhar_card_copy", label: "Aadhar card copy" },
   { id: "pan_card_copy", label: "Pan card copy" },

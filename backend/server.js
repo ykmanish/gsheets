@@ -12311,10 +12311,11 @@ const MRN_HEADERS = [
   "Email address",
   "Upload Photo of Quotation",
   "Quotation Amount  ",
-  "Upload photo of Quotation",
+  "Catagory",
+  "Upload photo of Quatation",
   "Assign To",
   "Status",
-  "Krishna PRN Status Updated",
+  "Krishna PRN Status Upadated",
   "Vendor Name",
   "Invoice Date",
   "Remark",
@@ -12331,11 +12332,12 @@ const MRN_FIELD_HEADERS = {
   leadTime: ["Lead Time (Usual time to get Material )", "Lead Time"],
   mrnPhoto: ["Upload Photo of MRN"],
   emailAddress: ["Email Address", "Email address"],
-  quotationPhoto: ["Upload Photo of Quotation", "Upload photo of Quatation"],
+  quotationPhoto: ["Upload Photo of Quotation", "Upload photo of Quotation", "Upload photo of Quatation"],
   quotationAmount: ["Quotation Amount", "Quotation Amount  "],
+  category: ["Category", "Catagory"],
   assignTo: ["Assign To"],
   status: ["Status"],
-  krishnaPrnStatusUpdated: ["Krishna PRN Status Updated"],
+  krishnaPrnStatusUpdated: ["Krishna PRN Status Updated", "Krishna PRN Status Upadated"],
   vendorName: ["Vendor Name"],
   invoiceDate: ["Invoice Date"],
   remark: ["Remark"],
@@ -12518,9 +12520,10 @@ function mapMrnRows(values = []) {
     let emailAddress = valueAt(row, ["Email Address", "Email address"]);
     let quotationPhoto = valueAt(row, ["Upload Photo of Quotation", "Upload photo of Quatation"]);
     let quotationAmount = valueAt(row, ["Quotation Amount"]);
+    let category = valueAt(row, ["Category", "Catagory"]);
     let assignTo = valueAt(row, ["Assign To"]);
     let status = valueAt(row, ["Status"]);
-    let krishnaPrnStatusUpdated = valueAt(row, ["Krishna PRN Status Updated"]);
+    let krishnaPrnStatusUpdated = valueAt(row, ["Krishna PRN Status Updated", "Krishna PRN Status Upadated"]);
     let vendorName = valueAt(row, ["Vendor Name"]);
     let invoiceDate = valueAt(row, ["Invoice Date"]);
     let remark = valueAt(row, ["Remark"]);
@@ -12555,6 +12558,7 @@ function mapMrnRows(values = []) {
       emailAddress,
       quotationPhoto,
       quotationAmount,
+      category,
       assignTo,
       status,
       krishnaPrnStatusUpdated,
@@ -12650,6 +12654,7 @@ const MRN_HISTORY_FIELDS = [
   ["emailAddress", "Email address"],
   ["quotationPhoto", "Quotation file"],
   ["quotationAmount", "Quotation amount"],
+  ["category", "Category"],
   ["assignTo", "Assigned to"],
   ["status", "Status"],
   ["krishnaPrnStatusUpdated", "PRN status"],
@@ -12673,6 +12678,7 @@ function mrnSnapshotFromSheetRow(headers = [], row = [], rowNumber = null) {
     emailAddress: record.emailAddress || "",
     quotationPhoto: record.quotationPhoto || "",
     quotationAmount: record.quotationAmount || "",
+    category: record.category || "",
     assignTo: record.assignTo || "",
     status: record.status || "",
     krishnaPrnStatusUpdated: record.krishnaPrnStatusUpdated || "",
@@ -12855,6 +12861,7 @@ async function updateMrnRecord(rowNumber, values = {}, files = {}) {
     emailAddress: currentRecord.emailAddress || "",
     quotationPhoto: currentRecord.quotationPhoto || "",
     quotationAmount: currentRecord.quotationAmount || "",
+    category: currentRecord.category || "",
     assignTo: currentRecord.assignTo || "",
     status: currentRecord.status || "",
     krishnaPrnStatusUpdated: currentRecord.krishnaPrnStatusUpdated || "",
@@ -13151,7 +13158,26 @@ function mrnWhatsappRecordKey(row = {}, spreadsheetId = "") {
   const sheetId = normalizeSpreadsheetId(spreadsheetId);
   const rowNumber = Number(row.rowNumber) || 0;
   const mrnKey = mrnWhatsappKey(row.mrnNo);
-  return [sheetId, rowNumber || "", mrnKey].filter(Boolean).join(":");
+  const fallback = [
+    projectText(row.timestamp),
+    projectText(row.project),
+    projectText(row.materialRequirement),
+  ].filter(Boolean).join("|").toLowerCase();
+  return [sheetId, rowNumber || "", mrnKey || fallback].filter(Boolean).join(":");
+}
+
+function isMeaningfulMrnSheetRow(row = {}) {
+  return Boolean(
+    projectText(row.mrnNo)
+    || projectText(row.timestamp)
+    || projectText(row.project)
+    || projectText(row.materialRequestDate)
+    || projectText(row.requiredDate)
+    || projectText(row.materialRequirement)
+    || projectText(row.issuedBy)
+    || projectText(row.mrnPhoto)
+    || projectText(row.category)
+  );
 }
 
 function mrnTimestampMs(value) {
@@ -13273,18 +13299,36 @@ function mrnWhatsappParams(row = {}, actorName = "User", comment = "") {
   };
 }
 
-function mrnMaterialFollowupText(row = {}) {
-  const text = projectText(row.materialRequirement)
-    .replace(/\r/g, "\n")
-    .replace(/\s*\*\s*/g, "\n")
-    .replace(/\n{2,}/g, "\n")
-    .trim();
-  const items = text
-    .split(/\n+/)
-    .map((item) => item.replace(/^[*\-\s]+/, "").replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-  if (!items.length) return "";
-  return `Material Requirements for ${projectText(row.mrnNo || "MRN")}:\n${items.map((item) => `• ${item}`).join("\n")}`;
+function mrnDetailsFollowupText(row = {}) {
+  const clean = (value) => projectText(value, 1200).replace(/\s+/g, " ").trim();
+  const detailRows = [
+    ["MRN", row.mrnNo],
+    ["Timestamp", row.timestamp],
+    ["Project / Site", row.project],
+    ["Material Request Date", row.materialRequestDate],
+    ["Required By", row.requiredDate],
+    ["Material Requirement", row.materialRequirement],
+    ["Issued By", row.issuedBy],
+    ["Lead Time", row.leadTime],
+    ["MRN Photo", row.mrnPhoto],
+    ["Email", row.emailAddress],
+    ["Quotation Photo", row.quotationPhoto],
+    ["Quotation Amount", row.quotationAmount],
+    ["Category", row.category],
+    ["Assign To", row.assignTo],
+    ["Status", row.status],
+    ["Krishna PRN Status", row.krishnaPrnStatusUpdated],
+    ["Vendor Name", row.vendorName],
+    ["Invoice Date", row.invoiceDate],
+    ["Remark", row.remark],
+  ]
+    .map(([label, value]) => [label, clean(value)])
+    .filter(([, value]) => value);
+  if (!detailRows.length) return "";
+  return [
+    `MRN Details${clean(row.mrnNo) ? ` - ${clean(row.mrnNo)}` : ""}`,
+    ...detailRows.map(([label, value]) => `${label}: ${value}`),
+  ].join("\n");
 }
 
 function formatDateForMessage(value) {
@@ -13320,7 +13364,7 @@ async function sendMrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
         language,
         templateParams: params,
       }, actor || { id: "system", displayName: "MRN WhatsApp automation" });
-      const followupText = ["actionRequest", "approved"].includes(eventName) ? mrnMaterialFollowupText(row) : "";
+      const followupText = ["actionRequest", "approved"].includes(eventName) ? mrnDetailsFollowupText(row) : "";
       let followupMessage = null;
       if (followupText) {
         followupMessage = await whatsappService.sendMessage({
@@ -13352,7 +13396,7 @@ async function checkMrnWhatsappAutomationQueue({ source = "watcher" } = {}) {
     const dashboard = await readMrnDashboard({ all: true });
     const activeSpreadsheetId = normalizeSpreadsheetId(dashboard.spreadsheetId || publicMrnSettings().spreadsheetId);
     const records = (dashboard.records || [])
-      .filter((row) => projectText(row.mrnNo))
+      .filter((row) => isMeaningfulMrnSheetRow(row))
       .sort((a, b) => (Number(a.rowNumber) || 0) - (Number(b.rowNumber) || 0));
     const maxRowNumber = records.reduce((max, row) => Math.max(max, Number(row.rowNumber) || 0), 0);
     const processed = new Set((settings.processedActionRequestMrns || []).map((item) => mrnWhatsappKey(item)).filter(Boolean));
@@ -13514,6 +13558,17 @@ app.post("/mrn-dashboard/whatsapp/send-test", requireSuperAdmin, async (req, res
   } catch (error) {
     const lastRun = await recordMrnWhatsappLastRun({ event: req.body?.event || "actionRequest", status: "failed", failed: 1, reason: error.message }).catch(() => null);
     res.status(400).json({ error: error.message || "Could not send MRN WhatsApp test", lastRun });
+  }
+});
+
+app.post("/mrn-dashboard/whatsapp/check-now", requireSuperAdmin, async (req, res) => {
+  try {
+    const result = await checkMrnWhatsappAutomationQueue({ source: req.authUser?.username || "manual" });
+    addActivityLog({ req, action: "Checked MRN WhatsApp queue", target: "MRN WhatsApp", details: result });
+    res.json(result);
+  } catch (error) {
+    const lastRun = await recordMrnWhatsappLastRun({ event: "actionRequest", status: "failed", failed: 1, reason: error.message }).catch(() => null);
+    res.status(400).json({ error: error.message || "Could not check MRN WhatsApp queue", lastRun });
   }
 });
 

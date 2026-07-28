@@ -409,20 +409,20 @@ export default function ProfilePage({ darkMode }) {
           </div>
         </section>
 
-        <section className={`mb-6 rounded-[26px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+        <section className={`mb-6 w-full min-w-0 overflow-hidden rounded-[22px] p-3 sm:rounded-[26px] sm:p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-lg font-black">Documents</h3>
               <p className={`mt-1 text-sm ${darkMode ? "text-white/55" : "text-black/55"}`}>Upload required HR documents. Files are saved to your Google Drive employee folder.</p>
             </div>
             {user?.employeeDocumentsFolderId && (
-              <a href={`https://drive.google.com/drive/folders/${user.employeeDocumentsFolderId}`} target="_blank" rel="noreferrer" className={`inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-xs font-black ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#eef8e8] text-[#39710f] hover:bg-[#e1f7d3]"}`}>
+              <a href={`https://drive.google.com/drive/folders/${user.employeeDocumentsFolderId}`} target="_blank" rel="noreferrer" className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-full px-4 text-xs font-black sm:w-auto ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#eef8e8] text-[#39710f] hover:bg-[#e1f7d3]"}`}>
                 <FolderOpen className="h-4 w-4" />
                 Open folder
               </a>
             )}
           </div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {EMPLOYEE_DOCUMENT_TYPES.map((docType) => {
               const documents = (user?.employeeDocuments || []).filter((item) => item.type === docType.id);
               const document = documents[0];
@@ -432,7 +432,7 @@ export default function ProfilePage({ darkMode }) {
               const meta = DOCUMENT_CARD_META[docType.id] || DOCUMENT_CARD_META.aadhar_card_copy;
               const Icon = meta.Icon;
               return (
-                <div key={docType.id} className={`rounded-[24px] border p-4 transition hover:-translate-y-0.5 ${darkMode ? "border-white/10 bg-[#191b20]" : "border-black/5 bg-white"}`}>
+                <div key={docType.id} className={`w-full min-w-0 overflow-hidden rounded-[20px] border p-3 transition hover:-translate-y-0.5 sm:rounded-[24px] sm:p-4 ${darkMode ? "border-white/10 bg-[#191b20]" : "border-black/5 bg-white"}`}>
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/10 text-white" : meta.icon}`}>
@@ -445,9 +445,9 @@ export default function ProfilePage({ darkMode }) {
                     </div>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${document ? (darkMode ? "bg-emerald-400/18 text-emerald-100" : "bg-emerald-100 text-emerald-700") : (darkMode ? "bg-red-400/18 text-red-100" : "bg-red-100 text-red-700")}`}>{document ? `${documents.length} uploaded` : "Missing"}</span>
                   </div>
-                  <div className={`relative min-h-[200px] overflow-hidden rounded-[18px] p-6 ${darkMode ? "bg-white/10 text-white" : meta.card}`}>
+                  <div className={`relative min-h-[170px] w-full min-w-0 overflow-hidden rounded-[18px] p-5 sm:min-h-[200px] sm:p-6 ${darkMode ? "bg-white/10 text-white" : meta.card}`}>
                     <p className="text-sm font-semibold opacity-80">{document ? "Verified file" : "Pending upload"}</p>
-                    <h4 className="mt-5 max-w-[15rem] text-[22px] font-black leading-[1.08] text-[#171714] dark:text-white">{docType.label}</h4>
+                    <h4 className="mt-5 max-w-full break-words text-[21px] font-black leading-[1.08] text-[#171714] dark:text-white sm:max-w-[15rem] sm:text-[22px]">{docType.label}</h4>
                     <p className={`mt-2 text-xs font-semibold ${darkMode ? "text-white/70" : "text-black/55"}`}>{progress ? `Uploading ${progress.current} of ${progress.total}` : document ? `${documents.length} file${documents.length === 1 ? "" : "s"} ready for HR review` : multiple ? "Multiple files accepted" : "No document uploaded yet"}</p>
                     {progress && (
                       <div className="mt-3">

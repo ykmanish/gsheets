@@ -1,7 +1,7 @@
-require("dotenv").config();
-
 const fs = require("fs");
 const path = require("path");
+require("dotenv").config();
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
@@ -5749,8 +5749,11 @@ async function getGoogleAuth() {
     throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is not set");
   }
 
+  const keyPath = path.isAbsolute(process.env.GOOGLE_SERVICE_ACCOUNT_KEY)
+    ? process.env.GOOGLE_SERVICE_ACCOUNT_KEY
+    : path.join(__dirname, process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
   const credentials = JSON.parse(
-    fs.readFileSync(process.env.GOOGLE_SERVICE_ACCOUNT_KEY, "utf8")
+    fs.readFileSync(keyPath, "utf8")
   );
 
   return new google.auth.GoogleAuth({

@@ -13021,7 +13021,7 @@ app.post("/dmr-dashboard/reminders/send-now", requireSuperAdmin, async (req, res
 const MRN_WHATSAPP_SETTINGS_ID = "mrn-whatsapp-automation-settings";
 const MRN_WHATSAPP_WATCH_INTERVAL_MS = Math.max(60_000, Number(process.env.MRN_WHATSAPP_WATCH_INTERVAL_MS) || 120_000);
 const MRN_WHATSAPP_WATCH_MAX_SENDS = Math.max(1, Number(process.env.MRN_WHATSAPP_WATCH_MAX_SENDS) || 1);
-const MRN_WHATSAPP_WATCHER_BASELINE_VERSION = "2026-07-27T17:20:00+05:30";
+const MRN_WHATSAPP_WATCHER_BASELINE_VERSION = "2026-07-28T12:45:00+05:30";
 let mrnWhatsappWatcherTimer = null;
 let mrnWhatsappWatcherRunning = false;
 const MRN_WHATSAPP_DEFAULTS = {
@@ -13032,6 +13032,7 @@ const MRN_WHATSAPP_DEFAULTS = {
   watcherBaselineRowNumber: 0,
   watcherBaselineEpochMs: 0,
   watcherBaselineVersion: "",
+  watcherSpreadsheetId: "",
   templates: {
     actionRequest: "mrn_action_request",
     approved: "mrn_approved_notification",
@@ -13077,6 +13078,7 @@ async function getMrnWhatsappSettings() {
     watcherBaselineRowNumber: Number(saved?.settings?.watcherBaselineRowNumber) || 0,
     watcherBaselineEpochMs: Number(saved?.settings?.watcherBaselineEpochMs) || 0,
     watcherBaselineVersion: saved?.settings?.watcherBaselineVersion || "",
+    watcherSpreadsheetId: normalizeSpreadsheetId(saved?.settings?.watcherSpreadsheetId || ""),
   };
 }
 
@@ -13105,6 +13107,7 @@ async function saveMrnWhatsappSettings(input = {}) {
     watcherBaselineRowNumber: Number(current.watcherBaselineRowNumber) || 0,
     watcherBaselineEpochMs: Number(current.watcherBaselineEpochMs) || 0,
     watcherBaselineVersion: current.watcherBaselineVersion || "",
+    watcherSpreadsheetId: normalizeSpreadsheetId(current.watcherSpreadsheetId || ""),
     lastRun: current.lastRun || null,
     updatedAt: new Date().toISOString(),
   };
@@ -13144,6 +13147,13 @@ function mrnWhatsappKey(value) {
   return normalizedMrnNumber(value) || projectText(value).toLowerCase();
 }
 
+function mrnWhatsappRecordKey(row = {}, spreadsheetId = "") {
+  const sheetId = normalizeSpreadsheetId(spreadsheetId);
+  const rowNumber = Number(row.rowNumber) || 0;
+  const mrnKey = mrnWhatsappKey(row.mrnNo);
+  return [sheetId, rowNumber || "", mrnKey].filter(Boolean).join(":");
+}
+
 function mrnTimestampMs(value) {
   const text = projectText(value).trim();
   if (!text) return 0;
@@ -13168,8 +13178,8 @@ function mrnTimestampMs(value) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-async function markMrnWhatsappActionRequestProcessed(mrnNo, rowNumber = 0) {
-  const key = mrnWhatsappKey(mrnNo);
+async function markMrnWhatsappActionRequestProcessed(mrnNo, rowNumber = 0, spreadsheetId = "") {
+  const key = mrnWhatsappRecordKey({ mrnNo, rowNumber }, spreadsheetId) || mrnWhatsappKey(mrnNo);
   if (!key) return;
   const db = await connectAuthDb();
   const update = {
@@ -13184,10 +13194,14 @@ async function markMrnWhatsappActionRequestProcessed(mrnNo, rowNumber = 0) {
   );
 }
 
-async function setMrnWhatsappProcessedKeys(keys = [], baselineRowNumber = 0) {
-  const clean = [...new Set(keys.map((key) => mrnWhatsappKey(key)).filter(Boolean))].slice(-1000);
+async function setMrnWhatsappProcessedKeys(keys = [], baselineRowNumber = 0, spreadsheetId = "") {
+  const clean = [...new Set(keys.map((item) => {
+    if (item && typeof item === "object") return mrnWhatsappRecordKey(item, spreadsheetId) || mrnWhatsappKey(item.mrnNo);
+    return mrnWhatsappKey(item);
+  }).filter(Boolean))].slice(-1000);
   const now = new Date().toISOString();
   const nowMs = Date.now();
+  const activeSpreadsheetId = normalizeSpreadsheetId(spreadsheetId);
   const db = await connectAuthDb();
   await db.collection("platformSettings").updateOne(
     { _id: MRN_WHATSAPP_SETTINGS_ID },
@@ -13199,6 +13213,7 @@ async function setMrnWhatsappProcessedKeys(keys = [], baselineRowNumber = 0) {
         "settings.watcherBaselineRowNumber": Number(baselineRowNumber) || 0,
         "settings.watcherBaselineEpochMs": nowMs,
         "settings.watcherBaselineVersion": MRN_WHATSAPP_WATCHER_BASELINE_VERSION,
+        "settings.watcherSpreadsheetId": activeSpreadsheetId,
       },
     },
     { upsert: true },
@@ -13335,26 +13350,25 @@ async function checkMrnWhatsappAutomationQueue({ source = "watcher" } = {}) {
     if (!publicMrnSettings().linked) return { status: "skipped", sent: 0, checked: 0, reason: "MRN sheet is not linked" };
 
     const dashboard = await readMrnDashboard({ all: true });
+    const activeSpreadsheetId = normalizeSpreadsheetId(dashboard.spreadsheetId || publicMrnSettings().spreadsheetId);
     const records = (dashboard.records || [])
       .filter((row) => projectText(row.mrnNo))
       .sort((a, b) => (Number(a.rowNumber) || 0) - (Number(b.rowNumber) || 0));
     const maxRowNumber = records.reduce((max, row) => Math.max(max, Number(row.rowNumber) || 0), 0);
     const processed = new Set((settings.processedActionRequestMrns || []).map((item) => mrnWhatsappKey(item)).filter(Boolean));
 
-    if (settings.watcherBaselineVersion !== MRN_WHATSAPP_WATCHER_BASELINE_VERSION) {
-      await setMrnWhatsappProcessedKeys(records.map((row) => row.mrnNo), maxRowNumber);
+    if (
+      settings.watcherBaselineVersion !== MRN_WHATSAPP_WATCHER_BASELINE_VERSION
+      || normalizeSpreadsheetId(settings.watcherSpreadsheetId) !== activeSpreadsheetId
+    ) {
+      await setMrnWhatsappProcessedKeys(records, maxRowNumber, activeSpreadsheetId);
       return { status: "initialized", sent: 0, checked: records.length, pending: 0 };
     }
 
     const baselineRowNumber = Number(settings.watcherBaselineRowNumber) || 0;
-    const baselineEpochMs = Number(settings.watcherBaselineEpochMs) || Date.now();
     const pending = records
       .filter((row) => (Number(row.rowNumber) || 0) > baselineRowNumber)
-      .filter((row) => {
-        const createdAtMs = mrnTimestampMs(row.timestamp);
-        return createdAtMs > baselineEpochMs;
-      })
-      .filter((row) => !processed.has(mrnWhatsappKey(row.mrnNo)))
+      .filter((row) => !processed.has(mrnWhatsappRecordKey(row, activeSpreadsheetId)) && !processed.has(mrnWhatsappKey(row.mrnNo)))
       .slice(0, MRN_WHATSAPP_WATCH_MAX_SENDS);
     let sent = 0;
     let failed = 0;
@@ -13364,7 +13378,7 @@ async function checkMrnWhatsappAutomationQueue({ source = "watcher" } = {}) {
         row,
         actor: { id: "system", displayName: "MRN WhatsApp watcher", username: source },
       });
-      await markMrnWhatsappActionRequestProcessed(row.mrnNo, row.rowNumber);
+      await markMrnWhatsappActionRequestProcessed(row.mrnNo, row.rowNumber, activeSpreadsheetId);
       if (result.sent) sent += result.sent;
       failed += result.failed || 0;
       addActivityLog({

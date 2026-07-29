@@ -1385,6 +1385,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     .join("||"), [data?.plannedWorkItems]);
   const plannedWorkSourceSignature = [data?.plannedWorkSourceId, data?.plannedWorkSourceSubmittedAt, plannedWorkSignature].filter(Boolean).join(":");
   const plannedWorkDiscardKey = `employee-daily-report-planned-discard:${userStorageId}:${currentReportDate}:${plannedWorkSourceDate}:${plannedWorkSourceSignature || "empty"}`;
+  const plannedWorkImportedKey = `employee-daily-report-planned-imported:${userStorageId}:${currentReportDate}:${plannedWorkSourceDate}:${plannedWorkSourceSignature || "empty"}`;
   const plannedWorkItems = useMemo(() => {
     if (plannedWorkDiscarded) return [];
     return cleanTaskItems(data?.plannedWorkItems)
@@ -1536,9 +1537,10 @@ export default function EmployeeDailyReport({ darkMode }) {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setPlannedWorkDiscarded(typeof window !== "undefined" && window.localStorage.getItem(plannedWorkDiscardKey) === "true");
+      setPlannedWorkImported(safeJsonParse(window.localStorage.getItem(plannedWorkImportedKey), {}) || {});
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [plannedWorkDiscardKey]);
+  }, [plannedWorkDiscardKey, plannedWorkImportedKey]);
 
   function openForm() {
     if (!data?.profile?.sheetLinked) {
@@ -1551,7 +1553,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     const recurringTasks = Array.isArray(data?.carriedForwardTasks) ? data.carriedForwardTasks : [];
     const discardedForToday = window.localStorage.getItem(plannedWorkDiscardKey) === "true";
     setPlannedWorkDiscarded(discardedForToday);
-    setPlannedWorkImported({});
+    setPlannedWorkImported(safeJsonParse(window.localStorage.getItem(plannedWorkImportedKey), {}) || {});
     setPlannedWorkSelection({});
     setPlannedWorkOpen(false);
     setEditingReport(Boolean(todayReport));
@@ -1618,19 +1620,31 @@ export default function EmployeeDailyReport({ darkMode }) {
     setForm((current) => {
       const existingRows = Array.isArray(current.taskItems) ? current.taskItems : [];
       const hasEmptyOnly = existingRows.length === 1 && !hasEmployeeDraftContent({ taskItems: existingRows, waitingTaskItems: [] });
-      return {
+      const nextForm = {
         ...current,
         taskItems: hasEmptyOnly ? importedRows : [...existingRows, ...importedRows],
       };
+      if (draftStorageKey) {
+        const savedAt = new Date().toISOString();
+        window.localStorage.setItem(draftStorageKey, JSON.stringify({ form: nextForm, savedAt }));
+        setLastDraftSavedAt(savedAt);
+      }
+      return nextForm;
     });
     setPlannedWorkImported((current) => {
       const next = { ...current };
       selectedItems.forEach((item) => { next[item.plannedKey] = true; });
+      window.localStorage.setItem(plannedWorkImportedKey, JSON.stringify(next));
       return next;
     });
-    window.localStorage.setItem(plannedWorkDiscardKey, "true");
-    setPlannedWorkDiscarded(true);
-    setPlannedWorkOpen(false);
+    const importedAllPlannedWork = selectedItems.length >= plannedWorkItems.length;
+    if (importedAllPlannedWork) {
+      window.localStorage.setItem(plannedWorkDiscardKey, "true");
+      setPlannedWorkDiscarded(true);
+      setPlannedWorkOpen(false);
+    } else {
+      setPlannedWorkOpen(true);
+    }
     setPlannedWorkSelection({});
     toast.success(`${selectedItems.length} planned task${selectedItems.length === 1 ? "" : "s"} imported`);
   }

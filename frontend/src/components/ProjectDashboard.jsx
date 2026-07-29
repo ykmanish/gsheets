@@ -3678,6 +3678,7 @@ function TasksView({
 }
 
 function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, onOpenPhase, onClose, onDownloadPdf, downloadingPdf = false }) {
+  const [scale, setScale] = useState("day");
   const todayKey = new Date().toISOString().slice(0, 10);
   const rows = useMemo(() => {
     const dayCount = (start, end) => {
@@ -3685,6 +3686,30 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
       const to = new Date(`${end}T00:00:00`);
       if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return 1;
       return Math.max(1, Math.round((to - from) / 86400000) + 1);
+    };
+    const subtaskRowsFor = (task, parentStart, parentDue, parentDepth, phaseId = "") => {
+      const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+      return subtasks.map((subtask, subtaskIndex) => {
+        const startDate = dateKeyFromValue(subtask.startDate || subtask.date || subtask.createdAt) || parentStart;
+        const dueDate = dateKeyFromValue(subtask.dueDate || subtask.endDate || subtask.deadline || subtask.targetDate) || startDate || parentDue;
+        const assigneeIds = [subtask.assigneeId, ...(subtask.assigneeIds || [])].filter(Boolean);
+        return {
+          type: "subtask",
+          id: subtask.id || `${task.id}-subtask-${subtaskIndex}`,
+          parentId: task.id,
+          phaseId,
+          title: subtask.title || subtask.name || `Subtask ${subtaskIndex + 1}`,
+          status: subtask.done ? "done" : subtask.status || task.status || "todo",
+          priority: task.priority || "medium",
+          startDate,
+          dueDate,
+          duration: dayCount(startDate, dueDate),
+          progress: subtask.done ? 100 : subtask.status === "in_progress" ? 50 : 0,
+          assignees: users.filter((person) => assigneeIds.includes(person.id)),
+          depth: parentDepth + 1,
+          source: task,
+        };
+      });
     };
     const rowsByPhase = [];
     phases.forEach((phase, phaseIndex) => {
@@ -3728,6 +3753,7 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
           depth: 1,
           source: task,
         });
+        rowsByPhase.push(...subtaskRowsFor(task, taskStart, taskDue, 1, phase.id));
       });
     });
     const looseTasks = tasks.filter((task) => !task.phaseId || !phases.some((phase) => phase.id === task.phaseId));
@@ -3748,6 +3774,7 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
         depth: 0,
         source: task,
       });
+      rowsByPhase.push(...subtaskRowsFor(task, startDate, dueDate, 0));
     });
     return rowsByPhase.filter((row) => row.startDate || row.dueDate);
   }, [phases, project.startDate, tasks, todayKey, users]);
@@ -3762,17 +3789,37 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
     return { startDate, endDate, days };
   }, [rows, todayKey]);
 
-  const dayMarkers = useMemo(() => {
+  const timelineUnits = useMemo(() => {
+    if (scale === "month") {
+      const result = [];
+      for (let cursor = startOfMonth(bounds.startDate); cursor <= bounds.endDate; cursor = addMonths(cursor, 1)) {
+        const unitStart = new Date(cursor);
+        const unitEnd = addDays(addMonths(cursor, 1), -1);
+        result.push({ start: unitStart, end: unitEnd, key: unitStart.toISOString(), label: unitStart.toLocaleDateString("en-IN", { month: "short", year: "numeric" }), band: String(unitStart.getFullYear()) });
+      }
+      return result;
+    }
+    const step = scale === "week" ? 7 : 1;
     const result = [];
-    for (let index = 0; index < bounds.days; index += 1) result.push(addDays(bounds.startDate, index));
+    for (let index = 0; index < bounds.days; index += step) {
+      const unitStart = addDays(bounds.startDate, index);
+      const unitEnd = addDays(unitStart, step - 1);
+      result.push({
+        start: unitStart,
+        end: unitEnd,
+        key: unitStart.toISOString(),
+        label: scale === "week" ? `${unitStart.getDate()}-${unitEnd.getDate()}` : unitStart.toLocaleDateString("en-IN", { day: "2-digit" }),
+        band: unitStart.toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
+      });
+    }
     return result;
-  }, [bounds.days, bounds.startDate]);
+  }, [bounds.days, bounds.endDate, bounds.startDate, scale]);
 
   const monthBands = useMemo(() => {
     const bands = [];
     let current = null;
-    dayMarkers.forEach((date, index) => {
-      const key = date.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+    timelineUnits.forEach((unit, index) => {
+      const key = unit.band;
       if (!current || current.key !== key) {
         current = { key, start: index, end: index };
         bands.push(current);
@@ -3781,27 +3828,19 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
       }
     });
     return bands;
-  }, [dayMarkers]);
-
-  const markers = useMemo(() => {
-    const result = [];
-    for (let index = 0; index < bounds.days; index += 1) {
-      result.push(addDays(bounds.startDate, index));
-    }
-    return result;
-  }, [bounds.days, bounds.startDate]);
+  }, [timelineUnits]);
 
   const positionFor = (value) => {
     const date = new Date(`${dateKeyFromValue(value)}T00:00:00`);
     if (Number.isNaN(date.getTime())) return 0;
     return Math.min(100, Math.max(0, (Math.round((date - bounds.startDate) / 86400000) / Math.max(1, bounds.days)) * 100));
   };
-  const overlapRows = rows.filter((row) => row.type === "task").map((row) => {
-    const overlaps = rows.filter((item) => item.type === "task" && item.id !== row.id && item.startDate <= row.dueDate && item.dueDate >= row.startDate);
+  const overlapRows = rows.filter((row) => row.type !== "phase").map((row) => {
+    const overlaps = rows.filter((item) => item.type !== "phase" && item.id !== row.id && item.startDate <= row.dueDate && item.dueDate >= row.startDate);
     return { id: row.id, count: overlaps.length };
   });
   const overlapCount = overlapRows.filter((row) => row.count > 0).length;
-  const timelineMinWidth = Math.max(980, bounds.days * 38);
+  const timelineMinWidth = Math.max(980, timelineUnits.length * (scale === "month" ? 160 : scale === "week" ? 92 : 38));
   const sideColumnsWidth = 596;
   const ganttColumns = "260px 112px 112px 112px minmax(760px,1fr)";
   const statusMeta = {
@@ -3810,7 +3849,7 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
     blocked: { label: "Blocked", color: "#f25f6c" },
     todo: { label: "Pending", color: "#a78bfa" },
   };
-  const taskRows = rows.filter((row) => row.type === "task");
+  const taskRows = rows.filter((row) => row.type !== "phase");
 
   return (
     <div className="fixed inset-0 z-50 flex h-screen w-screen flex-col bg-[#f7f8f5] p-3 text-[#20231f] dark:bg-[#090c0a] dark:text-white sm:p-4">
@@ -3829,7 +3868,26 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
             <span className="rounded-full bg-[#eaf4ff] px-3 py-1 text-xs font-semibold text-[#1268b3]">
               {formatDate(bounds.startDate.toISOString().slice(0, 10))} - {formatDate(bounds.endDate.toISOString().slice(0, 10))}
             </span>
-            <Button variant="secondary" onClick={onDownloadPdf} disabled={downloadingPdf} className="dark:border-white/10 dark:bg-white/[0.08] dark:text-white dark:hover:bg-white/[0.12]">
+            <div className="flex rounded-full bg-[#f1f3ef] p-1 dark:bg-white/[0.08]">
+              {[
+                ["day", "Date"],
+                ["week", "Week"],
+                ["month", "Month"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setScale(value)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-semibold transition",
+                    scale === value ? "bg-white text-[#20231f] shadow-sm dark:bg-white dark:text-[#11150f]" : "text-[#697066] hover:text-[#20231f] dark:text-white/60 dark:hover:text-white",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <Button variant="secondary" onClick={() => onDownloadPdf?.(scale)} disabled={downloadingPdf} className="dark:border-white/10 dark:bg-white/[0.08] dark:text-white dark:hover:bg-white/[0.12]">
               {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               PDF
             </Button>
@@ -3855,18 +3913,17 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                     <span
                       key={band.key}
                       className="absolute top-2 text-center text-[10px] font-bold text-[#72786f] dark:text-white/45"
-                      style={{ left: `${(band.start / bounds.days) * 100}%`, width: `${((band.end - band.start + 1) / bounds.days) * 100}%` }}
+                      style={{ left: `${(band.start / Math.max(1, timelineUnits.length)) * 100}%`, width: `${((band.end - band.start + 1) / Math.max(1, timelineUnits.length)) * 100}%` }}
                     >
                       {band.key}
                     </span>
                   ))}
                 </div>
                 <div className="relative h-8">
-                  {markers.map((date) => {
-                    const index = Math.round((date - bounds.startDate) / 86400000);
+                  {timelineUnits.map((unit, index) => {
                     return (
-                    <span key={date.toISOString()} className="absolute top-2 -translate-x-1/2 whitespace-nowrap text-[10px] text-[#20231f] dark:text-white/75" style={{ left: `${((index + 0.5) / Math.max(1, bounds.days)) * 100}%` }}>
-                      {date.toLocaleDateString("en-IN", { day: "2-digit" })}
+                    <span key={unit.key} className="absolute top-2 -translate-x-1/2 whitespace-nowrap text-[10px] text-[#20231f] dark:text-white/75" style={{ left: `${((index + 0.5) / Math.max(1, timelineUnits.length)) * 100}%` }}>
+                      {unit.label}
                     </span>
                     );
                   })}
@@ -3888,7 +3945,7 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                     : row.status === "in_progress"
                       ? "bg-[#fff2cc] text-[#805b11]"
                       : "bg-[#edf2ff] text-[#2f61c9]";
-              const color = row.type === "phase" ? "#2f6df6" : row.status === "done" ? "#42c989" : row.status === "blocked" ? "#f25f6c" : row.priority === "critical" ? "#8f5cf7" : row.priority === "high" ? "#ffad42" : "#37c6c0";
+              const color = row.type === "phase" ? "#2f6df6" : row.type === "subtask" ? "#14b8a6" : row.status === "done" ? "#42c989" : row.status === "blocked" ? "#f25f6c" : row.priority === "critical" ? "#8f5cf7" : row.priority === "high" ? "#ffad42" : "#37c6c0";
               return (
                 <button
                   key={`${row.type}-${row.id}`}
@@ -3904,12 +3961,12 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                         <span className="truncate">{row.title}</span>
                       </div>
                     ) : (
-                      <div className="flex min-w-0 items-start gap-2 pl-5">
-                        <span className="mt-1.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                      <div className={cn("flex min-w-0 items-start gap-2", row.type === "subtask" ? "pl-10" : "pl-5")}>
+                        <span className={cn("mt-1.5 shrink-0 rounded-full", row.type === "subtask" ? "h-2.5 w-2.5" : "h-3 w-3")} style={{ backgroundColor: color }} />
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-bold dark:text-white/95">{row.title}</span>
+                          <span className={cn("block truncate font-bold dark:text-white/95", row.type === "subtask" ? "text-xs" : "text-sm")}>{row.title}</span>
                           <span className={cn("mt-1 inline-flex rounded-full px-2.5 py-1 text-xs leading-none", badgeClass)}>
-                              {badgeLabel}{overlapping ? ` · ${overlapping} overlap${overlapping === 1 ? "" : "s"}` : ""}
+                              {row.type === "subtask" ? "Subtask · " : ""}{badgeLabel}{overlapping ? ` · ${overlapping} overlap${overlapping === 1 ? "" : "s"}` : ""}
                           </span>
                         </span>
                       </div>
@@ -3926,16 +3983,16 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                   </div>
                   <div className="relative px-0 py-0" style={{ minWidth: timelineMinWidth }}>
                     <div className="absolute inset-0">
-                      {dayMarkers.map((date, index) => (
+                      {timelineUnits.map((unit, index) => (
                         <span
-                          key={date.toISOString()}
+                          key={unit.key}
                           className={cn(
                             "absolute top-0 h-full border-l",
-                            index % 7 === 0
+                            scale !== "day" || index % 7 === 0
                               ? "border-[#e4e8e1] bg-[#fafbf8] dark:border-white/[0.08] dark:bg-white/[0.045]"
                               : "border-[#f1f3ef] dark:border-white/[0.055] dark:bg-transparent",
                           )}
-                          style={{ left: `${(index / Math.max(1, bounds.days)) * 100}%`, width: `${100 / Math.max(1, bounds.days)}%` }}
+                          style={{ left: `${(index / Math.max(1, timelineUnits.length)) * 100}%`, width: `${100 / Math.max(1, timelineUnits.length)}%` }}
                         />
                       ))}
                     </div>
@@ -4882,6 +4939,14 @@ function addDays(date, amount) {
   const next = new Date(date);
   next.setDate(next.getDate() + amount);
   return next;
+}
+
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date, amount) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
 
 function monthLabel(date) {
@@ -6507,11 +6572,11 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     }
   }
 
-  async function downloadGanttPdf() {
+  async function downloadGanttPdf(scale = "day") {
     if (!selectedProject?.id) return;
     try {
       setGanttPdfDownloading(true);
-      const response = await fetch(`${API_URL}/project-dashboard/projects/${selectedProject.id}/gantt/pdf`);
+      const response = await fetch(`${API_URL}/project-dashboard/projects/${selectedProject.id}/gantt/pdf?scale=${encodeURIComponent(scale)}`);
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.error || "Could not download Gantt PDF");
@@ -6521,7 +6586,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
       const link = document.createElement("a");
       const name = (selectedProject.name || "project").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "project";
       link.href = url;
-      link.download = `${name}-gantt-chart.pdf`;
+      link.download = `${name}-gantt-chart-${scale}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();

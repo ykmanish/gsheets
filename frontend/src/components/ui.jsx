@@ -12,6 +12,7 @@ import {
   FileType,
   Image as ImageIcon,
   Moon,
+  Search,
   Sheet,
   Sun,
 } from "lucide-react";
@@ -52,12 +53,21 @@ export function ThemeSwitch({ darkMode, onToggle }) {
   );
 }
 
-export function SelectMenu({ darkMode, value, options, onChange, disabled = false, placeholder = "Select an option", className = "" }) {
+export function SelectMenu({ darkMode, value, options, onChange, disabled = false, placeholder = "Select an option", className = "", searchable = false, searchPlaceholder = "Search..." }) {
   const [open, setOpen] = useState(false);
   const [opensUpward, setOpensUpward] = useState(false);
+  const [query, setQuery] = useState("");
   const ref = useRef(null);
-  useClickOutside(ref, () => setOpen(false));
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
+  useClickOutside(ref, closeMenu);
   const selected = options.find((option) => option.value === value);
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleOptions = searchable && normalizedQuery
+    ? options.filter((option) => String(option.label || "").toLowerCase().includes(normalizedQuery))
+    : options;
 
   const updatePlacement = useCallback(() => {
     const rect = ref.current?.getBoundingClientRect();
@@ -86,7 +96,10 @@ export function SelectMenu({ darkMode, value, options, onChange, disabled = fals
         disabled={disabled}
         onClick={() => {
           updatePlacement();
-          setOpen((current) => !current);
+          setOpen((current) => {
+            if (current) setQuery("");
+            return !current;
+          });
         }}
         className={`h-12 w-full rounded-2xl border px-4 flex items-center justify-between gap-3 text-left transition disabled:opacity-60 ${
           darkMode
@@ -106,8 +119,24 @@ export function SelectMenu({ darkMode, value, options, onChange, disabled = fals
             darkMode ? "bg-[#181a20] border-white/10" : "bg-white border-black/5"
           }`}
         >
+          {searchable && (
+            <div className="relative mb-2">
+              <Search className={`pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${darkMode ? "text-white/35" : "text-black/35"}`} />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={searchPlaceholder}
+                className={`h-10 w-full rounded-xl border pl-9 pr-3 text-sm outline-none ${
+                  darkMode
+                    ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/30"
+                    : "border-black/10 bg-white text-black placeholder:text-black/35"
+                }`}
+                autoFocus
+              />
+            </div>
+          )}
           <div className="max-h-64 overflow-y-auto pr-1">
-            {options.map((option) => {
+            {visibleOptions.map((option) => {
               const active = option.value === value;
               return (
                 <button
@@ -115,7 +144,7 @@ export function SelectMenu({ darkMode, value, options, onChange, disabled = fals
                   key={option.value}
                   onClick={() => {
                     onChange(option.value);
-                    setOpen(false);
+                    closeMenu();
                   }}
                   className={`w-full rounded-xl px-3 py-2.5 flex items-center justify-between gap-3 text-left text-sm transition ${
                     active
@@ -131,6 +160,11 @@ export function SelectMenu({ darkMode, value, options, onChange, disabled = fals
                 </button>
               );
             })}
+            {!visibleOptions.length && (
+              <div className={`px-3 py-4 text-center text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                No options found.
+              </div>
+            )}
           </div>
         </div>
       )}

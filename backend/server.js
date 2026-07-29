@@ -3265,6 +3265,84 @@ Data: ${JSON.stringify(normalizedEntries).slice(0, 50000)}`,
   return analysis;
 }
 
+async function buildEmployeeSiteTaskRemarks({ db, range, employeeReports }) {
+  const siteGroups = employeePdfSiteTaskEntries({ employeeReports }).filter((group) => group.tasks.length);
+  const fallback = Object.fromEntries(siteGroups.map((group) => [
+    group.site,
+    {
+      text: `${group.tasks.length} task${group.tasks.length === 1 ? "" : "s"} reported. Review completion status, blockers, and handover requirements for this site.`,
+      provider: "fallback",
+    },
+  ]));
+  if (!siteGroups.length) return {};
+  const signature = crypto
+    .createHash("sha1")
+    .update(JSON.stringify(siteGroups.map((group) => ({
+      site: group.site,
+      tasks: group.tasks.map((task) => ({
+        employeeName: task.employeeName,
+        category: task.category,
+        status: task.status,
+        involvement: task.involvement,
+        description: task.description,
+      })),
+    }))))
+    .digest("hex");
+  const cacheKey = `employee-site-task-remarks:v1:${range.from}:${range.to}:${signature}`;
+  const cached = await db.collection("employeeSiteTaskRemarks").findOne({ cacheKey });
+  if (cached?.remarks) return cached.remarks;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  let remarks = fallback;
+  if (anthropicKey) {
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: AbortSignal.timeout(18000),
+        headers: { "content-type": "application/json", "x-api-key": anthropicKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
+          max_tokens: 1800,
+          temperature: 0.2,
+          messages: [{
+            role: "user",
+            content: `Analyze employee daily-report tasks site-wise. Return strict JSON only: {"remarks":{"Site name":"one concise professional remark"}}.
+Rules:
+- One remark per site.
+- Maximum 24 words per remark.
+- Mention progress, blockers, coordination need, or follow-up only when supported by the tasks.
+- Do not invent facts.
+- Do not repeat every task.
+- Use direct CEO-ready language.
+
+Data: ${JSON.stringify(siteGroups).slice(0, 45000)}`,
+          }],
+        }),
+      });
+      const data = await response.json();
+      const text = (data.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n").trim();
+      const jsonText = text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+      if (response.ok && jsonText) {
+        const parsed = JSON.parse(jsonText);
+        remarks = { ...fallback };
+        Object.entries(parsed.remarks || {}).forEach(([site, value]) => {
+          const cleanSite = projectText(site);
+          const cleanValue = projectText(value);
+          if (cleanSite && cleanValue) remarks[cleanSite] = { text: cleanValue, provider: "claude", model: data.model || process.env.CLAUDE_MODEL || "claude-sonnet-4-6" };
+        });
+      }
+    } catch (error) {
+      console.warn("Employee site task remarks fallback:", error.message);
+      remarks = fallback;
+    }
+  }
+  await db.collection("employeeSiteTaskRemarks").updateOne(
+    { cacheKey },
+    { $set: { cacheKey, rangeFrom: range.from, rangeTo: range.to, signature, remarks, createdAt: new Date() } },
+    { upsert: true },
+  );
+  return remarks;
+}
+
 async function buildEmployeeReportExportData(req, query = {}) {
   const db = await connectAuthDb();
   const today = employeeReportToday(req);
@@ -3407,6 +3485,7 @@ async function buildEmployeeReportExportData(req, query = {}) {
     };
   });
   const notSubmittedCount = notSubmitted.reduce((sum, group) => sum + group.count, 0);
+  const siteTaskRemarks = await buildEmployeeSiteTaskRemarks({ db, range: { from, to }, employeeReports: employeeSubmissions });
   return {
     range: { from, to },
     selectedUserIds,
@@ -3417,6 +3496,7 @@ async function buildEmployeeReportExportData(req, query = {}) {
     executiveAnswers,
     notSubmitted,
     employeeReports: employeeSubmissions,
+    siteTaskRemarks,
   };
 }
 
@@ -8758,6 +8838,75 @@ function employeePdfDrawCompactCard(doc, segment, x, y, width, index) {
   return height;
 }
 
+function employeePdfSiteTaskEntries(report) {
+  const submissions = Array.isArray(report.employeeReports) ? report.employeeReports : [];
+  const siteMap = new Map();
+  const siteDisplayLabels = new Map();
+  submissions.forEach((submission) => {
+    let tasks = sanitizeEmployeeTaskItems(submission.taskItems);
+    if (!tasks.length && projectText(submission.taskDescription)) {
+      tasks = [{
+        site: submission.site,
+        category: submission.taskType,
+        status: submission.taskStatus,
+        involvement: submission.involvement,
+        description: submission.taskDescription,
+      }];
+    }
+    tasks.forEach((task) => {
+      const site = projectText(task.site) || "No site";
+      const siteKey = site.toLowerCase().replace(/\s+/g, " ").trim();
+      if (!siteDisplayLabels.has(siteKey) || siteDisplayLabels.get(siteKey) === siteDisplayLabels.get(siteKey).toUpperCase()) siteDisplayLabels.set(siteKey, site);
+      const current = siteMap.get(siteKey) || { site: siteDisplayLabels.get(siteKey) || site, tasks: [] };
+      current.site = siteDisplayLabels.get(siteKey) || current.site;
+      current.tasks.push({
+        employeeName: projectText(submission.employeeName) || "Employee",
+        department: projectText(submission.department),
+        reportDate: submission.reportDate,
+        category: projectText(task.category) || "General",
+        status: projectText(task.status),
+        involvement: projectText(task.involvement),
+        description: projectText(task.description) || "No description provided.",
+      });
+      siteMap.set(siteKey, current);
+    });
+  });
+  return [...siteMap.values()].sort((a, b) => a.site.localeCompare(b.site));
+}
+
+function employeePdfSiteTaskHeight(doc, entry, width) {
+  const metadata = [entry.category, entry.status, entry.involvement].filter(Boolean).join(" | ");
+  const body = `${entry.employeeName}${entry.department ? ` (${entry.department})` : ""}${metadata ? ` - ${metadata}` : ""}: ${entry.description}`;
+  doc.font(dmrPdfFonts.regular).fontSize(6.7);
+  return Math.max(22, 8 + doc.heightOfString(body, { width: width - 96, lineGap: 0.4 }));
+}
+
+function employeePdfDrawSiteTask(doc, entry, x, y, width, index) {
+  const height = employeePdfSiteTaskHeight(doc, entry, width);
+  const metadata = [entry.category, entry.status, entry.involvement].filter(Boolean).join(" | ");
+  const body = `${entry.employeeName}${entry.department ? ` (${entry.department})` : ""}${metadata ? ` - ${metadata}` : ""}: ${entry.description}`;
+  doc.fillColor("#0f9f6e").font(dmrPdfFonts.bold).fontSize(6.8).text(String(index + 1), x + 4, y + 6, { width: 18, align: "center", lineBreak: false });
+  doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(6.6).text(dmrPdfDateLabel(entry.reportDate), x + 28, y + 6, { width: 58, height: 9 });
+  doc.fillColor("#26312c").font(dmrPdfFonts.regular).fontSize(6.7).text(body, x + 92, y + 5, { width: width - 96, lineGap: 0.4 });
+  return height;
+}
+
+function employeePdfSiteRemarkHeight(doc, remark, width) {
+  const text = projectText(remark?.text) || "No AI remark available for this site.";
+  doc.font(dmrPdfFonts.regular).fontSize(7.4);
+  return Math.max(34, 20 + doc.heightOfString(text, { width: width - 30, lineGap: 0.8 }));
+}
+
+function employeePdfDrawSiteRemark(doc, remark, x, y, width) {
+  const text = projectText(remark?.text) || "No AI remark available for this site.";
+  const height = employeePdfSiteRemarkHeight(doc, remark, width);
+  const label = remark?.provider === "claude" ? "CLAUDE REMARK" : "SITE REMARK";
+  doc.roundedRect(x, y, width, height, 8).fill("#fff7df").stroke("#f0d38d");
+  doc.fillColor("#b66a00").font(dmrPdfFonts.bold).fontSize(6.8).text(label, x + 12, y + 8, { width: width - 24, height: 9 });
+  doc.fillColor("#26312c").font(dmrPdfFonts.bold).fontSize(7.4).text(text, x + 12, y + 20, { width: width - 24, lineGap: 0.8 });
+  return height;
+}
+
 function generateEmployeeDailyReportPdf(report) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 32, bufferPages: true, info: { Title: `Employee Daily Report ${report.range.from} to ${report.range.to}`, Author: "UIPL Docs" } });
@@ -8771,6 +8920,10 @@ function generateEmployeeDailyReportPdf(report) {
     const pageWidth = doc.page.width - left - doc.page.margins.right;
     const pageBottom = doc.page.height - doc.page.margins.bottom;
     const submissions = Array.isArray(report.employeeReports) ? report.employeeReports : [];
+    const siteGroups = employeePdfSiteTaskEntries(report).map((group) => ({
+      ...group,
+      remark: report.siteTaskRemarks?.[group.site] || null,
+    }));
     let pageNumber = 1;
     const addSubmissionsHeader = () => {
       doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(18).text("Employee submissions", left, 44, { width: pageWidth * 0.55, height: 24 });
@@ -8778,10 +8931,25 @@ function generateEmployeeDailyReportPdf(report) {
       doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8).text(`${report.summary.responses || 0} submissions · ${report.summary.employees || 0} employees · ${report.summary.questions || 0} management questions`, left, 68, { width: pageWidth, height: 12 });
       doc.y = 86;
     };
+    const addSiteHeader = (compact = false) => {
+      if (compact) {
+        doc.y = 34;
+        return;
+      }
+      doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(18).text("Site-wise employee tasks", left, 44, { width: pageWidth * 0.55, height: 24 });
+      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8).text(`${employeePdfRangeLabel(report.range)} | Page ${pageNumber}`, left + pageWidth - 190, 50, { width: 190, align: "right", height: 12 });
+      doc.fillColor("#6f756f").font(dmrPdfFonts.regular).fontSize(8).text(`${siteGroups.length} sites · tasks grouped by reported site with employee name`, left, 68, { width: pageWidth, height: 12 });
+      doc.y = 86;
+    };
     const addSubmissionPage = () => {
       doc.addPage();
       pageNumber += 1;
       addSubmissionsHeader();
+    };
+    const addSitePage = (compact = true) => {
+      doc.addPage();
+      pageNumber += 1;
+      addSiteHeader(compact);
     };
     const drawSummaryPage = () => {
       const completedTasks = submissions.reduce((sum, item) => sum + sanitizeEmployeeTaskItems(item.taskItems).length, 0);
@@ -8878,6 +9046,67 @@ function generateEmployeeDailyReportPdf(report) {
     if (!submissions.length) {
       doc.end();
       return;
+    }
+    if (siteGroups.length) {
+      addSitePage(false);
+      const siteCardWidth = pageWidth;
+      const siteTaskGap = 10;
+      const siteTaskWidth = (siteCardWidth - siteTaskGap) / 2;
+      siteGroups.forEach((group) => {
+        const drawSiteTitle = (continued = false) => {
+          const titleHeight = 30;
+          const titleTop = doc.y;
+          doc.roundedRect(left, titleTop, siteCardWidth, titleHeight, 8).fill("#f1f8f4").stroke("#dce6df");
+          doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(11).text(`${group.site}${continued ? " (continued)" : ""}`, left + 12, titleTop + 8, { width: siteCardWidth - 108, height: 14 });
+          doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(7.4).text(`${group.tasks.length} task${group.tasks.length === 1 ? "" : "s"}`, left + siteCardWidth - 88, titleTop + 10, { width: 76, align: "right", height: 9 });
+          doc.y += titleHeight + 1;
+        };
+        const drawTableHeader = () => {
+          const top = doc.y;
+          const drawHalf = (x) => {
+            doc.fillColor("#6f756f").font(dmrPdfFonts.bold).fontSize(5.8).text("#", x + 14, top + 3, { width: 12, align: "center" });
+            doc.text("DATE", x + 38, top + 3, { width: 42 });
+            doc.text("EMPLOYEE / TASK", x + 96, top + 3, { width: siteTaskWidth - 100 });
+          };
+          drawHalf(left);
+          drawHalf(left + siteTaskWidth + siteTaskGap);
+          doc.moveTo(left, top + 14).lineTo(left + siteCardWidth, top + 14).strokeColor("#dce6df").lineWidth(0.5).stroke();
+          doc.y += 16;
+        };
+        const firstTaskHeight = group.tasks.length ? employeePdfSiteTaskHeight(doc, group.tasks[0], siteTaskWidth) : 0;
+        if (doc.y + 30 + 4 + 16 + firstTaskHeight > pageBottom) {
+          addSitePage();
+        }
+        drawSiteTitle();
+        drawTableHeader();
+        for (let index = 0; index < group.tasks.length; index += 2) {
+          const leftEntry = group.tasks[index];
+          const rightEntry = group.tasks[index + 1];
+          const leftHeight = employeePdfSiteTaskHeight(doc, leftEntry, siteTaskWidth);
+          const rightHeight = rightEntry ? employeePdfSiteTaskHeight(doc, rightEntry, siteTaskWidth) : 0;
+          const rowHeight = Math.max(leftHeight, rightHeight);
+          if (doc.y + rowHeight > pageBottom) {
+            addSitePage();
+            drawSiteTitle(true);
+            drawTableHeader();
+          }
+          const rowTop = doc.y;
+          employeePdfDrawSiteTask(doc, leftEntry, left, rowTop, siteTaskWidth, index);
+          if (rightEntry) {
+            const rightX = left + siteTaskWidth + siteTaskGap;
+            employeePdfDrawSiteTask(doc, rightEntry, rightX, rowTop, siteTaskWidth, index + 1);
+          }
+          doc.moveTo(left, rowTop + rowHeight).lineTo(left + siteCardWidth, rowTop + rowHeight).strokeColor("#edf1ee").lineWidth(0.4).stroke();
+          doc.y = rowTop + rowHeight;
+        }
+        const remarkHeight = employeePdfSiteRemarkHeight(doc, group.remark, siteCardWidth);
+        if (doc.y + remarkHeight > pageBottom) {
+          addSitePage();
+          drawSiteTitle(true);
+        }
+        doc.y += 5;
+        doc.y += employeePdfDrawSiteRemark(doc, group.remark, left, doc.y, siteCardWidth) + 8;
+      });
     }
     addSubmissionPage();
     const columnGap = 12;
@@ -11403,8 +11632,10 @@ function normalizeProjectInput(body, existing = {}) {
           id: projectText(subtask.id) || crypto.randomUUID(),
           title: projectText(subtask.title),
           description: projectText(subtask.description),
+          startDate: projectText(subtask.startDate),
           dueDate: projectText(subtask.dueDate || subtask.deadline),
           assigneeId: projectText(subtask.assigneeId),
+          dependencyIds: normalizeList(subtask.dependencyIds),
           done: status === "done" ? true : Boolean(subtask.done),
           createdAt: projectText(subtask.createdAt) || now,
           updatedAt: projectText(subtask.updatedAt) || now,
@@ -11674,7 +11905,25 @@ function mrnMatchesProject(row = {}, project = {}) {
 }
 
 function projectTaskMap(project = {}) {
-  return new Map(projectManualTasks(project).map((task) => [task.id, task]));
+  const entries = [];
+  projectManualTasks(project).forEach((task) => {
+    entries.push([task.id, task]);
+    (task.subtasks || []).forEach((subtask) => {
+      entries.push([
+        `subtask:${task.id}:${subtask.id}`,
+        {
+          ...subtask,
+          id: `subtask:${task.id}:${subtask.id}`,
+          parentTaskId: task.id,
+          title: `${task.title || "Task"} / ${subtask.title || "Subtask"}`,
+          status: subtask.done ? "done" : "todo",
+          dueDate: subtask.dueDate || subtask.deadline || "",
+          startDate: subtask.startDate || "",
+        },
+      ]);
+    });
+  });
+  return new Map(entries);
 }
 
 function appendProjectActivityFromDiff(project = {}, beforeProject = {}, req) {
@@ -11737,10 +11986,19 @@ function serializeProjectWithDependencyState(project = {}) {
   const allTasksMap = projectTaskMap(project);
   const decorate = (task) => {
     const state = taskDependencyState(task, allTasksMap);
+    const decorateSubtask = (subtask) => {
+      const subtaskState = taskDependencyState(subtask, allTasksMap);
+      return {
+        ...subtask,
+        blockedBy: subtaskState.activeBlockers.map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate, status: item.status })),
+        dependencyWarnings: subtaskState.dueWarnings.map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate })),
+      };
+    };
     return {
       ...task,
       blockedBy: state.activeBlockers.map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate, status: item.status })),
       dependencyWarnings: state.dueWarnings.map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate })),
+      subtasks: (task.subtasks || []).map(decorateSubtask),
     };
   };
   return {

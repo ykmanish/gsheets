@@ -149,6 +149,32 @@ function completeSubtasksWhenTaskDone(task = {}) {
   };
 }
 
+function projectDependencyOptions(tasks = [], currentTaskId = "", currentSubtaskId = "") {
+  const options = [];
+  tasks.forEach((task) => {
+    if (task.id !== currentTaskId) {
+      options.push({ value: task.id, label: task.title || "Untitled task", type: "task", item: task });
+    }
+    (task.subtasks || []).forEach((subtask) => {
+      if (task.id === currentTaskId && !currentSubtaskId) return;
+      if (task.id === currentTaskId && subtask.id === currentSubtaskId) return;
+      options.push({
+        value: `subtask:${task.id}:${subtask.id}`,
+        label: `${task.title || "Untitled task"} / ${subtask.title || "Untitled subtask"}`,
+        type: "subtask",
+        item: subtask,
+        parentTask: task,
+      });
+    });
+  });
+  return options;
+}
+
+function selectedProjectDependencies(ids = [], options = []) {
+  const optionMap = new Map(options.map((option) => [option.value, option]));
+  return ids.map((id) => optionMap.get(id)).filter(Boolean);
+}
+
 function blankPhase() {
   return {
     id: uid("phase"),
@@ -456,6 +482,8 @@ function NativeSelect({
   className = "",
   disabled = false,
   placeholder = "Select an option",
+  searchable = false,
+  searchPlaceholder = "Search...",
 }) {
   return (
     <SelectMenu
@@ -466,6 +494,8 @@ function NativeSelect({
       disabled={disabled}
       placeholder={placeholder}
       className={className}
+      searchable={searchable}
+      searchPlaceholder={searchPlaceholder}
     />
   );
 }
@@ -772,8 +802,14 @@ function TaskDetailView({
 }) {
   const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
   const doneSubtasks = subtasks.filter((item) => item.done).length;
-  const blockedBy = task.blockedBy || dependencies.filter((item) => item.status !== "done");
-  const dependencyWarnings = task.dependencyWarnings || dependencies.filter((item) => item.dueDate && task.dueDate && task.dueDate < item.dueDate);
+  const dependencyItems = dependencies.map((dependency) => ({
+    id: dependency.value || dependency.id,
+    title: dependency.label || dependency.title,
+    status: dependency.type === "subtask" ? (dependency.item?.done ? "done" : "todo") : dependency.item?.status || dependency.status,
+    dueDate: dependency.item?.dueDate || dependency.dueDate,
+  }));
+  const blockedBy = task.blockedBy || dependencyItems.filter((item) => item.status !== "done");
+  const dependencyWarnings = task.dependencyWarnings || dependencyItems.filter((item) => item.dueDate && task.dueDate && task.dueDate < item.dueDate);
   const progress = subtasks.length ? Math.round((doneSubtasks / subtasks.length) * 100) : 0;
   const [activeTab, setActiveTab] = useState("progress");
   return (
@@ -945,7 +981,7 @@ function TaskDetailView({
         <section className="mt-6 grid gap-4 lg:grid-cols-2">
           <DetailSection title={`Dependencies (${dependencies.length})`} icon={Link2}>
             <div className="space-y-2">
-              {dependencies.map((item) => (
+              {dependencyItems.map((item) => (
                 <div key={item.id} className={cn("flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm dark:bg-white/[0.05]", item.status === "done" ? "bg-[#f5f7f2]" : "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-200")}>
                   <StatusPill status={item.status || "todo"} compact />
                   <span className="min-w-0 flex-1 truncate font-medium">{item.title || "Untitled task"}</span>
@@ -1181,9 +1217,8 @@ function TaskDrawer({
         (doc.driveFileId && (task.documentIds || []).includes(doc.driveFileId)),
     )
     .slice(0, 6);
-  const dependencies = allTasks.filter((item) =>
-    (task.dependencyIds || []).includes(item.id),
-  );
+  const dependencyOptions = projectDependencyOptions(allTasks, task.id);
+  const dependencies = selectedProjectDependencies(task.dependencyIds || [], dependencyOptions);
   const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
   const doneSubtasks = subtasks.filter((item) => item.done).length;
   const phase = phases.find((item) => item.id === task.phaseId);
@@ -1215,8 +1250,10 @@ function TaskDrawer({
           id: uid("subtask"),
           title: subtaskTitle.trim(),
           description: "",
+          startDate: "",
           dueDate: "",
           assigneeId: "",
+          dependencyIds: [],
           done: false,
           createdAt: new Date().toISOString(),
         },
@@ -1350,6 +1387,15 @@ function TaskDrawer({
               value={task.dueDate || ""}
               onChange={(value) => onChange({ dueDate: value })}
               placeholder="No date"
+            />
+          </PropertyRow>
+          <PropertyRow icon={CalendarDays} label="Start date">
+            <DatePicker
+              darkMode={darkMode}
+              disabled={!isEditing}
+              value={task.startDate || ""}
+              onChange={(value) => onChange({ startDate: value })}
+              placeholder="No start date"
             />
           </PropertyRow>
           <PropertyRow icon={Users} label="Assignee">
@@ -1597,10 +1643,19 @@ function TaskDrawer({
                     <DatePicker
                       darkMode={darkMode}
                       disabled={!isEditing}
+                      value={item.startDate || ""}
+                      onChange={(value) => updateSubtask(item.id, { startDate: value })}
+                      placeholder="No start date"
+                    />
+                    <DatePicker
+                      darkMode={darkMode}
+                      disabled={!isEditing}
                       value={item.dueDate || ""}
                       onChange={(value) => updateSubtask(item.id, { dueDate: value })}
                       placeholder="No deadline"
                     />
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     <NativeSelect
                       darkMode={darkMode}
                       disabled={!isEditing}
@@ -1614,7 +1669,47 @@ function TaskDrawer({
                         })),
                       ]}
                     />
+                    <NativeSelect
+                      darkMode={darkMode}
+                      disabled={!isEditing}
+                      value=""
+                      searchable
+                      searchPlaceholder="Search task or subtask..."
+                      onChange={(value) =>
+                        value &&
+                        updateSubtask(item.id, {
+                          dependencyIds: [...new Set([...(item.dependencyIds || []), value])],
+                        })
+                      }
+                      options={[
+                        { value: "", label: "Add dependency..." },
+                        ...projectDependencyOptions(allTasks, task.id, item.id)
+                          .filter((option) => !(item.dependencyIds || []).includes(option.value))
+                          .map((option) => ({
+                            value: option.value,
+                            label: option.type === "subtask" ? `Subtask: ${option.label}` : `Task: ${option.label}`,
+                          })),
+                      ]}
+                    />
                   </div>
+                  {(item.dependencyIds || []).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {selectedProjectDependencies(item.dependencyIds || [], projectDependencyOptions(allTasks, task.id, item.id)).map((dependency) => (
+                        <span key={dependency.value} className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#eef3e9] px-2 py-1 text-[10px] font-semibold text-[#527d42] dark:bg-white/[0.06]">
+                          <span className="truncate">{dependency.type === "subtask" ? "Subtask" : "Task"}: {dependency.label}</span>
+                          {isEditing && (
+                            <button
+                              type="button"
+                              onClick={() => updateSubtask(item.id, { dependencyIds: (item.dependencyIds || []).filter((id) => id !== dependency.value) })}
+                              className="text-[#7b8178] hover:text-[#20231f]"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               {!subtasks.length && (
@@ -1648,6 +1743,8 @@ function TaskDrawer({
               <NativeSelect
                 darkMode={darkMode}
                 value=""
+                searchable
+                searchPlaceholder="Search task or subtask..."
                 onChange={(value) =>
                   value &&
                   onChange({
@@ -1658,52 +1755,54 @@ function TaskDrawer({
                 }
                 options={[
                   { value: "", label: "Add a dependency..." },
-                  ...allTasks
+                  ...dependencyOptions
                     .filter(
                       (item) =>
-                        item.id !== task.id &&
-                        !(task.dependencyIds || []).includes(item.id),
+                        !(task.dependencyIds || []).includes(item.value),
                     )
                     .map((item) => ({
-                      value: item.id,
-                      label: item.title || "Untitled task",
+                      value: item.value,
+                      label: item.type === "subtask" ? `Subtask: ${item.label}` : `Task: ${item.label}`,
                     })),
                 ]}
                 className="mt-3"
               />
             )}
             <div className="mt-3 space-y-2">
-              {dependencies.map((item) => (
+              {dependencies.map((dependency) => {
+                const item = dependency.item || {};
+                const done = dependency.type === "subtask" ? Boolean(item.done) : item.status === "done";
+                return (
                 <div
-                  key={item.id}
+                  key={dependency.value}
                   className="flex items-center gap-3 rounded-lg border border-[#e0e4dd] bg-white px-3 py-3 dark:border-white/10 dark:bg-white/[0.03]"
                 >
                   <span
                     className={cn(
                       "flex h-5 w-5 items-center justify-center rounded-full border",
-                      item.status === "done"
+                      done
                         ? "border-[#65bf45] bg-[#65bf45] text-white"
                         : "border-[#a9afa5]",
                     )}
                   >
-                    {item.status === "done" && <Check className="h-3 w-3" />}
+                    {done && <Check className="h-3 w-3" />}
                   </span>
                   <span
                     className={cn(
                       "min-w-0 flex-1 truncate text-sm",
-                      item.status === "done" && "text-[#8a8f87] line-through",
+                      done && "text-[#8a8f87] line-through",
                     )}
                   >
-                    {item.title}
+                    {dependency.type === "subtask" ? `Subtask: ${dependency.label}` : dependency.label}
                   </span>
-                  <StatusPill status={item.status} compact />
+                  <StatusPill status={done ? "done" : item.status || "todo"} compact />
                   {isEditing && (
                     <IconButton
                       label="Remove dependency"
                       onClick={() =>
                         onChange({
                           dependencyIds: (task.dependencyIds || []).filter(
-                            (id) => id !== item.id,
+                            (id) => id !== dependency.value,
                           ),
                         })
                       }
@@ -1712,7 +1811,8 @@ function TaskDrawer({
                     </IconButton>
                   )}
                 </div>
-              ))}
+                );
+              })}
               {!dependencies.length && (
                 <div className="rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">
                   No dependencies linked to this task.
@@ -2964,6 +3064,7 @@ const WORKSPACE_NAV = [
   { value: "overview", label: "Overview", icon: LayoutDashboard },
   { value: "phases", label: "Phases", icon: Layers3 },
   { value: "tasks", label: "Tasks", icon: ListChecks },
+  { value: "gantt", label: "Gantt View", icon: BarChart3 },
   { value: "calendar", label: "Calendar", icon: CalendarDays },
   { value: "manpower", label: "Manpower", icon: Users },
   { value: "mrn", label: "MRN", icon: ClipboardList },
@@ -3415,6 +3516,266 @@ function TasksView({
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, onOpenPhase, onClose }) {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const rows = useMemo(() => {
+    const dayCount = (start, end) => {
+      const from = new Date(`${start}T00:00:00`);
+      const to = new Date(`${end}T00:00:00`);
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return 1;
+      return Math.max(1, Math.round((to - from) / 86400000) + 1);
+    };
+    const rowsByPhase = [];
+    phases.forEach((phase, phaseIndex) => {
+      const phaseTasks = tasks.filter((task) => task.phaseId === phase.id);
+      const taskDates = phaseTasks.flatMap((task) => [dateKeyFromValue(task.startDate), dateKeyFromValue(task.dueDate)]).filter(Boolean).sort();
+      const startDate = dateKeyFromValue(phase.startDate) || taskDates[0] || dateKeyFromValue(project.startDate) || todayKey;
+      const dueDate = dateKeyFromValue(phase.dueDate) || taskDates.at(-1) || startDate;
+      const done = phaseTasks.filter((task) => task.status === "done").length;
+      const phaseAssigneeIds = new Set(phaseTasks.flatMap((task) => task.assigneeIds || []));
+      rowsByPhase.push({
+        type: "phase",
+        id: phase.id,
+        title: phase.name || `Phase ${phaseIndex + 1}`,
+        status: phase.status || "todo",
+        startDate,
+        dueDate,
+        duration: dayCount(startDate, dueDate),
+        progress: phaseTasks.length ? Math.round((done / phaseTasks.length) * 100) : 0,
+        assignees: users.filter((person) => phaseAssigneeIds.has(person.id)),
+        depth: 0,
+        source: phase,
+      });
+      phaseTasks.forEach((task) => {
+        const taskStart = dateKeyFromValue(task.startDate) || dateKeyFromValue(task.dueDate) || startDate;
+        const taskDue = dateKeyFromValue(task.dueDate) || taskStart;
+        const assignees = users.filter((person) => (task.assigneeIds || []).includes(person.id));
+        const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+        const doneSubtasks = subtasks.filter((subtask) => subtask.done).length;
+        rowsByPhase.push({
+          type: "task",
+          id: task.id,
+          parentId: phase.id,
+          title: task.title || "Untitled task",
+          status: (task.blockedBy || []).length ? "blocked" : task.status || "todo",
+          priority: task.priority || "medium",
+          startDate: taskStart,
+          dueDate: taskDue,
+          duration: dayCount(taskStart, taskDue),
+          progress: subtasks.length ? Math.round((doneSubtasks / subtasks.length) * 100) : task.status === "done" ? 100 : task.status === "in_progress" ? 50 : 0,
+          assignees,
+          depth: 1,
+          source: task,
+        });
+      });
+    });
+    const looseTasks = tasks.filter((task) => !task.phaseId || !phases.some((phase) => phase.id === task.phaseId));
+    looseTasks.forEach((task) => {
+      const startDate = dateKeyFromValue(task.startDate) || dateKeyFromValue(task.dueDate) || todayKey;
+      const dueDate = dateKeyFromValue(task.dueDate) || startDate;
+      rowsByPhase.push({
+        type: "task",
+        id: task.id,
+        title: task.title || "Untitled task",
+        status: (task.blockedBy || []).length ? "blocked" : task.status || "todo",
+        priority: task.priority || "medium",
+        startDate,
+        dueDate,
+        duration: dayCount(startDate, dueDate),
+        progress: task.status === "done" ? 100 : task.status === "in_progress" ? 50 : 0,
+        assignees: users.filter((person) => (task.assigneeIds || []).includes(person.id)),
+        depth: 0,
+        source: task,
+      });
+    });
+    return rowsByPhase.filter((row) => row.startDate || row.dueDate);
+  }, [phases, project.startDate, tasks, todayKey, users]);
+
+  const bounds = useMemo(() => {
+    const dates = rows.flatMap((row) => [row.startDate, row.dueDate]).filter(Boolean).sort();
+    const start = dates[0] || todayKey;
+    const end = dates.at(-1) || start;
+    const startDate = addDays(new Date(`${start}T00:00:00`), -2);
+    const endDate = addDays(new Date(`${end}T00:00:00`), 4);
+    const days = Math.max(1, Math.round((endDate - startDate) / 86400000) + 1);
+    return { startDate, endDate, days };
+  }, [rows, todayKey]);
+
+  const dayMarkers = useMemo(() => {
+    const result = [];
+    for (let index = 0; index < bounds.days; index += 1) result.push(addDays(bounds.startDate, index));
+    return result;
+  }, [bounds.days, bounds.startDate]);
+
+  const monthBands = useMemo(() => {
+    const bands = [];
+    let current = null;
+    dayMarkers.forEach((date, index) => {
+      const key = date.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+      if (!current || current.key !== key) {
+        current = { key, start: index, end: index };
+        bands.push(current);
+      } else {
+        current.end = index;
+      }
+    });
+    return bands;
+  }, [dayMarkers]);
+
+  const markers = useMemo(() => {
+    const result = [];
+    for (let index = 0; index < bounds.days; index += Math.max(1, Math.ceil(bounds.days / 22))) {
+      result.push(addDays(bounds.startDate, index));
+    }
+    return result;
+  }, [bounds.days, bounds.startDate]);
+
+  const positionFor = (value) => {
+    const date = new Date(`${dateKeyFromValue(value)}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return 0;
+    return Math.min(100, Math.max(0, ((date - bounds.startDate) / 86400000 / Math.max(1, bounds.days - 1)) * 100));
+  };
+  const overlapRows = rows.filter((row) => row.type === "task").map((row) => {
+    const overlaps = rows.filter((item) => item.type === "task" && item.id !== row.id && item.startDate <= row.dueDate && item.dueDate >= row.startDate);
+    return { id: row.id, count: overlaps.length };
+  });
+  const overlapCount = overlapRows.filter((row) => row.count > 0).length;
+  const timelineMinWidth = Math.max(980, bounds.days * 38);
+  const statusMeta = {
+    done: { label: "Completed", color: "#42c989" },
+    in_progress: { label: "In progress", color: "#ffbd59" },
+    blocked: { label: "Blocked", color: "#f25f6c" },
+    todo: { label: "Pending", color: "#a78bfa" },
+  };
+  const taskRows = rows.filter((row) => row.type === "task");
+
+  return (
+    <div className="fixed inset-0 z-50 flex h-screen w-screen flex-col bg-[#f7f8f5] p-3 text-[#20231f] dark:bg-[#11130f] dark:text-white sm:p-4">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 dark:bg-white/[0.03]">
+          <div>
+            <h2 className="text-xl font-semibold">Gantt View</h2>
+            <p className="mt-0.5 text-xs text-[#7b8178]">
+              Full project schedule with phase rows, task timelines, progress and overlapping work.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[#fff2cc] px-3 py-1 text-xs font-semibold text-[#805b11]">
+              {overlapCount} overlapping task{overlapCount === 1 ? "" : "s"}
+            </span>
+            <span className="rounded-full bg-[#eaf4ff] px-3 py-1 text-xs font-semibold text-[#1268b3]">
+              {formatDate(bounds.startDate.toISOString().slice(0, 10))} - {formatDate(bounds.endDate.toISOString().slice(0, 10))}
+            </span>
+            <IconButton label="Close Gantt" onClick={onClose} className="bg-[#f1f3ef] hover:bg-[#e7ebe4] dark:bg-white/[0.06]">
+              <X className="h-4 w-4" />
+            </IconButton>
+          </div>
+        </div>
+
+        <section className="mt-3 min-h-0 flex-1 overflow-auto rounded-xl bg-white dark:bg-white/[0.03]">
+          <div className="min-w-[1180px]" style={{ width: 300 + timelineMinWidth }}>
+            <div className="sticky top-0 z-20 grid grid-cols-[300px_minmax(760px,1fr)] border-b border-[#eef1eb] bg-white dark:border-white/10 dark:bg-[#181b17]">
+              <div className="sticky left-0 z-30 border-r border-[#eef1eb] bg-white px-4 py-3 dark:border-white/10 dark:bg-[#181b17]">
+                <h3 className="text-sm font-bold">Task list</h3>
+                <p className="mt-0.5 text-[11px] text-[#858b82]">{taskRows.length} scheduled task{taskRows.length === 1 ? "" : "s"}</p>
+              </div>
+              <div className="relative" style={{ minWidth: timelineMinWidth }}>
+                <div className="relative h-7 border-b border-[#edf0ea] dark:border-white/10">
+                  {monthBands.map((band) => (
+                    <span
+                      key={band.key}
+                      className="absolute top-2 text-center text-[10px] font-bold text-[#72786f]"
+                      style={{ left: `${(band.start / bounds.days) * 100}%`, width: `${((band.end - band.start + 1) / bounds.days) * 100}%` }}
+                    >
+                      {band.key}
+                    </span>
+                  ))}
+                </div>
+                <div className="relative h-8">
+                  {markers.map((date) => (
+                    <span key={date.toISOString()} className="absolute top-2 -translate-x-1/2 whitespace-nowrap text-[10px]" style={{ left: `${positionFor(date.toISOString().slice(0, 10))}%` }}>
+                      {date.toLocaleDateString("en-IN", { day: "2-digit" })}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {rows.map((row) => {
+              const left = positionFor(row.startDate);
+              const right = positionFor(row.dueDate);
+              const width = Math.max(1.8, right - left);
+              const overlapping = overlapRows.find((item) => item.id === row.id)?.count || 0;
+              const color = row.type === "phase" ? "#2f6df6" : row.status === "done" ? "#42c989" : row.status === "blocked" ? "#f25f6c" : row.priority === "critical" ? "#8f5cf7" : row.priority === "high" ? "#ffad42" : "#37c6c0";
+              return (
+                <button
+                  key={`${row.type}-${row.id}`}
+                  type="button"
+                  onClick={() => row.type === "phase" ? onOpenPhase?.(row.source) : onOpenTask?.(row.source)}
+                  className={cn("grid grid-cols-[300px_minmax(760px,1fr)] text-left hover:bg-[#fafbf8] dark:hover:bg-white/[0.025]", row.type === "phase" ? "border-b border-[#eef1eb] dark:border-white/10" : "")}
+                >
+                  <div className="sticky left-0 z-10 min-w-0 border-r border-[#eef1eb] bg-white px-4 py-2.5 dark:border-white/10 dark:bg-[#181b17]">
+                    {row.type === "phase" ? (
+                      <div className="flex items-center gap-2 text-xs font-bold text-[#2f6df6]">
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#2f6df6]" />
+                        <span className="truncate">{row.title}</span>
+                      </div>
+                    ) : (
+                      <div className="flex min-w-0 items-start gap-2 pl-5">
+                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-semibold">{row.title}</span>
+                          <span className="mt-0.5 block truncate text-[10px] text-[#858b82]">
+                            {statusMeta[row.status]?.label || statusLabel(row.status)} · {formatDate(row.startDate)} - {formatDate(row.dueDate)}
+                            {overlapping ? ` · ${overlapping} overlap${overlapping === 1 ? "" : "s"}` : ""}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="relative px-0 py-0" style={{ minWidth: timelineMinWidth }}>
+                    <div className="absolute inset-0">
+                      {dayMarkers.map((date, index) => (
+                        <span
+                          key={date.toISOString()}
+                          className={cn("absolute top-0 h-full border-l", index % 7 === 0 ? "border-[#e4e8e1] bg-[#fafbf8]" : "border-[#f1f3ef]", "dark:border-white/10")}
+                          style={{ left: `${(index / Math.max(1, bounds.days)) * 100}%`, width: `${100 / Math.max(1, bounds.days)}%` }}
+                        />
+                      ))}
+                    </div>
+                    <div className={cn("relative", row.type === "phase" ? "h-12" : "h-14")}>
+                      <span
+                        className={cn(
+                          "absolute flex items-center overflow-hidden rounded-full px-3 font-normal text-white",
+                          row.type === "phase" ? "top-[8px] h-8 text-xs" : "top-[10px] h-8 text-[11px]",
+                        )}
+                        style={{ left: `${left}%`, width: `${width}%`, backgroundColor: color, minWidth: row.type === "phase" ? 150 : 112, opacity: row.type === "phase" ? 0.98 : 0.9 }}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {row.title}{row.type === "phase" ? ` · ${row.progress}%` : ""}
+                        </span>
+                        {row.assignees?.length > 0 && (
+                          <span className="ml-2 shrink-0 scale-[0.78] origin-right">
+                            <AvatarStack people={row.assignees} limit={2} />
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+            {!rows.length && (
+              <div className="px-6 py-16 text-center text-sm text-[#858b82]">
+                Add start dates or deadlines to phases and tasks to build the Gantt chart.
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -4373,6 +4734,7 @@ function buildCalendarEvents({ project, phases = [], tasks = [], mrns = [] }) {
     pushEvent({ id: `${task.id}-start`, date: task.startDate, title: `${task.title || "Task"} starts`, type: "task", status: task.status, meta: phaseName || statusLabel(task.status), source: task });
     pushEvent({ id: `${task.id}-due`, date: task.dueDate, title: task.title || "Task deadline", type: "task", status: task.status, meta: `${task.priority || "medium"} priority`, source: task });
     (task.subtasks || []).forEach((subtask) => {
+      pushEvent({ id: `${task.id}-${subtask.id}-start`, date: subtask.startDate, title: `${subtask.title || "Subtask"} starts`, type: "subtask", status: subtask.done ? "done" : task.status, meta: task.title, source: task });
       pushEvent({ id: `${task.id}-${subtask.id}-due`, date: subtask.dueDate || subtask.date, title: subtask.title || "Subtask deadline", type: "subtask", status: subtask.done ? "done" : task.status, meta: task.title, source: task });
     });
   });
@@ -6419,6 +6781,17 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               isSuperAdmin={canEditSelectedProject}
               onOpenTask={openTask}
               onAddTask={addTask}
+            />
+          )}
+          {workspaceView === "gantt" && (
+            <GanttView
+              project={selectedProject}
+              phases={phases}
+              tasks={tasks}
+              users={users}
+              onOpenTask={openTask}
+              onOpenPhase={openPhase}
+              onClose={() => setWorkspaceView("tasks")}
             />
           )}
           {workspaceView === "calendar" && (

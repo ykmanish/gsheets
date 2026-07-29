@@ -1559,13 +1559,18 @@ export default function EmployeeDailyReport({ darkMode }) {
     setEditingReport(Boolean(todayReport));
     const nextDraftKey = `${draftStoragePrefix}:${todayReport?.id ? `edit:${todayReport.id}` : "new"}`;
     setActiveDraftKey(nextDraftKey);
+    const todoImportKey = `employee-daily-report-todo-import:${userStorageId}:${currentReportDate}`;
+    const todoImportRows = cleanTaskItems(safeJsonParse(window.localStorage.getItem(todoImportKey), []) || [])
+      .map((item) => normalizeTaskRowForForm(item, {}, true));
     const baseForm = {
       ...emptyForm,
       ...(todayReport || {}),
       tomorrowPlanTick: true,
       taskItems: todayReport?.taskItems?.length
         ? todayReport.taskItems.map((item) => normalizeTaskRowForForm(item, todayReport, true))
-        : recurringTasks.length
+        : todoImportRows.length
+          ? todoImportRows
+          : recurringTasks.length
           ? recurringTasks.map((item) => normalizeTaskRowForForm(item, {}, true))
           : [createEmptyTaskRow()],
       waitingTaskItems: todayReport?.waitingTaskItems?.length
@@ -1577,9 +1582,25 @@ export default function EmployeeDailyReport({ darkMode }) {
     const storedDraft = safeJsonParse(window.localStorage.getItem(nextDraftKey), null);
     const usableDraft = storedDraft?.form && hasEmployeeDraftContent(storedDraft.form) ? storedDraft : null;
     if (storedDraft && !usableDraft) window.localStorage.removeItem(nextDraftKey);
-    setForm(baseForm);
-    setLastDraftSavedAt(usableDraft?.savedAt || "");
-    if (usableDraft?.form) {
+    const nextBaseForm = todoImportRows.length && (todayReport?.taskItems?.length || usableDraft?.form?.taskItems?.length)
+      ? {
+        ...baseForm,
+        taskItems: [
+          ...(usableDraft?.form?.taskItems?.length ? usableDraft.form.taskItems : baseForm.taskItems || []),
+          ...todoImportRows,
+        ],
+      }
+      : baseForm;
+    if (todoImportRows.length) {
+      const savedAt = new Date().toISOString();
+      window.localStorage.setItem(nextDraftKey, JSON.stringify({ form: nextBaseForm, savedAt }));
+      window.localStorage.removeItem(todoImportKey);
+      setLastDraftSavedAt(savedAt);
+      toast.success(`${todoImportRows.length} todo task${todoImportRows.length === 1 ? "" : "s"} added to draft`);
+    }
+    setForm(nextBaseForm);
+    if (!todoImportRows.length) setLastDraftSavedAt(usableDraft?.savedAt || "");
+    if (usableDraft?.form && !todoImportRows.length) {
       setPendingDraft({ ...usableDraft, baseForm });
       setDraftChoiceOpen(true);
     } else {
@@ -1588,6 +1609,12 @@ export default function EmployeeDailyReport({ darkMode }) {
     }
     setFormOpen(true);
   }
+
+  useEffect(() => {
+    if (!data || formOpen) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("openTodos") === "1") openForm();
+  }, [data, formOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function continueDraft() {
     if (pendingDraft?.form) {

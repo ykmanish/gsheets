@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowRight, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, ClipboardList, FileSpreadsheet, FileText, Images, LayoutDashboard, MessageCircleMore, PackageSearch, Search, ShieldCheck, SlidersHorizontal, UserRound, Users, Workflow, X, ChartNoAxesCombined, Sheet } from "lucide-react";
+import { Activity, ArrowRight, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, ClipboardList, FileSpreadsheet, FileText, Images, LayoutDashboard, ListTodo, MessageCircleMore, PackageSearch, Search, ShieldCheck, SlidersHorizontal, UserRound, Users, Workflow, X, ChartNoAxesCombined, Sheet } from "lucide-react";
 
 const COMMAND_ITEMS = [
   { id: "dashboard", label: "Dashboard", description: "Overview, documents, activity, and workspace status", group: "Workspace", keywords: ["home", "overview"], icon: LayoutDashboard },
@@ -16,6 +16,7 @@ const COMMAND_ITEMS = [
   { id: "hr-employees", label: "Employees", description: "Employee profiles, HR setup, and documents", group: "HR", parent: "HR", keywords: ["staff", "team"], icon: Users },
   { id: "hr-leave", label: "Leave", description: "Manage and track employee leave requests", group: "HR", parent: "HR", keywords: ["leaves", "holiday"], icon: CalendarDays },
   { id: "hr-attendance", label: "Attendance", description: "Clock-in records, locations, and attendance", group: "HR", parent: "HR", keywords: ["clock", "timesheet"], icon: CalendarCheck },
+  { id: "todos", label: "Todos", description: "Personal tasks you can send to daily report", group: "Workspace", keywords: ["todo", "personal tasks"], icon: ListTodo },
   { id: "sheet-dashboard", label: "Sheet Dashboard", description: "Connected sheet dashboards and views", group: "Workspace", keywords: ["spreadsheet", "google sheet"], icon: Sheet },
   { id: "automations", label: "Automation", description: "Run and manage automation workflows", group: "Workspace", keywords: ["workflow"], icon: Workflow },
   { id: "reports", label: "Reports", description: "Generate and review saved reports", group: "Workspace", keywords: ["pdf", "analysis"], icon: ChartNoAxesCombined },

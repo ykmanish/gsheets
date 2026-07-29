@@ -73,6 +73,7 @@ const MENU_ITEMS = [
   { id: "hr-employees", label: "Employees", parent: "hr-dashboard", group: "hr" },
   { id: "hr-leave", label: "Leave", parent: "hr-dashboard", group: "hr" },
   { id: "hr-attendance", label: "Attendance", parent: "hr-dashboard", group: "hr" },
+  { id: "todos", label: "Todos" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
@@ -87,7 +88,7 @@ const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];
 const MENU_ITEM_IDS = new Set(ALL_MENU_ITEMS.map((item) => item.id));
 const ROLE_MENU_ITEM_IDS = new Set(MENU_ITEMS.map((item) => item.id));
 const MENU_PARENT_BY_CHILD_ID = new Map(MENU_ITEMS.filter((item) => item.parent && ROLE_MENU_ITEM_IDS.has(item.parent)).map((item) => [item.id, item.parent]));
-const DEFAULT_EMPLOYEE_MENU_IDS = ["hr-leave", "hr-attendance"];
+const DEFAULT_EMPLOYEE_MENU_IDS = ["hr-leave", "hr-attendance", "todos"];
 const PROTECTED_GLOBAL_MODULES = new Set(["dashboard", "module-control"]);
 const PRIVILEGE_ITEMS = [
   { id: "upload_documents", label: "Upload documents" },
@@ -127,6 +128,7 @@ async function connectAuthDb() {
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
   await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
+  await authDb.collection("personalTodos").createIndex({ userId: 1, createdAt: -1 });
   try {
     await authDb.collection("dmrWhatsAppReminderRuns").dropIndex("date_1_type_1");
   } catch (error) {
@@ -3713,6 +3715,121 @@ app.put("/admin/module-control", requireSuperAdmin, async (req, res) => {
   } catch (error) {
     console.error("Module control update error:", error);
     res.status(500).json({ error: "Could not update module controls" });
+  }
+});
+
+function normalizePersonalTodoTask(body = {}) {
+  const involvementValues = Array.isArray(body.involvementValues)
+    ? body.involvementValues.map(projectText).filter(Boolean)
+    : projectText(body.involvement).split(",").map(projectText).filter(Boolean);
+  return {
+    site: projectText(body.site),
+    siteOther: projectText(body.siteOther),
+    category: projectText(body.category),
+    categoryOther: projectText(body.categoryOther),
+    status: projectText(body.status) || "In Progress",
+    statusOther: projectText(body.statusOther),
+    involvement: involvementValues.join(", "),
+    involvementValues,
+    involvementOther: projectText(body.involvementOther),
+    description: projectText(body.description),
+    recurring: Boolean(body.recurring),
+  };
+}
+
+function serializePersonalTodo(doc = {}) {
+  const status = projectText(doc.task?.status);
+  return {
+    id: String(doc._id),
+    userId: String(doc.userId || ""),
+    task: doc.task || {},
+    completed: Boolean(doc.completed) || /^completed$/i.test(status),
+    importedAt: doc.importedAt || "",
+    createdAt: doc.createdAt || "",
+    updatedAt: doc.updatedAt || "",
+  };
+}
+
+app.get("/todos", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "todos")) return res.status(403).json({ error: "Todos access required" });
+    const db = await connectAuthDb();
+    const items = await db.collection("personalTodos").find({ userId: new ObjectId(req.authUser.id) }).sort({ completed: 1, createdAt: -1 }).limit(300).toArray();
+    const ownReports = await getCachedEmployeeReportsForUsers(db, [req.user]);
+    const optionUsage = employeeReportOptionUsage(ownReports);
+    const siteOptions = [...new Set([...EMPLOYEE_REPORT_OPTIONS.sites, ...ownReports.flatMap((report) => [
+      report.site,
+      ...sanitizeEmployeeTaskItems(report.taskItems).map((item) => item.site),
+      ...sanitizeEmployeeTaskItems(report.waitingTaskItems).map((item) => item.site),
+    ])].map(projectText).filter(Boolean))];
+    res.json({
+      todos: items.map(serializePersonalTodo),
+      options: { ...EMPLOYEE_REPORT_OPTIONS, sites: siteOptions },
+      optionUsage,
+      preferences: sanitizeEmployeeTaskPreferences(req.user.employeeTaskPreferences || {
+        useCustomOnly: false,
+        sites: req.user.employeeTaskSites || [],
+        categories: req.user.employeeTaskCategories || [],
+      }),
+    });
+  } catch (error) {
+    console.error("Todos load error:", error);
+    res.status(500).json({ error: "Could not load todos" });
+  }
+});
+
+app.post("/todos", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "todos")) return res.status(403).json({ error: "Todos access required" });
+    const task = normalizePersonalTodoTask(req.body || {});
+    if (!task.site && !task.category && !task.description) return res.status(400).json({ error: "Add todo task details" });
+    const db = await connectAuthDb();
+    const now = new Date().toISOString();
+    const doc = { userId: new ObjectId(req.authUser.id), task, completed: /^completed$/i.test(task.status), importedAt: "", createdAt: now, updatedAt: now };
+    const result = await db.collection("personalTodos").insertOne(doc);
+    res.json({ success: true, todo: serializePersonalTodo({ ...doc, _id: result.insertedId }) });
+  } catch (error) {
+    console.error("Todos create error:", error);
+    res.status(500).json({ error: "Could not save todo" });
+  }
+});
+
+app.patch("/todos/:id", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "todos")) return res.status(403).json({ error: "Todos access required" });
+    if (!ObjectId.isValid(req.params.id)) return res.status(404).json({ error: "Todo not found" });
+    const db = await connectAuthDb();
+    const update = { updatedAt: new Date().toISOString() };
+    if (req.body?.task) {
+      update.task = normalizePersonalTodoTask(req.body.task);
+      update.completed = /^completed$/i.test(update.task.status);
+    }
+    if (typeof req.body?.completed === "boolean") update.completed = req.body.completed;
+    if (req.body?.markImported) update.importedAt = new Date().toISOString();
+    const result = await db.collection("personalTodos").findOneAndUpdate(
+      { _id: new ObjectId(req.params.id), userId: new ObjectId(req.authUser.id) },
+      { $set: update },
+      { returnDocument: "after" },
+    );
+    const updated = result.value || result;
+    if (!updated?._id) return res.status(404).json({ error: "Todo not found" });
+    res.json({ success: true, todo: serializePersonalTodo(updated) });
+  } catch (error) {
+    console.error("Todos update error:", error);
+    res.status(500).json({ error: "Could not update todo" });
+  }
+});
+
+app.delete("/todos/:id", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "todos")) return res.status(403).json({ error: "Todos access required" });
+    if (!ObjectId.isValid(req.params.id)) return res.status(404).json({ error: "Todo not found" });
+    const db = await connectAuthDb();
+    await db.collection("personalTodos").deleteOne({ _id: new ObjectId(req.params.id), userId: new ObjectId(req.authUser.id) });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Todos delete error:", error);
+    res.status(500).json({ error: "Could not delete todo" });
   }
 });
 
@@ -11854,11 +11971,16 @@ function projectGanttRows(project = {}) {
         progress: subtask.done ? 100 : subtask.status === "in_progress" ? 50 : 0,
         depth: parentDepth + 1,
       };
-    });
+    }).sort((a, b) => `${a.startDate || ""}:${a.dueDate || ""}:${a.title}`.localeCompare(`${b.startDate || ""}:${b.dueDate || ""}:${b.title}`));
+  };
+  const scheduleSort = (a, b) => {
+    const aStart = projectDateKey(a.startDate) || projectDateKey(a.dueDate) || todayKey;
+    const bStart = projectDateKey(b.startDate) || projectDateKey(b.dueDate) || todayKey;
+    return `${aStart}:${projectDateKey(a.dueDate) || aStart}:${projectText(a.title || a.name)}`.localeCompare(`${bStart}:${projectDateKey(b.dueDate) || bStart}:${projectText(b.title || b.name)}`);
   };
   const rows = [];
-  phases.forEach((phase, phaseIndex) => {
-    const phaseTasks = tasks.filter((task) => task.phaseId === phase.id);
+  [...phases].sort(scheduleSort).forEach((phase, phaseIndex) => {
+    const phaseTasks = tasks.filter((task) => task.phaseId === phase.id).sort(scheduleSort);
     const taskDates = phaseTasks.flatMap((task) => [projectDateKey(task.startDate), projectDateKey(task.dueDate)]).filter(Boolean).sort();
     const startDate = projectDateKey(phase.startDate) || taskDates[0] || projectDateKey(project.startDate) || todayKey;
     const dueDate = projectDateKey(phase.dueDate) || taskDates.at(-1) || startDate;
@@ -11892,7 +12014,7 @@ function projectGanttRows(project = {}) {
       rows.push(...subtaskRowsFor(task, taskStart, taskDue, 1, phase.id));
     });
   });
-  tasks.filter((task) => !task.phaseId || !phases.some((phase) => phase.id === task.phaseId)).forEach((task) => {
+  tasks.filter((task) => !task.phaseId || !phases.some((phase) => phase.id === task.phaseId)).sort(scheduleSort).forEach((task) => {
     const startDate = projectDateKey(task.startDate) || projectDateKey(task.dueDate) || todayKey;
     const dueDate = projectDateKey(task.dueDate) || startDate;
     rows.push({

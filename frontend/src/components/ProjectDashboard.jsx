@@ -3709,11 +3709,16 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
           depth: parentDepth + 1,
           source: task,
         };
-      });
+      }).sort((a, b) => `${a.startDate || ""}:${a.dueDate || ""}:${a.title}`.localeCompare(`${b.startDate || ""}:${b.dueDate || ""}:${b.title}`));
+    };
+    const scheduleSort = (a, b) => {
+      const aStart = dateKeyFromValue(a.startDate) || dateKeyFromValue(a.dueDate) || todayKey;
+      const bStart = dateKeyFromValue(b.startDate) || dateKeyFromValue(b.dueDate) || todayKey;
+      return `${aStart}:${dateKeyFromValue(a.dueDate) || aStart}:${a.title || a.name || ""}`.localeCompare(`${bStart}:${dateKeyFromValue(b.dueDate) || bStart}:${b.title || b.name || ""}`);
     };
     const rowsByPhase = [];
-    phases.forEach((phase, phaseIndex) => {
-      const phaseTasks = tasks.filter((task) => task.phaseId === phase.id);
+    [...phases].sort(scheduleSort).forEach((phase, phaseIndex) => {
+      const phaseTasks = tasks.filter((task) => task.phaseId === phase.id).sort(scheduleSort);
       const taskDates = phaseTasks.flatMap((task) => [dateKeyFromValue(task.startDate), dateKeyFromValue(task.dueDate)]).filter(Boolean).sort();
       const startDate = dateKeyFromValue(phase.startDate) || taskDates[0] || dateKeyFromValue(project.startDate) || todayKey;
       const dueDate = dateKeyFromValue(phase.dueDate) || taskDates.at(-1) || startDate;
@@ -3757,7 +3762,7 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
       });
     });
     const looseTasks = tasks.filter((task) => !task.phaseId || !phases.some((phase) => phase.id === task.phaseId));
-    looseTasks.forEach((task) => {
+    looseTasks.sort(scheduleSort).forEach((task) => {
       const startDate = dateKeyFromValue(task.startDate) || dateKeyFromValue(task.dueDate) || todayKey;
       const dueDate = dateKeyFromValue(task.dueDate) || startDate;
       rowsByPhase.push({

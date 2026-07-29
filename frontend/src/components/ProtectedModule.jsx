@@ -23,6 +23,7 @@ import MrnDashboard from "./MrnDashboard";
 import StockDashboard from "./StockDashboard";
 import SiteImagesDashboard from "./SiteImagesDashboard";
 import EmployeeDailyReport from "./EmployeeDailyReport";
+import Todos from "./Todos";
 import ModuleControl from "./ModuleControl";
 import HrDashboard from "./HrDashboard";
 import ProfilePage from "./ProfilePage";
@@ -41,6 +42,7 @@ const menuPaths = {
   "hr-employees": "/hr/employees",
   "hr-leave": "/hr/leave",
   "hr-attendance": "/hr/attendance",
+  todos: "/todos",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
@@ -109,7 +111,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const [dismissedNotificationId, setDismissedNotificationId] = useState(null);
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "todos", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
       "projects",
       "profile",
     ];
@@ -243,6 +245,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "hr-employees" && <HrDashboard darkMode={darkMode} section="employees" />}
         {moduleId === "hr-leave" && <HrDashboard darkMode={darkMode} section="leave" />}
         {moduleId === "hr-attendance" && <HrDashboard darkMode={darkMode} section="attendance" />}
+        {moduleId === "todos" && <Todos darkMode={darkMode} />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}

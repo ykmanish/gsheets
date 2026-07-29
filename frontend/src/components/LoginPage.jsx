@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
@@ -86,25 +86,25 @@ export default function LoginPage() {
     }
   }
   
-  const backgroundImage= {
-    backgroundImage: "url('https://assets.lummi.ai/assets/QmWyKXxWZdtwBj9REXhGRG17Py5pvn34iuCnSjbiVX1Rz1?auto=format&w=1500')",
+  const backgroundImage = {
+    backgroundImage: "url('/tbgss.png')",
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
-
-  }
+  };
 
   return (
-    <main 
-    style={backgroundImage}
-    className="min-h-dvh bg-[#f6f6f4] flex items-center justify-center px-4 py-6 sm:px-5">
+    <main
+      style={backgroundImage}
+      className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#111] px-4 py-6 sm:px-5"
+    >
       <Toaster position="top-center" />
-      <form onSubmit={handleSubmit} className="w-full max-w-[430px] bg-white border border-black/5 rounded-[24px] p-5 -sm sm:rounded-[28px] sm:p-8">
-        <p className="text-[11px] uppercase tracking-[0.32em] text-black/35 mb-2">Secure Access</p>
-        <h1 className="text-2xl font-semibold text-black small leading-tight sm:text-3xl">Login to UIPL Docs</h1>
-        <p className="text-sm text-black/45 mt-3">
-          Log in to access your UIPL Docs dashboard.
-        </p>
+      <div className="absolute inset-0 bg-black/58" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.05),rgba(0,0,0,0.42))]" />
+      <form onSubmit={handleSubmit} className="relative z-10 w-full max-w-[430px] rounded-[30px] border border-white/70 bg-white p-6 shadow-[0_28px_90px_rgba(0,0,0,0.35)] sm:p-8">
+        <p className="mb-2 text-[11px] uppercase tracking-[0.32em] text-black/35">Secure Access</p>
+        <h1 className="small text-2xl font-semibold leading-tight text-black sm:text-3xl">Login to your account</h1>
+        <p className="mt-3 text-sm leading-6 text-black/55">Enter your username and password to access UIPL Docs.</p>
 
         <div className="mt-8 space-y-4">
           <label className="block">
@@ -112,20 +112,22 @@ export default function LoginPage() {
             <input
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              className="mt-2 w-full rounded-2xl border-black/10 bg-black/[0.02] px-4 py-3 text-black outline-none focus:border-black"
+              className="mt-2 h-14 w-full rounded-2xl border border-black/5 bg-[#f8f3f3] px-5 text-black outline-none transition focus:border-black/15 focus:bg-white focus:ring-4 focus:ring-black/[0.04]"
               autoComplete="username"
+              placeholder="Enter username"
               required
             />
           </label>
           <label className="block">
             <span className="text-xs uppercase tracking-[0.18em] text-black/40">Password</span>
-            <div className="mt-2 flex items-center rounded-2xl bg-black/[0.02] pr-2">
+            <div className="mt-2 flex h-14 items-center rounded-2xl border border-black/5 bg-[#f8f3f3] pr-2 transition focus-within:border-black/15 focus-within:bg-white focus-within:ring-4 focus-within:ring-black/[0.04]">
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="min-w-0 flex-1 rounded-2xl bg-transparent px-4 py-3 text-black outline-none"
+                className="min-w-0 flex-1 rounded-2xl bg-transparent px-5 text-black outline-none"
                 autoComplete="current-password"
+                placeholder="Enter password"
                 required
               />
               <button
@@ -146,9 +148,9 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading || !recaptchaLoaded}
-          className="mt-7 w-full rounded-2xl bg-[#000000] text-white py-3.5 font-medium flex items-center justify-center gap-2 disabled:opacity-60"
+          className="mt-7 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-black font-semibold text-white shadow-[0_12px_30px_rgba(0,0,0,0.18)] transition hover:bg-black/85 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {!recaptchaLoaded ? "Loading..." : "Login"}
         </button>
       </form>

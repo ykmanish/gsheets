@@ -26,6 +26,7 @@ import EmployeeDailyReport from "./EmployeeDailyReport";
 import ModuleControl from "./ModuleControl";
 import HrDashboard from "./HrDashboard";
 import ProfilePage from "./ProfilePage";
+import CommandPalette from "./CommandPalette";
 
 const menuPaths = {
   dashboard: "/dashboard",
@@ -103,6 +104,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     return window.localStorage.getItem("uipl_docs_sidebar_collapsed") === "true";
   });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [latestNotification, setLatestNotification] = useState(null);
   const [dismissedNotificationId, setDismissedNotificationId] = useState(null);
   const allowedMenus = useMemo(() => {
@@ -133,6 +135,17 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   useEffect(() => {
     window.localStorage.setItem("uipl_docs_sidebar_collapsed", String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    function openCommandPalette(event) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen(true);
+      }
+    }
+    window.addEventListener("keydown", openCommandPalette);
+    return () => window.removeEventListener("keydown", openCommandPalette);
+  }, []);
 
   useEffect(() => {
     if (loading || !user) return;
@@ -179,6 +192,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
 
   const navigateToMenu = (menu) => {
     setSidebarOpen(false);
+    setCommandPaletteOpen(false);
     router.push(menuPaths[menu] || "/dashboard");
   };
 
@@ -196,6 +210,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         setCollapsed={setSidebarCollapsed}
         user={user}
         onLogout={logout}
+        onOpenSearch={() => setCommandPaletteOpen(true)}
       />
       <div className="flex-1 newq flex min-w-0 flex-col overflow-hidden">
         <Navbar
@@ -240,6 +255,13 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "profile" && <ProfilePage darkMode={darkMode} />}
       </div>
       <NotificationDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} darkMode={darkMode} />
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onNavigate={navigateToMenu}
+        allowedMenus={allowedMenus}
+        darkMode={darkMode}
+      />
     </div>
   );
 }

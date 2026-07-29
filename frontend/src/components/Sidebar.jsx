@@ -4,7 +4,7 @@ import Image from "next/image";
 import { API_URL } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
 
-export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen, collapsed = false, setCollapsed, user, onLogout }) {
+export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen, collapsed = false, setCollapsed, user, onLogout, onOpenSearch }) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "documents", label: "Documents", icon: FileText },
@@ -184,7 +184,14 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           </div>
           <div className={`relative newq overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out ${collapsed ? "md:mt-0 md:max-h-0 md:opacity-0" : "mt-4 max-h-10 opacity-100"}`}>
             <Search className={`absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${muted}`} />
-            <input value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} placeholder="Global Search" className={`h-10 w-full rounded-xl border-0 pl-9 pr-3 text-sm outline-none ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35" : "bg-[#f1f4f8] text-slate-800 placeholder:text-slate-400"}`} />
+            <input
+              value={menuSearch}
+              onFocus={() => onOpenSearch?.()}
+              onChange={(event) => setMenuSearch(event.target.value)}
+              placeholder="Global Search"
+              className={`h-10 w-full rounded-xl border-0 pl-9 pr-16 text-sm outline-none ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35" : "bg-[#f1f4f8] text-slate-800 placeholder:text-slate-400"}`}
+            />
+            <kbd className={`pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold sm:block ${darkMode ? "border-white/10 text-white/35" : "border-slate-200 text-slate-400"}`}>Ctrl K</kbd>
           </div>
         </div>
 

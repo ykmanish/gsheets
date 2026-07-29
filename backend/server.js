@@ -811,7 +811,7 @@ function employeeReportDateRange() {
 }
 
 function employeeReportToday(req = null) {
-  const allowDateOverride = process.env.ALLOW_EMPLOYEE_REPORT_DATE_OVERRIDE === "true";
+  const allowDateOverride = process.env.ALLOW_EMPLOYEE_REPORT_DATE_OVERRIDE === "true" || Boolean(req?.authUser?.isSuperAdmin);
   const headerDate = allowDateOverride ? dmrDateKey(req?.headers?.["x-employee-report-date"]) : "";
   const envDate = allowDateOverride ? dmrDateKey(process.env.EMPLOYEE_REPORT_TEST_DATE) : "";
   return headerDate || envDate || istDateKey(new Date());
@@ -2523,6 +2523,10 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
   const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
   const carriedForwardTasks = todayReport ? [] : employeeRecurringTasksFromReports(ownReports, today);
+  const plannedWorkSourceDate = addDaysToDateKey(today, -1);
+  const plannedWorkSourceReport = ownReports.find((report) => String(report.userId) === userId && report.reportDate === plannedWorkSourceDate) || null;
+  const plannedWorkItems = sanitizeEmployeeTaskItems(plannedWorkSourceReport?.waitingTaskItems)
+    .filter((item) => item.site && item.category && item.description);
   const siteOptions = [...new Set([...EMPLOYEE_REPORT_OPTIONS.sites, ...allCachedReports.flatMap((report) => [
     report.site,
     ...sanitizeEmployeeTaskItems(report.taskItems).map((item) => item.site),
@@ -2583,6 +2587,10 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     executiveAnswersSubmitted: Boolean(executiveAnswers?.answers?.length),
     carriedForwardTasks,
     carriedForwardFrom: carriedForwardTasks[0]?.recurringFrom || "",
+    plannedWorkSourceDate,
+    plannedWorkSourceId: plannedWorkSourceReport ? String(plannedWorkSourceReport.reportId || plannedWorkSourceReport._id || "") : "",
+    plannedWorkSourceSubmittedAt: plannedWorkSourceReport?.submittedAt || null,
+    plannedWorkItems,
     currentUserId: userId,
     profile: {
       department: req.user.department || "",

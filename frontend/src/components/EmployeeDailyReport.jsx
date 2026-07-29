@@ -9,17 +9,8 @@ import UserAvatar from "./UserAvatar";
 
 const employeeReportTestDateKey = "employee-report-test-date";
 
-function employeeReportDateOverrideAllowed() {
-  if (typeof window === "undefined") return false;
-  return process.env.NODE_ENV === "development" || ["localhost", "127.0.0.1"].includes(window.location.hostname);
-}
-
 function employeeReportTestDate() {
   if (typeof window === "undefined") return "";
-  if (!employeeReportDateOverrideAllowed()) {
-    window.localStorage.removeItem(employeeReportTestDateKey);
-    return "";
-  }
   const queryDate = new URLSearchParams(window.location.search).get("employeeReportDate");
   if (String(queryDate || "").toLowerCase() === "clear") {
     window.localStorage.removeItem(employeeReportTestDateKey);
@@ -169,6 +160,40 @@ function normalizeTaskRowForForm(item = {}, fallback = {}, includeStatus = true)
     involvementValues,
     recurring: includeStatus ? Boolean(item.recurring) : false,
     recurringId: includeStatus ? item.recurringId || recurringIdForTask(item) : "",
+  };
+}
+
+function plannedWorkKey(item = {}, index = 0, sourceDate = "") {
+  return [sourceDate, index, item.site, item.category, item.description].map((value) => String(value || "").trim().toLowerCase()).join("|");
+}
+
+function cleanTaskItems(items = []) {
+  return (Array.isArray(items) ? items : []).map((item) => ({
+    ...item,
+    site: String(item?.site || "").trim(),
+    category: String(item?.category || "").trim(),
+    status: String(item?.status || "").trim(),
+    involvement: String(item?.involvement || "").trim(),
+    involvementValues: involvementValuesFromRow(item),
+    description: String(item?.description || "").trim(),
+  })).filter((item) => item.site || item.category || item.description);
+}
+
+function plannedWorkToTaskRow(item = {}) {
+  const site = String(item.site || "").trim();
+  const category = String(item.category || "").trim();
+  const description = String(item.description || "").trim();
+  const involvementValues = involvementValuesFromRow(item);
+  return {
+    ...createEmptyTaskRow(),
+    site,
+    category,
+    status: "In Progress",
+    involvement: involvementValues.join(", "),
+    involvementValues,
+    involvementOther: item.involvementOther || "",
+    description,
+    recurringId: recurringIdForTask({ site, category, description }),
   };
 }
 
@@ -1271,6 +1296,10 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [draftChoiceOpen, setDraftChoiceOpen] = useState(false);
   const [pendingDraft, setPendingDraft] = useState(null);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
+  const [plannedWorkOpen, setPlannedWorkOpen] = useState(false);
+  const [plannedWorkSelection, setPlannedWorkSelection] = useState({});
+  const [plannedWorkImported, setPlannedWorkImported] = useState({});
+  const [plannedWorkDiscarded, setPlannedWorkDiscarded] = useState(false);
   const [customPrefs, setCustomPrefs] = useState({ useCustomOnly: false, sites: [], categories: [] });
   const [customOptionsOpen, setCustomOptionsOpen] = useState(false);
   const [customSiteInput, setCustomSiteInput] = useState("");
@@ -1350,6 +1379,19 @@ export default function EmployeeDailyReport({ darkMode }) {
   const currentReportDate = data?.today || todayInput();
   const draftStoragePrefix = `employee-daily-report-draft:${userStorageId}:${currentReportDate}`;
   const draftStorageKey = activeDraftKey || `${draftStoragePrefix}:new`;
+  const plannedWorkSourceDate = data?.plannedWorkSourceDate || addDaysInput(currentReportDate, -1);
+  const plannedWorkSignature = useMemo(() => cleanTaskItems(data?.plannedWorkItems)
+    .map((item) => [item.site, item.category, item.involvement, item.description].join("::"))
+    .join("||"), [data?.plannedWorkItems]);
+  const plannedWorkSourceSignature = [data?.plannedWorkSourceId, data?.plannedWorkSourceSubmittedAt, plannedWorkSignature].filter(Boolean).join(":");
+  const plannedWorkDiscardKey = `employee-daily-report-planned-discard:${userStorageId}:${currentReportDate}:${plannedWorkSourceDate}:${plannedWorkSourceSignature || "empty"}`;
+  const plannedWorkItems = useMemo(() => {
+    if (plannedWorkDiscarded) return [];
+    return cleanTaskItems(data?.plannedWorkItems)
+      .map((item, index) => ({ ...item, plannedKey: plannedWorkKey(item, index, plannedWorkSourceDate) }))
+      .filter((item) => item.site && item.category && item.description && !plannedWorkImported[item.plannedKey]);
+  }, [data?.plannedWorkItems, plannedWorkDiscarded, plannedWorkImported, plannedWorkSourceDate]);
+  const selectedPlannedWorkCount = plannedWorkItems.filter((item) => plannedWorkSelection[item.plannedKey]).length;
 
   async function load() {
     try {
@@ -1491,6 +1533,13 @@ export default function EmployeeDailyReport({ darkMode }) {
     return () => window.clearTimeout(timeoutId);
   }, [draftChoiceOpen, draftStorageKey, form, formOpen, submitting]);
 
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setPlannedWorkDiscarded(typeof window !== "undefined" && window.localStorage.getItem(plannedWorkDiscardKey) === "true");
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [plannedWorkDiscardKey]);
+
   function openForm() {
     if (!data?.profile?.sheetLinked) {
       toast.error("Link your Google Sheet before filling today's report");
@@ -1500,6 +1549,11 @@ export default function EmployeeDailyReport({ darkMode }) {
     setFormExpanded(false);
     const todayReport = data?.todayReport;
     const recurringTasks = Array.isArray(data?.carriedForwardTasks) ? data.carriedForwardTasks : [];
+    const discardedForToday = window.localStorage.getItem(plannedWorkDiscardKey) === "true";
+    setPlannedWorkDiscarded(discardedForToday);
+    setPlannedWorkImported({});
+    setPlannedWorkSelection({});
+    setPlannedWorkOpen(false);
     setEditingReport(Boolean(todayReport));
     const nextDraftKey = `${draftStoragePrefix}:${todayReport?.id ? `edit:${todayReport.id}` : "new"}`;
     setActiveDraftKey(nextDraftKey);
@@ -1548,6 +1602,45 @@ export default function EmployeeDailyReport({ darkMode }) {
     setLastDraftSavedAt("");
     setDraftChoiceOpen(false);
     setPendingDraft(null);
+  }
+
+  function togglePlannedWorkItem(key) {
+    setPlannedWorkSelection((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  function importSelectedPlannedWork() {
+    const selectedItems = plannedWorkItems.filter((item) => plannedWorkSelection[item.plannedKey]);
+    if (!selectedItems.length) {
+      toast.error("Select planned work to import");
+      return;
+    }
+    const importedRows = selectedItems.map(plannedWorkToTaskRow);
+    setForm((current) => {
+      const existingRows = Array.isArray(current.taskItems) ? current.taskItems : [];
+      const hasEmptyOnly = existingRows.length === 1 && !hasEmployeeDraftContent({ taskItems: existingRows, waitingTaskItems: [] });
+      return {
+        ...current,
+        taskItems: hasEmptyOnly ? importedRows : [...existingRows, ...importedRows],
+      };
+    });
+    setPlannedWorkImported((current) => {
+      const next = { ...current };
+      selectedItems.forEach((item) => { next[item.plannedKey] = true; });
+      return next;
+    });
+    window.localStorage.setItem(plannedWorkDiscardKey, "true");
+    setPlannedWorkDiscarded(true);
+    setPlannedWorkOpen(false);
+    setPlannedWorkSelection({});
+    toast.success(`${selectedItems.length} planned task${selectedItems.length === 1 ? "" : "s"} imported`);
+  }
+
+  function discardPlannedWorkForToday() {
+    window.localStorage.setItem(plannedWorkDiscardKey, "true");
+    setPlannedWorkDiscarded(true);
+    setPlannedWorkSelection({});
+    setPlannedWorkOpen(false);
+    toast.success("Today's planned work hidden");
   }
 
   function saveCustomPreferences(nextPrefs, options = {}) {
@@ -2396,7 +2489,7 @@ export default function EmployeeDailyReport({ darkMode }) {
         <div className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] ${formClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeFormDrawer(); }}>
           <form onSubmit={submitReport} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${formExpanded ? "employee-report-shell-expanded" : ""} ${formClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
             <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <span><b>Daily work progress</b> · {todayInput()}</span>
+              <span><b>Daily work progress</b> · {currentReportDate}</span>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setFormExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={formExpanded ? "Restore drawer size" : "Expand report to full screen"}>
                   {formExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
@@ -2536,6 +2629,77 @@ export default function EmployeeDailyReport({ darkMode }) {
                     </div>
                   </div>
                   </div>
+                  {plannedWorkItems.length > 0 && (
+                    <div className="md:col-span-2">
+                      <div className={`overflow-hidden rounded-[22px] transition ${darkMode ? "bg-[#d8f36a]/10" : "bg-[#f4fee9]"}`}>
+                        <button
+                          type="button"
+                          onClick={() => setPlannedWorkOpen((current) => !current)}
+                          className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-[#4b9b16]">Today&apos;s planned work</span>
+                            <span className={`mt-1 block truncate text-sm font-bold ${darkMode ? "text-white" : "text-black"}`}>
+                              {plannedWorkItems.length} item{plannedWorkItems.length === 1 ? "" : "s"} from {formatShortDate(plannedWorkSourceDate)}
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className={`hidden rounded-full px-3 py-1 text-xs font-bold sm:inline-flex ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-black/55"}`}>
+                              Import to today
+                            </span>
+                            <ChevronDown className={`h-5 w-5 text-[#4b9b16] transition-transform duration-300 ${plannedWorkOpen ? "rotate-180" : ""}`} />
+                          </span>
+                        </button>
+                        <div className={`grid transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${plannedWorkOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                          <div className="min-h-0 overflow-hidden">
+                            <div className={`border-t p-4 ${darkMode ? "border-white/10" : "border-[#d9f8c8]"}`}>
+                              <div className="space-y-2">
+                                {plannedWorkItems.map((item) => {
+                                  const selected = Boolean(plannedWorkSelection[item.plannedKey]);
+                                  return (
+                                    <button
+                                      key={item.plannedKey}
+                                      type="button"
+                                      onClick={() => togglePlannedWorkItem(item.plannedKey)}
+                                      className={`flex w-full items-start gap-3 rounded-2xl p-3 text-left transition ${selected ? darkMode ? "bg-[#d8f36a]/18" : "bg-white" : darkMode ? "bg-white/[0.04] hover:bg-white/[0.07]" : "bg-white/60 hover:bg-white"}`}
+                                    >
+                                      <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${selected ? "border-[#4b9b16] bg-[#89ed3f] text-black" : darkMode ? "border-white/20 bg-white/5" : "border-black/15 bg-white"}`}>
+                                        {selected && <Check className="h-3.5 w-3.5" />}
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="flex flex-wrap items-center gap-2">
+                                          <span className="font-bold">{item.site}</span>
+                                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/60" : "bg-[#eef4ea] text-black/55"}`}>{item.category}</span>
+                                          {item.involvement && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/60" : "bg-[#eef4ea] text-black/55"}`}>{item.involvement}</span>}
+                                        </span>
+                                        <span className={`mt-1 block text-sm leading-5 ${darkMode ? "text-white/65" : "text-black/60"}`}>{item.description}</span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const allSelected = plannedWorkItems.every((item) => plannedWorkSelection[item.plannedKey]);
+                                    setPlannedWorkSelection(allSelected ? {} : plannedWorkItems.reduce((result, item) => ({ ...result, [item.plannedKey]: true }), {}));
+                                  }}
+                                  className={`h-10 rounded-full px-4 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                                >
+                                  {plannedWorkItems.every((item) => plannedWorkSelection[item.plannedKey]) ? "Clear selection" : "Select all"}
+                                </button>
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={discardPlannedWorkForToday} className={`h-10 rounded-full px-4 text-xs font-bold transition ${darkMode ? "bg-red-500/10 text-red-200 hover:bg-red-500/15" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>Discard for today</button>
+                                  <button type="button" onClick={importSelectedPlannedWork} disabled={!selectedPlannedWorkCount} className="h-10 rounded-full bg-[#89ed3f] px-4 text-xs font-black text-black transition hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-50">Import selected {selectedPlannedWorkCount ? `(${selectedPlannedWorkCount})` : ""}</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <TaskRowsEditor
                     title="Today's Tasks"
                     rows={form.taskItems}

@@ -85,6 +85,8 @@ export default function ProfilePage({ darkMode }) {
   const [editing, setEditing] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(true);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [reportChecking, setReportChecking] = useState(true);
+  const [todayReportSubmitted, setTodayReportSubmitted] = useState(false);
   const [documentUploading, setDocumentUploading] = useState("");
   const [documentUploadProgress, setDocumentUploadProgress] = useState({});
   const [attendanceData, setAttendanceData] = useState({ settings: {}, records: [], remoteWorkEnabled: false, reportExempt: false });
@@ -128,6 +130,22 @@ export default function ProfilePage({ darkMode }) {
   const attendanceReady = attendanceConfigured || remoteWorkEnabled;
   const canClockIn = !todayAttendance?.clockInAt && (attendanceConfigured || remoteWorkEnabled);
   const canClockOut = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt && attendanceReady);
+  const reportExempt = Boolean(attendanceData.reportExempt);
+  const mustFillReportBeforeClockOut = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt && !todayReportSubmitted && !reportExempt);
+
+  async function loadReportStatus() {
+    try {
+      setReportChecking(true);
+      const response = await fetch(`${API_URL}/employee-daily-report`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not load report status");
+      setTodayReportSubmitted(Boolean(data.todaySubmitted));
+    } catch {
+      setTodayReportSubmitted(false);
+    } finally {
+      setReportChecking(false);
+    }
+  }
 
   async function loadAttendance() {
     try {
@@ -196,7 +214,7 @@ export default function ProfilePage({ darkMode }) {
   }
 
   async function clockOutFromProfile() {
-    if (attendanceSaving || !canClockOut) return;
+    if (attendanceSaving || !canClockOut || mustFillReportBeforeClockOut) return;
     try {
       setAttendanceSaving(true);
       let location = {};
@@ -238,9 +256,26 @@ export default function ProfilePage({ darkMode }) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadAttendance();
+      void loadReportStatus();
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    function refreshReportStatus() {
+      void loadReportStatus();
+    }
+    window.addEventListener("uipl:employee-daily-report-submitted", refreshReportStatus);
+    window.addEventListener("focus", refreshReportStatus);
+    return () => {
+      window.removeEventListener("uipl:employee-daily-report-submitted", refreshReportStatus);
+      window.removeEventListener("focus", refreshReportStatus);
+    };
+  }, []);
+
+  function openEmployeeReport() {
+    window.location.href = "/employee-daily-report";
+  }
 
   async function saveProfile(event) {
     event.preventDefault();
@@ -430,22 +465,26 @@ export default function ProfilePage({ darkMode }) {
                   <h1 className="text-3xl small text-black dark:text-white font-black tracking-tight">{displayName}</h1>
                   <button
                     type="button"
-                    onClick={todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? clockOutFromProfile : clockInFromProfile}
-                    disabled={attendanceLoading || attendanceSaving || (todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? !canClockOut : !canClockIn)}
+                    onClick={mustFillReportBeforeClockOut ? openEmployeeReport : todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? clockOutFromProfile : clockInFromProfile}
+                    disabled={attendanceLoading || attendanceSaving || reportChecking || (mustFillReportBeforeClockOut ? false : todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? !canClockOut : !canClockIn)}
                     className={`inline-flex h-12 w-fit min-w-[142px] items-center justify-center gap-2 rounded-full px-6 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
                       todayAttendance?.clockOutAt
                         ? darkMode ? "bg-emerald-400/16 text-emerald-100" : "bg-[#e8f6ee] text-[#15734d]"
+                        : mustFillReportBeforeClockOut
+                          ? darkMode ? "bg-sky-400/14 text-sky-200 hover:bg-sky-400/20" : "bg-sky-50 text-sky-700 hover:bg-sky-100"
                         : todayAttendance?.clockInAt
                           ? darkMode ? "bg-red-600 text-white hover:bg-red-500" : "bg-red-500 text-white hover:bg-red-600"
                           : "bg-green-500 text-white hover:bg-green-600"
                     }`}
                   >
-                    {attendanceLoading || attendanceSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : todayAttendance?.clockOutAt ? <CheckCircle2 className="h-4 w-4" /> : todayAttendance?.clockInAt ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+                    {attendanceLoading || attendanceSaving || reportChecking ? <RefreshCw className="h-4 w-4 animate-spin" /> : todayAttendance?.clockOutAt ? <CheckCircle2 className="h-4 w-4" /> : mustFillReportBeforeClockOut ? <FileText className="h-4 w-4" /> : todayAttendance?.clockInAt ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
                     {attendanceLoading
                       ? "Checking"
+                      : reportChecking
+                        ? "Checking report"
                       : attendanceSaving
                         ? todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? "Clocking out" : "Clocking in"
-                        : todayAttendance?.clockOutAt ? "Clocked out" : todayAttendance?.clockInAt ? "Clock out" : "Clock in"}
+                        : todayAttendance?.clockOutAt ? "Clocked out" : mustFillReportBeforeClockOut ? "Fill Employee Report" : todayAttendance?.clockInAt ? "Clock out" : "Clock in"}
                   </button>
                 </div>
                 <p className={`mt-1 text-sm ${darkMode ? "text-white/60" : "text-black/55"}`}>{form.designation || "Designation not added"}</p>

@@ -1205,7 +1205,15 @@ function TaskDrawer({
   const [tab, setTab] = useState("subtasks");
   const [editMode, setEditMode] = useState(Boolean(task.__isNew));
   const [comment, setComment] = useState("");
-  const [subtaskTitle, setSubtaskTitle] = useState("");
+  const [subtaskFormOpen, setSubtaskFormOpen] = useState(false);
+  const [subtaskDraft, setSubtaskDraft] = useState({
+    title: "",
+    description: "",
+    startDate: "",
+    dueDate: "",
+    assigneeId: "",
+    dependencyIds: [],
+  });
   const isEditing = Boolean(editable && (task.__isNew || editMode));
   const assignees = users.filter((person) =>
     (task.assigneeIds || []).includes(person.id),
@@ -1242,24 +1250,29 @@ function TaskDrawer({
   }
 
   function addSubtask() {
-    if (!subtaskTitle.trim()) return;
+    if (!subtaskDraft.title.trim()) return;
     onChange({
       subtasks: [
-        ...subtasks,
         {
           id: uid("subtask"),
-          title: subtaskTitle.trim(),
-          description: "",
-          startDate: "",
-          dueDate: "",
-          assigneeId: "",
-          dependencyIds: [],
+          title: subtaskDraft.title.trim(),
+          description: subtaskDraft.description.trim(),
+          startDate: subtaskDraft.startDate,
+          dueDate: subtaskDraft.dueDate,
+          assigneeId: subtaskDraft.assigneeId,
+          dependencyIds: subtaskDraft.dependencyIds,
           done: false,
           createdAt: new Date().toISOString(),
         },
+        ...subtasks,
       ],
     });
-    setSubtaskTitle("");
+    setSubtaskDraft({ title: "", description: "", startDate: "", dueDate: "", assigneeId: "", dependencyIds: [] });
+    setSubtaskFormOpen(false);
+  }
+
+  function updateSubtaskDraft(patch) {
+    setSubtaskDraft((current) => ({ ...current, ...patch }));
   }
 
   function updateSubtask(id, patch) {
@@ -1527,23 +1540,35 @@ function TaskDrawer({
 
         <div className="mt-7 flex gap-6 border-b border-[#e1e5de] dark:border-white/10">
           {[
-            ["subtasks", `Subtasks ${subtasks.length || ""}`],
-            ["details", `Dependencies ${dependencies.length || ""}`],
-            ["comments", `Comments ${(task.comments || []).length || ""}`],
-            ["activity", "Activities"],
-          ].map(([value, label]) => (
+            ["subtasks", "Subtasks", subtasks.length],
+            ["details", "Dependencies", dependencies.length],
+            ["comments", "Comments", (task.comments || []).length],
+            ["activity", "Activities", 0],
+          ].map(([value, label, count]) => (
             <button
               key={value}
               type="button"
               onClick={() => setTab(value)}
               className={cn(
-                "border-b-2 px-1 pb-3 text-sm transition",
+                "flex items-center gap-2 border-b-2 px-1 pb-3 text-sm transition",
                 tab === value
                   ? "border-[#20231f] font-semibold text-[#20231f] dark:border-white dark:text-white"
                   : "border-transparent text-[#7c8278] dark:text-white/45",
               )}
             >
-              {label}
+              <span>{label}</span>
+              {count > 0 && (
+                <span
+                  className={cn(
+                    "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-none",
+                    tab === value
+                      ? "bg-[#20231f] text-white dark:bg-white dark:text-[#20231f]"
+                      : "bg-[#eef2eb] text-[#64705f] dark:bg-white/10 dark:text-white/70",
+                  )}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -1566,30 +1591,125 @@ function TaskDrawer({
               className="mt-3"
             />
             {isEditing && (
-              <div className="mt-4 flex gap-2">
-                <input
-                  value={subtaskTitle}
-                  onChange={(event) => setSubtaskTitle(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addSubtask();
-                    }
-                  }}
-                  placeholder="Add a subtask..."
-                  className={cn(inputClass, "h-10 flex-1 rounded-full")}
-                />
-                <Button variant="primary" onClick={addSubtask}>
-                  <Plus className="h-3.5 w-3.5" />
-                  Add
-                </Button>
+              <div className="mt-4">
+                {!subtaskFormOpen ? (
+                  <Button variant="primary" className="!h-11 !px-5" onClick={() => setSubtaskFormOpen(true)}>
+                    <Plus className="h-4 w-4" />
+                    Add new subtask
+                  </Button>
+                ) : (
+                  <div className="animate-[subtask-card-in_260ms_ease-out] rounded-2xl border border-[#dfe3dc] bg-[#fbfcf8] p-3 dark:border-white/10 dark:bg-white/[0.045]">
+                    <div className="grid gap-3">
+                      <input
+                        autoFocus
+                        value={subtaskDraft.title}
+                        onChange={(event) => updateSubtaskDraft({ title: event.target.value })}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            addSubtask();
+                          }
+                        }}
+                        placeholder="Subtask name"
+                        className={cn(inputClass, "h-11 rounded-xl")}
+                      />
+                      <textarea
+                        rows={2}
+                        value={subtaskDraft.description}
+                        onChange={(event) => updateSubtaskDraft({ description: event.target.value })}
+                        placeholder="Description"
+                        className={cn(textAreaClass, "min-h-[64px] rounded-xl text-xs")}
+                      />
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <DatePicker
+                          darkMode={darkMode}
+                          value={subtaskDraft.startDate}
+                          onChange={(value) => updateSubtaskDraft({ startDate: value })}
+                          placeholder="Start date"
+                        />
+                        <DatePicker
+                          darkMode={darkMode}
+                          value={subtaskDraft.dueDate}
+                          onChange={(value) => updateSubtaskDraft({ dueDate: value })}
+                          placeholder="Due date"
+                        />
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <NativeSelect
+                          darkMode={darkMode}
+                          value={subtaskDraft.assigneeId}
+                          onChange={(value) => updateSubtaskDraft({ assigneeId: value })}
+                          options={[
+                            { value: "", label: "No assignee" },
+                            ...users.map((person) => ({
+                              value: person.id,
+                              label: person.displayName || person.username,
+                            })),
+                          ]}
+                        />
+                        <NativeSelect
+                          darkMode={darkMode}
+                          value=""
+                          searchable
+                          searchPlaceholder="Search task or subtask..."
+                          onChange={(value) =>
+                            value &&
+                            updateSubtaskDraft({
+                              dependencyIds: [...new Set([...(subtaskDraft.dependencyIds || []), value])],
+                            })
+                          }
+                          options={[
+                            { value: "", label: "Add dependency..." },
+                            ...projectDependencyOptions(allTasks, task.id, "new-subtask")
+                              .filter((option) => !(subtaskDraft.dependencyIds || []).includes(option.value))
+                              .map((option) => ({
+                                value: option.value,
+                                label: option.type === "subtask" ? `Subtask: ${option.label}` : `Task: ${option.label}`,
+                              })),
+                          ]}
+                        />
+                      </div>
+                      {(subtaskDraft.dependencyIds || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedProjectDependencies(subtaskDraft.dependencyIds || [], projectDependencyOptions(allTasks, task.id, "new-subtask")).map((dependency) => (
+                            <span key={dependency.value} className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#eef3e9] px-2 py-1 text-[10px] font-semibold text-[#527d42] dark:bg-white/[0.06] dark:text-white/70">
+                              <span className="truncate">{dependency.type === "subtask" ? "Subtask" : "Task"}: {dependency.label}</span>
+                              <button
+                                type="button"
+                                onClick={() => updateSubtaskDraft({ dependencyIds: (subtaskDraft.dependencyIds || []).filter((id) => id !== dependency.value) })}
+                                className="text-[#7b8178] hover:text-[#20231f] dark:hover:text-white"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setSubtaskFormOpen(false);
+                            setSubtaskDraft({ title: "", description: "", startDate: "", dueDate: "", assigneeId: "", dependencyIds: [] });
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button variant="primary" disabled={!subtaskDraft.title.trim()} onClick={addSubtask}>
+                          <Plus className="h-3.5 w-3.5" />
+                          Add subtask
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <div className="mt-4 space-y-2">
               {subtasks.map((item) => (
                 <div
                   key={item.id}
-                  className="rounded-xl border border-[#e0e4dd] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                  className="animate-[subtask-card-in_260ms_ease-out] rounded-xl border border-[#e0e4dd] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]"
                 >
                   <div className="flex items-center gap-3">
                     <button

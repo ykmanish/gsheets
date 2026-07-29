@@ -3075,28 +3075,28 @@ const WORKSPACE_NAV = [
 function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenTeam, navItems = WORKSPACE_NAV, unreadCounts = {} }) {
   const members = projectTeamMembers(project, tasks, users);
   return (
-    <aside className="hidden min-h-0 w-[220px] shrink-0 flex-col overflow-y-auto border-[#e0e4dd] bg-[#f0f2ee] px-3 pb-10 pt-4 md:flex dark:border-white/10 dark:bg-[#121511]">
-      <div className="px-2">
+    <aside className="hidden min-h-0 w-[220px] shrink-0 flex-col overflow-hidden border-[#e0e4dd] bg-[#f0f2ee] px-3 py-3 md:flex dark:border-white/10 dark:bg-[#121511]">
+      <div className="shrink-0 px-2">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#348a70] text-xs font-bold text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#348a70] text-xs font-bold text-white">
             {initials(project.name)}
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-md small font-semibold">{project.name}</h2>
+            <h2 className="truncate text-sm small font-semibold">{project.name}</h2>
             <p className="truncate text-[10px] text-[#7b8178]">
               {project.code || "Project workspace"}
             </p>
           </div>
         </div>
       </div>
-      <nav className="mt-6 space-y-1">
+      <nav className="scrollbar-hide mt-4 min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pb-3">
         {navItems.map(({ value, label, icon: Icon }) => (
           <button
             key={value}
             type="button"
             onClick={() => onView(value)}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition",
+              "flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm transition",
               view === value
                 ? "bg-white font-semibold text-[#20231f] dark:bg-white/10 dark:text-white"
                 : "text-[#62685f] hover:bg-white/60 dark:text-white/45 dark:hover:bg-white/[0.05]",
@@ -3123,16 +3123,16 @@ function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenT
       <button
         type="button"
         onClick={onOpenTeam}
-        className="mb-4 mt-6 w-full rounded-2xl border-t border-[#dce0d8] px-0 pb-4 pt-5 text-left transition hover:bg-white/45 dark:border-white/10 dark:hover:bg-white/[0.04]"
+        className="mt-3 w-full shrink-0 rounded-2xl border border-[#dce0d8] px-0 pb-3 pt-4 text-left transition hover:bg-white/45 dark:border-white/10 dark:hover:bg-white/[0.04]"
       >
         <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#949a91]">
           Project team
         </p>
-        <div className="mt-3 flex items-center justify-between gap-3 px-3">
+        <div className="mt-2 flex items-center justify-between gap-3 px-3">
           <AvatarStack people={members} />
           <UserPlus className="h-4 w-4 text-[#8a9087]" />
         </div>
-        <p className="mt-2 px-3 text-[11px] text-[#7d837a]">
+        <p className="mt-1.5 px-3 text-[11px] text-[#7d837a]">
           {members.length || 0} active members
         </p>
       </button>
@@ -3436,6 +3436,13 @@ function TasksView({
             task.dueDate &&
             new Date(`${task.dueDate}T00:00:00`) < new Date() &&
             task.status !== "done";
+          const rowTone = overdue
+            ? "delayed"
+            : task.status === "done"
+              ? "done"
+              : task.status === "in_progress"
+                ? "progress"
+                : "neutral";
           const isBlockedByDependency = (task.blockedBy || []).length > 0;
           const hasDependencyWarning = (task.dependencyWarnings || []).length > 0;
           return (
@@ -3443,7 +3450,16 @@ function TasksView({
               key={task.id}
               type="button"
               onClick={() => onOpenTask(task)}
-              className="grid min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] items-start gap-3 border-b border-[#eceeea] px-4 py-5 text-left text-sm last:border-0 hover:bg-[#fafbf9] dark:border-white/10 dark:hover:bg-white/[0.025]"
+              className={cn(
+                "grid min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] items-start gap-3 border-b px-4 py-5 text-left text-sm last:border-0 transition-colors",
+                rowTone === "delayed"
+                  ? "border-red-100 bg-red-50/70 hover:bg-red-50 dark:border-red-400/20 dark:bg-red-500/[0.11] dark:hover:bg-red-500/[0.16]"
+                  : rowTone === "done"
+                    ? "border-emerald-100 bg-emerald-50/70 hover:bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-500/[0.10] dark:hover:bg-emerald-500/[0.15]"
+                    : rowTone === "progress"
+                      ? "border-blue-100 bg-blue-50/70 hover:bg-blue-50 dark:border-blue-400/20 dark:bg-blue-500/[0.10] dark:hover:bg-blue-500/[0.15]"
+                      : "border-[#eceeea] bg-white hover:bg-[#fafbf9] dark:border-white/10 dark:bg-transparent dark:hover:bg-white/[0.025]",
+              )}
             >
               <span className="flex min-w-0 items-start gap-3">
                 <span
@@ -3455,16 +3471,28 @@ function TasksView({
                         ? "border-rose-500"
                         : task.status === "in_progress"
                           ? "border-amber-400"
-                          : "border-[#a5aaa1]",
+                          : rowTone === "delayed"
+                            ? "border-red-400 bg-red-100 dark:border-red-300 dark:bg-red-400/20"
+                            : "border-[#a5aaa1]",
                   )}
                 />
                 <span className="flex min-h-[40px] min-w-0 flex-col">
-                  <span className="block truncate font-medium">
+                  <span
+                    className={cn(
+                      "block truncate font-medium",
+                      rowTone === "delayed" && "text-red-950 dark:text-red-50",
+                      rowTone === "done" && "text-emerald-950 dark:text-emerald-50",
+                      rowTone === "progress" && "text-blue-950 dark:text-blue-50",
+                    )}
+                  >
                     {task.title || "Untitled task"}
                   </span>
                   <span
                     className={cn(
                       "mt-0.5 block h-4 max-w-[260px] truncate text-[11px] leading-4 text-[#858b82]",
+                      rowTone === "delayed" && "text-red-700/70 dark:text-red-100/70",
+                      rowTone === "done" && "text-emerald-700/70 dark:text-emerald-100/70",
+                      rowTone === "progress" && "text-blue-700/70 dark:text-blue-100/70",
                       !task.description && !isBlockedByDependency && !hasDependencyWarning && "invisible",
                       isBlockedByDependency && "font-semibold text-rose-500",
                       hasDependencyWarning && !isBlockedByDependency && "font-semibold text-amber-600",
@@ -3478,7 +3506,15 @@ function TasksView({
                   </span>
                 </span>
               </span>
-              <span className="truncate pt-0.5 text-xs text-[#6e746b] dark:text-white/50">
+              <span
+                className={cn(
+                  "truncate pt-0.5 text-xs",
+                  rowTone === "delayed" && "font-semibold text-red-700 dark:text-red-100",
+                  rowTone === "done" && "font-semibold text-emerald-700 dark:text-emerald-100",
+                  rowTone === "progress" && "font-semibold text-blue-700 dark:text-blue-100",
+                  rowTone === "neutral" && "text-[#6e746b] dark:text-white/50",
+                )}
+              >
                 {phases.find((phase) => phase.id === task.phaseId)?.name ||
                   "No phase"}
               </span>
@@ -3496,7 +3532,10 @@ function TasksView({
               <span
                 className={cn(
                   "pt-0.5 text-xs",
-                  overdue ? "font-semibold text-rose-500" : "text-[#747a71]",
+                  rowTone === "delayed" && "font-semibold text-red-600 dark:text-red-100",
+                  rowTone === "done" && "font-semibold text-emerald-700 dark:text-emerald-100",
+                  rowTone === "progress" && "font-semibold text-blue-700 dark:text-blue-100",
+                  rowTone === "neutral" && "text-[#747a71] dark:text-white/55",
                 )}
               >
                 {formatDate(task.dueDate, "No date")}

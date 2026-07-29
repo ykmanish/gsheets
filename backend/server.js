@@ -53,7 +53,7 @@ app.use((req, res, next) => {
 });
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://quantabase:manish1728@quants.u266oxg.mongodb.net/sheets?appName=Quants";
-const AUTH_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+const AUTH_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 14;
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY
 const SUPER_ADMIN_USERNAME = "AdminUIPL";
 const SUPER_ADMIN_PASSWORD = "Admin@9579";

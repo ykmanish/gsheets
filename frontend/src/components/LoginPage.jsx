@@ -77,6 +77,7 @@ export default function LoginPage() {
       window.localStorage.setItem("vectordocs_auth_token", data.token);
       window.localStorage.setItem("vectordocs_auth_user", JSON.stringify(data.user));
       window.localStorage.setItem("vectordocs_auth_menus", JSON.stringify(data.menus || []));
+      window.localStorage.setItem("vectordocs_disabled_modules", JSON.stringify(data.disabledModules || []));
       window.location.href = "/";
     } catch (error) {
       toast.error(error.message || "Could not login");

@@ -53,6 +53,10 @@ function clearAuth() {
   window.localStorage.removeItem(AUTH_DISABLED_MODULES_KEY);
 }
 
+function isAuthFailure(status) {
+  return status === 401 || status === 403;
+}
+
 export function AuthProvider({ children }) {
   const stored = getStoredAuth();
   const [token, setToken] = useState(stored.token);
@@ -72,15 +76,19 @@ export function AuthProvider({ children }) {
 
       try {
         const response = await fetch(`${API_URL}/auth/me`);
-        if (!response.ok) throw new Error("Session expired");
+        if (!response.ok) {
+          if (isAuthFailure(response.status)) throw new Error("Session expired");
+          return;
+        }
         const data = await response.json();
         if (ignore) return;
         saveAuth(token, data.user, data.menus, data.disabledModules);
         setUser(data.user);
         setMenus(data.menus || []);
         setDisabledModules(data.disabledModules || []);
-      } catch {
+      } catch (error) {
         if (ignore) return;
+        if (!(error instanceof TypeError) && error.message !== "Session expired") return;
         clearAuth();
         setToken(null);
         setUser(null);

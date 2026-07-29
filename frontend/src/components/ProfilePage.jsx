@@ -292,7 +292,7 @@ export default function ProfilePage({ darkMode }) {
 
   return (
     <main className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f12] text-white" : "bg-[#f4f6f2] text-[#171714]"}`}>
-      <form onSubmit={saveProfile} className="mx-auto max-w-6xl">
+      <form onSubmit={saveProfile} className="mx-auto w-full max-w-[1680px]">
         <section className="pb-4">
           <div className={`relative rounded-[28px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#e3e8df] bg-white"}`}>
             <div

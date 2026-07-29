@@ -87,7 +87,7 @@ export default function ActivityLog({ darkMode }) {
 
   return (
     <div className="flex-1 min-h-0 overflow-hidden px-4 py-4 newq sm:px-6 lg:px-8 lg:py-8" style={{ background: darkMode ? "linear-gradient(180deg,#111318,#0c0d10)" : "linear-gradient(180deg,#f7f6f2,#f3f1ea)" }}>
-      <div className="mx-auto flex h-full max-w-7xl flex-col">
+      <div className="mx-auto flex h-full w-full max-w-[1680px] flex-col">
         <div className="mb-6 flex-shrink-0">
           <p className={`mb-3 text-[11px] uppercase tracking-[0.32em] ${muted}`}>System trail</p>
           <h2 className={`small text-2xl font-semibold sm:text-3xl md:text-4xl ${darkMode ? "text-white" : "text-black"}`}>Activity Log</h2>

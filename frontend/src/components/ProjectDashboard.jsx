@@ -2792,7 +2792,7 @@ function PortfolioView({
         darkMode ? "bg-[#10120f] text-white" : "bg-[#f4f5f2] text-[#20231f]",
       )}
     >
-      <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+      <div className="mx-auto w-full max-w-[1680px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
         <header className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-[#65984f]">
@@ -2911,7 +2911,7 @@ function PortfolioView({
               </p>
             </div>
           ) : layout === "grid" ? (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {projects.map((project, projectIndex) => {
                 const tasks = project.manualTasks || [];
                 const members = projectTeamMembers(project, tasks, users);
@@ -3164,7 +3164,7 @@ function OverviewView({
     )
     .slice(0, 6);
   return (
-    <div className="mx-auto max-w-[1250px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
       <section className="rounded-2xl  border-[#dfe3dc] bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -3367,7 +3367,7 @@ function TasksView({
     return matchesQuery && matchesPriority && matchesAssignee;
   });
   return (
-    <div className="mx-auto max-w-[1350px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold">All tasks</h2>
@@ -3818,7 +3818,7 @@ function PhasesView({
   onAddTask,
 }) {
   return (
-    <div className="mx-auto max-w-[1250px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Project timeline</h2>
@@ -4582,7 +4582,7 @@ function ProjectManpowerView({ darkMode, project }) {
   const progress = manpowerProgress(planned || planForToday, actual);
 
   return (
-    <div className="mx-auto max-w-[1250px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl  font-semibold">Project Manpower</h2>
@@ -5019,7 +5019,7 @@ function ProjectMrnView({ darkMode, project }) {
   );
 
   return (
-    <div className="mx-auto max-w-[1250px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold">Project MRN</h2>
@@ -5206,7 +5206,7 @@ function ProjectStockView({ darkMode, project }) {
   }, [query, sites]);
 
   return (
-    <div className="mx-auto max-w-[1250px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-semibold">
@@ -5343,7 +5343,7 @@ function ProjectActivityView({ project }) {
   const groups = useMemo(() => groupProjectActivity(activity), [activity]);
 
   return (
-    <div className="mx-auto max-w-[1050px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-semibold">
@@ -5656,7 +5656,7 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
   }
 
   return (
-    <section className="mx-auto flex h-full min-h-0 w-full max-w-[1200px] flex-col overflow-hidden bg-white dark:bg-[#11130f]">
+    <section className="mx-auto flex h-full min-h-0 w-full max-w-[1680px] flex-col overflow-hidden bg-white dark:bg-[#11130f]">
       <div ref={scrollRef} onScroll={handleChatScroll} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-6">
         {messages.map((message, index) => {
           const own = isOwnMessage(message);
@@ -5995,7 +5995,7 @@ function FilesView({
   onDeleteFile,
 }) {
   return (
-    <div className="mx-auto max-w-[1250px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Project files</h2>

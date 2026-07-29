@@ -3064,20 +3064,18 @@ const WORKSPACE_NAV = [
   { value: "overview", label: "Overview", icon: LayoutDashboard },
   { value: "phases", label: "Phases", icon: Layers3 },
   { value: "tasks", label: "Tasks", icon: ListChecks },
-  { value: "gantt", label: "Gantt View", icon: BarChart3 },
   { value: "calendar", label: "Calendar", icon: CalendarDays },
   { value: "manpower", label: "Manpower", icon: Users },
   { value: "mrn", label: "MRN", icon: ClipboardList },
   { value: "stock", label: "Stock", icon: PackageSearch },
   { value: "chat", label: "Chat", icon: MessageSquare },
-  { value: "activity", label: "Activity", icon: Clock3 },
   { value: "files", label: "Files", icon: FolderOpen },
 ];
 
 function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenTeam, navItems = WORKSPACE_NAV, unreadCounts = {} }) {
   const members = projectTeamMembers(project, tasks, users);
   return (
-    <aside className="hidden w-[220px] shrink-0 flex-col  border-[#e0e4dd] bg-[#f0f2ee] px-3 py-4 md:flex dark:border-white/10 dark:bg-[#121511]">
+    <aside className="hidden min-h-0 w-[220px] shrink-0 flex-col overflow-y-auto border-[#e0e4dd] bg-[#f0f2ee] px-3 pb-10 pt-4 md:flex dark:border-white/10 dark:bg-[#121511]">
       <div className="px-2">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#348a70] text-xs font-bold text-white">
@@ -3125,7 +3123,7 @@ function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenT
       <button
         type="button"
         onClick={onOpenTeam}
-        className="mt-6 w-full rounded-2xl border-t border-[#dce0d8] px-0 pb-3 pt-5 text-left transition hover:bg-white/45 dark:border-white/10 dark:hover:bg-white/[0.04]"
+        className="mb-4 mt-6 w-full rounded-2xl border-t border-[#dce0d8] px-0 pb-4 pt-5 text-left transition hover:bg-white/45 dark:border-white/10 dark:hover:bg-white/[0.04]"
       >
         <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#949a91]">
           Project team
@@ -6228,7 +6226,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   }, [loadProjectDocs, selectedProject?.id]);
 
   useEffect(() => {
-    if (!workspaceNav.some((item) => item.value === workspaceView)) {
+    const headerOnlyViews = new Set(["gantt", "activity"]);
+    if (!headerOnlyViews.has(workspaceView) && !workspaceNav.some((item) => item.value === workspaceView)) {
       setWorkspaceView("overview");
     }
   }, [workspaceNav, workspaceView]);
@@ -6769,6 +6768,14 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               />
             </IconButton>
             <Button
+              className="!h-8 !rounded-full !border-0 !bg-[#11a36a] !px-3 !text-[11px] !font-semibold !text-white shadow-sm hover:!bg-[#0b8f5a] dark:!bg-[#17c77f] dark:!text-[#07110c] dark:hover:!bg-[#48dc9d]"
+              onClick={() => setWorkspaceView("gantt")}
+            >
+              <BarChart3 className="h-3 w-3" />
+              <span className="hidden sm:inline">Gantt View</span>
+              <span className="sm:hidden">Gantt</span>
+            </Button>
+            <Button
               className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
               onClick={() => setProjectReportOpen(true)}
             >
@@ -6781,6 +6788,13 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
             >
               <ShieldCheck className="h-3 w-3" />
               <span className="hidden sm:inline">Access</span>
+            </Button>
+            <Button
+              className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
+              onClick={() => setWorkspaceView("activity")}
+            >
+              <Clock3 className="h-3 w-3" />
+              <span className="hidden sm:inline">Activity</span>
             </Button>
             {canEditSelectedProject && (
               <Button

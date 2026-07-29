@@ -380,7 +380,7 @@ export default function ProfilePage({ darkMode }) {
                       todayAttendance?.clockOutAt
                         ? darkMode ? "bg-emerald-400/16 text-emerald-100" : "bg-[#e8f6ee] text-[#15734d]"
                         : todayAttendance?.clockInAt
-                          ? darkMode ? "bg-red-400/16 text-red-100 hover:bg-red-400/22" : "bg-red-500 text-white hover:bg-red-600"
+                          ? darkMode ? "bg-red-600 text-white hover:bg-red-500" : "bg-red-500 text-white hover:bg-red-600"
                           : "bg-green-500 text-white hover:bg-green-600"
                     }`}
                   >

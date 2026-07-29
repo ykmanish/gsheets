@@ -1673,7 +1673,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         {todayReportChecking ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Fill Employee Report
                       </button>
                     ) : (
-                      <button type="button" disabled={!attendanceReady || attendanceSaving || !todayAttendance?.clockInAt || todayAttendance?.clockOutAt} onClick={() => submitAttendance("clock-out")} className={`flex h-11 min-w-[124px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-red-400/14 text-red-200 hover:bg-red-400/20" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
+                      <button type="button" disabled={!attendanceReady || attendanceSaving || !todayAttendance?.clockInAt || todayAttendance?.clockOutAt} onClick={() => submitAttendance("clock-out")} className={`flex h-11 min-w-[124px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-red-600 text-white hover:bg-red-500" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
                         {attendanceClockAction === "clock-out" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} {attendanceClockAction === "clock-out" ? "Clocking out" : "Clock out"}
                       </button>
                     )}

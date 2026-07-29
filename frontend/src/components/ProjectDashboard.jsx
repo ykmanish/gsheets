@@ -3520,7 +3520,7 @@ function TasksView({
   );
 }
 
-function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, onOpenPhase, onClose }) {
+function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, onOpenPhase, onClose, onDownloadPdf, downloadingPdf = false }) {
   const todayKey = new Date().toISOString().slice(0, 10);
   const rows = useMemo(() => {
     const dayCount = (start, end) => {
@@ -3672,6 +3672,10 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
             <span className="rounded-full bg-[#eaf4ff] px-3 py-1 text-xs font-semibold text-[#1268b3]">
               {formatDate(bounds.startDate.toISOString().slice(0, 10))} - {formatDate(bounds.endDate.toISOString().slice(0, 10))}
             </span>
+            <Button variant="secondary" onClick={onDownloadPdf} disabled={downloadingPdf}>
+              {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              PDF
+            </Button>
             <IconButton label="Close Gantt" onClick={onClose} className="bg-[#f1f3ef] hover:bg-[#e7ebe4] dark:bg-white/[0.06]">
               <X className="h-4 w-4" />
             </IconButton>
@@ -6162,6 +6166,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
   const [saving, setSaving] = useState(false);
   const [accessSaving, setAccessSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [ganttPdfDownloading, setGanttPdfDownloading] = useState(false);
 
   const load = useCallback(
     async (quiet = false) => {
@@ -6336,6 +6341,33 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
       toast.error(error.message || "Could not update project access");
     } finally {
       setAccessSaving(false);
+    }
+  }
+
+  async function downloadGanttPdf() {
+    if (!selectedProject?.id) return;
+    try {
+      setGanttPdfDownloading(true);
+      const response = await fetch(`${API_URL}/project-dashboard/projects/${selectedProject.id}/gantt/pdf`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Could not download Gantt PDF");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const name = (selectedProject.name || "project").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "project";
+      link.href = url;
+      link.download = `${name}-gantt-chart.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Gantt PDF downloaded");
+    } catch (error) {
+      toast.error(error.message || "Could not download Gantt PDF");
+    } finally {
+      setGanttPdfDownloading(false);
     }
   }
 
@@ -6814,6 +6846,8 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
               onOpenTask={openTask}
               onOpenPhase={openPhase}
               onClose={() => setWorkspaceView("tasks")}
+              onDownloadPdf={downloadGanttPdf}
+              downloadingPdf={ganttPdfDownloading}
             />
           )}
           {workspaceView === "calendar" && (

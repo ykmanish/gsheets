@@ -11774,6 +11774,200 @@ function projectManualTasks(project = {}) {
   ];
 }
 
+function projectGanttRows(project = {}) {
+  const todayKey = istDateKey(new Date());
+  const phases = Array.isArray(project.phases) ? project.phases : [];
+  const tasks = projectManualTasks(project);
+  const dayCount = (start, end) => {
+    const from = new Date(`${start}T00:00:00`);
+    const to = new Date(`${end}T00:00:00`);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return 1;
+    return Math.max(1, Math.round((to - from) / 86400000) + 1);
+  };
+  const rows = [];
+  phases.forEach((phase, phaseIndex) => {
+    const phaseTasks = tasks.filter((task) => task.phaseId === phase.id);
+    const taskDates = phaseTasks.flatMap((task) => [projectDateKey(task.startDate), projectDateKey(task.dueDate)]).filter(Boolean).sort();
+    const startDate = projectDateKey(phase.startDate) || taskDates[0] || projectDateKey(project.startDate) || todayKey;
+    const dueDate = projectDateKey(phase.dueDate) || taskDates.at(-1) || startDate;
+    const done = phaseTasks.filter((task) => task.status === "done").length;
+    rows.push({
+      type: "phase",
+      id: phase.id || `phase-${phaseIndex}`,
+      title: projectText(phase.name) || `Phase ${phaseIndex + 1}`,
+      status: projectText(phase.status) || "todo",
+      startDate,
+      dueDate,
+      duration: dayCount(startDate, dueDate),
+      progress: phaseTasks.length ? Math.round((done / phaseTasks.length) * 100) : 0,
+    });
+    phaseTasks.forEach((task) => {
+      const taskStart = projectDateKey(task.startDate) || projectDateKey(task.dueDate) || startDate;
+      const taskDue = projectDateKey(task.dueDate) || taskStart;
+      const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+      const doneSubtasks = subtasks.filter((subtask) => subtask.done).length;
+      rows.push({
+        type: "task",
+        id: task.id,
+        title: projectText(task.title) || "Untitled task",
+        status: (task.blockedBy || []).length ? "blocked" : projectText(task.status) || "todo",
+        priority: projectText(task.priority) || "medium",
+        startDate: taskStart,
+        dueDate: taskDue,
+        duration: dayCount(taskStart, taskDue),
+        progress: subtasks.length ? Math.round((doneSubtasks / subtasks.length) * 100) : task.status === "done" ? 100 : task.status === "in_progress" ? 50 : 0,
+      });
+    });
+  });
+  tasks.filter((task) => !task.phaseId || !phases.some((phase) => phase.id === task.phaseId)).forEach((task) => {
+    const startDate = projectDateKey(task.startDate) || projectDateKey(task.dueDate) || todayKey;
+    const dueDate = projectDateKey(task.dueDate) || startDate;
+    rows.push({
+      type: "task",
+      id: task.id,
+      title: projectText(task.title) || "Untitled task",
+      status: (task.blockedBy || []).length ? "blocked" : projectText(task.status) || "todo",
+      priority: projectText(task.priority) || "medium",
+      startDate,
+      dueDate,
+      duration: dayCount(startDate, dueDate),
+      progress: task.status === "done" ? 100 : task.status === "in_progress" ? 50 : 0,
+    });
+  });
+  return rows.filter((row) => row.startDate || row.dueDate);
+}
+
+function generateProjectGanttPdf(project = {}) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 14, bufferPages: true, info: { Title: `${project.name || "Project"} Gantt Chart`, Author: "UIPL Docs" } });
+    registerDmrPdfFonts(doc);
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const rows = projectGanttRows(project);
+    const dates = rows.flatMap((row) => [row.startDate, row.dueDate]).filter(Boolean).sort();
+    const startKey = dates[0] || istDateKey(new Date());
+    const endKey = dates.at(-1) || startKey;
+    const addProjectDays = (date, amount) => {
+      const next = new Date(date);
+      next.setDate(next.getDate() + amount);
+      return next;
+    };
+    const startDate = addProjectDays(new Date(`${startKey}T00:00:00`), -2);
+    const endDate = addProjectDays(new Date(`${endKey}T00:00:00`), 4);
+    const totalDays = Math.max(1, Math.round((endDate - startDate) / 86400000) + 1);
+    const dayKeys = Array.from({ length: totalDays }, (_, index) => projectDateKey(addProjectDays(startDate, index)));
+    const overlapMap = new Map(rows.filter((row) => row.type === "task").map((row) => {
+      const count = rows.filter((item) => item.type === "task" && item.id !== row.id && item.startDate <= row.dueDate && item.dueDate >= row.startDate).length;
+      return [row.id, count];
+    }));
+    const page = { width: doc.page.width, height: doc.page.height, left: 14, right: 14, top: 14, bottom: 14 };
+    const fixedWidth = 316;
+    const taskW = 140;
+    const dateW = 56;
+    const durationW = 40;
+    const chartX = page.left + fixedWidth;
+    const chartW = page.width - page.left - page.right - fixedWidth;
+    const dayW = totalDays <= 45 ? chartW / totalDays : 14;
+    const daysPerPage = Math.max(7, Math.floor(chartW / dayW));
+    const rowH = 32;
+    const headerH = 48;
+    const rowsPerPage = Math.max(5, Math.floor((page.height - page.top - page.bottom - headerH) / rowH));
+    const statusBadge = (row) => {
+      const delayed = row.type === "task" && row.status !== "done" && row.dueDate && row.dueDate < istDateKey(new Date());
+      if (delayed) return { label: "Delayed", bg: "#ffe2e7", fg: "#a72f45" };
+      if (row.status === "done") return { label: "Completed", bg: "#e4f8eb", fg: "#268a55" };
+      if (row.status === "blocked") return { label: "Blocked", bg: "#ffe2e7", fg: "#a72f45" };
+      if (row.status === "in_progress") return { label: "In progress", bg: "#fff2cc", fg: "#805b11" };
+      return { label: "Pending", bg: "#edf2ff", fg: "#2f61c9" };
+    };
+    const rowColor = (row) => row.type === "phase" ? "#2f6df6" : row.status === "done" ? "#42c989" : row.status === "blocked" ? "#f25f6c" : row.priority === "critical" ? "#8f5cf7" : row.priority === "high" ? "#ffad42" : "#37c6c0";
+    const shortDateLabel = (value) => {
+      const date = new Date(`${projectDateKey(value)}T00:00:00`);
+      if (Number.isNaN(date.getTime())) return "-";
+      return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
+    };
+    const chipWidth = (text, fontSize = 5.8, pad = 9, max = 90) => {
+      doc.font(dmrPdfFonts.bold).fontSize(fontSize);
+      return Math.min(max, Math.max(20, doc.widthOfString(text) + pad));
+    };
+    const writeBadge = (x, y, w, text, bg, fg, fontSize = 5.8) => {
+      doc.roundedRect(x, y, w, 12, 4).fill(bg);
+      doc.fillColor(fg).font(dmrPdfFonts.bold).fontSize(fontSize).text(text, x, y + 2.7, { width: w, align: "center", height: 7 });
+    };
+    let pageNo = 0;
+    for (let dayStart = 0; dayStart < dayKeys.length; dayStart += daysPerPage) {
+      const visibleDays = dayKeys.slice(dayStart, dayStart + daysPerPage);
+      for (let rowStart = 0; rowStart < Math.max(1, rows.length); rowStart += rowsPerPage) {
+        if (pageNo) doc.addPage();
+        pageNo += 1;
+        const visibleRows = rows.slice(rowStart, rowStart + rowsPerPage);
+        doc.rect(0, 0, page.width, page.height).fill("#f7f8f5");
+        doc.rect(page.left, page.top, page.width - page.left - page.right, page.height - page.top - page.bottom).fill("#ffffff");
+        doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(6.2).text("GANTT VIEW", page.left + 8, page.top + 5, { characterSpacing: 1.1 });
+        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(25).text(projectText(project.name) || "Project schedule", page.left + 8, page.top + 15, { width: 360, height: 28, ellipsis: true });
+        doc.fillColor("#1268b3").font(dmrPdfFonts.bold).fontSize(7).text(`${dmrPdfDateLabel(startKey)} - ${dmrPdfDateLabel(endKey)} | Page ${pageNo}`, page.width - page.right - 260, page.top + 15, { width: 250, align: "right" });
+
+        const headerY = page.top + 43;
+        doc.rect(page.left, headerY, page.width - page.left - page.right, 16).fill("#f8faf6");
+        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(7.3).text("Task list", page.left + 8, headerY + 4.5, { width: taskW });
+        doc.fillColor("#5270a8").font(dmrPdfFonts.bold).fontSize(5.8).text("START", page.left + taskW, headerY + 5, { width: dateW, align: "center" });
+        doc.fillColor("#8a6515").font(dmrPdfFonts.bold).fontSize(5.8).text("END", page.left + taskW + dateW, headerY + 5, { width: dateW, align: "center" });
+        doc.fillColor("#5f665c").font(dmrPdfFonts.bold).fontSize(5.8).text("DUR", page.left + taskW + dateW * 2, headerY + 5, { width: durationW, align: "center" });
+        [taskW, taskW + dateW, taskW + dateW * 2, fixedWidth].forEach((offset) => {
+          doc.strokeColor("#e7ece4").lineWidth(0.55).moveTo(page.left + offset, headerY).lineTo(page.left + offset, page.height - page.bottom).stroke();
+        });
+        visibleDays.forEach((key, index) => {
+          const x = chartX + index * dayW;
+          doc.strokeColor(index % 7 === 0 ? "#dde4d9" : "#edf0ea").lineWidth(0.45).moveTo(x, headerY).lineTo(x, page.height - page.bottom).stroke();
+          doc.fillColor("#171714").font(dmrPdfFonts.regular).fontSize(5.8).text(key.slice(-2), x, headerY + 5, { width: dayW, align: "center" });
+        });
+        doc.strokeColor("#e4e7e1").moveTo(page.left, headerY + 16).lineTo(page.width - page.right, headerY + 16).stroke();
+
+        visibleRows.forEach((row, index) => {
+          const y = headerY + 17 + index * rowH;
+          const color = rowColor(row);
+          if (index % 2 === 1) doc.rect(page.left, y, page.width - page.left - page.right, rowH).fill("#fbfcfa");
+          doc.strokeColor("#eef1eb").lineWidth(0.5).moveTo(page.left, y + rowH).lineTo(page.width - page.right, y + rowH).stroke();
+          const rowCenter = y + rowH / 2;
+          const taskIndent = row.type === "task" ? 10 : 0;
+          const dotX = page.left + 18 + taskIndent;
+          const textX = page.left + 34 + taskIndent;
+          doc.circle(dotX, row.type === "phase" ? rowCenter : y + 8.5, row.type === "phase" ? 3.2 : 2.8).fill(color);
+          doc.fillColor(row.type === "phase" ? "#2f6df6" : "#171714").font(dmrPdfFonts.bold).fontSize(7.1).text(row.title, textX, row.type === "phase" ? y + 12 : y + 5.2, { width: taskW - 44 - taskIndent, height: 9, ellipsis: true });
+          if (row.type === "task") {
+            const badge = statusBadge(row);
+            const overlap = overlapMap.get(row.id) || 0;
+            const badgeText = `${badge.label}${overlap ? ` · ${overlap}` : ""}`;
+            writeBadge(textX, y + 18, chipWidth(badgeText, 5.4, 12, 78), badgeText, badge.bg, badge.fg, 5.4);
+          }
+          const startText = shortDateLabel(row.startDate);
+          const endText = shortDateLabel(row.dueDate);
+          const durationText = `${row.duration}d`;
+          writeBadge(page.left + taskW + (dateW - 44) / 2, rowCenter - 6, 44, startText, row.type === "phase" ? "#dbe7ff" : "#c8f1ec", row.type === "phase" ? "#1e55d8" : "#00796f", 5.1);
+          writeBadge(page.left + taskW + dateW + (dateW - 44) / 2, rowCenter - 6, 44, endText, row.status === "done" ? "#c9f0d8" : row.status === "blocked" ? "#ffd2da" : "#ffe7a8", row.status === "done" ? "#1d7d48" : row.status === "blocked" ? "#a72f45" : "#8a5b00", 5.1);
+          writeBadge(page.left + taskW + dateW * 2 + (durationW - 28) / 2, rowCenter - 6, 28, durationText, "#e2e7dc", "#465044", 5.2);
+          const startIndex = dayKeys.indexOf(row.startDate);
+          const barStart = Math.max(dayStart, startIndex);
+          const barEnd = Math.min(dayStart + visibleDays.length, startIndex + row.duration);
+          if (barEnd > barStart) {
+            const x = chartX + (barStart - dayStart) * dayW;
+            const w = Math.max(3, (barEnd - barStart) * dayW);
+            doc.roundedRect(x + 1, rowCenter - 6, w - 2, 12, 4).fill(color);
+            doc.fillColor("#ffffff").font(dmrPdfFonts.bold).fontSize(5.7).text(`${row.title}${row.type === "phase" ? ` · ${row.progress}%` : ""}`, x + 4, rowCenter - 3.2, { width: Math.max(0, w - 8), height: 7, ellipsis: true });
+          }
+        });
+      }
+    }
+    if (!rows.length) {
+      doc.fillColor("#858b82").font(dmrPdfFonts.regular).fontSize(11).text("Add start dates or deadlines to phases and tasks to build the Gantt chart.", 0, 260, { align: "center" });
+    }
+    doc.end();
+  });
+}
+
 function projectTaskIdsForUser(project = {}, userId = "") {
   if (!userId) return new Set();
   const ids = new Set();
@@ -12159,6 +12353,22 @@ app.patch("/project-dashboard/projects/:id", (req, res) => {
     res.json({ success: true, project: projectDashboardConfig.projects[index] });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+app.get("/project-dashboard/projects/:id/gantt/pdf", async (req, res) => {
+  try {
+    const project = projectDashboardConfig.projects.find((item) => item.id === req.params.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
+    const buffer = await generateProjectGanttPdf(scopedProjectForUser(project, req));
+    const safeName = (projectText(project.name) || "project").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "project";
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}-gantt-chart.pdf"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error("Project Gantt PDF error:", error);
+    res.status(500).json({ error: `Could not generate Gantt PDF: ${error.message}` });
   }
 });
 

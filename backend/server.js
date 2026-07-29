@@ -11930,8 +11930,8 @@ function generateProjectGanttPdf(project = {}, options = {}) {
       next.setDate(next.getDate() + amount);
       return next;
     };
-    const startDate = addProjectDays(new Date(`${startKey}T00:00:00`), -2);
-    const endDate = addProjectDays(new Date(`${endKey}T00:00:00`), 4);
+    const startDate = new Date(`${startKey}T00:00:00`);
+    const endDate = new Date(`${endKey}T00:00:00`);
     const totalDays = Math.max(1, Math.round((endDate - startDate) / 86400000) + 1);
     const startOfPdfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
     const addPdfMonths = (date, amount) => new Date(date.getFullYear(), date.getMonth() + amount, 1);

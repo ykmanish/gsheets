@@ -3783,8 +3783,8 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
     const dates = rows.flatMap((row) => [row.startDate, row.dueDate]).filter(Boolean).sort();
     const start = dates[0] || todayKey;
     const end = dates.at(-1) || start;
-    const startDate = addDays(new Date(`${start}T00:00:00`), -2);
-    const endDate = addDays(new Date(`${end}T00:00:00`), 4);
+    const startDate = new Date(`${start}T00:00:00`);
+    const endDate = new Date(`${end}T00:00:00`);
     const days = Math.max(1, Math.round((endDate - startDate) / 86400000) + 1);
     return { startDate, endDate, days };
   }, [rows, todayKey]);

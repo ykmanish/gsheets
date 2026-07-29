@@ -3543,7 +3543,7 @@ function TasksView({
         </div>
       </div>
       <section className="mt-4 overflow-x-auto rounded-2xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="hidden min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] gap-3 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">
+        <div className="hidden w-full min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] gap-3 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">
           <span>Task</span>
           <span>Phase</span>
           <span>Assigned to</span>
@@ -3571,7 +3571,7 @@ function TasksView({
               type="button"
               onClick={() => onOpenTask(task)}
               className={cn(
-                "grid min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] items-start gap-3 border-b px-4 py-5 text-left text-sm last:border-0 transition-colors",
+                "grid w-full min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] items-start gap-3 border-b px-4 py-5 text-left text-sm last:border-0 transition-colors",
                 rowTone === "delayed"
                   ? "border-red-100 bg-red-50/70 hover:bg-red-50 dark:border-red-400/20 dark:bg-red-500/[0.11] dark:hover:bg-red-500/[0.16]"
                   : rowTone === "done"

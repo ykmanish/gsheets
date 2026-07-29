@@ -1327,6 +1327,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe7e4] bg-white";
   const softPanel = darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white";
+  const initialLoading = loading && !data;
   const isClockedInToday = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt);
   const isClockedOutToday = Boolean(todayAttendance?.clockOutAt);
   const reportExempt = Boolean(data?.profile?.reportExempt);
@@ -1985,8 +1986,6 @@ export default function EmployeeDailyReport({ darkMode }) {
     else result.pending += 1;
     return result;
   }, { total: 0, submitted: 0, pending: 0 });
-  const initialLoading = loading && !data;
-
   return (
     <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}>
       <section className={`relative z-20 mb-5 overflow-visible rounded-[30px] border p-6 sm:p-8 ${darkMode ? "border-white/10 bg-[#202328]" : "border-[#dfe7e4] bg-white/95"}`}>

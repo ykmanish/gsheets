@@ -1380,15 +1380,6 @@ function TaskDrawer({
               options={STATUS_OPTIONS}
             />
           </PropertyRow>
-          <PropertyRow icon={CalendarDays} label="Due date">
-            <DatePicker
-              darkMode={darkMode}
-              disabled={!isEditing}
-              value={task.dueDate || ""}
-              onChange={(value) => onChange({ dueDate: value })}
-              placeholder="No date"
-            />
-          </PropertyRow>
           <PropertyRow icon={CalendarDays} label="Start date">
             <DatePicker
               darkMode={darkMode}
@@ -1396,6 +1387,15 @@ function TaskDrawer({
               value={task.startDate || ""}
               onChange={(value) => onChange({ startDate: value })}
               placeholder="No start date"
+            />
+          </PropertyRow>
+          <PropertyRow icon={CalendarDays} label="Due date">
+            <DatePicker
+              darkMode={darkMode}
+              disabled={!isEditing}
+              value={task.dueDate || ""}
+              onChange={(value) => onChange({ dueDate: value })}
+              placeholder="No date"
             />
           </PropertyRow>
           <PropertyRow icon={Users} label="Assignee">

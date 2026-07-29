@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, ChevronDown, Clock3, Copy, Download, Eye, FileText, Heart, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Settings2, Sparkles, Star, Trash2, X } from "lucide-react";
+import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, ChevronDown, Clock3, Copy, Download, Eye, FileText, Heart, LogIn, Loader2, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Settings2, Sparkles, Star, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import { ConfirmModal, useClickOutside } from "./ui";
@@ -1270,6 +1270,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [sheetSaving, setSheetSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState(null);
+  const [attendanceClockingIn, setAttendanceClockingIn] = useState(false);
   const [attendanceClockingOut, setAttendanceClockingOut] = useState(false);
   const [refreshingToday, setRefreshingToday] = useState(false);
   const [deletingReportId, setDeletingReportId] = useState("");
@@ -1326,6 +1327,15 @@ export default function EmployeeDailyReport({ darkMode }) {
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe7e4] bg-white";
   const softPanel = darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white";
+  const isClockedInToday = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt);
+  const isClockedOutToday = Boolean(todayAttendance?.clockOutAt);
+  const reportExempt = Boolean(data?.profile?.reportExempt);
+  const clockButtonIsClockOut = reportExempt ? isClockedInToday : Boolean(data?.todaySubmitted);
+  const clockButtonDisabled = initialLoading
+    || attendanceClockingIn
+    || attendanceClockingOut
+    || (!reportExempt && !data?.todaySubmitted && isClockedInToday)
+    || (clockButtonIsClockOut && (!isClockedInToday || isClockedOutToday));
   const userStorageId = data?.currentUserId || "me";
   const draftStoragePrefix = `employee-daily-report-draft:${userStorageId}:${todayInput()}`;
   const draftStorageKey = activeDraftKey || `${draftStoragePrefix}:new`;
@@ -1390,6 +1400,27 @@ export default function EmployeeDailyReport({ darkMode }) {
       setTodayAttendance(ownToday);
     } catch {
       setTodayAttendance(null);
+    }
+  }
+
+  async function clockInFromReportHero() {
+    try {
+      setAttendanceClockingIn(true);
+      const location = await browserLocation();
+      const response = await fetch(`${API_URL}/hr/attendance/clock-in`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(location),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not clock in");
+      setTodayAttendance(result.record || null);
+      window.dispatchEvent(new Event("uipl:hr-data-changed"));
+      toast.success("Clocked in");
+    } catch (error) {
+      toast.error(error.message || "Could not clock in");
+    } finally {
+      setAttendanceClockingIn(false);
     }
   }
 
@@ -1977,21 +2008,43 @@ export default function EmployeeDailyReport({ darkMode }) {
                   {initialLoading ? <ThreeDotLoader /> : data?.profile?.department || "Department not set"}
                 </span>
                 <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-[#efaccb] bg-[#f7bdd7] text-[#6f123b]"}`}>
-                  <CalendarCheck className="h-3.5 w-3.5" /> {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Today filled" : "Today pending"}
+                  <CalendarCheck className="h-3.5 w-3.5" /> {initialLoading ? <ThreeDotLoader /> : reportExempt ? "Report exempt" : data?.todaySubmitted ? "Today filled" : "Today pending"}
                 </span>
               </div>
               <h1 className={`mt-5 max-w-4xl text-4xl small font-black  leading-[0.96] tracking-tight sm:text-4xl ${darkMode ? "text-white" : "text-[#161616]"}`}>Daily work reports, made simple.</h1>
               <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>Submit today&apos;s work progress, review previous entries, and track reporting consistency in one clean workspace.</p>
             </div>
-            <div className="flex flex-wrap gap-3 lg:justify-end">
-                <button
-                  disabled={initialLoading || !data?.profile?.sheetLinked}
-                  onClick={openForm}
-                  className={`flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}
-                >
-                  {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
-                  {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Edit today's report" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
-                </button>
+            <div className="flex flex-col gap-3 lg:items-end">
+              <button
+                type="button"
+                onClick={clockButtonIsClockOut ? clockOutFromReportModal : clockInFromReportHero}
+                disabled={clockButtonDisabled}
+                className={`flex h-14 min-w-[178px] items-center justify-center gap-2 rounded-full px-8 text-base font-bold shadow-none transition active:scale-[0.98] disabled:cursor-not-allowed ${
+                  clockButtonIsClockOut
+                    ? "bg-red-500 text-white hover:bg-red-600 disabled:bg-red-50 disabled:text-red-300"
+                    : isClockedInToday
+                      ? "bg-[#eef8f3] text-[#7db99d] shadow-none"
+                      : "bg-[#00c853] text-white hover:bg-[#00b84d]"
+                }`}
+              >
+                {(attendanceClockingIn || attendanceClockingOut) ? <Loader2 className="h-5 w-5 animate-spin" /> : isClockedInToday && !clockButtonIsClockOut ? <CheckCircle2 className="h-5 w-5" /> : <LogIn className={`h-5 w-5 ${clockButtonIsClockOut ? "rotate-180" : ""}`} />}
+                {initialLoading
+                  ? <ThreeDotLoader />
+                  : clockButtonIsClockOut
+                    ? isClockedOutToday ? "Clocked out" : "Clock out"
+                    : isClockedInToday ? "Clocked in" : "Clock in"}
+              </button>
+              <div className="flex flex-wrap gap-3 lg:justify-end">
+                {!reportExempt && (
+                  <button
+                    disabled={initialLoading || !data?.profile?.sheetLinked}
+                    onClick={openForm}
+                    className={`flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}
+                  >
+                    {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
+                    {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Edit today's report" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
+                  </button>
+                )}
                 <div ref={heroActionRef} className="relative">
                   <button
                     type="button"
@@ -2080,6 +2133,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     </div>
                   )}
                 </div>
+              </div>
             </div>
           </div>
           {initialLoading ? (

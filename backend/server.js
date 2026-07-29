@@ -574,6 +574,7 @@ const EMPLOYEE_REPORT_OPTIONS = {
 };
 const EMPLOYEE_REPORT_APP_TAB = "_AppData";
 const EMPLOYEE_REPORT_APP_HEADERS = ["Report ID", "User ID", "Employee", "Department", "Report Date", "Submitted At", "Client", "Site", "Task Type", "Task Status", "Involvement", "Tomorrow Plan", "Note", "Task Items JSON", "Waiting Items JSON"];
+const EMPLOYEE_REPORT_EXEMPT_USERNAMES = new Set(["neelamverma"]);
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_TEMPLATE || "daily_report_reminder";
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_LANGUAGE || "en";
 const EMPLOYEE_REPORT_REMINDER_LINK = process.env.EMPLOYEE_REPORT_REMINDER_LINK || process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "http://localhost:3000/employee-daily-report";
@@ -653,6 +654,14 @@ function employeeSheetErrorMessage(error, fallback = "Could not read employee re
 
 function canViewEmployeeDailyReports(req) {
   return Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "view_employee_daily_reports"));
+}
+
+function isEmployeeDailyReportExempt(user = {}) {
+  const usernames = [
+    user.usernameLower,
+    user.username,
+  ].map(projectText).filter(Boolean).map((value) => value.toLowerCase());
+  return usernames.some((username) => EMPLOYEE_REPORT_EXEMPT_USERNAMES.has(username));
 }
 
 function normalizeEmployeeAssignee(value = "") {
@@ -1669,11 +1678,12 @@ async function sendEmployeeDailyReportReminders({ dateKey = employeeReportToday(
     employeeDailySpreadsheetId: { $exists: true, $ne: "" },
     isActive: { $ne: false },
   }).limit(500).toArray();
-  const reports = await getCachedEmployeeReportsForUsers(db, linkedUsers);
+  const reminderUsers = linkedUsers.filter((user) => !isEmployeeDailyReportExempt(user));
+  const reports = await getCachedEmployeeReportsForUsers(db, reminderUsers);
   const submitted = new Set(reports.filter((report) => report.reportDate === date).map((report) => String(report.userId)));
   const startedAt = new Date();
   const results = [];
-  const lockPayload = { _id: runId, date, status: "running", source, templateName, recipients: linkedUsers.length, startedAt, updatedAt: startedAt };
+  const lockPayload = { _id: runId, date, status: "running", source, templateName, recipients: reminderUsers.length, startedAt, updatedAt: startedAt };
   if (!force) {
     if (existingRun) {
       const lock = await db.collection("platformSettings").findOneAndUpdate(
@@ -1704,7 +1714,7 @@ async function sendEmployeeDailyReportReminders({ dateKey = employeeReportToday(
     );
   }
 
-  for (const user of linkedUsers) {
+  for (const user of reminderUsers) {
     const userId = String(user._id || user.id || "");
     const employeeName = user.displayName || user.username || "Employee";
     const phone = employeeReminderPhone(user);
@@ -2469,13 +2479,15 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const db = await connectAuthDb();
   const isAdmin = canViewEmployeeDailyReports(req);
   const userId = String(req.authUser.id);
+  const reportExempt = isEmployeeDailyReportExempt(req.user || req.authUser || {});
   const search = projectText(query.search).toLowerCase();
   const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateFrom || "")) ? String(query.dateFrom) : "";
   const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateTo || "")) ? String(query.dateTo) : "";
   const linkedUsers = isAdmin
     ? await db.collection("users").find({ employeeDailySpreadsheetId: { $exists: true, $ne: "" } }).limit(500).toArray()
     : [req.user];
-  const allCachedReports = await getCachedEmployeeReportsForUsers(db, linkedUsers);
+  const reportEligibleLinkedUsers = linkedUsers.filter((user) => !isEmployeeDailyReportExempt(user));
+  const allCachedReports = await getCachedEmployeeReportsForUsers(db, reportEligibleLinkedUsers);
   const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(allCachedReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] }))
     .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
     .slice(0, 500);
@@ -2509,7 +2521,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     };
   });
   const reportUsers = isAdmin
-    ? linkedUsers.map((user) => ({
+    ? reportEligibleLinkedUsers.map((user) => ({
       _id: String(user._id),
       employeeName: user.displayName || user.username || "Employee",
       department: user.department || "",
@@ -2519,7 +2531,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     }))
     : [];
   const todaySubmissionStatus = isAdmin
-    ? linkedUsers.map((user) => {
+    ? reportEligibleLinkedUsers.map((user) => {
       const linkedUserId = String(user._id);
       const submitted = allCachedReports.find((report) => String(report.userId) === linkedUserId && report.reportDate === today);
       return {
@@ -2559,6 +2571,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
       sheetLinked: Boolean(req.user.employeeDailySpreadsheetId),
       sheetId: req.user.employeeDailySpreadsheetId || "",
       sheetUrl: employeeSheetUrl(req.user.employeeDailySpreadsheetId || ""),
+      reportExempt,
     },
     options: { ...EMPLOYEE_REPORT_OPTIONS, sites: siteOptions },
     optionUsage,
@@ -2842,6 +2855,7 @@ app.post("/employee-daily-report/refine-description", async (req, res) => {
 app.post("/employee-daily-report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    if (isEmployeeDailyReportExempt(req.user || req.authUser || {})) return res.status(403).json({ error: "Daily report is not required for this user. Please use clock in and clock out." });
     const db = await connectAuthDb();
     const today = employeeReportToday(req);
     const userId = String(req.authUser.id);
@@ -2898,6 +2912,7 @@ app.post("/employee-daily-report", async (req, res) => {
 app.put("/employee-daily-report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    if (isEmployeeDailyReportExempt(req.user || req.authUser || {})) return res.status(403).json({ error: "Daily report is not required for this user. Please use clock in and clock out." });
     const db = await connectAuthDb();
     const today = employeeReportToday(req);
     const userId = String(req.authUser.id);
@@ -3373,6 +3388,7 @@ async function buildEmployeeReportExportData(req, query = {}) {
         avatarUrl: user.avatarUrl || "",
       };
     })
+    .filter((user) => !isEmployeeDailyReportExempt(user))
     .filter((user) => projectText(user.roleName).toLowerCase() !== "dmr manager")
     .filter((user) => !selectedUserSet.size || selectedUserSet.has(user.id));
   const eligibleUserIdSet = new Set(activeUsers.map((user) => user.id));

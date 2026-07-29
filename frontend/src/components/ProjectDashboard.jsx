@@ -3656,12 +3656,12 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
   const taskRows = rows.filter((row) => row.type === "task");
 
   return (
-    <div className="fixed inset-0 z-50 flex h-screen w-screen flex-col bg-[#f7f8f5] p-3 text-[#20231f] dark:bg-[#11130f] dark:text-white sm:p-4">
+    <div className="fixed inset-0 z-50 flex h-screen w-screen flex-col bg-[#f7f8f5] p-3 text-[#20231f] dark:bg-[#090c0a] dark:text-white sm:p-4">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 dark:bg-white/[0.03]">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 dark:border dark:border-white/10 dark:bg-[#141915]">
           <div>
             <h2 className="text-xl font-semibold">Gantt View</h2>
-            <p className="mt-0.5 text-xs text-[#7b8178]">
+            <p className="mt-0.5 text-xs text-[#7b8178] dark:text-white/55">
               Full project schedule with phase rows, task timelines, progress and overlapping work.
             </p>
           </div>
@@ -3672,32 +3672,32 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
             <span className="rounded-full bg-[#eaf4ff] px-3 py-1 text-xs font-semibold text-[#1268b3]">
               {formatDate(bounds.startDate.toISOString().slice(0, 10))} - {formatDate(bounds.endDate.toISOString().slice(0, 10))}
             </span>
-            <Button variant="secondary" onClick={onDownloadPdf} disabled={downloadingPdf}>
+            <Button variant="secondary" onClick={onDownloadPdf} disabled={downloadingPdf} className="dark:border-white/10 dark:bg-white/[0.08] dark:text-white dark:hover:bg-white/[0.12]">
               {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               PDF
             </Button>
-            <IconButton label="Close Gantt" onClick={onClose} className="bg-[#f1f3ef] hover:bg-[#e7ebe4] dark:bg-white/[0.06]">
+            <IconButton label="Close Gantt" onClick={onClose} className="bg-[#f1f3ef] hover:bg-[#e7ebe4] dark:bg-white/[0.10] dark:text-white/80 dark:hover:bg-white/[0.16]">
               <X className="h-4 w-4" />
             </IconButton>
           </div>
         </div>
 
-        <section className="mt-3 min-h-0 flex-1 overflow-auto rounded-xl bg-white dark:bg-white/[0.03]">
+        <section className="mt-3 min-h-0 flex-1 overflow-auto rounded-xl bg-white dark:border dark:border-white/10 dark:bg-[#111611]">
           <div className="min-w-[1438px]" style={{ width: sideColumnsWidth + timelineMinWidth }}>
-            <div className="sticky top-0 z-20 grid border-b border-[#eef1eb] bg-white dark:border-white/10 dark:bg-[#181b17]" style={{ gridTemplateColumns: ganttColumns }}>
-              <div className="sticky left-0 z-30 bg-white px-4 py-3 dark:bg-[#181b17]">
+            <div className="sticky top-0 z-20 grid border-b border-[#eef1eb] bg-white dark:border-white/10 dark:bg-[#151b16]" style={{ gridTemplateColumns: ganttColumns }}>
+              <div className="sticky left-0 z-30 bg-white px-4 py-3 dark:bg-[#151b16]">
                 <h3 className="text-sm font-bold">Task list</h3>
-                <p className="mt-0.5 text-[11px] text-[#858b82]">{taskRows.length} scheduled task{taskRows.length === 1 ? "" : "s"}</p>
+                <p className="mt-0.5 text-[11px] text-[#858b82] dark:text-white/50">{taskRows.length} scheduled task{taskRows.length === 1 ? "" : "s"}</p>
               </div>
-              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[10px] font-bold uppercase tracking-wide text-[#5270a8] dark:bg-[#181b17]" style={{ left: 260 }}>Start</div>
-              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[10px] font-bold uppercase tracking-wide text-[#8a6515] dark:bg-[#181b17]" style={{ left: 372 }}>End</div>
-              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[10px] font-bold uppercase tracking-wide text-[#5f665c] dark:bg-[#181b17]" style={{ left: 484 }}>Duration</div>
+              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[10px] font-bold uppercase tracking-wide text-[#5270a8] dark:bg-[#151b16] dark:text-blue-200" style={{ left: 260 }}>Start</div>
+              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[10px] font-bold uppercase tracking-wide text-[#8a6515] dark:bg-[#151b16] dark:text-amber-200" style={{ left: 372 }}>End</div>
+              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[10px] font-bold uppercase tracking-wide text-[#5f665c] dark:bg-[#151b16] dark:text-white/55" style={{ left: 484 }}>Duration</div>
               <div className="relative" style={{ minWidth: timelineMinWidth }}>
                 <div className="relative h-7 border-b border-[#edf0ea] dark:border-white/10">
                   {monthBands.map((band) => (
                     <span
                       key={band.key}
-                      className="absolute top-2 text-center text-[10px] font-bold text-[#72786f]"
+                      className="absolute top-2 text-center text-[10px] font-bold text-[#72786f] dark:text-white/45"
                       style={{ left: `${(band.start / bounds.days) * 100}%`, width: `${((band.end - band.start + 1) / bounds.days) * 100}%` }}
                     >
                       {band.key}
@@ -3708,7 +3708,7 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                   {markers.map((date) => {
                     const index = Math.round((date - bounds.startDate) / 86400000);
                     return (
-                    <span key={date.toISOString()} className="absolute top-2 -translate-x-1/2 whitespace-nowrap text-[10px]" style={{ left: `${((index + 0.5) / Math.max(1, bounds.days)) * 100}%` }}>
+                    <span key={date.toISOString()} className="absolute top-2 -translate-x-1/2 whitespace-nowrap text-[10px] text-[#20231f] dark:text-white/75" style={{ left: `${((index + 0.5) / Math.max(1, bounds.days)) * 100}%` }}>
                       {date.toLocaleDateString("en-IN", { day: "2-digit" })}
                     </span>
                     );
@@ -3737,10 +3737,10 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                   key={`${row.type}-${row.id}`}
                   type="button"
                   onClick={() => row.type === "phase" ? onOpenPhase?.(row.source) : onOpenTask?.(row.source)}
-                  className="grid border-b border-[#eef1eb] text-left hover:bg-[#fafbf8] dark:border-white/10 dark:hover:bg-white/[0.025]"
+                  className="grid border-b border-[#eef1eb] text-left hover:bg-[#fafbf8] dark:border-white/10 dark:hover:bg-white/[0.045]"
                   style={{ gridTemplateColumns: ganttColumns }}
                 >
-                  <div className="sticky left-0 z-10 flex min-w-0 items-center bg-white px-4 py-2.5 dark:bg-[#181b17]">
+                  <div className="sticky left-0 z-10 flex min-w-0 items-center bg-white px-4 py-2.5 dark:bg-[#151b16]">
                     {row.type === "phase" ? (
                       <div className="flex items-center gap-2 text-sm font-bold text-[#2f6df6]">
                         <span className="h-3 w-3 rounded-full bg-[#2f6df6]" />
@@ -3750,7 +3750,7 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                       <div className="flex min-w-0 items-start gap-2 pl-5">
                         <span className="mt-1.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-bold">{row.title}</span>
+                          <span className="block truncate text-sm font-bold dark:text-white/95">{row.title}</span>
                           <span className={cn("mt-1 inline-flex rounded-full px-2.5 py-1 text-xs leading-none", badgeClass)}>
                               {badgeLabel}{overlapping ? ` · ${overlapping} overlap${overlapping === 1 ? "" : "s"}` : ""}
                           </span>
@@ -3758,13 +3758,13 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                       </div>
                     )}
                   </div>
-                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#181b17]" style={{ left: 260 }}>
+                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#151b16]" style={{ left: 260 }}>
                     <span className={cn("whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-bold leading-none", row.type === "phase" ? "bg-[#dbe7ff] text-[#1e55d8]" : "bg-[#c8f1ec] text-[#00796f]")}>{formatDate(row.startDate)}</span>
                   </div>
-                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#181b17]" style={{ left: 372 }}>
+                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#151b16]" style={{ left: 372 }}>
                     <span className={cn("whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-bold leading-none", row.status === "done" ? "bg-[#c9f0d8] text-[#1d7d48]" : row.status === "blocked" ? "bg-[#ffd2da] text-[#a72f45]" : "bg-[#ffe7a8] text-[#8a5b00]")}>{formatDate(row.dueDate)}</span>
                   </div>
-                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#181b17]" style={{ left: 484 }}>
+                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#151b16]" style={{ left: 484 }}>
                     <span className="whitespace-nowrap rounded-full bg-[#e2e7dc] px-3 py-1.5 text-sm font-bold leading-none text-[#465044] dark:bg-white/15 dark:text-white/80">{row.duration}d</span>
                   </div>
                   <div className="relative px-0 py-0" style={{ minWidth: timelineMinWidth }}>
@@ -3772,7 +3772,12 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                       {dayMarkers.map((date, index) => (
                         <span
                           key={date.toISOString()}
-                          className={cn("absolute top-0 h-full border-l", index % 7 === 0 ? "border-[#e4e8e1] bg-[#fafbf8]" : "border-[#f1f3ef]", "dark:border-white/10")}
+                          className={cn(
+                            "absolute top-0 h-full border-l",
+                            index % 7 === 0
+                              ? "border-[#e4e8e1] bg-[#fafbf8] dark:border-white/[0.08] dark:bg-white/[0.045]"
+                              : "border-[#f1f3ef] dark:border-white/[0.055] dark:bg-transparent",
+                          )}
                           style={{ left: `${(index / Math.max(1, bounds.days)) * 100}%`, width: `${100 / Math.max(1, bounds.days)}%` }}
                         />
                       ))}

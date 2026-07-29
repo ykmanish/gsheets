@@ -9,8 +9,17 @@ import UserAvatar from "./UserAvatar";
 
 const employeeReportTestDateKey = "employee-report-test-date";
 
+function employeeReportDateOverrideAllowed() {
+  if (typeof window === "undefined") return false;
+  return process.env.NODE_ENV === "development" || ["localhost", "127.0.0.1"].includes(window.location.hostname);
+}
+
 function employeeReportTestDate() {
   if (typeof window === "undefined") return "";
+  if (!employeeReportDateOverrideAllowed()) {
+    window.localStorage.removeItem(employeeReportTestDateKey);
+    return "";
+  }
   const queryDate = new URLSearchParams(window.location.search).get("employeeReportDate");
   if (String(queryDate || "").toLowerCase() === "clear") {
     window.localStorage.removeItem(employeeReportTestDateKey);
@@ -1338,7 +1347,8 @@ export default function EmployeeDailyReport({ darkMode }) {
     || (!reportExempt && !data?.todaySubmitted && isClockedInToday)
     || (clockButtonIsClockOut && (!isClockedInToday || isClockedOutToday));
   const userStorageId = data?.currentUserId || "me";
-  const draftStoragePrefix = `employee-daily-report-draft:${userStorageId}:${todayInput()}`;
+  const currentReportDate = data?.today || todayInput();
+  const draftStoragePrefix = `employee-daily-report-draft:${userStorageId}:${currentReportDate}`;
   const draftStorageKey = activeDraftKey || `${draftStoragePrefix}:new`;
 
   async function load() {
@@ -1397,7 +1407,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     try {
       const result = await api("/hr/attendance");
       const records = result.records || [];
-      const ownToday = records.find((record) => String(record.userId || "") === String(user?.id || "") && record.date === todayInput()) || null;
+      const ownToday = records.find((record) => String(record.userId || "") === String(user?.id || "") && record.date === currentReportDate) || null;
       setTodayAttendance(ownToday);
     } catch {
       setTodayAttendance(null);
@@ -1707,7 +1717,7 @@ export default function EmployeeDailyReport({ darkMode }) {
       await api("/employee-daily-report/executive-answers", {
         method: "PUT",
         body: JSON.stringify({
-          reportDate: data?.today || todayInput(),
+          reportDate: currentReportDate,
           answers: executiveQuestions.map((question) => ({ id: question.id, answer: executiveAnswers[question.id] || "" })),
         }),
       });
@@ -1745,7 +1755,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     if (checkingReminder) return;
     try {
       setCheckingReminder(true);
-      const date = data?.today || todayInput();
+      const date = currentReportDate;
       const result = await api("/employee-daily-report/reminder/send-now", {
         method: "POST",
         body: JSON.stringify({ date }),

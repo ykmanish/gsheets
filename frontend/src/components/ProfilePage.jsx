@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, ExternalLink, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, LogIn, LogOut, Mail, MessageCircleMore, Pencil, Phone, ReceiptText, RefreshCw, Save, Upload } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, ExternalLink, Eye, EyeOff, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, KeyRound, LogIn, LogOut, Mail, MessageCircleMore, Pencil, Phone, ReceiptText, RefreshCw, Save, ShieldCheck, Upload } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import UserAvatar, { beanheadPresetsForGender } from "./UserAvatar";
 import { SelectMenu } from "./ui";
@@ -44,6 +44,34 @@ function ProfileField({ darkMode, label, value, onChange, icon: Icon, className 
   );
 }
 
+function PasswordField({ darkMode, label, value, onChange, visible, onToggle, autoComplete, placeholder }) {
+  return (
+    <label className="block">
+      <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>{label}</span>
+      <span className={`mt-2 flex h-12 items-center rounded-2xl border pr-2 transition focus-within:ring-4 ${darkMode ? "border-white/10 bg-white/[0.045] focus-within:ring-white/5" : "border-black/10 bg-white focus-within:ring-emerald-500/10"}`}>
+        <KeyRound className={`ml-4 h-4 w-4 shrink-0 ${darkMode ? "text-white/38" : "text-black/35"}`} />
+        <input
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className={`min-w-0 flex-1 bg-transparent px-3 text-sm outline-none ${darkMode ? "text-white placeholder:text-white/30" : "text-black placeholder:text-black/35"}`}
+          autoComplete={autoComplete}
+          placeholder={placeholder}
+          required
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${darkMode ? "text-white/55 hover:bg-white/10" : "text-black/45 hover:bg-black/5"}`}
+          aria-label={visible ? "Hide password" : "Show password"}
+        >
+          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </span>
+    </label>
+  );
+}
+
 function todayInput() {
   const now = new Date();
   const offset = now.getTimezoneOffset();
@@ -53,6 +81,7 @@ function todayInput() {
 export default function ProfilePage({ darkMode }) {
   const { user, refreshUser } = useAuth();
   const [saving, setSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(true);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
@@ -61,6 +90,8 @@ export default function ProfilePage({ darkMode }) {
   const [attendanceData, setAttendanceData] = useState({ settings: {}, records: [], remoteWorkEnabled: false, reportExempt: false });
   const [avatarDrawerOpen, setAvatarDrawerOpen] = useState(false);
   const avatarPickerRef = useRef(null);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [visiblePasswords, setVisiblePasswords] = useState({ currentPassword: false, newPassword: false, confirmPassword: false });
   const [form, setForm] = useState({
     displayName: user?.displayName || "",
     email: user?.email || "",
@@ -231,6 +262,31 @@ export default function ProfilePage({ darkMode }) {
       toast.error(error.message || "Could not save profile");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function changePassword(event) {
+    event.preventDefault();
+    if (passwordSaving) return;
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) return toast.error("Fill all password fields");
+    if (passwordForm.newPassword.length < 6) return toast.error("New password must be at least 6 characters");
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) return toast.error("Passwords do not match");
+    try {
+      setPasswordSaving(true);
+      const response = await fetch(`${API_URL}/profile/password`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(passwordForm),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not change password");
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setVisiblePasswords({ currentPassword: false, newPassword: false, confirmPassword: false });
+      toast.success("Password changed");
+    } catch (error) {
+      toast.error(error.message || "Could not change password");
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -449,6 +505,60 @@ export default function ProfilePage({ darkMode }) {
               <ProfileField darkMode={darkMode} label="Phone number" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value.replace(/\D/g, "") }))} disabled={!editing} placeholder="919898892887" icon={Phone} inputMode="numeric" />
               <ProfileField darkMode={darkMode} label="WhatsApp number" value={form.whatsappPhone} onChange={(value) => setForm((current) => ({ ...current, whatsappPhone: value.replace(/\D/g, "") }))} disabled={!editing} placeholder="919898892887" icon={MessageCircleMore} inputMode="numeric" />
             </div>
+          </div>
+        </section>
+
+        <section className={`mb-6 rounded-[26px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-lg font-black">Password & security</h3>
+              <p className={`mt-1 text-sm ${darkMode ? "text-white/55" : "text-black/55"}`}>Change your account password using your current password.</p>
+            </div>
+            <span className={`inline-flex h-10 w-fit items-center gap-2 rounded-full px-4 text-xs font-black ${darkMode ? "bg-white/10 text-white/70" : "bg-[#eef8e8] text-[#39710f]"}`}>
+              <ShieldCheck className="h-4 w-4" />
+              Secure
+            </span>
+          </div>
+          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+            <PasswordField
+              darkMode={darkMode}
+              label="Current password"
+              value={passwordForm.currentPassword}
+              onChange={(value) => setPasswordForm((current) => ({ ...current, currentPassword: value }))}
+              visible={visiblePasswords.currentPassword}
+              onToggle={() => setVisiblePasswords((current) => ({ ...current, currentPassword: !current.currentPassword }))}
+              autoComplete="current-password"
+              placeholder="Enter current password"
+            />
+            <PasswordField
+              darkMode={darkMode}
+              label="New password"
+              value={passwordForm.newPassword}
+              onChange={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))}
+              visible={visiblePasswords.newPassword}
+              onToggle={() => setVisiblePasswords((current) => ({ ...current, newPassword: !current.newPassword }))}
+              autoComplete="new-password"
+              placeholder="Enter new password"
+            />
+            <PasswordField
+              darkMode={darkMode}
+              label="Confirm password"
+              value={passwordForm.confirmPassword}
+              onChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))}
+              visible={visiblePasswords.confirmPassword}
+              onToggle={() => setVisiblePasswords((current) => ({ ...current, confirmPassword: !current.confirmPassword }))}
+              autoComplete="new-password"
+              placeholder="Confirm new password"
+            />
+            <button
+              type="button"
+              onClick={changePassword}
+              disabled={passwordSaving}
+              className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto ${darkMode ? "bg-[#d8f36a] text-black hover:bg-[#cbe95b]" : "bg-black text-white hover:bg-black/85"}`}
+            >
+              {passwordSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+              {passwordSaving ? "Changing" : "Change password"}
+            </button>
           </div>
         </section>
 

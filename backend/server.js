@@ -303,7 +303,6 @@ async function seedSuperAdmin() {
       updatedAt: now,
     });
   } else {
-    const password = hashPassword(SUPER_ADMIN_PASSWORD);
     await db.collection("users").updateOne(
       { _id: existing._id },
       {
@@ -311,8 +310,6 @@ async function seedSuperAdmin() {
           roleId: role._id,
           isSuperAdmin: true,
           blacklisted: false,
-          passwordHash: password.hash,
-          passwordSalt: password.salt,
           updatedAt: now,
         },
       }
@@ -487,6 +484,32 @@ app.patch("/profile", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("Profile update error:", error);
     res.status(500).json({ error: "Could not update profile" });
+  }
+});
+
+app.patch("/profile/password", requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body || {};
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: "Current password, new password, and confirm password are required" });
+    }
+    if (String(newPassword).length < 6) return res.status(400).json({ error: "New password must be at least 6 characters" });
+    if (newPassword !== confirmPassword) return res.status(400).json({ error: "New password and confirm password do not match" });
+    if (!verifyPassword(currentPassword, req.user.passwordHash, req.user.passwordSalt)) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    const hashed = hashPassword(newPassword);
+    const db = await connectAuthDb();
+    await db.collection("users").updateOne(
+      { _id: req.user._id },
+      { $set: { passwordHash: hashed.hash, passwordSalt: hashed.salt, updatedAt: new Date() } }
+    );
+    addActivityLog({ req, action: "Changed password", target: req.authUser?.username || "User", status: "success" });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Password change error:", error);
+    res.status(500).json({ error: "Could not change password" });
   }
 });
 
@@ -788,8 +811,9 @@ function employeeReportDateRange() {
 }
 
 function employeeReportToday(req = null) {
-  const headerDate = dmrDateKey(req?.headers?.["x-employee-report-date"]);
-  const envDate = dmrDateKey(process.env.EMPLOYEE_REPORT_TEST_DATE);
+  const allowDateOverride = process.env.ALLOW_EMPLOYEE_REPORT_DATE_OVERRIDE === "true";
+  const headerDate = allowDateOverride ? dmrDateKey(req?.headers?.["x-employee-report-date"]) : "";
+  const envDate = allowDateOverride ? dmrDateKey(process.env.EMPLOYEE_REPORT_TEST_DATE) : "";
   return headerDate || envDate || istDateKey(new Date());
 }
 

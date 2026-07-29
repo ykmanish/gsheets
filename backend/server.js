@@ -74,6 +74,7 @@ const MENU_ITEMS = [
   { id: "hr-leave", label: "Leave", parent: "hr-dashboard", group: "hr" },
   { id: "hr-attendance", label: "Attendance", parent: "hr-dashboard", group: "hr" },
   { id: "todos", label: "Todos" },
+  { id: "forum", label: "Forum" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
@@ -129,6 +130,10 @@ async function connectAuthDb() {
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
   await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
   await authDb.collection("personalTodos").createIndex({ userId: 1, createdAt: -1 });
+  await authDb.collection("forumConversations").createIndex({ type: 1, updatedAt: -1 });
+  await authDb.collection("forumConversations").createIndex({ participantIds: 1, updatedAt: -1 });
+  await authDb.collection("forumMessages").createIndex({ conversationId: 1, createdAt: 1 });
+  await authDb.collection("forumMessages").createIndex({ recipientIds: 1, createdAt: -1 });
   try {
     await authDb.collection("dmrWhatsAppReminderRuns").dropIndex("date_1_type_1");
   } catch (error) {
@@ -15522,6 +15527,296 @@ app.delete("/reports/:id", requirePrivilege("manage_reports", "Report management
   }
 });
 
+const FORUM_GROUP_ID = "workspace-forum";
+const forumClients = new Map();
+
+function forumEncryptionKey() {
+  return crypto.createHash("sha256").update(process.env.FORUM_ENCRYPTION_KEY || process.env.SESSION_SECRET || MONGODB_URI).digest();
+}
+
+function encryptForumText(text) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", forumEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(String(text), "utf8"), cipher.final()]);
+  return {
+    ciphertext: encrypted.toString("base64"),
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+  };
+}
+
+function decryptForumText(payload = {}) {
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", forumEncryptionKey(), Buffer.from(payload.iv || "", "base64"));
+    decipher.setAuthTag(Buffer.from(payload.tag || "", "base64"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(payload.ciphertext || "", "base64")),
+      decipher.final(),
+    ]).toString("utf8");
+  } catch {
+    return "[Encrypted message unavailable]";
+  }
+}
+
+function forumUserProfile(user = {}) {
+  return {
+    id: String(user._id || user.id || ""),
+    username: user.username || "",
+    displayName: user.displayName || user.username || "User",
+    email: user.email || "",
+    phone: user.phone || "",
+    department: user.department || "",
+    designation: user.designation || user.jobTitle || "",
+    avatarPreset: user.avatarPreset || "",
+    avatarUrl: user.avatarUrl || "",
+    gender: user.gender || "",
+    roleName: user.roleName || "",
+  };
+}
+
+function forumConversationIdForDirect(userA, userB) {
+  return `dm:${[String(userA), String(userB)].sort().join(":")}`;
+}
+
+async function ensureForumGroupConversation(db) {
+  const now = new Date();
+  const result = await db.collection("forumConversations").findOneAndUpdate(
+    { _id: FORUM_GROUP_ID },
+    {
+      $setOnInsert: {
+        _id: FORUM_GROUP_ID,
+        type: "group",
+        name: "Group Forum",
+        participantIds: [],
+        createdAt: now,
+        updatedAt: now,
+      },
+    },
+    { upsert: true, returnDocument: "after" }
+  );
+  return result.value || result;
+}
+
+async function serializeForumMessage(message) {
+  if (!message) return null;
+  const db = await connectAuthDb();
+  const sender = await db.collection("users").findOne({ _id: new ObjectId(message.senderId) });
+  return {
+    id: String(message._id),
+    conversationId: message.conversationId,
+    type: message.type,
+    senderId: message.senderId,
+    sender: forumUserProfile(sender || { _id: message.senderId, username: "User" }),
+    text: decryptForumText(message.encrypted),
+    encrypted: true,
+    createdAt: message.createdAt,
+  };
+}
+
+async function forumConversationSummary(conversation, authUserId) {
+  const db = await connectAuthDb();
+  const participantIds = (conversation.participantIds || []).filter(Boolean);
+  const participants = participantIds.length
+    ? await db.collection("users").find({ _id: { $in: participantIds.map((id) => new ObjectId(id)) } }).toArray()
+    : [];
+  const other = participants.find((user) => String(user._id) !== authUserId);
+  const lastMessage = conversation.lastMessage ? {
+    ...conversation.lastMessage,
+    text: decryptForumText(conversation.lastMessage.encrypted),
+    encrypted: true,
+  } : null;
+  return {
+    id: conversation._id,
+    type: conversation.type,
+    name: conversation.type === "direct" ? (other?.displayName || other?.username || "Direct message") : conversation.name || "Group Forum",
+    participants: participants.map(forumUserProfile),
+    lastMessage,
+    updatedAt: conversation.updatedAt,
+  };
+}
+
+function forumSocketsFor(userId) {
+  return forumClients.get(String(userId)) || new Set();
+}
+
+function sendForumSocket(socket, payload) {
+  if (socket.destroyed) return;
+  const text = JSON.stringify(payload);
+  const body = Buffer.from(text);
+  const header = body.length < 126
+    ? Buffer.from([0x81, body.length])
+    : Buffer.concat([Buffer.from([0x81, 126]), Buffer.from([(body.length >> 8) & 255, body.length & 255])]);
+  socket.write(Buffer.concat([header, body]));
+}
+
+function broadcastForumPayload(userIds, payload) {
+  for (const userId of new Set(userIds.map(String))) {
+    for (const socket of forumSocketsFor(userId)) sendForumSocket(socket, payload);
+  }
+}
+
+async function createForumMessage({ req, conversationId, text }) {
+  const db = await connectAuthDb();
+  const now = new Date();
+  let conversation = await db.collection("forumConversations").findOne({ _id: conversationId });
+  if (!conversation && conversationId === FORUM_GROUP_ID) conversation = await ensureForumGroupConversation(db);
+  if (!conversation) throw Object.assign(new Error("Conversation not found"), { status: 404 });
+  if (conversation.type === "direct" && !(conversation.participantIds || []).includes(req.authUser.id)) {
+    throw Object.assign(new Error("Conversation not found"), { status: 404 });
+  }
+  const encrypted = encryptForumText(text);
+  const recipientIds = conversation.type === "direct" ? conversation.participantIds : [];
+  const message = {
+    conversationId,
+    type: conversation.type,
+    senderId: req.authUser.id,
+    recipientIds,
+    encrypted,
+    createdAt: now,
+  };
+  const result = await db.collection("forumMessages").insertOne(message);
+  const saved = { ...message, _id: result.insertedId };
+  await db.collection("forumConversations").updateOne(
+    { _id: conversationId },
+    {
+      $set: {
+        updatedAt: now,
+        lastMessage: {
+          id: String(result.insertedId),
+          senderId: req.authUser.id,
+          encrypted,
+          createdAt: now,
+        },
+      },
+    }
+  );
+  const serialized = await serializeForumMessage(saved);
+  const recipients = conversation.type === "direct"
+    ? conversation.participantIds
+    : (await db.collection("sessions").distinct("userId")).map(String);
+  broadcastForumPayload(recipients, { type: "forum:message", conversationId, message: serialized });
+  return serialized;
+}
+
+app.get("/forum/bootstrap", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const group = await ensureForumGroupConversation(db);
+    const conversations = await db.collection("forumConversations").find({
+      $or: [{ _id: FORUM_GROUP_ID }, { participantIds: req.authUser.id }],
+    }).sort({ updatedAt: -1 }).toArray();
+    const users = await db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1, username: 1 }).toArray();
+    const onlineUserIds = [...forumClients.keys()];
+    res.json({
+      currentUser: req.authUser,
+      group: await forumConversationSummary(group, req.authUser.id),
+      conversations: await Promise.all(conversations.map((item) => forumConversationSummary(item, req.authUser.id))),
+      users: users.map(forumUserProfile),
+      onlineUserIds,
+    });
+  } catch (error) {
+    console.error("Forum bootstrap error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/forum/conversations/:id/messages", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversation = req.params.id === FORUM_GROUP_ID
+      ? await ensureForumGroupConversation(db)
+      : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    const messages = await db.collection("forumMessages").find({ conversationId: conversation._id }).sort({ createdAt: 1 }).limit(300).toArray();
+    res.json({ messages: await Promise.all(messages.map(serializeForumMessage)) });
+  } catch (error) {
+    console.error("Forum messages error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/conversations/direct", async (req, res) => {
+  try {
+    const targetUserId = String(req.body?.userId || "");
+    if (!ObjectId.isValid(targetUserId) || targetUserId === req.authUser.id) return res.status(400).json({ error: "Choose another user" });
+    const db = await connectAuthDb();
+    const target = await db.collection("users").findOne({ _id: new ObjectId(targetUserId), blacklisted: { $ne: true } });
+    if (!target) return res.status(404).json({ error: "User not found" });
+    const now = new Date();
+    const conversationId = forumConversationIdForDirect(req.authUser.id, targetUserId);
+    const result = await db.collection("forumConversations").findOneAndUpdate(
+      { _id: conversationId },
+      {
+        $setOnInsert: {
+          _id: conversationId,
+          type: "direct",
+          participantIds: [req.authUser.id, targetUserId],
+          createdAt: now,
+        },
+        $set: { updatedAt: now },
+      },
+      { upsert: true, returnDocument: "after" }
+    );
+    const conversation = await forumConversationSummary(result.value || result, req.authUser.id);
+    broadcastForumPayload([req.authUser.id, targetUserId], { type: "forum:conversation", conversation });
+    res.json({ conversation });
+  } catch (error) {
+    console.error("Forum direct conversation error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/conversations/:id/messages", async (req, res) => {
+  try {
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ error: "Message cannot be empty" });
+    if (text.length > 4000) return res.status(400).json({ error: "Message is too long" });
+    const message = await createForumMessage({ req, conversationId: req.params.id, text });
+    res.json({ message });
+  } catch (error) {
+    console.error("Forum send error:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.delete("/forum/conversations/:id/messages", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversation = req.params.id === FORUM_GROUP_ID
+      ? await ensureForumGroupConversation(db)
+      : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    await db.collection("forumMessages").deleteMany({ conversationId: conversation._id });
+    await db.collection("forumConversations").updateOne(
+      { _id: conversation._id },
+      { $set: { updatedAt: new Date() }, $unset: { lastMessage: "" } }
+    );
+    const recipients = conversation.type === "direct"
+      ? conversation.participantIds
+      : (await db.collection("sessions").distinct("userId")).map(String);
+    broadcastForumPayload(recipients, { type: "forum:cleared", conversationId: conversation._id });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Forum clear error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete("/forum/conversations/:id", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversation = await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
+    if (!conversation || conversation.type !== "direct") return res.status(404).json({ error: "Direct conversation not found" });
+    await db.collection("forumMessages").deleteMany({ conversationId: conversation._id });
+    await db.collection("forumConversations").deleteOne({ _id: conversation._id });
+    broadcastForumPayload(conversation.participantIds, { type: "forum:deleted", conversationId: conversation._id });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Forum delete error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post("/chat", async (req, res) => {
   try {
     const question = String(req.body?.question || "").trim();
@@ -15618,6 +15913,105 @@ app.post("/chat", async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
+
+function readForumSocketFrame(buffer) {
+  if (!buffer || buffer.length < 6) return null;
+  const opcode = buffer[0] & 0x0f;
+  if (opcode === 0x8) return { close: true };
+  let offset = 2;
+  let length = buffer[1] & 0x7f;
+  if (length === 126) {
+    if (buffer.length < 8) return null;
+    length = buffer.readUInt16BE(2);
+    offset = 4;
+  } else if (length === 127) {
+    return null;
+  }
+  const masked = Boolean(buffer[1] & 0x80);
+  if (!masked || buffer.length < offset + 4 + length) return null;
+  const mask = buffer.subarray(offset, offset + 4);
+  offset += 4;
+  const payload = Buffer.alloc(length);
+  for (let index = 0; index < length; index += 1) {
+    payload[index] = buffer[offset + index] ^ mask[index % 4];
+  }
+  return { text: payload.toString("utf8") };
+}
+
+async function authenticateForumSocket(request) {
+  const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
+  const token = url.searchParams.get("token");
+  if (!token) return null;
+  const db = await connectAuthDb();
+  const session = await db.collection("sessions").findOne({ tokenHash: hashToken(token), expiresAt: { $gt: new Date() } });
+  if (!session) return null;
+  const user = await db.collection("users").findOne({ _id: session.userId });
+  if (!user || user.blacklisted) return null;
+  const role = await getRole(user.roleId);
+  return sanitizeUser(user, role);
+}
+
+server.on("upgrade", async (request, socket) => {
+  try {
+    const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
+    if (url.pathname !== "/forum/socket" && url.pathname !== "/api/forum/socket") {
+      socket.destroy();
+      return;
+    }
+    const user = await authenticateForumSocket(request);
+    if (!user) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    const key = request.headers["sec-websocket-key"];
+    const accept = crypto.createHash("sha1").update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64");
+    socket.write([
+      "HTTP/1.1 101 Switching Protocols",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      `Sec-WebSocket-Accept: ${accept}`,
+      "\r\n",
+    ].join("\r\n"));
+    if (!forumClients.has(user.id)) forumClients.set(user.id, new Set());
+    forumClients.get(user.id).add(socket);
+    broadcastForumPayload([...forumClients.keys()], { type: "forum:presence", onlineUserIds: [...forumClients.keys()] });
+    socket.on("data", (buffer) => {
+      const frame = readForumSocketFrame(buffer);
+      if (frame?.close) socket.end();
+      if (frame?.text === "ping") sendForumSocket(socket, { type: "forum:pong" });
+      if (frame?.text && frame.text !== "ping") {
+        try {
+          const payload = JSON.parse(frame.text);
+          if (payload.type === "forum:typing" && payload.conversationId) {
+            const recipientIds = Array.isArray(payload.recipientIds) ? payload.recipientIds : [];
+            const targets = payload.conversationId === FORUM_GROUP_ID
+              ? [...forumClients.keys()]
+              : recipientIds;
+            broadcastForumPayload(targets.filter((id) => String(id) !== user.id), {
+              type: "forum:typing",
+              conversationId: payload.conversationId,
+              user: { id: user.id, displayName: user.displayName || user.username, username: user.username },
+              typing: Boolean(payload.typing),
+            });
+          }
+        } catch {
+          // Ignore malformed socket payloads.
+        }
+      }
+    });
+    socket.on("close", () => {
+      const sockets = forumClients.get(user.id);
+      sockets?.delete(socket);
+      if (!sockets?.size) forumClients.delete(user.id);
+      broadcastForumPayload([...forumClients.keys()], { type: "forum:presence", onlineUserIds: [...forumClients.keys()] });
+    });
+    socket.on("error", () => socket.destroy());
+  } catch (error) {
+    console.error("Forum socket error:", error);
+    socket.destroy();
+  }
+});
 
 if (require.main === module) {
   refreshEmployeeReminderCron().catch((error) => {

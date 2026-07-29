@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, ExternalLink, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, LogIn, Mail, MessageCircleMore, Pencil, Phone, ReceiptText, RefreshCw, Save, Upload } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, ExternalLink, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, LogIn, LogOut, Mail, MessageCircleMore, Pencil, Phone, ReceiptText, RefreshCw, Save, Upload } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import UserAvatar, { beanheadPresetsForGender } from "./UserAvatar";
 import { SelectMenu } from "./ui";
@@ -58,7 +58,7 @@ export default function ProfilePage({ darkMode }) {
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [documentUploading, setDocumentUploading] = useState("");
   const [documentUploadProgress, setDocumentUploadProgress] = useState({});
-  const [attendanceData, setAttendanceData] = useState({ settings: {}, records: [], remoteWorkEnabled: false });
+  const [attendanceData, setAttendanceData] = useState({ settings: {}, records: [], remoteWorkEnabled: false, reportExempt: false });
   const [avatarDrawerOpen, setAvatarDrawerOpen] = useState(false);
   const avatarPickerRef = useRef(null);
   const [form, setForm] = useState({
@@ -94,7 +94,9 @@ export default function ProfilePage({ darkMode }) {
   const todayAttendance = attendanceData.records.find((record) => record.userId === user?.id && record.date === todayInput());
   const attendanceConfigured = Boolean(Number(attendanceData.settings?.latitude) && Number(attendanceData.settings?.longitude));
   const remoteWorkEnabled = Boolean(attendanceData.remoteWorkEnabled || user?.remoteWorkEnabled);
+  const attendanceReady = attendanceConfigured || remoteWorkEnabled;
   const canClockIn = !todayAttendance?.clockInAt && (attendanceConfigured || remoteWorkEnabled);
+  const canClockOut = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt && attendanceReady);
 
   async function loadAttendance() {
     try {
@@ -105,9 +107,10 @@ export default function ProfilePage({ darkMode }) {
         settings: data.settings || {},
         records: data.records || [],
         remoteWorkEnabled: Boolean(data.remoteWorkEnabled),
+        reportExempt: Boolean(data.reportExempt),
       });
     } catch {
-      setAttendanceData({ settings: {}, records: [], remoteWorkEnabled: false });
+      setAttendanceData({ settings: {}, records: [], remoteWorkEnabled: false, reportExempt: false });
     } finally {
       setAttendanceLoading(false);
     }
@@ -156,6 +159,36 @@ export default function ProfilePage({ darkMode }) {
       toast.success("Clocked in");
     } catch (error) {
       toast.error(error.message || "Could not clock in");
+    } finally {
+      setAttendanceSaving(false);
+    }
+  }
+
+  async function clockOutFromProfile() {
+    if (attendanceSaving || !canClockOut) return;
+    try {
+      setAttendanceSaving(true);
+      let location = {};
+      try {
+        location = await browserLocation();
+      } catch (error) {
+        if (!remoteWorkEnabled) throw error;
+      }
+      const response = await fetch(`${API_URL}/hr/attendance/clock-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(location),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not clock out");
+      setAttendanceData((current) => ({
+        ...current,
+        settings: data.settings || current.settings,
+        records: [data.record, ...current.records.filter((record) => record.id !== data.record?.id)],
+      }));
+      toast.success("Clocked out");
+    } catch (error) {
+      toast.error(error.message || "Could not clock out");
     } finally {
       setAttendanceSaving(false);
     }
@@ -341,12 +374,22 @@ export default function ProfilePage({ darkMode }) {
                   <h1 className="text-3xl small text-black dark:text-white font-black tracking-tight">{displayName}</h1>
                   <button
                     type="button"
-                    onClick={clockInFromProfile}
-                    disabled={attendanceLoading || attendanceSaving || !canClockIn}
-                    className={`inline-flex h-12 w-fit min-w-[142px] items-center justify-center gap-2 rounded-full px-6 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${todayAttendance?.clockInAt ? (darkMode ? "bg-emerald-400/16 text-emerald-100" : "bg-[#e8f6ee] text-[#15734d]") : "bg-green-500 text-white hover:bg-green-600"}`}
+                    onClick={todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? clockOutFromProfile : clockInFromProfile}
+                    disabled={attendanceLoading || attendanceSaving || (todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? !canClockOut : !canClockIn)}
+                    className={`inline-flex h-12 w-fit min-w-[142px] items-center justify-center gap-2 rounded-full px-6 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      todayAttendance?.clockOutAt
+                        ? darkMode ? "bg-emerald-400/16 text-emerald-100" : "bg-[#e8f6ee] text-[#15734d]"
+                        : todayAttendance?.clockInAt
+                          ? darkMode ? "bg-red-400/16 text-red-100 hover:bg-red-400/22" : "bg-red-500 text-white hover:bg-red-600"
+                          : "bg-green-500 text-white hover:bg-green-600"
+                    }`}
                   >
-                    {attendanceLoading || attendanceSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : todayAttendance?.clockInAt ? <CheckCircle2 className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
-                    {attendanceLoading ? "Checking" : attendanceSaving ? "Clocking in" : todayAttendance?.clockInAt ? "Clocked in" : "Clock in"}
+                    {attendanceLoading || attendanceSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : todayAttendance?.clockOutAt ? <CheckCircle2 className="h-4 w-4" /> : todayAttendance?.clockInAt ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+                    {attendanceLoading
+                      ? "Checking"
+                      : attendanceSaving
+                        ? todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? "Clocking out" : "Clocking in"
+                        : todayAttendance?.clockOutAt ? "Clocked out" : todayAttendance?.clockInAt ? "Clock out" : "Clock in"}
                   </button>
                 </div>
                 <p className={`mt-1 text-sm ${darkMode ? "text-white/60" : "text-black/55"}`}>{form.designation || "Designation not added"}</p>

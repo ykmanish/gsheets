@@ -3698,6 +3698,7 @@ app.get("/hr/overview", async (req, res) => {
       const selfRole = selfUser?.roleId ? await getRole(selfUser.roleId) : null;
       return res.json({
         canManageHr,
+        reportExempt: isEmployeeDailyReportExempt(selfUser || req.user || req.authUser || {}),
         employees: selfUser ? [sanitizeUser(selfUser, selfRole)] : [],
         roles: [],
         documents: [],
@@ -3714,6 +3715,7 @@ app.get("/hr/overview", async (req, res) => {
     const employees = users.map((user) => sanitizeUser(user, roleMap.get(String(user.roleId))));
     res.json({
       canManageHr,
+      reportExempt: isEmployeeDailyReportExempt(req.user || req.authUser || {}),
       employees,
       roles: roles.map((role) => ({
         id: String(role._id),
@@ -4319,6 +4321,7 @@ app.get("/hr/attendance", async (req, res) => {
     res.json({
       canManageHr,
       remoteWorkEnabled: await remoteWorkEnabledForUser(db, req.authUser.id),
+      reportExempt: isEmployeeDailyReportExempt(req.user || req.authUser || {}),
       settings: await getAttendanceSettings(db),
       records: await loadHrAttendanceRecords(req, db, canManageHr),
     });

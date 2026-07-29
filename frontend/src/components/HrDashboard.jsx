@@ -409,6 +409,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceSearchResults, setAttendanceSearchResults] = useState([]);
   const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100 });
   const [todayReportSubmitted, setTodayReportSubmitted] = useState(false);
+  const [todayReportExempt, setTodayReportExempt] = useState(false);
   const [todayReportChecking, setTodayReportChecking] = useState(false);
   const attendanceSearchTimerRef = useRef(null);
   const attendanceGoogleGeocoderRef = useRef(null);
@@ -533,7 +534,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const todayAttendanceRecords = myAttendanceRecords.filter((record) => record.date === todayInput());
   const todayAttendanceLabel = todayAttendance?.clockOutAt ? "Completed" : todayAttendance?.clockInAt ? "Checked in" : "Not marked";
   const todayWorkMinutes = Number(todayAttendance?.workMinutes || 0);
-  const mustFillReportBeforeClockOut = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt && !todayReportSubmitted);
+  const reportExempt = Boolean(todayReportExempt || data?.reportExempt);
+  const mustFillReportBeforeClockOut = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt && !todayReportSubmitted && !reportExempt);
   const currentLeaveMonth = currentMonthInput();
   const currentMonthLeaveRequests = myLeaveRequests.filter((request) => leaveDaysInMonth(request, currentLeaveMonth) > 0);
   const approvedMonthLeaveRequests = currentMonthLeaveRequests.filter((request) => request.status === "approved");
@@ -914,8 +916,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not load daily report status");
       setTodayReportSubmitted(Boolean(result.todaySubmitted));
+      setTodayReportExempt(Boolean(result.profile?.reportExempt));
     } catch {
       setTodayReportSubmitted(false);
+      setTodayReportExempt(false);
     } finally {
       setTodayReportChecking(false);
     }

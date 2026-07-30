@@ -181,9 +181,10 @@ function conversationPreviewText(message, fallback) {
   const text = String(message?.text || "").trim();
   if (!text) return fallback;
   const url = firstUrlFromText(text);
-  if (!url) return text;
+  if (!url) return text.length > 90 ? `${text.slice(0, 90).trim()}...` : text;
   const rest = textWithoutUrls(text);
-  return rest || compactUrlLabel(url);
+  const preview = rest || compactUrlLabel(url);
+  return preview.length > 90 ? `${preview.slice(0, 90).trim()}...` : preview;
 }
 
 function LinkPreviewCard({ url, mine, darkMode, time }) {
@@ -926,18 +927,18 @@ export default function Forum({ darkMode }) {
   return (
     <div className={`h-[calc(100dvh-64px)] min-h-[560px] overflow-hidden ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f7f8fb] text-black"}`}>
       <div className={`grid h-full min-h-0 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] ${surface}`}>
-        <aside className={`min-h-0 flex-col border-x lg:flex ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"} ${mobileListOpen ? "flex" : "hidden lg:flex"}`}>
-          <div className={`shrink-0 border-b p-4 ${divider}`}>
+        <aside className={`min-h-0 min-w-0 w-full max-w-full flex-col overflow-hidden border-x lg:flex ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"} ${mobileListOpen ? "flex" : "hidden lg:flex"}`}>
+          <div className={`min-w-0 shrink-0 overflow-hidden border-b p-4 ${divider}`}>
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#10b981] text-white">
                 <MessagesSquare className="h-5 w-5" />
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <h1 className="truncate text-lg font-semibold">Forum</h1>
                 <p className={`truncate text-xs ${muted}`}>{onlineUserIds.length} online now</p>
               </div>
             </div>
-            <div className={`mt-4 flex h-11 items-center gap-2 rounded-2xl px-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f3f4f6]"}`}>
+            <div className={`mt-4 flex h-11 min-w-0 items-center gap-2 overflow-hidden rounded-2xl px-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f3f4f6]"}`}>
               <Search className={`h-4 w-4 ${muted}`} />
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats and people" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-black/35 dark:placeholder:text-white/30" />
             </div>
@@ -945,7 +946,7 @@ export default function Forum({ darkMode }) {
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
             <p className={`px-4 pb-2 pt-4 text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Group</p>
-            <div className="space-y-1 px-2">
+            <div className="min-w-0 space-y-1 overflow-hidden px-2">
               {[groupConversation].filter(Boolean).map((conversation) => {
                 const active = conversation.id === selectedId;
                 const unread = unreadByConversation[conversation.id];
@@ -968,7 +969,7 @@ export default function Forum({ darkMode }) {
                           <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
                         )}
                       </span>
-                      <span className={`mt-1 block truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`}>
+                      <span className={`mt-1 block max-w-full truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? `${typingUsers[0].displayName} typing...` : conversationPreviewText(conversation.lastMessage, "Workspace group forum")}>
                         {typingUsers.length ? `${typingUsers[0].displayName} typing...` : conversationPreviewText(conversation.lastMessage, "Workspace group forum")}
                       </span>
                     </span>
@@ -978,7 +979,7 @@ export default function Forum({ darkMode }) {
             </div>
 
             <p className={`px-4 pb-2 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Direct messages</p>
-            <div className="space-y-1 px-2 pb-4">
+            <div className="min-w-0 space-y-1 overflow-hidden px-2 pb-4">
               {filteredDirectConversations.map((conversation) => {
                 const other = conversation.participants?.find((user) => user.id !== getStoredAuth().user?.id);
                 const active = conversation.id === selectedId;
@@ -1001,7 +1002,7 @@ export default function Forum({ darkMode }) {
                           <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
                         )}
                       </span>
-                      <span className={`mt-1 block truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`}>
+                      <span className={`mt-1 block max-w-full truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? "typing..." : conversationPreviewText(conversation.lastMessage, "Direct message")}>
                         {typingUsers.length ? "typing..." : conversationPreviewText(conversation.lastMessage, "Direct message")}
                       </span>
                     </span>

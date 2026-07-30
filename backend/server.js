@@ -12090,14 +12090,15 @@ function generateProjectGanttPdf(project = {}, options = {}) {
       return [row.id, count];
     }));
     const page = { width: doc.page.width, height: doc.page.height, left: 14, right: 14, top: 14, bottom: 14 };
-    const fixedWidth = 316;
-    const taskW = 140;
-    const dateW = 56;
-    const durationW = 40;
+    const monthScale = scale === "month";
+    const fixedWidth = monthScale ? 274 : 316;
+    const taskW = monthScale ? 124 : 140;
+    const dateW = monthScale ? 50 : 56;
+    const durationW = monthScale ? 32 : 40;
     const chartX = page.left + fixedWidth;
     const chartW = page.width - page.left - page.right - fixedWidth;
-    const unitW = scale === "month" ? Math.max(82, chartW / Math.max(1, Math.min(timelineUnits.length, 4))) : scale === "week" ? Math.max(54, chartW / Math.max(1, Math.min(timelineUnits.length, 9))) : totalDays <= 45 ? chartW / totalDays : 14;
-    const unitsPerPage = Math.max(1, Math.floor(chartW / unitW));
+    const unitW = monthScale ? chartW / Math.max(1, timelineUnits.length) : scale === "week" ? Math.max(54, chartW / Math.max(1, Math.min(timelineUnits.length, 9))) : totalDays <= 45 ? chartW / totalDays : 14;
+    const unitsPerPage = monthScale ? Math.max(1, timelineUnits.length) : Math.max(1, Math.floor(chartW / unitW));
     const rowH = 32;
     const headerH = 48;
     const rowsPerPage = Math.max(5, Math.floor((page.height - page.top - page.bottom - headerH) / rowH));
@@ -12133,7 +12134,7 @@ function generateProjectGanttPdf(project = {}, options = {}) {
         doc.rect(0, 0, page.width, page.height).fill("#f7f8f5");
         doc.rect(page.left, page.top, page.width - page.left - page.right, page.height - page.top - page.bottom).fill("#ffffff");
         doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(6.2).text("GANTT VIEW", page.left + 8, page.top + 5, { characterSpacing: 1.1 });
-        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(25).text(projectText(project.name) || "Project schedule", page.left + 8, page.top + 15, { width: 360, height: 28, ellipsis: true });
+        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(25).text(projectText(project.name) || "Project schedule", page.left + 8, page.top + 15, { width: monthScale ? 300 : 360, height: 28, ellipsis: true });
         doc.fillColor("#1268b3").font(dmrPdfFonts.bold).fontSize(7).text(`${dmrPdfDateLabel(startKey)} - ${dmrPdfDateLabel(endKey)} | ${scale.toUpperCase()} | Page ${pageNo}`, page.width - page.right - 260, page.top + 15, { width: 250, align: "right" });
 
         const headerY = page.top + 43;
@@ -12148,7 +12149,7 @@ function generateProjectGanttPdf(project = {}, options = {}) {
         visibleUnits.forEach((unit, index) => {
           const x = chartX + index * unitW;
           doc.strokeColor(scale !== "day" || index % 7 === 0 ? "#dde4d9" : "#edf0ea").lineWidth(0.45).moveTo(x, headerY).lineTo(x, page.height - page.bottom).stroke();
-          doc.fillColor("#171714").font(dmrPdfFonts.regular).fontSize(5.8).text(unit.label, x, headerY + 5, { width: unitW, align: "center", ellipsis: true });
+          doc.fillColor("#171714").font(dmrPdfFonts.regular).fontSize(monthScale && unitW < 52 ? 4.8 : 5.8).text(unit.label, x, headerY + 5, { width: unitW, align: "center", ellipsis: true });
         });
         doc.strokeColor("#e4e7e1").moveTo(page.left, headerY + 16).lineTo(page.width - page.right, headerY + 16).stroke();
 
@@ -12172,9 +12173,9 @@ function generateProjectGanttPdf(project = {}, options = {}) {
           const startText = shortDateLabel(row.startDate);
           const endText = shortDateLabel(row.dueDate);
           const durationText = `${row.duration}d`;
-          writeBadge(page.left + taskW + (dateW - 44) / 2, rowCenter - 6, 44, startText, row.type === "phase" ? "#dbe7ff" : "#c8f1ec", row.type === "phase" ? "#1e55d8" : "#00796f", 5.1);
-          writeBadge(page.left + taskW + dateW + (dateW - 44) / 2, rowCenter - 6, 44, endText, row.status === "done" ? "#c9f0d8" : row.status === "blocked" ? "#ffd2da" : "#ffe7a8", row.status === "done" ? "#1d7d48" : row.status === "blocked" ? "#a72f45" : "#8a5b00", 5.1);
-          writeBadge(page.left + taskW + dateW * 2 + (durationW - 28) / 2, rowCenter - 6, 28, durationText, "#e2e7dc", "#465044", 5.2);
+          writeBadge(page.left + taskW + (dateW - (monthScale ? 40 : 44)) / 2, rowCenter - 6, monthScale ? 40 : 44, startText, row.type === "phase" ? "#dbe7ff" : "#c8f1ec", row.type === "phase" ? "#1e55d8" : "#00796f", monthScale ? 4.7 : 5.1);
+          writeBadge(page.left + taskW + dateW + (dateW - (monthScale ? 40 : 44)) / 2, rowCenter - 6, monthScale ? 40 : 44, endText, row.status === "done" ? "#c9f0d8" : row.status === "blocked" ? "#ffd2da" : "#ffe7a8", row.status === "done" ? "#1d7d48" : row.status === "blocked" ? "#a72f45" : "#8a5b00", monthScale ? 4.7 : 5.1);
+          writeBadge(page.left + taskW + dateW * 2 + (durationW - (monthScale ? 24 : 28)) / 2, rowCenter - 6, monthScale ? 24 : 28, durationText, "#e2e7dc", "#465044", monthScale ? 4.8 : 5.2);
           const rowStartDate = new Date(`${row.startDate}T00:00:00`);
           const rowEndDate = new Date(`${row.dueDate}T00:00:00`);
           const firstVisible = visibleUnits.findIndex((unit) => unit.end >= rowStartDate && unit.start <= rowEndDate);

@@ -12100,17 +12100,20 @@ function generateProjectGanttPdf(project = {}, options = {}) {
     const unitW = monthScale ? chartW / Math.max(1, timelineUnits.length) : scale === "week" ? Math.max(54, chartW / Math.max(1, Math.min(timelineUnits.length, 9))) : totalDays <= 45 ? chartW / totalDays : 14;
     const unitsPerPage = monthScale ? Math.max(1, timelineUnits.length) : Math.max(1, Math.floor(chartW / unitW));
     const rowH = 32;
-    const headerH = 48;
+    const headerH = 60;
     const rowsPerPage = Math.max(5, Math.floor((page.height - page.top - page.bottom - headerH) / rowH));
-    const statusBadge = (row) => {
-      const delayed = row.type === "task" && row.status !== "done" && row.dueDate && row.dueDate < istDateKey(new Date());
-      if (delayed) return { label: "Delayed", bg: "#ffe2e7", fg: "#a72f45" };
-      if (row.status === "done") return { label: "Completed", bg: "#e4f8eb", fg: "#268a55" };
-      if (row.status === "blocked") return { label: "Blocked", bg: "#ffe2e7", fg: "#a72f45" };
-      if (row.status === "in_progress") return { label: "In progress", bg: "#fff2cc", fg: "#805b11" };
-      return { label: "Pending", bg: "#edf2ff", fg: "#2f61c9" };
+    const statusStyle = (row) => {
+      const delayed = row.status !== "done" && row.dueDate && row.dueDate < istDateKey(new Date());
+      if (delayed || row.status === "blocked") return { label: delayed ? "Delayed" : "Blocked", color: "#ef4444", bg: "#fee2e2", fg: "#991b1b" };
+      if (row.status === "done") return { label: "Completed", color: "#22c55e", bg: "#dcfce7", fg: "#166534" };
+      if (row.status === "in_progress") return { label: "Ongoing", color: "#2563eb", bg: "#dbeafe", fg: "#1d4ed8" };
+      return { label: "Not started", color: "#9ca3af", bg: "#f3f4f6", fg: "#4b5563" };
     };
-    const rowColor = (row) => row.type === "phase" ? "#2f6df6" : row.type === "subtask" ? "#14b8a6" : row.status === "done" ? "#42c989" : row.status === "blocked" ? "#f25f6c" : row.priority === "critical" ? "#8f5cf7" : row.priority === "high" ? "#ffad42" : "#37c6c0";
+    const statusBadge = (row) => {
+      const style = statusStyle(row);
+      return { label: style.label, bg: style.bg, fg: style.fg };
+    };
+    const rowColor = (row) => statusStyle(row).color;
     const shortDateLabel = (value) => {
       const date = new Date(`${projectDateKey(value)}T00:00:00`);
       if (Number.isNaN(date.getTime())) return "-";
@@ -12134,11 +12137,12 @@ function generateProjectGanttPdf(project = {}, options = {}) {
         doc.rect(0, 0, page.width, page.height).fill("#f7f8f5");
         doc.rect(page.left, page.top, page.width - page.left - page.right, page.height - page.top - page.bottom).fill("#ffffff");
         doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(6.2).text("GANTT VIEW", page.left + 8, page.top + 5, { characterSpacing: 1.1 });
-        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(25).text(projectText(project.name) || "Project schedule", page.left + 8, page.top + 15, { width: monthScale ? 300 : 360, height: 28, ellipsis: true });
+        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(18).text(projectText(project.name) || "Project schedule", page.left + 8, page.top + 20, { width: monthScale ? 300 : 360, height: 22, ellipsis: true });
         doc.fillColor("#1268b3").font(dmrPdfFonts.bold).fontSize(7).text(`${dmrPdfDateLabel(startKey)} - ${dmrPdfDateLabel(endKey)} | ${scale.toUpperCase()} | Page ${pageNo}`, page.width - page.right - 260, page.top + 15, { width: 250, align: "right" });
 
-        const headerY = page.top + 43;
+        const headerY = page.top + 52;
         doc.rect(page.left, headerY, page.width - page.left - page.right, 16).fill("#f8faf6");
+        doc.strokeColor("#dfe6dc").lineWidth(0.7).rect(page.left, headerY, page.width - page.left - page.right, 16).stroke();
         doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(7.3).text("Task list", page.left + 8, headerY + 4.5, { width: taskW });
         doc.fillColor("#5270a8").font(dmrPdfFonts.bold).fontSize(5.8).text("START", page.left + taskW, headerY + 5, { width: dateW, align: "center" });
         doc.fillColor("#8a6515").font(dmrPdfFonts.bold).fontSize(5.8).text("END", page.left + taskW + dateW, headerY + 5, { width: dateW, align: "center" });
@@ -12151,13 +12155,13 @@ function generateProjectGanttPdf(project = {}, options = {}) {
           doc.strokeColor(scale !== "day" || index % 7 === 0 ? "#dde4d9" : "#edf0ea").lineWidth(0.45).moveTo(x, headerY).lineTo(x, page.height - page.bottom).stroke();
           doc.fillColor("#171714").font(dmrPdfFonts.regular).fontSize(monthScale && unitW < 52 ? 4.8 : 5.8).text(unit.label, x, headerY + 5, { width: unitW, align: "center", ellipsis: true });
         });
-        doc.strokeColor("#e4e7e1").moveTo(page.left, headerY + 16).lineTo(page.width - page.right, headerY + 16).stroke();
+        doc.strokeColor("#dfe6dc").lineWidth(0.7).moveTo(page.left, headerY + 16).lineTo(page.width - page.right, headerY + 16).stroke();
 
         visibleRows.forEach((row, index) => {
           const y = headerY + 17 + index * rowH;
           const color = rowColor(row);
-          if (index % 2 === 1) doc.rect(page.left, y, page.width - page.left - page.right, rowH).fill("#fbfcfa");
-          doc.strokeColor("#eef1eb").lineWidth(0.5).moveTo(page.left, y + rowH).lineTo(page.width - page.right, y + rowH).stroke();
+          doc.rect(page.left, y, page.width - page.left - page.right, rowH).fill("#ffffff");
+          doc.strokeColor("#e1e7dd").lineWidth(0.55).rect(page.left, y, page.width - page.left - page.right, rowH).stroke();
           const rowCenter = y + rowH / 2;
           const taskIndent = row.type === "subtask" ? 20 : row.type === "task" ? 10 : 0;
           const dotX = page.left + 18 + taskIndent;

@@ -175,6 +175,24 @@ function selectedProjectDependencies(ids = [], options = []) {
   return ids.map((id) => optionMap.get(id)).filter(Boolean);
 }
 
+function scheduleDateForItem(item = {}) {
+  return (
+    dateKeyFromValue(item.startDate) ||
+    dateKeyFromValue(item.dueDate || item.endDate || item.deadline || item.targetDate || item.date) ||
+    "9999-12-31"
+  );
+}
+
+function compareScheduledItems(a = {}, b = {}) {
+  const aKey = `${scheduleDateForItem(a)}:${dateKeyFromValue(a.dueDate || a.endDate || a.deadline || a.targetDate || a.date) || "9999-12-31"}:${String(a.title || a.name || "")}`;
+  const bKey = `${scheduleDateForItem(b)}:${dateKeyFromValue(b.dueDate || b.endDate || b.deadline || b.targetDate || b.date) || "9999-12-31"}:${String(b.title || b.name || "")}`;
+  return aKey.localeCompare(bKey);
+}
+
+function sortByScheduleDate(items = []) {
+  return [...items].sort(compareScheduledItems);
+}
+
 function blankPhase() {
   return {
     id: uid("phase"),
@@ -800,7 +818,7 @@ function TaskDetailView({
   editable,
   onEdit,
 }) {
-  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+  const subtasks = sortByScheduleDate(Array.isArray(task.subtasks) ? task.subtasks : []);
   const doneSubtasks = subtasks.filter((item) => item.done).length;
   const dependencyItems = dependencies.map((dependency) => ({
     id: dependency.value || dependency.id,
@@ -1010,9 +1028,10 @@ function TaskDetailView({
 }
 
 function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) {
-  const done = tasks.filter((task) => task.status === "done").length;
-  const blocked = tasks.filter((task) => task.status === "blocked").length;
-  const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  const scheduledTasks = sortByScheduleDate(tasks);
+  const done = scheduledTasks.filter((task) => task.status === "done").length;
+  const blocked = scheduledTasks.filter((task) => task.status === "blocked").length;
+  const progress = scheduledTasks.length ? Math.round((done / scheduledTasks.length) * 100) : 0;
   const [activeTab, setActiveTab] = useState("tasks");
   return (
     <div className="px-6 pb-8 pt-6 sm:px-7">
@@ -1037,7 +1056,7 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
         <PropertyRow icon={Sparkles} label="Progress">
           <div className="flex items-center gap-3">
             <span className="text-sm font-semibold">{progress}% complete</span>
-            <span className="text-xs text-[#737970] dark:text-white/50">{done} of {tasks.length} tasks done</span>
+            <span className="text-xs text-[#737970] dark:text-white/50">{done} of {scheduledTasks.length} tasks done</span>
           </div>
         </PropertyRow>
         <PropertyRow icon={CalendarDays} label="Dates">
@@ -1078,7 +1097,7 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
       <div className="mt-7 flex gap-8 border-b border-[#e1e5de] dark:border-white/10">
         {[
           ["progress", "Progress"],
-          ["tasks", `Tasks ${tasks.length || ""}`],
+          ["tasks", `Tasks ${scheduledTasks.length || ""}`],
           ["activity", "Activities"],
         ].map(([value, label]) => (
           <button
@@ -1102,7 +1121,7 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
           <div className="rounded-2xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
             <div className="flex items-center justify-between text-sm">
               <span className="font-semibold">Phase progress</span>
-              <span className="text-[#737970] dark:text-white/50">{done} of {tasks.length} done</span>
+              <span className="text-[#737970] dark:text-white/50">{done} of {scheduledTasks.length} done</span>
             </div>
             <ProgressBar value={progress} className="mt-3" />
           </div>
@@ -1125,11 +1144,11 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
           <h4 className="text-lg font-semibold">Tasks in this phase</h4>
           <span className="flex items-center gap-2 text-sm text-[#5f665b] dark:text-white/55">
             <span className="relative grid h-5 w-5 place-items-center rounded-full border-2 border-[#e1e5de] after:absolute after:inset-0 after:rounded-full after:border-2 after:border-l-[#6e7bff] after:border-t-[#6e7bff] after:border-transparent" />
-            {done}/{tasks.length}
+            {done}/{scheduledTasks.length}
           </span>
         </div>
         <div className="overflow-hidden rounded-xl border border-[#e0e4dd] dark:border-white/10">
-          {tasks.map((task, index) => {
+          {scheduledTasks.map((task, index) => {
             const assignees = users.filter((person) => (task.assigneeIds || []).includes(person.id));
             return (
               <button
@@ -1153,7 +1172,7 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
               </button>
             );
           })}
-          {!tasks.length && (
+          {!scheduledTasks.length && (
             <p className="p-7 text-center text-xs text-[#858b82]">
               No tasks in this phase yet.
             </p>
@@ -1176,7 +1195,7 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
             </div>
             <div className="flex gap-3">
               <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#1683ff]" />
-              <p>{tasks.length} total task{tasks.length === 1 ? "" : "s"} linked to this phase.</p>
+              <p>{scheduledTasks.length} total task{scheduledTasks.length === 1 ? "" : "s"} linked to this phase.</p>
             </div>
           </div>
         </section>
@@ -1227,7 +1246,7 @@ function TaskDrawer({
     .slice(0, 6);
   const dependencyOptions = projectDependencyOptions(allTasks, task.id);
   const dependencies = selectedProjectDependencies(task.dependencyIds || [], dependencyOptions);
-  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+  const subtasks = sortByScheduleDate(Array.isArray(task.subtasks) ? task.subtasks : []);
   const doneSubtasks = subtasks.filter((item) => item.done).length;
   const phase = phases.find((item) => item.id === task.phaseId);
 
@@ -2049,8 +2068,9 @@ function PhaseDrawer({
 }) {
   const [editMode, setEditMode] = useState(Boolean(phase.__isNew));
   const isEditing = Boolean(editable && (phase.__isNew || editMode));
-  const done = tasks.filter((task) => task.status === "done").length;
-  const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  const scheduledTasks = sortByScheduleDate(tasks);
+  const done = scheduledTasks.filter((task) => task.status === "done").length;
+  const progress = scheduledTasks.length ? Math.round((done / scheduledTasks.length) * 100) : 0;
   return (
     <SlideOver
       title={phase.__isNew ? "New phase" : "Phase details"}
@@ -2148,7 +2168,7 @@ function PhaseDrawer({
                   <p className="mt-1 text-2xl font-semibold">{progress}%</p>
                 </div>
                 <p className="text-xs text-[#777d74]">
-                  {done} of {tasks.length} tasks done
+                  {done} of {scheduledTasks.length} tasks done
                 </p>
               </div>
               <ProgressBar value={progress} className="mt-3" />
@@ -2164,7 +2184,7 @@ function PhaseDrawer({
                 )}
               </div>
               <div className="mt-3 divide-y divide-[#e4e7e1] overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:divide-white/10 dark:border-white/10 dark:bg-white/[0.03]">
-                {tasks.map((task, index) => {
+                {scheduledTasks.map((task, index) => {
                   const assignees = users.filter((person) =>
                     (task.assigneeIds || []).includes(person.id),
                   );
@@ -3475,7 +3495,7 @@ function TasksView({
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState("all");
   const [assignee, setAssignee] = useState("all");
-  const filtered = tasks.filter((task) => {
+  const filtered = sortByScheduleDate(tasks.filter((task) => {
     const matchesQuery =
       !query ||
       `${task.title} ${task.description}`
@@ -3485,7 +3505,7 @@ function TasksView({
     const matchesAssignee =
       assignee === "all" || (task.assigneeIds || []).includes(assignee);
     return matchesQuery && matchesPriority && matchesAssignee;
-  });
+  }));
   return (
     <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

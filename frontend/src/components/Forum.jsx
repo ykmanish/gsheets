@@ -1,12 +1,59 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BellOff, ChevronDown, ChevronUp, FileText, ImageIcon, Link as LinkIcon, LockKeyhole, MessageCircleMore, MoreVertical, Plus, Search, Send, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, CircleDot, Compass, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
 
 const GROUP_ID = "workspace-forum";
+
+const GROUP_AVATAR_PRESETS = [
+  ["ocean", "linear-gradient(135deg,#2563eb,#06b6d4)", MessagesSquare],
+  ["emerald", "linear-gradient(135deg,#059669,#84cc16)", Sparkles],
+  ["sunset", "linear-gradient(135deg,#f97316,#ec4899)", Rocket],
+  ["violet", "linear-gradient(135deg,#7c3aed,#2563eb)", Globe2],
+  ["rose", "linear-gradient(135deg,#e11d48,#fb7185)", Network],
+  ["amber", "linear-gradient(135deg,#f59e0b,#ef4444)", Compass],
+  ["cyan", "linear-gradient(135deg,#0891b2,#22c55e)", Zap],
+  ["indigo", "linear-gradient(135deg,#4f46e5,#8b5cf6)", Star],
+  ["lime", "linear-gradient(135deg,#65a30d,#14b8a6)", ShieldCheck],
+  ["pink", "linear-gradient(135deg,#db2777,#9333ea)", Gem],
+  ["sky", "linear-gradient(135deg,#0284c7,#38bdf8)", Layers3],
+  ["forest", "linear-gradient(135deg,#166534,#0f766e)", CircleDot],
+  ["coral", "linear-gradient(135deg,#fb7185,#f97316)", SunMedium],
+  ["royal", "linear-gradient(135deg,#1d4ed8,#7c3aed)", Waves],
+  ["mint", "linear-gradient(135deg,#10b981,#a3e635)", Landmark],
+  ["fire", "linear-gradient(135deg,#dc2626,#f59e0b)", MessagesSquare],
+  ["plum", "linear-gradient(135deg,#9333ea,#e879f9)", Sparkles],
+  ["teal", "linear-gradient(135deg,#0d9488,#06b6d4)", Rocket],
+  ["gold", "linear-gradient(135deg,#ca8a04,#facc15)", Globe2],
+  ["night", "linear-gradient(135deg,#111827,#2563eb)", Network],
+  ["grape", "linear-gradient(135deg,#581c87,#c026d3)", Compass],
+  ["leaf", "linear-gradient(135deg,#15803d,#4ade80)", Zap],
+  ["ruby", "linear-gradient(135deg,#9f1239,#f43f5e)", Star],
+  ["aqua", "linear-gradient(135deg,#0e7490,#67e8f9)", ShieldCheck],
+  ["orchid", "linear-gradient(135deg,#a21caf,#f0abfc)", Gem],
+  ["steel", "linear-gradient(135deg,#334155,#64748b)", Layers3],
+  ["peach", "linear-gradient(135deg,#fb923c,#fda4af)", CircleDot],
+  ["bluegrass", "linear-gradient(135deg,#1d4ed8,#22c55e)", SunMedium],
+  ["magenta", "linear-gradient(135deg,#be185d,#7c3aed)", Waves],
+  ["slate", "linear-gradient(135deg,#0f172a,#475569)", Landmark],
+].map(([id, gradient, Icon]) => ({ id, gradient, Icon }));
+
+function groupAvatarPreset(id) {
+  return GROUP_AVATAR_PRESETS.find((preset) => preset.id === id) || GROUP_AVATAR_PRESETS[0];
+}
+
+function GroupAvatar({ group, className = "h-11 w-11", iconClassName = "h-5 w-5", rounded = "full" }) {
+  const preset = groupAvatarPreset(group?.avatarPreset);
+  const Icon = preset.Icon || MessagesSquare;
+  return (
+    <span className={`grid shrink-0 place-items-center overflow-hidden ${rounded === "lg" ? "rounded-2xl" : "rounded-full"} text-white ${className}`} style={{ background: preset.gradient }}>
+      <Icon className={iconClassName} />
+    </span>
+  );
+}
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -48,19 +95,30 @@ function sameConversation(a, b) {
 function renderMessageText(text, query, active = false, users = [], onMentionClick, mine = false) {
   const value = String(text || "");
   const needle = query.trim();
-  const mentionPattern = /@([a-zA-Z0-9_.-]+)/g;
+  const inlinePattern = /(https?:\/\/[^\s<>()]+)|@([a-zA-Z0-9_.-]+)/g;
   const parts = [];
   let lastIndex = 0;
-  for (const match of value.matchAll(mentionPattern)) {
+  for (const match of value.matchAll(inlinePattern)) {
     const start = match.index || 0;
     if (start > lastIndex) parts.push(value.slice(lastIndex, start));
-    const username = match[1].toLowerCase();
-    const user = users.find((item) => String(item.username || "").toLowerCase() === username || String(item.displayName || "").toLowerCase().replace(/\s+/g, "") === username);
-    parts.push(
-      <button key={`${start}-${match[0]}`} type="button" onClick={() => user && onMentionClick?.(user)} className={`font-normal underline underline-offset-2 ${mine ? "text-white decoration-white/50" : "text-[#2563eb] decoration-[#2563eb]/35"}`}>
-        {match[0]}
-      </button>
-    );
+    if (match[1]) {
+      const url = match[1].replace(/[.,!?;:]+$/, "");
+      const suffix = match[1].slice(url.length);
+      parts.push(
+        <a key={`${start}-${url}`} href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`inline-flex max-w-full align-baseline rounded-full px-3 py-1.5 text-sm font-medium no-underline ${mine ? "bg-white text-[#2563eb] hover:bg-[#f8fbff]" : "bg-white text-[#2563eb] hover:bg-[#f8fafc]"}`}>
+          <span className="block max-w-full truncate">{url}</span>
+        </a>
+      );
+      if (suffix) parts.push(suffix);
+    } else {
+      const username = match[2].toLowerCase();
+      const user = users.find((item) => String(item.username || "").toLowerCase() === username || String(item.displayName || "").toLowerCase().replace(/\s+/g, "") === username);
+      parts.push(
+        <button key={`${start}-${match[0]}`} type="button" onClick={() => user && onMentionClick?.(user)} className={`font-normal underline underline-offset-2 ${mine ? "text-[#2563eb] decoration-[#2563eb]/35" : "text-[#2563eb] decoration-[#2563eb]/35"}`}>
+          {match[0]}
+        </button>
+      );
+    }
     lastIndex = start + match[0].length;
   }
   if (lastIndex < value.length) parts.push(value.slice(lastIndex));
@@ -79,6 +137,74 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
       </span>
     );
   });
+}
+
+function firstUrlFromText(text = "") {
+  const match = String(text || "").match(/https?:\/\/[^\s<>()]+/i);
+  return match ? match[0].replace(/[.,!?;:]+$/, "") : "";
+}
+
+function textWithoutUrls(text = "") {
+  return String(text || "").replace(/https?:\/\/[^\s<>()]+/gi, "").trim();
+}
+
+function linkPreviewMeta(url = "") {
+  try {
+    const parsed = new URL(url);
+    const path = `${parsed.pathname || ""}${parsed.search || ""}`.replace(/^\/$/, "");
+    return {
+      host: parsed.hostname.replace(/^www\./, ""),
+      title: parsed.hostname.replace(/^www\./, ""),
+      detail: path ? `/${path}` : parsed.origin,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function compactUrlLabel(url = "") {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    const path = `${parsed.pathname || ""}${parsed.search || ""}`.replace(/^\/$/, "");
+    return path ? `${host}/${path.replace(/^\//, "")}` : host;
+  } catch {
+    return url;
+  }
+}
+
+function LinkPreviewCard({ url, mine, darkMode, time }) {
+  const [faviconSourceIndex, setFaviconSourceIndex] = useState(0);
+  const meta = linkPreviewMeta(url);
+  if (!meta) return null;
+  const faviconSources = [
+    `https://icons.duckduckgo.com/ip3/${meta.host}.ico`,
+    `https://www.google.com/s2/favicons?domain_url=${encodeURIComponent(url)}&sz=128`,
+    `https://www.google.com/s2/favicons?domain=${encodeURIComponent(meta.host)}&sz=128`,
+  ];
+  const faviconUrl = faviconSources[faviconSourceIndex];
+  const compactUrl = compactUrlLabel(url);
+  return (
+    <a href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`flex min-w-[260px] max-w-full items-center gap-3 rounded-[22px] px-4 py-3 text-left transition ${mine ? "bg-[#dcecff] hover:bg-[#d6e8fb]" : darkMode ? "bg-white/[0.08] hover:bg-white/[0.11]" : "bg-white hover:bg-[#f8fafc]"}`}>
+      <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white">
+        {faviconUrl ? (
+          <img
+            src={faviconUrl}
+            alt=""
+            onError={() => setFaviconSourceIndex((current) => current + 1)}
+            className="h-8 w-8 rounded-lg object-contain"
+          />
+        ) : (
+          <Globe2 className="h-8 w-8 text-[#2563eb]" />
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate text-sm font-black ${darkMode && !mine ? "text-white" : "text-[#14213d]"}`}>{meta.title}</span>
+        <span className={`mt-0.5 block truncate text-sm ${darkMode && !mine ? "text-white/50" : "text-[#667085]"}`}>{compactUrl}</span>
+      </span>
+      <span className={`self-end whitespace-nowrap pb-0.5 text-[10px] ${mine ? "text-[#71809a]" : darkMode ? "text-white/40" : "text-black/40"}`}>{time}</span>
+    </a>
+  );
 }
 
 function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, activeDirectUserId }) {
@@ -131,34 +257,162 @@ function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, active
   );
 }
 
-function ForumInfoPanel({ darkMode, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser }) {
+function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup }) {
   const [showAllMembers, setShowAllMembers] = useState(false);
+  const [groupNameDraft, setGroupNameDraft] = useState(group?.name || "Group Forum");
+  const [editingName, setEditingName] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const [memberToAdd, setMemberToAdd] = useState("");
+  const [saving, setSaving] = useState(false);
+  const avatarPickerRef = useRef(null);
+  const memberPickerRef = useRef(null);
   const panelBg = darkMode ? "bg-[#15171c] text-white" : "bg-[#fbfcff] text-black";
-  const softBlock = darkMode ? "bg-white/[0.05]" : "bg-[#f4f7fb]";
   const visibleMembers = showAllMembers ? groupParticipants : groupParticipants.slice(0, 4);
+  const adminIds = new Set((group?.adminIds || []).map(String));
+  const participantIds = new Set((group?.participantIds || groupParticipants.map((member) => member.id)).map(String));
+  const canManage = Boolean(currentUser?.isSuperAdmin || adminIds.has(String(currentUser?.id || "")));
+  const availableUsers = users.filter((user) => user.id && !participantIds.has(String(user.id)));
+
+  useEffect(() => {
+    if (!memberPickerOpen) return undefined;
+    function closeOnOutside(event) {
+      if (memberPickerRef.current?.contains(event.target)) return;
+      setMemberPickerOpen(false);
+    }
+    window.addEventListener("mousedown", closeOnOutside);
+    return () => window.removeEventListener("mousedown", closeOnOutside);
+  }, [memberPickerOpen]);
+
+  useEffect(() => {
+    if (!avatarPickerOpen) return undefined;
+    function closeOnOutside(event) {
+      if (avatarPickerRef.current?.contains(event.target)) return;
+      setAvatarPickerOpen(false);
+    }
+    window.addEventListener("mousedown", closeOnOutside);
+    return () => window.removeEventListener("mousedown", closeOnOutside);
+  }, [avatarPickerOpen]);
+
+  async function saveGroup(update) {
+    try {
+      setSaving(true);
+      await onUpdateGroup(update);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function participantListWith(userId, included) {
+    const next = new Set(participantIds);
+    if (included) next.add(String(userId));
+    else next.delete(String(userId));
+    return [...next];
+  }
+
+  function adminListWith(userId, included) {
+    const next = new Set(adminIds);
+    if (included) next.add(String(userId));
+    else next.delete(String(userId));
+    return [...next];
+  }
 
   return (
     <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-x-hidden overflow-y-auto px-5 py-7 2xl:px-6 xl:flex ${panelBg}`}>
       <div className="mx-auto flex w-full max-w-[320px] flex-col">
-        <span className="mx-auto grid h-20 w-20 min-w-20 place-items-center overflow-hidden rounded-full bg-[#2563eb] text-white">
-          <UsersRound className="h-9 w-9" />
-        </span>
-        <h2 className="mt-4 text-center text-lg font-bold">Group Forum</h2>
+        <div ref={avatarPickerRef} className="relative mx-auto">
+          <GroupAvatar group={group} className="h-20 w-20 min-w-20" iconClassName="h-9 w-9" />
+          {canManage && (
+            <button type="button" onClick={() => setAvatarPickerOpen((open) => !open)} className={`absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full border-2 ${darkMode ? "border-[#15171c] bg-[#1c1f26] hover:bg-[#252934]" : "border-[#fbfcff] bg-white hover:bg-[#f4f7fb]"}`} aria-label="Change group avatar">
+              <Pencil className={`h-3.5 w-3.5 ${muted}`} />
+            </button>
+          )}
+          {canManage && avatarPickerOpen && (
+            <div className={`absolute left-1/2 top-[calc(100%+12px)] z-40 w-[304px] -translate-x-1/2 rounded-[22px] border p-3 shadow-2xl ${darkMode ? "border-white/10 bg-[#1c1f26] text-white" : "border-black/10 bg-white text-black"}`}>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${muted}`}>Group avatar</p>
+                  <p className="text-sm font-black">Choose gradient</p>
+                </div>
+                <button type="button" onClick={() => setAvatarPickerOpen(false)} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close avatar picker">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="grid max-h-64 grid-cols-5 gap-2 overflow-y-auto pr-1">
+                {GROUP_AVATAR_PRESETS.map((preset) => {
+                  const selected = (group?.avatarPreset || "ocean") === preset.id;
+                  const Icon = preset.Icon || MessagesSquare;
+                  return (
+                    <button key={preset.id} type="button" onClick={() => { void saveGroup({ avatarPreset: preset.id }); setAvatarPickerOpen(false); }} className={`grid h-12 w-12 place-items-center rounded-full transition active:scale-[0.96] ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label={`Choose ${preset.id} avatar`}>
+                      <span className="grid h-10 w-10 place-items-center rounded-full text-white" style={{ background: preset.gradient }}>
+                        <Icon className="h-4 w-4" />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="mt-4 flex items-center justify-center gap-2">
+          {canManage && editingName ? (
+            <div className={`flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl border px-3 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
+              <input value={groupNameDraft} autoFocus onChange={(event) => setGroupNameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { void saveGroup({ name: groupNameDraft }).then(() => setEditingName(false)); } }} className="min-w-0 flex-1 bg-transparent text-center text-sm font-bold outline-none" />
+              <button type="button" disabled={saving || !groupNameDraft.trim()} onClick={() => { void saveGroup({ name: groupNameDraft }).then(() => setEditingName(false)); }} className="grid h-7 w-7 place-items-center rounded-full bg-[#2563eb] text-white disabled:opacity-35" aria-label="Save group name">
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Group Forum"); setEditingName(false); }} className={`grid h-7 w-7 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Cancel group name edit">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <h2 className="min-w-0 truncate text-center text-lg font-bold">{group?.name || "Group Forum"}</h2>
+              {canManage && (
+                <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Group Forum"); setEditingName(true); }} className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Edit group name">
+                  <Pencil className={`h-4 w-4 ${muted}`} />
+                </button>
+              )}
+            </>
+          )}
+        </div>
         <p className="mt-1 text-center text-xs font-semibold text-[#22c55e]">{groupParticipants.length} members · {onlineUserIds.length} online</p>
 
-        <div className="mt-6 grid grid-cols-4 gap-3">
-          {[
-            ["Profile", ShieldCheck],
-            ["Mute", BellOff],
-            ["Files", FileText],
-            ["Search", Search],
-          ].map(([label, Icon]) => (
-            <button key={label} type="button" className={`grid gap-2 rounded-[14px] px-2 py-3 text-center text-[11px] font-semibold ${softBlock}`}>
-              <Icon className="mx-auto h-4 w-4 text-[#2563eb]" />
-              <span className="truncate">{label}</span>
-            </button>
-          ))}
-        </div>
+        {canManage && (
+          <PanelSection title="Group settings" muted={muted}>
+            <div className="space-y-3">
+              <button type="button" disabled={saving} onClick={() => saveGroup({ adminOnlyMessages: !group?.adminOnlyMessages })} className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
+                <span>Only admins can message</span>
+                <span className={`relative h-6 w-11 rounded-full transition ${group?.adminOnlyMessages ? "bg-[#2563eb]" : darkMode ? "bg-white/15" : "bg-black/10"}`}>
+                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${group?.adminOnlyMessages ? "left-6" : "left-1"}`} />
+                </span>
+              </button>
+              <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
+                <span className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>Add member</span>
+                <div className="flex gap-2">
+                  <div ref={memberPickerRef} className="relative min-w-0 flex-1">
+                    <button type="button" onClick={() => setMemberPickerOpen((open) => !open)} className={`flex h-9 w-full items-center justify-between gap-2 rounded-xl border px-3 text-left text-xs font-semibold outline-none ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
+                      <span className={memberToAdd ? "truncate" : `truncate ${muted}`}>{availableUsers.find((user) => user.id === memberToAdd)?.displayName || "Choose user"}</span>
+                      <ChevronDown className={`h-4 w-4 shrink-0 transition ${memberPickerOpen ? "rotate-180" : ""} ${muted}`} />
+                    </button>
+                    {memberPickerOpen && (
+                      <div className={`absolute left-0 top-[calc(100%+8px)] z-30 max-h-64 w-full overflow-y-auto rounded-2xl border p-1.5 shadow-2xl ${darkMode ? "border-white/10 bg-[#1c1f26]" : "border-black/10 bg-white"}`}>
+                        {availableUsers.map((user) => (
+                          <button key={user.id} type="button" onClick={() => { setMemberToAdd(user.id); setMemberPickerOpen(false); }} className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold ${memberToAdd === user.id ? "bg-[#2563eb] text-white" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}>
+                            <UserAvatar user={user} name={user.displayName} className="h-6 w-6" />
+                            <span className="min-w-0 flex-1 truncate">{user.displayName || user.username}</span>
+                          </button>
+                        ))}
+                        {!availableUsers.length && <p className={`px-3 py-3 text-xs ${muted}`}>All users are already added.</p>}
+                      </div>
+                    )}
+                  </div>
+                  <button type="button" disabled={saving || !memberToAdd} onClick={() => { void saveGroup({ participantIds: participantListWith(memberToAdd, true) }); setMemberToAdd(""); }} className="rounded-xl bg-[#2563eb] px-3 text-xs font-bold text-white disabled:opacity-35">Add</button>
+                </div>
+              </div>
+            </div>
+          </PanelSection>
+        )}
 
         <PanelSection
           title="Members"
@@ -174,27 +428,72 @@ function ForumInfoPanel({ darkMode, groupParticipants, online, onlineUserIds, mu
                   <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(member.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-semibold">{member.displayName}</span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-xs font-semibold">{member.displayName}</span>
+                    {adminIds.has(String(member.id)) && <span className="shrink-0 rounded-full bg-[#dbeafe] px-1.5 py-0.5 text-[9px] font-black uppercase text-[#2563eb]">Admin</span>}
+                  </span>
                   <span className={`block truncate text-[10px] ${muted}`}>{member.designation || member.department || member.username}</span>
                 </span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onDirect(member);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
+                <span className="flex shrink-0 items-center gap-1">
+                  {canManage && !member.isSuperAdmin && String(member.id) !== String(currentUser?.id || "") && (
+                    <>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void saveGroup({ adminIds: adminListWith(member.id, !adminIds.has(String(member.id))) });
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void saveGroup({ adminIds: adminListWith(member.id, !adminIds.has(String(member.id))) });
+                          }
+                        }}
+                        className={`rounded-full px-2 py-1 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-[#2563eb]"}`}
+                      >
+                        {adminIds.has(String(member.id)) ? "Demote" : "Promote"}
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void saveGroup({ participantIds: participantListWith(member.id, false), adminIds: adminListWith(member.id, false) });
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void saveGroup({ participantIds: participantListWith(member.id, false), adminIds: adminListWith(member.id, false) });
+                          }
+                        }}
+                        className="rounded-full px-2 py-1 text-[10px] font-bold text-red-500 hover:bg-red-500/10"
+                      >
+                        Remove
+                      </span>
+                    </>
+                  )}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(event) => {
                       event.stopPropagation();
                       onDirect(member);
-                    }
-                  }}
-                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
-                  aria-label={`Message ${member.displayName}`}
-                >
-                  <MessageCircleMore className={`h-4 w-4 ${muted}`} />
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onDirect(member);
+                      }
+                    }}
+                    className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                    aria-label={`Message ${member.displayName}`}
+                  >
+                    <MessageCircleMore className={`h-4 w-4 ${muted}`} />
+                  </span>
                 </span>
               </button>
             ))}
@@ -251,6 +550,7 @@ export default function Forum({ darkMode }) {
   const selectedConversation = conversations.find((item) => item.id === selectedId) || conversations.find((item) => item.id === GROUP_ID);
   const selectedIsGroup = selectedId === GROUP_ID;
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
+  const currentUser = getStoredAuth().user;
 
   const searchedUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -271,7 +571,9 @@ export default function Forum({ darkMode }) {
   const selectedOtherUser = selectedConversation?.type === "direct"
     ? selectedConversation.participants?.find((user) => user.id !== getStoredAuth().user?.id)
     : null;
-  const currentUser = getStoredAuth().user;
+  const groupAdminIds = useMemo(() => new Set((groupConversation?.adminIds || []).map(String)), [groupConversation?.adminIds]);
+  const currentUserIsGroupAdmin = Boolean(currentUser?.isSuperAdmin || groupAdminIds.has(String(currentUser?.id || "")));
+  const canSendSelectedConversation = Boolean(selectedConversation && (selectedConversation.type !== "group" || !selectedConversation.adminOnlyMessages || currentUserIsGroupAdmin));
   const messageMatches = useMemo(() => {
     const term = messageSearch.trim().toLowerCase();
     if (!term) return [];
@@ -280,14 +582,10 @@ export default function Forum({ darkMode }) {
       .filter(({ message }) => String(message.text || "").toLowerCase().includes(term));
   }, [messageSearch, messages]);
   const groupParticipants = useMemo(() => {
-    const groupMessages = selectedIsGroup ? messages : [];
     const byId = new Map();
-    for (const user of users) byId.set(user.id, user);
-    for (const message of groupMessages) {
-      if (message.sender?.id) byId.set(message.sender.id, message.sender);
-    }
+    for (const user of groupConversation?.participants || []) byId.set(user.id, user);
     return [...byId.values()].sort((a, b) => Number(online.has(b.id)) - Number(online.has(a.id)) || (a.displayName || "").localeCompare(b.displayName || ""));
-  }, [messages, online, selectedIsGroup, users]);
+  }, [groupConversation?.participants, online]);
   const mentionQuery = useMemo(() => {
     if (!selectedIsGroup) return null;
     const match = composer.match(/(^|\s)@([a-zA-Z0-9_.-]*)$/);
@@ -304,9 +602,11 @@ export default function Forum({ darkMode }) {
   const loadBootstrap = useCallback(async () => {
     const data = await api("/forum/bootstrap");
     const list = data.conversations || [];
-    setConversations(list.some((item) => item.id === GROUP_ID) ? list : [data.group, ...list].filter(Boolean));
-    setUsers((data.users || []).filter((user) => user.id !== data.currentUser?.id));
+    setConversations(list);
+    setSelectedId((current) => list.some((item) => item.id === current) ? current : (list[0]?.id || GROUP_ID));
+    setUsers(data.users || []);
     setOnlineUserIds(data.onlineUserIds || []);
+    return data;
   }, []);
 
   const loadMessages = useCallback(async (conversationId) => {
@@ -320,8 +620,8 @@ export default function Forum({ darkMode }) {
     async function boot() {
       try {
         setLoading(true);
-        await loadBootstrap();
-        if (!stopped) await loadMessages(GROUP_ID);
+        const bootData = await loadBootstrap();
+        if (!stopped && (bootData?.conversations || []).some((item) => item.id === GROUP_ID)) await loadMessages(GROUP_ID);
       } catch (error) {
         toast.error(error.message);
       } finally {
@@ -333,12 +633,12 @@ export default function Forum({ darkMode }) {
   }, [loadBootstrap, loadMessages]);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || !selectedConversation) return;
     const timer = window.setTimeout(() => {
       void loadMessages(selectedId).catch((error) => toast.error(error.message));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadMessages, selectedId]);
+  }, [loadMessages, selectedConversation, selectedId]);
 
   useEffect(() => {
     const ws = new WebSocket(socketUrl());
@@ -454,6 +754,10 @@ export default function Forum({ darkMode }) {
     event.preventDefault();
     const text = composer.trim();
     if (!text) return;
+    if (!canSendSelectedConversation) {
+      toast.error("Only group admins can message right now");
+      return;
+    }
     setComposer("");
     emitTyping(false);
     try {
@@ -529,6 +833,20 @@ export default function Forum({ darkMode }) {
     }
   }
 
+  async function updateGroup(update) {
+    try {
+      const data = await api("/forum/group", {
+        method: "PATCH",
+        body: JSON.stringify(update),
+      });
+      setConversations((current) => [data.conversation, ...current.filter((item) => item.id !== data.conversation.id)]);
+      toast.success("Group updated");
+    } catch (error) {
+      toast.error(error.message);
+      throw error;
+    }
+  }
+
   if (loading) {
     return (
       <div className={`grid h-[calc(100dvh-24px)] min-h-[560px] place-items-center ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f2f4f1] text-black"}`}>
@@ -543,8 +861,8 @@ export default function Forum({ darkMode }) {
         <aside className={`min-h-0 flex-col border-x lg:flex ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"} ${mobileListOpen ? "flex" : "hidden lg:flex"}`}>
           <div className={`shrink-0 border-b p-4 ${divider}`}>
             <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#2563eb] text-white">
-                <UsersRound className="h-5 w-5" />
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#10b981] text-white">
+                <MessagesSquare className="h-5 w-5" />
               </span>
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-semibold">Forum</h1>
@@ -567,7 +885,7 @@ export default function Forum({ darkMode }) {
                 return (
                   <button key={conversation.id} type="button" onClick={() => { setSelectedId(conversation.id); setMobileListOpen(false); }} className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
                     {conversation.type === "group" ? (
-                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white"><UsersRound className="h-5 w-5" /></span>
+                      <GroupAvatar group={conversation} className="h-11 w-11" iconClassName="h-5 w-5" />
                     ) : (
                       <UserAvatar user={conversation.participants?.find((user) => user.id !== getStoredAuth().user?.id)} name={conversation.name} className="h-11 w-11" />
                     )}
@@ -652,7 +970,7 @@ export default function Forum({ darkMode }) {
               </button>
               <div className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100"}`}>
                 {selectedConversation?.type === "group" ? (
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white"><UsersRound className="h-5 w-5" /></span>
+                  <GroupAvatar group={selectedConversation} className="h-10 w-10" iconClassName="h-5 w-5" />
                 ) : (
                   <UserAvatar user={selectedConversation?.participants?.find((user) => user.id !== getStoredAuth().user?.id)} name={selectedConversation?.name} className="h-10 w-10" />
                 )}
@@ -728,6 +1046,8 @@ export default function Forum({ darkMode }) {
                   const showName = !groupedWithPrevious;
                   const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
                   const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
+                  const previewUrl = firstUrlFromText(message.text);
+                  const displayText = previewUrl ? textWithoutUrls(message.text) : message.text;
                   return (
                     <div
                       key={message.id}
@@ -758,10 +1078,17 @@ export default function Forum({ darkMode }) {
                             )}
                           </div>
                         )}
-                        <div className={`rounded-[20px] px-4 py-3 ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${mine ? "rounded-br-[6px] bg-[#2563eb] text-white" : darkMode ? "rounded-bl-[6px] bg-[#1c1f26] text-white" : "rounded-bl-[6px] bg-white text-[#111827]"}`}>
-                          <p className="whitespace-pre-wrap break-words text-sm leading-6">{renderMessageText(message.text, messageSearch, isActiveMatch, users, setSidebarUser, mine)}</p>
-                          <p className={`mt-1 text-right text-[10px] ${mine ? "text-white/70" : muted}`}>{formatTime(message.createdAt)}</p>
-                        </div>
+                        {displayText && (
+                          <div className={`rounded-[20px] px-4 py-3 ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#dcecff] text-[#14213d]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-white/[0.08] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
+                            <p className="whitespace-pre-wrap break-words text-sm leading-6">{renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}</p>
+                            {!previewUrl && <p className={`mt-1 text-right text-[10px] ${mine ? "text-[#71809a]" : muted}`}>{formatTime(message.createdAt)}</p>}
+                          </div>
+                        )}
+                        {previewUrl && (
+                          <div className={`ring-offset-2 transition ${displayText ? "mt-2" : ""} ${isActiveMatch ? "rounded-[22px] ring-2 ring-[#facc15]" : ""}`}>
+                            <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} />
+                          </div>
+                        )}
                       </div>
                       {mine && (showAvatar ? (
                         <span className="self-end">
@@ -802,8 +1129,8 @@ export default function Forum({ darkMode }) {
                 </div>
               )}
               <div className={`mx-auto flex max-w-4xl items-center gap-3 rounded-full border px-5 py-2.5 ${darkMode ? "border-white/[0.06] bg-white/[0.045]" : "border-[#eef1f5] bg-white"}`}>
-                <textarea value={composer} onChange={(event) => updateComposer(event.target.value)} onBlur={() => emitTyping(false)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) sendMessage(event); }} rows={1} placeholder="Write Something" className={`max-h-24 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm outline-none ${softText}`} />
-                <button type="submit" disabled={!composer.trim()} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
+                <textarea value={composer} disabled={!canSendSelectedConversation} onChange={(event) => updateComposer(event.target.value)} onBlur={() => emitTyping(false)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) sendMessage(event); }} rows={1} placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"} className={`max-h-24 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`} />
+                <button type="submit" disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
                   <Send className="h-4 w-4" />
                 </button>
               </div>
@@ -822,13 +1149,18 @@ export default function Forum({ darkMode }) {
             />
           ) : (
             <ForumInfoPanel
+              key={`${groupConversation?.id || GROUP_ID}-${groupConversation?.name || "Group Forum"}`}
               darkMode={darkMode}
+              group={groupConversation}
+              users={users}
+              currentUser={currentUser}
               groupParticipants={groupParticipants}
               online={online}
               onlineUserIds={onlineUserIds}
               muted={muted}
               onDirect={startDirect}
               onSelectUser={setSidebarUser}
+              onUpdateGroup={updateGroup}
             />
           )}
         </main>

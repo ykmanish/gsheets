@@ -408,6 +408,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceSettingsExpanded, setAttendanceSettingsExpanded] = useState(false);
   const [attendanceSearchResults, setAttendanceSearchResults] = useState([]);
   const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100 });
+  const [attendanceDateFilter, setAttendanceDateFilter] = useState(todayInput());
   const [todayReportSubmitted, setTodayReportSubmitted] = useState(false);
   const [todayReportExempt, setTodayReportExempt] = useState(false);
   const [todayReportChecking, setTodayReportChecking] = useState(false);
@@ -526,6 +527,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const leavePeriodPreview = leaveForm.startDate && leaveForm.endDate ? `${formatDateLabel(leaveForm.startDate)} - ${formatDateLabel(leaveForm.endDate)}` : "Select dates";
   const myLeaveRequests = leaveRequests.filter((request) => data?.canManageHr || request.userId === user?.id);
   const myAttendanceRecords = attendanceRecords.filter((record) => data?.canManageHr || record.userId === user?.id);
+  const filteredAttendanceRecords = myAttendanceRecords.filter((record) => !attendanceDateFilter || record.date === attendanceDateFilter);
   const currentEmployeeProfile = employees.find((employee) => employee.id === user?.id);
   const remoteWorkEnabled = Boolean(currentEmployeeProfile?.remoteWorkEnabled || data?.remoteWorkEnabled || user?.remoteWorkEnabled);
   const todayAttendance = attendanceRecords.find((record) => record.userId === user?.id && record.date === todayInput());
@@ -581,23 +583,6 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       onView: () => {
         setSelectedLeave(request);
         setReviewComment(request.adminComment || "");
-      },
-    })),
-    ...myAttendanceRecords.map((record) => ({
-      id: `attendance-${record.id || `${record.userId}-${record.date}`}`,
-      kind: "Attendance",
-      userId: record.userId,
-      employeeName: record.employeeName,
-      department: record.department,
-      title: record.workMode === "remote" ? "Remote attendance" : "Office attendance",
-      detail: record.clockInAt ? `${record.clockOutAt ? "Completed" : "Checked in"} · ${record.workMinutes ? `${Math.floor(record.workMinutes / 60)}h ${record.workMinutes % 60}m` : "0h"}` : "Not marked",
-      period: record.date,
-      startDate: record.date,
-      endDate: record.date,
-      status: record.status || "pending",
-      onView: () => {
-        const employee = employees.find((item) => String(item.id || "") === String(record.userId || ""));
-        if (employee) openEmployeeDetail(employee);
       },
     })),
     ...pendingSalaryRequests,
@@ -1368,7 +1353,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
           <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-2xl font-black">HR request records</h2>
-              <p className={`mt-1 text-sm ${muted}`}>Leave and attendance requests in one full-width table.</p>
+              <p className={`mt-1 text-sm ${muted}`}>Leave requests in one full-width table.</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button onClick={loadHr} disabled={loading} className={`flex h-10 items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-black/10 bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
@@ -1378,7 +1363,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             </div>
           </div>
           <div className="grid gap-3 px-5 pb-5 md:grid-cols-2 xl:grid-cols-[minmax(180px,0.8fr)_minmax(220px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_auto]">
-            <DrawerSelect darkMode={darkMode} label="Request Type" value={requestTypeFilter} placeholder="Select type..." options={["All", "Leave", "Attendance"]} onChange={setRequestTypeFilter} />
+            <DrawerSelect darkMode={darkMode} label="Request Type" value={requestTypeFilter} placeholder="Select type..." options={["All", "Leave"]} onChange={setRequestTypeFilter} />
             <DrawerSelect darkMode={darkMode} label="Employee" searchable searchPlaceholder="Search employee..." value={requestEmployeeFilter} placeholder="Select employee..." options={requestEmployeeOptions} onChange={setRequestEmployeeFilter} />
             <DrawerDatePicker darkMode={darkMode} label="From Date" value={requestDateFilter.startDate} placeholder="Start date" onChange={(startDate) => setRequestDateFilter((current) => ({ ...current, startDate, endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate }))} />
             <DrawerDatePicker darkMode={darkMode} label="To Date" value={requestDateFilter.endDate} placeholder="End date" minDate={requestDateFilter.startDate} onChange={(endDate) => setRequestDateFilter((current) => ({ ...current, endDate }))} />
@@ -1411,7 +1396,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </table>
             </div>
           ) : (
-            <div className="p-4"><EmptyState darkMode={darkMode} icon={MessageSquare} title={loading ? "Loading HR requests" : "No HR requests yet"} text="Leave and attendance requests will appear here in one table." /></div>
+            <div className="p-4"><EmptyState darkMode={darkMode} icon={MessageSquare} title={loading ? "Loading HR requests" : "No HR requests yet"} text="Leave requests will appear here in one table." /></div>
           )}
         </section>
       )}
@@ -1626,7 +1611,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                   <SlidersHorizontal className="h-4 w-4" /> Settings
                 </button>
               )}
-              <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{myAttendanceRecords.length} record{myAttendanceRecords.length === 1 ? "" : "s"}</span>
+              <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{filteredAttendanceRecords.length} record{filteredAttendanceRecords.length === 1 ? "" : "s"}</span>
             </div>
           </div>
 
@@ -1682,6 +1667,22 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </div>
 
               <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/[0.06] bg-[#0c1117]" : "bg-[#fbfcf9]"}`}>
+                <div className={`flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-end sm:justify-between ${darkMode ? "border-white/[0.06]" : "border-[#edf0ea]"}`}>
+                  <div>
+                    <p className="text-sm font-black">Attendance records</p>
+                    <p className={`mt-1 text-xs ${muted}`}>Showing entries for {formatDateLabel(attendanceDateFilter) || "all dates"}.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <div className="w-full sm:w-[220px]">
+                      <DrawerDatePicker darkMode={darkMode} label="Date" value={attendanceDateFilter} placeholder="Select date" onChange={setAttendanceDateFilter} />
+                    </div>
+                    {attendanceDateFilter !== todayInput() && (
+                      <button type="button" onClick={() => setAttendanceDateFilter(todayInput())} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                        <X className="h-4 w-4" /> Today
+                      </button>
+                    )}
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
@@ -1701,7 +1702,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {myAttendanceRecords.map((record) => {
+                      {filteredAttendanceRecords.map((record) => {
                         const attendanceEmployee = String(record.userId || "") === String(user?.id || "") ? user : employees.find((employee) => String(employee.id || "") === String(record.userId || ""));
                         return (
                           <tr key={record.id} className={`h-[92px] border-b last:border-b-0 ${darkMode ? "border-white/[0.06] bg-[#0f151c] hover:bg-[#141b24]" : "border-[#edf0ea] bg-white hover:bg-[#fbfcf7]"}`}>
@@ -1723,8 +1724,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                           </tr>
                         );
                       })}
-                      {!myAttendanceRecords.length && (
-                        <tr><td colSpan={7} className={`px-5 py-12 text-center ${muted}`}>No attendance records yet.</td></tr>
+                      {!filteredAttendanceRecords.length && (
+                        <tr><td colSpan={7} className={`px-5 py-12 text-center ${muted}`}>No attendance records found for {formatDateLabel(attendanceDateFilter) || "this date"}.</td></tr>
                       )}
                     </tbody>
                   </table>

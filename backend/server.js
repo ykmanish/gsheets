@@ -15528,6 +15528,11 @@ app.delete("/reports/:id", requirePrivilege("manage_reports", "Report management
 });
 
 const FORUM_GROUP_ID = "workspace-forum";
+const FORUM_GROUP_AVATAR_PRESETS = new Set([
+  "ocean", "emerald", "sunset", "violet", "rose", "amber", "cyan", "indigo", "lime", "pink",
+  "sky", "forest", "coral", "royal", "mint", "fire", "plum", "teal", "gold", "night",
+  "grape", "leaf", "ruby", "aqua", "orchid", "steel", "peach", "bluegrass", "magenta", "slate",
+]);
 const forumClients = new Map();
 
 function forumEncryptionKey() {
@@ -15571,6 +15576,7 @@ function forumUserProfile(user = {}) {
     avatarUrl: user.avatarUrl || "",
     gender: user.gender || "",
     roleName: user.roleName || "",
+    isSuperAdmin: Boolean(user.isSuperAdmin),
   };
 }
 
@@ -15580,6 +15586,9 @@ function forumConversationIdForDirect(userA, userB) {
 
 async function ensureForumGroupConversation(db) {
   const now = new Date();
+  const activeUsers = await db.collection("users").find({ blacklisted: { $ne: true } }, { projection: { _id: 1, isSuperAdmin: 1 } }).toArray();
+  const activeUserIds = activeUsers.map((user) => String(user._id));
+  const superAdminIds = activeUsers.filter((user) => user.isSuperAdmin).map((user) => String(user._id));
   const result = await db.collection("forumConversations").findOneAndUpdate(
     { _id: FORUM_GROUP_ID },
     {
@@ -15587,14 +15596,40 @@ async function ensureForumGroupConversation(db) {
         _id: FORUM_GROUP_ID,
         type: "group",
         name: "Group Forum",
-        participantIds: [],
+        avatarPreset: "ocean",
+        participantIds: activeUserIds,
+        adminIds: superAdminIds,
+        adminOnlyMessages: false,
         createdAt: now,
         updatedAt: now,
       },
     },
     { upsert: true, returnDocument: "after" }
   );
-  return result.value || result;
+  const group = result.value || result;
+  const updates = {};
+  if (!Array.isArray(group.participantIds) || group.participantIds.length === 0) updates.participantIds = activeUserIds;
+  const adminIds = [...new Set([...(group.adminIds || []).map(String), ...superAdminIds])];
+  if (JSON.stringify(adminIds) !== JSON.stringify((group.adminIds || []).map(String))) updates.adminIds = adminIds;
+  if (group.adminOnlyMessages === undefined) updates.adminOnlyMessages = false;
+  if (!group.avatarPreset) updates.avatarPreset = "ocean";
+  if (Object.keys(updates).length) {
+    updates.updatedAt = group.updatedAt || now;
+    await db.collection("forumConversations").updateOne({ _id: FORUM_GROUP_ID }, { $set: updates });
+    return { ...group, ...updates };
+  }
+  return group;
+}
+
+function isForumGroupAdmin(conversation = {}, req) {
+  return Boolean(req.authUser?.isSuperAdmin || (conversation.adminIds || []).map(String).includes(String(req.authUser?.id || "")));
+}
+
+function assertForumGroupMember(conversation = {}, req) {
+  if ((conversation.participantIds || []).map(String).includes(String(req.authUser?.id || ""))) return;
+  const error = new Error("You are not a member of this group");
+  error.status = 403;
+  throw error;
 }
 
 async function serializeForumMessage(message) {
@@ -15630,6 +15665,12 @@ async function forumConversationSummary(conversation, authUserId) {
     type: conversation.type,
     name: conversation.type === "direct" ? (other?.displayName || other?.username || "Direct message") : conversation.name || "Group Forum",
     participants: participants.map(forumUserProfile),
+    participantIds,
+    adminIds: (conversation.adminIds || []).map(String),
+    adminOnlyMessages: Boolean(conversation.adminOnlyMessages),
+    avatarPreset: conversation.avatarPreset || "ocean",
+    canManage: conversation.type === "group" && (conversation.adminIds || []).map(String).includes(String(authUserId)),
+    canSendMessages: conversation.type !== "group" || !conversation.adminOnlyMessages || (conversation.adminIds || []).map(String).includes(String(authUserId)),
     lastMessage,
     updatedAt: conversation.updatedAt,
   };
@@ -15664,8 +15705,14 @@ async function createForumMessage({ req, conversationId, text }) {
   if (conversation.type === "direct" && !(conversation.participantIds || []).includes(req.authUser.id)) {
     throw Object.assign(new Error("Conversation not found"), { status: 404 });
   }
+  if (conversation.type === "group") {
+    assertForumGroupMember(conversation, req);
+    if (conversation.adminOnlyMessages && !isForumGroupAdmin(conversation, req)) {
+      throw Object.assign(new Error("Only group admins can message right now"), { status: 403 });
+    }
+  }
   const encrypted = encryptForumText(text);
-  const recipientIds = conversation.type === "direct" ? conversation.participantIds : [];
+  const recipientIds = conversation.type === "direct" ? conversation.participantIds : conversation.participantIds;
   const message = {
     conversationId,
     type: conversation.type,
@@ -15693,7 +15740,7 @@ async function createForumMessage({ req, conversationId, text }) {
   const serialized = await serializeForumMessage(saved);
   const recipients = conversation.type === "direct"
     ? conversation.participantIds
-    : (await db.collection("sessions").distinct("userId")).map(String);
+    : conversation.participantIds;
   broadcastForumPayload(recipients, { type: "forum:message", conversationId, message: serialized });
   return serialized;
 }
@@ -15702,9 +15749,7 @@ app.get("/forum/bootstrap", async (req, res) => {
   try {
     const db = await connectAuthDb();
     const group = await ensureForumGroupConversation(db);
-    const conversations = await db.collection("forumConversations").find({
-      $or: [{ _id: FORUM_GROUP_ID }, { participantIds: req.authUser.id }],
-    }).sort({ updatedAt: -1 }).toArray();
+    const conversations = await db.collection("forumConversations").find({ participantIds: req.authUser.id }).sort({ updatedAt: -1 }).toArray();
     const users = await db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1, username: 1 }).toArray();
     const onlineUserIds = [...forumClients.keys()];
     res.json({
@@ -15727,11 +15772,55 @@ app.get("/forum/conversations/:id/messages", async (req, res) => {
       ? await ensureForumGroupConversation(db)
       : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
     if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if (conversation.type === "group") assertForumGroupMember(conversation, req);
     const messages = await db.collection("forumMessages").find({ conversationId: conversation._id }).sort({ createdAt: 1 }).limit(300).toArray();
     res.json({ messages: await Promise.all(messages.map(serializeForumMessage)) });
   } catch (error) {
     console.error("Forum messages error:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch("/forum/group", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const group = await ensureForumGroupConversation(db);
+    if (!isForumGroupAdmin(group, req)) return res.status(403).json({ error: "Only group admins can manage this group" });
+    const activeUsers = await db.collection("users").find({ blacklisted: { $ne: true } }, { projection: { _id: 1, isSuperAdmin: 1 } }).toArray();
+    const activeUserIds = new Set(activeUsers.map((user) => String(user._id)));
+    const superAdminIds = activeUsers.filter((user) => user.isSuperAdmin).map((user) => String(user._id));
+    const update = { updatedAt: new Date() };
+    if (req.body?.name !== undefined) {
+      const name = String(req.body.name || "").trim();
+      if (!name || name.length > 80) return res.status(400).json({ error: "Group name must be 1-80 characters" });
+      update.name = name;
+    }
+    if (req.body?.adminOnlyMessages !== undefined) update.adminOnlyMessages = Boolean(req.body.adminOnlyMessages);
+    if (req.body?.avatarPreset !== undefined) {
+      const avatarPreset = String(req.body.avatarPreset || "").trim();
+      if (!FORUM_GROUP_AVATAR_PRESETS.has(avatarPreset)) return res.status(400).json({ error: "Choose a valid group avatar" });
+      update.avatarPreset = avatarPreset;
+    }
+    if (req.body?.participantIds !== undefined) {
+      const participantIds = [...new Set((Array.isArray(req.body.participantIds) ? req.body.participantIds : []).map(String).filter((id) => activeUserIds.has(id)))];
+      update.participantIds = [...new Set([...participantIds, ...superAdminIds])];
+    }
+    if (req.body?.adminIds !== undefined) {
+      const participantSource = update.participantIds || group.participantIds || [];
+      const participantSet = new Set(participantSource.map(String));
+      update.adminIds = [...new Set([
+        ...(Array.isArray(req.body.adminIds) ? req.body.adminIds : []).map(String).filter((id) => participantSet.has(id)),
+        ...superAdminIds,
+      ])];
+    }
+    await db.collection("forumConversations").updateOne({ _id: FORUM_GROUP_ID }, { $set: update });
+    const saved = await db.collection("forumConversations").findOne({ _id: FORUM_GROUP_ID });
+    const conversation = await forumConversationSummary(saved, req.authUser.id);
+    broadcastForumPayload(saved.participantIds || [], { type: "forum:conversation", conversation });
+    res.json({ conversation });
+  } catch (error) {
+    console.error("Forum group update error:", error);
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 

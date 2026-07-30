@@ -1034,7 +1034,7 @@ export default function Forum({ darkMode }) {
         <main className={`min-h-0 min-w-0 overflow-hidden ${mobileListOpen ? "hidden lg:flex" : "flex"}`}>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <header className={`flex h-16 shrink-0 items-center gap-3 border-b px-4 ${divider}`}>
-              <button type="button" onClick={() => setMobileListOpen(true)} className={`grid h-10 w-10 place-items-center rounded-full lg:hidden ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Back to chats">
+              <button type="button" onClick={() => setMobileListOpen(true)} className={`h-10 w-10 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Back to chats">
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100"}`}>
@@ -1047,7 +1047,7 @@ export default function Forum({ darkMode }) {
                   <span className="block truncate text-sm font-semibold">{selectedConversation?.name || "Group Forum"}</span>
                 </span>
               </div>
-              <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-[min(52vw,240px)] sm:w-[280px] lg:w-[380px]" : "w-10 lg:w-[104px]"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
+              <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-full flex-1" : "w-10 lg:w-[104px]"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
                 <button type="button" onClick={() => setMessageSearchOpen(true)} className="flex h-7 shrink-0 items-center gap-2 rounded-full" aria-label="Search messages">
                   <Search className={`h-4 w-4 ${muted}`} />
                   <span className={`hidden text-xs font-semibold transition-opacity duration-200 lg:inline ${messageSearchOpen ? "w-0 opacity-0" : "opacity-100"} ${muted}`}>Search</span>
@@ -1077,11 +1077,11 @@ export default function Forum({ darkMode }) {
                   </>
                 )}
               </div>
-              <span className={`hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold sm:inline-flex ${darkMode ? "bg-emerald-300/12 text-emerald-200" : "bg-[#dcfce7] text-[#16a34a]"}`}>
+              <span className={`hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold sm:inline-flex ${messageSearchOpen ? "sm:hidden" : ""} ${darkMode ? "bg-emerald-300/12 text-emerald-200" : "bg-[#dcfce7] text-[#16a34a]"}`}>
                 <LockKeyhole className="h-3.5 w-3.5" />
                 Encrypted
               </span>
-              <div ref={chatMenuRef} className="relative">
+              <div ref={chatMenuRef} className={`relative ${messageSearchOpen ? "hidden" : ""}`}>
                 <button type="button" onClick={() => setChatMenuOpen((open) => !open)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Chat actions">
                   <MoreVertical className="h-4 w-4" />
                 </button>
@@ -1098,7 +1098,7 @@ export default function Forum({ darkMode }) {
                   </div>
                 )}
               </div>
-              <button type="button" onClick={closeChat} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Close chat">
+              <button type="button" onClick={closeChat} className={`h-9 w-9 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Close chat">
                 <X className="h-4 w-4" />
               </button>
             </header>
@@ -1131,7 +1131,7 @@ export default function Forum({ darkMode }) {
                           <UserAvatar user={message.sender} name={message.sender?.displayName} className="h-7 w-7 sm:h-8 sm:w-8" />
                         </span>
                       ) : <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />)}
-                      <div className={`flex min-w-0 flex-col ${mine ? "max-w-[calc(100%-12px)] items-end sm:max-w-[76%]" : "max-w-[calc(100%-36px)] items-start sm:max-w-[76%]"}`}>
+                      <div className={`flex min-w-0 flex-col ${mine ? "max-w-[calc(100%-12px)] items-end sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]"}`}>
                         {showName && (
                           <div className={`mb-1 flex items-center gap-2 text-xs ${muted}`}>
                             {mine || !message.sender ? (
@@ -1151,8 +1151,9 @@ export default function Forum({ darkMode }) {
                           <div className={`max-w-full rounded-[20px] px-4 py-3 ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#dcecff] text-[#14213d]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-white/[0.08] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
                             <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
                               {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                              {!previewUrl && <span className="inline-block w-3" />}
                               {!previewUrl && (
-                                <span className={`ml-3 inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? "text-[#71809a]" : muted}`}>
+                                <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? "text-[#71809a]" : muted}`}>
                                   {formatTime(message.createdAt)}
                                 </span>
                               )}

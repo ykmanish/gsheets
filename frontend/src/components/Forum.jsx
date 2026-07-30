@@ -541,6 +541,7 @@ export default function Forum({ darkMode }) {
   const endRef = useRef(null);
   const messageRefs = useRef(new Map());
   const chatMenuRef = useRef(null);
+  const optimisticMessageCounterRef = useRef(0);
 
   const surface = darkMode ? "bg-[#15171c]" : "bg-white";
   const subSurface = darkMode ? "bg-[#101116]" : "bg-[#f7f8fb]";
@@ -773,6 +774,24 @@ export default function Forum({ darkMode }) {
     }
     setComposer("");
     emitTyping(false);
+    optimisticMessageCounterRef.current += 1;
+    const tempMessage = {
+      id: `temp-${optimisticMessageCounterRef.current}`,
+      conversationId: selectedId,
+      type: selectedConversation?.type || "group",
+      senderId: currentUser?.id,
+      sender: currentUser,
+      text,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
+    setMessages((current) => [...current, tempMessage]);
+    setConversations((current) => current.map((item) => (
+      item.id === selectedId
+        ? { ...item, lastMessage: tempMessage, updatedAt: tempMessage.createdAt }
+        : item
+    )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
+    window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
     try {
       const data = await api(`/forum/conversations/${encodeURIComponent(selectedId)}/messages`, {
         method: "POST",
@@ -784,10 +803,14 @@ export default function Forum({ darkMode }) {
             ? { ...item, lastMessage: data.message, updatedAt: data.message.createdAt }
             : item
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
-        setMessages((current) => current.some((message) => message.id === data.message.id) ? current : [...current, data.message]);
+        setMessages((current) => [
+          ...current.filter((message) => message.id !== tempMessage.id && message.id !== data.message.id),
+          data.message,
+        ]);
         window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
       }
     } catch (error) {
+      setMessages((current) => current.filter((message) => message.id !== tempMessage.id));
       setComposer(text);
       toast.error(error.message);
     }

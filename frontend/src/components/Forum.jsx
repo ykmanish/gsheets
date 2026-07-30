@@ -641,9 +641,12 @@ export default function Forum({ darkMode }) {
   }, [loadMessages, selectedConversation, selectedId]);
 
   useEffect(() => {
-    const ws = new WebSocket(socketUrl());
-    socketRef.current = ws;
-    ws.onmessage = (event) => {
+    let stopped = false;
+    let reconnectTimer = null;
+    function connectSocket() {
+      const ws = new WebSocket(socketUrl());
+      socketRef.current = ws;
+      ws.onmessage = (event) => {
       const payload = JSON.parse(event.data || "{}");
       if (payload.type === "forum:presence") setOnlineUserIds(payload.onlineUserIds || []);
       if (payload.type === "forum:conversation" && payload.conversation) {
@@ -696,9 +699,19 @@ export default function Forum({ darkMode }) {
           setMessages([]);
         }
       }
+      };
+      ws.onerror = () => {};
+      ws.onclose = () => {
+        if (stopped) return;
+        reconnectTimer = window.setTimeout(connectSocket, 2500);
+      };
+    }
+    connectSocket();
+    return () => {
+      stopped = true;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      socketRef.current?.close();
     };
-    ws.onerror = () => {};
-    return () => ws.close();
   }, [currentUser?.id, currentUser?.username, selectedId]);
 
   useEffect(() => {
@@ -761,10 +774,19 @@ export default function Forum({ darkMode }) {
     setComposer("");
     emitTyping(false);
     try {
-      await api(`/forum/conversations/${encodeURIComponent(selectedId)}/messages`, {
+      const data = await api(`/forum/conversations/${encodeURIComponent(selectedId)}/messages`, {
         method: "POST",
         body: JSON.stringify({ text }),
       });
+      if (data.message) {
+        setConversations((current) => current.map((item) => (
+          item.id === selectedId
+            ? { ...item, lastMessage: data.message, updatedAt: data.message.createdAt }
+            : item
+        )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
+        setMessages((current) => current.some((message) => message.id === data.message.id) ? current : [...current, data.message]);
+        window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+      }
     } catch (error) {
       setComposer(text);
       toast.error(error.message);
@@ -1114,7 +1136,7 @@ export default function Forum({ darkMode }) {
                 {(typingByConversation[selectedId] || []).map((user) => user.displayName).join(", ")} typing...
               </div>
             )}
-            <form onSubmit={sendMessage} className={`relative shrink-0 border-t px-6 py-4 ${divider}`}>
+            <form onSubmit={sendMessage} className={`relative shrink-0 border-t px-6 py-3 ${divider}`}>
               {mentionOptions.length > 0 && (
                 <div className={`absolute bottom-[76px] left-6 z-20 w-72 overflow-hidden rounded-2xl p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
                   {mentionOptions.map((user) => (
@@ -1128,9 +1150,9 @@ export default function Forum({ darkMode }) {
                   ))}
                 </div>
               )}
-              <div className={`mx-auto flex max-w-4xl items-center gap-3 rounded-full border px-5 py-2.5 ${darkMode ? "border-white/[0.06] bg-white/[0.045]" : "border-[#eef1f5] bg-white"}`}>
-                <textarea value={composer} disabled={!canSendSelectedConversation} onChange={(event) => updateComposer(event.target.value)} onBlur={() => emitTyping(false)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) sendMessage(event); }} rows={1} placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"} className={`max-h-24 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`} />
-                <button type="submit" disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
+              <div className={`mx-auto flex max-w-4xl items-center gap-3 rounded-full border px-5 py-1.5 ${darkMode ? "border-white/[0.06] bg-white/[0.045]" : "border-[#eef1f5] bg-white"}`}>
+                <textarea value={composer} disabled={!canSendSelectedConversation} onChange={(event) => updateComposer(event.target.value)} onBlur={() => emitTyping(false)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) sendMessage(event); }} rows={1} placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"} className={`max-h-20 min-h-7 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`} />
+                <button type="submit" disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
                   <Send className="h-4 w-4" />
                 </button>
               </div>

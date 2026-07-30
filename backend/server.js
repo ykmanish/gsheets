@@ -12100,7 +12100,7 @@ function generateProjectGanttPdf(project = {}, options = {}) {
     const unitW = monthScale ? chartW / Math.max(1, timelineUnits.length) : scale === "week" ? Math.max(54, chartW / Math.max(1, Math.min(timelineUnits.length, 9))) : totalDays <= 45 ? chartW / totalDays : 14;
     const unitsPerPage = monthScale ? Math.max(1, timelineUnits.length) : Math.max(1, Math.floor(chartW / unitW));
     const rowH = 32;
-    const headerH = 60;
+    const headerH = 52;
     const rowsPerPage = Math.max(5, Math.floor((page.height - page.top - page.bottom - headerH) / rowH));
     const statusStyle = (row) => {
       const delayed = row.status !== "done" && row.dueDate && row.dueDate < istDateKey(new Date());
@@ -12137,10 +12137,10 @@ function generateProjectGanttPdf(project = {}, options = {}) {
         doc.rect(0, 0, page.width, page.height).fill("#f7f8f5");
         doc.rect(page.left, page.top, page.width - page.left - page.right, page.height - page.top - page.bottom).fill("#ffffff");
         doc.fillColor("#0f6b49").font(dmrPdfFonts.bold).fontSize(6.2).text("GANTT VIEW", page.left + 8, page.top + 5, { characterSpacing: 1.1 });
-        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(18).text(projectText(project.name) || "Project schedule", page.left + 8, page.top + 20, { width: monthScale ? 300 : 360, height: 22, ellipsis: true });
+        doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(17).text(projectText(project.name) || "Project schedule", page.left + 8, page.top + 16, { width: monthScale ? 300 : 360, height: 20, ellipsis: true });
         doc.fillColor("#1268b3").font(dmrPdfFonts.bold).fontSize(7).text(`${dmrPdfDateLabel(startKey)} - ${dmrPdfDateLabel(endKey)} | ${scale.toUpperCase()} | Page ${pageNo}`, page.width - page.right - 260, page.top + 15, { width: 250, align: "right" });
 
-        const headerY = page.top + 52;
+        const headerY = page.top + 44;
         doc.rect(page.left, headerY, page.width - page.left - page.right, 16).fill("#f8faf6");
         doc.strokeColor("#dfe6dc").lineWidth(0.7).rect(page.left, headerY, page.width - page.left - page.right, 16).stroke();
         doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(7.3).text("Task list", page.left + 8, headerY + 4.5, { width: taskW });
@@ -12152,9 +12152,13 @@ function generateProjectGanttPdf(project = {}, options = {}) {
         });
         visibleUnits.forEach((unit, index) => {
           const x = chartX + index * unitW;
-          doc.strokeColor(scale !== "day" || index % 7 === 0 ? "#dde4d9" : "#edf0ea").lineWidth(0.45).moveTo(x, headerY).lineTo(x, page.height - page.bottom).stroke();
+          doc.strokeColor(scale !== "day" || index % 7 === 0 ? "#d7dfd3" : "#edf0ea").lineWidth(monthScale ? 0.7 : 0.45).moveTo(x, headerY).lineTo(x, page.height - page.bottom).stroke();
           doc.fillColor("#171714").font(dmrPdfFonts.regular).fontSize(monthScale && unitW < 52 ? 4.8 : 5.8).text(unit.label, x, headerY + 5, { width: unitW, align: "center", ellipsis: true });
         });
+        if (visibleUnits.length) {
+          const chartRightX = chartX + visibleUnits.length * unitW;
+          doc.strokeColor(monthScale ? "#d7dfd3" : "#edf0ea").lineWidth(monthScale ? 0.7 : 0.45).moveTo(chartRightX, headerY).lineTo(chartRightX, page.height - page.bottom).stroke();
+        }
         doc.strokeColor("#dfe6dc").lineWidth(0.7).moveTo(page.left, headerY + 16).lineTo(page.width - page.right, headerY + 16).stroke();
 
         visibleRows.forEach((row, index) => {
@@ -12162,6 +12166,14 @@ function generateProjectGanttPdf(project = {}, options = {}) {
           const color = rowColor(row);
           doc.rect(page.left, y, page.width - page.left - page.right, rowH).fill("#ffffff");
           doc.strokeColor("#e1e7dd").lineWidth(0.55).rect(page.left, y, page.width - page.left - page.right, rowH).stroke();
+          visibleUnits.forEach((unit, unitIndex) => {
+            const x = chartX + unitIndex * unitW;
+            doc.strokeColor(monthScale ? "#d7dfd3" : "#edf0ea").lineWidth(monthScale ? 0.65 : 0.4).moveTo(x, y).lineTo(x, y + rowH).stroke();
+          });
+          if (visibleUnits.length) {
+            const chartRightX = chartX + visibleUnits.length * unitW;
+            doc.strokeColor(monthScale ? "#d7dfd3" : "#edf0ea").lineWidth(monthScale ? 0.65 : 0.4).moveTo(chartRightX, y).lineTo(chartRightX, y + rowH).stroke();
+          }
           const rowCenter = y + rowH / 2;
           const taskIndent = row.type === "subtask" ? 20 : row.type === "task" ? 10 : 0;
           const dotX = page.left + 18 + taskIndent;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, CircleDot, Compass, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, CircleDot, Compass, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
@@ -53,6 +53,10 @@ function GroupAvatar({ group, className = "h-11 w-11", iconClassName = "h-5 w-5"
       <Icon className={iconClassName} />
     </span>
   );
+}
+
+function TinySpinner({ className = "h-3.5 w-3.5" }) {
+  return <LoaderCircle className={`${className} animate-spin`} />;
 }
 
 async function api(path, options = {}) {
@@ -273,7 +277,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [memberToAdd, setMemberToAdd] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState("");
   const avatarPickerRef = useRef(null);
   const memberPickerRef = useRef(null);
   const panelBg = darkMode ? "bg-[#15171c] text-white" : "bg-[#fbfcff] text-black";
@@ -303,12 +307,12 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
     return () => window.removeEventListener("mousedown", closeOnOutside);
   }, [avatarPickerOpen]);
 
-  async function saveGroup(update) {
+  async function saveGroup(update, action = "group") {
     try {
-      setSaving(true);
+      setPendingAction(action);
       await onUpdateGroup(update);
     } finally {
-      setSaving(false);
+      setPendingAction("");
     }
   }
 
@@ -352,7 +356,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                   const selected = (group?.avatarPreset || "ocean") === preset.id;
                   const Icon = preset.Icon || MessagesSquare;
                   return (
-                    <button key={preset.id} type="button" onClick={() => { void saveGroup({ avatarPreset: preset.id }); setAvatarPickerOpen(false); }} className={`grid h-12 w-12 place-items-center rounded-full transition active:scale-[0.96] ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label={`Choose ${preset.id} avatar`}>
+                    <button key={preset.id} type="button" disabled={Boolean(pendingAction)} onClick={() => { void saveGroup({ avatarPreset: preset.id }, "avatar"); setAvatarPickerOpen(false); }} className={`grid h-12 w-12 place-items-center rounded-full transition active:scale-[0.96] disabled:cursor-wait disabled:opacity-60 ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label={`Choose ${preset.id} avatar`}>
                       <span className="grid h-10 w-10 place-items-center rounded-full text-white" style={{ background: preset.gradient }}>
                         <Icon className="h-4 w-4" />
                       </span>
@@ -366,9 +370,9 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
         <div className="mt-4 flex items-center justify-center gap-2">
           {canManage && editingName ? (
             <div className={`flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl border px-3 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
-              <input value={groupNameDraft} autoFocus onChange={(event) => setGroupNameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { void saveGroup({ name: groupNameDraft }).then(() => setEditingName(false)); } }} className="min-w-0 flex-1 bg-transparent text-center text-sm font-bold outline-none" />
-              <button type="button" disabled={saving || !groupNameDraft.trim()} onClick={() => { void saveGroup({ name: groupNameDraft }).then(() => setEditingName(false)); }} className="grid h-7 w-7 place-items-center rounded-full bg-[#2563eb] text-white disabled:opacity-35" aria-label="Save group name">
-                <Check className="h-3.5 w-3.5" />
+              <input value={groupNameDraft} autoFocus onChange={(event) => setGroupNameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { void saveGroup({ name: groupNameDraft }, "name").then(() => setEditingName(false)); } }} className="min-w-0 flex-1 bg-transparent text-center text-sm font-bold outline-none" />
+              <button type="button" disabled={Boolean(pendingAction) || !groupNameDraft.trim()} onClick={() => { void saveGroup({ name: groupNameDraft }, "name").then(() => setEditingName(false)); }} className="grid h-7 w-7 place-items-center rounded-full bg-[#2563eb] text-white disabled:opacity-35" aria-label="Save group name">
+                {pendingAction === "name" ? <TinySpinner /> : <Check className="h-3.5 w-3.5" />}
               </button>
               <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Group Forum"); setEditingName(false); }} className={`grid h-7 w-7 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Cancel group name edit">
                 <X className="h-3.5 w-3.5" />
@@ -390,10 +394,12 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
         {canManage && (
           <PanelSection title="Group settings" muted={muted}>
             <div className="space-y-3">
-              <button type="button" disabled={saving} onClick={() => saveGroup({ adminOnlyMessages: !group?.adminOnlyMessages })} className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
+              <button type="button" disabled={Boolean(pendingAction)} onClick={() => saveGroup({ adminOnlyMessages: !group?.adminOnlyMessages }, "adminOnlyMessages")} className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold transition disabled:cursor-wait disabled:opacity-75 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
                 <span>Only admins can message</span>
-                <span className={`relative h-6 w-11 rounded-full transition ${group?.adminOnlyMessages ? "bg-[#2563eb]" : darkMode ? "bg-white/15" : "bg-black/10"}`}>
-                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${group?.adminOnlyMessages ? "left-6" : "left-1"}`} />
+                <span className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${group?.adminOnlyMessages ? "bg-[#2563eb]" : darkMode ? "bg-white/15" : "bg-black/10"}`}>
+                  <span className={`absolute top-1 grid h-4 w-4 place-items-center rounded-full bg-white shadow-sm transition-all duration-300 ${group?.adminOnlyMessages ? "left-6" : "left-1"}`}>
+                    {pendingAction === "adminOnlyMessages" && <TinySpinner className="h-3 w-3 text-[#2563eb]" />}
+                  </span>
                 </span>
               </button>
               <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
@@ -416,7 +422,10 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                       </div>
                     )}
                   </div>
-                  <button type="button" disabled={saving || !memberToAdd} onClick={() => { void saveGroup({ participantIds: participantListWith(memberToAdd, true) }); setMemberToAdd(""); }} className="rounded-xl bg-[#2563eb] px-3 text-xs font-bold text-white disabled:opacity-35">Add</button>
+                  <button type="button" disabled={Boolean(pendingAction) || !memberToAdd} onClick={() => { const addingUserId = memberToAdd; void saveGroup({ participantIds: participantListWith(addingUserId, true) }, `add:${addingUserId}`).then(() => setMemberToAdd("")); }} className="inline-flex min-w-14 items-center justify-center gap-1.5 rounded-xl bg-[#2563eb] px-3 text-xs font-bold text-white transition disabled:cursor-wait disabled:opacity-35">
+                    {pendingAction.startsWith("add:") ? <TinySpinner /> : null}
+                    Add
+                  </button>
                 </div>
               </div>
             </div>
@@ -431,7 +440,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
         >
           <div className="space-y-2">
             {visibleMembers.map((member) => (
-              <button key={member.id} type="button" onClick={() => onSelectUser(member)} className={`flex w-full items-center gap-2 rounded-xl p-2 text-left ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+              <button key={member.id} type="button" disabled={pendingAction === `member:${member.id}` || pendingAction === `remove:${member.id}`} onClick={() => onSelectUser(member)} className={`flex w-full items-center gap-2 rounded-xl p-2 text-left transition disabled:cursor-wait disabled:opacity-75 ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
                 <span className="relative shrink-0">
                   <UserAvatar user={member} name={member.displayName} className="h-8 w-8" />
                   <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(member.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
@@ -451,17 +460,18 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                         tabIndex={0}
                         onClick={(event) => {
                           event.stopPropagation();
-                          void saveGroup({ adminIds: adminListWith(member.id, !adminIds.has(String(member.id))) });
+                          void saveGroup({ adminIds: adminListWith(member.id, !adminIds.has(String(member.id))) }, `member:${member.id}`);
                         }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
                             event.stopPropagation();
-                            void saveGroup({ adminIds: adminListWith(member.id, !adminIds.has(String(member.id))) });
+                            void saveGroup({ adminIds: adminListWith(member.id, !adminIds.has(String(member.id))) }, `member:${member.id}`);
                           }
                         }}
-                        className={`rounded-full px-2 py-1 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-[#2563eb]"}`}
+                        className={`inline-flex min-w-[58px] items-center justify-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-[#2563eb]"}`}
                       >
+                        {pendingAction === `member:${member.id}` && <TinySpinner className="h-3 w-3" />}
                         {adminIds.has(String(member.id)) ? "Demote" : "Promote"}
                       </span>
                       <span
@@ -469,17 +479,18 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                         tabIndex={0}
                         onClick={(event) => {
                           event.stopPropagation();
-                          void saveGroup({ participantIds: participantListWith(member.id, false), adminIds: adminListWith(member.id, false) });
+                          void saveGroup({ participantIds: participantListWith(member.id, false), adminIds: adminListWith(member.id, false) }, `remove:${member.id}`);
                         }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
                             event.stopPropagation();
-                            void saveGroup({ participantIds: participantListWith(member.id, false), adminIds: adminListWith(member.id, false) });
+                            void saveGroup({ participantIds: participantListWith(member.id, false), adminIds: adminListWith(member.id, false) }, `remove:${member.id}`);
                           }
                         }}
-                        className="rounded-full px-2 py-1 text-[10px] font-bold text-red-500 hover:bg-red-500/10"
+                        className="inline-flex min-w-[54px] items-center justify-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-red-500 hover:bg-red-500/10"
                       >
+                        {pendingAction === `remove:${member.id}` && <TinySpinner className="h-3 w-3" />}
                         Remove
                       </span>
                     </>
@@ -1035,10 +1046,10 @@ export default function Forum({ darkMode }) {
                   <span className="block truncate text-sm font-semibold">{selectedConversation?.name || "Group Forum"}</span>
                 </span>
               </div>
-              <div className={`hidden h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out lg:flex ${messageSearchOpen ? "w-[380px]" : "w-[104px]"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
+              <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-[min(52vw,240px)] sm:w-[280px] lg:w-[380px]" : "w-10 lg:w-[104px]"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
                 <button type="button" onClick={() => setMessageSearchOpen(true)} className="flex h-7 shrink-0 items-center gap-2 rounded-full" aria-label="Search messages">
                   <Search className={`h-4 w-4 ${muted}`} />
-                  <span className={`text-xs font-semibold transition-opacity duration-200 ${messageSearchOpen ? "w-0 opacity-0" : "opacity-100"} ${muted}`}>Search</span>
+                  <span className={`hidden text-xs font-semibold transition-opacity duration-200 lg:inline ${messageSearchOpen ? "w-0 opacity-0" : "opacity-100"} ${muted}`}>Search</span>
                 </button>
                 <input
                   value={messageSearch}
@@ -1137,8 +1148,14 @@ export default function Forum({ darkMode }) {
                         )}
                         {displayText && (
                           <div className={`max-w-full rounded-[20px] px-4 py-3 ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#dcecff] text-[#14213d]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-white/[0.08] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
-                            <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">{renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}</p>
-                            {!previewUrl && <p className={`mt-1 text-right text-[10px] ${mine ? "text-[#71809a]" : muted}`}>{formatTime(message.createdAt)}</p>}
+                            <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
+                              {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                              {!previewUrl && (
+                                <span className={`ml-3 inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? "text-[#71809a]" : muted}`}>
+                                  {formatTime(message.createdAt)}
+                                </span>
+                              )}
+                            </p>
                           </div>
                         )}
                         {previewUrl && (

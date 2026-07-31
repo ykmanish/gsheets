@@ -251,29 +251,29 @@ function LinkPreviewCard({ url, mine, darkMode, time, embedded = false }) {
   const faviconUrl = faviconSources[faviconSourceIndex];
   const compactUrl = compactUrlLabel(url);
   const surfaceClass = embedded
-    ? mine
-      ? "bg-white/45 hover:bg-white/55"
-      : darkMode ? "bg-white/[0.08] hover:bg-white/[0.11]" : "bg-[#f1f7ff] hover:bg-[#eaf3ff]"
-    : mine ? "bg-[#dcecff] hover:bg-[#d6e8fb]" : darkMode ? "bg-white/[0.08] hover:bg-white/[0.11]" : "bg-white hover:bg-[#f8fafc]";
+    ? darkMode ? "bg-black/35 hover:bg-black/45" : "bg-black/5 hover:bg-black/10"
+    : mine
+      ? darkMode ? "bg-[#141a26] hover:bg-[#19202e]" : "bg-[#e5f1ff] hover:bg-[#d6e8fb]"
+      : darkMode ? "bg-[#1e222b] hover:bg-[#242934]" : "bg-[#f0f2f5] hover:bg-[#e4e7ec]";
   return (
-    <a href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`flex w-full min-w-0 max-w-full items-center gap-2.5 rounded-[22px] px-3 py-3 text-left transition sm:gap-3 sm:px-4 ${surfaceClass}`}>
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white sm:h-12 sm:w-12">
+    <a href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`flex w-full min-w-0 max-w-full items-center gap-2.5 rounded-[20px] px-3 py-2.5 text-left transition sm:gap-3 sm:px-4 ${surfaceClass}`}>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white sm:h-11 sm:w-11">
         {faviconUrl ? (
           <img
             src={faviconUrl}
             alt=""
             onError={() => setFaviconSourceIndex((current) => current + 1)}
-            className="h-7 w-7 rounded-lg object-contain sm:h-8 sm:w-8"
+            className="h-6 w-6 rounded-md object-contain sm:h-7 sm:w-7"
           />
         ) : (
-          <Globe2 className="h-7 w-7 text-[#2563eb] sm:h-8 sm:w-8" />
+          <Globe2 className="h-6 w-6 text-[#2563eb] sm:h-7 sm:w-7" />
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`block truncate text-sm font-black ${darkMode && !mine ? "text-white" : "text-[#14213d]"}`}>{meta.title}</span>
-        <span className={`mt-0.5 block truncate text-sm ${darkMode && !mine ? "text-white/50" : "text-[#667085]"}`}>{compactUrl}</span>
+        <span className={`block truncate text-sm font-semibold ${darkMode ? "text-white" : "text-[#14213d]"}`}>{meta.title}</span>
+        <span className={`mt-0.5 block truncate text-xs ${darkMode ? "text-white/70" : "text-[#525866]"}`}>{compactUrl}</span>
       </span>
-      {!embedded && <span className={`self-end whitespace-nowrap pb-0.5 text-[10px] ${mine ? "text-[#71809a]" : darkMode ? "text-white/40" : "text-black/40"}`}>{time}</span>}
+      {!embedded && <span className={`self-end whitespace-nowrap pb-0.5 text-[10px] ${mine ? darkMode ? "text-white/60" : "text-[#71809a]" : darkMode ? "text-white/50" : "text-black/45"}`}>{time}</span>}
     </a>
   );
 }
@@ -788,7 +788,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
           // Notify for messages in other conversations
           const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
-          const previewText = String(payload.message?.text || "").slice(0, 80);
+          const fullText = String(payload.message?.text || "").trim();
+          const previewText = fullText.length > 35 ? `${fullText.slice(0, 35)}…` : fullText;
           showAppToast(`${senderName}: ${previewText}`, {
             type: "notification",
             darkMode,
@@ -1016,6 +1017,36 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     setChatMenuOpen(false);
   }
 
+  const touchTimerRef = useRef(null);
+  const touchStartPosRef = useRef({ x: 0, y: 0 });
+
+  function handleMessageTouchStart(event, message) {
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+    touchTimerRef.current = setTimeout(() => {
+      openMessageMenu({ preventDefault: () => {}, clientX: touchStartPosRef.current.x, clientY: touchStartPosRef.current.y }, message);
+    }, 450);
+  }
+
+  function handleMessageTouchMove(event) {
+    const touch = event.touches?.[0];
+    if (!touch || !touchTimerRef.current) return;
+    const dist = Math.hypot(touch.clientX - touchStartPosRef.current.x, touch.clientY - touchStartPosRef.current.y);
+    if (dist > 10) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+  }
+
+  function handleMessageTouchEnd() {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+  }
+
   function openMessageMenu(event, message) {
     event.preventDefault();
     const menuWidth = 192;
@@ -1096,6 +1127,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       throw error;
     }
   }
+
+  // Auto-resize composer textarea height as content changes
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, [composer]);
 
   if (loading) {
     return (
@@ -1214,7 +1253,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
         <main className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
           <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
-            <header className={`flex h-16 w-full shrink-0 items-center gap-3 border-b border-t-0 px-4 ${divider}`}>
+            <header className={`sticky top-0 z-20 flex h-16 w-full shrink-0 items-center gap-3 border-b border-t-0 px-4 ${divider} ${surface}`}>
               <button type="button" onClick={closeChat} className={`h-9 w-9 shrink-0 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Back to chats">
                 <ArrowLeft className="h-5 w-5" />
               </button>
@@ -1302,8 +1341,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                   const showDate = messageDateKey(message.createdAt) !== messageDateKey(previousMessage?.createdAt);
                   const groupedWithNext = nextMessage?.senderId === message.senderId;
                   const groupedWithPrevious = !showDate && previousMessage?.senderId === message.senderId;
-                  const showAvatar = !mine && !groupedWithNext;
-                  const showName = !groupedWithPrevious;
+                  const isGroupChat = selectedConversation?.type === "group";
+                  const showAvatar = isGroupChat && !mine && !groupedWithNext;
+                  const showName = isGroupChat && !mine && !groupedWithPrevious;
                   const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
                   const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
                   const previewUrl = firstUrlFromText(message.text);
@@ -1323,14 +1363,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                           else messageRefs.current.delete(message.id);
                         }}
                         onContextMenu={(event) => openMessageMenu(event, message)}
+                        onTouchStart={(event) => handleMessageTouchStart(event, message)}
+                        onTouchMove={handleMessageTouchMove}
+                        onTouchEnd={handleMessageTouchEnd}
+                        onTouchCancel={handleMessageTouchEnd}
+                        style={{ userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
                         className={`flex min-w-0 items-end gap-2 sm:gap-3 ${groupedWithPrevious ? "mt-[-6px]" : ""} ${mine ? "justify-end" : "justify-start"}`}
                       >
-                      {!mine && (showAvatar ? (
+                      {!mine && isGroupChat && (showAvatar ? (
                         <span className="self-end">
                           <UserAvatar user={message.sender} name={message.sender?.displayName} className="h-7 w-7 sm:h-8 sm:w-8" />
                         </span>
                       ) : <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />)}
-                      <div className={`flex min-w-0 flex-col ${mine ? "max-w-[calc(100%-12px)] items-end sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]"}`}>
+                      <div className={`flex min-w-0 flex-col ${mine ? "max-w-[85%] items-end sm:max-w-[75%]" : isGroupChat ? "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[85%] items-start sm:max-w-[75%]"}`}>
                         {showName && (
                           <div className={`mb-1 flex items-center gap-2 text-xs ${muted}`}>
                             {mine || !message.sender ? (
@@ -1347,24 +1392,24 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                           </div>
                         )}
                         {displayText && previewUrl && (
-                          <div className={`w-full max-w-full min-w-0 rounded-[22px] p-2 ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#dcecff] text-[#14213d]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-white/[0.08] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
+                          <div className={`w-full max-w-full min-w-0 rounded-[22px] p-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#141a26] text-[#f1f5f9]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#1e222b] text-[#f1f5f9]" : "rounded-bl-[6px] bg-[#f0f2f5] text-[#14213d]"}`}>
                             <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} embedded />
                             <p className="flex min-w-0 items-end gap-3 px-2 pb-1 pt-2 text-sm leading-6">
                               <span className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                                 {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
                               </span>
-                              <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? "text-[#71809a]" : muted}`}>
+                              <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
                                 {formatTime(message.createdAt)}
                               </span>
                             </p>
                           </div>
                         )}
                         {displayText && !previewUrl && (
-                          <div className={`max-w-full rounded-[20px] px-4 py-3 ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#dcecff] text-[#14213d]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-white/[0.08] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
+                          <div className={`max-w-full rounded-[20px] px-4 py-3 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#141a26] text-[#f1f5f9]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#1e222b] text-[#f1f5f9]" : "rounded-bl-[6px] bg-[#f0f2f5] text-[#14213d]"}`}>
                             <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
                               {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
                               <span className="inline-block w-3" />
-                              <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? "text-[#71809a]" : muted}`}>
+                              <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
                                 {formatTime(message.createdAt)}
                               </span>
                             </p>
@@ -1422,10 +1467,26 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 </div>
               )}
               <div className="mx-auto flex max-w-4xl items-end gap-2">
-                <label className={`flex min-h-12 flex-1 items-center rounded-full px-4 ${darkMode ? "bg-white/[0.08]" : "bg-white"}`}>
-                  <textarea ref={composerRef} value={composer} disabled={!canSendSelectedConversation} onChange={(event) => updateComposer(event.target.value)} onBlur={() => emitTyping(false)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(event); } }} rows={1} placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"} className={`max-h-20 min-h-7 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`} />
+                <label className={`flex min-h-12 flex-1 items-center rounded-[20px] px-4 transition-all ${darkMode ? "bg-white/[0.08]" : "bg-white"}`}>
+                  <textarea
+                    ref={composerRef}
+                    value={composer}
+                    disabled={!canSendSelectedConversation}
+                    onChange={(event) => updateComposer(event.target.value)}
+                    onBlur={() => emitTyping(false)}
+                    onKeyDown={(event) => {
+                      if (!isMobileViewport && event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        sendMessage(event);
+                      }
+                    }}
+                    enterKeyHint="enter"
+                    rows={1}
+                    placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"}
+                    className={`max-h-32 min-h-7 flex-1 resize-none bg-transparent py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`}
+                  />
                 </label>
-                <button type="submit" onMouseDown={(event) => event.preventDefault()} onPointerDown={(event) => event.preventDefault()} disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#22c55e] text-white transition hover:bg-[#16a34a] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
+                <button type="submit" onMouseDown={(event) => event.preventDefault()} onPointerDown={(event) => event.preventDefault()} disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
                   <Send className="h-4 w-4" />
                 </button>
               </div>

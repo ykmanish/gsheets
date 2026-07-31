@@ -41,7 +41,7 @@ function ToastPill({ id, message, detail, type = "info", darkMode = false, label
   const Icon = item.Icon;
 
   return (
-    <div className={`flex min-h-14 max-w-[92vw] items-center overflow-hidden rounded-full border shadow-[0_18px_48px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/10 bg-[#101318] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
+    <div className={`flex min-h-14 max-w-[92vw] sm:max-w-md items-center overflow-hidden rounded-full border shadow-[0_18px_48px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/10 bg-[#101318] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
       <div className={`ml-3 grid h-9 w-9 shrink-0 place-items-center rounded-full ring-4 ${item.bubble}`}>
         <Icon className={`h-4 w-4 ${type === "loading" ? "animate-spin" : ""}`} />
       </div>

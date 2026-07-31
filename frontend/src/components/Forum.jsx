@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
@@ -165,6 +165,24 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
   });
 }
 
+function getMessageStatus(message, selectedConversation, currentUserId, onlineUserIds = []) {
+  if (!message || message.senderId !== currentUserId) return null;
+  const readBy = message.readBy || {};
+  const deliveredTo = message.deliveredTo || {};
+  const participantIds = selectedConversation?.participantIds || [];
+  const recipients = participantIds.filter((id) => String(id) !== String(currentUserId));
+
+  if (!recipients.length) return "read";
+
+  const isRead = recipients.every((id) => Boolean(readBy[String(id)]));
+  if (isRead) return "read";
+
+  const isDelivered = recipients.some((id) => Boolean(deliveredTo[String(id)] || readBy[String(id)] || onlineUserIds.map(String).includes(String(id))));
+  if (isDelivered) return "delivered";
+
+  return "sent";
+}
+
 function firstUrlFromText(text = "") {
   const match = String(text || "").match(/https?:\/\/[^\s<>()]+/i);
   return match ? match[0].replace(/[.,!?;:]+$/, "") : "";
@@ -243,7 +261,7 @@ function conversationPreviewText(message, fallback) {
   return preview.length > 90 ? `${preview.slice(0, 90).trim()}...` : preview;
 }
 
-function LinkPreviewCard({ url, mine, darkMode, time, embedded = false }) {
+function LinkPreviewCard({ url, mine, darkMode, time, embedded = false, status = null }) {
   const [faviconSourceIndex, setFaviconSourceIndex] = useState(0);
   const meta = linkPreviewMeta(url);
   if (!meta) return null;
@@ -251,10 +269,10 @@ function LinkPreviewCard({ url, mine, darkMode, time, embedded = false }) {
   const faviconUrl = faviconSources[faviconSourceIndex];
   const compactUrl = compactUrlLabel(url);
   const surfaceClass = embedded
-    ? darkMode ? "bg-black/35 hover:bg-black/45" : "bg-black/5 hover:bg-black/10"
+    ? darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/5 hover:bg-black/10"
     : mine
-      ? darkMode ? "bg-[#141a26] hover:bg-[#19202e]" : "bg-[#e5f1ff] hover:bg-[#d6e8fb]"
-      : darkMode ? "bg-[#1e222b] hover:bg-[#242934]" : "bg-[#f0f2f5] hover:bg-[#e4e7ec]";
+      ? darkMode ? "bg-[#181a20] hover:bg-[#1f222a]" : "bg-[#e5f1ff] hover:bg-[#d6e8fb]"
+      : darkMode ? "bg-[#252830] hover:bg-[#2c303a]" : "bg-[#f0f2f5] hover:bg-[#e4e7ec]";
   return (
     <a href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`flex w-full min-w-0 max-w-full items-center gap-2.5 rounded-[20px] px-3 py-2.5 text-left transition sm:gap-3 sm:px-4 ${surfaceClass}`}>
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white sm:h-11 sm:w-11">
@@ -273,7 +291,22 @@ function LinkPreviewCard({ url, mine, darkMode, time, embedded = false }) {
         <span className={`block truncate text-sm font-semibold ${darkMode ? "text-white" : "text-[#14213d]"}`}>{meta.title}</span>
         <span className={`mt-0.5 block truncate text-xs ${darkMode ? "text-white/70" : "text-[#525866]"}`}>{compactUrl}</span>
       </span>
-      {!embedded && <span className={`self-end whitespace-nowrap pb-0.5 text-[10px] ${mine ? darkMode ? "text-white/60" : "text-[#71809a]" : darkMode ? "text-white/50" : "text-black/45"}`}>{time}</span>}
+      {!embedded && (
+        <span className={`self-end inline-flex items-center gap-1 shrink-0 whitespace-nowrap pb-0.5 text-[10px] ${mine ? darkMode ? "text-white/60" : "text-[#71809a]" : darkMode ? "text-white/50" : "text-black/45"}`}>
+          <span>{time}</span>
+          {mine && status && (
+            <span className="inline-flex items-center justify-center">
+              {status === "read" ? (
+                <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+              ) : status === "delivered" ? (
+                <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/60" : "text-[#71809a]"}`} title="Delivered" />
+              ) : (
+                <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/60" : "text-[#71809a]"}`} title="Sent" />
+              )}
+            </span>
+          )}
+        </span>
+      )}
     </a>
   );
 }
@@ -621,6 +654,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [mobileViewportHeight, setMobileViewportHeight] = useState(null);
   const [messageMenu, setMessageMenu] = useState(null);
+  const [messageInfoTarget, setMessageInfoTarget] = useState(null);
   const [copyFeedbackId, setCopyFeedbackId] = useState("");
   const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
   const [deletingMessage, setDeletingMessage] = useState(false);
@@ -816,6 +850,22 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           }
         }
       }
+      if (payload.type === "forum:read") {
+        if (sameConversation(payload.conversationId, selectedId)) {
+          setMessages((current) =>
+            current.map((msg) => {
+              if (msg.senderId === currentUser?.id) {
+                return {
+                  ...msg,
+                  readBy: { ...(msg.readBy || {}), [payload.userId]: payload.readAt },
+                  deliveredTo: { ...(msg.deliveredTo || {}), [payload.userId]: payload.readAt },
+                };
+              }
+              return msg;
+            })
+          );
+        }
+      }
       if (payload.type === "forum:messageDeleted") {
         if (sameConversation(payload.conversationId, selectedId)) {
           setMessages((current) => current.filter((message) => message.id !== payload.messageId));
@@ -868,9 +918,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         delete next[selectedId];
         return next;
       });
+      if (selectedId) {
+        api(`/forum/conversations/${encodeURIComponent(selectedId)}/read`, { method: "POST" }).catch(() => {});
+      }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [selectedId]);
+  }, [selectedId, messages.length]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveMatchIndex(0), 0);
@@ -1284,7 +1337,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
         <main
           style={isMobileViewport && !mobileListOpen && mobileViewportHeight ? { height: `${mobileViewportHeight}px` } : undefined}
-          className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"} flex-col flex-1 h-full relative`}
+          className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}
         >
           <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
             <header className={`sticky top-0 z-20 flex h-16 w-full shrink-0 items-center gap-3 border-b border-t-0 px-4 ${divider} ${surface}`}>
@@ -1378,6 +1431,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                   const isGroupChat = selectedConversation?.type === "group";
                   const showAvatar = isGroupChat && !mine && !groupedWithNext;
                   const showName = isGroupChat && !mine && !groupedWithPrevious;
+                  const isContextTarget = messageMenu?.message?.id === message.id;
                   const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
                   const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
                   const previewUrl = firstUrlFromText(message.text);
@@ -1402,7 +1456,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                         onTouchEnd={handleMessageTouchEnd}
                         onTouchCancel={handleMessageTouchEnd}
                         style={{ userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
-                        className={`flex min-w-0 items-end gap-2 sm:gap-3 ${groupedWithPrevious ? "mt-[-6px]" : ""} ${mine ? "justify-end" : "justify-start"}`}
+                        className={`flex min-w-0 items-end gap-2 sm:gap-3 ${groupedWithPrevious ? "mt-[-6px]" : ""} ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[78]" : ""}`}
                       >
                       {!mine && isGroupChat && (showAvatar ? (
                         <span className="self-end">
@@ -1426,32 +1480,54 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                           </div>
                         )}
                         {displayText && previewUrl && (
-                          <div className={`w-full max-w-full min-w-0 rounded-[22px] p-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#141a26] text-[#f1f5f9]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#1e222b] text-[#f1f5f9]" : "rounded-bl-[6px] bg-[#f0f2f5] text-[#14213d]"}`}>
+                          <div className={`w-full max-w-full min-w-0 rounded-[22px] p-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#181a20] text-white" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#252830] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
                             <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} embedded />
                             <p className="flex min-w-0 items-end gap-3 px-2 pb-1 pt-2 text-sm leading-6">
                               <span className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                                 {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
                               </span>
-                              <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
-                                {formatTime(message.createdAt)}
+                              <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                <span>{formatTime(message.createdAt)}</span>
+                                {mine && (
+                                  <span className="inline-flex items-center justify-center translate-y-[0.5px]">
+                                    {getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
+                                      <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+                                    ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
+                                      <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
+                                    ) : (
+                                      <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
+                                    )}
+                                  </span>
+                                )}
                               </span>
                             </p>
                           </div>
                         )}
                         {displayText && !previewUrl && (
-                          <div className={`max-w-full rounded-[20px] px-4 py-3 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#141a26] text-[#f1f5f9]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#1e222b] text-[#f1f5f9]" : "rounded-bl-[6px] bg-[#f0f2f5] text-[#14213d]"}`}>
+                          <div className={`max-w-full rounded-[20px] px-4 py-3 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#181a20] text-white" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#252830] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
                             <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
                               {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
                               <span className="inline-block w-3" />
-                              <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
-                                {formatTime(message.createdAt)}
+                              <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                <span>{formatTime(message.createdAt)}</span>
+                                {mine && (
+                                  <span className="inline-flex items-center justify-center translate-y-[0.5px]">
+                                    {getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
+                                      <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+                                    ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
+                                      <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
+                                    ) : (
+                                      <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
+                                    )}
+                                  </span>
+                                )}
                               </span>
                             </p>
                           </div>
                         )}
                         {previewUrl && !displayText && (
                           <div className={`w-full max-w-full min-w-0 ring-offset-2 transition ${isActiveMatch ? "rounded-[22px] ring-2 ring-[#facc15]" : ""}`}>
-                            <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} />
+                            <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} status={getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds)} />
                           </div>
                         )}
                         {copyFeedbackId === message.id && (
@@ -1561,31 +1637,152 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           )}
         </main>
         {messageMenu && (
-          <div
-            ref={messageMenuRef}
-            style={{ left: messageMenu.x, top: messageMenu.y }}
-            className={`fixed z-[80] w-48 origin-top-left rounded-2xl border p-1.5 shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${darkMode ? "border-white/10 bg-[#1c1f26]/95 text-white" : "border-black/10 bg-white/95 text-[#111827]"}`}
-          >
-            <button
-              type="button"
-              onClick={() => copyMessageText(messageMenu.message)}
-              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
-            >
-              <Copy className="h-4 w-4 text-[#2563eb]" />
-              Copy message
-            </button>
-            <button
-              type="button"
-              disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
-              onClick={() => {
-                setDeleteMessageTarget(messageMenu.message);
+          <>
+            <div
+              className="fixed inset-0 z-[75] bg-black/65 transition-opacity duration-200 ease-out animate-in fade-in-0"
+              onClick={() => setMessageMenu(null)}
+              onContextMenu={(e) => {
+                e.preventDefault();
                 setMessageMenu(null);
               }}
-              className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
+            />
+            <div
+              ref={messageMenuRef}
+              style={{ left: messageMenu.x, top: messageMenu.y }}
+              className={`fixed z-[80] w-48 origin-top-left rounded-2xl border p-1.5 shadow-[0_20px_70px_rgba(0,0,0,0.32)] backdrop-blur-xl transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-90 slide-in-from-top-1.5 ${darkMode ? "border-white/10 bg-[#1c1f26]/95 text-white" : "border-black/10 bg-white/95 text-[#111827]"}`}
             >
-              <Trash2 className="h-4 w-4" />
-              Delete message
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMessageInfoTarget(messageMenu.message);
+                  setMessageMenu(null);
+                }}
+                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+              >
+                <Info className="h-4 w-4 text-[#2563eb]" />
+                Message info
+              </button>
+              <button
+                type="button"
+                onClick={() => copyMessageText(messageMenu.message)}
+                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+              >
+                <Copy className="h-4 w-4 text-[#2563eb]" />
+                Copy message
+              </button>
+              <button
+                type="button"
+                disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
+                onClick={() => {
+                  setDeleteMessageTarget(messageMenu.message);
+                  setMessageMenu(null);
+                }}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete message
+              </button>
+            </div>
+          </>
+        )}
+        {messageInfoTarget && (
+          <div
+            className="fixed inset-0 z-[95] grid place-items-center bg-black/92 px-4 animate-in fade-in duration-150"
+            onMouseDown={() => setMessageInfoTarget(null)}
+          >
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              className={`w-full max-w-md overflow-hidden rounded-[24px] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.7)] animate-in zoom-in-95 duration-150 ${darkMode ? "bg-[#0b0d12] text-white" : "bg-white text-[#111827]"}`}
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-[#2563eb]/10 text-[#2563eb]">
+                    <Info className="h-5 w-5" />
+                  </span>
+                  <h3 className="text-lg font-bold">Message info</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMessageInfoTarget(null)}
+                  className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f2f4f8]"}`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Message Preview */}
+              <div className="my-5">
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${muted}`}>Message</p>
+                <div className={`rounded-2xl px-4 py-3 text-sm leading-6 ${darkMode ? "bg-[#13151b] text-white border border-white/5" : "bg-[#f8fafc] text-[#14213d] border"}`}>
+                  <p className="whitespace-pre-wrap break-words">{messageInfoTarget.text}</p>
+                </div>
+              </div>
+
+              {/* Receipts Info */}
+              <div className="space-y-4 pt-2 border-t border-white/10">
+                {/* Read Status */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-[#3b82f6]/10 text-[#3b82f6]">
+                      <CheckCheck className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Read</p>
+                      <p className={`text-xs ${muted}`}>
+                        {getMessageStatus(messageInfoTarget, selectedConversation, currentUser?.id, onlineUserIds) === "read"
+                          ? Object.values(messageInfoTarget.readBy || {})[0]
+                            ? new Date(Object.values(messageInfoTarget.readBy)[0]).toLocaleString([], { dateStyle: "short", timeStyle: "short" })
+                            : "Read"
+                          : "Not read yet"}
+                      </p>
+                    </div>
+                  </div>
+                  {getMessageStatus(messageInfoTarget, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
+                    <span className="text-xs font-bold text-[#3b82f6]">Read</span>
+                  ) : (
+                    <span className={`text-xs font-medium ${muted}`}>-</span>
+                  )}
+                </div>
+
+                {/* Delivered Status */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "bg-white/10 text-white/70" : "bg-black/5 text-black/60"}`}>
+                      <CheckCheck className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Delivered</p>
+                      <p className={`text-xs ${muted}`}>
+                        {getMessageStatus(messageInfoTarget, selectedConversation, currentUser?.id, onlineUserIds) !== "sent"
+                          ? Object.values(messageInfoTarget.deliveredTo || {})[0]
+                            ? new Date(Object.values(messageInfoTarget.deliveredTo)[0]).toLocaleString([], { dateStyle: "short", timeStyle: "short" })
+                            : "Delivered"
+                          : "Not delivered"}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-medium ${muted}`}>
+                    {getMessageStatus(messageInfoTarget, selectedConversation, currentUser?.id, onlineUserIds) !== "sent" ? "Delivered" : "-"}
+                  </span>
+                </div>
+
+                {/* Sent Status */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "bg-white/10 text-white/70" : "bg-black/5 text-black/60"}`}>
+                      <Check className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Sent</p>
+                      <p className={`text-xs ${muted}`}>
+                        {messageInfoTarget.createdAt ? new Date(messageInfoTarget.createdAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "Sent"}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-medium ${muted}`}>Sent</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
         {deleteMessageTarget && (

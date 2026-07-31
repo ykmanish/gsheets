@@ -15662,6 +15662,8 @@ async function serializeForumMessage(message) {
     text: decryptForumText(message.encrypted),
     encrypted: true,
     createdAt: message.createdAt,
+    readBy: message.readBy || {},
+    deliveredTo: message.deliveredTo || {},
   };
 }
 
@@ -15730,6 +15732,12 @@ async function createForumMessage({ req, conversationId, text }) {
   }
   const encrypted = encryptForumText(text);
   const recipientIds = conversation.type === "direct" ? conversation.participantIds : conversation.participantIds;
+  const deliveredTo = {};
+  for (const rId of recipientIds || []) {
+    if (String(rId) !== String(req.authUser.id) && forumSocketsFor(rId).size > 0) {
+      deliveredTo[String(rId)] = now;
+    }
+  }
   const message = {
     conversationId,
     type: conversation.type,
@@ -15737,6 +15745,8 @@ async function createForumMessage({ req, conversationId, text }) {
     recipientIds,
     encrypted,
     createdAt: now,
+    readBy: {},
+    deliveredTo,
   };
   const result = await db.collection("forumMessages").insertOne(message);
   const saved = { ...message, _id: result.insertedId };
@@ -15795,6 +15805,48 @@ app.get("/forum/conversations/:id/messages", async (req, res) => {
     res.json({ messages: await Promise.all(messages.map(serializeForumMessage)) });
   } catch (error) {
     console.error("Forum messages error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/conversations/:id/read", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversationId = req.params.id;
+    const userId = req.authUser.id;
+    const now = new Date();
+
+    const conversation = conversationId === FORUM_GROUP_ID
+      ? await ensureForumGroupConversation(db)
+      : await db.collection("forumConversations").findOne({ _id: conversationId, participantIds: userId });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+
+    await db.collection("forumMessages").updateMany(
+      {
+        conversationId,
+        senderId: { $ne: userId },
+        [`readBy.${userId}`]: { $exists: false },
+      },
+      {
+        $set: {
+          [`readBy.${userId}`]: now,
+          [`deliveredTo.${userId}`]: now,
+        },
+      }
+    );
+
+    if (conversation.participantIds) {
+      broadcastForumPayload(conversation.participantIds, {
+        type: "forum:read",
+        conversationId,
+        userId,
+        readAt: now,
+      });
+    }
+
+    res.json({ success: true, readAt: now });
+  } catch (error) {
+    console.error("Forum mark read error:", error);
     res.status(500).json({ error: error.message });
   }
 });

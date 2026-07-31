@@ -173,21 +173,33 @@ function ProtectedModuleContent({ moduleId, projectId }) {
 
     const previousBodyOverflow = document.body.style.overflow;
     const previousBodyHeight = document.body.style.height;
+    const previousBodyBackground = document.body.style.backgroundColor;
+    const previousBodyOverscroll = document.body.style.overscrollBehavior;
     const previousHtmlOverflow = document.documentElement.style.overflow;
     const previousHtmlHeight = document.documentElement.style.height;
+    const previousHtmlBackground = document.documentElement.style.backgroundColor;
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
 
     if (forumMobileChatOpen) {
       document.body.style.overflow = "hidden";
       document.body.style.height = "100dvh";
+      document.body.style.backgroundColor = chatHeaderColor;
+      document.body.style.overscrollBehavior = "none";
       document.documentElement.style.overflow = "hidden";
       document.documentElement.style.height = "100dvh";
+      document.documentElement.style.backgroundColor = chatHeaderColor;
+      document.documentElement.style.overscrollBehavior = "none";
     }
 
     return () => {
       document.body.style.overflow = previousBodyOverflow;
       document.body.style.height = previousBodyHeight;
+      document.body.style.backgroundColor = previousBodyBackground;
+      document.body.style.overscrollBehavior = previousBodyOverscroll;
       document.documentElement.style.overflow = previousHtmlOverflow;
       document.documentElement.style.height = previousHtmlHeight;
+      document.documentElement.style.backgroundColor = previousHtmlBackground;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
       themeMeta.setAttribute("content", appColor);
     };
   }, [darkMode, forumMobileChatOpen]);

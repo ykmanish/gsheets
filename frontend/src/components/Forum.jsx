@@ -92,6 +92,27 @@ function formatListTime(value) {
   return sameDay ? formatTime(value) : date.toLocaleDateString([], { day: "2-digit", month: "short" });
 }
 
+function messageDateKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function formatMessageDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+    year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
+}
+
 function sameConversation(a, b) {
   return String(a) === String(b);
 }
@@ -1156,7 +1177,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
         <main className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
           <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
-            <header className={`flex h-16 w-full shrink-0 items-center gap-3 border-b px-4 ${divider}`}>
+            <header className={`flex h-16 w-full shrink-0 items-center gap-3 border-b border-t-0 px-4 ${divider}`}>
               <div className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100 xl:max-w-none"}`}>
                 {selectedConversation?.type === "group" ? (
                   <GroupAvatar group={selectedConversation} className="h-10 w-10" iconClassName="h-5 w-5" />
@@ -1233,8 +1254,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                   const mine = message.senderId === getStoredAuth().user?.id;
                   const nextMessage = messages[index + 1];
                   const previousMessage = messages[index - 1];
+                  const showDate = messageDateKey(message.createdAt) !== messageDateKey(previousMessage?.createdAt);
                   const groupedWithNext = nextMessage?.senderId === message.senderId;
-                  const groupedWithPrevious = previousMessage?.senderId === message.senderId;
+                  const groupedWithPrevious = !showDate && previousMessage?.senderId === message.senderId;
                   const showAvatar = !mine && !groupedWithNext;
                   const showName = !groupedWithPrevious;
                   const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
@@ -1242,15 +1264,22 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                   const previewUrl = firstUrlFromText(message.text);
                   const displayText = previewUrl ? textWithoutUrls(message.text) : message.text;
                   return (
-                    <div
-                      key={message.id}
-                      ref={(node) => {
-                        if (node) messageRefs.current.set(message.id, node);
-                        else messageRefs.current.delete(message.id);
-                      }}
-                      onContextMenu={(event) => openMessageMenu(event, message)}
-                      className={`flex min-w-0 items-end gap-2 sm:gap-3 ${groupedWithPrevious ? "mt-[-6px]" : ""} ${mine ? "justify-end" : "justify-start"}`}
-                    >
+                    <div key={message.id} className="min-w-0">
+                      {showDate && (
+                        <div className="sticky top-2 z-10 my-2 flex justify-center">
+                          <span className={`rounded-full px-3 py-1 text-[11px] font-semibold shadow-sm ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
+                            {formatMessageDate(message.createdAt)}
+                          </span>
+                        </div>
+                      )}
+                      <div
+                        ref={(node) => {
+                          if (node) messageRefs.current.set(message.id, node);
+                          else messageRefs.current.delete(message.id);
+                        }}
+                        onContextMenu={(event) => openMessageMenu(event, message)}
+                        className={`flex min-w-0 items-end gap-2 sm:gap-3 ${groupedWithPrevious ? "mt-[-6px]" : ""} ${mine ? "justify-end" : "justify-start"}`}
+                      >
                       {!mine && (showAvatar ? (
                         <span className="self-end">
                           <UserAvatar user={message.sender} name={message.sender?.displayName} className="h-7 w-7 sm:h-8 sm:w-8" />
@@ -1308,6 +1337,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                           </span>
                         )}
                       </div>
+                    </div>
                     </div>
                   );
                 })}

@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Toaster } from "react-hot-toast";
 import { BellRing, X } from "lucide-react";
 import { API_URL, AuthProvider, getStoredAuth, useAuth } from "./AuthProvider";
+import { showAppToast } from "./ToastPill";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import Dashboard from "./Dashboard";
@@ -151,6 +152,73 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     window.addEventListener("keydown", openCommandPalette);
     return () => window.removeEventListener("keydown", openCommandPalette);
   }, []);
+
+  // ── Global forum WebSocket: delivers notifications on ALL pages ──
+  const globalForumWsRef = useRef(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    // Request browser notification permission early
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+    let stopped = false;
+    let reconnectTimer = null;
+    function connectGlobalForumSocket() {
+      const { token } = getStoredAuth();
+      if (!token) return;
+      const base = API_URL.replace(/^http/, "ws").replace(/\/api$/, "");
+      const wsUrl = `${base}/forum/socket?token=${encodeURIComponent(token)}`;
+      const ws = new WebSocket(wsUrl);
+      globalForumWsRef.current = ws;
+      ws.onmessage = (event) => {
+        // Skip if the Forum page is already active (it handles its own notifications)
+        if (window.__forumPageActive) return;
+        try {
+          const payload = JSON.parse(event.data || "{}");
+          if (payload.type === "forum:message" && payload.message?.senderId !== user.id) {
+            const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
+            const previewText = String(payload.message?.text || "").slice(0, 80);
+            // In-app toast
+            showAppToast(`${senderName}: ${previewText}`, {
+              type: "notification",
+              darkMode,
+              detail: "New forum message",
+              label: "Message",
+              duration: 4500,
+            });
+            // Browser push notification
+            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+              try {
+                const browserNotif = new Notification(senderName, {
+                  body: previewText || "Sent a message",
+                  icon: "/favicon.ico",
+                  tag: `forum-global-${payload.conversationId}-${payload.message?.id}`,
+                });
+                browserNotif.onclick = () => {
+                  window.focus();
+                  window.location.href = "/forum";
+                  browserNotif.close();
+                };
+              } catch {}
+            }
+            // Refresh navbar notification badge
+            window.dispatchEvent(new Event("uipl:notifications-changed"));
+          }
+        } catch {}
+      };
+      ws.onerror = () => {};
+      ws.onclose = () => {
+        if (stopped) return;
+        reconnectTimer = window.setTimeout(connectGlobalForumSocket, 4000);
+      };
+    }
+    connectGlobalForumSocket();
+    return () => {
+      stopped = true;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      globalForumWsRef.current?.close();
+    };
+  }, [darkMode, user?.id]);
 
   useEffect(() => {
     if (loading || !user) return;

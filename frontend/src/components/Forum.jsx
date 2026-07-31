@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
+import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
 
@@ -715,6 +716,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
   }, []);
 
+  // Request browser notification permission & mark forum page as active
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+    window.__forumPageActive = true;
+    return () => { window.__forumPageActive = false; };
+  }, []);
+
   useEffect(() => {
     let stopped = false;
     async function boot() {
@@ -775,6 +785,37 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
               },
             };
           });
+
+          // Show in-app toast notification
+          const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
+          const previewText = String(payload.message?.text || "").slice(0, 80);
+          showAppToast(`${senderName}: ${previewText}`, {
+            type: "notification",
+            darkMode,
+            detail: mentioned ? "You were mentioned" : "New forum message",
+            label: "Message",
+            duration: 4500,
+          });
+
+          // Show browser push notification
+          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+            try {
+              const browserNotif = new Notification(senderName, {
+                body: previewText || "Sent a message",
+                icon: "/favicon.ico",
+                tag: `forum-${payload.conversationId}-${payload.message?.id}`,
+              });
+              browserNotif.onclick = () => {
+                window.focus();
+                setSelectedId(payload.conversationId);
+                setMobileListOpen(false);
+                browserNotif.close();
+              };
+            } catch {}
+          }
+
+          // Trigger navbar notification badge refresh
+          window.dispatchEvent(new Event("uipl:notifications-changed"));
         }
       }
       if (payload.type === "forum:messageDeleted") {

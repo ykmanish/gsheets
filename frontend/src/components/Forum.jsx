@@ -619,6 +619,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [sidebarUser, setSidebarUser] = useState(null);
   const [mobileListOpen, setMobileListOpen] = useState(true);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [mobileViewportHeight, setMobileViewportHeight] = useState(null);
   const [messageMenu, setMessageMenu] = useState(null);
   const [copyFeedbackId, setCopyFeedbackId] = useState("");
   const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
@@ -1136,26 +1137,35 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
   }, [composer]);
 
-  // Lock window scroll position to 0 on mobile when keyboard opens
+  // Dynamic mobile visualViewport height handling (WhatsApp style)
   useEffect(() => {
-    if (!isMobileViewport) return;
-    const lockScroll = () => {
+    if (!isMobileViewport || mobileListOpen) {
+      setMobileViewportHeight(null);
+      return;
+    }
+    const updateViewport = () => {
       window.scrollTo(0, 0);
       document.body.scrollTop = 0;
-    };
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", lockScroll);
-      window.visualViewport.addEventListener("scroll", lockScroll);
-    }
-    window.addEventListener("scroll", lockScroll);
-    return () => {
+      document.documentElement.scrollTop = 0;
       if (window.visualViewport) {
-        window.visualViewport.removeEventListener("resize", lockScroll);
-        window.visualViewport.removeEventListener("scroll", lockScroll);
+        setMobileViewportHeight(window.visualViewport.height);
       }
-      window.removeEventListener("scroll", lockScroll);
     };
-  }, [isMobileViewport]);
+    updateViewport();
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener("resize", updateViewport);
+      vv.addEventListener("scroll", updateViewport);
+    }
+    window.addEventListener("scroll", updateViewport);
+    return () => {
+      if (vv) {
+        vv.removeEventListener("resize", updateViewport);
+        vv.removeEventListener("scroll", updateViewport);
+      }
+      window.removeEventListener("scroll", updateViewport);
+    };
+  }, [isMobileViewport, mobileListOpen]);
 
   if (loading) {
     return (
@@ -1272,7 +1282,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           </div>
         </aside>
 
-        <main className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+        <main
+          style={isMobileViewport && !mobileListOpen && mobileViewportHeight ? { height: `${mobileViewportHeight}px` } : undefined}
+          className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"} flex-col flex-1 h-full relative`}
+        >
           <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
             <header className={`sticky top-0 z-20 flex h-16 w-full shrink-0 items-center gap-3 border-b border-t-0 px-4 ${divider} ${surface}`}>
               <button type="button" onClick={closeChat} className={`h-9 w-9 shrink-0 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Back to chats">

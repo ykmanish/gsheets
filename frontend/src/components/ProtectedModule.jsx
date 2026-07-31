@@ -326,7 +326,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const hideTopChrome = moduleId === "forum" && forumMobileChatOpen;
 
   return (
-    <div className={`flex newq ${hideTopChrome ? "h-dvh max-h-dvh overflow-hidden" : "min-h-dvh md:h-screen"} ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#eef3f2]"}`}>
+    <div className={`flex newq ${hideTopChrome ? "fixed inset-0 h-full w-full overflow-hidden z-50" : "min-h-dvh md:h-screen"} ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#eef3f2]"}`}>
       <Toaster position="top-center" />
       <Sidebar
         activeMenu={moduleId}

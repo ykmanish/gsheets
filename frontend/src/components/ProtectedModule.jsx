@@ -175,7 +175,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         if (window.__forumPageActive) return;
         try {
           const payload = JSON.parse(event.data || "{}");
-          if (payload.type === "forum:message" && payload.message?.senderId !== user.id) {
+          if (payload.type === "forum:message" && payload.message?.senderId !== user.id && document.hidden) {
             const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
             const previewText = String(payload.message?.text || "").slice(0, 80);
             // In-app toast
@@ -201,8 +201,6 @@ function ProtectedModuleContent({ moduleId, projectId }) {
                 };
               } catch {}
             }
-            // Refresh navbar notification badge
-            window.dispatchEvent(new Event("uipl:notifications-changed"));
           }
         } catch {}
       };

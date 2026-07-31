@@ -5963,7 +5963,7 @@ function describeActivity(req) {
 
 function activityLogger(req, res, next) {
   const activity = describeActivity(req);
-  if (!activity || req.path.startsWith("/activity-logs")) return next();
+  if (!activity || req.path.startsWith("/activity-logs") || req.path.startsWith("/forum")) return next();
 
   res.on("finish", () => {
     addActivityLog({
@@ -15759,19 +15759,6 @@ async function createForumMessage({ req, conversationId, text }) {
     ? conversation.participantIds
     : conversation.participantIds;
   broadcastForumPayload(recipients, { type: "forum:message", conversationId, message: serialized });
-
-  // Create notification entries for recipients (except sender) so they appear in the bell icon
-  const notifyRecipientIds = recipients.filter((id) => String(id) !== String(req.authUser.id));
-  if (notifyRecipientIds.length > 0) {
-    const senderName = serialized?.sender?.displayName || serialized?.sender?.username || "Someone";
-    const plainText = serialized?.text || "";
-    const preview = plainText.length > 100 ? plainText.slice(0, 100) + "…" : plainText;
-    notifyUsers(notifyRecipientIds, {
-      title: `New message from ${senderName}`,
-      message: preview,
-      type: "forum-message",
-    });
-  }
 
   return serialized;
 }

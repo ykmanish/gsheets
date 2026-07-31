@@ -786,36 +786,34 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
             };
           });
 
-          // Show in-app toast notification
-          const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
-          const previewText = String(payload.message?.text || "").slice(0, 80);
-          showAppToast(`${senderName}: ${previewText}`, {
-            type: "notification",
-            darkMode,
-            detail: mentioned ? "You were mentioned" : "New forum message",
-            label: "Message",
-            duration: 4500,
-          });
+          // Only notify when user is away (tab hidden/minimized)
+          if (document.hidden) {
+            const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
+            const previewText = String(payload.message?.text || "").slice(0, 80);
+            showAppToast(`${senderName}: ${previewText}`, {
+              type: "notification",
+              darkMode,
+              detail: mentioned ? "You were mentioned" : "New forum message",
+              label: "Message",
+              duration: 4500,
+            });
 
-          // Show browser push notification
-          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-            try {
-              const browserNotif = new Notification(senderName, {
-                body: previewText || "Sent a message",
-                icon: "/favicon.ico",
-                tag: `forum-${payload.conversationId}-${payload.message?.id}`,
-              });
-              browserNotif.onclick = () => {
-                window.focus();
-                setSelectedId(payload.conversationId);
-                setMobileListOpen(false);
-                browserNotif.close();
-              };
-            } catch {}
+            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+              try {
+                const browserNotif = new Notification(senderName, {
+                  body: previewText || "Sent a message",
+                  icon: "/favicon.ico",
+                  tag: `forum-${payload.conversationId}-${payload.message?.id}`,
+                });
+                browserNotif.onclick = () => {
+                  window.focus();
+                  setSelectedId(payload.conversationId);
+                  setMobileListOpen(false);
+                  browserNotif.close();
+                };
+              } catch {}
+            }
           }
-
-          // Trigger navbar notification badge refresh
-          window.dispatchEvent(new Event("uipl:notifications-changed"));
         }
       }
       if (payload.type === "forum:messageDeleted") {

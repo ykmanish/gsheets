@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
@@ -264,13 +264,13 @@ function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, active
   if (!user) return null;
   return (
     <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-hidden ${panelBg} xl:flex`}>
-      {onBack && (
-        <div className={`flex h-16 shrink-0 items-center justify-end border-b px-5 2xl:px-6 ${divider}`}>
+      <div className={`flex h-16 shrink-0 items-center justify-end border-b px-5 2xl:px-6 ${divider}`}>
+        {onBack && (
           <button type="button" onClick={onBack} className={`rounded-full px-5 py-2.5 text-sm font-semibold ${darkMode ? "bg-white/[0.05] hover:bg-white/10" : "bg-[#f4f7fb] hover:bg-[#edf1f7]"}`}>
-          Back
-        </button>
-        </div>
-      )}
+            Back
+          </button>
+        )}
+      </div>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="mx-auto flex w-[calc(100%-40px)] max-w-[320px] flex-col py-7">
       <UserAvatar user={user} name={user.displayName} className="mx-auto h-24 w-24" />
@@ -367,7 +367,9 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
   }
 
   return (
-    <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-x-hidden overflow-y-auto px-5 py-7 2xl:px-6 xl:flex ${panelBg}`}>
+    <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-hidden ${panelBg} xl:flex`}>
+      <div className={`h-16 shrink-0 border-b ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"}`} />
+      <div className="min-h-0 overflow-x-hidden overflow-y-auto px-5 py-7 2xl:px-6">
       <div className="mx-auto flex w-full max-w-[320px] flex-col">
         <div ref={avatarPickerRef} className="relative mx-auto">
           <GroupAvatar group={group} className="h-20 w-20 min-w-20" iconClassName="h-9 w-9" />
@@ -556,6 +558,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
           </div>
         </PanelSection>
       </div>
+      </div>
     </aside>
   );
 }
@@ -576,7 +579,7 @@ function PanelSection({ title, action, muted, children, onAction }) {
   );
 }
 
-export default function Forum({ darkMode }) {
+export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
   const [users, setUsers] = useState([]);
@@ -593,6 +596,7 @@ export default function Forum({ darkMode }) {
   const [typingByConversation, setTypingByConversation] = useState({});
   const [sidebarUser, setSidebarUser] = useState(null);
   const [mobileListOpen, setMobileListOpen] = useState(true);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [messageMenu, setMessageMenu] = useState(null);
   const [copyFeedbackId, setCopyFeedbackId] = useState("");
   const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
@@ -610,6 +614,18 @@ export default function Forum({ darkMode }) {
   const divider = darkMode ? "border-white/[0.06]" : "border-[#eef1f5]";
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const softText = darkMode ? "text-white/72" : "text-black/68";
+
+  useEffect(() => {
+    const syncViewport = () => setIsMobileViewport(window.innerWidth < 1024);
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
+
+  useEffect(() => {
+    onMobileChatOpenChange?.(isMobileViewport && !mobileListOpen);
+    return () => onMobileChatOpenChange?.(false);
+  }, [isMobileViewport, mobileListOpen, onMobileChatOpenChange]);
   const selectedConversation = conversations.find((item) => item.id === selectedId) || conversations.find((item) => item.id === GROUP_ID);
   const selectedIsGroup = selectedId === GROUP_ID;
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
@@ -936,8 +952,9 @@ export default function Forum({ darkMode }) {
   }
 
   function closeChat() {
-    setSelectedId(GROUP_ID);
+    setMobileListOpen(true);
     setMessageSearch("");
+    setMessageSearchOpen(false);
     setChatMenuOpen(false);
   }
 
@@ -1031,9 +1048,9 @@ export default function Forum({ darkMode }) {
   }
 
   return (
-    <div className={`h-[calc(100dvh-64px)] min-h-[560px] overflow-hidden ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f7f8fb] text-black"}`}>
-      <div className={`grid h-full min-h-0 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] ${surface}`}>
-        <aside className={`min-h-0 min-w-0 w-full max-w-full flex-col overflow-hidden border-x lg:flex ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"} ${mobileListOpen ? "flex" : "hidden lg:flex"}`}>
+    <div className={`min-h-0 w-full max-w-full flex-1 overflow-hidden ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f7f8fb] text-black"}`}>
+      <div className={`grid h-full min-h-0 w-full max-w-full overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] ${surface}`}>
+        <aside className={`min-h-0 min-w-0 w-screen max-w-full flex-col overflow-hidden border-x lg:w-full lg:flex ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"} ${mobileListOpen ? "flex" : "hidden lg:flex"}`}>
           <div className={`min-w-0 shrink-0 overflow-hidden border-b p-4 ${divider}`}>
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#10b981] text-white">
@@ -1137,13 +1154,10 @@ export default function Forum({ darkMode }) {
           </div>
         </aside>
 
-        <main className={`min-h-0 min-w-0 overflow-hidden ${mobileListOpen ? "hidden lg:flex" : "flex"}`}>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <header className={`flex h-16 shrink-0 items-center gap-3 border-b px-4 ${divider}`}>
-              <button type="button" onClick={() => setMobileListOpen(true)} className={`h-10 w-10 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Back to chats">
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <div className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100"}`}>
+        <main className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+          <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
+            <header className={`flex h-16 w-full shrink-0 items-center gap-3 border-b px-4 ${divider}`}>
+              <div className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100 xl:max-w-none"}`}>
                 {selectedConversation?.type === "group" ? (
                   <GroupAvatar group={selectedConversation} className="h-10 w-10" iconClassName="h-5 w-5" />
                 ) : (
@@ -1153,7 +1167,7 @@ export default function Forum({ darkMode }) {
                   <span className="block truncate text-sm font-semibold">{selectedConversation?.name || "Group Forum"}</span>
                 </span>
               </div>
-              <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-full flex-1" : "w-10 lg:w-[104px]"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
+              <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-full flex-1" : "hidden"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
                 <button type="button" onClick={() => setMessageSearchOpen(true)} className="flex h-7 shrink-0 items-center gap-2 rounded-full" aria-label="Search messages">
                   <Search className={`h-4 w-4 ${muted}`} />
                   <span className={`hidden text-xs font-semibold transition-opacity duration-200 lg:inline ${messageSearchOpen ? "w-0 opacity-0" : "opacity-100"} ${muted}`}>Search</span>
@@ -1193,6 +1207,10 @@ export default function Forum({ darkMode }) {
                 </button>
                 {chatMenuOpen && (
                   <div className={`absolute right-0 top-11 z-20 w-40 rounded-2xl p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
+                    <button type="button" onClick={() => { setMessageSearchOpen(true); setChatMenuOpen(false); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
+                      <Search className="h-3.5 w-3.5" />
+                      Search
+                    </button>
                     <button type="button" onClick={clearChat} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
                       <Trash2 className="h-3.5 w-3.5" />
                       Clear chat

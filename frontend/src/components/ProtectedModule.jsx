@@ -111,6 +111,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [latestNotification, setLatestNotification] = useState(null);
   const [dismissedNotificationId, setDismissedNotificationId] = useState(null);
+  const [forumMobileChatOpen, setForumMobileChatOpen] = useState(false);
   const allowedMenus = useMemo(() => {
     const assigned = [
       ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "todos", "forum", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
@@ -199,6 +200,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     setCommandPaletteOpen(false);
     router.push(menuPaths[menu] || "/dashboard");
   };
+  const hideTopChrome = moduleId === "forum" && forumMobileChatOpen;
 
   return (
     <div className={`flex newq min-h-dvh md:h-screen ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#eef3f2]"}`}>
@@ -217,20 +219,24 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         onOpenSearch={() => setCommandPaletteOpen(true)}
       />
       <div className="flex-1 newq flex min-w-0 flex-col overflow-hidden">
-        <Navbar
-          darkMode={darkMode}
-          setDarkMode={setDarkMode}
-          user={user}
-          onMenuClick={() => setSidebarOpen(true)}
-          onNotificationsClick={() => setNotificationsOpen(true)}
-          onNewNotification={showLatestUnreadNotification}
-        />
-        <NotificationStrip
-          notification={latestNotification}
-          darkMode={darkMode}
-          onClose={closeNotificationStrip}
-          onView={viewLatestNotification}
-        />
+        {!hideTopChrome && (
+          <>
+            <Navbar
+              darkMode={darkMode}
+              setDarkMode={setDarkMode}
+              user={user}
+              onMenuClick={() => setSidebarOpen(true)}
+              onNotificationsClick={() => setNotificationsOpen(true)}
+              onNewNotification={showLatestUnreadNotification}
+            />
+            <NotificationStrip
+              notification={latestNotification}
+              darkMode={darkMode}
+              onClose={closeNotificationStrip}
+              onView={viewLatestNotification}
+            />
+          </>
+        )}
         {moduleId === "dashboard" && (
           <Dashboard darkMode={darkMode} selectedDocs={selectedDocs} setSelectedDocs={setSelectedDocs} />
         )}
@@ -248,7 +254,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "hr-leave" && <HrDashboard darkMode={darkMode} section="leave" />}
         {moduleId === "hr-attendance" && <HrDashboard darkMode={darkMode} section="attendance" />}
         {moduleId === "todos" && <Todos darkMode={darkMode} />}
-        {moduleId === "forum" && <Forum darkMode={darkMode} />}
+        {moduleId === "forum" && <Forum darkMode={darkMode} onMobileChatOpenChange={setForumMobileChatOpen} />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}

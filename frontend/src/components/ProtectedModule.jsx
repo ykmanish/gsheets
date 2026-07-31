@@ -160,6 +160,38 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     router.replace(menuPaths[fallback] || "/dashboard");
   }, [allowedMenus, loading, moduleId, router, user]);
 
+  useEffect(() => {
+    const chatHeaderColor = darkMode ? "#15171c" : "#ffffff";
+    const appColor = darkMode ? "#0b0c0f" : "#eef3f2";
+    let themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (!themeMeta) {
+      themeMeta = document.createElement("meta");
+      themeMeta.setAttribute("name", "theme-color");
+      document.head.appendChild(themeMeta);
+    }
+    themeMeta.setAttribute("content", forumMobileChatOpen ? chatHeaderColor : appColor);
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyHeight = document.body.style.height;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousHtmlHeight = document.documentElement.style.height;
+
+    if (forumMobileChatOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.height = "100dvh";
+      document.documentElement.style.overflow = "hidden";
+      document.documentElement.style.height = "100dvh";
+    }
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.height = previousBodyHeight;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.documentElement.style.height = previousHtmlHeight;
+      themeMeta.setAttribute("content", appColor);
+    };
+  }, [darkMode, forumMobileChatOpen]);
+
   const showLatestUnreadNotification = useCallback((notification) => {
     if (!notification) {
       setLatestNotification(null);
@@ -203,7 +235,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const hideTopChrome = moduleId === "forum" && forumMobileChatOpen;
 
   return (
-    <div className={`flex newq min-h-dvh md:h-screen ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#eef3f2]"}`}>
+    <div className={`flex newq ${hideTopChrome ? "h-dvh max-h-dvh overflow-hidden" : "min-h-dvh md:h-screen"} ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#eef3f2]"}`}>
       <Toaster position="top-center" />
       <Sidebar
         activeMenu={moduleId}
@@ -218,7 +250,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         onLogout={logout}
         onOpenSearch={() => setCommandPaletteOpen(true)}
       />
-      <div className="flex-1 newq flex min-w-0 flex-col overflow-hidden">
+      <div className="flex-1 newq flex min-h-0 min-w-0 flex-col overflow-hidden">
         {!hideTopChrome && (
           <>
             <Navbar

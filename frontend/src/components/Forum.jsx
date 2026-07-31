@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Reply, Rocket, Search, Send, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
@@ -41,6 +41,233 @@ const GROUP_AVATAR_PRESETS = [
   ["magenta", "linear-gradient(135deg,#be185d,#7c3aed)", Waves],
   ["slate", "linear-gradient(135deg,#0f172a,#475569)", Landmark],
 ].map(([id, gradient, Icon]) => ({ id, gradient, Icon }));
+
+const EMOJI_KEYWORDS = {
+  "😀": "grinning happy smile face joy",
+  "😃": "smiley happy face joy smile",
+  "😄": "smile happy face joy laugh",
+  "😁": "grin happy face teeth smile",
+  "😆": "laughing XD happy face joy",
+  "😅": "sweat smile happy relief face",
+  "🤣": "rofl laughing floor joy lol face",
+  "😂": "joy tears happy laugh face lol",
+  "🙂": "slightly smiling happy face",
+  "🙃": "upside down silly face",
+  "🫠": "melting face hot liquid",
+  "😉": "wink face flirty playful",
+  "😊": "blush happy smile face sweet",
+  "😇": "halo angel innocent good face",
+  "🥰": "hearts in love romantic face",
+  "😍": "heart eyes love romantic face",
+  "🤩": "star struck amazed excited face",
+  "😘": "kiss blow kiss love romance face",
+  "😗": "kissing face love",
+  "😚": "kissing closed eyes love face",
+  "😙": "kissing smiling eyes face",
+  "🥲": "smiling tear happy sad bittersweet",
+  "😋": "yum delicious food taste face",
+  "😛": "tongue out silly playful face",
+  "😜": "wink tongue crazy silly face",
+  "🤪": "zany goofy crazy silly face",
+  "😝": "squint tongue silly funny face",
+  "🤑": "money mouth rich cash face",
+  "🤗": "hug hugging warmth embrace face",
+  "🫣": "peeking eye shy scared face",
+  "🤫": "shh quiet silence secret face",
+  "🤔": "thinking think wonder curious face",
+  "🫡": "salute respect officer honor face",
+  "🤐": "zipper mouth quiet secret face",
+  "🤨": "raised eyebrow skeptical suspicious face",
+  "😐": "neutral poker face meh",
+  "😑": "expressionless meh blank face",
+  "😶": "no mouth silent quiet face",
+  "🫥": "dotted line invisible ghost hidden face",
+  "😏": "smirk sly coy flirty face",
+  "😒": "unamused bored annoyed face",
+  "🙄": "eye roll annoyed whatever face",
+  "😬": "grimace awkward nervous face",
+  "🤥": "lying pinocchio long nose lie face",
+  "🫨": "shaking shocked earthquake face",
+  "😌": "relieved peaceful calm face",
+  "😔": "pensive sad depressed sorrow face",
+  "😪": "sleepy snot tired face",
+  "🤤": "drooling hungry food sleep face",
+  "😴": "sleeping zzz asleep rest face",
+  "😷": "mask medical sick doctor virus face",
+  "🤒": "thermometer sick fever ill face",
+  "🤕": "bandage hurt injury pain face",
+  "🤢": "nauseated gross sick vomit face",
+  "🤮": "vomiting puke gross sick face",
+  "🤧": "sneezing cold flu tissue face",
+  "🥵": "hot heat sweat red face",
+  "🥶": "cold freezing ice frozen face",
+  "🥴": "woozy drunk dizzy face",
+  "😵": "dizzy dead shocked face",
+  "😵‍💫": "spiral eyes dizzy confused face",
+  "🤯": "exploding head mind blown shocked face",
+  "🤠": "cowboy hat Sheriff face",
+  "🥳": "party celebrate birthday hat blower face",
+  "🥸": "disguise glasses mustache hidden face",
+  "😎": "cool sunglasses awesome style face",
+  "🤓": "nerd glasses smart geek face",
+  "🧐": "monocle inspecting investigate face",
+  "😕": "confused puzzled face",
+  "🫤": "slanted mouth skeptical meh face",
+  "😟": "worried anxious concerned face",
+  "🙁": "slightly frowning sad face",
+  "😮": "open mouth shocked surprised face",
+  "😯": "hushed surprised quiet face",
+  "😲": "astonished shocked amazed face",
+  "😳": "flustered embarrassed shocked face",
+  "🥺": "pleading begging puppy eyes cute face sad",
+  "🥹": "holding back tears touched emotional face sad",
+  "😦": "frowning open mouth sad face",
+  "😧": "anguished pained shocked face sad",
+  "😮‍💨": "exhale sigh relief tired face",
+  "😭": "loudly crying cry sad tears sob face sorrow",
+  "😱": "scream fearful terrified shocked face",
+  "😖": "confounded pained frustrated face",
+  "😣": "persevering struggling pained face",
+  "😞": "disappointed sad regret face sorrow",
+  "😓": "sweat sad depressed face",
+  "😩": "weary exhausted crying sad face",
+  "😫": "tired exhausted crying face sad",
+  "🥱": "yawning bored sleepy face",
+  "😤": "triumph huff proud angry face",
+  "😡": "pouting mad angry rage red face",
+  "😠": "angry mad annoyed face",
+  "🤬": "swearing cursing symbols mad face",
+  "😈": "smiling devil evil horn mischief",
+  "👿": "angry devil imp evil purple",
+  "💀": "skull dead death skeleton ghost",
+  "☠️": "skull crossbones danger poison death",
+  "💩": "poop dung crap funny",
+  "🤡": "clown joke fool circus",
+  "👹": "ogre demon monster japanese",
+  "👺": "goblin red nose monster japanese",
+  "👻": "ghost halloween spooky",
+  "👽": "alien space ufo extraterrestrial",
+  "👾": "alien monster space invader game",
+  "🤖": "robot bot machine tech",
+  "😢": "crying sad tear sorrow face hurt sob",
+  "🙏": "pray thanks please hope hands folded thank",
+  "👍": "thumbs up good agree approve like yes ok okay",
+  "👎": "thumbs down bad disapprove no dislike",
+  "❤️": "heart love red romance care passion",
+  "🔥": "fire hot lit flame burn lit",
+  "✨": "sparkles magic shiny star clean gold",
+  "🎉": "tada party celebration confetti birthday",
+  "💯": "100 hundred perfect score A+",
+};
+
+function matchEmojiSearch(emoji, query) {
+  if (!query) return true;
+  const q = query.toLowerCase().trim();
+  if (emoji.includes(q)) return true;
+  const keywords = EMOJI_KEYWORDS[emoji] || "";
+  return keywords.toLowerCase().includes(q);
+}
+
+const EMOJI_CATEGORIES = [
+  {
+    id: "recents",
+    label: "Recent reactions",
+    icon: "🕒",
+    emojis: ["❤️", "👍", "😂", "😮", "😢", "🙏", "🔥", "✨"]
+  },
+  {
+    id: "smileys",
+    label: "Smileys & People",
+    icon: "😃",
+    emojis: [
+      "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃", "🫠", "😉", "😊", "😇",
+      "🥰", "😍", "🤩", "😘", "😗", "😚", "😙", "🥲", "😋", "😛", "😜", "🤪", "😝", "🤑",
+      "🤗", "🫣", "🤫", "🤔", "🫡", "🤐", "🤨", "😐", "😑", "😶", "🫥", "😏", "😒", "🙄",
+      "😬", "🤥", "🫨", "😌", "😔", "😪", "🤤", "😴", "😷", "🤒", "🤕", "🤢", "🤮", "🤧",
+      "🥵", "🥶", "🥴", "😵", "😵‍💫", "🤯", "🤠", "🥳", "🥸", "😎", "🤓", "🧐", "😕", "🫤",
+      "😟", "🙁", "😮", "😯", "😲", "😳", "🥺", "🥹", "😦", "😧", "📁", "😮‍💨", "😭", "😱",
+      "😖", "😣", "😞", "😓", "😩", "😫", "🥱", "😤", "😡", "😠", "🤬", "😈", "👿", "💀",
+      "☠️", "💩", "🤡", "👹", "👺", "👻", "👽", "👾", "🤖", "👋", "🤚", "🖐️", "✋", "🖖",
+      "🫱", "🫲", "🫳", "🫴", "👌", "🤌", "🤏", "✌️", "🤞", "🫰", "🤟", "🤘", "🤙", "👈",
+      "👉", "👆", "🖕", "👇", "☝️", "🫵", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌",
+      "🫶", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪"
+    ]
+  },
+  {
+    id: "animals",
+    label: "Animals & Nature",
+    icon: "🐻",
+    emojis: [
+      "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷",
+      "🐸", "🐵", "🙈", "🙉", "🙊", "🐒", "🐔", "🐧", "🐦", "🐤", "🐣", "🐥", "🦆", "🦅",
+      "🦉", "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🪱", "🐛", "🦋", "🐌", "🐞", "🐜", "🪰",
+      "🪲", "🪳", "🦟", "🦗", "🕷️", "🕸️", "🦂", "🐢", "🐍", "🦎", "🦖", "🦕", "🐙", "🦑",
+      "🦐", "🦞", "🦀", "🐡", "🐠", "🐟", "🐬", "🐳", "🐋", "🦈", "🦭", "🐊", "🐅", "🐆",
+      "zebra", "🦍", "🦧", "🦣", "🐘", "🦛", "🦏", "🐪", "🐫", "🦒", "🦘", "🦬", "🐃", "🐂",
+      "🐄", "🐎", "🐖", "🐏", "🐑", "🦙", "🐐", "🦌", "🐕", "🐩", "🦮", "🐕‍🦺", "🐈", "🐈‍⬛",
+      "🌸", "🌺", "🌻", "🌹", "🌷", "🌱", "🌲", "🌳", "🌴", "🌵", "🌾", "🌿", "☘️", "🍀",
+      "🍁", "🍂", "🍃"
+    ]
+  },
+  {
+    id: "food",
+    label: "Food & Drink",
+    icon: "☕",
+    emojis: [
+      "🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭",
+      "🍍", "🥥", "🥝", "🍅", "🍆", "🥑", "🥦", "🥬", "🥒", "🌶️", "🫑", "🌽", "🥕", "🫒",
+      "🧄", "🧅", "🥔", "🍠", "🥐", "🥯", "🍞", "🥖", "🥨", "🧀", "🥚", "🍳", "🧈", "🥞",
+      "🧇", "🥓", "🥩", "🍗", "🍖", "🦴", "🌭", "🍔", "🍟", "🍕", "🫓", "🥪", "🥙", "🧆",
+      "🌮", "🌯", "🫔", "🥗", "🥘", "🫕", "🥫", "🍝", "🍜", "🍲", "🍛", "🍣", "🍱", "🥟",
+      "🦪", "🍤", "🍙", "🍚", "🍘", "🍥", "🥠", "🥮", "🍢", "🍡", "🍧", "🍨", "🍦", "🥧",
+      "🧁", "🍰", "🎂", "🍮", "🍭", "🍬", "🍫", "🍿", "🍩", "🍪", "🌰", "🥜", "🍯", "🥛",
+      "🍼", "🫖", "☕️", "🍵", "🧃", "🥤", "🧋", "🍶", "🍺", "🍻", "🥂", "🍷", "🥃", "🍸",
+      "🍹", "🍾", "🧊"
+    ]
+  },
+  {
+    id: "activities",
+    label: "Activities & Sports",
+    icon: "⚽",
+    emojis: [
+      "⚽️", "🏀", "🏈", "⚾️", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱", "🪀", "🏓", "🏸", "🏒",
+      "🏑", "🥍", "🏏", "🪃", "🥅", "⛳️", "🪁", "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹",
+      "🛼", "🛷", "⛸️", "🥌", "🎿", "⛷️", "🏂", "🪂", "🏋️‍♂️", "🤼‍♂️", "🤸‍♂️", "⛹️‍♂️", "🤺",
+      "🤾‍♂️", "🏌️‍♂️", "🏇", "🧘‍♂️", "🏄‍♂️", "🏊‍♂️", "🤽‍♂️", "🚣‍♂️", "🧗‍♂️", "🚵‍♂️", "🚴‍♂️",
+      "🏆", "🥇", "🥈", "🥉", "🏅", "🎖️", "🏵️", "🎗️", "🎫", "🎟️", "🎪", "🤹‍♂️", "🎭", "🩰",
+      "🎨", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🪘", "🎷", "🎺", "🪗", "🎸", "🪕", "🎻"
+    ]
+  },
+  {
+    id: "travel",
+    label: "Travel & Places",
+    icon: "🚗",
+    emojis: [
+      "🚗", "🚕", "🚙", "🚌", "🏎️", "🚓", "🚑", "🚒", "🚐", "🛻", "🚚", "🚛", "🚜",
+      "🦯", "🦽", "🦼", "🛴", "🚲", "🛵", "🏍️", "🛺", "🚨", "🚔", "🚘", "🚝",
+      "🚄", "🚅", "🚈", "🚂", "🚆", "🚇", "🚊", "🚉", "✈️", "🛫", "🛬", "🛩️", "💺", "🛰️",
+      "🚀", "🛸", "🚁", "🛶", "⛵️", "🚤", "🛥️", "🛳️", "⛴️", "🚢", "⚓️", "🛟", "🚧", "⛽️",
+      "🚏", "🗺️", "🗿", "🗽", "🗼", "🏰", "🏯", "🏟️", "🎡", "🎢", "🎠", "⛲️", "🏖️", "🏝️",
+      "🏜️", "🌋", "⛰️", "🏔️", "🗻", "🏕️", "⛺️", "🛖", "🏠", "🏡", "🏢", "🏣", "🏥", "🏦"
+    ]
+  },
+  {
+    id: "objects",
+    label: "Objects & Symbols",
+    icon: "💡",
+    emojis: [
+      "⌚️", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "🖲️", "🕹️", "🗜️", "💽", "💾", "💿",
+      "📀", "📼", "📷", "📸", "📹", "🎥", "📽️", "🎞️", "📞", "☎️", "📟", "📠", "📺", "📻",
+      "🎙️", "🎚️", "🎛️", "⏱️", "⏲️", "⏰", "🕰️", "⌛️", "⏳", "📡", "🔋", "🔌", "💡", "🔦",
+      "🕯️", "🧯", "🛢️", "💸", "💵", "💴", "💶", "💷", "🪙", "💰", "💳", "💎", "⚖️", "🪜",
+      "🧰", "🪛", "🔧", "🔨", "⚒️", "🛠️", "⛏️", "🪓", "⚙️", "🔗", "⛓️", "🧲", "🔫", "💣",
+      "🧨", "🔪", "🗡️", "⚔️", "🛡️", "🚬", "⚰️", "🪦", "⚱️", "🏺", "🔮", "🪄", "🧿",
+      "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕",
+      "💞", "💓", "💗", "💖", "💘", "💝", "🔥", "✨", "🌟", "💫", "💥", "💯", "💢",
+      "💬", "👁️‍🗨️", "🗯️", "💭", "💤"
+    ]
+  }
+];
 
 function groupAvatarPreset(id) {
   return GROUP_AVATAR_PRESETS.find((preset) => preset.id === id) || GROUP_AVATAR_PRESETS[0];
@@ -251,6 +478,24 @@ function preferredFaviconSources(host = "", url = "") {
   ].filter(Boolean);
 }
 
+function getSavedReactionsMap() {
+  try {
+    const raw = typeof window !== "undefined" ? localStorage.getItem("raga_forum_message_reactions") : null;
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveMessageReaction(messageId, reactions) {
+  try {
+    if (typeof window === "undefined") return;
+    const map = getSavedReactionsMap();
+    map[messageId] = reactions;
+    localStorage.setItem("raga_forum_message_reactions", JSON.stringify(map));
+  } catch {}
+}
+
 function conversationPreviewText(message, fallback) {
   const text = String(message?.text || "").trim();
   if (!text) return fallback;
@@ -319,9 +564,13 @@ function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, active
   if (!user) return null;
   return (
     <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-hidden ${panelBg} xl:flex`}>
-      <div className={`flex h-16 shrink-0 items-center justify-end border-b px-5 2xl:px-6 ${divider}`}>
+      <div className={`flex h-16 shrink-0 items-center justify-center border-b px-4 ${divider}`}>
+        <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+          <ShieldCheck className="h-4.5 w-4.5 shrink-0" />
+          <span>Messages are end-to-end encrypted</span>
+        </span>
         {onBack && (
-          <button type="button" onClick={onBack} className={`rounded-full px-5 py-2.5 text-sm font-semibold ${darkMode ? "bg-white/[0.05] hover:bg-white/10" : "bg-[#f4f7fb] hover:bg-[#edf1f7]"}`}>
+          <button type="button" onClick={onBack} className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/[0.05] hover:bg-white/10" : "bg-[#f4f7fb] hover:bg-[#edf1f7]"}`}>
             Back
           </button>
         )}
@@ -423,7 +672,12 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
 
   return (
     <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-hidden ${panelBg} xl:flex`}>
-      <div className={`h-16 shrink-0 border-b ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"}`} />
+      <div className={`flex h-16 shrink-0 items-center justify-center border-b px-4 ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"}`}>
+        <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+          <ShieldCheck className="h-4.5 w-4.5 shrink-0" />
+          <span>Messages are end-to-end encrypted</span>
+        </span>
+      </div>
       <div className="min-h-0 overflow-x-hidden overflow-y-auto px-5 py-7 2xl:px-6">
       <div className="mx-auto flex w-full max-w-[320px] flex-col">
         <div ref={avatarPickerRef} className="relative mx-auto">
@@ -654,9 +908,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [mobileViewportHeight, setMobileViewportHeight] = useState(null);
   const [messageMenu, setMessageMenu] = useState(null);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [emojiSearch, setEmojiSearch] = useState("");
+  const [emojiCategory, setEmojiCategory] = useState("smileys");
   const [messageInfoTarget, setMessageInfoTarget] = useState(null);
   const [copyFeedbackId, setCopyFeedbackId] = useState("");
+  const [reactionsPopoverTarget, setReactionsPopoverTarget] = useState(null);
   const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
+  const [replyToMessageTarget, setReplyToMessageTarget] = useState(null);
   const [deletingMessage, setDeletingMessage] = useState(false);
   const socketRef = useRef(null);
   const endRef = useRef(null);
@@ -665,6 +924,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const messageMenuRef = useRef(null);
   const optimisticMessageCounterRef = useRef(0);
   const composerRef = useRef(null);
+  const mainChatRef = useRef(null);
 
   const surface = darkMode ? "bg-[#15171c]" : "bg-white";
   const subSurface = darkMode ? "bg-[#101116]" : "bg-[#f7f8fb]";
@@ -683,7 +943,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     onMobileChatOpenChange?.(isMobileViewport && !mobileListOpen);
     return () => onMobileChatOpenChange?.(false);
   }, [isMobileViewport, mobileListOpen, onMobileChatOpenChange]);
-  const selectedConversation = conversations.find((item) => item.id === selectedId) || conversations.find((item) => item.id === GROUP_ID);
+  const selectedConversation = selectedId ? conversations.find((item) => item.id === selectedId) || null : null;
   const selectedIsGroup = selectedId === GROUP_ID;
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
   const currentUser = getStoredAuth().user;
@@ -747,7 +1007,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   const loadMessages = useCallback(async (conversationId) => {
     const data = await api(`/forum/conversations/${encodeURIComponent(conversationId)}/messages`);
-    setMessages(data.messages || []);
+    const savedMap = getSavedReactionsMap();
+    const fetchedMessages = (data.messages || []).map((msg) => ({
+      ...msg,
+      reactions: savedMap[msg.id] || msg.reactions || [],
+    }));
+    setMessages(fetchedMessages);
     window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
   }, []);
 
@@ -804,6 +1069,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
             : item
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
         setTypingByConversation((current) => ({ ...current, [payload.conversationId]: [] }));
+        if (payload.type === "forum:reaction") {
+          setMessages((current) =>
+            current.map((msg) =>
+              msg.id === payload.messageId ? { ...msg, reactions: payload.reactions } : msg
+            )
+          );
+        }
         if (sameConversation(payload.conversationId, selectedId)) {
           setMessages((current) => current.some((message) => message.id === payload.message.id) ? current : [...current, payload.message]);
           window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
@@ -991,7 +1263,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       toast.error("Only group admins can message right now");
       return;
     }
+
+    const currentReply = replyToMessageTarget
+      ? {
+          id: replyToMessageTarget.id,
+          senderName: String(replyToMessageTarget.senderId) === String(currentUser?.id) ? "You" : replyToMessageTarget.sender?.displayName || replyToMessageTarget.sender?.username || "User",
+          text: replyToMessageTarget.text,
+        }
+      : null;
+
     setComposer("");
+    setReplyToMessageTarget(null);
     window.setTimeout(() => composerRef.current?.focus(), 0);
     emitTyping(false);
     optimisticMessageCounterRef.current += 1;
@@ -1004,6 +1286,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       text,
       createdAt: new Date().toISOString(),
       pending: true,
+      replyToMessage: currentReply,
     };
     setMessages((current) => [...current, tempMessage]);
     setConversations((current) => current.map((item) => (
@@ -1015,7 +1298,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     try {
       const data = await api(`/forum/conversations/${encodeURIComponent(selectedId)}/messages`, {
         method: "POST",
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, replyToMessage: currentReply }),
       });
       if (data.message) {
         setConversations((current) => current.map((item) => (
@@ -1064,11 +1347,93 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     setActiveMatchIndex((current) => (current + direction + messageMatches.length) % messageMatches.length);
   }
 
+  async function handleEmojiReaction(targetMessage, emoji) {
+    if (!targetMessage) return;
+    setMessageMenu(null);
+    setMessages((currentMessages) =>
+      currentMessages.map((msg) => {
+        if (msg.id === targetMessage.id) {
+          const currentReactions = msg.reactions || [];
+          const existingIndex = currentReactions.findIndex((r) => String(r.userId) === String(currentUser?.id));
+          let newReactions;
+          if (existingIndex > -1) {
+            if (currentReactions[existingIndex].emoji === emoji) {
+              newReactions = currentReactions.filter((_, i) => i !== existingIndex);
+            } else {
+              newReactions = currentReactions.map((r, i) =>
+                i === existingIndex ? { ...r, emoji, user: currentUser } : r
+              );
+            }
+          } else {
+            newReactions = [...currentReactions, { emoji, userId: currentUser?.id, user: currentUser }];
+          }
+          saveMessageReaction(targetMessage.id, newReactions);
+          return { ...msg, reactions: newReactions };
+        }
+        return msg;
+      })
+    );
+
+    try {
+      const data = await api(`/forum/messages/${encodeURIComponent(targetMessage.id)}/reactions`, {
+        method: "POST",
+        body: JSON.stringify({ emoji }),
+      });
+      if (data?.reactions) {
+        setMessages((currentMessages) =>
+          currentMessages.map((msg) =>
+            msg.id === targetMessage.id ? { ...msg, reactions: data.reactions } : msg
+          )
+        );
+        saveMessageReaction(targetMessage.id, data.reactions);
+      }
+    } catch (error) {
+      console.error("Reaction save error:", error);
+    }
+  }
+
+  async function removeMyReaction(targetMessage) {
+    if (!targetMessage) return;
+    const myEmoji = (targetMessage.reactions || []).find((r) => String(r.userId) === String(currentUser?.id))?.emoji;
+    setMessages((currentMessages) =>
+      currentMessages.map((msg) => {
+        if (msg.id === targetMessage.id) {
+          const currentReactions = (msg.reactions || []).filter((r) => String(r.userId) !== String(currentUser?.id));
+          saveMessageReaction(targetMessage.id, currentReactions);
+          return { ...msg, reactions: currentReactions };
+        }
+        return msg;
+      })
+    );
+
+    if (myEmoji) {
+      try {
+        const data = await api(`/forum/messages/${encodeURIComponent(targetMessage.id)}/reactions`, {
+          method: "POST",
+          body: JSON.stringify({ emoji: myEmoji }),
+        });
+        if (data?.reactions) {
+          setMessages((currentMessages) =>
+            currentMessages.map((msg) =>
+              msg.id === targetMessage.id ? { ...msg, reactions: data.reactions } : msg
+            )
+          );
+          saveMessageReaction(targetMessage.id, data.reactions);
+        }
+      } catch (error) {
+        console.error("Reaction remove error:", error);
+      }
+    }
+  }
+
   function closeChat() {
+    setSelectedId(null);
+    setMessages([]);
     setMobileListOpen(true);
     setMessageSearch("");
     setMessageSearchOpen(false);
     setChatMenuOpen(false);
+    setSidebarUser(null);
   }
 
   const touchTimerRef = useRef(null);
@@ -1103,13 +1468,78 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   function openMessageMenu(event, message) {
     event.preventDefault();
-    const menuWidth = 192;
-    const menuHeight = 108;
+    const mine = message.senderId === currentUser?.id;
+    const mainBounds = mainChatRef.current?.getBoundingClientRect() || {
+      left: 0,
+      right: window.innerWidth,
+      top: 0,
+      bottom: window.innerHeight,
+    };
+    const menuWidth = 260;
+    const menuHeight = 220;
     const padding = 12;
-    const x = Math.min(Math.max(padding, event.clientX), window.innerWidth - menuWidth - padding);
-    const y = Math.min(Math.max(padding, event.clientY), window.innerHeight - menuHeight - padding);
-    setMessageMenu({ message, x, y });
+
+    const messageNode = messageRefs.current.get(message.id);
+    const rect = messageNode ? messageNode.getBoundingClientRect() : {
+      left: event.clientX || 100,
+      right: (event.clientX || 100) + 120,
+      top: event.clientY || 100,
+      bottom: (event.clientY || 100) + 40,
+    };
+
+    let x;
+    if (mine) {
+      x = Math.max(mainBounds.left + padding, Math.min(rect.right - menuWidth, mainBounds.right - menuWidth - padding));
+    } else {
+      x = Math.max(mainBounds.left + padding, Math.min(rect.left, mainBounds.right - menuWidth - padding));
+    }
+
+    let y;
+    if (rect.bottom + 8 + menuHeight <= mainBounds.bottom - padding) {
+      y = rect.bottom + 8;
+    } else if (rect.top - 8 - menuHeight >= mainBounds.top + padding) {
+      y = rect.top - menuHeight - 8;
+    } else {
+      y = Math.max(mainBounds.top + padding, Math.min(rect.bottom + 8, mainBounds.bottom - menuHeight - padding));
+    }
+
+    setEmojiPickerOpen(false);
+    setEmojiSearch("");
+    setMessageMenu({ message, x, y, mine });
   }
+
+  useEffect(() => {
+    if (!messageMenu || !messageMenuRef.current) return;
+    const menuNode = messageMenuRef.current;
+    const rect = menuNode.getBoundingClientRect();
+    const mainBounds = mainChatRef.current?.getBoundingClientRect() || {
+      left: 0,
+      right: window.innerWidth,
+      top: 0,
+      bottom: window.innerHeight,
+    };
+    const padding = 12;
+
+    let newX = messageMenu.x;
+    let newY = messageMenu.y;
+
+    if (rect.right > mainBounds.right - padding) {
+      newX = Math.max(mainBounds.left + padding, mainBounds.right - rect.width - padding);
+    }
+    if (newX < mainBounds.left + padding) {
+      newX = mainBounds.left + padding;
+    }
+    if (rect.bottom > mainBounds.bottom - padding) {
+      newY = Math.max(mainBounds.top + padding, mainBounds.bottom - rect.height - padding);
+    }
+    if (newY < mainBounds.top + padding) {
+      newY = mainBounds.top + padding;
+    }
+
+    if (Math.abs(newX - messageMenu.x) > 1 || Math.abs(newY - messageMenu.y) > 1) {
+      setMessageMenu((prev) => (prev ? { ...prev, x: newX, y: newY } : null));
+    }
+  }, [messageMenu, emojiPickerOpen]);
 
   async function copyMessageText(message) {
     const text = String(message?.text || "");
@@ -1124,11 +1554,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     }
   }
 
-  async function deleteSingleMessage() {
+  async function deleteSingleMessage(mode = "everyone") {
     if (!deleteMessageTarget || deletingMessage) return;
     try {
       setDeletingMessage(true);
-      await api(`/forum/conversations/${encodeURIComponent(deleteMessageTarget.conversationId || selectedId)}/messages/${encodeURIComponent(deleteMessageTarget.id)}`, { method: "DELETE" });
+      await api(`/forum/conversations/${encodeURIComponent(deleteMessageTarget.conversationId || selectedId)}/messages/${encodeURIComponent(deleteMessageTarget.id)}?mode=${mode}`, { method: "DELETE" });
       setMessages((current) => current.filter((message) => message.id !== deleteMessageTarget.id));
       setDeleteMessageTarget(null);
       setMessageMenu(null);
@@ -1336,365 +1766,619 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         </aside>
 
         <main
+          ref={mainChatRef}
           style={isMobileViewport && !mobileListOpen && mobileViewportHeight ? { height: `${mobileViewportHeight}px` } : undefined}
           className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}
         >
-          <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
-            <header className={`sticky top-0 z-20 flex h-16 w-full shrink-0 items-center gap-3 border-b border-t-0 px-4 ${divider} ${surface}`}>
-              <button type="button" onClick={closeChat} className={`h-9 w-9 shrink-0 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Back to chats">
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <div className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100 xl:max-w-none"}`}>
-                {selectedConversation?.type === "group" ? (
-                  <GroupAvatar group={selectedConversation} className="h-10 w-10" iconClassName="h-5 w-5" />
-                ) : (
-                  <UserAvatar user={selectedConversation?.participants?.find((user) => user.id !== getStoredAuth().user?.id)} name={selectedConversation?.name} className="h-10 w-10" />
-                )}
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">{selectedConversation?.name || "Group Forum"}</span>
-                  {selectedConversation?.type === "direct" && selectedOtherUser && (
-                    <span className={`block truncate text-[11px] leading-4 lg:hidden ${online.has(selectedOtherUser.id) ? "text-[#22c55e]" : muted}`}>
-                      {online.has(selectedOtherUser.id) ? "Online" : "Offline"}
-                    </span>
-                  )}
-                </span>
+          {!selectedConversation ? (
+            <div className={`flex flex-1 flex-col items-center justify-center p-8 text-center ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-black"}`}>
+              <div className={`grid h-16 w-16 place-items-center rounded-full ${darkMode ? "bg-white/5" : "bg-[#f2f4f8]"}`}>
+                <MessagesSquare className="h-8 w-8 text-[#2563eb]" />
               </div>
-              <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-full flex-1" : "hidden"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
-                <button type="button" onClick={() => setMessageSearchOpen(true)} className="flex h-7 shrink-0 items-center gap-2 rounded-full" aria-label="Search messages">
-                  <Search className={`h-4 w-4 ${muted}`} />
-                  <span className={`hidden text-xs font-semibold transition-opacity duration-200 lg:inline ${messageSearchOpen ? "w-0 opacity-0" : "opacity-100"} ${muted}`}>Search</span>
-                </button>
-                <input
-                  value={messageSearch}
-                  onChange={(event) => setMessageSearch(event.target.value)}
-                  placeholder="Search messages"
-                  className={`min-w-0 flex-1 bg-transparent text-xs outline-none transition-opacity duration-200 placeholder:text-black/35 dark:placeholder:text-white/30 ${messageSearchOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
-                />
-                {messageSearchOpen && messageSearch.trim() && (
-                  <span className={`shrink-0 text-[10px] ${muted}`}>
-                    {messageMatches.length ? `${activeMatchIndex + 1}/${messageMatches.length}` : "0/0"}
-                  </span>
-                )}
-                {messageSearchOpen && (
-                  <>
-                    <button type="button" onClick={() => navigateMatch(-1)} disabled={!messageMatches.length} className={`grid h-6 w-6 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-white"} disabled:opacity-35`} aria-label="Previous match">
-                      <ChevronUp className="h-3.5 w-3.5" />
+              <h3 className="mt-4 text-lg font-bold">Select a conversation</h3>
+              <p className={`mt-1 max-w-sm text-sm ${muted}`}>Choose a chat from the sidebar to start messaging.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
+                <header className={`sticky top-0 z-20 flex h-16 w-full shrink-0 items-center gap-3 border-b border-t-0 px-4 ${divider} ${surface}`}>
+                  <button type="button" onClick={closeChat} className={`h-9 w-9 shrink-0 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Back to chats">
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                  <div className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100 xl:max-w-none"}`}>
+                    {selectedConversation?.type === "group" ? (
+                      <GroupAvatar group={selectedConversation} className="h-10 w-10" iconClassName="h-5 w-5" />
+                    ) : (
+                      <UserAvatar user={selectedConversation?.participants?.find((user) => user.id !== getStoredAuth().user?.id)} name={selectedConversation?.name} className="h-10 w-10" />
+                    )}
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{selectedConversation?.name || "Group Forum"}</span>
+                      {selectedConversation?.type === "direct" && selectedOtherUser && (
+                        <span className={`block truncate text-[11px] leading-4 lg:hidden ${online.has(selectedOtherUser.id) ? "text-[#22c55e]" : muted}`}>
+                          {online.has(selectedOtherUser.id) ? "Online" : "Offline"}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-full flex-1" : "hidden"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
+                    <button type="button" onClick={() => setMessageSearchOpen(true)} className="flex h-7 shrink-0 items-center gap-2 rounded-full" aria-label="Search messages">
+                      <Search className={`h-4 w-4 ${muted}`} />
+                      <span className={`hidden text-xs font-semibold transition-opacity duration-200 lg:inline ${messageSearchOpen ? "w-0 opacity-0" : "opacity-100"} ${muted}`}>Search</span>
                     </button>
-                    <button type="button" onClick={() => navigateMatch(1)} disabled={!messageMatches.length} className={`grid h-6 w-6 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-white"} disabled:opacity-35`} aria-label="Next match">
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </button>
-                    <button type="button" onClick={() => { setMessageSearchOpen(false); setMessageSearch(""); }} className={`grid h-6 w-6 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-white"}`} aria-label="Close search">
+                    <input
+                      value={messageSearch}
+                      onChange={(event) => setMessageSearch(event.target.value)}
+                      placeholder="Search messages..."
+                      className={`w-full bg-transparent text-xs font-normal outline-none ${softText}`}
+                    />
+                    {messageMatches.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[11px] font-semibold ${muted}`}>{activeMatchIndex + 1}/{messageMatches.length}</span>
+                        <button type="button" onClick={() => navigateMatch(-1)} className={`grid h-6 w-6 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}>
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" onClick={() => navigateMatch(1)} className={`grid h-6 w-6 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}>
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    <button type="button" onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }} className={`grid h-6 w-6 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}>
                       <X className="h-3.5 w-3.5" />
                     </button>
-                  </>
-                )}
-              </div>
-              <span className={`hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold sm:inline-flex ${messageSearchOpen ? "sm:hidden" : ""} ${darkMode ? "bg-emerald-300/12 text-emerald-200" : "bg-[#dcfce7] text-[#16a34a]"}`}>
-                <LockKeyhole className="h-3.5 w-3.5" />
-                Encrypted
-              </span>
-              <div ref={chatMenuRef} className={`relative ${messageSearchOpen ? "hidden" : ""}`}>
-                <button type="button" onClick={() => setChatMenuOpen((open) => !open)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Chat actions">
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-                {chatMenuOpen && (
-                  <div className={`absolute right-0 top-11 z-20 w-40 rounded-2xl p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
-                    <button type="button" onClick={() => { setMessageSearchOpen(true); setChatMenuOpen(false); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
-                      <Search className="h-3.5 w-3.5" />
-                      Search
-                    </button>
-                    <button type="button" onClick={clearChat} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Clear chat
-                    </button>
-                    <button type="button" onClick={deleteChat} disabled={selectedConversation?.type !== "direct"} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35">
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete chat
-                    </button>
                   </div>
-                )}
-              </div>
-              <button type="button" onClick={closeChat} className={`h-9 w-9 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Close chat">
-                <X className="h-4 w-4" />
-              </button>
-            </header>
+                  {!messageSearchOpen && (
+                    <button type="button" onClick={() => setMessageSearchOpen(true)} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Search messages">
+                      <Search className="h-4 w-4" />
+                    </button>
+                  )}
+                  <div className="relative shrink-0">
+                    <button type="button" onClick={() => setChatMenuOpen((current) => !current)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="More chat options">
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                    {chatMenuOpen && (
+                      <div ref={chatMenuRef} className={`absolute right-0 top-11 z-30 w-44 rounded-2xl border p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/10 bg-[#1c1f26] text-white" : "border-black/10 bg-white text-[#111827]"}`}>
+                        <button type="button" onClick={clearChat} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}>
+                          <Sparkles className="h-3.5 w-3.5 text-[#2563eb]" />
+                          Clear messages
+                        </button>
+                        <button type="button" onClick={deleteChat} disabled={selectedConversation?.type !== "direct"} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35">
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete chat
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button type="button" onClick={closeChat} className={`h-9 w-9 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Close chat">
+                    <X className="h-4 w-4" />
+                  </button>
+                </header>
 
-            <section className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 sm:py-5 ${subSurface}`}>
-              <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
-                {messages.map((message, index) => {
-                  const mine = message.senderId === getStoredAuth().user?.id;
-                  const nextMessage = messages[index + 1];
-                  const previousMessage = messages[index - 1];
-                  const showDate = messageDateKey(message.createdAt) !== messageDateKey(previousMessage?.createdAt);
-                  const groupedWithNext = nextMessage?.senderId === message.senderId;
-                  const groupedWithPrevious = !showDate && previousMessage?.senderId === message.senderId;
-                  const isGroupChat = selectedConversation?.type === "group";
-                  const showAvatar = isGroupChat && !mine && !groupedWithNext;
-                  const showName = isGroupChat && !mine && !groupedWithPrevious;
-                  const isContextTarget = messageMenu?.message?.id === message.id;
-                  const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
-                  const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
-                  const previewUrl = firstUrlFromText(message.text);
-                  const displayText = previewUrl ? textWithoutUrls(message.text) : message.text;
-                  return (
-                    <div key={message.id} className="min-w-0">
-                      {showDate && (
-                        <div className="sticky top-2 z-10 my-2 flex justify-center">
-                          <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
-                            {formatMessageDate(message.createdAt)}
-                          </span>
-                        </div>
-                      )}
-                      <div
-                        ref={(node) => {
-                          if (node) messageRefs.current.set(message.id, node);
-                          else messageRefs.current.delete(message.id);
-                        }}
-                        onContextMenu={(event) => openMessageMenu(event, message)}
-                        onTouchStart={(event) => handleMessageTouchStart(event, message)}
-                        onTouchMove={handleMessageTouchMove}
-                        onTouchEnd={handleMessageTouchEnd}
-                        onTouchCancel={handleMessageTouchEnd}
-                        style={{ userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
-                        className={`flex min-w-0 items-end gap-2 sm:gap-3 ${groupedWithPrevious ? "mt-[-6px]" : ""} ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[78]" : ""}`}
-                      >
-                      {!mine && isGroupChat && (showAvatar ? (
-                        <span className="self-end">
-                          <UserAvatar user={message.sender} name={message.sender?.displayName} className="h-7 w-7 sm:h-8 sm:w-8" />
-                        </span>
-                      ) : <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />)}
-                      <div className={`flex min-w-0 flex-col ${mine ? "max-w-[85%] items-end sm:max-w-[75%]" : isGroupChat ? "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[85%] items-start sm:max-w-[75%]"}`}>
-                        {showName && (
-                          <div className={`mb-1 flex items-center gap-2 text-xs ${muted}`}>
-                            {mine || !message.sender ? (
-                              <span>{mine ? "You" : selectedConversation?.name || "User"}</span>
-                            ) : (
+                <section className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 sm:py-5 ${subSurface}`}>
+                  <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
+                    {messages.map((message, index) => {
+                      const mine = message.senderId === getStoredAuth().user?.id;
+                      const nextMessage = messages[index + 1];
+                      const previousMessage = messages[index - 1];
+                      const showDate = messageDateKey(message.createdAt) !== messageDateKey(previousMessage?.createdAt);
+                      const groupedWithNext = nextMessage?.senderId === message.senderId;
+                      const groupedWithPrevious = !showDate && previousMessage?.senderId === message.senderId;
+
+                      const isGroupChat = selectedConversation?.type === "group";
+                      const showAvatar = isGroupChat && !mine && !groupedWithNext;
+                      const showName = isGroupChat && !mine && !groupedWithPrevious;
+                      const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
+                      const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
+                      const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
+                      const previewUrl = firstUrlFromText(message.text);
+                      const displayText = previewUrl ? textWithoutUrls(message.text) : message.text;
+                      return (
+                        <div key={message.id} className="min-w-0">
+                          {showDate && (
+                            <div className="sticky top-2 z-10 my-2 flex justify-center">
+                              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
+                                {formatMessageDate(message.createdAt)}
+                              </span>
+                            </div>
+                          )}
+                          <div
+                            ref={(node) => {
+                              if (node) messageRefs.current.set(message.id, node);
+                              else messageRefs.current.delete(message.id);
+                            }}
+                            onContextMenu={(event) => openMessageMenu(event, message)}
+                            onTouchStart={(event) => handleMessageTouchStart(event, message)}
+                            onTouchMove={handleMessageTouchMove}
+                            onTouchEnd={handleMessageTouchEnd}
+                            onTouchCancel={handleMessageTouchEnd}
+                            style={{ userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
+                            className={`flex min-w-0 items-end gap-2 sm:gap-3 transition-all duration-200 ${groupedWithPrevious ? "mt-[-6px]" : ""} ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[86] scale-[1.01]" : ""}`}
+                          >
+                          {!mine && isGroupChat && (showAvatar ? (
+                            <span className="self-end">
+                              <UserAvatar user={message.sender} name={message.sender?.displayName} className="h-7 w-7 sm:h-8 sm:w-8" />
+                            </span>
+                          ) : <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />)}
+                          <div className={`flex min-w-0 flex-col ${mine ? "max-w-[85%] items-end sm:max-w-[75%]" : isGroupChat ? "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[85%] items-start sm:max-w-[75%]"}`}>
+                            {showName && (
+                              <div className={`mb-1 flex items-center gap-2 text-xs ${muted}`}>
+                                {mine || !message.sender ? (
+                                  <span>{mine ? "You" : selectedConversation?.name || "User"}</span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSidebarUser(message.sender)}
+                                    className="font-normal hover:text-[#2563eb] hover:underline hover:underline-offset-2"
+                                  >
+                                    {message.sender.displayName || "User"}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                            {displayText && previewUrl && (
+                              <div className={`w-full max-w-full min-w-0 rounded-[22px] p-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#181a20] text-white" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#252830] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
+                                <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} embedded />
+                                <p className="flex min-w-0 items-end gap-3 px-2 pb-1 pt-2 text-sm leading-6">
+                                  <span className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                                    {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                                  </span>
+                                  <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                    <span>{formatTime(message.createdAt)}</span>
+                                    {mine && (
+                                      <span className="inline-flex items-center justify-center translate-y-[0.5px]">
+                                        {getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
+                                          <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+                                        ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
+                                          <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
+                                        ) : (
+                                          <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
+                                        )}
+                                      </span>
+                                    )}
+                                  </span>
+                                </p>
+                              </div>
+                            )}
+                            {displayText && !previewUrl && (
+                              <div className={`max-w-full rounded-[20px] px-4 py-3 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#181a20] text-white" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#252830] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
+                                <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
+                                  {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                                  <span className="inline-block w-3" />
+                                  <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                    <span>{formatTime(message.createdAt)}</span>
+                                    {mine && (
+                                      <span className="inline-flex items-center justify-center translate-y-[0.5px]">
+                                        {getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
+                                          <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+                                        ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
+                                          <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
+                                        ) : (
+                                          <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
+                                        )}
+                                      </span>
+                                    )}
+                                  </span>
+                                </p>
+                              </div>
+                            )}
+                            {previewUrl && !displayText && (
+                              <div className={`w-full max-w-full min-w-0 ring-offset-2 transition ${isActiveMatch ? "rounded-[22px] ring-2 ring-[#facc15]" : ""}`}>
+                                <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} status={getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds)} />
+                              </div>
+                            )}
+                            {message.reactions && message.reactions.length > 0 && (
                               <button
                                 type="button"
-                                onClick={() => setSidebarUser(message.sender)}
-                                className="font-normal hover:text-[#2563eb] hover:underline hover:underline-offset-2"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  const rect = event.currentTarget.getBoundingClientRect();
+                                  const mainBounds = mainChatRef.current?.getBoundingClientRect() || {
+                                    left: 0,
+                                    right: window.innerWidth,
+                                    top: 0,
+                                    bottom: window.innerHeight,
+                                  };
+                                  const popoverWidth = 260;
+                                  const popoverHeight = 180;
+                                  const padding = 12;
+
+                                  let targetX = mine ? rect.right - popoverWidth : rect.left;
+                                  if (targetX + popoverWidth > mainBounds.right - padding) {
+                                    targetX = mainBounds.right - popoverWidth - padding;
+                                  }
+                                  if (targetX < mainBounds.left + padding) {
+                                    targetX = mainBounds.left + padding;
+                                  }
+
+                                  let targetY = rect.bottom + 6;
+                                  if (targetY + popoverHeight > mainBounds.bottom - padding) {
+                                    targetY = rect.top - popoverHeight - 6;
+                                  }
+                                  targetY = Math.max(mainBounds.top + padding, Math.min(targetY, mainBounds.bottom - popoverHeight - padding));
+
+                                  setReactionsPopoverTarget({
+                                    message,
+                                    x: targetX,
+                                    y: targetY,
+                                  });
+                                }}
+                                className={`-mt-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-all hover:scale-110 active:scale-95 ${mine ? "self-end" : "self-start"} ${darkMode ? "bg-[#181a20] text-white border border-white/10" : "bg-white text-black border border-black/10"}`}
                               >
-                                {message.sender.displayName || "User"}
+                                {Array.from(new Set(message.reactions.map((r) => r.emoji))).map((emoji) => (
+                                  <span key={emoji}>{emoji}</span>
+                                ))}
+                                {message.reactions.length > 1 && (
+                                  <span className="text-[10px] font-bold opacity-75">{message.reactions.length}</span>
+                                )}
                               </button>
                             )}
-                          </div>
-                        )}
-                        {displayText && previewUrl && (
-                          <div className={`w-full max-w-full min-w-0 rounded-[22px] p-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#181a20] text-white" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#252830] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
-                            <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} embedded />
-                            <p className="flex min-w-0 items-end gap-3 px-2 pb-1 pt-2 text-sm leading-6">
-                              <span className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                                {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                            {copyFeedbackId === message.id && (
+                              <span className={`mt-1 inline-flex animate-pulse items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ${darkMode ? "bg-emerald-400/15 text-emerald-200" : "bg-emerald-50 text-emerald-600"}`}>
+                                <Check className="h-3 w-3" />
+                                Copied
                               </span>
-                              <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
-                                <span>{formatTime(message.createdAt)}</span>
-                                {mine && (
-                                  <span className="inline-flex items-center justify-center translate-y-[0.5px]">
-                                    {getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
-                                      <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
-                                    ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
-                                      <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
-                                    ) : (
-                                      <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
-                                    )}
-                                  </span>
-                                )}
-                              </span>
-                            </p>
+                            )}
                           </div>
-                        )}
-                        {displayText && !previewUrl && (
-                          <div className={`max-w-full rounded-[20px] px-4 py-3 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#181a20] text-white" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-[#252830] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
-                            <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
-                              {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
-                              <span className="inline-block w-3" />
-                              <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
-                                <span>{formatTime(message.createdAt)}</span>
-                                {mine && (
-                                  <span className="inline-flex items-center justify-center translate-y-[0.5px]">
-                                    {getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
-                                      <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
-                                    ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
-                                      <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
-                                    ) : (
-                                      <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
-                                    )}
-                                  </span>
-                                )}
-                              </span>
-                            </p>
-                          </div>
-                        )}
-                        {previewUrl && !displayText && (
-                          <div className={`w-full max-w-full min-w-0 ring-offset-2 transition ${isActiveMatch ? "rounded-[22px] ring-2 ring-[#facc15]" : ""}`}>
-                            <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} status={getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds)} />
-                          </div>
-                        )}
-                        {copyFeedbackId === message.id && (
-                          <span className={`mt-1 inline-flex animate-pulse items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ${darkMode ? "bg-emerald-400/15 text-emerald-200" : "bg-emerald-50 text-emerald-600"}`}>
-                            <Check className="h-3 w-3" />
-                            Copied
-                          </span>
-                        )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(typingByConversation[selectedId] || []).length > 0 && (
+                    <div className="flex items-center gap-3">
+                      <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
+                      <div className={`flex items-center gap-1 rounded-[18px] rounded-bl-[6px] px-4 py-3 ${darkMode ? "bg-white/[0.08]" : "bg-white"}`} aria-label={`${(typingByConversation[selectedId] || []).map((user) => user.displayName).join(", ")} typing`}>
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb] [animation-delay:0.15s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb] [animation-delay:0.3s]" />
                       </div>
                     </div>
-                    </div>
-                  );
-                })}
-                {!messages.length && (
-                  <div className={`mx-auto mt-16 max-w-sm rounded-[24px] p-6 text-center ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
-                    <ShieldCheck className="mx-auto h-9 w-9 text-[#2563eb]" />
-                    <p className="mt-3 font-semibold">Start the conversation</p>
-                    <p className={`mt-1 text-sm ${muted}`}>Messages are stored encrypted and delivered live when people are online.</p>
-                  </div>
-                )}
-                {(typingByConversation[selectedId] || []).length > 0 && (
-                  <div className="flex min-w-0 items-end gap-2 sm:gap-3">
-                    <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
-                    <div className={`flex items-center gap-1 rounded-[18px] rounded-bl-[6px] px-4 py-3 ${darkMode ? "bg-white/[0.08]" : "bg-white"}`} aria-label={`${(typingByConversation[selectedId] || []).map((user) => user.displayName).join(", ")} typing`}>
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#9aa4b2] [animation-delay:-0.24s]" />
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#9aa4b2] [animation-delay:-0.12s]" />
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#9aa4b2]" />
-                    </div>
-                  </div>
-                )}
-                <div ref={endRef} />
-              </div>
-            </section>
-
-            <form onSubmit={sendMessage} className={`relative shrink-0 px-3 py-2 sm:px-6 ${subSurface}`}>
-              {mentionOptions.length > 0 && (
-                <div className={`absolute bottom-[76px] left-6 z-20 w-72 overflow-hidden rounded-2xl p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
-                  {mentionOptions.map((user) => (
-                    <button key={user.id} type="button" onClick={() => selectMention(user)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
-                      <UserAvatar user={user} name={user.displayName} className="h-8 w-8" />
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold">{user.displayName}</span>
-                        <span className={`block truncate text-xs ${muted}`}>@{user.username || user.displayName}</span>
-                      </span>
-                    </button>
-                  ))}
+                  )}
+                  <div ref={endRef} />
                 </div>
-              )}
-              <div className="mx-auto flex max-w-4xl items-end gap-2">
-                <label className={`flex min-h-12 flex-1 items-center rounded-[20px] px-4 transition-all ${darkMode ? "bg-white/[0.08]" : "bg-white"}`}>
-                  <textarea
-                    ref={composerRef}
-                    value={composer}
-                    disabled={!canSendSelectedConversation}
-                    onChange={(event) => updateComposer(event.target.value)}
-                    onFocus={() => {
-                      if (isMobileViewport) {
-                        window.scrollTo(0, 0);
-                        document.body.scrollTop = 0;
-                      }
-                    }}
-                    onBlur={() => emitTyping(false)}
-                    onKeyDown={(event) => {
-                      if (!isMobileViewport && event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        sendMessage(event);
-                      }
-                    }}
-                    enterKeyHint="enter"
-                    rows={1}
-                    placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"}
-                    className={`max-h-32 min-h-7 flex-1 resize-none bg-transparent py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`}
-                  />
-                </label>
-                <button type="submit" onMouseDown={(event) => event.preventDefault()} onPointerDown={(event) => event.preventDefault()} disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
-                  <Send className="h-4 w-4" />
-                </button>
-              </div>
-            </form>
-          </div>
+              </section>
 
-          {sidebarUser || selectedConversation?.type === "direct" ? (
-            <UserInfoPanel
-              darkMode={darkMode}
-              user={sidebarUser || selectedOtherUser}
-              online={online}
-              muted={muted}
-              onDirect={startDirect}
-              onBack={sidebarUser ? () => setSidebarUser(null) : null}
-              activeDirectUserId={selectedConversation?.type === "direct" ? selectedOtherUser?.id : null}
-            />
-          ) : (
-            <ForumInfoPanel
-              key={`${groupConversation?.id || GROUP_ID}-${groupConversation?.name || "Group Forum"}`}
-              darkMode={darkMode}
-              group={groupConversation}
-              users={users}
-              currentUser={currentUser}
-              groupParticipants={groupParticipants}
-              online={online}
-              onlineUserIds={onlineUserIds}
-              muted={muted}
-              onDirect={startDirect}
-              onSelectUser={setSidebarUser}
-              onUpdateGroup={updateGroup}
-            />
-          )}
+              <form onSubmit={sendMessage} className={`relative shrink-0 px-3 py-2 sm:px-6 ${subSurface}`}>
+                {mentionOptions.length > 0 && (
+                  <div className={`absolute bottom-[76px] left-6 z-20 w-72 overflow-hidden rounded-2xl p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
+                    {mentionOptions.map((user) => (
+                      <button key={user.id} type="button" onClick={() => selectMention(user)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
+                        <UserAvatar user={user} name={user.displayName} className="h-8 w-8" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold">{user.displayName}</span>
+                          <span className={`block truncate text-xs ${muted}`}>@{user.username || user.displayName}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {replyToMessageTarget && (
+                  <div className={`mx-auto mb-2 flex max-w-4xl items-center justify-between rounded-2xl border-l-4 border-[#2563eb] px-4 py-2.5 shadow-sm transition-all animate-in fade-in-0 slide-in-from-bottom-2 duration-150 ${darkMode ? "bg-[#1f232b] text-white" : "bg-white text-[#111827]"}`}>
+                    <div className="min-w-0 flex-1 pr-3">
+                      <p className="truncate text-xs font-bold text-[#2563eb]">
+                        Replying to {String(replyToMessageTarget.senderId) === String(currentUser?.id) ? "You" : replyToMessageTarget.sender?.displayName || replyToMessageTarget.sender?.username || "User"}
+                      </p>
+                      <p className={`truncate text-xs ${muted}`}>{replyToMessageTarget.text}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyToMessageTarget(null)}
+                      className={`grid h-6 w-6 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+                <div className="mx-auto flex max-w-4xl items-end gap-2">
+                  <label className={`flex min-h-12 flex-1 items-center rounded-[20px] px-4 transition-all ${darkMode ? "bg-white/[0.08]" : "bg-white"}`}>
+                    <textarea
+                      ref={composerRef}
+                      value={composer}
+                      disabled={!canSendSelectedConversation}
+                      onChange={(event) => updateComposer(event.target.value)}
+                      onFocus={() => {
+                        if (isMobileViewport) {
+                          window.scrollTo(0, 0);
+                          document.body.scrollTop = 0;
+                        }
+                      }}
+                      onBlur={() => emitTyping(false)}
+                      onKeyDown={(event) => {
+                        if (!isMobileViewport && event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          sendMessage(event);
+                        }
+                      }}
+                      enterKeyHint="enter"
+                      rows={1}
+                      placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"}
+                      className={`max-h-32 min-h-7 flex-1 resize-none bg-transparent py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`}
+                    />
+                  </label>
+                  <button type="submit" onMouseDown={(event) => event.preventDefault()} onPointerDown={(event) => event.preventDefault()} disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {sidebarUser || selectedConversation?.type === "direct" ? (
+              <UserInfoPanel
+                darkMode={darkMode}
+                user={sidebarUser || selectedOtherUser}
+                online={online}
+                muted={muted}
+                onDirect={startDirect}
+                onBack={sidebarUser ? () => setSidebarUser(null) : null}
+                activeDirectUserId={selectedConversation?.type === "direct" ? selectedOtherUser?.id : null}
+              />
+            ) : (
+              <ForumInfoPanel
+                key={`${groupConversation?.id || GROUP_ID}-${groupConversation?.name || "Group Forum"}`}
+                darkMode={darkMode}
+                group={groupConversation}
+                users={users}
+                currentUser={currentUser}
+                groupParticipants={groupParticipants}
+                online={online}
+                onlineUserIds={onlineUserIds}
+                muted={muted}
+                onDirect={startDirect}
+                onSelectUser={setSidebarUser}
+                onUpdateGroup={updateGroup}
+              />
+            )}
+          </>
+        )}
         </main>
         {messageMenu && (
           <>
             <div
               className="fixed inset-0 z-[75] bg-black/65 transition-opacity duration-200 ease-out animate-in fade-in-0"
-              onClick={() => setMessageMenu(null)}
+              onClick={() => {
+                setMessageMenu(null);
+                setEmojiPickerOpen(false);
+              }}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setMessageMenu(null);
+                setEmojiPickerOpen(false);
               }}
             />
             <div
               ref={messageMenuRef}
-              style={{ left: messageMenu.x, top: messageMenu.y }}
-              className={`fixed z-[80] w-48 origin-top-left rounded-2xl border p-1.5 shadow-[0_20px_70px_rgba(0,0,0,0.32)] backdrop-blur-xl transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-90 slide-in-from-top-1.5 ${darkMode ? "border-white/10 bg-[#1c1f26]/95 text-white" : "border-black/10 bg-white/95 text-[#111827]"}`}
+              style={{
+                left: messageMenu.x,
+                top: messageMenu.y,
+              }}
+              className={`fixed z-[95] flex flex-col gap-2.5 animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200 ease-out ${messageMenu.mine ? "items-end origin-top-right" : "items-start origin-top-left"}`}
             >
-              <button
-                type="button"
-                onClick={() => {
-                  setMessageInfoTarget(messageMenu.message);
-                  setMessageMenu(null);
-                }}
-                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
-              >
-                <Info className="h-4 w-4 text-[#2563eb]" />
-                Message info
-              </button>
-              <button
-                type="button"
-                onClick={() => copyMessageText(messageMenu.message)}
-                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
-              >
-                <Copy className="h-4 w-4 text-[#2563eb]" />
-                Copy message
-              </button>
-              <button
-                type="button"
-                disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
-                onClick={() => {
-                  setDeleteMessageTarget(messageMenu.message);
-                  setMessageMenu(null);
-                }}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete message
-              </button>
+              {/* WhatsApp Style Floating Emoji Reaction Bar */}
+              <div className={`flex items-center gap-1 rounded-full px-2.5 py-2 shadow-[0_16px_60px_rgba(0,0,0,0.6)] transition-all ${darkMode ? "bg-[#12141a] text-white" : "bg-white text-[#111827]"}`}>
+                {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      handleEmojiReaction(messageMenu.message, emoji);
+                      setEmojiPickerOpen(false);
+                    }}
+                    className="grid h-8 w-8 place-items-center rounded-full text-base transition-transform duration-150 hover:scale-130 active:scale-95"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setEmojiPickerOpen((prev) => !prev)}
+                  className={`grid h-8 w-8 place-items-center rounded-full text-xs transition ${emojiPickerOpen ? "bg-emerald-500/20 text-emerald-400" : "hover:bg-white/10 " + muted}`}
+                  title="More reactions"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* WhatsApp Full Emoji Picker Popover */}
+              {emojiPickerOpen ? (
+                <div className={`w-80 max-w-[calc(100vw-32px)] rounded-[22px] p-3 sm:p-3.5 shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-in fade-in-0 zoom-in-95 duration-150 border-0 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}>
+                  {/* Category Header Tabs */}
+                  <div className="flex items-center justify-between border-b pb-2 mb-2 border-white/10 px-1 overflow-x-auto gap-1">
+                    {EMOJI_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setEmojiCategory(cat.id)}
+                        className={`px-2 py-1 text-lg transition-all rounded-xl opacity-100 ${emojiCategory === cat.id ? darkMode ? "bg-emerald-500/20 text-emerald-400 scale-110 font-bold" : "bg-emerald-100 text-emerald-800 scale-110 font-bold border border-emerald-300" : darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                        title={cat.label}
+                      >
+                        {cat.icon}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Search Input */}
+                  <div className={`flex items-center gap-2 rounded-xl px-3 py-2 border mb-3 ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-[#f4f6f8]"}`}>
+                    <Search className={`h-4 w-4 shrink-0 ${muted}`} />
+                    <input
+                      type="text"
+                      placeholder="Search reaction"
+                      value={emojiSearch}
+                      onChange={(e) => setEmojiSearch(e.target.value)}
+                      className="w-full bg-transparent text-xs outline-none placeholder:text-gray-400"
+                    />
+                    {emojiSearch && (
+                      <button type="button" onClick={() => setEmojiSearch("")}>
+                        <X className="h-3.5 w-3.5 text-gray-400" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Emoji Categories List */}
+                  <div className="max-h-48 sm:max-h-56 overflow-y-auto space-y-3 pr-1 touch-pan-y overscroll-contain">
+                    {EMOJI_CATEGORIES.filter((cat) => emojiSearch ? true : cat.id === emojiCategory || cat.id === "recents").map((cat) => {
+                      const filtered = cat.emojis.filter((e) => matchEmojiSearch(e, emojiSearch));
+                      if (!filtered.length) return null;
+                      return (
+                        <div key={cat.id}>
+                          <p className="text-[11px] font-bold mb-1.5 px-1 opacity-70">{cat.label}</p>
+                          <div className="grid grid-cols-7 gap-1">
+                            {filtered.map((emoji, idx) => (
+                              <button
+                                key={`${emoji}-${idx}`}
+                                type="button"
+                                onClick={() => {
+                                  handleEmojiReaction(messageMenu.message, emoji);
+                                  setEmojiPickerOpen(false);
+                                  setEmojiSearch("");
+                                }}
+                                className="grid h-9 w-9 place-items-center rounded-xl text-xl transition hover:bg-white/10 hover:scale-125 active:scale-95"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* WhatsApp Style Context Menu */
+                <div className={`w-52 rounded-[22px] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.6)] transition-all ${darkMode ? "bg-[#12141a] text-white" : "bg-white text-[#111827]"}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyToMessageTarget(messageMenu.message);
+                      setMessageMenu(null);
+                      if (composerRef.current) composerRef.current.focus();
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                  >
+                    <Reply className="h-4 w-4 text-[#2563eb]" />
+                    Reply
+                  </button>
+                  {messageMenu.message?.senderId === currentUser?.id && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMessageInfoTarget(messageMenu.message);
+                        setMessageMenu(null);
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                    >
+                      <Info className="h-4 w-4 text-[#2563eb]" />
+                      Message info
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => copyMessageText(messageMenu.message)}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                  >
+                    <Copy className="h-4 w-4 text-[#2563eb]" />
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
+                    onClick={() => {
+                      setDeleteMessageTarget(messageMenu.message);
+                      setMessageMenu(null);
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {reactionsPopoverTarget && (
+          <>
+            <div
+              className="fixed inset-0 z-[85] bg-black/75 transition-opacity duration-200 ease-out animate-in fade-in-0"
+              onClick={() => setReactionsPopoverTarget(null)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setReactionsPopoverTarget(null);
+              }}
+            />
+            <div
+              style={{
+                left: reactionsPopoverTarget.x,
+                top: reactionsPopoverTarget.y,
+              }}
+              className={`fixed z-[90] w-72 rounded-[22px] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-in fade-in-0 zoom-in-95 duration-150 border-0 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}
+            >
+              {/* Header with count and reaction filter tabs */}
+              <div className="flex flex-col gap-2.5">
+                <p className="text-sm font-bold opacity-80">
+                  {reactionsPopoverTarget.message.reactions?.length || 0} reaction{reactionsPopoverTarget.message.reactions?.length === 1 ? "" : "s"}
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className={`grid h-8 w-8 place-items-center rounded-full border ${darkMode ? "border-white/10 bg-white/5 text-white/70" : "border-black/10 bg-black/5 text-black/70"}`}>
+                    <SmilePlus className="h-4 w-4" />
+                  </div>
+                  {Array.from(new Set((reactionsPopoverTarget.message.reactions || []).map((r) => r.emoji))).map((emoji) => {
+                    const count = (reactionsPopoverTarget.message.reactions || []).filter((r) => r.emoji === emoji).length;
+                    return (
+                      <div
+                        key={emoji}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-emerald-100 text-emerald-700 border border-emerald-300"}`}
+                      >
+                        <span>{emoji}</span>
+                        <span>{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className={`my-3 border-b ${darkMode ? "border-white/10" : "border-black/10"}`} />
+
+              {/* Reactors list */}
+              <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+                {(reactionsPopoverTarget.message.reactions || []).map((reaction, idx) => {
+                  const isMe = String(reaction.userId) === String(currentUser?.id);
+                  const userObj = reaction.user || users.find((u) => String(u.id) === String(reaction.userId)) || (isMe ? currentUser : null);
+                  const name = isMe ? "You" : userObj?.displayName || "User";
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        if (isMe) {
+                          removeMyReaction(reactionsPopoverTarget.message);
+                          setReactionsPopoverTarget(null);
+                          toast.success("Reaction removed");
+                        }
+                      }}
+                      className={`flex items-center justify-between rounded-xl px-2 py-2 transition ${isMe ? "cursor-pointer" : ""} ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <UserAvatar user={userObj} name={name} className="h-10 w-10 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">{name}</p>
+                          {isMe && <p className={`text-xs ${muted}`}>Click to remove</p>}
+                        </div>
+                      </div>
+                      <span className="text-xl shrink-0 ml-2">{reaction.emoji}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </>
         )}
         {messageInfoTarget && (
           <div
-            className="fixed inset-0 z-[95] grid place-items-center bg-black/92 px-4 animate-in fade-in duration-150"
+            className={`fixed inset-0 z-[95] grid place-items-center transition-all duration-200 px-4 animate-in fade-in duration-150 ${darkMode ? "bg-black/80" : "bg-black/40"}`}
             onMouseDown={() => setMessageInfoTarget(null)}
           >
             <div
               onMouseDown={(e) => e.stopPropagation()}
-              className={`w-full max-w-md overflow-hidden rounded-[24px] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.7)] animate-in zoom-in-95 duration-150 ${darkMode ? "bg-[#0b0d12] text-white" : "bg-white text-[#111827]"}`}
+              className={`w-full max-w-md overflow-hidden rounded-[24px] p-6 shadow-none border-0 animate-in zoom-in-95 duration-150 ${darkMode ? "bg-[#0b0d12] text-white" : "bg-white text-[#111827]"}`}
             >
-              <div className="flex items-center justify-between pb-4 border-b border-white/10">
+              <div className="flex items-center justify-between pb-4">
                 <div className="flex items-center gap-2.5">
                   <span className="grid h-9 w-9 place-items-center rounded-full bg-[#2563eb]/10 text-[#2563eb]">
                     <Info className="h-5 w-5" />
@@ -1713,13 +2397,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
               {/* Message Preview */}
               <div className="my-5">
                 <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${muted}`}>Message</p>
-                <div className={`rounded-2xl px-4 py-3 text-sm leading-6 ${darkMode ? "bg-[#13151b] text-white border border-white/5" : "bg-[#f8fafc] text-[#14213d] border"}`}>
+                <div className={`rounded-2xl px-4 py-3 text-sm leading-6 border-0 shadow-none ${darkMode ? "bg-[#13151b] text-white" : "bg-[#f3f4f6] text-[#14213d]"}`}>
                   <p className="whitespace-pre-wrap break-words">{messageInfoTarget.text}</p>
                 </div>
               </div>
 
               {/* Receipts Info */}
-              <div className="space-y-4 pt-2 border-t border-white/10">
+              <div className="space-y-4 pt-2">
                 {/* Read Status */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">

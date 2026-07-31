@@ -15664,6 +15664,8 @@ async function serializeForumMessage(message) {
     createdAt: message.createdAt,
     readBy: message.readBy || {},
     deliveredTo: message.deliveredTo || {},
+    reactions: message.reactions || [],
+    replyToMessage: message.replyToMessage || null,
   };
 }
 
@@ -15747,6 +15749,7 @@ async function createForumMessage({ req, conversationId, text }) {
     createdAt: now,
     readBy: {},
     deliveredTo,
+    replyToMessage: req.body?.replyToMessage || null,
   };
   const result = await db.collection("forumMessages").insertOne(message);
   const saved = { ...message, _id: result.insertedId };
@@ -15801,7 +15804,10 @@ app.get("/forum/conversations/:id/messages", async (req, res) => {
       : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
     if (!conversation) return res.status(404).json({ error: "Conversation not found" });
     if (conversation.type === "group") assertForumGroupMember(conversation, req);
-    const messages = await db.collection("forumMessages").find({ conversationId: conversation._id }).sort({ createdAt: 1 }).limit(300).toArray();
+    const messages = await db.collection("forumMessages").find({
+      conversationId: conversation._id,
+      deletedForUsers: { $ne: String(req.authUser.id) }
+    }).sort({ createdAt: 1 }).limit(300).toArray();
     res.json({ messages: await Promise.all(messages.map(serializeForumMessage)) });
   } catch (error) {
     console.error("Forum messages error:", error);
@@ -15973,9 +15979,21 @@ app.delete("/forum/conversations/:id/messages/:messageId", async (req, res) => {
     const messageId = new ObjectId(req.params.messageId);
     const message = await db.collection("forumMessages").findOne({ _id: messageId, conversationId: conversation._id });
     if (!message) return res.status(404).json({ error: "Message not found" });
-    if (String(message.senderId) !== String(req.authUser.id) && !isForumGroupAdmin(conversation, req) && !req.authUser?.isSuperAdmin) {
-      return res.status(403).json({ error: "You can delete only your own message" });
+
+    const mode = req.query.mode || (String(message.senderId) === String(req.authUser.id) ? "everyone" : "me");
+
+    if (mode === "me") {
+      await db.collection("forumMessages").updateOne(
+        { _id: messageId, conversationId: conversation._id },
+        { $addToSet: { deletedForUsers: String(req.authUser.id) } }
+      );
+      return res.json({ success: true, messageId: String(messageId), mode: "me" });
     }
+
+    if (String(message.senderId) !== String(req.authUser.id) && !isForumGroupAdmin(conversation, req) && !req.authUser?.isSuperAdmin) {
+      return res.status(403).json({ error: "You can delete only your own message for everyone" });
+    }
+
     await db.collection("forumMessages").deleteOne({ _id: messageId, conversationId: conversation._id });
     const latest = await db.collection("forumMessages").find({ conversationId: conversation._id }).sort({ createdAt: -1 }).limit(1).next();
     const update = latest
@@ -15996,10 +16014,64 @@ app.delete("/forum/conversations/:id/messages/:messageId", async (req, res) => {
     const recipients = conversation.type === "direct" ? conversation.participantIds : conversation.participantIds;
     broadcastForumPayload(recipients, { type: "forum:messageDeleted", conversationId: conversation._id, messageId: String(messageId) });
     broadcastForumPayload(recipients, { type: "forum:conversation", conversation: await forumConversationSummary(savedConversation, req.authUser.id) });
-    res.json({ success: true, messageId: String(messageId) });
+    res.json({ success: true, messageId: String(messageId), mode: "everyone" });
   } catch (error) {
-    console.error("Forum message delete error:", error);
-    res.status(error.status || 500).json({ error: error.message || "Could not delete message" });
+    console.error("Delete message error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/messages/:messageId/reactions", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const messageId = req.params.messageId;
+    const { emoji } = req.body || {};
+    const userId = req.authUser.id;
+
+    if (!emoji || typeof emoji !== "string") {
+      return res.status(400).json({ error: "Emoji required" });
+    }
+
+    const filter = ObjectId.isValid(messageId) ? { _id: new ObjectId(messageId) } : { _id: messageId };
+    const message = await db.collection("forumMessages").findOne(filter);
+    if (!message) return res.status(404).json({ error: "Message not found" });
+
+    const currentReactions = Array.isArray(message.reactions) ? message.reactions : [];
+    const existingIndex = currentReactions.findIndex((r) => String(r.userId) === String(userId));
+
+    let updatedReactions;
+    if (existingIndex > -1) {
+      if (currentReactions[existingIndex].emoji === emoji) {
+        updatedReactions = currentReactions.filter((_, i) => i !== existingIndex);
+      } else {
+        updatedReactions = currentReactions.map((r, i) =>
+          i === existingIndex ? { ...r, emoji, updatedAt: new Date() } : r
+        );
+      }
+    } else {
+      updatedReactions = [...currentReactions, { userId: String(userId), emoji, createdAt: new Date() }];
+    }
+
+    await db.collection("forumMessages").updateOne(filter, { $set: { reactions: updatedReactions } });
+
+    const updatedMessageDoc = await db.collection("forumMessages").findOne(filter);
+    const serialized = await serializeForumMessage(updatedMessageDoc);
+
+    const conversation = await db.collection("forumConversations").findOne({ _id: message.conversationId });
+    if (conversation) {
+      const recipients = conversation.participantIds || [];
+      broadcastForumPayload(recipients, {
+        type: "forum:reaction",
+        conversationId: message.conversationId,
+        messageId: String(message._id),
+        reactions: serialized.reactions,
+      });
+    }
+
+    res.json({ success: true, reactions: serialized.reactions, message: serialized });
+  } catch (error) {
+    console.error("Forum reaction error:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 

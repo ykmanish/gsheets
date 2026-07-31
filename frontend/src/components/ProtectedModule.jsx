@@ -238,6 +238,10 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     }
     themeMeta.setAttribute("content", forumMobileChatOpen ? chatHeaderColor : appColor);
 
+    const previousBodyPosition = document.body.style.position;
+    const previousBodyTop = document.body.style.top;
+    const previousBodyLeft = document.body.style.left;
+    const previousBodyWidth = document.body.style.width;
     const previousBodyOverflow = document.body.style.overflow;
     const previousBodyHeight = document.body.style.height;
     const previousBodyBackground = document.body.style.backgroundColor;
@@ -248,17 +252,25 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
 
     if (forumMobileChatOpen) {
+      document.body.style.position = "fixed";
+      document.body.style.top = "0px";
+      document.body.style.left = "0px";
+      document.body.style.width = "100%";
+      document.body.style.height = "100%";
       document.body.style.overflow = "hidden";
-      document.body.style.height = "100dvh";
       document.body.style.backgroundColor = chatHeaderColor;
       document.body.style.overscrollBehavior = "none";
       document.documentElement.style.overflow = "hidden";
-      document.documentElement.style.height = "100dvh";
+      document.documentElement.style.height = "100%";
       document.documentElement.style.backgroundColor = chatHeaderColor;
       document.documentElement.style.overscrollBehavior = "none";
     }
 
     return () => {
+      document.body.style.position = previousBodyPosition;
+      document.body.style.top = previousBodyTop;
+      document.body.style.left = previousBodyLeft;
+      document.body.style.width = previousBodyWidth;
       document.body.style.overflow = previousBodyOverflow;
       document.body.style.height = previousBodyHeight;
       document.body.style.backgroundColor = previousBodyBackground;

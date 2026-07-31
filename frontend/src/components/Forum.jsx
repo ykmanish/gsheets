@@ -1136,6 +1136,27 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
   }, [composer]);
 
+  // Lock window scroll position to 0 on mobile when keyboard opens
+  useEffect(() => {
+    if (!isMobileViewport) return;
+    const lockScroll = () => {
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
+    };
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", lockScroll);
+      window.visualViewport.addEventListener("scroll", lockScroll);
+    }
+    window.addEventListener("scroll", lockScroll);
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", lockScroll);
+        window.visualViewport.removeEventListener("scroll", lockScroll);
+      }
+      window.removeEventListener("scroll", lockScroll);
+    };
+  }, [isMobileViewport]);
+
   if (loading) {
     return (
       <div className={`grid h-[calc(100dvh-24px)] min-h-[560px] place-items-center ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f2f4f1] text-black"}`}>
@@ -1473,6 +1494,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     value={composer}
                     disabled={!canSendSelectedConversation}
                     onChange={(event) => updateComposer(event.target.value)}
+                    onFocus={() => {
+                      if (isMobileViewport) {
+                        window.scrollTo(0, 0);
+                        document.body.scrollTop = 0;
+                      }
+                    }}
                     onBlur={() => emitTyping(false)}
                     onKeyDown={(event) => {
                       if (!isMobileViewport && event.key === "Enter" && !event.shiftKey) {

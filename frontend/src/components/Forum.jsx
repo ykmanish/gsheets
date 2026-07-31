@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
@@ -1178,6 +1178,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         <main className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
           <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
             <header className={`flex h-16 w-full shrink-0 items-center gap-3 border-b border-t-0 px-4 ${divider}`}>
+              <button type="button" onClick={closeChat} className={`h-9 w-9 shrink-0 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Back to chats">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
               <div className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100 xl:max-w-none"}`}>
                 {selectedConversation?.type === "group" ? (
                   <GroupAvatar group={selectedConversation} className="h-10 w-10" iconClassName="h-5 w-5" />
@@ -1267,7 +1270,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     <div key={message.id} className="min-w-0">
                       {showDate && (
                         <div className="sticky top-2 z-10 my-2 flex justify-center">
-                          <span className={`rounded-full px-3 py-1 text-[11px] font-semibold shadow-sm ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
+                          <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
                             {formatMessageDate(message.createdAt)}
                           </span>
                         </div>
@@ -1362,7 +1365,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
               </div>
             </section>
 
-            <form onSubmit={sendMessage} className={`relative shrink-0 border-t px-3 py-3 sm:px-6 ${divider}`}>
+            <form onSubmit={sendMessage} className={`relative shrink-0 px-3 py-2 sm:px-6 ${subSurface}`}>
               {mentionOptions.length > 0 && (
                 <div className={`absolute bottom-[76px] left-6 z-20 w-72 overflow-hidden rounded-2xl p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
                   {mentionOptions.map((user) => (
@@ -1376,9 +1379,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                   ))}
                 </div>
               )}
-              <div className={`mx-auto flex max-w-4xl items-center gap-2 rounded-full border px-4 py-1.5 sm:gap-3 sm:px-5 ${darkMode ? "border-white/[0.06] bg-white/[0.045]" : "border-[#eef1f5] bg-white"}`}>
-                <textarea ref={composerRef} value={composer} disabled={!canSendSelectedConversation} onChange={(event) => updateComposer(event.target.value)} onBlur={() => emitTyping(false)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(event); } }} rows={1} placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"} className={`max-h-20 min-h-7 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`} />
-                <button type="submit" onMouseDown={(event) => event.preventDefault()} onPointerDown={(event) => event.preventDefault()} disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
+              <div className="mx-auto flex max-w-4xl items-end gap-2">
+                <label className={`flex min-h-12 flex-1 items-center rounded-full px-4 ${darkMode ? "bg-white/[0.08]" : "bg-white"}`}>
+                  <textarea ref={composerRef} value={composer} disabled={!canSendSelectedConversation} onChange={(event) => updateComposer(event.target.value)} onBlur={() => emitTyping(false)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(event); } }} rows={1} placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"} className={`max-h-20 min-h-7 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`} />
+                </label>
+                <button type="submit" onMouseDown={(event) => event.preventDefault()} onPointerDown={(event) => event.preventDefault()} disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#22c55e] text-white transition hover:bg-[#16a34a] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
                   <Send className="h-4 w-4" />
                 </button>
               </div>

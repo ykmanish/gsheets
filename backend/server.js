@@ -15908,6 +15908,48 @@ app.delete("/forum/conversations/:id/messages", async (req, res) => {
   }
 });
 
+app.delete("/forum/conversations/:id/messages/:messageId", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversation = req.params.id === FORUM_GROUP_ID
+      ? await ensureForumGroupConversation(db)
+      : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if (conversation.type === "group") assertForumGroupMember(conversation, req);
+    if (!ObjectId.isValid(req.params.messageId)) return res.status(400).json({ error: "Invalid message" });
+    const messageId = new ObjectId(req.params.messageId);
+    const message = await db.collection("forumMessages").findOne({ _id: messageId, conversationId: conversation._id });
+    if (!message) return res.status(404).json({ error: "Message not found" });
+    if (String(message.senderId) !== String(req.authUser.id) && !isForumGroupAdmin(conversation, req) && !req.authUser?.isSuperAdmin) {
+      return res.status(403).json({ error: "You can delete only your own message" });
+    }
+    await db.collection("forumMessages").deleteOne({ _id: messageId, conversationId: conversation._id });
+    const latest = await db.collection("forumMessages").find({ conversationId: conversation._id }).sort({ createdAt: -1 }).limit(1).next();
+    const update = latest
+      ? {
+          $set: {
+            updatedAt: latest.createdAt || new Date(),
+            lastMessage: {
+              id: String(latest._id),
+              senderId: latest.senderId,
+              encrypted: latest.encrypted,
+              createdAt: latest.createdAt,
+            },
+          },
+        }
+      : { $set: { updatedAt: new Date() }, $unset: { lastMessage: "" } };
+    await db.collection("forumConversations").updateOne({ _id: conversation._id }, update);
+    const savedConversation = await db.collection("forumConversations").findOne({ _id: conversation._id });
+    const recipients = conversation.type === "direct" ? conversation.participantIds : conversation.participantIds;
+    broadcastForumPayload(recipients, { type: "forum:messageDeleted", conversationId: conversation._id, messageId: String(messageId) });
+    broadcastForumPayload(recipients, { type: "forum:conversation", conversation: await forumConversationSummary(savedConversation, req.authUser.id) });
+    res.json({ success: true, messageId: String(messageId) });
+  } catch (error) {
+    console.error("Forum message delete error:", error);
+    res.status(error.status || 500).json({ error: error.message || "Could not delete message" });
+  }
+});
+
 app.delete("/forum/conversations/:id", async (req, res) => {
   try {
     const db = await connectAuthDb();

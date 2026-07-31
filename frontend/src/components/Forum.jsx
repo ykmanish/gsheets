@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, CircleDot, Compass, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Rocket, Search, Send, ShieldCheck, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
@@ -177,6 +177,40 @@ function compactUrlLabel(url = "") {
   }
 }
 
+function preferredFaviconSources(host = "", url = "") {
+  const cleanHost = String(host || "").replace(/^www\./, "");
+  let parsedUrl = null;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    parsedUrl = null;
+  }
+  const pathname = parsedUrl?.pathname || "";
+  const productIcons = {
+    "drive.google.com": "https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_48dp.png",
+    "docs.google.com": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_document_x32.png",
+    "sheets.google.com": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_spreadsheet_x32.png",
+    "slides.google.com": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_presentation_x32.png",
+    "mail.google.com": "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico",
+    "gmail.com": "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico",
+    "meet.google.com": "https://www.gstatic.com/images/branding/product/1x/meet_2020q4_48dp.png",
+    "maps.google.com": "https://www.gstatic.com/images/branding/product/1x/maps_48dp.png",
+  };
+  const productIcon = cleanHost === "docs.google.com" && pathname.startsWith("/spreadsheets")
+    ? "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_spreadsheet_x32.png"
+    : cleanHost === "docs.google.com" && pathname.startsWith("/presentation")
+      ? "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_presentation_x32.png"
+      : cleanHost === "docs.google.com" && pathname.startsWith("/forms")
+        ? "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_form_x32.png"
+        : productIcons[cleanHost] || ((cleanHost === "google.com" && pathname.startsWith("/maps")) ? "https://www.gstatic.com/images/branding/product/1x/maps_48dp.png" : "");
+  return [
+    productIcon,
+    `https://icons.duckduckgo.com/ip3/${cleanHost}.ico`,
+    `https://www.google.com/s2/favicons?domain_url=${encodeURIComponent(url)}&sz=128`,
+    `https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanHost)}&sz=128`,
+  ].filter(Boolean);
+}
+
 function conversationPreviewText(message, fallback) {
   const text = String(message?.text || "").trim();
   if (!text) return fallback;
@@ -187,19 +221,20 @@ function conversationPreviewText(message, fallback) {
   return preview.length > 90 ? `${preview.slice(0, 90).trim()}...` : preview;
 }
 
-function LinkPreviewCard({ url, mine, darkMode, time }) {
+function LinkPreviewCard({ url, mine, darkMode, time, embedded = false }) {
   const [faviconSourceIndex, setFaviconSourceIndex] = useState(0);
   const meta = linkPreviewMeta(url);
   if (!meta) return null;
-  const faviconSources = [
-    `https://icons.duckduckgo.com/ip3/${meta.host}.ico`,
-    `https://www.google.com/s2/favicons?domain_url=${encodeURIComponent(url)}&sz=128`,
-    `https://www.google.com/s2/favicons?domain=${encodeURIComponent(meta.host)}&sz=128`,
-  ];
+  const faviconSources = preferredFaviconSources(meta.host, url);
   const faviconUrl = faviconSources[faviconSourceIndex];
   const compactUrl = compactUrlLabel(url);
+  const surfaceClass = embedded
+    ? mine
+      ? "bg-white/45 hover:bg-white/55"
+      : darkMode ? "bg-white/[0.08] hover:bg-white/[0.11]" : "bg-[#f1f7ff] hover:bg-[#eaf3ff]"
+    : mine ? "bg-[#dcecff] hover:bg-[#d6e8fb]" : darkMode ? "bg-white/[0.08] hover:bg-white/[0.11]" : "bg-white hover:bg-[#f8fafc]";
   return (
-    <a href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`flex w-full min-w-0 max-w-full items-center gap-2.5 rounded-[22px] px-3 py-3 text-left transition sm:gap-3 sm:px-4 ${mine ? "bg-[#dcecff] hover:bg-[#d6e8fb]" : darkMode ? "bg-white/[0.08] hover:bg-white/[0.11]" : "bg-white hover:bg-[#f8fafc]"}`}>
+    <a href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`flex w-full min-w-0 max-w-full items-center gap-2.5 rounded-[22px] px-3 py-3 text-left transition sm:gap-3 sm:px-4 ${surfaceClass}`}>
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white sm:h-12 sm:w-12">
         {faviconUrl ? (
           <img
@@ -216,7 +251,7 @@ function LinkPreviewCard({ url, mine, darkMode, time }) {
         <span className={`block truncate text-sm font-black ${darkMode && !mine ? "text-white" : "text-[#14213d]"}`}>{meta.title}</span>
         <span className={`mt-0.5 block truncate text-sm ${darkMode && !mine ? "text-white/50" : "text-[#667085]"}`}>{compactUrl}</span>
       </span>
-      <span className={`self-end whitespace-nowrap pb-0.5 text-[10px] ${mine ? "text-[#71809a]" : darkMode ? "text-white/40" : "text-black/40"}`}>{time}</span>
+      {!embedded && <span className={`self-end whitespace-nowrap pb-0.5 text-[10px] ${mine ? "text-[#71809a]" : darkMode ? "text-white/40" : "text-black/40"}`}>{time}</span>}
     </a>
   );
 }
@@ -558,10 +593,15 @@ export default function Forum({ darkMode }) {
   const [typingByConversation, setTypingByConversation] = useState({});
   const [sidebarUser, setSidebarUser] = useState(null);
   const [mobileListOpen, setMobileListOpen] = useState(true);
+  const [messageMenu, setMessageMenu] = useState(null);
+  const [copyFeedbackId, setCopyFeedbackId] = useState("");
+  const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
+  const [deletingMessage, setDeletingMessage] = useState(false);
   const socketRef = useRef(null);
   const endRef = useRef(null);
   const messageRefs = useRef(new Map());
   const chatMenuRef = useRef(null);
+  const messageMenuRef = useRef(null);
   const optimisticMessageCounterRef = useRef(0);
   const composerRef = useRef(null);
 
@@ -700,6 +740,13 @@ export default function Forum({ darkMode }) {
           });
         }
       }
+      if (payload.type === "forum:messageDeleted") {
+        if (sameConversation(payload.conversationId, selectedId)) {
+          setMessages((current) => current.filter((message) => message.id !== payload.messageId));
+        }
+        setMessageMenu((current) => current?.message?.id === payload.messageId ? null : current);
+        setDeleteMessageTarget((current) => current?.id === payload.messageId ? null : current);
+      }
       if (payload.type === "forum:typing") {
         setTypingByConversation((current) => {
           const list = (current[payload.conversationId] || []).filter((item) => item.id !== payload.user?.id);
@@ -770,6 +817,27 @@ export default function Forum({ darkMode }) {
     window.addEventListener("mousedown", closeOnOutside);
     return () => window.removeEventListener("mousedown", closeOnOutside);
   }, [chatMenuOpen]);
+
+  useEffect(() => {
+    if (!messageMenu) return undefined;
+    function closeMessageMenu(event) {
+      if (messageMenuRef.current?.contains(event.target)) return;
+      setMessageMenu(null);
+    }
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setMessageMenu(null);
+    }
+    window.addEventListener("mousedown", closeMessageMenu);
+    window.addEventListener("resize", closeMessageMenu);
+    window.addEventListener("scroll", closeMessageMenu, true);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("mousedown", closeMessageMenu);
+      window.removeEventListener("resize", closeMessageMenu);
+      window.removeEventListener("scroll", closeMessageMenu, true);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [messageMenu]);
 
   async function startDirect(user) {
     try {
@@ -871,6 +939,44 @@ export default function Forum({ darkMode }) {
     setSelectedId(GROUP_ID);
     setMessageSearch("");
     setChatMenuOpen(false);
+  }
+
+  function openMessageMenu(event, message) {
+    event.preventDefault();
+    const menuWidth = 192;
+    const menuHeight = 108;
+    const padding = 12;
+    const x = Math.min(Math.max(padding, event.clientX), window.innerWidth - menuWidth - padding);
+    const y = Math.min(Math.max(padding, event.clientY), window.innerHeight - menuHeight - padding);
+    setMessageMenu({ message, x, y });
+  }
+
+  async function copyMessageText(message) {
+    const text = String(message?.text || "");
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFeedbackId(message.id);
+      setMessageMenu(null);
+      window.setTimeout(() => setCopyFeedbackId((current) => current === message.id ? "" : current), 1400);
+    } catch (error) {
+      toast.error("Could not copy message");
+    }
+  }
+
+  async function deleteSingleMessage() {
+    if (!deleteMessageTarget || deletingMessage) return;
+    try {
+      setDeletingMessage(true);
+      await api(`/forum/conversations/${encodeURIComponent(deleteMessageTarget.conversationId || selectedId)}/messages/${encodeURIComponent(deleteMessageTarget.id)}`, { method: "DELETE" });
+      setMessages((current) => current.filter((message) => message.id !== deleteMessageTarget.id));
+      setDeleteMessageTarget(null);
+      setMessageMenu(null);
+    } catch (error) {
+      toast.error(error.message || "Could not delete message");
+    } finally {
+      setDeletingMessage(false);
+    }
   }
 
   async function clearChat() {
@@ -1124,6 +1230,7 @@ export default function Forum({ darkMode }) {
                         if (node) messageRefs.current.set(message.id, node);
                         else messageRefs.current.delete(message.id);
                       }}
+                      onContextMenu={(event) => openMessageMenu(event, message)}
                       className={`flex min-w-0 items-end gap-2 sm:gap-3 ${groupedWithPrevious ? "mt-[-6px]" : ""} ${mine ? "justify-end" : "justify-start"}`}
                     >
                       {!mine && (showAvatar ? (
@@ -1147,23 +1254,40 @@ export default function Forum({ darkMode }) {
                             )}
                           </div>
                         )}
-                        {displayText && (
-                          <div className={`max-w-full rounded-[20px] px-4 py-3 ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#dcecff] text-[#14213d]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-white/[0.08] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
-                            <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
-                              {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
-                              {!previewUrl && <span className="inline-block w-3" />}
-                              {!previewUrl && (
-                                <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? "text-[#71809a]" : muted}`}>
-                                  {formatTime(message.createdAt)}
-                                </span>
-                              )}
+                        {displayText && previewUrl && (
+                          <div className={`w-full max-w-full min-w-0 rounded-[22px] p-2 ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#dcecff] text-[#14213d]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-white/[0.08] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
+                            <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} embedded />
+                            <p className="flex min-w-0 items-end gap-3 px-2 pb-1 pt-2 text-sm leading-6">
+                              <span className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                                {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                              </span>
+                              <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? "text-[#71809a]" : muted}`}>
+                                {formatTime(message.createdAt)}
+                              </span>
                             </p>
                           </div>
                         )}
-                        {previewUrl && (
-                          <div className={`w-full max-w-full min-w-0 ring-offset-2 transition ${displayText ? "mt-2" : ""} ${isActiveMatch ? "rounded-[22px] ring-2 ring-[#facc15]" : ""}`}>
+                        {displayText && !previewUrl && (
+                          <div className={`max-w-full rounded-[20px] px-4 py-3 ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${mine ? darkMode ? "rounded-br-[6px] bg-[#dcecff] text-[#14213d]" : "rounded-br-[6px] bg-[#e5f1ff] text-[#14213d]" : darkMode ? "rounded-bl-[6px] bg-white/[0.08] text-white" : "rounded-bl-[6px] bg-white text-[#14213d]"}`}>
+                            <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
+                              {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                              <span className="inline-block w-3" />
+                              <span className={`inline-block whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? "text-[#71809a]" : muted}`}>
+                                {formatTime(message.createdAt)}
+                              </span>
+                            </p>
+                          </div>
+                        )}
+                        {previewUrl && !displayText && (
+                          <div className={`w-full max-w-full min-w-0 ring-offset-2 transition ${isActiveMatch ? "rounded-[22px] ring-2 ring-[#facc15]" : ""}`}>
                             <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} />
                           </div>
+                        )}
+                        {copyFeedbackId === message.id && (
+                          <span className={`mt-1 inline-flex animate-pulse items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ${darkMode ? "bg-emerald-400/15 text-emerald-200" : "bg-emerald-50 text-emerald-600"}`}>
+                            <Check className="h-3 w-3" />
+                            Copied
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1240,6 +1364,61 @@ export default function Forum({ darkMode }) {
             />
           )}
         </main>
+        {messageMenu && (
+          <div
+            ref={messageMenuRef}
+            style={{ left: messageMenu.x, top: messageMenu.y }}
+            className={`fixed z-[80] w-48 origin-top-left rounded-2xl border p-1.5 shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${darkMode ? "border-white/10 bg-[#1c1f26]/95 text-white" : "border-black/10 bg-white/95 text-[#111827]"}`}
+          >
+            <button
+              type="button"
+              onClick={() => copyMessageText(messageMenu.message)}
+              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+            >
+              <Copy className="h-4 w-4 text-[#2563eb]" />
+              Copy message
+            </button>
+            <button
+              type="button"
+              disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
+              onClick={() => {
+                setDeleteMessageTarget(messageMenu.message);
+                setMessageMenu(null);
+              }}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete message
+            </button>
+          </div>
+        )}
+        {deleteMessageTarget && (
+          <div className="fixed inset-0 z-[90] grid place-items-center dark:bg-black/80 bg-black/60 px-4 " onMouseDown={() => !deletingMessage && setDeleteMessageTarget(null)}>
+            <div onMouseDown={(event) => event.stopPropagation()} className={`w-full max-w-md rounded-[24px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+              <div className="flex items-start gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-500/10 text-red-500">
+                  <Trash2 className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-lg text-black dark:text-white font-black">Delete message?</h3>
+                  <p className={`mt-1 text-sm leading-5 ${muted}`}>This message will be removed from the conversation for everyone.</p>
+                </div>
+              </div>
+              {/* <div className={`mt-4 max-h-24 overflow-hidden rounded-2xl px-3 py-2 text-sm ${darkMode ? "bg-white/[0.05] text-white/70" : "bg-[#f7f8fb] text-black/60"}`}>
+                <p className="line-clamp-3 whitespace-pre-wrap break-words">{deleteMessageTarget.text || "Link preview message"}</p>
+              </div> */}
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" disabled={deletingMessage} onClick={() => setDeleteMessageTarget(null)} className={`h-10 rounded-full px-4 text-sm font-bold ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-[#f3f4f6] hover:bg-[#e5e7eb]"} disabled:opacity-50`}>
+                  Cancel
+                </button>
+                <button type="button" disabled={deletingMessage} onClick={deleteSingleMessage} className="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-full bg-red-500 px-4 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-60">
+                  {deletingMessage ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1189,6 +1189,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 )}
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{selectedConversation?.name || "Group Forum"}</span>
+                  {selectedConversation?.type === "direct" && selectedOtherUser && (
+                    <span className={`block truncate text-[11px] leading-4 lg:hidden ${online.has(selectedOtherUser.id) ? "text-[#22c55e]" : muted}`}>
+                      {online.has(selectedOtherUser.id) ? "Online" : "Offline"}
+                    </span>
+                  )}
                 </span>
               </div>
               <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-full flex-1" : "hidden"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>

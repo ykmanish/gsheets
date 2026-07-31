@@ -604,7 +604,7 @@ const EMPLOYEE_REPORT_OPTIONS = {
 };
 const EMPLOYEE_REPORT_APP_TAB = "_AppData";
 const EMPLOYEE_REPORT_APP_HEADERS = ["Report ID", "User ID", "Employee", "Department", "Report Date", "Submitted At", "Client", "Site", "Task Type", "Task Status", "Involvement", "Tomorrow Plan", "Note", "Task Items JSON", "Waiting Items JSON"];
-const EMPLOYEE_REPORT_EXEMPT_USERNAMES = new Set(["neelamverma"]);
+const EMPLOYEE_REPORT_EXEMPT_USERNAMES = new Set(["neelamverma", "iqbalpatel"]);
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_TEMPLATE || "daily_report_reminder";
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_LANGUAGE || "en";
 const EMPLOYEE_REPORT_REMINDER_LINK = process.env.EMPLOYEE_REPORT_REMINDER_LINK || process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "http://localhost:3000/employee-daily-report";

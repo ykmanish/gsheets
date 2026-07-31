@@ -175,7 +175,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         if (window.__forumPageActive) return;
         try {
           const payload = JSON.parse(event.data || "{}");
-          if (payload.type === "forum:message" && payload.message?.senderId !== user.id && document.hidden) {
+          if (payload.type === "forum:message" && payload.message?.senderId !== user.id) {
             const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
             const previewText = String(payload.message?.text || "").slice(0, 80);
             // In-app toast
@@ -186,8 +186,8 @@ function ProtectedModuleContent({ moduleId, projectId }) {
               label: "Message",
               duration: 4500,
             });
-            // Browser push notification
-            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+            // Browser push notification only when tab is hidden
+            if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
               try {
                 const browserNotif = new Notification(senderName, {
                   body: previewText || "Sent a message",

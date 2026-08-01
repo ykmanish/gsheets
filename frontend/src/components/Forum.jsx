@@ -2137,7 +2137,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 );
               })}
               {!filteredDirectConversations.length && (
-                <p className={`px-3 py-3 text-sm ${muted}`}>No direct conversations yet.</p>
+                <p className={`px-3 py-3 text-sm ${muted}`}>No direct conversations yet</p>
               )}
               {searchedUsers.length > 0 && (
                 <>

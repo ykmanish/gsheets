@@ -923,6 +923,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [activeScreenShareUserId, setActiveScreenShareUserId] = useState(null);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const peerConnectionsRef = useRef(new Map());
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
@@ -932,7 +933,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
   }, [localStream]);
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      const playPromise = remoteVideoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          setAutoplayBlocked(true);
+        });
+      }
+    }
   }, [remoteStream]);
   const socketRef = useRef(null);
   const endRef = useRef(null);
@@ -995,10 +1004,20 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   const startScreenShare = async () => {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      let stream;
+      try {
+        if (!navigator.mediaDevices.getDisplayMedia) throw new Error("NotSupported");
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      } catch (err) {
+        if (err.name === 'NotAllowedError') return;
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
+        toast.success("Screen share unavailable. Sharing camera instead.");
+      }
+      
       localStreamRef.current = stream;
       setLocalStream(stream);
       setActiveScreenShareUserId(currentUser?.id);
+      setAutoplayBlocked(false);
 
       stream.getVideoTracks()[0].onended = () => {
         stopScreenShare();
@@ -1014,6 +1033,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       }
     } catch (err) {
       console.error("Error sharing screen", err);
+      toast.error("Could not start sharing");
     }
   };
 
@@ -2077,7 +2097,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                         <button
                           type="button"
                           onClick={activeScreenShareUserId === currentUser?.id ? stopScreenShare : startScreenShare}
-                          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${activeScreenShareUserId === currentUser?.id ? "bg-red-500 text-white hover:bg-red-600" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}
+                          className={`hidden sm:grid h-9 w-9 shrink-0 place-items-center rounded-full ${activeScreenShareUserId === currentUser?.id ? "bg-red-500 text-white hover:bg-red-600" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}
                           aria-label="Share Screen"
                         >
                           {activeScreenShareUserId === currentUser?.id ? <X className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
@@ -2086,7 +2106,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                         <button
                           type="button"
                           disabled
-                          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full opacity-30 cursor-not-allowed ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}
+                          className={`hidden sm:grid h-9 w-9 shrink-0 place-items-center rounded-full opacity-30 cursor-not-allowed ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}
                           aria-label="Someone is already sharing"
                         >
                           <Monitor className="h-4 w-4" />
@@ -2111,6 +2131,20 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                           <Trash2 className="h-3.5 w-3.5" />
                           Delete chat
                         </button>
+                        {isMobileViewport && (
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              activeScreenShareUserId === currentUser?.id ? stopScreenShare() : startScreenShare();
+                              setChatMenuOpen(false);
+                            }}
+                            disabled={activeScreenShareUserId && activeScreenShareUserId !== currentUser?.id}
+                            className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${activeScreenShareUserId === currentUser?.id ? "text-red-500 hover:bg-red-500/10" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"} disabled:opacity-35`}
+                          >
+                            {activeScreenShareUserId === currentUser?.id ? <X className="h-3.5 w-3.5" /> : <Monitor className="h-3.5 w-3.5" />}
+                            {activeScreenShareUserId === currentUser?.id ? "Stop sharing" : "Share screen"}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2134,6 +2168,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                         <span className="text-sm font-semibold">You are sharing</span>
                         <button type="button" onClick={stopScreenShare} className="ml-2 rounded-full bg-red-500 px-3 py-1 text-xs font-bold hover:bg-red-600">
                           Stop
+                        </button>
+                      </div>
+                    )}
+                    {autoplayBlocked && !localStream && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            if (remoteVideoRef.current) {
+                              remoteVideoRef.current.play().then(() => setAutoplayBlocked(false)).catch(console.error);
+                            }
+                          }}
+                          className="rounded-full bg-white px-6 py-2.5 text-sm font-bold text-black hover:bg-white/90"
+                        >
+                          Tap to Play Screen Share
                         </button>
                       </div>
                     )}

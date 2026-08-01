@@ -1047,13 +1047,20 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
 
     pc.onicecandidate = (event) => {
-      if (event.candidate && socketRef.current) {
-        socketRef.current.send(JSON.stringify({
-          type: "forum:screenShareCandidate",
-          conversationId: selectedId,
-          targetUserId,
-          candidate: event.candidate
-        }));
+      if (event.candidate) {
+        const sendCandidate = () => {
+          if (socketRef.current?.readyState === WebSocket.OPEN) {
+            socketRef.current.send(JSON.stringify({
+              type: "forum:screenShareCandidate",
+              conversationId: selectedId,
+              targetUserId,
+              candidate: event.candidate
+            }));
+          } else if (socketRef.current) {
+            setTimeout(sendCandidate, 200);
+          }
+        };
+        sendCandidate();
       }
     };
 
@@ -1081,12 +1088,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (!peerConnectionsRef.current.has(sharerId)) {
         const pc = createPeerConnection(sharerId, false);
         pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
-          socketRef.current?.send(JSON.stringify({
-            type: "forum:screenShareOffer",
-            conversationId: selectedId,
-            targetUserId: sharerId,
-            offer: pc.localDescription
-          }));
+          const sendOffer = () => {
+            if (socketRef.current?.readyState === WebSocket.OPEN) {
+              socketRef.current.send(JSON.stringify({
+                type: "forum:screenShareOffer",
+                conversationId: selectedId,
+                targetUserId: sharerId,
+                offer: pc.localDescription
+              }));
+            } else if (socketRef.current) {
+              setTimeout(sendOffer, 200);
+            }
+          };
+          sendOffer();
         }).catch(console.error);
       }
     } else if (!selectedConversation?.activeScreenShareUserId && !localStreamRef.current) {
@@ -1323,12 +1337,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           if (payload.userId !== currentUser?.id) {
             const pc = createPeerConnection(payload.userId, true);
             pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
-              socketRef.current?.send(JSON.stringify({
-                type: "forum:screenShareOffer",
-                conversationId: selectedId,
-                targetUserId: payload.userId,
-                offer: pc.localDescription
-              }));
+              const sendOffer = () => {
+                if (socketRef.current?.readyState === WebSocket.OPEN) {
+                  socketRef.current.send(JSON.stringify({
+                    type: "forum:screenShareOffer",
+                    conversationId: selectedId,
+                    targetUserId: payload.userId,
+                    offer: pc.localDescription
+                  }));
+                } else if (socketRef.current) {
+                  setTimeout(sendOffer, 200);
+                }
+              };
+              sendOffer();
             }).catch(console.error);
           }
         }
@@ -1351,12 +1372,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
             .then(() => pc.createAnswer())
             .then(answer => pc.setLocalDescription(answer))
             .then(() => {
-              socketRef.current?.send(JSON.stringify({
-                type: "forum:screenShareAnswer",
-                conversationId: selectedId,
-                targetUserId: payload.fromUserId,
-                answer: pc.localDescription
-              }));
+              const sendAnswer = () => {
+                if (socketRef.current?.readyState === WebSocket.OPEN) {
+                  socketRef.current.send(JSON.stringify({
+                    type: "forum:screenShareAnswer",
+                    conversationId: selectedId,
+                    targetUserId: payload.fromUserId,
+                    answer: pc.localDescription
+                  }));
+                } else if (socketRef.current) {
+                  setTimeout(sendAnswer, 200);
+                }
+              };
+              sendAnswer();
             }).catch(console.error);
         }
       }
@@ -2148,25 +2176,34 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 </header>
 
                 {(localStream || remoteStream) && (
-                  <div className={`relative flex w-full justify-center overflow-hidden border-b shrink-0 ${darkMode ? "bg-black border-white/[0.06]" : "bg-[#f0f2f5] border-[#eef1f5]"} ${isFullscreen ? "fixed inset-0 z-[100] h-[100dvh] w-screen border-none bg-black flex-col" : "max-h-[40vh]"}`}>
+                  <div id="screen-share-container" className={`relative flex w-full justify-center overflow-hidden border-b shrink-0 ${darkMode ? "bg-black border-white/[0.06]" : "bg-[#f0f2f5] border-[#eef1f5]"} ${isFullscreen ? "h-screen w-screen border-none bg-black flex-col" : "max-h-[40vh]"}`}>
                     <video
                       ref={localStream ? localVideoRef : remoteVideoRef}
                       autoPlay
                       playsInline
                       muted={!!localStream}
-                      className={`w-auto object-contain ${isFullscreen ? "h-full w-full max-h-none" : "h-full max-h-[40vh] max-w-full"}`}
+                      className={`w-auto object-contain ${isFullscreen ? "h-full w-full" : "h-full max-h-[40vh] max-w-full"}`}
                     />
                     
-                    <div className="absolute right-3 top-3 z-10 flex gap-2">
-                      <button 
-                        type="button" 
-                        onClick={() => setIsFullscreen(!isFullscreen)} 
-                        className="grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white backdrop-blur-md hover:bg-black/80"
-                        aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                      >
-                        {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-                      </button>
-                    </div>
+                    {!localStream && (
+                      <div className="absolute right-3 top-3 z-10 flex gap-2">
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            const container = document.getElementById("screen-share-container");
+                            if (!document.fullscreenElement && container) {
+                              container.requestFullscreen().catch(console.error);
+                            } else if (document.fullscreenElement) {
+                              document.exitFullscreen().catch(console.error);
+                            }
+                          }} 
+                          className="grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white backdrop-blur-md hover:bg-black/80 transition-colors"
+                          aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                        >
+                          {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    )}
 
                     {localStream && (
                       <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-2 text-white backdrop-blur-md">

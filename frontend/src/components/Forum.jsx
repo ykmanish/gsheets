@@ -2240,6 +2240,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
     touchTimerRef.current = setTimeout(() => {
       if (!swipeRef.current.locked) {
+        if (event.cancelable) event.preventDefault();
+        window.getSelection?.().removeAllRanges();
+        document.activeElement?.blur?.();
         swipeRef.current.active = false;
         openMessageMenu({ preventDefault: () => {}, clientX: touchStartPosRef.current.x, clientY: touchStartPosRef.current.y }, message);
       }
@@ -2308,10 +2311,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       bottom: window.innerHeight,
     };
     const menuWidth = 260;
-    const menuHeight = 470;
-    const padding = 12;
     const viewport = window.visualViewport;
+    const safeTop = Math.max(mainBounds.top, viewport?.offsetTop || 0);
     const safeBottom = Math.min(mainBounds.bottom, (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight));
+    const safeLeft = Math.max(mainBounds.left, viewport?.offsetLeft || 0);
+    const safeRight = Math.min(mainBounds.right, (viewport?.offsetLeft || 0) + (viewport?.width || window.innerWidth));
+    const isTouchViewport = isMobileViewport || (viewport?.width || window.innerWidth) < 768;
+    const menuHeight = isTouchViewport ? Math.min(520, safeBottom - safeTop - 24) : 470;
+    const padding = 12;
 
     const messageNode = messageRefs.current.get(message.id);
     const clickX = event.clientX || 100;
@@ -2331,7 +2338,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     };
 
     let x;
-    if (mine) {
+    if (isTouchViewport) {
+      x = Math.max(safeLeft + padding, Math.min((safeLeft + safeRight - menuWidth) / 2, safeRight - menuWidth - padding));
+    } else if (mine) {
       x = Math.max(mainBounds.left + padding, Math.min(rect.right - menuWidth, mainBounds.right - menuWidth - padding));
     } else {
       x = Math.max(mainBounds.left + padding, Math.min(rect.left, mainBounds.right - menuWidth - padding));
@@ -2340,15 +2349,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     let y;
     if (rect.bottom + 8 + menuHeight <= safeBottom - padding) {
       y = rect.bottom + 8;
-    } else if (rect.top - 8 - menuHeight >= mainBounds.top + padding) {
+    } else if (rect.top - 8 - menuHeight >= safeTop + padding) {
       y = rect.top - menuHeight - 8;
     } else {
-      y = Math.max(mainBounds.top + padding, Math.min(rect.bottom + 8, safeBottom - menuHeight - padding));
+      y = Math.max(safeTop + padding, Math.min(rect.bottom + 8, safeBottom - menuHeight - padding));
     }
 
     setEmojiPickerOpen(false);
     setEmojiSearch("");
-    setMessageMenu({ message, x, y, mine, maxActionsHeight: Math.max(180, safeBottom - y - 86) });
+    setMessageMenu({ message, x, y, mine, maxActionsHeight: Math.max(180, safeBottom - y - 86), touchViewport: isTouchViewport });
   }
 
   useEffect(() => {
@@ -2363,22 +2372,27 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     };
     const viewport = window.visualViewport;
     const viewportBottom = Math.min(mainBounds.bottom, (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight));
+    const viewportTop = Math.max(mainBounds.top, viewport?.offsetTop || 0);
+    const viewportLeft = Math.max(mainBounds.left, viewport?.offsetLeft || 0);
+    const viewportRight = Math.min(mainBounds.right, (viewport?.offsetLeft || 0) + (viewport?.width || window.innerWidth));
     const padding = 12;
 
     let newX = messageMenu.x;
     let newY = messageMenu.y;
 
-    if (rect.right > mainBounds.right - padding) {
+    if (messageMenu.touchViewport) {
+      newX = Math.max(viewportLeft + padding, Math.min((viewportLeft + viewportRight - rect.width) / 2, viewportRight - rect.width - padding));
+    } else if (rect.right > mainBounds.right - padding) {
       newX = Math.max(mainBounds.left + padding, mainBounds.right - rect.width - padding);
     }
-    if (newX < mainBounds.left + padding) {
-      newX = mainBounds.left + padding;
+    if (newX < viewportLeft + padding) {
+      newX = viewportLeft + padding;
     }
     if (rect.bottom > viewportBottom - padding) {
-      newY = Math.max(mainBounds.top + padding, viewportBottom - rect.height - padding);
+      newY = Math.max(viewportTop + padding, viewportBottom - rect.height - padding);
     }
-    if (newY < mainBounds.top + padding) {
-      newY = mainBounds.top + padding;
+    if (newY < viewportTop + padding) {
+      newY = viewportTop + padding;
     }
     const maxActionsHeight = Math.max(180, viewportBottom - newY - 86);
 
@@ -3123,7 +3137,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                               transform: swipeOffset.id === message.id ? `translateX(${swipeOffset.x}px)` : undefined,
                               transition: swipeOffset.id === message.id ? "none" : "transform 300ms cubic-bezier(0.22, 1, 0.36, 1)",
                             }}
-                            className={`flex min-w-0 items-end gap-2 sm:gap-3 duration-200 ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[86] scale-[1.01]" : ""}`}
+                            className={`forum-chat-message flex min-w-0 items-end gap-2 sm:gap-3 duration-200 ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[86] scale-[1.01]" : ""}`}
                           >
                           {!mine && isGroupChat && (showAvatar ? (
                             <span className="self-end">

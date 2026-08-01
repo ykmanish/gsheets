@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Pin, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Pin, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, Smile, SmilePlus, Sparkles, Star, Sticker, SunMedium, Trash2, Upload, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
+import EmojiPicker from "emoji-picker-react";
+import { GiphyFetch } from "@giphy/js-fetch-api";
+import { Grid } from "@giphy/react-components";
+
+const gf = new GiphyFetch(process.env.NEXT_PUBLIC_GIPHY_API_KEY || "eGCEt3kYBuQiWaTPQhS2lSod97pS9Fpi");
 
 const GROUP_ID = "workspace-forum";
 
@@ -274,6 +279,12 @@ function groupAvatarPreset(id) {
 }
 
 function GroupAvatar({ group, className = "h-11 w-11", iconClassName = "h-5 w-5", rounded = "full" }) {
+  if (group?.avatarUrl) {
+    const src = group.avatarUrl.startsWith("blob:") || group.avatarUrl.startsWith("data:") ? group.avatarUrl : `${API_URL}${group.avatarUrl}`;
+    return (
+      <img src={src} alt="" className={`shrink-0 object-cover ${rounded === "lg" ? "rounded-2xl" : "rounded-full"} ${className}`} />
+    );
+  }
   const preset = groupAvatarPreset(group?.avatarPreset);
   const Icon = preset.Icon || MessagesSquare;
   return (
@@ -902,6 +913,11 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
       <div className="mx-auto flex w-full max-w-[320px] flex-col">
         <div ref={avatarPickerRef} className="relative mx-auto">
           <GroupAvatar group={group} className="h-20 w-20 min-w-20" iconClassName="h-9 w-9" />
+          {pendingAction === "avatar" && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-full bg-black/50 text-white">
+              <TinySpinner className="h-6 w-6" />
+            </div>
+          )}
           {canManage && (
             <button type="button" onClick={() => setAvatarPickerOpen((open) => !open)} className={`absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full border-2 ${darkMode ? "border-[#15171c] bg-[#1c1f26] hover:bg-[#252934]" : "border-[#fbfcff] bg-white hover:bg-[#f4f7fb]"}`} aria-label="Change group avatar">
               <Pencil className={`h-3.5 w-3.5 ${muted}`} />
@@ -912,18 +928,47 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${muted}`}>Group avatar</p>
-                  <p className="text-sm font-black">Choose gradient</p>
+                  <p className="text-sm font-black">Choose avatar</p>
                 </div>
                 <button type="button" onClick={() => setAvatarPickerOpen(false)} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close avatar picker">
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <div className="grid max-h-64 grid-cols-5 gap-2 overflow-y-auto pr-1">
+              <div className="mb-3">
+                <label className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border p-2 text-sm font-bold transition active:scale-[0.98] ${darkMode ? "border-white/10 hover:bg-white/5" : "border-black/10 hover:bg-black/5"}`}>
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/webp"
+                    className="hidden"
+                    onClick={(event) => { event.target.value = null; }}
+                    onChange={async (event) => {
+                      const file = event.target.files[0];
+                      if (!file) return;
+                      setAvatarPickerOpen(false);
+                      const formData = new FormData();
+                      formData.append("avatar", file);
+                      const endpoint = group.id === GROUP_ID ? "/forum/group/avatar" : `/forum/conversations/${encodeURIComponent(group.id)}/avatar`;
+                      try {
+                        setPendingAction("avatar");
+                        const data = await apiFormWithProgress(endpoint, formData);
+                        if (data.error) throw new Error(data.error);
+                      } catch (error) {
+                        toast.error(error.message || "Could not upload avatar");
+                      } finally {
+                        setPendingAction("");
+                      }
+                    }}
+                  />
+                  <Upload className="h-4 w-4" />
+                  Upload Custom Image
+                </label>
+              </div>
+              <div className="grid max-h-64 grid-cols-5 gap-2 overflow-y-auto p-2 -m-2">
                 {GROUP_AVATAR_PRESETS.map((preset) => {
                   const selected = (group?.avatarPreset || "ocean") === preset.id;
                   const Icon = preset.Icon || MessagesSquare;
                   return (
-                    <button key={preset.id} type="button" disabled={Boolean(pendingAction)} onClick={() => { void saveGroup({ avatarPreset: preset.id }, "avatar"); setAvatarPickerOpen(false); }} className={`grid h-12 w-12 place-items-center rounded-full transition active:scale-[0.96] disabled:cursor-wait disabled:opacity-60 ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label={`Choose ${preset.id} avatar`}>
+                    <button key={preset.id} type="button" disabled={Boolean(pendingAction)} onClick={() => { void saveGroup({ avatarPreset: preset.id }, "avatar"); setAvatarPickerOpen(false); }} className={`grid h-12 w-12 place-items-center rounded-full outline-none focus:outline-none transition active:scale-[0.96] disabled:cursor-wait disabled:opacity-60 ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label={`Choose ${preset.id} avatar`}>
                       <span className="grid h-10 w-10 place-items-center rounded-full text-white" style={{ background: preset.gradient }}>
                         <Icon className="h-4 w-4" />
                       </span>
@@ -1121,6 +1166,20 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [starredOnlyOpen, setStarredOnlyOpen] = useState(false);
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerTab, setMediaPickerTab] = useState("emoji");
+  const [giphySearch, setGiphySearch] = useState("");
+  const mediaPickerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (mediaPickerOpen && mediaPickerRef.current && !mediaPickerRef.current.contains(event.target)) {
+        setMediaPickerOpen(false);
+      }
+    }
+    window.addEventListener("mousedown", handleClickOutside);
+    return () => window.removeEventListener("mousedown", handleClickOutside);
+  }, [mediaPickerOpen]);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [unreadByConversation, setUnreadByConversation] = useState({});
   const [typingByConversation, setTypingByConversation] = useState({});
@@ -1147,6 +1206,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [forwardTargetIds, setForwardTargetIds] = useState([]);
   const [forwardSending, setForwardSending] = useState(false);
   const [forumSettingsOpen, setForumSettingsOpen] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [createGroupStep, setCreateGroupStep] = useState(1);
+  const [createGroupName, setCreateGroupName] = useState("");
+  const [createGroupAvatar, setCreateGroupAvatar] = useState("ocean");
+  const [createGroupAvatarFile, setCreateGroupAvatarFile] = useState(null);
+  const [createGroupMemberIds, setCreateGroupMemberIds] = useState([]);
+  const [createGroupSearch, setCreateGroupSearch] = useState("");
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const [forumDriveFolderUrl, setForumDriveFolderUrl] = useState("");
   const [forumDriveConnectedUrl, setForumDriveConnectedUrl] = useState("");
   const [savingForumSettings, setSavingForumSettings] = useState(false);
@@ -1224,7 +1291,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     };
   }, [imageDraft?.previewUrl]);
   const selectedConversation = selectedId ? conversations.find((item) => item.id === selectedId) || null : null;
-  const selectedIsGroup = selectedId === GROUP_ID;
+  const selectedIsGroup = selectedConversation?.type === "group";
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
   const currentUser = getStoredAuth().user;
 
@@ -1439,9 +1506,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const forwardTargets = useMemo(() => {
     const term = forwardSearch.trim().toLowerCase();
     const items = [];
-    const group = conversations.find((item) => item.id === GROUP_ID);
-    if (group) {
-      items.push({ key: `group:${GROUP_ID}`, type: "group", id: GROUP_ID, title: group.name || "Group Forum", subtitle: "Workspace group", avatarUser: null, group });
+    for (const group of conversations.filter((item) => item.type === "group")) {
+      items.push({ key: `group:${group.id}`, type: "group", id: group.id, title: group.name || "Group Forum", subtitle: group.id === GROUP_ID ? "Workspace group" : "Group chat", avatarUser: null, group });
     }
     for (const conversation of conversations.filter((item) => item.type === "direct")) {
       const other = conversation.participants?.find((user) => String(user.id) !== String(currentUser?.id));
@@ -1470,10 +1536,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   }, [conversations, currentUser?.id, forwardSearch, users]);
 
   const groupConversation = conversations.find((item) => item.id === GROUP_ID);
+  const groupConversations = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return conversations
+      .filter((item) => item.type === "group")
+      .filter((item) => !term || [item.name, item.lastMessage?.text].join(" ").toLowerCase().includes(term));
+  }, [conversations, search]);
   const selectedOtherUser = selectedConversation?.type === "direct"
     ? selectedConversation.participants?.find((user) => user.id !== getStoredAuth().user?.id)
     : null;
-  const groupAdminIds = useMemo(() => new Set((groupConversation?.adminIds || []).map(String)), [groupConversation?.adminIds]);
+  const groupAdminIds = useMemo(() => new Set((selectedConversation?.type === "group" ? selectedConversation.adminIds || [] : []).map(String)), [selectedConversation?.adminIds, selectedConversation?.type]);
   const currentUserIsGroupAdmin = Boolean(currentUser?.isSuperAdmin || groupAdminIds.has(String(currentUser?.id || "")));
   const canSendSelectedConversation = Boolean(selectedConversation && (selectedConversation.type !== "group" || !selectedConversation.adminOnlyMessages || currentUserIsGroupAdmin));
   const messageMatches = useMemo(() => {
@@ -1488,9 +1560,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   ), [messages, starredOnlyOpen]);
   const groupParticipants = useMemo(() => {
     const byId = new Map();
-    for (const user of groupConversation?.participants || []) byId.set(user.id, user);
+    for (const user of selectedConversation?.type === "group" ? selectedConversation.participants || [] : []) byId.set(user.id, user);
     return [...byId.values()].sort((a, b) => Number(online.has(b.id)) - Number(online.has(a.id)) || (a.displayName || "").localeCompare(b.displayName || ""));
-  }, [groupConversation?.participants, online]);
+  }, [online, selectedConversation?.participants, selectedConversation?.type]);
   const mentionQuery = useMemo(() => {
     if (!selectedIsGroup) return null;
     const match = composer.match(/(^|\s)@([a-zA-Z0-9_.-]*)$/);
@@ -1503,6 +1575,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       .filter((user) => [user.displayName, user.username].join(" ").toLowerCase().includes(mentionQuery))
       .slice(0, 6);
   }, [currentUser?.id, groupParticipants, mentionQuery]);
+  const createGroupUsers = useMemo(() => {
+    const term = createGroupSearch.trim().toLowerCase();
+    return users
+      .filter((user) => user.id && String(user.id) !== String(currentUser?.id))
+      .filter((user) => !term || [user.displayName, user.username, user.department, user.designation, user.email].join(" ").toLowerCase().includes(term))
+      .sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
+  }, [createGroupSearch, currentUser?.id, users]);
 
   const loadBootstrap = useCallback(async () => {
     const data = await api("/forum/bootstrap");
@@ -1917,9 +1996,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   }
 
   async function sendMessage(event) {
-    event.preventDefault();
+    event?.preventDefault?.();
+    const giphy = event?.giphy;
     const text = composer.trim();
-    if (!text) return;
+    if (!text && !giphy) return;
     if (!canSendSelectedConversation) {
       toast.error("Only group admins can message right now");
       return;
@@ -1968,6 +2048,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       pending: true,
       replyToMessage: currentReply,
     };
+    
+    // Check if the event has a giphy object (passed from media picker)
+    if (giphy?.url) {
+      tempMessage.attachment = {
+        kind: giphy.type === "sticker" ? "sticker" : "gif",
+        openUrl: giphy.url,
+        name: giphy.type === "sticker" ? "Sticker" : "GIF",
+      };
+      if (!tempMessage.text) tempMessage.text = giphy.type === "sticker" ? "Sticker" : "GIF";
+    }
+
     setMessages((current) => [...current, tempMessage]);
     setConversations((current) => current.map((item) => (
       item.id === selectedId
@@ -1978,7 +2069,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     try {
       const data = await api(`/forum/conversations/${encodeURIComponent(selectedId)}/messages`, {
         method: "POST",
-        body: JSON.stringify({ text, replyToMessage: currentReply }),
+        body: JSON.stringify({ text, replyToMessage: currentReply, giphy }),
       });
       if (data.message) {
         setConversations((current) => current.map((item) => (
@@ -2609,7 +2700,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   async function updateGroup(update) {
     try {
-      const data = await api("/forum/group", {
+      const endpoint = selectedId === GROUP_ID ? "/forum/group" : `/forum/conversations/${encodeURIComponent(selectedId)}/group`;
+      const data = await api(endpoint, {
         method: "PATCH",
         body: JSON.stringify(update),
       });
@@ -2618,6 +2710,46 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     } catch (error) {
       toast.error(error.message);
       throw error;
+    }
+  }
+
+  async function createGroup(event) {
+    event?.preventDefault();
+    const name = createGroupName.trim();
+    if (!name) return toast.error("Enter group name");
+    if (!createGroupMemberIds.length) return toast.error("Add at least one member");
+    try {
+      setCreatingGroup(true);
+      const data = await api("/forum/conversations/group", {
+        method: "POST",
+        body: JSON.stringify({ name, avatarPreset: createGroupAvatar, participantIds: createGroupMemberIds }),
+      });
+      let createdConversation = data.conversation;
+      if (createGroupAvatarFile) {
+        const formData = new FormData();
+        formData.append("avatar", createGroupAvatarFile);
+        try {
+          const avatarData = await apiFormWithProgress(`/forum/conversations/${encodeURIComponent(createdConversation.id)}/avatar`, formData);
+          if (avatarData.conversation) createdConversation = avatarData.conversation;
+        } catch (error) {
+          toast.error("Group created, but avatar upload failed");
+        }
+      }
+      setConversations((current) => [createdConversation, ...current.filter((item) => item.id !== createdConversation.id)]);
+      setSelectedId(createdConversation.id);
+      setMobileListOpen(false);
+      setCreateGroupOpen(false);
+      setCreateGroupStep(1);
+      setCreateGroupName("");
+      setCreateGroupAvatar("ocean");
+      setCreateGroupAvatarFile(null);
+      setCreateGroupMemberIds([]);
+      setCreateGroupSearch("");
+      toast.success("Group created");
+    } catch (error) {
+      toast.error(error.message || "Could not create group");
+    } finally {
+      setCreatingGroup(false);
     }
   }
 
@@ -2696,14 +2828,20 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           </div>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-            <p className={`px-4 pb-2 pt-4 text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Group</p>
+            <div className="flex items-center justify-between px-4 pb-2 pt-4">
+              <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Group</p>
+              <button type="button" onClick={() => setCreateGroupOpen(true)} className={`inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#eef4ff] text-[#2563eb] hover:bg-[#e0ecff]"}`}>
+                <Plus className="h-3.5 w-3.5" />
+                New
+              </button>
+            </div>
             <div className="min-w-0 space-y-1 overflow-hidden px-2">
-              {[groupConversation].filter(Boolean).map((conversation) => {
+              {groupConversations.map((conversation) => {
                 const active = conversation.id === selectedId;
                 const unread = unreadByConversation[conversation.id];
                 const typingUsers = typingByConversation[conversation.id] || [];
                 const pinActivity = pinActivityText(conversation.pinnedMessage, currentUser?.id);
-                const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, "Workspace group forum");
+                const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, conversation.id === GROUP_ID ? "Workspace group forum" : "Group chat");
                 return (
                   <button key={conversation.id} type="button" onClick={() => { setSelectedId(conversation.id); setMobileListOpen(false); }} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
                     {conversation.type === "group" ? (
@@ -3168,7 +3306,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                     Forwarded from {message.forwardedFrom.senderName || "User"}
                                   </div>
                                 )}
-                                {message.attachment.kind === "image" || String(message.attachment.mimeType || "").startsWith("image/") ? (
+                                {message.attachment.kind === "image" || message.attachment.kind === "gif" || message.attachment.kind === "sticker" || String(message.attachment.mimeType || "").startsWith("image/") ? (
                                   <ImageAttachmentCard
                                     attachment={message.attachment}
                                     mine={mine}
@@ -3485,34 +3623,116 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     className="hidden"
                     onChange={(event) => handlePhotoSelected(event.target.files?.[0])}
                   />
-                  <div className="relative shrink-0">
-                    {attachmentMenuOpen && (
-                      <div className={`absolute bottom-14 left-0 z-30 w-56 origin-bottom-left rounded-[18px] border-0 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] forum-ctx-actions ${darkMode ? "bg-[#1b1e25] text-white" : "bg-white text-[#111827]"}`}>
-                        <button type="button" onClick={() => { setAttachmentMenuOpen(false); documentInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f4f7fb]"}`}>
-                          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-violet-400/15 text-violet-300" : "bg-violet-50 text-violet-600"}`}>
-                            <FileText className="h-4 w-4" />
-                          </span>
-                          Document
-                        </button>
-                        <button type="button" onClick={() => { setAttachmentMenuOpen(false); photoInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f4f7fb]"}`}>
-                          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-sky-400/15 text-sky-300" : "bg-sky-50 text-sky-600"}`}>
-                            <ImageIcon className="h-4 w-4" />
-                          </span>
-                          Photos
-                        </button>
-                      </div>
-                    )}
+                  <label className={`relative flex min-h-12 flex-1 items-center rounded-[20px] pl-2 pr-4 transition-all ${darkMode ? "bg-[#23262d]" : "bg-white"}`} ref={mediaPickerRef}>
+                    <div className="relative shrink-0">
+                      {attachmentMenuOpen && (
+                        <div className={`absolute bottom-14 left-0 z-30 w-56 origin-bottom-left rounded-[18px] border-0 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] forum-ctx-actions ${darkMode ? "bg-[#1b1e25] text-white" : "bg-white text-[#111827]"}`}>
+                          <button type="button" onClick={() => { setAttachmentMenuOpen(false); documentInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f4f7fb]"}`}>
+                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-violet-400/15 text-violet-300" : "bg-violet-50 text-violet-600"}`}>
+                              <FileText className="h-4 w-4" />
+                            </span>
+                            Document
+                          </button>
+                          <button type="button" onClick={() => { setAttachmentMenuOpen(false); photoInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f4f7fb]"}`}>
+                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-sky-400/15 text-sky-300" : "bg-sky-50 text-sky-600"}`}>
+                              <ImageIcon className="h-4 w-4" />
+                            </span>
+                            Photos
+                          </button>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { setAttachmentMenuOpen((current) => !current); setMediaPickerOpen(false); }}
+                        disabled={!canSendSelectedConversation}
+                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45 ${attachmentMenuOpen ? "rotate-45" : ""} ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
+                        aria-label="Add attachment"
+                      >
+                        <Plus className="h-[22px] w-[22px]" />
+                      </button>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => setAttachmentMenuOpen((current) => !current)}
+                      onClick={() => {
+                        setMediaPickerOpen(!mediaPickerOpen);
+                        if (!mediaPickerOpen) setAttachmentMenuOpen(false);
+                      }}
+                      title="Emojis, GIFs, Stickers"
                       disabled={!canSendSelectedConversation}
-                      className={`grid h-12 w-12 shrink-0 place-items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45 ${attachmentMenuOpen ? "rotate-45" : ""} ${darkMode ? "bg-[#23262d] text-white hover:bg-[#2c3038]" : "bg-white text-black hover:bg-[#f7f8fb]"}`}
-                      aria-label="Add attachment"
+                      className={`mr-2 grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
                     >
-                      <Plus className="h-5 w-5" />
+                      <Smile className={`h-[22px] w-[22px] transition ${mediaPickerOpen ? "text-[#2563eb]" : ""}`} />
                     </button>
-                  </div>
-                  <label className={`flex min-h-12 flex-1 items-center rounded-[20px] px-4 transition-all ${darkMode ? "bg-[#23262d]" : "bg-white"}`}>
+                    
+                    {mediaPickerOpen && (
+                      <div className={`absolute bottom-[calc(100%+8px)] left-0 z-30 flex h-[420px] w-[360px] flex-col overflow-hidden rounded-[18px] border-0 shadow-[0_18px_50px_rgba(15,23,42,0.25)] forum-ctx-actions ${darkMode ? "bg-[#1b1e25] text-white" : "bg-white text-[#111827]"}`}>
+                        <div className="flex-1 overflow-hidden">
+                          {mediaPickerTab === "emoji" ? (
+                            <EmojiPicker
+                              theme={darkMode ? "dark" : "light"}
+                              width="100%"
+                              height="100%"
+                              previewConfig={{ showPreview: false }}
+                              onEmojiClick={(emojiData) => {
+                                updateComposer(composer + emojiData.emoji);
+                              }}
+                            />
+                          ) : (
+                            <div className="flex h-full flex-col">
+                              <div className="p-3">
+                                <input
+                                  type="text"
+                                  placeholder={`Search ${mediaPickerTab === "gif" ? "GIFs" : "Stickers"} via GIPHY`}
+                                  value={giphySearch}
+                                  onChange={(e) => setGiphySearch(e.target.value)}
+                                  className={`w-full rounded-full border px-4 py-2 text-sm outline-none ${darkMode ? "border-white/10 bg-black/20 focus:border-[#2563eb]" : "border-black/10 bg-black/5 focus:border-[#2563eb]"}`}
+                                />
+                              </div>
+                              <div className="flex-1 overflow-y-auto px-2 pb-2">
+                                <Grid
+                                  key={`${mediaPickerTab}-${giphySearch}`}
+                                  width={340}
+                                  columns={mediaPickerTab === "gif" ? 2 : 3}
+                                  fetchGifs={(offset) => giphySearch ? gf.search(giphySearch, { offset, limit: 20, type: mediaPickerTab === "sticker" ? "stickers" : "gifs" }) : gf.trending({ offset, limit: 20, type: mediaPickerTab === "sticker" ? "stickers" : "gifs" })}
+                                  onGifClick={(gif, e) => {
+                                    e.preventDefault();
+                                    setMediaPickerOpen(false);
+                                    sendMessage({
+                                      preventDefault: () => {},
+                                      giphy: { url: gif.images.original.url, type: mediaPickerTab }
+                                    });
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className={`flex items-center gap-1 border-t p-2 ${darkMode ? "border-white/10 bg-[#16181d]" : "border-black/10 bg-[#f4f7fb]"}`}>
+                          <button
+                            type="button"
+                            onClick={() => { setMediaPickerTab("emoji"); setGiphySearch(""); }}
+                            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${mediaPickerTab === "emoji" ? (darkMode ? "bg-white/15 text-white" : "bg-white text-black") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
+                          >
+                            Emoji
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setMediaPickerTab("gif"); setGiphySearch(""); }}
+                            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${mediaPickerTab === "gif" ? (darkMode ? "bg-white/15 text-white" : "bg-white text-black") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
+                          >
+                            GIF
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setMediaPickerTab("sticker"); setGiphySearch(""); }}
+                            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${mediaPickerTab === "sticker" ? (darkMode ? "bg-white/15 text-white" : "bg-white text-black") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
+                          >
+                            Sticker
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <textarea
                       ref={composerRef}
                       value={composer}
@@ -3558,9 +3778,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
               />
             ) : (
               <ForumInfoPanel
-                key={`${groupConversation?.id || GROUP_ID}-${groupConversation?.name || "Group Forum"}`}
+                key={`${selectedConversation?.id || GROUP_ID}-${selectedConversation?.name || "Group Forum"}`}
                 darkMode={darkMode}
-                group={groupConversation}
+                group={selectedConversation}
                 users={users}
                 currentUser={currentUser}
                 groupParticipants={groupParticipants}
@@ -3575,6 +3795,126 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           </>
         )}
         </main>
+        {createGroupOpen && (
+          <div
+            className="fixed inset-0 z-[95] grid place-items-center bg-black/55 px-4 backdrop-blur-[2px] transition-all animate-in fade-in duration-200"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !creatingGroup) setCreateGroupOpen(false);
+            }}
+          >
+            <form onSubmit={createGroup} className={`w-full max-w-lg rounded-[26px] p-5 shadow-2xl animate-in zoom-in-95 duration-200 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-black">Create group</h3>
+                  <p className={`mt-1 text-xs ${muted}`}>{createGroupStep === 1 ? "Step 1 of 2: name and avatar" : "Step 2 of 2: add members"}</p>
+                </div>
+                <button type="button" onClick={() => { setCreateGroupOpen(false); setCreateGroupStep(1); }} disabled={creatingGroup} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close create group">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <span className={`h-1.5 rounded-full ${createGroupStep >= 1 ? "bg-[#2563eb]" : darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                <span className={`h-1.5 rounded-full ${createGroupStep >= 2 ? "bg-[#2563eb]" : darkMode ? "bg-white/10" : "bg-black/10"}`} />
+              </div>
+
+              {createGroupStep === 1 ? (
+                <>
+                  <div className="mt-6 flex items-center gap-4">
+                    <GroupAvatar group={{ name: createGroupName || "Group", avatarPreset: createGroupAvatar, avatarUrl: createGroupAvatarFile ? URL.createObjectURL(createGroupAvatarFile) : "" }} className="h-16 w-16" iconClassName="h-7 w-7" />
+                    <label className="min-w-0 flex-1">
+                      <span className={`mb-1 block text-[11px] font-bold uppercase tracking-[0.12em] ${muted}`}>Group name</span>
+                      <input value={createGroupName} onChange={(event) => setCreateGroupName(event.target.value)} maxLength={80} placeholder="Enter group name" className={`h-11 w-full rounded-2xl px-3 text-sm font-semibold outline-none ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f6f8]"}`} />
+                    </label>
+                  </div>
+
+                  <div className="mt-6">
+                    <p className={`mb-3 text-[11px] font-bold uppercase tracking-[0.12em] ${muted}`}>Avatar</p>
+                    <div className="grid max-h-72 grid-cols-6 gap-3 overflow-y-auto p-2 -m-2 sm:grid-cols-8">
+                      <label className={`cursor-pointer grid h-11 w-11 place-items-center rounded-full outline-none focus:outline-none transition ${createGroupAvatarFile ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Upload custom avatar">
+                        <input type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onClick={(e) => { e.target.value = null; }} onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            setCreateGroupAvatarFile(file);
+                            setCreateGroupAvatar("");
+                          }
+                        }} />
+                        <span className="grid h-9 w-9 place-items-center rounded-full bg-gray-500 text-white">
+                          <Upload className="h-4 w-4" />
+                        </span>
+                      </label>
+                      {GROUP_AVATAR_PRESETS.map((preset) => {
+                        const Icon = preset.Icon || MessagesSquare;
+                        const selected = !createGroupAvatarFile && createGroupAvatar === preset.id;
+                        return (
+                          <button key={preset.id} type="button" onClick={() => { setCreateGroupAvatar(preset.id); setCreateGroupAvatarFile(null); }} className={`grid h-11 w-11 place-items-center rounded-full outline-none focus:outline-none transition ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label={`Choose ${preset.id}`}>
+                            <span className="grid h-9 w-9 place-items-center rounded-full text-white" style={{ background: preset.gradient }}>
+                              <Icon className="h-4 w-4" />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-6">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black">{createGroupName || "New group"}</p>
+                      <p className={`text-xs ${muted}`}>Choose people to add</p>
+                    </div>
+                    <span className={`text-xs ${muted}`}>{createGroupMemberIds.length} selected</span>
+                  </div>
+                  <div className={`mb-3 flex h-10 items-center gap-2 rounded-2xl px-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f6f8]"}`}>
+                    <Search className={`h-4 w-4 ${muted}`} />
+                    <input value={createGroupSearch} onChange={(event) => setCreateGroupSearch(event.target.value)} placeholder="Search users" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+                  </div>
+                  <div className="max-h-[52vh] space-y-1 overflow-y-auto pr-1">
+                    {createGroupUsers.map((user) => {
+                      const selected = createGroupMemberIds.includes(user.id);
+                      return (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => setCreateGroupMemberIds((current) => selected ? current.filter((id) => id !== user.id) : [...current, user.id])}
+                          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${selected ? darkMode ? "bg-emerald-500/15" : "bg-emerald-50" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}
+                        >
+                          <UserAvatar user={user} name={user.displayName} className="h-9 w-9" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold">{user.displayName}</span>
+                            <span className={`block truncate text-xs ${muted}`}>{user.designation || user.department || user.email || user.username}</span>
+                          </span>
+                          <span className={`grid h-5 w-5 place-items-center rounded-full border ${selected ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
+                            {selected && <Check className="h-3.5 w-3.5" />}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6 flex items-center justify-between gap-3">
+                {createGroupStep === 2 ? (
+                  <button type="button" onClick={() => setCreateGroupStep(1)} disabled={creatingGroup} className={`h-11 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-[#f4f6f8] hover:bg-[#eef1f5]"}`}>
+                    Back
+                  </button>
+                ) : <span />}
+                {createGroupStep === 1 ? (
+                  <button type="button" onClick={() => setCreateGroupStep(2)} disabled={!createGroupName.trim()} className="h-11 min-w-28 rounded-full bg-[#2563eb] px-6 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                    Next
+                  </button>
+                ) : (
+                  <button type="submit" disabled={creatingGroup || !createGroupName.trim() || !createGroupMemberIds.length} className="inline-flex h-11 min-w-32 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-6 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                    {creatingGroup && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                    Create group
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        )}
         {forumSettingsOpen && (
           <div
             className="fixed inset-0 z-[95] grid place-items-center bg-black/55 px-4 backdrop-blur-[2px]"
@@ -3726,69 +4066,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 </button>
               </div>
 
-              {/* WhatsApp Full Emoji Picker Popover */}
+              {/* EmojiPicker for Reactions */}
               {emojiPickerOpen ? (
-                <div className={`w-80 max-w-[calc(100vw-32px)] rounded-[22px] p-3 sm:p-3.5 shadow-[0_24px_80px_rgba(0,0,0,0.18)] forum-ctx-picker border-0 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}>
-                  {/* Category Header Tabs */}
-                  <div className="flex items-center justify-between border-b pb-2 mb-2 border-white/10 px-1 overflow-x-auto gap-1">
-                    {EMOJI_CATEGORIES.map((cat) => (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => setEmojiCategory(cat.id)}
-                        className={`px-2 py-1 text-lg transition-all rounded-xl opacity-100 ${emojiCategory === cat.id ? darkMode ? "bg-emerald-500/20 text-emerald-400 scale-110 font-bold" : "bg-emerald-100 text-emerald-800 scale-110 font-bold border border-emerald-300" : darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
-                        title={cat.label}
-                      >
-                        {cat.icon}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Search Input */}
-                  <div className={`flex items-center gap-2 rounded-xl px-3 py-2 border mb-3 ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-[#f4f6f8]"}`}>
-                    <Search className={`h-4 w-4 shrink-0 ${muted}`} />
-                    <input
-                      type="text"
-                      placeholder="Search reaction"
-                      value={emojiSearch}
-                      onChange={(e) => setEmojiSearch(e.target.value)}
-                      className="w-full bg-transparent text-xs outline-none placeholder:text-gray-400"
-                    />
-                    {emojiSearch && (
-                      <button type="button" onClick={() => setEmojiSearch("")}>
-                        <X className="h-3.5 w-3.5 text-gray-400" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Emoji Categories List */}
-                  <div className="max-h-48 sm:max-h-56 overflow-y-auto space-y-3 pr-1 touch-pan-y overscroll-contain">
-                    {EMOJI_CATEGORIES.filter((cat) => emojiSearch ? true : cat.id === emojiCategory || cat.id === "recents").map((cat) => {
-                      const filtered = cat.emojis.filter((e) => matchEmojiSearch(e, emojiSearch));
-                      if (!filtered.length) return null;
-                      return (
-                        <div key={cat.id}>
-                          <p className="text-[11px] font-bold mb-1.5 px-1 opacity-70">{cat.label}</p>
-                          <div className="grid grid-cols-7 gap-1">
-                            {filtered.map((emoji, idx) => (
-                              <button
-                                key={`${emoji}-${idx}`}
-                                type="button"
-                                onClick={() => {
-                                  handleEmojiReaction(messageMenu.message, emoji);
-                                  setEmojiPickerOpen(false);
-                                  setEmojiSearch("");
-                                }}
-                                className="grid h-9 w-9 place-items-center rounded-xl text-xl transition hover:bg-white/10 hover:scale-125 active:scale-95"
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div className={`w-[320px] h-[400px] overflow-hidden max-w-[calc(100vw-32px)] rounded-[22px] shadow-[0_24px_80px_rgba(0,0,0,0.18)] forum-ctx-picker border-0 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}>
+                  <EmojiPicker
+                    theme={darkMode ? "dark" : "light"}
+                    width="100%"
+                    height="100%"
+                    previewConfig={{ showPreview: false }}
+                    onEmojiClick={(emojiData) => {
+                      handleEmojiReaction(messageMenu.message, emojiData.emoji);
+                      setEmojiPickerOpen(false);
+                    }}
+                  />
                 </div>
               ) : (
                 /* WhatsApp Style Context Menu */
@@ -3909,7 +4199,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           <>
             <div
               className="fixed inset-0 z-[85] bg-black/75 backdrop-blur-[2px] forum-ctx-backdrop"
-              onClick={() => setReactionsPopoverTarget(null)}
+              onMouseDown={() => setReactionsPopoverTarget(null)}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setReactionsPopoverTarget(null);

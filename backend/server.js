@@ -581,6 +581,8 @@ app.get("/health", (req, res) => {
   res.json({ ok: true, status: "connected", timestamp: new Date().toISOString() });
 });
 
+app.use("/uploads", express.static(process.env.UPLOADS_DIR || path.join(__dirname, "uploads")));
+
 app.use(async (req, res, next) => {
   if (req.path.startsWith("/auth/")) return next();
   return requireAuth(req, res, next);
@@ -15735,7 +15737,8 @@ async function forumConversationSummary(conversation, authUserId) {
     participantIds,
     adminIds: (conversation.adminIds || []).map(String),
     adminOnlyMessages: Boolean(conversation.adminOnlyMessages),
-    avatarPreset: conversation.avatarPreset || "ocean",
+    avatarPreset: conversation.avatarPreset || (conversation.avatarUrl ? "" : "ocean"),
+    avatarUrl: conversation.avatarUrl || "",
     canManage: conversation.type === "group" && (conversation.adminIds || []).map(String).includes(String(authUserId)),
     canSendMessages: conversation.type !== "group" || !conversation.adminOnlyMessages || (conversation.adminIds || []).map(String).includes(String(authUserId)),
     lastMessage,
@@ -16123,6 +16126,31 @@ app.post("/forum/conversations/:id/pin", async (req, res) => {
   }
 });
 
+app.post("/forum/group/avatar", upload.single("avatar"), async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const group = await ensureForumGroupConversation(db);
+    if (!isForumGroupAdmin(group, req) && req.authUser.roleName !== "Super Admin") {
+      return res.status(403).json({ error: "Only group admins or superadmins can update the avatar" });
+    }
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    await db.collection("forumConversations").updateOne(
+      { _id: FORUM_GROUP_ID },
+      { $set: { avatarUrl, avatarPreset: "", updatedAt: new Date() } }
+    );
+    const saved = await db.collection("forumConversations").findOne({ _id: FORUM_GROUP_ID });
+    const conversation = await forumConversationSummary(saved, req.authUser.id);
+    broadcastForumPayload(conversation.participantIds || [], { type: "forum:conversation", conversation });
+    res.json({ conversation });
+  } catch (error) {
+    console.error("Forum main group avatar update error:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+
 app.patch("/forum/group", async (req, res) => {
   try {
     const db = await connectAuthDb();
@@ -16142,6 +16170,7 @@ app.patch("/forum/group", async (req, res) => {
       const avatarPreset = String(req.body.avatarPreset || "").trim();
       if (!FORUM_GROUP_AVATAR_PRESETS.has(avatarPreset)) return res.status(400).json({ error: "Choose a valid group avatar" });
       update.avatarPreset = avatarPreset;
+      update.avatarUrl = "";
     }
     if (req.body?.participantIds !== undefined) {
       const participantIds = [...new Set((Array.isArray(req.body.participantIds) ? req.body.participantIds : []).map(String).filter((id) => activeUserIds.has(id)))];
@@ -16158,10 +16187,125 @@ app.patch("/forum/group", async (req, res) => {
     await db.collection("forumConversations").updateOne({ _id: FORUM_GROUP_ID }, { $set: update });
     const saved = await db.collection("forumConversations").findOne({ _id: FORUM_GROUP_ID });
     const conversation = await forumConversationSummary(saved, req.authUser.id);
-    broadcastForumPayload(saved.participantIds || [], { type: "forum:conversation", conversation });
+    broadcastForumPayload(conversation.participantIds || [], { type: "forum:conversation", conversation });
     res.json({ conversation });
   } catch (error) {
     console.error("Forum group update error:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/conversations/group", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const activeUsers = await db.collection("users").find({ blacklisted: { $ne: true } }, { projection: { _id: 1 } }).toArray();
+    const activeUserIds = new Set(activeUsers.map((user) => String(user._id)));
+    const name = String(req.body?.name || "").trim();
+    if (!name || name.length > 80) return res.status(400).json({ error: "Group name must be 1-80 characters" });
+    const avatarPreset = String(req.body?.avatarPreset || "ocean").trim();
+    if (!FORUM_GROUP_AVATAR_PRESETS.has(avatarPreset)) return res.status(400).json({ error: "Choose a valid group avatar" });
+    const requestedMembers = Array.isArray(req.body?.participantIds) ? req.body.participantIds : [];
+    const participantIds = [...new Set([
+      req.authUser.id,
+      ...requestedMembers.map(String).filter((id) => activeUserIds.has(id)),
+    ])];
+    if (participantIds.length < 2) return res.status(400).json({ error: "Add at least one member" });
+    const now = new Date();
+    const conversation = {
+      _id: `group:${new ObjectId()}`,
+      type: "group",
+      name,
+      avatarPreset,
+      participantIds,
+      adminIds: [req.authUser.id],
+      adminOnlyMessages: false,
+      createdBy: req.authUser.id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.collection("forumConversations").insertOne(conversation);
+    const summary = await forumConversationSummary(conversation, req.authUser.id);
+    broadcastForumPayload(participantIds, { type: "forum:conversation", conversation: summary });
+    res.json({ conversation: summary });
+  } catch (error) {
+    console.error("Forum group create error:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/conversations/:id/avatar", upload.single("avatar"), async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversation = await db.collection("forumConversations").findOne({ _id: req.params.id, type: "group" });
+    if (!conversation) return res.status(404).json({ error: "Group not found" });
+    assertForumGroupMember(conversation, req);
+    if (!isForumGroupAdmin(conversation, req) && req.authUser.roleName !== "Super Admin") {
+      return res.status(403).json({ error: "Only group admins or superadmins can update the avatar" });
+    }
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    await db.collection("forumConversations").updateOne(
+      { _id: conversation._id },
+      { $set: { avatarUrl, avatarPreset: "", updatedAt: new Date() } }
+    );
+    const saved = await db.collection("forumConversations").findOne({ _id: conversation._id });
+    const summaryForActor = await forumConversationSummary(saved, req.authUser.id);
+    const recipients = summaryForActor.participantIds || [];
+    broadcastForumPayload(recipients, { type: "forum:conversation", conversation: summaryForActor });
+    res.json({ conversation: summaryForActor });
+  } catch (error) {
+    console.error("Forum group avatar update error:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+
+app.patch("/forum/conversations/:id/group", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversation = await db.collection("forumConversations").findOne({ _id: req.params.id, type: "group" });
+    if (!conversation) return res.status(404).json({ error: "Group not found" });
+    assertForumGroupMember(conversation, req);
+    if (!isForumGroupAdmin(conversation, req)) return res.status(403).json({ error: "Only group admins can manage this group" });
+
+    const activeUsers = await db.collection("users").find({ blacklisted: { $ne: true } }, { projection: { _id: 1 } }).toArray();
+    const activeUserIds = new Set(activeUsers.map((user) => String(user._id)));
+    const update = { updatedAt: new Date() };
+    if (req.body?.name !== undefined) {
+      const name = String(req.body.name || "").trim();
+      if (!name || name.length > 80) return res.status(400).json({ error: "Group name must be 1-80 characters" });
+      update.name = name;
+    }
+    if (req.body?.adminOnlyMessages !== undefined) update.adminOnlyMessages = Boolean(req.body.adminOnlyMessages);
+    if (req.body?.avatarPreset !== undefined) {
+      const avatarPreset = String(req.body.avatarPreset || "").trim();
+      if (!FORUM_GROUP_AVATAR_PRESETS.has(avatarPreset)) return res.status(400).json({ error: "Choose a valid group avatar" });
+      update.avatarPreset = avatarPreset;
+      update.avatarUrl = "";
+    }
+    if (req.body?.participantIds !== undefined) {
+      const participantIds = [...new Set([
+        req.authUser.id,
+        ...(Array.isArray(req.body.participantIds) ? req.body.participantIds : []).map(String).filter((id) => activeUserIds.has(id)),
+      ])];
+      update.participantIds = participantIds;
+    }
+    if (req.body?.adminIds !== undefined) {
+      const participantSet = new Set((update.participantIds || conversation.participantIds || []).map(String));
+      update.adminIds = [...new Set([
+        req.authUser.id,
+        ...(Array.isArray(req.body.adminIds) ? req.body.adminIds : []).map(String).filter((id) => participantSet.has(id)),
+      ])];
+    }
+    await db.collection("forumConversations").updateOne({ _id: conversation._id }, { $set: update });
+    const saved = await db.collection("forumConversations").findOne({ _id: conversation._id });
+    const recipients = [...new Set([...(conversation.participantIds || []), ...(saved.participantIds || [])])];
+    const summaryForActor = await forumConversationSummary(saved, req.authUser.id);
+    broadcastForumPayload(recipients, { type: "forum:conversation", conversation: summaryForActor });
+    res.json({ conversation: summaryForActor });
+  } catch (error) {
+    console.error("Forum custom group update error:", error);
     res.status(error.status || 500).json({ error: error.message });
   }
 });
@@ -16199,10 +16343,27 @@ app.post("/forum/conversations/direct", async (req, res) => {
 
 app.post("/forum/conversations/:id/messages", async (req, res) => {
   try {
-    const text = String(req.body?.text || "").trim();
-    if (!text) return res.status(400).json({ error: "Message cannot be empty" });
+    let text = String(req.body?.text || "").trim();
+    const giphy = req.body?.giphy;
+    let attachment = null;
+    if (giphy?.url) {
+      attachment = {
+        kind: giphy.type === "sticker" ? "sticker" : "gif",
+        openUrl: giphy.url,
+        name: giphy.type === "sticker" ? "Sticker" : "GIF",
+      };
+      if (!text) text = giphy.type === "sticker" ? "Sticker" : "GIF";
+    }
+    
+    if (!text && !attachment) return res.status(400).json({ error: "Message cannot be empty" });
     if (text.length > 4000) return res.status(400).json({ error: "Message is too long" });
-    const message = await createForumMessage({ req, conversationId: req.params.id, text });
+    
+    const message = await createForumMessage({ 
+      req, 
+      conversationId: req.params.id, 
+      text,
+      attachment
+    });
     res.json({ message });
   } catch (error) {
     console.error("Forum send error:", error);

@@ -306,6 +306,59 @@ function socketUrl() {
   return `${base}/forum/socket?token=${encodeURIComponent(token || "")}`;
 }
 
+const SCREEN_SHARE_VIDEO_CONSTRAINTS = {
+  width: { ideal: 1280, max: 1280 },
+  height: { ideal: 720, max: 720 },
+  frameRate: { ideal: 10, max: 15 },
+};
+
+const SCREEN_SHARE_MAX_VIDEO_BITRATE = 700_000;
+
+async function capScreenShareSender(sender) {
+  if (!sender?.getParameters) return;
+  const params = sender.getParameters();
+  params.encodings = params.encodings?.length ? params.encodings : [{}];
+  params.encodings[0] = {
+    ...params.encodings[0],
+    maxBitrate: SCREEN_SHARE_MAX_VIDEO_BITRATE,
+    maxFramerate: 15,
+    scaleResolutionDownBy: Math.max(Number(params.encodings[0]?.scaleResolutionDownBy) || 1, 1),
+  };
+  await sender.setParameters(params).catch(() => {});
+}
+
+function screenShareIceServers() {
+  const turnUrls = (process.env.NEXT_PUBLIC_TURN_URLS || "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean);
+  const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME || "";
+  const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL || "";
+  return [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    ...(turnUrls.length && turnUsername && turnCredential
+      ? [{ urls: turnUrls, username: turnUsername, credential: turnCredential }]
+      : [
+          {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+          },
+          {
+            urls: "turn:openrelay.metered.ca:443",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+          },
+          {
+            urls: "turn:openrelay.metered.ca:443?transport=tcp",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+          },
+        ]),
+  ];
+}
+
 function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -1012,7 +1065,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       }
       
       try {
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: SCREEN_SHARE_VIDEO_CONSTRAINTS,
+          audio: true,
+        });
       } catch (err) {
         if (err.name === 'NotAllowedError') return; // User cancelled
         console.error("Screen share error", err);
@@ -1043,27 +1099,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     }
   };
 
-  const createPeerConnection = useCallback((targetUserId, isInitiator) => {
+  const createPeerConnection = useCallback((targetUserId) => {
+    const existing = peerConnectionsRef.current.get(targetUserId);
+    if (existing && existing.connectionState !== "closed") return existing;
+
     const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        {
-          urls: "turn:openrelay.metered.ca:80",
-          username: "openrelayproject",
-          credential: "openrelayproject"
-        },
-        {
-          urls: "turn:openrelay.metered.ca:443",
-          username: "openrelayproject",
-          credential: "openrelayproject"
-        },
-        {
-          urls: "turn:openrelay.metered.ca:443?transport=tcp",
-          username: "openrelayproject",
-          credential: "openrelayproject"
-        }
-      ]
+      iceServers: screenShareIceServers(),
+      bundlePolicy: "max-bundle",
     });
 
     pc.onicecandidate = (event) => {
@@ -1087,8 +1129,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     pc.oniceconnectionstatechange = () => {
       console.log(`ICE State (${targetUserId}):`, pc.iceConnectionState);
       if (pc.iceConnectionState === "failed") {
-        toast.error("Screen share connection failed (network blocked).");
-        stopScreenShare();
+        toast.error("Screen share connection failed. Add a TURN server or check AWS/Nginx websocket proxying.");
+        pc.restartIce?.();
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (["failed", "disconnected"].includes(pc.connectionState)) {
+        console.warn(`Screen share peer ${targetUserId} ${pc.connectionState}`);
       }
     };
 
@@ -1106,7 +1154,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStreamRef.current);
+        const sender = pc.addTrack(track, localStreamRef.current);
+        if (track.kind === "video") void capScreenShareSender(sender);
       });
     } else {
       pc.addTransceiver("video", { direction: "recvonly" });
@@ -1120,9 +1169,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   useEffect(() => {
     if (selectedConversation?.activeScreenShareUserId && selectedConversation.activeScreenShareUserId !== currentUser?.id) {
       const sharerId = selectedConversation.activeScreenShareUserId;
-      setActiveScreenShareUserId(sharerId);
+      window.setTimeout(() => setActiveScreenShareUserId(sharerId), 0);
       if (!peerConnectionsRef.current.has(sharerId)) {
-        const pc = createPeerConnection(sharerId, false);
+        const pc = createPeerConnection(sharerId);
         pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
           const sendOffer = () => {
             if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -1140,8 +1189,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         }).catch(console.error);
       }
     } else if (!selectedConversation?.activeScreenShareUserId && !localStreamRef.current) {
-       setActiveScreenShareUserId(null);
-       setRemoteStream(null);
+       window.setTimeout(() => {
+         setActiveScreenShareUserId(null);
+         setRemoteStream(null);
+       }, 0);
     }
   }, [selectedConversation?.activeScreenShareUserId, selectedId, currentUser?.id, createPeerConnection]);
 
@@ -1370,24 +1421,6 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         setConversations(current => current.map(c => c.id === payload.conversationId ? { ...c, activeScreenShareUserId: payload.userId } : c));
         if (sameConversation(payload.conversationId, selectedId)) {
           setActiveScreenShareUserId(payload.userId);
-          if (payload.userId !== currentUser?.id) {
-            const pc = createPeerConnection(payload.userId, true);
-            pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
-              const sendOffer = () => {
-                if (socketRef.current?.readyState === WebSocket.OPEN) {
-                  socketRef.current.send(JSON.stringify({
-                    type: "forum:screenShareOffer",
-                    conversationId: selectedId,
-                    targetUserId: payload.userId,
-                    offer: pc.localDescription
-                  }));
-                } else if (socketRef.current) {
-                  setTimeout(sendOffer, 200);
-                }
-              };
-              sendOffer();
-            }).catch(console.error);
-          }
         }
       }
       if (payload.type === "forum:screenShareStop") {
@@ -1403,7 +1436,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       }
       if (payload.type === "forum:screenShareOffer" && payload.targetUserId === currentUser?.id) {
         if (sameConversation(payload.conversationId, selectedId)) {
-          const pc = createPeerConnection(payload.fromUserId, false);
+          const pc = createPeerConnection(payload.fromUserId);
           pc.setRemoteDescription(new RTCSessionDescription(payload.offer))
             .then(() => {
               if (pc.candidateQueue) {

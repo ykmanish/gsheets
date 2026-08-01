@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, MoreVertical, Network, Pencil, Plus, Reply, Rocket, Search, Send, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Plus, Reply, Rocket, Search, Send, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
@@ -920,6 +920,20 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [replyToMessageTarget, setReplyToMessageTarget] = useState(null);
   const [deletingMessage, setDeletingMessage] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+  const [activeScreenShareUserId, setActiveScreenShareUserId] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
+  const peerConnectionsRef = useRef(new Map());
+  const localStreamRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+
+  useEffect(() => {
+    if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
+  }, [localStream]);
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
+  }, [remoteStream]);
   const socketRef = useRef(null);
   const endRef = useRef(null);
   const messageRefs = useRef(new Map());
@@ -944,6 +958,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     return () => window.removeEventListener("resize", syncViewport);
   }, []);
 
+
   useEffect(() => {
     onMobileChatOpenChange?.(isMobileViewport && !mobileListOpen);
     return () => onMobileChatOpenChange?.(false);
@@ -952,6 +967,107 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const selectedIsGroup = selectedId === GROUP_ID;
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
   const currentUser = getStoredAuth().user;
+
+  const stopScreenShare = useCallback(() => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+      setLocalStream(null);
+    }
+    peerConnectionsRef.current.forEach((pc) => pc.close());
+    peerConnectionsRef.current.clear();
+    setRemoteStream(null);
+    setActiveScreenShareUserId(null);
+
+    const socket = socketRef.current;
+    if (socket && socket.readyState === WebSocket.OPEN && selectedId) {
+      socket.send(JSON.stringify({
+        type: "forum:screenShareStop",
+        conversationId: selectedId,
+        recipientIds: selectedConversation?.type === "direct" ? selectedConversation.participantIds : undefined,
+      }));
+    }
+  }, [selectedId, selectedConversation]);
+
+  useEffect(() => {
+    return () => stopScreenShare();
+  }, [selectedId, stopScreenShare]);
+
+  const startScreenShare = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+      setActiveScreenShareUserId(currentUser?.id);
+
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenShare();
+      };
+
+      const socket = socketRef.current;
+      if (socket && socket.readyState === WebSocket.OPEN && selectedId) {
+        socket.send(JSON.stringify({
+          type: "forum:screenShareStart",
+          conversationId: selectedId,
+          recipientIds: selectedConversation?.type === "direct" ? selectedConversation.participantIds : undefined,
+        }));
+      }
+    } catch (err) {
+      console.error("Error sharing screen", err);
+    }
+  };
+
+  const createPeerConnection = useCallback((targetUserId, isInitiator) => {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socketRef.current) {
+        socketRef.current.send(JSON.stringify({
+          type: "forum:screenShareCandidate",
+          conversationId: selectedId,
+          targetUserId,
+          candidate: event.candidate
+        }));
+      }
+    };
+
+    pc.ontrack = (event) => {
+      setRemoteStream(event.streams[0]);
+    };
+
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => {
+        pc.addTrack(track, localStreamRef.current);
+      });
+    } else {
+      pc.addTransceiver("video", { direction: "recvonly" });
+      pc.addTransceiver("audio", { direction: "recvonly" });
+    }
+
+    peerConnectionsRef.current.set(targetUserId, pc);
+    return pc;
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (selectedConversation?.activeScreenShareUserId && selectedConversation.activeScreenShareUserId !== currentUser?.id) {
+      const sharerId = selectedConversation.activeScreenShareUserId;
+      setActiveScreenShareUserId(sharerId);
+      if (!peerConnectionsRef.current.has(sharerId)) {
+        const pc = createPeerConnection(sharerId, false);
+        pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
+          socketRef.current?.send(JSON.stringify({
+            type: "forum:screenShareOffer",
+            conversationId: selectedId,
+            targetUserId: sharerId,
+            offer: pc.localDescription
+          }));
+        }).catch(console.error);
+      }
+    } else if (!selectedConversation?.activeScreenShareUserId && !localStreamRef.current) {
+       setActiveScreenShareUserId(null);
+       setRemoteStream(null);
+    }
+  }, [selectedConversation?.activeScreenShareUserId, selectedId, currentUser?.id, createPeerConnection]);
 
   const searchedUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -1173,6 +1289,56 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           item.id === payload.conversationId ? { ...item, lastMessage: null, updatedAt: new Date().toISOString() } : item
         )));
         if (sameConversation(payload.conversationId, selectedId)) setMessages([]);
+      }
+      if (payload.type === "forum:screenShareStart") {
+        if (sameConversation(payload.conversationId, selectedId)) {
+          setActiveScreenShareUserId(payload.userId);
+          if (payload.userId !== currentUser?.id) {
+            const pc = createPeerConnection(payload.userId, true);
+            pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
+              socketRef.current?.send(JSON.stringify({
+                type: "forum:screenShareOffer",
+                conversationId: selectedId,
+                targetUserId: payload.userId,
+                offer: pc.localDescription
+              }));
+            }).catch(console.error);
+          }
+        }
+      }
+      if (payload.type === "forum:screenShareStop") {
+        if (sameConversation(payload.conversationId, selectedId)) {
+          peerConnectionsRef.current.forEach((pc) => pc.close());
+          peerConnectionsRef.current.clear();
+          setRemoteStream(null);
+          if (activeScreenShareUserId !== currentUser?.id) {
+            setActiveScreenShareUserId(null);
+          }
+        }
+      }
+      if (payload.type === "forum:screenShareOffer" && payload.targetUserId === currentUser?.id) {
+        if (sameConversation(payload.conversationId, selectedId)) {
+          const pc = createPeerConnection(payload.fromUserId, false);
+          pc.setRemoteDescription(new RTCSessionDescription(payload.offer))
+            .then(() => pc.createAnswer())
+            .then(answer => pc.setLocalDescription(answer))
+            .then(() => {
+              socketRef.current?.send(JSON.stringify({
+                type: "forum:screenShareAnswer",
+                conversationId: selectedId,
+                targetUserId: payload.fromUserId,
+                answer: pc.localDescription
+              }));
+            }).catch(console.error);
+        }
+      }
+      if (payload.type === "forum:screenShareAnswer" && payload.targetUserId === currentUser?.id) {
+        const pc = peerConnectionsRef.current.get(payload.fromUserId);
+        if (pc) pc.setRemoteDescription(new RTCSessionDescription(payload.answer)).catch(console.error);
+      }
+      if (payload.type === "forum:screenShareCandidate" && payload.targetUserId === currentUser?.id) {
+        const pc = peerConnectionsRef.current.get(payload.fromUserId);
+        if (pc) pc.addIceCandidate(new RTCIceCandidate(payload.candidate)).catch(console.error);
       }
       if (payload.type === "forum:deleted") {
         setConversations((current) => current.filter((item) => item.id !== payload.conversationId));
@@ -1906,9 +2072,30 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     </button>
                   </div>
                   {!messageSearchOpen && (
-                    <button type="button" onClick={() => setMessageSearchOpen(true)} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Search messages">
-                      <Search className="h-4 w-4" />
-                    </button>
+                    <>
+                      {(!activeScreenShareUserId || activeScreenShareUserId === currentUser?.id) ? (
+                        <button
+                          type="button"
+                          onClick={activeScreenShareUserId === currentUser?.id ? stopScreenShare : startScreenShare}
+                          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${activeScreenShareUserId === currentUser?.id ? "bg-red-500 text-white hover:bg-red-600" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}
+                          aria-label="Share Screen"
+                        >
+                          {activeScreenShareUserId === currentUser?.id ? <X className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full opacity-30 cursor-not-allowed ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}
+                          aria-label="Someone is already sharing"
+                        >
+                          <Monitor className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setMessageSearchOpen(true)} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Search messages">
+                        <Search className="h-4 w-4" />
+                      </button>
+                    </>
                   )}
                   <div className="relative shrink-0">
                     <button type="button" onClick={() => setChatMenuOpen((current) => !current)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="More chat options">
@@ -1931,6 +2118,27 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     <X className="h-4 w-4" />
                   </button>
                 </header>
+
+                {(localStream || remoteStream) && (
+                  <div className={`relative flex w-full justify-center overflow-hidden border-b shrink-0 ${darkMode ? "bg-black border-white/[0.06]" : "bg-[#f0f2f5] border-[#eef1f5]"} max-h-[40vh]`}>
+                    <video
+                      ref={localStream ? localVideoRef : remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      muted={!!localStream}
+                      className="h-full max-h-[40vh] w-auto max-w-full object-contain"
+                    />
+                    {localStream && (
+                      <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-2 text-white backdrop-blur-md">
+                        <Monitor className="h-4 w-4 text-emerald-400" />
+                        <span className="text-sm font-semibold">You are sharing</span>
+                        <button type="button" onClick={stopScreenShare} className="ml-2 rounded-full bg-red-500 px-3 py-1 text-xs font-bold hover:bg-red-600">
+                          Stop
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <section className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 sm:py-5 ${subSurface}`}>
                   <div className="mx-auto flex w-full max-w-4xl flex-col">

@@ -15551,6 +15551,7 @@ const FORUM_GROUP_AVATAR_PRESETS = new Set([
   "grape", "leaf", "ruby", "aqua", "orchid", "steel", "peach", "bluegrass", "magenta", "slate",
 ]);
 const forumClients = new Map();
+const activeScreenShares = new Map();
 
 function forumEncryptionKey() {
   return crypto.createHash("sha256").update(process.env.FORUM_ENCRYPTION_KEY || process.env.SESSION_SECRET || MONGODB_URI).digest();
@@ -15695,6 +15696,7 @@ async function forumConversationSummary(conversation, authUserId) {
     canManage: conversation.type === "group" && (conversation.adminIds || []).map(String).includes(String(authUserId)),
     canSendMessages: conversation.type !== "group" || !conversation.adminOnlyMessages || (conversation.adminIds || []).map(String).includes(String(authUserId)),
     lastMessage,
+    activeScreenShareUserId: activeScreenShares.get(String(conversation._id)) || null,
     updatedAt: conversation.updatedAt,
   };
 }
@@ -16329,6 +16331,40 @@ server.on("upgrade", async (request, socket) => {
               typing: Boolean(payload.typing),
             });
           }
+          if (payload.type === "forum:screenShareStart" && payload.conversationId) {
+            if (activeScreenShares.has(payload.conversationId) && activeScreenShares.get(payload.conversationId) !== user.id) {
+              // Ignore if someone else is sharing
+            } else {
+              activeScreenShares.set(payload.conversationId, user.id);
+              const recipientIds = Array.isArray(payload.recipientIds) ? payload.recipientIds : [];
+              const targets = payload.conversationId === FORUM_GROUP_ID ? [...forumClients.keys()] : recipientIds;
+              broadcastForumPayload(targets.filter((id) => String(id) !== user.id), {
+                type: "forum:screenShareStart",
+                conversationId: payload.conversationId,
+                userId: user.id
+              });
+            }
+          }
+          if (payload.type === "forum:screenShareStop" && payload.conversationId) {
+            if (activeScreenShares.get(payload.conversationId) === user.id) {
+              activeScreenShares.delete(payload.conversationId);
+              const recipientIds = Array.isArray(payload.recipientIds) ? payload.recipientIds : [];
+              const targets = payload.conversationId === FORUM_GROUP_ID ? [...forumClients.keys()] : recipientIds;
+              broadcastForumPayload(targets.filter((id) => String(id) !== user.id), {
+                type: "forum:screenShareStop",
+                conversationId: payload.conversationId,
+                userId: user.id
+              });
+            }
+          }
+          if (["forum:screenShareOffer", "forum:screenShareAnswer", "forum:screenShareCandidate"].includes(payload.type)) {
+            if (payload.targetUserId) {
+              broadcastForumPayload([payload.targetUserId], {
+                ...payload,
+                fromUserId: user.id
+              });
+            }
+          }
         } catch {
           // Ignore malformed socket payloads.
         }
@@ -16337,7 +16373,15 @@ server.on("upgrade", async (request, socket) => {
     socket.on("close", () => {
       const sockets = forumClients.get(user.id);
       sockets?.delete(socket);
-      if (!sockets?.size) forumClients.delete(user.id);
+      if (!sockets?.size) {
+        forumClients.delete(user.id);
+        for (const [convId, sharerId] of activeScreenShares.entries()) {
+          if (sharerId === user.id) {
+            activeScreenShares.delete(convId);
+            broadcastForumPayload([...forumClients.keys()], { type: "forum:screenShareStop", conversationId: convId, userId: user.id });
+          }
+        }
+      }
       broadcastForumPayload([...forumClients.keys()], { type: "forum:presence", onlineUserIds: [...forumClients.keys()] });
     });
     socket.on("error", () => socket.destroy());

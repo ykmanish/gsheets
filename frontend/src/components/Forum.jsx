@@ -1439,6 +1439,24 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           setRemoteStream(null);
           setAutoplayBlocked(false);
           setActiveScreenShareUserId(payload.userId);
+          if (payload.userId !== currentUser?.id) {
+            const pc = createPeerConnection(payload.userId, { fresh: true });
+            pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
+              const sendOffer = () => {
+                if (socketRef.current?.readyState === WebSocket.OPEN) {
+                  socketRef.current.send(JSON.stringify({
+                    type: "forum:screenShareOffer",
+                    conversationId: payload.conversationId,
+                    targetUserId: payload.userId,
+                    offer: pc.localDescription
+                  }));
+                } else if (socketRef.current) {
+                  setTimeout(sendOffer, 200);
+                }
+              };
+              sendOffer();
+            }).catch(console.error);
+          }
         }
       }
       if (payload.type === "forum:screenShareStop") {

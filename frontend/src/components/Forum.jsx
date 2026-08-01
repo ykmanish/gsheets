@@ -1404,7 +1404,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           );
           setReactionsPopoverTarget((current) => (
             current?.message?.id === payload.messageId
-              ? { ...current, message: { ...current.message, reactions: payload.reactions || [] } }
+              ? { ...current, width: current.width || Math.min(288, Math.max(240, window.innerWidth - 24)), message: { ...current.message, reactions: payload.reactions || [] } }
               : current
           ));
           saveMessageReaction(payload.messageId, payload.reactions || []);
@@ -2572,34 +2572,35 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   const rect = event.currentTarget.getBoundingClientRect();
-                                  const mainBounds = mainChatRef.current?.getBoundingClientRect() || {
+                                  const viewportBounds = {
                                     left: 0,
                                     right: window.innerWidth,
                                     top: 0,
                                     bottom: window.innerHeight,
                                   };
-                                  const popoverWidth = 260;
-                                  const popoverHeight = 180;
+                                  const popoverWidth = Math.min(288, Math.max(240, window.innerWidth - 24));
+                                  const popoverHeight = 230;
                                   const padding = 12;
 
                                   let targetX = mine ? rect.right - popoverWidth : rect.left;
-                                  if (targetX + popoverWidth > mainBounds.right - padding) {
-                                    targetX = mainBounds.right - popoverWidth - padding;
+                                  if (targetX + popoverWidth > viewportBounds.right - padding) {
+                                    targetX = viewportBounds.right - popoverWidth - padding;
                                   }
-                                  if (targetX < mainBounds.left + padding) {
-                                    targetX = mainBounds.left + padding;
+                                  if (targetX < viewportBounds.left + padding) {
+                                    targetX = viewportBounds.left + padding;
                                   }
 
                                   let targetY = rect.bottom + 6;
-                                  if (targetY + popoverHeight > mainBounds.bottom - padding) {
+                                  if (targetY + popoverHeight > viewportBounds.bottom - padding) {
                                     targetY = rect.top - popoverHeight - 6;
                                   }
-                                  targetY = Math.max(mainBounds.top + padding, Math.min(targetY, mainBounds.bottom - popoverHeight - padding));
+                                  targetY = Math.max(viewportBounds.top + padding, Math.min(targetY, viewportBounds.bottom - popoverHeight - padding));
 
                                   setReactionsPopoverTarget({
                                     message,
                                     x: targetX,
                                     y: targetY,
+                                    width: popoverWidth,
                                   });
                                 }}
                                 className={`-mt-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-all hover:scale-110 active:scale-95 ${mine ? "self-end" : "self-start"} ${darkMode ? "bg-[#181a20] text-white border border-white/10" : "bg-white text-black border border-black/10"}`}
@@ -2949,8 +2950,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
               style={{
                 left: reactionsPopoverTarget.x,
                 top: reactionsPopoverTarget.y,
+                width: reactionsPopoverTarget.width || 288,
+                maxWidth: "calc(100vw - 24px)",
               }}
-              className={`fixed z-[90] w-72 rounded-[22px] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.18)] forum-ctx-reactions border-0 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}
+              className={`fixed z-[90] rounded-[22px] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.18)] forum-ctx-reactions border-0 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}
             >
               {/* Header with count and reaction filter tabs */}
               <div className="flex flex-col gap-2.5">

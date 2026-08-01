@@ -1349,13 +1349,6 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
             : item
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
         setTypingByConversation((current) => ({ ...current, [payload.conversationId]: [] }));
-        if (payload.type === "forum:reaction") {
-          setMessages((current) =>
-            current.map((msg) =>
-              msg.id === payload.messageId ? { ...msg, reactions: payload.reactions } : msg
-            )
-          );
-        }
         if (sameConversation(payload.conversationId, selectedId)) {
           setMessages((current) => current.some((message) => message.id === payload.message.id) ? current : [...current, payload.message]);
           window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
@@ -1400,6 +1393,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
               };
             } catch {}
           }
+        }
+      }
+      if (payload.type === "forum:reaction") {
+        if (sameConversation(payload.conversationId, selectedId)) {
+          setMessages((current) =>
+            current.map((msg) =>
+              msg.id === payload.messageId ? { ...msg, reactions: payload.reactions || [] } : msg
+            )
+          );
+          setReactionsPopoverTarget((current) => (
+            current?.message?.id === payload.messageId
+              ? { ...current, message: { ...current.message, reactions: payload.reactions || [] } }
+              : current
+          ));
+          saveMessageReaction(payload.messageId, payload.reactions || []);
         }
       }
       if (payload.type === "forum:read") {

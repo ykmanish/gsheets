@@ -15662,6 +15662,8 @@ async function serializeForumMessage(message) {
     text: decryptForumText(message.encrypted),
     encrypted: true,
     createdAt: message.createdAt,
+    updatedAt: message.updatedAt || message.createdAt,
+    isEdited: !!message.isEdited,
     readBy: message.readBy || {},
     deliveredTo: message.deliveredTo || {},
     reactions: message.reactions || [],
@@ -15963,6 +15965,65 @@ app.delete("/forum/conversations/:id/messages", async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error("Forum clear error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put("/forum/conversations/:id/messages/:messageId", async (req, res) => {
+  try {
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ error: "Message cannot be empty" });
+    if (text.length > 4000) return res.status(400).json({ error: "Message is too long" });
+
+    const db = await connectAuthDb();
+    const conversation = req.params.id === FORUM_GROUP_ID
+      ? await ensureForumGroupConversation(db)
+      : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if (conversation.type === "group") assertForumGroupMember(conversation, req);
+    if (!ObjectId.isValid(req.params.messageId)) return res.status(400).json({ error: "Invalid message" });
+    
+    const messageId = new ObjectId(req.params.messageId);
+    const message = await db.collection("forumMessages").findOne({ _id: messageId, conversationId: conversation._id });
+    if (!message) return res.status(404).json({ error: "Message not found" });
+
+    if (String(message.senderId) !== String(req.authUser.id)) {
+      return res.status(403).json({ error: "You can only edit your own messages" });
+    }
+
+    const encrypted = encryptForumText(text);
+    const now = new Date();
+
+    await db.collection("forumMessages").updateOne(
+      { _id: messageId, conversationId: conversation._id },
+      { $set: { encrypted, isEdited: true, updatedAt: now } }
+    );
+
+    const latest = await db.collection("forumMessages").find({ conversationId: conversation._id }).sort({ createdAt: -1 }).limit(1).next();
+    if (latest && String(latest._id) === String(messageId)) {
+      await db.collection("forumConversations").updateOne(
+        { _id: conversation._id },
+        { $set: { "lastMessage.encrypted": encrypted, updatedAt: now } }
+      );
+    }
+
+    const recipients = conversation.type === "direct"
+      ? conversation.participantIds
+      : (await db.collection("sessions").distinct("userId")).map(String);
+      
+    broadcastForumPayload(recipients, {
+      type: "forum:messageEdited",
+      messageId: String(messageId),
+      conversationId: String(conversation._id),
+      encrypted,
+      text: text,
+      isEdited: true,
+      updatedAt: now
+    });
+
+    res.json({ success: true, messageId: String(messageId) });
+  } catch (error) {
+    console.error("Forum edit error:", error);
     res.status(500).json({ error: error.message });
   }
 });

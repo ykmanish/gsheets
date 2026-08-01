@@ -486,7 +486,7 @@ function getMessageStatus(message, selectedConversation, currentUserId, onlineUs
   if (!message || message.senderId !== currentUserId) return null;
   const readBy = message.readBy || {};
   const deliveredTo = message.deliveredTo || {};
-  const participantIds = selectedConversation?.participantIds || [];
+  const participantIds = selectedConversation?.participantIds || selectedConversation?.participants?.map(p => p.id) || [];
   const recipients = participantIds.filter((id) => String(id) !== String(currentUserId));
 
   if (!recipients.length) return "read";
@@ -1754,6 +1754,23 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
             })
           );
         }
+        setConversations((current) =>
+          current.map((c) => {
+            if (sameConversation(c.id, payload.conversationId)) {
+              if (c.lastMessage && c.lastMessage.senderId === currentUser?.id) {
+                return {
+                  ...c,
+                  lastMessage: {
+                    ...c.lastMessage,
+                    readBy: { ...(c.lastMessage.readBy || {}), [payload.userId]: payload.readAt },
+                    deliveredTo: { ...(c.lastMessage.deliveredTo || {}), [payload.userId]: payload.readAt },
+                  }
+                };
+              }
+            }
+            return c;
+          })
+        );
       }
       if (payload.type === "forum:messageDeleted") {
         if (sameConversation(payload.conversationId, selectedId)) {
@@ -2866,6 +2883,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                             {!pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
                               getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "read"
                                 ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
+                                : getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "delivered"
+                                ? <CheckCheck className="h-3.5 w-3.5 shrink-0" />
                                 : <Check className="h-3.5 w-3.5 shrink-0" />
                             )}
                             <span className="min-w-0 truncate">{previewText}</span>
@@ -2910,6 +2929,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                             {!pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
                               getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "read"
                                 ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
+                                : getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "delivered"
+                                ? <CheckCheck className="h-3.5 w-3.5 shrink-0" />
                                 : <Check className="h-3.5 w-3.5 shrink-0" />
                             )}
                             <span className="min-w-0 truncate">{previewText}</span>

@@ -15669,6 +15669,7 @@ async function serializeForumMessage(message) {
     deliveredTo: message.deliveredTo || {},
     reactions: message.reactions || [],
     replyToMessage: message.replyToMessage || null,
+    forwardedFrom: message.forwardedFrom || null,
   };
 }
 
@@ -15722,7 +15723,7 @@ function broadcastForumPayload(userIds, payload) {
   }
 }
 
-async function createForumMessage({ req, conversationId, text }) {
+async function createForumMessage({ req, conversationId, text, forwardedFrom = null }) {
   const db = await connectAuthDb();
   const now = new Date();
   let conversation = await db.collection("forumConversations").findOne({ _id: conversationId });
@@ -15755,6 +15756,7 @@ async function createForumMessage({ req, conversationId, text }) {
     readBy: {},
     deliveredTo,
     replyToMessage: req.body?.replyToMessage || null,
+    forwardedFrom,
   };
   const result = await db.collection("forumMessages").insertOne(message);
   const saved = { ...message, _id: result.insertedId };
@@ -15945,6 +15947,75 @@ app.post("/forum/conversations/:id/messages", async (req, res) => {
     res.json({ message });
   } catch (error) {
     console.error("Forum send error:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/messages/forward", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const messageIds = Array.isArray(req.body?.messageIds) ? req.body.messageIds.map(String).filter(Boolean) : [];
+    const targets = Array.isArray(req.body?.targets) ? req.body.targets : [];
+    if (!messageIds.length) return res.status(400).json({ error: "Choose at least one message to forward" });
+    if (!targets.length) return res.status(400).json({ error: "Choose at least one recipient" });
+
+    const sourceFilters = messageIds.map((id) => ObjectId.isValid(id) ? new ObjectId(id) : id);
+    const sourceMessages = await db.collection("forumMessages").find({ _id: { $in: sourceFilters } }).sort({ createdAt: 1 }).toArray();
+    if (!sourceMessages.length) return res.status(404).json({ error: "Messages not found" });
+
+    const normalizedTargets = [];
+    for (const target of targets) {
+      const type = String(target?.type || "");
+      const id = String(target?.id || "");
+      if (type === "group" && id === FORUM_GROUP_ID) {
+        normalizedTargets.push({ type, conversationId: FORUM_GROUP_ID });
+      } else if (type === "conversation" && id) {
+        normalizedTargets.push({ type, conversationId: id });
+      } else if (type === "user" && ObjectId.isValid(id) && id !== req.authUser.id) {
+        normalizedTargets.push({ type, conversationId: forumConversationIdForDirect(req.authUser.id, id), userId: id });
+      }
+    }
+    if (!normalizedTargets.length) return res.status(400).json({ error: "No valid recipients selected" });
+
+    const created = [];
+    for (const target of normalizedTargets) {
+      if (target.userId) {
+        const targetUser = await db.collection("users").findOne({ _id: new ObjectId(target.userId), blacklisted: { $ne: true } });
+        if (!targetUser) continue;
+        const now = new Date();
+        await db.collection("forumConversations").updateOne(
+          { _id: target.conversationId },
+          {
+            $setOnInsert: {
+              _id: target.conversationId,
+              type: "direct",
+              participantIds: [req.authUser.id, target.userId],
+              createdAt: now,
+            },
+            $set: { updatedAt: now },
+          },
+          { upsert: true }
+        );
+      }
+
+      for (const source of sourceMessages) {
+        const sourceSender = await db.collection("users").findOne({ _id: new ObjectId(source.senderId) });
+        const text = decryptForumText(source.encrypted);
+        if (!text) continue;
+        const forwardedFrom = {
+          messageId: String(source._id),
+          conversationId: source.conversationId,
+          senderId: source.senderId,
+          senderName: sourceSender?.displayName || sourceSender?.username || "User",
+          forwardedAt: new Date(),
+        };
+        created.push(await createForumMessage({ req, conversationId: target.conversationId, text, forwardedFrom }));
+      }
+    }
+
+    res.json({ success: true, messages: created });
+  } catch (error) {
+    console.error("Forum forward error:", error);
     res.status(error.status || 500).json({ error: error.message });
   }
 });

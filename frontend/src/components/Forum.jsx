@@ -438,7 +438,7 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
     return (
       <span key={`highlight-${index}`}>
         {part.slice(0, start)}
-        <mark className={`rounded px-0.5 ${active ? "bg-[#facc15] text-black" : "bg-[#fde68a] text-black"}`}>{part.slice(start, start + needle.length)}</mark>
+        <mark className={`rounded px-0.5 ${active ? "bg-[#22c55e] text-[#052e16]" : "bg-[#86efac] text-[#052e16]"}`}>{part.slice(start, start + needle.length)}</mark>
         {part.slice(start + needle.length)}
       </span>
     );
@@ -969,6 +969,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [copyFeedbackId, setCopyFeedbackId] = useState("");
   const [reactionsPopoverTarget, setReactionsPopoverTarget] = useState(null);
   const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
+  const [deleteSelectionTarget, setDeleteSelectionTarget] = useState(null);
+  const [selectedMessageIds, setSelectedMessageIds] = useState([]);
+  const [selectionDeleting, setSelectionDeleting] = useState(false);
+  const [forwardMessageIds, setForwardMessageIds] = useState([]);
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [forwardTargetIds, setForwardTargetIds] = useState([]);
+  const [forwardSending, setForwardSending] = useState(false);
   const [editingMessageTarget, setEditingMessageTarget] = useState(null);
   const [replyToMessageTarget, setReplyToMessageTarget] = useState(null);
   const [deletingMessage, setDeletingMessage] = useState(false);
@@ -1243,6 +1250,39 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       .filter((item) => !term || [item.name, item.lastMessage?.text].join(" ").toLowerCase().includes(term));
   }, [conversations, search]);
 
+  const forwardTargets = useMemo(() => {
+    const term = forwardSearch.trim().toLowerCase();
+    const items = [];
+    const group = conversations.find((item) => item.id === GROUP_ID);
+    if (group) {
+      items.push({ key: `group:${GROUP_ID}`, type: "group", id: GROUP_ID, title: group.name || "Group Forum", subtitle: "Workspace group", avatarUser: null, group });
+    }
+    for (const conversation of conversations.filter((item) => item.type === "direct")) {
+      const other = conversation.participants?.find((user) => String(user.id) !== String(currentUser?.id));
+      items.push({
+        key: `conversation:${conversation.id}`,
+        type: "conversation",
+        id: conversation.id,
+        title: conversation.name || other?.displayName || "Direct message",
+        subtitle: other?.designation || other?.department || "Recent chat",
+        avatarUser: other,
+      });
+    }
+    for (const user of users) {
+      if (!user.id || String(user.id) === String(currentUser?.id)) continue;
+      if (items.some((item) => item.avatarUser?.id === user.id)) continue;
+      items.push({
+        key: `user:${user.id}`,
+        type: "user",
+        id: user.id,
+        title: user.displayName || user.username || "User",
+        subtitle: [user.designation, user.department].filter(Boolean).join(" • ") || user.email || "User",
+        avatarUser: user,
+      });
+    }
+    return items.filter((item) => !term || [item.title, item.subtitle].join(" ").toLowerCase().includes(term));
+  }, [conversations, currentUser?.id, forwardSearch, users]);
+
   const groupConversation = conversations.find((item) => item.id === GROUP_ID);
   const selectedOtherUser = selectedConversation?.type === "direct"
     ? selectedConversation.participants?.find((user) => user.id !== getStoredAuth().user?.id)
@@ -1429,6 +1469,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (payload.type === "forum:messageDeleted") {
         if (sameConversation(payload.conversationId, selectedId)) {
           setMessages((current) => current.filter((message) => message.id !== payload.messageId));
+          setSelectedMessageIds((current) => current.filter((id) => id !== payload.messageId));
         }
         setMessageMenu((current) => current?.message?.id === payload.messageId ? null : current);
         setDeleteMessageTarget((current) => current?.id === payload.messageId ? null : current);
@@ -1593,6 +1634,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [selectedId, messages.length]);
+
+  useEffect(() => {
+    setSelectedMessageIds([]);
+  }, [selectedId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveMatchIndex(0), 0);
@@ -1868,6 +1913,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   function handleMessageTouchStart(event, message) {
     const touch = event.touches?.[0];
     if (!touch) return;
+    if (selectedMessageIds.length) return;
     touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
     swipeRef.current = { active: true, messageId: message.id, message, startX: touch.clientX, startY: touch.clientY, currentX: touch.clientX, locked: false };
     if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
@@ -1929,6 +1975,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   function openMessageMenu(event, message) {
     event.preventDefault();
+    if (selectedMessageIds.length) {
+      toggleSelectedMessage(message);
+      return;
+    }
     const mine = message.senderId === currentUser?.id;
     const mainBounds = mainChatRef.current?.getBoundingClientRect() || {
       left: 0,
@@ -2012,6 +2062,111 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       window.setTimeout(() => setCopyFeedbackId((current) => current === message.id ? "" : current), 1400);
     } catch (error) {
       toast.error("Could not copy message");
+    }
+  }
+
+  function toggleSelectedMessage(message) {
+    if (!message?.id || String(message.id).startsWith("temp-")) return;
+    setSelectedMessageIds((current) => (
+      current.includes(message.id)
+        ? current.filter((id) => id !== message.id)
+        : [...current, message.id]
+    ));
+  }
+
+  function startMessageSelection(message) {
+    setMessageMenu(null);
+    setEmojiPickerOpen(false);
+    if (!message?.id || String(message.id).startsWith("temp-")) return;
+    setSelectedMessageIds([message.id]);
+  }
+
+  async function copySelectedMessages() {
+    const selected = messages.filter((message) => selectedMessageIds.includes(message.id));
+    const text = selected.map((message) => String(message.text || "")).filter(Boolean).join("\n");
+    if (!text) {
+      toast.error("No text to copy");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${selected.length} message${selected.length === 1 ? "" : "s"} copied`);
+      setSelectedMessageIds([]);
+    } catch {
+      toast.error("Could not copy messages");
+    }
+  }
+
+  async function deleteSelectedMessages(mode = null) {
+    const selected = (deleteSelectionTarget?.messages || messages.filter((message) => selectedMessageIds.includes(message.id))).filter((message) => !String(message.id).startsWith("temp-"));
+    if (!selected.length || selectionDeleting) return;
+    try {
+      setSelectionDeleting(true);
+      await Promise.all(selected.map((message) => {
+        const finalMode = mode || "me";
+        return api(`/forum/conversations/${encodeURIComponent(message.conversationId || selectedId)}/messages/${encodeURIComponent(message.id)}?mode=${finalMode}`, { method: "DELETE" });
+      }));
+      setMessages((current) => current.filter((message) => !selected.some((item) => item.id === message.id)));
+      setSelectedMessageIds([]);
+      setDeleteSelectionTarget(null);
+      toast.success(`${selected.length} message${selected.length === 1 ? "" : "s"} deleted`);
+    } catch (error) {
+      toast.error(error.message || "Could not delete selected messages");
+    } finally {
+      setSelectionDeleting(false);
+    }
+  }
+
+  function requestDeleteSelectedMessages() {
+    const selected = messages.filter((message) => selectedMessageIds.includes(message.id) && !String(message.id).startsWith("temp-"));
+    if (!selected.length) return;
+    const allMine = selected.every((message) => String(message.senderId) === String(currentUser?.id));
+    if (allMine) {
+      setDeleteSelectionTarget({ messages: selected });
+      return;
+    }
+    void deleteSelectedMessages("me");
+  }
+
+  function openForwardDialog(messageIds) {
+    const ids = [...new Set((Array.isArray(messageIds) ? messageIds : [messageIds]).filter(Boolean))];
+    if (!ids.length) return;
+    setMessageMenu(null);
+    setEmojiPickerOpen(false);
+    setForwardMessageIds(ids);
+    setForwardTargetIds([]);
+    setForwardSearch("");
+  }
+
+  function toggleForwardTarget(targetKey) {
+    setForwardTargetIds((current) => (
+      current.includes(targetKey)
+        ? current.filter((id) => id !== targetKey)
+        : [...current, targetKey]
+    ));
+  }
+
+  async function sendForwardedMessages() {
+    if (!forwardMessageIds.length || !forwardTargetIds.length || forwardSending) return;
+    const targets = forwardTargets
+      .filter((target) => forwardTargetIds.includes(target.key))
+      .map(({ type, id }) => ({ type, id }));
+    try {
+      setForwardSending(true);
+      await api("/forum/messages/forward", {
+        method: "POST",
+        body: JSON.stringify({ messageIds: forwardMessageIds, targets }),
+      });
+      toast.success("Message forwarded");
+      setForwardMessageIds([]);
+      setForwardTargetIds([]);
+      setForwardSearch("");
+      setSelectedMessageIds([]);
+      void loadBootstrap().catch(() => {});
+    } catch (error) {
+      toast.error(error.message || "Could not forward message");
+    } finally {
+      setForwardSending(false);
     }
   }
 
@@ -2409,12 +2564,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
                       const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
                       const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
+                      const isSelectionMode = selectedMessageIds.length > 0;
+                      const isSelectedMessage = selectedMessageIds.includes(message.id);
                       const previewUrl = firstUrlFromText(message.text);
                       const displayText = previewUrl ? textWithoutUrls(message.text) : message.text;
                       const isGroupedWithNext = groupedWithNext && (nextMessage ? messageDateKey(nextMessage.createdAt) === messageDateKey(message.createdAt) : false);
 
                       // Smooth 18px rounded speech bubble with soft 4px tail
                       const bubbleRounding = mine ? "rounded-t-[18px] rounded-bl-[18px] rounded-br-[4px]" : "rounded-t-[18px] rounded-br-[18px] rounded-bl-[4px]";
+                      const bubbleTone = isActiveMatch
+                        ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]"
+                        : mine ? darkMode ? "bg-[#181a20] text-white" : "bg-[#e5f1ff] text-[#14213d]" : darkMode ? "bg-[#252830] text-white" : "bg-white text-[#14213d]";
                       return (
                         <div key={message.id} className={`min-w-0 first:mt-0 ${!groupedWithPrevious ? "mt-3" : "mt-1"}`}>
                           {showDate && (
@@ -2425,12 +2585,28 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                             </div>
                           )}
                           <div
-                            className="relative overflow-hidden min-w-0"
+                            className="relative min-w-0 overflow-hidden"
+                            onClick={() => {
+                              if (isSelectionMode) toggleSelectedMessage(message);
+                            }}
                             onTouchStart={(event) => handleMessageTouchStart(event, message)}
                             onTouchMove={handleMessageTouchMove}
                             onTouchEnd={handleMessageTouchEnd}
                             onTouchCancel={handleMessageTouchEnd}
                           >
+                          {isSelectionMode && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleSelectedMessage(message);
+                              }}
+                              className={`absolute right-1 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border text-white shadow-sm ${isSelectedMessage ? "border-emerald-500 bg-emerald-500" : darkMode ? "border-white/20 bg-black/40" : "border-black/10 bg-white"}`}
+                              aria-label={isSelectedMessage ? "Deselect message" : "Select message"}
+                            >
+                              {isSelectedMessage && <Check className="h-4 w-4" />}
+                            </button>
+                          )}
                           {/* Swipe reply icon */}
                           {swipeOffset.id === message.id && swipeOffset.x > 0 && (
                             <div
@@ -2477,7 +2653,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                               </div>
                             )}
                             {displayText && previewUrl && (
-                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} p-2.5 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${mine ? darkMode ? "bg-[#181a20] text-white" : "bg-[#e5f1ff] text-[#14213d]" : darkMode ? "bg-[#252830] text-white" : "bg-white text-[#14213d]"}`}>
+                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} p-2.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : bubbleTone}`}>
+                                {message.forwardedFrom && (
+                                  <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+                                    Forwarded from {message.forwardedFrom.senderName || "User"}
+                                  </div>
+                                )}
                                 {message.replyToMessage && (
                                   <button
                                     type="button"
@@ -2514,7 +2695,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                               </div>
                             )}
                             {displayText && !previewUrl && (
-                              <div className={`max-w-full ${bubbleRounding} px-3.5 py-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15] ring-offset-2" : ""} ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${mine ? darkMode ? "bg-[#181a20] text-white" : "bg-[#e5f1ff] text-[#14213d]" : darkMode ? "bg-[#252830] text-white" : "bg-white text-[#14213d]"}`}>
+                              <div className={`max-w-full ${bubbleRounding} px-3.5 py-2 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : bubbleTone}`}>
+                                {message.forwardedFrom && (
+                                  <div className={`mb-1 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+                                    Forwarded from {message.forwardedFrom.senderName || "User"}
+                                  </div>
+                                )}
                                 {message.replyToMessage && (
                                   <button
                                     type="button"
@@ -2549,7 +2735,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                               </div>
                             )}
                             {previewUrl && !displayText && (
-                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} ring-offset-2 transition ${isActiveMatch ? "ring-2 ring-[#facc15]" : ""} ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""}`}>
+                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] p-2.5 text-[#dcfce7]" : "bg-[#dff8e8] p-2.5 text-[#052e16]" : isActiveMatch ? darkMode ? "bg-[#123c2c] p-2.5 text-[#dcfce7]" : "bg-[#bbf7d0] p-2.5 text-[#052e16]" : ""}`}>
+                                {message.forwardedFrom && (
+                                  <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+                                    Forwarded from {message.forwardedFrom.senderName || "User"}
+                                  </div>
+                                )}
                                 {message.replyToMessage && (
                                   <button
                                     type="button"
@@ -2651,6 +2842,46 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                         </span>
                       </button>
                     ))}
+                  </div>
+                )}
+                {selectedMessageIds.length > 0 && (
+                  <div className={`mx-auto mb-2 flex max-w-4xl items-center gap-3 rounded-2xl px-3 py-2.5 ${darkMode ? "bg-[#111318] text-white" : "bg-white text-[#111827]"}`}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMessageIds([])}
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                      aria-label="Clear selected messages"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                    <p className="min-w-0 flex-1 text-sm font-bold">
+                      {selectedMessageIds.length} selected
+                    </p>
+                    <button
+                      type="button"
+                      onClick={copySelectedMessages}
+                      className={`grid h-9 w-9 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10 text-white/80" : "hover:bg-black/5 text-black/70"}`}
+                      aria-label="Copy selected messages"
+                    >
+                      <Copy className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={selectionDeleting}
+                      onClick={requestDeleteSelectedMessages}
+                      className="grid h-9 w-9 place-items-center rounded-full text-red-500 transition hover:bg-red-500/10 disabled:opacity-50"
+                      aria-label="Delete selected messages"
+                    >
+                      {selectionDeleting ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openForwardDialog(selectedMessageIds)}
+                      className={`grid h-9 w-9 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10 text-white/80" : "hover:bg-black/5 text-black/70"}`}
+                      aria-label="Forward selected messages"
+                    >
+                      <Reply className="h-5 w-5 rotate-180" />
+                    </button>
                   </div>
                 )}
                 {editingMessageTarget && (
@@ -2903,7 +3134,25 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     <Copy className="h-4 w-4 text-[#2563eb]" />
                     Copy
                   </button>
-                  {messageMenu.message?.senderId === currentUser?.id && (
+                  <button
+                    type="button"
+                    disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
+                    onClick={() => startMessageSelection(messageMenu.message)}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                  >
+                    <Check className="h-4 w-4 text-[#2563eb]" />
+                    Select
+                  </button>
+                  <button
+                    type="button"
+                    disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
+                    onClick={() => openForwardDialog(messageMenu.message?.id)}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                  >
+                    <Reply className="h-4 w-4 rotate-180 text-[#2563eb]" />
+                    Forward
+                  </button>
+                  {messageMenu.message?.senderId === currentUser?.id && !messageMenu.message?.forwardedFrom && (
                     <button
                       type="button"
                       disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
@@ -3014,6 +3263,95 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
             </div>
           </>
         )}
+        {forwardMessageIds.length > 0 && (
+          <div
+            className="fixed inset-0 z-[92] grid place-items-center bg-black/55 px-4 backdrop-blur-[2px] dark:bg-black/75"
+            onMouseDown={() => {
+              if (!forwardSending) {
+                setForwardMessageIds([]);
+                setForwardTargetIds([]);
+                setForwardSearch("");
+              }
+            }}
+          >
+            <div
+              onMouseDown={(event) => event.stopPropagation()}
+              className={`flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-[24px] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}
+            >
+              <div className="flex items-center gap-3 px-5 py-4">
+                <button
+                  type="button"
+                  disabled={forwardSending}
+                  onClick={() => {
+                    setForwardMessageIds([]);
+                    setForwardTargetIds([]);
+                    setForwardSearch("");
+                  }}
+                  className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"} disabled:opacity-50`}
+                  aria-label="Close forward dialog"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-black">Forward message</h3>
+                  <p className={`text-xs ${muted}`}>{forwardMessageIds.length} message{forwardMessageIds.length === 1 ? "" : "s"} selected</p>
+                </div>
+              </div>
+              <div className="px-5 pb-3">
+                <label className={`flex h-11 items-center gap-2 rounded-2xl px-3 ${darkMode ? "bg-white/10" : "bg-[#f3f5f8]"}`}>
+                  <Search className={`h-4 w-4 ${muted}`} />
+                  <input
+                    value={forwardSearch}
+                    onChange={(event) => setForwardSearch(event.target.value)}
+                    placeholder="Search people or group"
+                    className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                  />
+                </label>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+                {forwardTargets.map((target) => {
+                  const selected = forwardTargetIds.includes(target.key);
+                  return (
+                    <button
+                      key={target.key}
+                      type="button"
+                      onClick={() => toggleForwardTarget(target.key)}
+                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${selected ? darkMode ? "bg-emerald-500/15" : "bg-emerald-50" : darkMode ? "hover:bg-white/8" : "hover:bg-[#f6f8fb]"}`}
+                    >
+                      {target.type === "group" ? (
+                        <GroupAvatar group={target.group} className="h-10 w-10" iconClassName="h-5 w-5" />
+                      ) : (
+                        <UserAvatar user={target.avatarUser} name={target.title} className="h-10 w-10" />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-bold">{target.title}</span>
+                        <span className={`block truncate text-xs ${muted}`}>{target.subtitle}</span>
+                      </span>
+                      <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${selected ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
+                        {selected && <Check className="h-4 w-4" />}
+                      </span>
+                    </button>
+                  );
+                })}
+                {!forwardTargets.length && (
+                  <p className={`px-4 py-8 text-center text-sm ${muted}`}>No contacts found.</p>
+                )}
+              </div>
+              <div className={`flex items-center gap-3 border-t px-5 py-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+                <p className="min-w-0 flex-1 text-sm font-bold">{forwardTargetIds.length} selected</p>
+                <button
+                  type="button"
+                  disabled={!forwardTargetIds.length || forwardSending}
+                  onClick={sendForwardedMessages}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[#2563eb] px-5 text-sm font-bold text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#cbd5e1]"
+                >
+                  {forwardSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {messageInfoTarget && (
           <div
             className={`fixed inset-0 z-[95] grid place-items-center transition-all duration-200 px-4 animate-in fade-in duration-150 ${darkMode ? "bg-black/80" : "bg-black/40"}`}
@@ -3114,34 +3452,49 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
             </div>
           </div>
         )}
-        {deleteMessageTarget && (
-          <div className="fixed inset-0 z-[90] grid place-items-center dark:bg-black/80 bg-black/60 px-4 " onMouseDown={() => !deletingMessage && setDeleteMessageTarget(null)}>
-            <div onMouseDown={(event) => event.stopPropagation()} className={`w-full max-w-md rounded-[24px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
-              <div className="flex items-start gap-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-500/10 text-red-500">
-                  <Trash2 className="h-5 w-5" />
+        {(deleteMessageTarget || deleteSelectionTarget) && (
+          <div className="fixed inset-0 z-[90] grid place-items-center bg-black/60 px-4 dark:bg-black/80" onMouseDown={() => {
+            if (deletingMessage || selectionDeleting) return;
+            setDeleteMessageTarget(null);
+            setDeleteSelectionTarget(null);
+          }}>
+            <div onMouseDown={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[22px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+              <button
+                type="button"
+                disabled={deletingMessage || selectionDeleting}
+                onClick={() => {
+                  setDeleteMessageTarget(null);
+                  setDeleteSelectionTarget(null);
+                }}
+                className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-black/45 hover:bg-black/5 hover:text-black"} disabled:opacity-40`}
+                aria-label="Close delete dialog"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="flex items-start gap-3 pr-9">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-500/10 text-red-500">
+                  <Trash2 className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <h3 className="text-lg text-black dark:text-white font-black">Delete message?</h3>
-                  <p className={`mt-1 text-sm leading-5 ${muted}`}>This message will be removed from the conversation for everyone.</p>
+                  <h3 className="text-base font-black text-black dark:text-white">Delete {deleteSelectionTarget ? "messages" : "message"}?</h3>
+                  <p className={`mt-1 text-xs leading-5 ${muted}`}>
+                    {deleteSelectionTarget ? `${deleteSelectionTarget.messages.length} selected messages can be removed for you or everyone.` : "Choose how this message should be removed."}
+                  </p>
                 </div>
               </div>
               {/* <div className={`mt-4 max-h-24 overflow-hidden rounded-2xl px-3 py-2 text-sm ${darkMode ? "bg-white/[0.05] text-white/70" : "bg-[#f7f8fb] text-black/60"}`}>
                 <p className="line-clamp-3 whitespace-pre-wrap break-words">{deleteMessageTarget.text || "Link preview message"}</p>
               </div> */}
-              <div className="mt-5 flex flex-col gap-2">
-                {deleteMessageTarget.senderId === currentUser?.id && (
-                  <button type="button" disabled={deletingMessage} onClick={() => deleteSingleMessage("everyone")} className="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-red-500 px-4 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-60">
-                    {deletingMessage ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    Delete for everyone
+              <div className="mt-5 flex items-center gap-2">
+                {(deleteSelectionTarget || deleteMessageTarget?.senderId === currentUser?.id) && (
+                  <button type="button" disabled={deletingMessage || selectionDeleting} onClick={() => deleteSelectionTarget ? deleteSelectedMessages("everyone") : deleteSingleMessage("everyone")} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-red-500 px-3 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-60">
+                    {(deletingMessage || selectionDeleting) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    <span className="truncate">Delete for everyone</span>
                   </button>
                 )}
-                <button type="button" disabled={deletingMessage} onClick={() => deleteSingleMessage("me")} className="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-red-500 px-4 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-60">
-                  {deletingMessage ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  Delete for me
-                </button>
-                <button type="button" disabled={deletingMessage} onClick={() => setDeleteMessageTarget(null)} className={`flex h-10 w-full items-center justify-center rounded-full px-4 text-sm font-bold ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-[#f3f4f6] hover:bg-[#e5e7eb]"} disabled:opacity-50`}>
-                  Cancel
+                <button type="button" disabled={deletingMessage || selectionDeleting} onClick={() => deleteSelectionTarget ? deleteSelectedMessages("me") : deleteSingleMessage("me")} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-red-500 px-3 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-60">
+                  {(deletingMessage || selectionDeleting) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  <span className="truncate">Delete for me</span>
                 </button>
               </div>
             </div>

@@ -1044,7 +1044,27 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   };
 
   const createPeerConnection = useCallback((targetUserId, isInitiator) => {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443?transport=tcp",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        }
+      ]
+    });
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -1369,6 +1389,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         if (sameConversation(payload.conversationId, selectedId)) {
           const pc = createPeerConnection(payload.fromUserId, false);
           pc.setRemoteDescription(new RTCSessionDescription(payload.offer))
+            .then(() => {
+              if (pc.candidateQueue) {
+                pc.candidateQueue.forEach(c => pc.addIceCandidate(c).catch(console.error));
+                pc.candidateQueue = [];
+              }
+            })
             .then(() => pc.createAnswer())
             .then(answer => pc.setLocalDescription(answer))
             .then(() => {
@@ -1390,11 +1416,28 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       }
       if (payload.type === "forum:screenShareAnswer" && payload.targetUserId === currentUser?.id) {
         const pc = peerConnectionsRef.current.get(payload.fromUserId);
-        if (pc) pc.setRemoteDescription(new RTCSessionDescription(payload.answer)).catch(console.error);
+        if (pc) {
+          pc.setRemoteDescription(new RTCSessionDescription(payload.answer))
+            .then(() => {
+              if (pc.candidateQueue) {
+                pc.candidateQueue.forEach(c => pc.addIceCandidate(c).catch(console.error));
+                pc.candidateQueue = [];
+              }
+            })
+            .catch(console.error);
+        }
       }
       if (payload.type === "forum:screenShareCandidate" && payload.targetUserId === currentUser?.id) {
         const pc = peerConnectionsRef.current.get(payload.fromUserId);
-        if (pc) pc.addIceCandidate(new RTCIceCandidate(payload.candidate)).catch(console.error);
+        if (pc) {
+          const candidate = new RTCIceCandidate(payload.candidate);
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            pc.addIceCandidate(candidate).catch(console.error);
+          } else {
+            if (!pc.candidateQueue) pc.candidateQueue = [];
+            pc.candidateQueue.push(candidate);
+          }
+        }
       }
       if (payload.type === "forum:deleted") {
         setConversations((current) => current.filter((item) => item.id !== payload.conversationId));

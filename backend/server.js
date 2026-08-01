@@ -15650,7 +15650,7 @@ function assertForumGroupMember(conversation = {}, req) {
   throw error;
 }
 
-async function serializeForumMessage(message) {
+async function serializeForumMessage(message, viewerId = null) {
   if (!message) return null;
   const db = await connectAuthDb();
   const sender = await db.collection("users").findOne({ _id: new ObjectId(message.senderId) });
@@ -15680,6 +15680,8 @@ async function serializeForumMessage(message) {
     type: message.type,
     senderId: message.senderId,
     sender: forumUserProfile(sender || { _id: message.senderId, username: "User" }),
+    system: Boolean(message.system),
+    event: message.event || null,
     text: attachmentMissing ? "" : decryptForumText(message.encrypted),
     encrypted: true,
     createdAt: message.createdAt,
@@ -15688,6 +15690,8 @@ async function serializeForumMessage(message) {
     readBy: message.readBy || {},
     deliveredTo: message.deliveredTo || {},
     reactions: message.reactions || [],
+    starredBy: message.starredBy || [],
+    isStarred: (message.starredBy || []).map(String).includes(String(viewerId || "")),
     replyToMessage: message.replyToMessage || null,
     forwardedFrom: message.forwardedFrom || null,
     attachment,
@@ -15707,6 +15711,22 @@ async function forumConversationSummary(conversation, authUserId) {
     text: decryptForumText(conversation.lastMessage.encrypted),
     encrypted: true,
   } : null;
+  let pinnedMessage = null;
+  if (conversation.pinnedMessage?.messageId && (!conversation.pinnedMessage.expiresAt || new Date(conversation.pinnedMessage.expiresAt) > new Date())) {
+    const pinId = String(conversation.pinnedMessage.messageId);
+    const pinFilter = ObjectId.isValid(pinId) ? { _id: new ObjectId(pinId) } : { _id: pinId };
+    const pinnedDoc = await db.collection("forumMessages").findOne({ ...pinFilter, conversationId: conversation._id });
+    if (pinnedDoc) {
+      pinnedMessage = {
+        ...conversation.pinnedMessage,
+        messageId: String(pinnedDoc._id),
+        senderId: pinnedDoc.senderId,
+        senderName: String(pinnedDoc.senderId) === String(authUserId) ? "You" : (participants.find((user) => String(user._id) === String(pinnedDoc.senderId))?.displayName || "User"),
+        text: pinnedDoc.attachment?.kind === "image" ? (pinnedDoc.attachment.caption || "Photo") : (pinnedDoc.attachment?.name || decryptForumText(pinnedDoc.encrypted)),
+        attachment: pinnedDoc.attachment || null,
+      };
+    }
+  }
   return {
     id: conversation._id,
     type: conversation.type,
@@ -15719,6 +15739,7 @@ async function forumConversationSummary(conversation, authUserId) {
     canManage: conversation.type === "group" && (conversation.adminIds || []).map(String).includes(String(authUserId)),
     canSendMessages: conversation.type !== "group" || !conversation.adminOnlyMessages || (conversation.adminIds || []).map(String).includes(String(authUserId)),
     lastMessage,
+    pinnedMessage,
     activeScreenShareUserId: activeScreenShares.get(String(conversation._id))?.userId || activeScreenShares.get(String(conversation._id)) || null,
     activeScreenShareId: activeScreenShares.get(String(conversation._id))?.shareId || null,
     updatedAt: conversation.updatedAt,
@@ -15798,12 +15819,52 @@ async function createForumMessage({ req, conversationId, text, forwardedFrom = n
       },
     }
   );
-  const serialized = await serializeForumMessage(saved);
+  const serialized = await serializeForumMessage(saved, req.authUser.id);
   const recipients = conversation.type === "direct"
     ? conversation.participantIds
     : conversation.participantIds;
   broadcastForumPayload(recipients, { type: "forum:message", conversationId, message: serialized });
 
+  return serialized;
+}
+
+async function createForumSystemMessage({ req, conversation, text, event }) {
+  const db = await connectAuthDb();
+  const now = new Date();
+  const encrypted = encryptForumText(text);
+  const recipientIds = conversation.participantIds || [];
+  const message = {
+    conversationId: conversation._id,
+    type: conversation.type,
+    senderId: req.authUser.id,
+    recipientIds,
+    encrypted,
+    system: true,
+    event,
+    createdAt: now,
+    readBy: {},
+    deliveredTo: {},
+  };
+  const result = await db.collection("forumMessages").insertOne(message);
+  const saved = { ...message, _id: result.insertedId };
+  await db.collection("forumConversations").updateOne(
+    { _id: conversation._id },
+    {
+      $set: {
+        updatedAt: now,
+        lastMessage: {
+          id: String(result.insertedId),
+          senderId: req.authUser.id,
+          encrypted,
+          system: true,
+          event,
+          createdAt: now,
+        },
+      },
+    }
+  );
+  const serialized = await serializeForumMessage(saved, req.authUser.id);
+  broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized });
   return serialized;
 }
 
@@ -15963,7 +16024,7 @@ app.get("/forum/conversations/:id/messages", async (req, res) => {
       conversationId: conversation._id,
       deletedForUsers: { $ne: String(req.authUser.id) }
     }).sort({ createdAt: 1 }).limit(300).toArray();
-    res.json({ messages: await Promise.all(messages.map(serializeForumMessage)) });
+    res.json({ messages: await Promise.all(messages.map((message) => serializeForumMessage(message, req.authUser.id))) });
   } catch (error) {
     console.error("Forum messages error:", error);
     res.status(500).json({ error: error.message });
@@ -16009,6 +16070,56 @@ app.post("/forum/conversations/:id/read", async (req, res) => {
   } catch (error) {
     console.error("Forum mark read error:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/conversations/:id/pin", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversation = req.params.id === FORUM_GROUP_ID
+      ? await ensureForumGroupConversation(db)
+      : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if (conversation.type === "group") assertForumGroupMember(conversation, req);
+
+    const action = String(req.body?.action || "pin");
+    const now = new Date();
+    if (action === "unpin") {
+      await db.collection("forumConversations").updateOne(
+        { _id: conversation._id },
+        { $unset: { pinnedMessage: "" }, $set: { updatedAt: now } }
+      );
+      await createForumSystemMessage({ req, conversation, text: "Message unpinned", event: "pin:unpin" });
+      const saved = await db.collection("forumConversations").findOne({ _id: conversation._id });
+      const summary = await forumConversationSummary(saved, req.authUser.id);
+      broadcastForumPayload(conversation.participantIds || [], { type: "forum:pin", conversationId: conversation._id, conversation: summary, pinnedMessage: null });
+      return res.json({ conversation: summary, pinnedMessage: null });
+    }
+
+    const messageId = String(req.body?.messageId || "");
+    if (!ObjectId.isValid(messageId)) return res.status(400).json({ error: "Invalid message" });
+    const message = await db.collection("forumMessages").findOne({ _id: new ObjectId(messageId), conversationId: conversation._id });
+    if (!message) return res.status(404).json({ error: "Message not found" });
+    const durationHours = Math.max(1, Math.min(24 * 30, Number(req.body?.durationHours || 24 * 7)));
+    const pinnedMessage = {
+      messageId,
+      pinnedBy: req.authUser.id,
+      pinnedByName: req.authUser.displayName || req.authUser.username || "User",
+      pinnedAt: now,
+      expiresAt: new Date(now.getTime() + durationHours * 60 * 60 * 1000),
+    };
+    await db.collection("forumConversations").updateOne(
+      { _id: conversation._id },
+      { $set: { pinnedMessage, updatedAt: now } }
+    );
+    await createForumSystemMessage({ req, conversation, text: "You pinned a message", event: "pin:pin" });
+    const saved = await db.collection("forumConversations").findOne({ _id: conversation._id });
+    const summary = await forumConversationSummary(saved, req.authUser.id);
+    broadcastForumPayload(conversation.participantIds || [], { type: "forum:pin", conversationId: conversation._id, conversation: summary, pinnedMessage: summary.pinnedMessage });
+    res.json({ conversation: summary, pinnedMessage: summary.pinnedMessage });
+  } catch (error) {
+    console.error("Forum pin error:", error);
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -16376,7 +16487,7 @@ app.post("/forum/messages/:messageId/reactions", async (req, res) => {
     await db.collection("forumMessages").updateOne(filter, { $set: { reactions: updatedReactions } });
 
     const updatedMessageDoc = await db.collection("forumMessages").findOne(filter);
-    const serialized = await serializeForumMessage(updatedMessageDoc);
+    const serialized = await serializeForumMessage(updatedMessageDoc, req.authUser.id);
 
     const conversation = await db.collection("forumConversations").findOne({ _id: message.conversationId });
     if (conversation) {
@@ -16393,6 +16504,41 @@ app.post("/forum/messages/:messageId/reactions", async (req, res) => {
   } catch (error) {
     console.error("Forum reaction error:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/messages/:messageId/star", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const messageId = req.params.messageId;
+    const userId = String(req.authUser.id);
+    const filter = ObjectId.isValid(messageId) ? { _id: new ObjectId(messageId) } : { _id: messageId };
+    const message = await db.collection("forumMessages").findOne(filter);
+    if (!message) return res.status(404).json({ error: "Message not found" });
+    const conversation = await db.collection("forumConversations").findOne({ _id: message.conversationId, participantIds: userId });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if (conversation.type === "group") assertForumGroupMember(conversation, req);
+
+    const starredBy = (message.starredBy || []).map(String);
+    const isStarred = starredBy.includes(userId);
+    const update = isStarred
+      ? { $pull: { starredBy: userId } }
+      : { $addToSet: { starredBy: userId } };
+    await db.collection("forumMessages").updateOne(filter, update);
+
+    const updatedMessageDoc = await db.collection("forumMessages").findOne(filter);
+    const serialized = await serializeForumMessage(updatedMessageDoc, userId);
+    broadcastForumPayload([userId], {
+      type: "forum:star",
+      conversationId: message.conversationId,
+      messageId: String(message._id),
+      isStarred: serialized.isStarred,
+      message: serialized,
+    });
+    res.json({ success: true, isStarred: serialized.isStarred, message: serialized });
+  } catch (error) {
+    console.error("Forum star error:", error);
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Pin, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
@@ -595,7 +595,7 @@ function FileAttachmentCard({ attachment, mine, darkMode, time, status = null, i
   if (!attachment) return null;
   const { Icon, label, color } = fileVisualForAttachment(attachment);
   const isUploading = attachment.uploading;
-  const actionClass = darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white/70 text-[#0f766e] hover:bg-white";
+  const actionClass = darkMode ? "bg-white/[0.12] text-white hover:bg-white/[0.18]" : "bg-[#f3f6f8] text-[#0f766e] hover:bg-[#e9eef3]";
   return (
     <div className="w-full min-w-0 overflow-hidden rounded-[18px]">
       <div className="flex min-w-0 items-center gap-3 px-3 py-2.5">
@@ -689,6 +689,7 @@ function saveMessageReaction(messageId, reactions) {
 
 function conversationPreviewText(message, fallback) {
   if (message?.attachmentMissing) return fallback;
+  if (message?.system) return message.text || fallback;
   if (message?.attachment?.kind === "image" || String(message?.attachment?.mimeType || "").startsWith("image/")) return message.attachment.caption || "Photo";
   if (message?.attachment?.name) return `File: ${message.attachment.name}`;
   const text = String(message?.text || "").trim();
@@ -698,6 +699,30 @@ function conversationPreviewText(message, fallback) {
   const rest = textWithoutUrls(text);
   const preview = rest || compactUrlLabel(url);
   return preview.length > 90 ? `${preview.slice(0, 90).trim()}...` : preview;
+}
+
+function pinnedPreviewText(pin) {
+  if (!pin) return "";
+  const text = String(pin.text || "").trim();
+  if (pin.attachment?.kind === "image") return `${pin.senderName || "User"}: Photo`;
+  if (pin.attachment?.name) return `${pin.senderName || "User"}: ${pin.attachment.name}`;
+  return `${pin.senderName || "User"}: ${text || "Message"}`;
+}
+
+function pinActivityText(pin, currentUserId) {
+  if (!pin) return "";
+  return String(pin.pinnedBy || "") === String(currentUserId || "")
+    ? "You pinned a message"
+    : `${pin.pinnedByName || "Someone"} pinned a message`;
+}
+
+function systemMessageText(message, currentUserId) {
+  if (message?.event === "pin:pin") {
+    return String(message.senderId || "") === String(currentUserId || "")
+      ? "You pinned a message"
+      : `${message.sender?.displayName || "Someone"} pinned a message`;
+  }
+  return message?.text || "";
 }
 
 function LinkPreviewCard({ url, mine, darkMode, time, embedded = false, status = null, isEdited = false }) {
@@ -1094,6 +1119,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [search, setSearch] = useState("");
   const [messageSearch, setMessageSearch] = useState("");
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
+  const [starredOnlyOpen, setStarredOnlyOpen] = useState(false);
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [unreadByConversation, setUnreadByConversation] = useState({});
@@ -1111,6 +1137,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [reactionsPopoverTarget, setReactionsPopoverTarget] = useState(null);
   const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
   const [deleteSelectionTarget, setDeleteSelectionTarget] = useState(null);
+  const [pinMessageTarget, setPinMessageTarget] = useState(null);
+  const [pinDurationHours, setPinDurationHours] = useState(24 * 7);
+  const [pinSaving, setPinSaving] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState([]);
   const [selectionDeleting, setSelectionDeleting] = useState(false);
   const [forwardMessageIds, setForwardMessageIds] = useState([]);
@@ -1454,6 +1483,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       .map((message, index) => ({ message, index }))
       .filter(({ message }) => String(message.text || "").toLowerCase().includes(term));
   }, [messageSearch, messages]);
+  const visibleMessages = useMemo(() => (
+    starredOnlyOpen ? messages.filter((message) => message.isStarred) : messages
+  ), [messages, starredOnlyOpen]);
   const groupParticipants = useMemo(() => {
     const byId = new Map();
     for (const user of groupConversation?.participants || []) byId.set(user.id, user);
@@ -1532,6 +1564,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   }, [loadMessages, selectedConversation, selectedId]);
 
   useEffect(() => {
+    setStarredOnlyOpen(false);
+  }, [selectedId]);
+
+  useEffect(() => {
     let stopped = false;
     let reconnectTimer = null;
     function connectSocket() {
@@ -1541,6 +1577,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       const payload = JSON.parse(event.data || "{}");
       if (payload.type === "forum:presence") setOnlineUserIds(payload.onlineUserIds || []);
       if (payload.type === "forum:conversation" && payload.conversation) {
+        setConversations((current) => [payload.conversation, ...current.filter((item) => item.id !== payload.conversation.id)]);
+      }
+      if (payload.type === "forum:pin" && payload.conversation) {
         setConversations((current) => [payload.conversation, ...current.filter((item) => item.id !== payload.conversation.id)]);
       }
       if (payload.type === "forum:message") {
@@ -1609,6 +1648,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
               : current
           ));
           saveMessageReaction(payload.messageId, payload.reactions || []);
+        }
+      }
+      if (payload.type === "forum:star") {
+        if (sameConversation(payload.conversationId, selectedId)) {
+          setMessages((current) => current.map((message) => (
+            message.id === payload.messageId ? { ...message, ...payload.message } : message
+          )));
+          setMessageMenu((current) => (
+            current?.message?.id === payload.messageId ? { ...current, message: { ...current.message, ...payload.message } } : current
+          ));
         }
       }
       if (payload.type === "forum:read") {
@@ -2259,8 +2308,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       bottom: window.innerHeight,
     };
     const menuWidth = 260;
-    const menuHeight = 220;
+    const menuHeight = 470;
     const padding = 12;
+    const viewport = window.visualViewport;
+    const safeBottom = Math.min(mainBounds.bottom, (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight));
 
     const messageNode = messageRefs.current.get(message.id);
     const clickX = event.clientX || 100;
@@ -2287,17 +2338,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     }
 
     let y;
-    if (rect.bottom + 8 + menuHeight <= mainBounds.bottom - padding) {
+    if (rect.bottom + 8 + menuHeight <= safeBottom - padding) {
       y = rect.bottom + 8;
     } else if (rect.top - 8 - menuHeight >= mainBounds.top + padding) {
       y = rect.top - menuHeight - 8;
     } else {
-      y = Math.max(mainBounds.top + padding, Math.min(rect.bottom + 8, mainBounds.bottom - menuHeight - padding));
+      y = Math.max(mainBounds.top + padding, Math.min(rect.bottom + 8, safeBottom - menuHeight - padding));
     }
 
     setEmojiPickerOpen(false);
     setEmojiSearch("");
-    setMessageMenu({ message, x, y, mine });
+    setMessageMenu({ message, x, y, mine, maxActionsHeight: Math.max(180, safeBottom - y - 86) });
   }
 
   useEffect(() => {
@@ -2310,6 +2361,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       top: 0,
       bottom: window.innerHeight,
     };
+    const viewport = window.visualViewport;
+    const viewportBottom = Math.min(mainBounds.bottom, (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight));
     const padding = 12;
 
     let newX = messageMenu.x;
@@ -2321,15 +2374,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     if (newX < mainBounds.left + padding) {
       newX = mainBounds.left + padding;
     }
-    if (rect.bottom > mainBounds.bottom - padding) {
-      newY = Math.max(mainBounds.top + padding, mainBounds.bottom - rect.height - padding);
+    if (rect.bottom > viewportBottom - padding) {
+      newY = Math.max(mainBounds.top + padding, viewportBottom - rect.height - padding);
     }
     if (newY < mainBounds.top + padding) {
       newY = mainBounds.top + padding;
     }
+    const maxActionsHeight = Math.max(180, viewportBottom - newY - 86);
 
-    if (Math.abs(newX - messageMenu.x) > 1 || Math.abs(newY - messageMenu.y) > 1) {
-      setMessageMenu((prev) => (prev ? { ...prev, x: newX, y: newY } : null));
+    if (Math.abs(newX - messageMenu.x) > 1 || Math.abs(newY - messageMenu.y) > 1 || Math.abs((messageMenu.maxActionsHeight || 0) - maxActionsHeight) > 1) {
+      setMessageMenu((prev) => (prev ? { ...prev, x: newX, y: newY, maxActionsHeight } : null));
     }
   }, [messageMenu, emojiPickerOpen]);
 
@@ -2343,6 +2397,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       window.setTimeout(() => setCopyFeedbackId((current) => current === message.id ? "" : current), 1400);
     } catch (error) {
       toast.error("Could not copy message");
+    }
+  }
+
+  async function toggleMessageStar(message) {
+    if (!message?.id || String(message.id).startsWith("temp-")) return;
+    setMessageMenu(null);
+    try {
+      const data = await api(`/forum/messages/${encodeURIComponent(message.id)}/star`, { method: "POST" });
+      if (data.message) {
+        setMessages((current) => current.map((item) => item.id === data.message.id ? { ...item, ...data.message } : item));
+      }
+    } catch (error) {
+      toast.error(error.message || "Could not update star");
     }
   }
 
@@ -2396,6 +2463,36 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     } finally {
       setSelectionDeleting(false);
     }
+  }
+
+  async function savePinnedMessage(action = "pin") {
+    const target = pinMessageTarget;
+    if (pinSaving || (!selectedId && action === "unpin") || (!target && action !== "unpin")) return;
+    try {
+      setPinSaving(true);
+      const data = await api(`/forum/conversations/${encodeURIComponent(selectedId)}/pin`, {
+        method: "POST",
+        body: JSON.stringify(action === "unpin"
+          ? { action: "unpin" }
+          : { action: "pin", messageId: target.id, durationHours: pinDurationHours }),
+      });
+      if (data.conversation) {
+        setConversations((current) => [data.conversation, ...current.filter((item) => item.id !== data.conversation.id)]);
+      }
+      setPinMessageTarget(null);
+    } catch (error) {
+      toast.error(error.message || "Could not update pin");
+    } finally {
+      setPinSaving(false);
+    }
+  }
+
+  function openPinDialog(message) {
+    if (!message?.id || String(message.id).startsWith("temp-")) return;
+    setMessageMenu(null);
+    setEmojiPickerOpen(false);
+    setPinDurationHours(24 * 7);
+    setPinMessageTarget(message);
   }
 
   function requestDeleteSelectedMessages() {
@@ -2591,6 +2688,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 const active = conversation.id === selectedId;
                 const unread = unreadByConversation[conversation.id];
                 const typingUsers = typingByConversation[conversation.id] || [];
+                const pinActivity = pinActivityText(conversation.pinnedMessage, currentUser?.id);
+                const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, "Workspace group forum");
                 return (
                   <button key={conversation.id} type="button" onClick={() => { setSelectedId(conversation.id); setMobileListOpen(false); }} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
                     {conversation.type === "group" ? (
@@ -2606,18 +2705,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                             {unread.mentioned ? "@" : unread.count}
                           </span>
                         ) : (
-                          <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
+                          <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.pinnedMessage?.pinnedAt || conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
                         )}
                       </span>
-                      <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? `${typingUsers[0].displayName} typing...` : conversationPreviewText(conversation.lastMessage, "Workspace group forum")}>
+                      <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? `${typingUsers[0].displayName} typing...` : previewText}>
                         {typingUsers.length ? `${typingUsers[0].displayName} typing...` : (
                           <>
-                            {String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
+                            {!pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
                               getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "read"
                                 ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
                                 : <Check className="h-3.5 w-3.5 shrink-0" />
                             )}
-                            <span className="min-w-0 truncate">{conversationPreviewText(conversation.lastMessage, "Workspace group forum")}</span>
+                            <span className="min-w-0 truncate">{previewText}</span>
                           </>
                         )}
                       </span>
@@ -2634,6 +2733,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 const active = conversation.id === selectedId;
                 const unread = unreadByConversation[conversation.id];
                 const typingUsers = typingByConversation[conversation.id] || [];
+                const pinActivity = pinActivityText(conversation.pinnedMessage, currentUser?.id);
+                const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, "Direct message");
                 return (
                   <button key={conversation.id} type="button" onClick={() => { setSelectedId(conversation.id); setMobileListOpen(false); }} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
                     <span className="relative shrink-0">
@@ -2648,18 +2749,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                             {unread.mentioned ? "@" : unread.count}
                           </span>
                         ) : (
-                          <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
+                          <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.pinnedMessage?.pinnedAt || conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
                         )}
                       </span>
-                      <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? "typing..." : conversationPreviewText(conversation.lastMessage, "Direct message")}>
+                      <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? "typing..." : previewText}>
                         {typingUsers.length ? "typing..." : (
                           <>
-                            {String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
+                            {!pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
                               getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "read"
                                 ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
                                 : <Check className="h-3.5 w-3.5 shrink-0" />
                             )}
-                            <span className="min-w-0 truncate">{conversationPreviewText(conversation.lastMessage, "Direct message")}</span>
+                            <span className="min-w-0 truncate">{previewText}</span>
                           </>
                         )}
                       </span>
@@ -2782,6 +2883,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     </button>
                     {chatMenuOpen && (
                       <div ref={chatMenuRef} className={`absolute right-0 top-11 z-30 w-44 rounded-2xl border p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/10 bg-[#1c1f26] text-white" : "border-black/10 bg-white text-[#111827]"}`}>
+                        <button type="button" onClick={() => { setStarredOnlyOpen((current) => !current); setChatMenuOpen(false); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}>
+                          <Star className={`h-3.5 w-3.5 ${starredOnlyOpen ? "fill-amber-400 text-amber-400" : "text-[#2563eb]"}`} />
+                          {starredOnlyOpen ? "Show all messages" : "Starred messages"}
+                        </button>
                         <button type="button" onClick={clearChat} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}>
                           <Sparkles className="h-3.5 w-3.5 text-[#2563eb]" />
                           Clear messages
@@ -2797,6 +2902,31 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     <X className="h-4 w-4" />
                   </button>
                 </header>
+
+                {selectedConversation?.pinnedMessage && (
+                  <button
+                    type="button"
+                    onClick={() => scrollToMessage(selectedConversation.pinnedMessage.messageId)}
+                    className={`flex h-11 shrink-0 items-center gap-3 border-b px-4 text-left transition ${darkMode ? "border-white/[0.06] bg-[#111318] hover:bg-[#171a20]" : "border-[#e5e7eb] bg-white hover:bg-[#f7f8fb]"}`}
+                  >
+                    <Pin className={`h-4 w-4 shrink-0 ${darkMode ? "text-white/70" : "text-black/60"}`} />
+                    <span className="min-w-0 flex-1 truncate text-xs">
+                      <span className="font-bold">Pinned</span>
+                      <span className={`ml-2 ${muted}`}>{pinnedPreviewText(selectedConversation.pinnedMessage)}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void savePinnedMessage("unpin");
+                      }}
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                      aria-label="Unpin message"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </button>
+                )}
 
                 {(localStream || remoteStream) && (
                   <div id="screen-share-container" className={`relative flex w-full justify-center overflow-hidden border-b shrink-0 ${darkMode ? "bg-black border-white/[0.06]" : "bg-[#f0f2f5] border-[#eef1f5]"} ${isFullscreen ? "h-screen w-screen border-none bg-black flex-col" : "max-h-[40vh]"}`}>
@@ -2887,12 +3017,33 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 <>
                 <section className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 sm:py-5 ${subSurface}`}>
                   <div className="mx-auto flex w-full max-w-4xl flex-col">
-                    {messages.map((message, index) => {
+                    {starredOnlyOpen && !visibleMessages.some((message) => message.isStarred) && (
+                      <div className={`my-8 text-center text-sm ${muted}`}>No starred messages</div>
+                    )}
+                    {visibleMessages.map((message, index) => {
                       if (message.attachmentMissing) return null;
-                      const mine = message.senderId === getStoredAuth().user?.id;
                       const nextMessage = messages[index + 1];
                       const previousMessage = messages[index - 1];
                       const showDate = messageDateKey(message.createdAt) !== messageDateKey(previousMessage?.createdAt);
+                      if (message.system) {
+                        return (
+                          <div key={message.id} className="min-w-0 mt-3 first:mt-0">
+                            {showDate && (
+                              <div className="sticky top-2 z-10 my-2 flex justify-center">
+                                <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
+                                  {formatMessageDate(message.createdAt)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="my-2 flex justify-center">
+                              <span className={`rounded-xl px-3 py-1.5 text-xs ${darkMode ? "bg-[#252830] text-white/70" : "bg-white text-black/60"}`}>
+                                {systemMessageText(message, currentUser?.id)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      const mine = message.senderId === getStoredAuth().user?.id;
                       const groupedWithNext = nextMessage?.senderId === message.senderId;
                       const groupedWithPrevious = !showDate && previousMessage?.senderId === message.senderId;
                       const compactWithPrevious = groupedWithPrevious || (!showDate && message.attachment && previousMessage?.attachment);
@@ -2906,6 +3057,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
                       const isSelectionMode = selectedMessageIds.length > 0;
                       const isSelectedMessage = selectedMessageIds.includes(message.id);
+                      const isStarred = Boolean(message.isStarred);
                       const previewUrl = message.attachment ? "" : firstUrlFromText(message.text);
                       const displayText = message.attachment ? "" : (previewUrl ? textWithoutUrls(message.text) : message.text);
                       const isGroupedWithNext = groupedWithNext && (nextMessage ? messageDateKey(nextMessage.createdAt) === messageDateKey(message.createdAt) : false);
@@ -2914,7 +3066,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       const bubbleRounding = mine ? "rounded-t-[18px] rounded-bl-[18px] rounded-br-[4px]" : "rounded-t-[18px] rounded-br-[18px] rounded-bl-[4px]";
                       const bubbleTone = isActiveMatch
                         ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]"
+                        : isStarred ? darkMode ? "bg-[#3a2f13] text-[#fff7d6]" : "bg-[#fff4c7] text-[#14213d]"
                         : mine ? darkMode ? "bg-[#181a20] text-white" : "bg-[#e5f1ff] text-[#14213d]" : darkMode ? "bg-[#252830] text-white" : "bg-white text-[#14213d]";
+                      const starMark = isStarred ? <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" /> : null;
                       return (
                         <div key={message.id} className={`min-w-0 ${messageTopMargin} first:mt-0`}>
                           {showDate && (
@@ -2994,6 +3148,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                             )}
                             {message.attachment && (
                               <div className={`w-full max-w-[420px] min-w-0 ${bubbleRounding} p-1.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : isActiveMatch ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]" : bubbleTone}`}>
+                                {starMark && <div className="mb-1 flex justify-end px-1">{starMark}</div>}
                                 {message.forwardedFrom && (
                                   <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
                                     Forwarded from {message.forwardedFrom.senderName || "User"}
@@ -3052,6 +3207,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                     {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
                                   </span>
                                   <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                    {starMark}
                                     <span>{formatTime(message.createdAt)}</span>
                                     {mine && (
                                       <span className="inline-flex items-center justify-center translate-y-[0.5px]">
@@ -3091,6 +3247,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                 <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
                                   {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
                                   <span className={`float-right ml-3 mt-[8px] inline-flex items-center gap-1 whitespace-nowrap text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                    {starMark}
                                     {message.isEdited && <span className="opacity-70">Edited</span>}
                                     <span>{formatTime(message.createdAt)}</span>
                                     {mine && (
@@ -3109,7 +3266,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                               </div>
                             )}
                             {previewUrl && !displayText && (
-                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] p-2.5 text-[#dcfce7]" : "bg-[#dff8e8] p-2.5 text-[#052e16]" : isActiveMatch ? darkMode ? "bg-[#123c2c] p-2.5 text-[#dcfce7]" : "bg-[#bbf7d0] p-2.5 text-[#052e16]" : ""}`}>
+                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} p-2.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : isActiveMatch ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]" : bubbleTone}`}>
+                                {starMark && <div className="mb-1 flex justify-end px-1">{starMark}</div>}
                                 {message.forwardedFrom && (
                                   <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
                                     Forwarded from {message.forwardedFrom.senderName || "User"}
@@ -3472,6 +3630,40 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
             />
           </div>
         )}
+        {pinMessageTarget && (
+          <div className="fixed inset-0 z-[96] grid place-items-center bg-black/45 px-4 backdrop-blur-[1px]" onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !pinSaving) setPinMessageTarget(null);
+          }}>
+            <div className={`w-full max-w-md rounded-[24px] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.18)] animate-in zoom-in-95 duration-150 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+              <h3 className="text-xl font-semibold">Choose how long your pin lasts</h3>
+              <p className={`mt-4 text-sm ${muted}`}>You can unpin at any time.</p>
+              <div className="mt-5 space-y-4">
+                {[
+                  { label: "24 hours", value: 24 },
+                  { label: "7 days", value: 24 * 7 },
+                  { label: "30 days", value: 24 * 30 },
+                ].map((item) => (
+                  <label key={item.value} className="flex cursor-pointer items-center gap-3 text-sm">
+                    <span className={`grid h-5 w-5 place-items-center rounded-full border-2 ${pinDurationHours === item.value ? "border-[#10b981]" : darkMode ? "border-white/35" : "border-black/35"}`}>
+                      {pinDurationHours === item.value && <span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />}
+                    </span>
+                    <input type="radio" className="sr-only" checked={pinDurationHours === item.value} onChange={() => setPinDurationHours(item.value)} />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+              <div className="mt-10 flex justify-end gap-3">
+                <button type="button" onClick={() => setPinMessageTarget(null)} disabled={pinSaving} className="rounded-full px-5 py-2 text-sm font-bold text-[#0f766e] disabled:opacity-50">
+                  Cancel
+                </button>
+                <button type="button" onClick={() => savePinnedMessage("pin")} disabled={pinSaving} className="inline-flex min-w-20 items-center justify-center gap-2 rounded-full bg-[#10b981] px-6 py-2.5 text-sm font-bold text-white disabled:opacity-60">
+                  {pinSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  Pin
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {messageMenu && (
           <>
             <div
@@ -3491,8 +3683,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
               style={{
                 left: messageMenu.x,
                 top: messageMenu.y,
+                maxHeight: "calc(100dvh - 24px)",
               }}
-              className={`fixed z-[95] flex flex-col gap-2.5 forum-ctx-container ${messageMenu.mine ? "items-end origin-top-right" : "items-start origin-top-left"}`}
+              className={`fixed z-[95] flex flex-col gap-2.5 overflow-visible forum-ctx-container ${messageMenu.mine ? "items-end origin-top-right" : "items-start origin-top-left"}`}
             >
               {/* WhatsApp Style Floating Emoji Reaction Bar */}
               <div className={`flex items-center gap-1 rounded-full px-2.5 py-2 shadow-[0_16px_60px_rgba(0,0,0,0.18)] forum-ctx-emoji-bar ${darkMode ? "bg-[#12141a] text-white" : "bg-white text-[#111827]"}`}>
@@ -3585,7 +3778,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 </div>
               ) : (
                 /* WhatsApp Style Context Menu */
-                <div className={`w-52 rounded-[22px] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.18)] forum-ctx-actions ${darkMode ? "bg-[#12141a] text-white" : "bg-white text-[#111827]"}`}>
+                <div
+                  style={{ maxHeight: messageMenu.maxActionsHeight || 320 }}
+                  className={`w-52 overflow-y-auto overscroll-contain rounded-[22px] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.18)] forum-ctx-actions ${darkMode ? "bg-[#12141a] text-white" : "bg-white text-[#111827]"}`}
+                >
                   <button
                     type="button"
                     onClick={() => {
@@ -3636,6 +3832,31 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                   >
                     <Reply className="h-4 w-4 rotate-180 text-[#2563eb]" />
                     Forward
+                  </button>
+                  <button
+                    type="button"
+                    disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
+                    onClick={() => toggleMessageStar(messageMenu.message)}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                  >
+                    <Star className={`h-4 w-4 ${messageMenu.message?.isStarred ? "fill-amber-400 text-amber-400" : "text-[#2563eb]"}`} />
+                    {messageMenu.message?.isStarred ? "Unstar" : "Star message"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
+                    onClick={() => {
+                      if (selectedConversation?.pinnedMessage?.messageId === messageMenu.message?.id) {
+                        setMessageMenu(null);
+                        void savePinnedMessage("unpin");
+                      } else {
+                        openPinDialog(messageMenu.message);
+                      }
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                  >
+                    <Pin className="h-4 w-4 text-[#2563eb]" />
+                    {selectedConversation?.pinnedMessage?.messageId === messageMenu.message?.id ? "Unpin" : "Pin message"}
                   </button>
                   {messageMenu.message?.senderId === currentUser?.id && !messageMenu.message?.forwardedFrom && !messageMenu.message?.attachment && (
                     <button

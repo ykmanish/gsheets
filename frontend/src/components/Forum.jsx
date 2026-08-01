@@ -985,6 +985,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   useEffect(() => {
     if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
+    if (localVideoRef.current && !localStream) localVideoRef.current.srcObject = null;
   }, [localStream]);
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
@@ -996,6 +997,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         });
       }
     }
+    if (remoteVideoRef.current && !remoteStream) remoteVideoRef.current.srcObject = null;
   }, [remoteStream]);
   const socketRef = useRef(null);
   const endRef = useRef(null);
@@ -1058,6 +1060,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   const startScreenShare = async () => {
     try {
+      peerConnectionsRef.current.forEach((pc) => pc.close());
+      peerConnectionsRef.current.clear();
+      setRemoteStream(null);
+      setAutoplayBlocked(false);
+
       let stream;
       if (!navigator.mediaDevices.getDisplayMedia) {
         toast.error("Screen sharing is not supported by this mobile browser.");
@@ -1079,7 +1086,6 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       localStreamRef.current = stream;
       setLocalStream(stream);
       setActiveScreenShareUserId(currentUser?.id);
-      setAutoplayBlocked(false);
 
       stream.getVideoTracks()[0].onended = () => {
         stopScreenShare();
@@ -1099,9 +1105,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     }
   };
 
-  const createPeerConnection = useCallback((targetUserId) => {
+  const createPeerConnection = useCallback((targetUserId, { fresh = false } = {}) => {
     const existing = peerConnectionsRef.current.get(targetUserId);
-    if (existing && existing.connectionState !== "closed") return existing;
+    if (fresh && existing) {
+      existing.close();
+      peerConnectionsRef.current.delete(targetUserId);
+    } else if (existing && existing.connectionState !== "closed") {
+      return existing;
+    }
 
     const pc = new RTCPeerConnection({
       iceServers: screenShareIceServers(),
@@ -1420,6 +1431,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (payload.type === "forum:screenShareStart") {
         setConversations(current => current.map(c => c.id === payload.conversationId ? { ...c, activeScreenShareUserId: payload.userId } : c));
         if (sameConversation(payload.conversationId, selectedId)) {
+          const existing = peerConnectionsRef.current.get(payload.userId);
+          if (existing) {
+            existing.close();
+            peerConnectionsRef.current.delete(payload.userId);
+          }
+          setRemoteStream(null);
+          setAutoplayBlocked(false);
           setActiveScreenShareUserId(payload.userId);
         }
       }
@@ -1436,7 +1454,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       }
       if (payload.type === "forum:screenShareOffer" && payload.targetUserId === currentUser?.id) {
         if (sameConversation(payload.conversationId, selectedId)) {
-          const pc = createPeerConnection(payload.fromUserId);
+          const pc = createPeerConnection(payload.fromUserId, { fresh: true });
           pc.setRemoteDescription(new RTCSessionDescription(payload.offer))
             .then(() => {
               if (pc.candidateQueue) {

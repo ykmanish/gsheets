@@ -1084,8 +1084,24 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      console.log(`ICE State (${targetUserId}):`, pc.iceConnectionState);
+      if (pc.iceConnectionState === "failed") {
+        toast.error("Screen share connection failed (network blocked).");
+        stopScreenShare();
+      }
+    };
+
     pc.ontrack = (event) => {
-      setRemoteStream(event.streams[0]);
+      if (event.streams && event.streams.length > 0) {
+        setRemoteStream(new MediaStream(event.streams[0].getTracks()));
+      } else {
+        setRemoteStream(prev => {
+          const stream = prev ? new MediaStream(prev.getTracks()) : new MediaStream();
+          stream.addTrack(event.track);
+          return stream;
+        });
+      }
     };
 
     if (localStreamRef.current) {
@@ -2225,7 +2241,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       autoPlay
                       playsInline
                       muted={!!localStream}
-                      className={`w-auto object-contain ${isFullscreen ? "h-full w-full" : "h-full max-h-[40vh] max-w-full"}`}
+                      className={`w-full h-full object-contain ${isFullscreen ? "" : "max-h-[40vh]"}`}
                     />
                     
                     {!localStream && (

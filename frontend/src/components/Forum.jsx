@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Plus, Reply, Rocket, Search, Send, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Plus, Reply, Rocket, Search, Send, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
@@ -924,6 +924,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const peerConnectionsRef = useRef(new Map());
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
@@ -1005,13 +1006,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const startScreenShare = async () => {
     try {
       let stream;
+      if (!navigator.mediaDevices.getDisplayMedia) {
+        toast.error("Screen sharing is not supported by this mobile browser.");
+        return;
+      }
+      
       try {
-        if (!navigator.mediaDevices.getDisplayMedia) throw new Error("NotSupported");
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       } catch (err) {
-        if (err.name === 'NotAllowedError') return;
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
-        toast.success("Screen share unavailable. Sharing camera instead.");
+        if (err.name === 'NotAllowedError') return; // User cancelled
+        console.error("Screen share error", err);
+        toast.error("Failed to start screen sharing.");
+        return;
       }
       
       localStreamRef.current = stream;
@@ -1311,6 +1317,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         if (sameConversation(payload.conversationId, selectedId)) setMessages([]);
       }
       if (payload.type === "forum:screenShareStart") {
+        setConversations(current => current.map(c => c.id === payload.conversationId ? { ...c, activeScreenShareUserId: payload.userId } : c));
         if (sameConversation(payload.conversationId, selectedId)) {
           setActiveScreenShareUserId(payload.userId);
           if (payload.userId !== currentUser?.id) {
@@ -1327,6 +1334,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         }
       }
       if (payload.type === "forum:screenShareStop") {
+        setConversations(current => current.map(c => c.id === payload.conversationId ? { ...c, activeScreenShareUserId: null } : c));
         if (sameConversation(payload.conversationId, selectedId)) {
           peerConnectionsRef.current.forEach((pc) => pc.close());
           peerConnectionsRef.current.clear();
@@ -2131,20 +2139,6 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                           <Trash2 className="h-3.5 w-3.5" />
                           Delete chat
                         </button>
-                        {isMobileViewport && (
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              activeScreenShareUserId === currentUser?.id ? stopScreenShare() : startScreenShare();
-                              setChatMenuOpen(false);
-                            }}
-                            disabled={activeScreenShareUserId && activeScreenShareUserId !== currentUser?.id}
-                            className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${activeScreenShareUserId === currentUser?.id ? "text-red-500 hover:bg-red-500/10" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"} disabled:opacity-35`}
-                          >
-                            {activeScreenShareUserId === currentUser?.id ? <X className="h-3.5 w-3.5" /> : <Monitor className="h-3.5 w-3.5" />}
-                            {activeScreenShareUserId === currentUser?.id ? "Stop sharing" : "Share screen"}
-                          </button>
-                        )}
                       </div>
                     )}
                   </div>
@@ -2154,14 +2148,26 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 </header>
 
                 {(localStream || remoteStream) && (
-                  <div className={`relative flex w-full justify-center overflow-hidden border-b shrink-0 ${darkMode ? "bg-black border-white/[0.06]" : "bg-[#f0f2f5] border-[#eef1f5]"} max-h-[40vh]`}>
+                  <div className={`relative flex w-full justify-center overflow-hidden border-b shrink-0 ${darkMode ? "bg-black border-white/[0.06]" : "bg-[#f0f2f5] border-[#eef1f5]"} ${isFullscreen ? "fixed inset-0 z-[100] h-[100dvh] w-screen border-none bg-black flex-col" : "max-h-[40vh]"}`}>
                     <video
                       ref={localStream ? localVideoRef : remoteVideoRef}
                       autoPlay
                       playsInline
                       muted={!!localStream}
-                      className="h-full max-h-[40vh] w-auto max-w-full object-contain"
+                      className={`w-auto object-contain ${isFullscreen ? "h-full w-full max-h-none" : "h-full max-h-[40vh] max-w-full"}`}
                     />
+                    
+                    <div className="absolute right-3 top-3 z-10 flex gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setIsFullscreen(!isFullscreen)} 
+                        className="grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white backdrop-blur-md hover:bg-black/80"
+                        aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                      >
+                        {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+                      </button>
+                    </div>
+
                     {localStream && (
                       <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-2 text-white backdrop-blur-md">
                         <Monitor className="h-4 w-4 text-emerald-400" />

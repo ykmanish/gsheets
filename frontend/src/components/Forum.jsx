@@ -974,12 +974,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [deletingMessage, setDeletingMessage] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const [activeScreenShareUserId, setActiveScreenShareUserId] = useState(null);
+  const [activeScreenShareId, setActiveScreenShareId] = useState(null);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const peerConnectionsRef = useRef(new Map());
   const localStreamRef = useRef(null);
+  const activeScreenShareIdRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
 
@@ -1033,26 +1035,34 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
   const currentUser = getStoredAuth().user;
 
+  const resetScreenSharePeers = useCallback(() => {
+    peerConnectionsRef.current.forEach((pc) => pc.close());
+    peerConnectionsRef.current.clear();
+  }, []);
+
   const stopScreenShare = useCallback(() => {
+    const shareId = activeScreenShareIdRef.current;
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
       setLocalStream(null);
     }
-    peerConnectionsRef.current.forEach((pc) => pc.close());
-    peerConnectionsRef.current.clear();
+    resetScreenSharePeers();
     setRemoteStream(null);
     setActiveScreenShareUserId(null);
+    setActiveScreenShareId(null);
+    activeScreenShareIdRef.current = null;
 
     const socket = socketRef.current;
     if (socket && socket.readyState === WebSocket.OPEN && selectedId) {
       socket.send(JSON.stringify({
         type: "forum:screenShareStop",
         conversationId: selectedId,
+        shareId,
         recipientIds: selectedConversation?.type === "direct" ? selectedConversation.participantIds : undefined,
       }));
     }
-  }, [selectedId, selectedConversation]);
+  }, [resetScreenSharePeers, selectedId, selectedConversation]);
 
   useEffect(() => {
     return () => stopScreenShare();
@@ -1060,8 +1070,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   const startScreenShare = async () => {
     try {
-      peerConnectionsRef.current.forEach((pc) => pc.close());
-      peerConnectionsRef.current.clear();
+      const shareId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      activeScreenShareIdRef.current = shareId;
+      setActiveScreenShareId(shareId);
+      resetScreenSharePeers();
       setRemoteStream(null);
       setAutoplayBlocked(false);
 
@@ -1096,6 +1108,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         socket.send(JSON.stringify({
           type: "forum:screenShareStart",
           conversationId: selectedId,
+          shareId,
           recipientIds: selectedConversation?.type === "direct" ? selectedConversation.participantIds : undefined,
         }));
       }
@@ -1105,7 +1118,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     }
   };
 
-  const createPeerConnection = useCallback((targetUserId, { fresh = false } = {}) => {
+  const createPeerConnection = useCallback((targetUserId, { fresh = false, shareId = activeScreenShareIdRef.current } = {}) => {
     const existing = peerConnectionsRef.current.get(targetUserId);
     if (fresh && existing) {
       existing.close();
@@ -1118,15 +1131,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       iceServers: screenShareIceServers(),
       bundlePolicy: "max-bundle",
     });
+    pc.shareId = shareId;
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
+        if (pc.shareId && activeScreenShareIdRef.current && pc.shareId !== activeScreenShareIdRef.current) return;
         const sendCandidate = () => {
           if (socketRef.current?.readyState === WebSocket.OPEN) {
             socketRef.current.send(JSON.stringify({
               type: "forum:screenShareCandidate",
               conversationId: selectedId,
               targetUserId,
+              shareId: pc.shareId,
               candidate: event.candidate
             }));
           } else if (socketRef.current) {
@@ -1180,9 +1196,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   useEffect(() => {
     if (selectedConversation?.activeScreenShareUserId && selectedConversation.activeScreenShareUserId !== currentUser?.id) {
       const sharerId = selectedConversation.activeScreenShareUserId;
+      const shareId = selectedConversation.activeScreenShareId || `${selectedId}-${sharerId}`;
+      activeScreenShareIdRef.current = shareId;
+      window.setTimeout(() => setActiveScreenShareId(shareId), 0);
       window.setTimeout(() => setActiveScreenShareUserId(sharerId), 0);
       if (!peerConnectionsRef.current.has(sharerId)) {
-        const pc = createPeerConnection(sharerId);
+        const pc = createPeerConnection(sharerId, { shareId });
         pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
           const sendOffer = () => {
             if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -1190,6 +1209,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 type: "forum:screenShareOffer",
                 conversationId: selectedId,
                 targetUserId: sharerId,
+                shareId,
                 offer: pc.localDescription
               }));
             } else if (socketRef.current) {
@@ -1202,10 +1222,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     } else if (!selectedConversation?.activeScreenShareUserId && !localStreamRef.current) {
        window.setTimeout(() => {
          setActiveScreenShareUserId(null);
+         setActiveScreenShareId(null);
          setRemoteStream(null);
        }, 0);
     }
-  }, [selectedConversation?.activeScreenShareUserId, selectedId, currentUser?.id, createPeerConnection]);
+  }, [selectedConversation?.activeScreenShareId, selectedConversation?.activeScreenShareUserId, selectedId, currentUser?.id, createPeerConnection]);
 
   const searchedUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -1429,18 +1450,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         if (sameConversation(payload.conversationId, selectedId)) setMessages([]);
       }
       if (payload.type === "forum:screenShareStart") {
-        setConversations(current => current.map(c => c.id === payload.conversationId ? { ...c, activeScreenShareUserId: payload.userId } : c));
+        const shareId = payload.shareId || `${payload.conversationId}-${payload.userId}-${Date.now()}`;
+        setConversations(current => current.map(c => c.id === payload.conversationId ? { ...c, activeScreenShareUserId: payload.userId, activeScreenShareId: shareId } : c));
         if (sameConversation(payload.conversationId, selectedId)) {
-          const existing = peerConnectionsRef.current.get(payload.userId);
-          if (existing) {
-            existing.close();
-            peerConnectionsRef.current.delete(payload.userId);
-          }
+          activeScreenShareIdRef.current = shareId;
+          resetScreenSharePeers();
           setRemoteStream(null);
           setAutoplayBlocked(false);
+          setActiveScreenShareId(shareId);
           setActiveScreenShareUserId(payload.userId);
           if (payload.userId !== currentUser?.id) {
-            const pc = createPeerConnection(payload.userId, { fresh: true });
+            const pc = createPeerConnection(payload.userId, { fresh: true, shareId });
             pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
               const sendOffer = () => {
                 if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -1448,6 +1468,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     type: "forum:screenShareOffer",
                     conversationId: payload.conversationId,
                     targetUserId: payload.userId,
+                    shareId,
                     offer: pc.localDescription
                   }));
                 } else if (socketRef.current) {
@@ -1460,19 +1481,20 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         }
       }
       if (payload.type === "forum:screenShareStop") {
-        setConversations(current => current.map(c => c.id === payload.conversationId ? { ...c, activeScreenShareUserId: null } : c));
+        setConversations(current => current.map(c => c.id === payload.conversationId ? { ...c, activeScreenShareUserId: null, activeScreenShareId: null } : c));
         if (sameConversation(payload.conversationId, selectedId)) {
-          peerConnectionsRef.current.forEach((pc) => pc.close());
-          peerConnectionsRef.current.clear();
+          resetScreenSharePeers();
           setRemoteStream(null);
-          if (activeScreenShareUserId !== currentUser?.id) {
-            setActiveScreenShareUserId(null);
-          }
+          setActiveScreenShareId(null);
+          activeScreenShareIdRef.current = null;
+          setActiveScreenShareUserId(null);
         }
       }
       if (payload.type === "forum:screenShareOffer" && payload.targetUserId === currentUser?.id) {
         if (sameConversation(payload.conversationId, selectedId)) {
-          const pc = createPeerConnection(payload.fromUserId, { fresh: true });
+          if (activeScreenShareIdRef.current && payload.shareId && payload.shareId !== activeScreenShareIdRef.current) return;
+          const shareId = payload.shareId || activeScreenShareIdRef.current;
+          const pc = createPeerConnection(payload.fromUserId, { fresh: true, shareId });
           pc.setRemoteDescription(new RTCSessionDescription(payload.offer))
             .then(() => {
               if (pc.candidateQueue) {
@@ -1489,6 +1511,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     type: "forum:screenShareAnswer",
                     conversationId: selectedId,
                     targetUserId: payload.fromUserId,
+                    shareId,
                     answer: pc.localDescription
                   }));
                 } else if (socketRef.current) {
@@ -1500,8 +1523,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         }
       }
       if (payload.type === "forum:screenShareAnswer" && payload.targetUserId === currentUser?.id) {
+        if (activeScreenShareIdRef.current && payload.shareId && payload.shareId !== activeScreenShareIdRef.current) return;
         const pc = peerConnectionsRef.current.get(payload.fromUserId);
-        if (pc) {
+        if (pc && (!payload.shareId || !pc.shareId || payload.shareId === pc.shareId)) {
           pc.setRemoteDescription(new RTCSessionDescription(payload.answer))
             .then(() => {
               if (pc.candidateQueue) {
@@ -1513,8 +1537,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         }
       }
       if (payload.type === "forum:screenShareCandidate" && payload.targetUserId === currentUser?.id) {
+        if (activeScreenShareIdRef.current && payload.shareId && payload.shareId !== activeScreenShareIdRef.current) return;
         const pc = peerConnectionsRef.current.get(payload.fromUserId);
-        if (pc) {
+        if (pc && (!payload.shareId || !pc.shareId || payload.shareId === pc.shareId)) {
           const candidate = new RTCIceCandidate(payload.candidate);
           if (pc.remoteDescription && pc.remoteDescription.type) {
             pc.addIceCandidate(candidate).catch(console.error);
@@ -1544,7 +1569,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       socketRef.current?.close();
     };
-  }, [currentUser?.id, currentUser?.username, selectedId]);
+  }, [createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, selectedId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

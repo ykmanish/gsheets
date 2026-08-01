@@ -15696,7 +15696,8 @@ async function forumConversationSummary(conversation, authUserId) {
     canManage: conversation.type === "group" && (conversation.adminIds || []).map(String).includes(String(authUserId)),
     canSendMessages: conversation.type !== "group" || !conversation.adminOnlyMessages || (conversation.adminIds || []).map(String).includes(String(authUserId)),
     lastMessage,
-    activeScreenShareUserId: activeScreenShares.get(String(conversation._id)) || null,
+    activeScreenShareUserId: activeScreenShares.get(String(conversation._id))?.userId || activeScreenShares.get(String(conversation._id)) || null,
+    activeScreenShareId: activeScreenShares.get(String(conversation._id))?.shareId || null,
     updatedAt: conversation.updatedAt,
   };
 }
@@ -16332,28 +16333,35 @@ server.on("upgrade", async (request, socket) => {
             });
           }
           if (payload.type === "forum:screenShareStart" && payload.conversationId) {
-            if (activeScreenShares.has(payload.conversationId) && activeScreenShares.get(payload.conversationId) !== user.id) {
+            const existingShare = activeScreenShares.get(payload.conversationId);
+            const existingUserId = typeof existingShare === "object" ? existingShare.userId : existingShare;
+            if (existingUserId && existingUserId !== user.id) {
               // Ignore if someone else is sharing
             } else {
-              activeScreenShares.set(payload.conversationId, user.id);
+              const shareId = payload.shareId || `${Date.now()}-${crypto.randomUUID()}`;
+              activeScreenShares.set(payload.conversationId, { userId: user.id, shareId });
               const recipientIds = Array.isArray(payload.recipientIds) ? payload.recipientIds : [];
               const targets = payload.conversationId === FORUM_GROUP_ID ? [...forumClients.keys()] : recipientIds;
               broadcastForumPayload(targets.filter((id) => String(id) !== user.id), {
                 type: "forum:screenShareStart",
                 conversationId: payload.conversationId,
-                userId: user.id
+                userId: user.id,
+                shareId
               });
             }
           }
           if (payload.type === "forum:screenShareStop" && payload.conversationId) {
-            if (activeScreenShares.get(payload.conversationId) === user.id) {
+            const existingShare = activeScreenShares.get(payload.conversationId);
+            const existingUserId = typeof existingShare === "object" ? existingShare.userId : existingShare;
+            if (existingUserId === user.id) {
               activeScreenShares.delete(payload.conversationId);
               const recipientIds = Array.isArray(payload.recipientIds) ? payload.recipientIds : [];
               const targets = payload.conversationId === FORUM_GROUP_ID ? [...forumClients.keys()] : recipientIds;
               broadcastForumPayload(targets.filter((id) => String(id) !== user.id), {
                 type: "forum:screenShareStop",
                 conversationId: payload.conversationId,
-                userId: user.id
+                userId: user.id,
+                shareId: typeof existingShare === "object" ? existingShare.shareId : payload.shareId
               });
             }
           }
@@ -16376,9 +16384,10 @@ server.on("upgrade", async (request, socket) => {
       if (!sockets?.size) {
         forumClients.delete(user.id);
         for (const [convId, sharerId] of activeScreenShares.entries()) {
-          if (sharerId === user.id) {
+          const existingUserId = typeof sharerId === "object" ? sharerId.userId : sharerId;
+          if (existingUserId === user.id) {
             activeScreenShares.delete(convId);
-            broadcastForumPayload([...forumClients.keys()], { type: "forum:screenShareStop", conversationId: convId, userId: user.id });
+            broadcastForumPayload([...forumClients.keys()], { type: "forum:screenShareStop", conversationId: convId, userId: user.id, shareId: typeof sharerId === "object" ? sharerId.shareId : undefined });
           }
         }
       }

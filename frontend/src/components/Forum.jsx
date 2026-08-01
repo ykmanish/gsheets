@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Plus, Reply, Rocket, Search, Send, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, SmilePlus, Sparkles, Star, SunMedium, Trash2, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
@@ -300,6 +300,32 @@ async function api(path, options = {}) {
   return data;
 }
 
+function apiFormWithProgress(path, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const { token } = getStoredAuth();
+    xhr.open("POST", `${API_URL}${path}`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      onProgress?.(Math.max(1, Math.min(95, Math.round((event.loaded / event.total) * 95))));
+    };
+    xhr.onload = () => {
+      const data = (() => {
+        try {
+          return JSON.parse(xhr.responseText || "{}");
+        } catch {
+          return {};
+        }
+      })();
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new Error(data.error || "Forum request failed"));
+    };
+    xhr.onerror = () => reject(new Error("Forum request failed"));
+    xhr.send(formData);
+  });
+}
+
 function socketUrl() {
   const { token } = getStoredAuth();
   const base = API_URL.replace(/^http/, "ws").replace(/\/api$/, "");
@@ -531,6 +557,118 @@ function preferredFaviconSources(host = "", url = "") {
   ].filter(Boolean);
 }
 
+function formatFileSize(bytes = 0) {
+  const value = Number(bytes || 0);
+  if (!value) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size >= 10 || unit === 0 ? Math.round(size) : size.toFixed(1)} ${units[unit]}`;
+}
+
+function fileVisualForAttachment(attachment = {}) {
+  const name = String(attachment.name || "").toLowerCase();
+  const mime = String(attachment.mimeType || "").toLowerCase();
+  const ext = name.includes(".") ? name.split(".").pop() : "";
+  if (mime.includes("pdf") || ext === "pdf") return { Icon: FileText, label: "PDF", color: "bg-red-500" };
+  if (["doc", "docx"].includes(ext) || mime.includes("word")) return { Icon: FileText, label: "DOC", color: "bg-blue-600" };
+  if (["xls", "xlsx", "csv"].includes(ext) || mime.includes("spreadsheet") || mime.includes("excel")) return { Icon: FileSpreadsheet, label: "XLS", color: "bg-emerald-600" };
+  if (["html", "htm", "js", "jsx", "ts", "tsx", "css", "json"].includes(ext) || mime.includes("javascript") || mime.includes("html")) return { Icon: FileCode, label: ext ? ext.toUpperCase() : "CODE", color: "bg-violet-600" };
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext) || mime.includes("zip") || mime.includes("compressed")) return { Icon: FileArchive, label: "ZIP", color: "bg-amber-600" };
+  return { Icon: File, label: ext ? ext.toUpperCase().slice(0, 4) : "FILE", color: "bg-slate-600" };
+}
+
+function attachmentImageUrl(attachment = {}) {
+  if (attachment.driveFileId) {
+    const { token } = getStoredAuth();
+    return `${API_URL}/forum/files/${encodeURIComponent(attachment.driveFileId)}/preview?token=${encodeURIComponent(token || "")}`;
+  }
+  if (attachment.previewUrl) return attachment.previewUrl;
+  return attachment.openUrl || attachment.downloadUrl || "";
+}
+
+function FileAttachmentCard({ attachment, mine, darkMode, time, status = null, isEdited = false }) {
+  if (!attachment) return null;
+  const { Icon, label, color } = fileVisualForAttachment(attachment);
+  const isUploading = attachment.uploading;
+  const actionClass = darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white/70 text-[#0f766e] hover:bg-white";
+  return (
+    <div className="w-full min-w-0 overflow-hidden rounded-[18px]">
+      <div className="flex min-w-0 items-center gap-3 px-3 py-2.5">
+        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-white ${color}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{attachment.name || "Shared file"}</span>
+          <span className={`mt-0.5 block truncate text-[11px] ${darkMode ? "text-white/55" : "text-black/45"}`}>
+            {[label, formatFileSize(attachment.size)].filter(Boolean).join(" • ")}
+          </span>
+        </span>
+        <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : darkMode ? "text-white/50" : "text-black/45"}`}>
+          {isEdited && <span className="opacity-70">Edited</span>}
+          <span>{time}</span>
+          {mine && status && (
+            status === "read" ? <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" /> : <Check className="h-3.5 w-3.5" />
+          )}
+        </span>
+      </div>
+      {isUploading ? (
+        <div className="px-3 pb-3 pt-1.5">
+          <div className={`mb-1 flex items-center justify-between text-[11px] font-semibold ${darkMode ? "text-white/60" : "text-black/45"}`}>
+            <span>Uploading...</span>
+            <span className="tabular-nums transition-all duration-300">{Math.round(attachment.progress || 0)}%</span>
+          </div>
+          <div className={`h-1 overflow-hidden rounded-full ${darkMode ? "bg-white/15" : "bg-white/80"}`}>
+            <div className="h-full rounded-full bg-black transition-all duration-500 ease-out" style={{ width: `${Math.max(2, Math.min(100, attachment.progress || 0))}%` }} />
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 px-2 pb-2 pt-1">
+          <a href={attachment.openUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold no-underline ${actionClass}`}>
+            Open
+          </a>
+          <a href={attachment.downloadUrl || attachment.openUrl} target="_blank" rel="noreferrer" download onClick={(event) => event.stopPropagation()} className={`inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold no-underline ${actionClass}`}>
+            Download
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImageAttachmentCard({ attachment, mine, darkMode, time, status = null, onOpen, onMissing }) {
+  if (!attachment) return null;
+  const caption = String(attachment.caption || "").trim();
+  const imageUrl = attachmentImageUrl(attachment);
+  return (
+    <button type="button" onClick={onOpen} className="block w-full min-w-0 overflow-hidden rounded-[18px] text-left">
+      <span className={`block overflow-hidden rounded-[16px] ${darkMode ? "bg-black/20" : "bg-white/35"}`}>
+        <img
+        src={imageUrl}
+        alt={attachment.name || "Shared image"}
+        className="max-h-[320px] w-full object-contain"
+        onError={onMissing}
+      />
+      </span>
+      {caption && (
+        <p className="whitespace-pre-wrap break-words px-2 pb-1 pt-2 text-sm leading-6 [overflow-wrap:anywhere]">
+          {caption}
+        </p>
+      )}
+      <span className={`flex items-center justify-end gap-1.5 px-3 pb-1.5 pt-1 text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : darkMode ? "text-white/50" : "text-black/45"}`}>
+        <span>{time}</span>
+        {mine && status && (
+          status === "read" ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" /> : <Check className="h-3.5 w-3.5 shrink-0" />
+        )}
+      </span>
+    </button>
+  );
+}
+
 function getSavedReactionsMap() {
   try {
     const raw = typeof window !== "undefined" ? localStorage.getItem("raga_forum_message_reactions") : null;
@@ -550,6 +688,9 @@ function saveMessageReaction(messageId, reactions) {
 }
 
 function conversationPreviewText(message, fallback) {
+  if (message?.attachmentMissing) return fallback;
+  if (message?.attachment?.kind === "image" || String(message?.attachment?.mimeType || "").startsWith("image/")) return message.attachment.caption || "Photo";
+  if (message?.attachment?.name) return `File: ${message.attachment.name}`;
   const text = String(message?.text || "").trim();
   if (!text) return fallback;
   const url = firstUrlFromText(text);
@@ -976,6 +1117,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [forwardSearch, setForwardSearch] = useState("");
   const [forwardTargetIds, setForwardTargetIds] = useState([]);
   const [forwardSending, setForwardSending] = useState(false);
+  const [forumSettingsOpen, setForumSettingsOpen] = useState(false);
+  const [forumDriveFolderUrl, setForumDriveFolderUrl] = useState("");
+  const [forumDriveConnectedUrl, setForumDriveConnectedUrl] = useState("");
+  const [savingForumSettings, setSavingForumSettings] = useState(false);
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const [imageDraft, setImageDraft] = useState(null);
+  const [imageCaption, setImageCaption] = useState("");
+  const [fullscreenImage, setFullscreenImage] = useState(null);
   const [editingMessageTarget, setEditingMessageTarget] = useState(null);
   const [replyToMessageTarget, setReplyToMessageTarget] = useState(null);
   const [deletingMessage, setDeletingMessage] = useState(false);
@@ -1015,6 +1164,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const messageMenuRef = useRef(null);
   const optimisticMessageCounterRef = useRef(0);
   const composerRef = useRef(null);
+  const documentInputRef = useRef(null);
+  const photoInputRef = useRef(null);
   const mainChatRef = useRef(null);
   const swipeRef = useRef({ active: false, messageId: null, message: null, startX: 0, startY: 0, currentX: 0, locked: false });
   const [swipeOffset, setSwipeOffset] = useState({ id: null, x: 0 });
@@ -1037,6 +1188,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     onMobileChatOpenChange?.(isMobileViewport && !mobileListOpen);
     return () => onMobileChatOpenChange?.(false);
   }, [isMobileViewport, mobileListOpen, onMobileChatOpenChange]);
+
+  useEffect(() => {
+    return () => {
+      if (imageDraft?.previewUrl) URL.revokeObjectURL(imageDraft.previewUrl);
+    };
+  }, [imageDraft?.previewUrl]);
   const selectedConversation = selectedId ? conversations.find((item) => item.id === selectedId) || null : null;
   const selectedIsGroup = selectedId === GROUP_ID;
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
@@ -1322,6 +1479,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     setSelectedId((current) => list.some((item) => item.id === current) ? current : (list[0]?.id || GROUP_ID));
     setUsers(data.users || []);
     setOnlineUserIds(data.onlineUserIds || []);
+    api("/forum/settings").then((settings) => {
+      setForumDriveFolderUrl(settings.driveFolderUrl || "");
+      setForumDriveConnectedUrl(settings.driveFolderUrl || "");
+    }).catch(() => {});
     return data;
   }, []);
 
@@ -1790,6 +1951,117 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     }
   }
 
+  async function saveForumDriveSettings(event) {
+    event?.preventDefault();
+    const driveFolderUrl = forumDriveFolderUrl.trim();
+    if (!driveFolderUrl) {
+      toast.error("Paste the Drive folder link first");
+      return;
+    }
+    try {
+      setSavingForumSettings(true);
+      const data = await api("/forum/settings", {
+        method: "PUT",
+        body: JSON.stringify({ driveFolderUrl }),
+      });
+      setForumDriveFolderUrl(data.driveFolderUrl || driveFolderUrl);
+      setForumDriveConnectedUrl(data.driveFolderUrl || driveFolderUrl);
+      setForumSettingsOpen(false);
+      toast.success("Drive folder connected");
+    } catch (error) {
+      toast.error(error.message || "Could not connect Drive folder");
+    } finally {
+      setSavingForumSettings(false);
+    }
+  }
+
+  async function uploadForumFile(file, { caption = "" } = {}) {
+    if (!file) return;
+    if (!canSendSelectedConversation) {
+      toast.error("Only group admins can message right now");
+      return;
+    }
+    if (!forumDriveConnectedUrl) {
+      setForumSettingsOpen(true);
+      toast.error("Connect a Drive folder first");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    if (caption) formData.append("caption", caption);
+    optimisticMessageCounterRef.current += 1;
+    const tempId = `temp-file-${optimisticMessageCounterRef.current}`;
+    const tempMessage = {
+      id: tempId,
+      conversationId: selectedId,
+      type: selectedConversation?.type || "group",
+      senderId: currentUser?.id,
+      sender: currentUser,
+      text: file.type?.startsWith("image/") ? (caption || "Photo") : file.name,
+      createdAt: new Date().toISOString(),
+      pending: true,
+      attachment: {
+        name: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size || 0,
+        uploading: true,
+        progress: 1,
+        kind: file.type?.startsWith("image/") ? "image" : "file",
+        caption,
+        openUrl: file.type?.startsWith("image/") ? URL.createObjectURL(file) : "",
+      },
+    };
+    setMessages((current) => [...current, tempMessage]);
+    window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    try {
+      const data = await apiFormWithProgress(`/forum/conversations/${encodeURIComponent(selectedId)}/files`, formData, (progress) => {
+        setMessages((current) => current.map((message) => (
+          message.id === tempId
+            ? { ...message, attachment: { ...message.attachment, progress } }
+            : message
+        )));
+      });
+      if (data.message) {
+        setMessages((current) => [
+          ...current.filter((message) => message.id !== tempId && message.id !== data.message.id),
+          data.message,
+        ]);
+        setConversations((current) => current.map((item) => (
+          item.id === selectedId
+            ? { ...item, lastMessage: data.message, updatedAt: data.message.createdAt }
+            : item
+        )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
+        window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+      }
+    } catch (error) {
+      setMessages((current) => current.filter((message) => message.id !== tempId));
+      toast.error(error.message || "Could not upload file");
+    } finally {
+      if (documentInputRef.current) documentInputRef.current.value = "";
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }
+
+  function handlePhotoSelected(file) {
+    if (!file) return;
+    if (!file.type?.startsWith("image/")) {
+      toast.error("Choose an image file");
+      return;
+    }
+    setImageDraft({ file, previewUrl: URL.createObjectURL(file) });
+    setImageCaption("");
+  }
+
+  async function sendImageDraft(event) {
+    event?.preventDefault();
+    if (!imageDraft?.file) return;
+    const file = imageDraft.file;
+    const caption = imageCaption.trim();
+    setImageDraft(null);
+    setImageCaption("");
+    await uploadForumFile(file, { caption });
+  }
+
   function emitTyping(isTyping = true) {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN || !selectedId) return;
@@ -1991,7 +2263,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     const padding = 12;
 
     const messageNode = messageRefs.current.get(message.id);
-    const rect = messageNode ? messageNode.getBoundingClientRect() : {
+    const clickX = event.clientX || 100;
+    const clickY = event.clientY || 100;
+    const rect = message.attachment?.kind === "image" || String(message.attachment?.mimeType || "").startsWith("image/")
+      ? {
+          left: clickX,
+          right: clickX + 1,
+          top: clickY,
+          bottom: clickY + 1,
+        }
+      : messageNode ? messageNode.getBoundingClientRect() : {
       left: event.clientX || 100,
       right: (event.clientX || 100) + 120,
       top: event.clientY || 100,
@@ -2288,6 +2569,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 <h1 className="truncate text-lg font-semibold">Forum</h1>
                 <p className={`truncate text-xs ${muted}`}>{onlineUserIds.length} online now</p>
               </div>
+              <button
+                type="button"
+                onClick={() => setForumSettingsOpen(true)}
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f3f4f6]"}`}
+                aria-label="Forum Drive settings"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
             </div>
             <div className={`mt-4 flex h-11 min-w-0 items-center gap-2 overflow-hidden rounded-2xl px-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f3f4f6]"}`}>
               <Search className={`h-4 w-4 ${muted}`} />
@@ -2320,8 +2609,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                           <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
                         )}
                       </span>
-                      <span className={`mt-1 block max-w-full truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? `${typingUsers[0].displayName} typing...` : conversationPreviewText(conversation.lastMessage, "Workspace group forum")}>
-                        {typingUsers.length ? `${typingUsers[0].displayName} typing...` : conversationPreviewText(conversation.lastMessage, "Workspace group forum")}
+                      <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? `${typingUsers[0].displayName} typing...` : conversationPreviewText(conversation.lastMessage, "Workspace group forum")}>
+                        {typingUsers.length ? `${typingUsers[0].displayName} typing...` : (
+                          <>
+                            {String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
+                              getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "read"
+                                ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
+                                : <Check className="h-3.5 w-3.5 shrink-0" />
+                            )}
+                            <span className="min-w-0 truncate">{conversationPreviewText(conversation.lastMessage, "Workspace group forum")}</span>
+                          </>
+                        )}
                       </span>
                     </span>
                   </button>
@@ -2353,8 +2651,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                           <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
                         )}
                       </span>
-                      <span className={`mt-1 block max-w-full truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? "typing..." : conversationPreviewText(conversation.lastMessage, "Direct message")}>
-                        {typingUsers.length ? "typing..." : conversationPreviewText(conversation.lastMessage, "Direct message")}
+                      <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? "typing..." : conversationPreviewText(conversation.lastMessage, "Direct message")}>
+                        {typingUsers.length ? "typing..." : (
+                          <>
+                            {String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
+                              getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "read"
+                                ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
+                                : <Check className="h-3.5 w-3.5 shrink-0" />
+                            )}
+                            <span className="min-w-0 truncate">{conversationPreviewText(conversation.lastMessage, "Direct message")}</span>
+                          </>
+                        )}
                       </span>
                     </span>
                   </button>
@@ -2548,15 +2855,48 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                   </div>
                 )}
 
+                {imageDraft && (
+                  <div className={`flex min-h-0 flex-1 flex-col animate-in fade-in zoom-in-95 duration-150 ${subSurface}`}>
+                    <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 ${divider}`}>
+                      <button type="button" onClick={() => setImageDraft(null)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close image preview">
+                        <X className="h-5 w-5" />
+                      </button>
+                      <span className="text-sm font-semibold">Photo</span>
+                      <span className="h-9 w-9" />
+                    </div>
+                    <div className="flex min-h-0 flex-1 items-center justify-center p-4">
+                      <img src={imageDraft.previewUrl} alt="" className="max-h-[min(46vh,420px)] max-w-full rounded-xl object-contain shadow-[0_18px_50px_rgba(15,23,42,0.18)]" />
+                    </div>
+                    <form onSubmit={sendImageDraft} className={`shrink-0 border-t px-4 py-3 ${divider}`}>
+                      <div className="mx-auto flex max-w-3xl items-center gap-3">
+                        <input
+                          value={imageCaption}
+                          onChange={(event) => setImageCaption(event.target.value)}
+                          placeholder="Type a message"
+                          className={`h-12 min-w-0 flex-1 rounded-2xl px-4 text-sm outline-none ${darkMode ? "bg-[#23262d] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/45"}`}
+                        />
+                        <button type="submit" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#10b981] text-white shadow-[0_10px_30px_rgba(16,185,129,0.25)]">
+                          <Send className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {!imageDraft && (
+                <>
                 <section className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 sm:py-5 ${subSurface}`}>
                   <div className="mx-auto flex w-full max-w-4xl flex-col">
                     {messages.map((message, index) => {
+                      if (message.attachmentMissing) return null;
                       const mine = message.senderId === getStoredAuth().user?.id;
                       const nextMessage = messages[index + 1];
                       const previousMessage = messages[index - 1];
                       const showDate = messageDateKey(message.createdAt) !== messageDateKey(previousMessage?.createdAt);
                       const groupedWithNext = nextMessage?.senderId === message.senderId;
                       const groupedWithPrevious = !showDate && previousMessage?.senderId === message.senderId;
+                      const compactWithPrevious = groupedWithPrevious || (!showDate && message.attachment && previousMessage?.attachment);
+                      const messageTopMargin = compactWithPrevious ? "mt-1" : message.attachment ? "mt-2" : "mt-3";
 
                       const isGroupChat = selectedConversation?.type === "group";
                       const showAvatar = isGroupChat && !mine && !groupedWithNext;
@@ -2566,8 +2906,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
                       const isSelectionMode = selectedMessageIds.length > 0;
                       const isSelectedMessage = selectedMessageIds.includes(message.id);
-                      const previewUrl = firstUrlFromText(message.text);
-                      const displayText = previewUrl ? textWithoutUrls(message.text) : message.text;
+                      const previewUrl = message.attachment ? "" : firstUrlFromText(message.text);
+                      const displayText = message.attachment ? "" : (previewUrl ? textWithoutUrls(message.text) : message.text);
                       const isGroupedWithNext = groupedWithNext && (nextMessage ? messageDateKey(nextMessage.createdAt) === messageDateKey(message.createdAt) : false);
 
                       // Smooth 18px rounded speech bubble with soft 4px tail
@@ -2576,7 +2916,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                         ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]"
                         : mine ? darkMode ? "bg-[#181a20] text-white" : "bg-[#e5f1ff] text-[#14213d]" : darkMode ? "bg-[#252830] text-white" : "bg-white text-[#14213d]";
                       return (
-                        <div key={message.id} className={`min-w-0 first:mt-0 ${!groupedWithPrevious ? "mt-3" : "mt-1"}`}>
+                        <div key={message.id} className={`min-w-0 ${messageTopMargin} first:mt-0`}>
                           {showDate && (
                             <div className="sticky top-2 z-10 my-2 flex justify-center">
                               <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
@@ -2585,7 +2925,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                             </div>
                           )}
                           <div
-                            className="relative min-w-0 overflow-hidden"
+                            className={`relative min-w-0 overflow-hidden transition-colors ${isSelectedMessage ? darkMode ? "bg-[#123c2c]/70" : "bg-[#dff8e8]" : ""}`}
                             onClick={() => {
                               if (isSelectionMode) toggleSelectedMessage(message);
                             }}
@@ -2649,6 +2989,40 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                   >
                                     {message.sender.displayName || "User"}
                                   </button>
+                                )}
+                              </div>
+                            )}
+                            {message.attachment && (
+                              <div className={`w-full max-w-[420px] min-w-0 ${bubbleRounding} p-1.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : isActiveMatch ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]" : bubbleTone}`}>
+                                {message.forwardedFrom && (
+                                  <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+                                    Forwarded from {message.forwardedFrom.senderName || "User"}
+                                  </div>
+                                )}
+                                {message.attachment.kind === "image" || String(message.attachment.mimeType || "").startsWith("image/") ? (
+                                  <ImageAttachmentCard
+                                    attachment={message.attachment}
+                                    mine={mine}
+                                    darkMode={darkMode}
+                                    time={formatTime(message.createdAt)}
+                                    status={getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds)}
+                                    onOpen={() => {
+                                      if (selectedMessageIds.length || messageMenu) return;
+                                      setFullscreenImage(message.attachment);
+                                    }}
+                                    onMissing={() => {
+                                      setMessages((current) => current.filter((item) => item.id !== message.id));
+                                    }}
+                                  />
+                                ) : (
+                                  <FileAttachmentCard
+                                    attachment={message.attachment}
+                                    mine={mine}
+                                    darkMode={darkMode}
+                                    time={formatTime(message.createdAt)}
+                                    status={getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds)}
+                                    isEdited={message.isEdited}
+                                  />
                                 )}
                               </div>
                             )}
@@ -2926,7 +3300,47 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                   </div>
                 )}
                 <div className="mx-auto flex max-w-4xl items-end gap-2">
-                  <label className={`flex min-h-12 flex-1 items-center rounded-[20px] px-4 transition-all ${darkMode ? "bg-white/[0.08]" : "bg-white"}`}>
+                  <input
+                    ref={documentInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(event) => uploadForumFile(event.target.files?.[0])}
+                  />
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => handlePhotoSelected(event.target.files?.[0])}
+                  />
+                  <div className="relative shrink-0">
+                    {attachmentMenuOpen && (
+                      <div className={`absolute bottom-14 left-0 z-30 w-56 origin-bottom-left rounded-[18px] border-0 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] forum-ctx-actions ${darkMode ? "bg-[#1b1e25] text-white" : "bg-white text-[#111827]"}`}>
+                        <button type="button" onClick={() => { setAttachmentMenuOpen(false); documentInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f4f7fb]"}`}>
+                          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-violet-400/15 text-violet-300" : "bg-violet-50 text-violet-600"}`}>
+                            <FileText className="h-4 w-4" />
+                          </span>
+                          Document
+                        </button>
+                        <button type="button" onClick={() => { setAttachmentMenuOpen(false); photoInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f4f7fb]"}`}>
+                          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-sky-400/15 text-sky-300" : "bg-sky-50 text-sky-600"}`}>
+                            <ImageIcon className="h-4 w-4" />
+                          </span>
+                          Photos
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setAttachmentMenuOpen((current) => !current)}
+                      disabled={!canSendSelectedConversation}
+                      className={`grid h-12 w-12 shrink-0 place-items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45 ${attachmentMenuOpen ? "rotate-45" : ""} ${darkMode ? "bg-[#23262d] text-white hover:bg-[#2c3038]" : "bg-white text-black hover:bg-[#f7f8fb]"}`}
+                      aria-label="Add attachment"
+                    >
+                      <Plus className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <label className={`flex min-h-12 flex-1 items-center rounded-[20px] px-4 transition-all ${darkMode ? "bg-[#23262d]" : "bg-white"}`}>
                     <textarea
                       ref={composerRef}
                       value={composer}
@@ -2956,6 +3370,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                   </button>
                 </div>
               </form>
+              </>
+                )}
             </div>
 
             {sidebarUser || selectedConversation?.type === "direct" ? (
@@ -2987,6 +3403,75 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           </>
         )}
         </main>
+        {forumSettingsOpen && (
+          <div
+            className="fixed inset-0 z-[95] grid place-items-center bg-black/55 px-4 backdrop-blur-[2px]"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !savingForumSettings) setForumSettingsOpen(false);
+            }}
+          >
+            <form
+              onSubmit={saveForumDriveSettings}
+              className={`w-full max-w-md rounded-[24px] p-5 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}
+            >
+              <div className="flex items-start gap-3">
+                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-emerald-400/15 text-emerald-300" : "bg-emerald-50 text-emerald-600"}`}>
+                  <Settings className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold">Forum Drive folder</h3>
+                  <p className={`mt-1 text-sm ${muted}`}>Files shared in groups and DMs will upload to this folder.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForumSettingsOpen(false)}
+                  disabled={savingForumSettings}
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                  aria-label="Close settings"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <label className="mt-5 block">
+                <span className={`mb-2 block text-xs font-semibold ${muted}`}>Drive folder link</span>
+                <input
+                  value={forumDriveFolderUrl}
+                  onChange={(event) => setForumDriveFolderUrl(event.target.value)}
+                  placeholder="https://drive.google.com/drive/folders/..."
+                  className={`h-12 w-full rounded-2xl px-4 text-sm outline-none ${darkMode ? "bg-white/[0.08] text-white placeholder:text-white/30" : "bg-[#f4f7fb] text-black placeholder:text-black/35"}`}
+                />
+              </label>
+              {forumDriveConnectedUrl && (
+                <a href={forumDriveConnectedUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex max-w-full items-center gap-2 truncate text-xs font-semibold text-[#10b981] no-underline">
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Connected folder</span>
+                </a>
+              )}
+              <button
+                type="submit"
+                disabled={savingForumSettings || !forumDriveFolderUrl.trim()}
+                className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#10b981] px-4 text-sm font-bold text-white transition hover:bg-[#059669] disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {savingForumSettings ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Connect folder
+              </button>
+            </form>
+          </div>
+        )}
+        {fullscreenImage && (
+          <div className="fixed inset-0 z-[97] grid place-items-center overflow-hidden bg-black/90 p-3 sm:p-6 animate-in fade-in duration-150" onClick={() => setFullscreenImage(null)}>
+            <button type="button" onClick={() => setFullscreenImage(null)} className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Close image">
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={attachmentImageUrl(fullscreenImage)}
+              alt={fullscreenImage.name || "Shared image"}
+              className="h-auto max-h-[calc(100dvh-48px)] w-auto max-w-[calc(100vw-32px)] rounded-xl object-contain animate-in zoom-in-95 duration-150"
+              onClick={(event) => event.stopPropagation()}
+              onError={() => setFullscreenImage(null)}
+            />
+          </div>
+        )}
         {messageMenu && (
           <>
             <div
@@ -3152,7 +3637,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     <Reply className="h-4 w-4 rotate-180 text-[#2563eb]" />
                     Forward
                   </button>
-                  {messageMenu.message?.senderId === currentUser?.id && !messageMenu.message?.forwardedFrom && (
+                  {messageMenu.message?.senderId === currentUser?.id && !messageMenu.message?.forwardedFrom && !messageMenu.message?.attachment && (
                     <button
                       type="button"
                       disabled={String(messageMenu.message?.id || "").startsWith("temp-")}

@@ -329,7 +329,7 @@ async function requireAuth(req, res, next) {
     const db = await connectAuthDb();
     const header = req.headers.authorization || "";
     const streamToken =
-      req.method === "GET" && /^\/project-dashboard\/projects\/[^/]+\/chat\/stream$/.test(req.path)
+      req.method === "GET" && (/^\/project-dashboard\/projects\/[^/]+\/chat\/stream$/.test(req.path) || /^\/forum\/files\/[^/]+\/preview$/.test(req.path))
         ? String(req.query.token || "")
         : "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : streamToken || null;
@@ -15654,13 +15654,33 @@ async function serializeForumMessage(message) {
   if (!message) return null;
   const db = await connectAuthDb();
   const sender = await db.collection("users").findOne({ _id: new ObjectId(message.senderId) });
+  let attachment = message.attachment || null;
+  let attachmentMissing = false;
+  if (attachment?.driveFileId) {
+    try {
+      const auth = await getGoogleAuth();
+      const drive = google.drive({ version: "v3", auth });
+      const file = await drive.files.get({
+        fileId: attachment.driveFileId,
+        fields: "id,trashed",
+        supportsAllDrives: true,
+      });
+      if (file.data.trashed) {
+        attachment = null;
+        attachmentMissing = true;
+      }
+    } catch {
+      attachment = null;
+      attachmentMissing = true;
+    }
+  }
   return {
     id: String(message._id),
     conversationId: message.conversationId,
     type: message.type,
     senderId: message.senderId,
     sender: forumUserProfile(sender || { _id: message.senderId, username: "User" }),
-    text: decryptForumText(message.encrypted),
+    text: attachmentMissing ? "" : decryptForumText(message.encrypted),
     encrypted: true,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt || message.createdAt,
@@ -15670,6 +15690,8 @@ async function serializeForumMessage(message) {
     reactions: message.reactions || [],
     replyToMessage: message.replyToMessage || null,
     forwardedFrom: message.forwardedFrom || null,
+    attachment,
+    attachmentMissing,
   };
 }
 
@@ -15723,7 +15745,7 @@ function broadcastForumPayload(userIds, payload) {
   }
 }
 
-async function createForumMessage({ req, conversationId, text, forwardedFrom = null }) {
+async function createForumMessage({ req, conversationId, text, forwardedFrom = null, attachment = null }) {
   const db = await connectAuthDb();
   const now = new Date();
   let conversation = await db.collection("forumConversations").findOne({ _id: conversationId });
@@ -15757,6 +15779,7 @@ async function createForumMessage({ req, conversationId, text, forwardedFrom = n
     deliveredTo,
     replyToMessage: req.body?.replyToMessage || null,
     forwardedFrom,
+    attachment,
   };
   const result = await db.collection("forumMessages").insertOne(message);
   const saved = { ...message, _id: result.insertedId };
@@ -15769,6 +15792,7 @@ async function createForumMessage({ req, conversationId, text, forwardedFrom = n
           id: String(result.insertedId),
           senderId: req.authUser.id,
           encrypted,
+          attachment,
           createdAt: now,
         },
       },
@@ -15800,6 +15824,130 @@ app.get("/forum/bootstrap", async (req, res) => {
   } catch (error) {
     console.error("Forum bootstrap error:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+function forumDriveFolderUrl(folderId = "") {
+  return folderId ? `https://drive.google.com/drive/folders/${folderId}` : "";
+}
+
+async function forumSettingsPayload(db) {
+  const settings = await db.collection("forumSettings").findOne({ _id: "drive" });
+  return {
+    driveFolderId: settings?.driveFolderId || "",
+    driveFolderUrl: settings?.driveFolderId ? forumDriveFolderUrl(settings.driveFolderId) : "",
+    updatedAt: settings?.updatedAt || null,
+  };
+}
+
+async function uploadForumFileToDrive(file, folderId) {
+  if (!file?.path) throw new Error("Choose a file to upload.");
+  if (!folderId) throw new Error("Connect a Google Drive folder first.");
+  const auth = await getGoogleAuth();
+  const drive = google.drive({ version: "v3", auth });
+  let response;
+  try {
+    response = await drive.files.create({
+      requestBody: {
+        name: safeFileName(file.originalname || "forum-file"),
+        parents: [folderId],
+      },
+      media: {
+        mimeType: file.mimetype || "application/octet-stream",
+        body: fs.createReadStream(file.path),
+      },
+      fields: "id,name,mimeType,webViewLink,webContentLink,size,modifiedTime",
+      supportsAllDrives: true,
+    });
+    await drive.permissions.create({
+      fileId: response.data.id,
+      requestBody: { role: "reader", type: "anyone" },
+      supportsAllDrives: true,
+    }).catch(() => {});
+  } catch (error) {
+    const message = String(error?.message || "");
+    if (/storage quota|Service Accounts do not have storage quota/i.test(message)) {
+      throw new Error("Forum files must upload to a Google Shared Drive folder, or a Drive folder where the service account can create files.");
+    }
+    throw error;
+  }
+  return {
+    driveFileId: response.data.id,
+    name: response.data.name || file.originalname || "Forum file",
+    mimeType: response.data.mimeType || file.mimetype || "application/octet-stream",
+    size: Number(response.data.size || file.size || 0),
+    openUrl: response.data.webViewLink || `https://drive.google.com/file/d/${response.data.id}/view`,
+    downloadUrl: response.data.webContentLink || `https://drive.google.com/uc?export=download&id=${response.data.id}`,
+    previewUrl: `https://drive.google.com/thumbnail?id=${response.data.id}&sz=w1200`,
+    folderId,
+    uploadedAt: response.data.modifiedTime || new Date().toISOString(),
+  };
+}
+
+app.get("/forum/settings", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    res.json(await forumSettingsPayload(db));
+  } catch (error) {
+    console.error("Forum settings error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put("/forum/settings", async (req, res) => {
+  try {
+    const folderId = extractDriveFileId(req.body?.driveFolderUrl || req.body?.driveFolderId || "");
+    if (!folderId) return res.status(400).json({ error: "Enter a valid Google Drive folder link" });
+    const auth = await getGoogleAuth();
+    const drive = google.drive({ version: "v3", auth });
+    const folder = await drive.files.get({
+      fileId: folderId,
+      fields: "id,name,mimeType,trashed",
+      supportsAllDrives: true,
+    });
+    if (folder.data.trashed || folder.data.mimeType !== "application/vnd.google-apps.folder") {
+      return res.status(400).json({ error: "The link must be a Google Drive folder" });
+    }
+    const db = await connectAuthDb();
+    await db.collection("forumSettings").updateOne(
+      { _id: "drive" },
+      { $set: { driveFolderId: folderId, driveFolderName: folder.data.name || "", updatedAt: new Date(), updatedBy: req.authUser.id } },
+      { upsert: true }
+    );
+    res.json(await forumSettingsPayload(db));
+  } catch (error) {
+    console.error("Forum settings save error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/forum/files/:fileId/preview", async (req, res) => {
+  try {
+    const fileId = String(req.params.fileId || "");
+    if (!/^[a-zA-Z0-9_-]{10,}$/.test(fileId)) return res.status(400).send("Invalid file");
+    const auth = await getGoogleAuth();
+    const drive = google.drive({ version: "v3", auth });
+    const meta = await drive.files.get({
+      fileId,
+      fields: "id,name,mimeType,trashed",
+      supportsAllDrives: true,
+    });
+    if (meta.data.trashed) return res.status(404).send("File not found");
+    if (!String(meta.data.mimeType || "").startsWith("image/")) return res.status(415).send("Not an image");
+    const media = await drive.files.get(
+      { fileId, alt: "media", supportsAllDrives: true },
+      { responseType: "stream" }
+    );
+    res.setHeader("Content-Type", meta.data.mimeType || "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=60");
+    media.data.on("error", () => {
+      if (!res.headersSent) res.status(500).end();
+      else res.end();
+    });
+    media.data.pipe(res);
+  } catch (error) {
+    console.error("Forum file preview error:", error);
+    res.status(404).send("File not found");
   }
 });
 
@@ -15951,6 +16099,41 @@ app.post("/forum/conversations/:id/messages", async (req, res) => {
   }
 });
 
+app.post("/forum/conversations/:id/files", upload.single("file"), async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversationId = req.params.id;
+    const conversation = conversationId === FORUM_GROUP_ID
+      ? await ensureForumGroupConversation(db)
+      : await db.collection("forumConversations").findOne({ _id: conversationId, participantIds: req.authUser.id });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if (conversation.type === "group") {
+      assertForumGroupMember(conversation, req);
+      if (conversation.adminOnlyMessages && !isForumGroupAdmin(conversation, req)) {
+        return res.status(403).json({ error: "Only group admins can message right now" });
+      }
+    }
+    const settings = await db.collection("forumSettings").findOne({ _id: "drive" });
+    if (!settings?.driveFolderId) return res.status(400).json({ error: "Connect a Google Drive folder first" });
+    const caption = String(req.body?.caption || "").trim().slice(0, 4000);
+    const attachment = await uploadForumFileToDrive(req.file, settings.driveFolderId);
+    attachment.kind = String(attachment.mimeType || "").startsWith("image/") ? "image" : "file";
+    attachment.caption = caption;
+    const message = await createForumMessage({
+      req,
+      conversationId,
+      text: caption || (attachment.kind === "image" ? "Photo" : attachment.name),
+      attachment,
+    });
+    res.json({ message });
+  } catch (error) {
+    console.error("Forum file upload error:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  } finally {
+    if (req.file?.path) fs.promises.unlink(req.file.path).catch(() => {});
+  }
+});
+
 app.post("/forum/messages/forward", async (req, res) => {
   try {
     const db = await connectAuthDb();
@@ -16000,8 +16183,8 @@ app.post("/forum/messages/forward", async (req, res) => {
 
       for (const source of sourceMessages) {
         const sourceSender = await db.collection("users").findOne({ _id: new ObjectId(source.senderId) });
-        const text = decryptForumText(source.encrypted);
-        if (!text) continue;
+        const text = decryptForumText(source.encrypted) || source.attachment?.name || "";
+        if (!text && !source.attachment) continue;
         const forwardedFrom = {
           messageId: String(source._id),
           conversationId: source.conversationId,
@@ -16009,7 +16192,7 @@ app.post("/forum/messages/forward", async (req, res) => {
           senderName: sourceSender?.displayName || sourceSender?.username || "User",
           forwardedAt: new Date(),
         };
-        created.push(await createForumMessage({ req, conversationId: target.conversationId, text, forwardedFrom }));
+        created.push(await createForumMessage({ req, conversationId: target.conversationId, text, forwardedFrom, attachment: source.attachment || null }));
       }
     }
 
@@ -16063,6 +16246,9 @@ app.put("/forum/conversations/:id/messages/:messageId", async (req, res) => {
 
     if (String(message.senderId) !== String(req.authUser.id)) {
       return res.status(403).json({ error: "You can only edit your own messages" });
+    }
+    if (message.forwardedFrom || message.attachment) {
+      return res.status(400).json({ error: "Forwarded messages and files cannot be edited" });
     }
 
     const encrypted = encryptForumText(text);

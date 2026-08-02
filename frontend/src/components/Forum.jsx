@@ -2435,13 +2435,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     if (!text || refiningMessage || !canSendSelectedConversation) return;
     try {
       setRefiningMessage(true);
+      composerRef.current?.focus?.({ preventScroll: true });
       const result = await api("/forum/refine-message", {
         method: "POST",
         body: JSON.stringify({ text }),
       });
       if (result.refined) {
         updateComposer(result.refined);
-        window.setTimeout(() => composerRef.current?.focus(), 0);
+        window.setTimeout(() => composerRef.current?.focus?.({ preventScroll: true }), 0);
       }
     } catch (error) {
       toast.error(error.message || "Could not refine message");
@@ -3877,6 +3878,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 <div className="mx-auto mb-2 flex max-w-4xl justify-start lg:hidden">
                   <button
                     type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onPointerDown={(event) => event.preventDefault()}
                     onClick={refineComposerMessage}
                     disabled={!composer.trim() || refiningMessage || !canSendSelectedConversation}
                     title={refiningMessage ? "Refining with AI" : "Refine with AI"}
@@ -3945,6 +3948,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
                     <button
                       type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onPointerDown={(event) => event.preventDefault()}
                       onClick={refineComposerMessage}
                       disabled={!composer.trim() || refiningMessage || !canSendSelectedConversation}
                       title={refiningMessage ? "Refining with AI" : "Refine with AI"}

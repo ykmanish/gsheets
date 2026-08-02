@@ -551,3 +551,7 @@ body * {
   animation: forum-msg-pop-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   will-change: transform, opacity;
 }
+
+.forum-composer-refining {
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.34), 0 0 22px rgba(16, 185, 129, 0.12);
+}

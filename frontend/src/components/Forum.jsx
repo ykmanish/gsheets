@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Pin, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, Smile, SmilePlus, Sparkles, Star, Sticker, SunMedium, Trash2, Upload, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, AtSign, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Pin, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, Smile, SmilePlus, Sparkles, Star, Sticker, SunMedium, Trash2, Upload, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
@@ -436,6 +436,14 @@ function sameConversation(a, b) {
   return String(a) === String(b);
 }
 
+function mentionHandleForUser(user = {}) {
+  return String(user.username || user.displayName || "user")
+    .trim()
+    .replace(/^@+/, "")
+    .replace(/\s+/g, "")
+    .replace(/[^a-zA-Z0-9_.-]/g, "");
+}
+
 function renderMessageText(text, query, active = false, users = [], onMentionClick, mine = false) {
   const value = String(text || "");
   const needle = query.trim();
@@ -456,7 +464,7 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
       if (suffix) parts.push(suffix);
     } else {
       const username = match[2].toLowerCase();
-      const user = users.find((item) => String(item.username || "").toLowerCase() === username || String(item.displayName || "").toLowerCase().replace(/\s+/g, "") === username);
+      const user = users.find((item) => mentionHandleForUser(item).toLowerCase() === username);
       parts.push(
         <button key={`${start}-${match[0]}`} type="button" onClick={() => user && onMentionClick?.(user)} className={`font-normal underline underline-offset-2 ${mine ? "text-[#2563eb] decoration-[#2563eb]/35" : "text-[#2563eb] decoration-[#2563eb]/35"}`}>
           {match[0]}
@@ -842,6 +850,55 @@ function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, active
   );
 }
 
+function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDirect, activeDirectUserId }) {
+  const softBlock = darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]";
+  const isActiveDirectUser = activeDirectUserId && String(activeDirectUserId) === String(user?.id);
+  if (!user) return null;
+  return (
+    <div className="fixed inset-0 z-[96] flex items-end bg-black/45 backdrop-blur-[2px] xl:hidden" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose?.();
+    }}>
+      <div className={`max-h-[88vh] w-full overflow-hidden rounded-t-[28px] shadow-[0_-18px_60px_rgba(0,0,0,0.28)] animate-in slide-in-from-bottom-8 fade-in duration-200 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-black"}`}>
+        <div className="mx-auto mt-3 h-1.5 w-11 rounded-full bg-white/20" />
+        <div className="max-h-[calc(88vh-16px)] overflow-y-auto px-7 pb-8 pt-6">
+          <div className="relative">
+            <button type="button" onClick={onClose} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close profile">
+              <X className="h-4 w-4" />
+            </button>
+            <UserAvatar user={user} name={user.displayName} className="mx-auto h-24 w-24" />
+            <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">{user.displayName || user.username || "User"}</h2>
+            {user.username && <p className={`mt-1 truncate text-center text-sm ${muted}`}>@{mentionHandleForUser(user)}</p>}
+            <div className="mt-3 flex justify-center">
+              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${online.has(user.id) ? "bg-[#dcfce7] text-[#16a34a]" : "bg-slate-100 text-slate-500"}`}>
+                {online.has(user.id) ? "Online" : "Offline"}
+              </span>
+            </div>
+          </div>
+          {!isActiveDirectUser && (
+            <button type="button" onClick={() => onDirect(user)} className={`mt-8 flex w-full items-center justify-center gap-2 rounded-[14px] px-4 py-4 text-sm font-semibold ${softBlock}`}>
+              <MessageCircleMore className="h-4 w-4 text-[#2563eb]" />
+              Add Chat
+            </button>
+          )}
+          <PanelSection title="Profile" muted={muted}>
+            {[
+              ["Designation", user.designation],
+              ["Department", user.department],
+              ["Email", user.email],
+              ["Phone", user.phone],
+            ].map(([label, value]) => (
+              <div key={label} className="py-1.5">
+                <p className={`text-xs ${muted}`}>{label}</p>
+                <p className="mt-0.5 min-w-0 break-words text-sm font-bold">{value || "-"}</p>
+              </div>
+            ))}
+          </PanelSection>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup }) {
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(group?.name || "Group Forum");
@@ -1170,6 +1227,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [starredOnlyOpen, setStarredOnlyOpen] = useState(false);
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [mediaPickerTab, setMediaPickerTab] = useState("emoji");
   const [giphySearch, setGiphySearch] = useState("");
@@ -1188,6 +1246,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [unreadByConversation, setUnreadByConversation] = useState({});
   const [typingByConversation, setTypingByConversation] = useState({});
   const [sidebarUser, setSidebarUser] = useState(null);
+  const [mobileProfileUser, setMobileProfileUser] = useState(null);
   const [mobileListOpen, setMobileListOpen] = useState(true);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [mobileViewportHeight, setMobileViewportHeight] = useState(null);
@@ -1224,6 +1283,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [imageDraft, setImageDraft] = useState(null);
   const [imageCaption, setImageCaption] = useState("");
+  const [refiningMessage, setRefiningMessage] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState(null);
   const [editingMessageTarget, setEditingMessageTarget] = useState(null);
   const [replyToMessageTarget, setReplyToMessageTarget] = useState(null);
@@ -1636,8 +1696,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     if (mentionQuery === null) return [];
     return groupParticipants
       .filter((user) => user.id !== currentUser?.id)
-      .filter((user) => [user.displayName, user.username].join(" ").toLowerCase().includes(mentionQuery))
-      .slice(0, 6);
+      .filter((user) => {
+        const searchable = [user.displayName, user.username, mentionHandleForUser(user)].join(" ").toLowerCase();
+        return !mentionQuery || searchable.includes(mentionQuery);
+      })
+      .slice(0, 8);
   }, [currentUser?.id, groupParticipants, mentionQuery]);
   const createGroupUsers = useMemo(() => {
     const term = createGroupSearch.trim().toLowerCase();
@@ -2367,10 +2430,48 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     emitTyping(Boolean(value.trim()));
   }
 
+  async function refineComposerMessage() {
+    const text = composer.trim();
+    if (!text || refiningMessage || !canSendSelectedConversation) return;
+    try {
+      setRefiningMessage(true);
+      const result = await api("/forum/refine-message", {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+      if (result.refined) {
+        updateComposer(result.refined);
+        window.setTimeout(() => composerRef.current?.focus(), 0);
+      }
+    } catch (error) {
+      toast.error(error.message || "Could not refine message");
+    } finally {
+      setRefiningMessage(false);
+    }
+  }
+
   function selectMention(user) {
-    const next = composer.replace(/(^|\s)@([a-zA-Z0-9_.-]*)$/, `$1@${user.username || user.displayName} `);
-    setComposer(next);
+    const handle = mentionHandleForUser(user);
+    const next = composer.replace(/(^|\s)@([a-zA-Z0-9_.-]*)$/, `$1@${handle} `);
+    updateComposer(next);
+    setActiveMentionIndex(0);
     emitTyping(true);
+    window.setTimeout(() => composerRef.current?.focus(), 0);
+  }
+
+  function openMentionProfile(user) {
+    if (!user) return;
+    if (isMobileViewport) {
+      setMobileProfileUser(user);
+      return;
+    }
+    setSidebarUser(user);
+  }
+
+  async function startDirectFromProfile(user) {
+    await startDirect(user);
+    setMobileProfileUser(null);
+    setSidebarUser(null);
   }
 
   function navigateMatch(direction) {
@@ -3510,7 +3611,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                 <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} embedded />
                                 <p className="flex min-w-0 items-end gap-3 px-2 pb-1 pt-2 text-sm leading-6">
                                   <span className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                                    {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                                    {renderMessageText(displayText, messageSearch, isActiveMatch, users, openMentionProfile, mine)}
                                   </span>
                                   <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
                                     {starMark}
@@ -3552,7 +3653,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                 )}
                                 <div className="flex min-w-0 items-end gap-3">
                                   <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
-                                    {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                                  {renderMessageText(displayText, messageSearch, isActiveMatch, users, openMentionProfile, mine)}
                                   </p>
                                   <span className={`inline-flex min-w-[72px] shrink-0 items-center justify-end gap-1 whitespace-nowrap pb-[3px] text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
                                     {starMark}
@@ -3672,16 +3773,24 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
               <form onSubmit={sendMessage} className={`relative shrink-0 px-3 py-2 sm:px-6 ${subSurface}`}>
                 {mentionOptions.length > 0 && (
-                  <div className={`absolute bottom-[76px] left-6 z-20 w-72 overflow-hidden rounded-2xl p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
-                    {mentionOptions.map((user) => (
-                      <button key={user.id} type="button" onClick={() => selectMention(user)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
-                        <UserAvatar user={user} name={user.displayName} className="h-8 w-8" />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold">{user.displayName}</span>
-                          <span className={`block truncate text-xs ${muted}`}>@{user.username || user.displayName}</span>
+                  <div className={`absolute bottom-[76px] left-6 z-30 w-80 max-w-[calc(100vw-48px)] overflow-hidden rounded-[18px] p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
+                    <div className={`px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Mention</div>
+                    {mentionOptions.map((user, index) => {
+                      const active = index === Math.min(activeMentionIndex, mentionOptions.length - 1);
+                      return (
+                      <button key={user.id} type="button" onMouseEnter={() => setActiveMentionIndex(index)} onClick={() => selectMention(user)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${active ? darkMode ? "bg-white/12" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
+                        <span className="relative shrink-0">
+                          <UserAvatar user={user} name={user.displayName} className="h-9 w-9" />
+                          <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 ${darkMode ? "border-[#1c1f26]" : "border-white"} ${online.has(user.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
                         </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">{user.displayName || user.username || "User"}</span>
+                          <span className={`block truncate text-xs ${muted}`}>@{mentionHandleForUser(user)}</span>
+                        </span>
+                        <AtSign className={`h-4 w-4 shrink-0 ${active ? "text-[#2563eb]" : muted}`} />
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {selectedMessageIds.length > 0 && (
@@ -3779,7 +3888,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     className="hidden"
                     onChange={(event) => handlePhotoSelected(event.target.files?.[0])}
                   />
-                  <label className={`relative flex min-h-12 flex-1 items-center rounded-[20px] pl-2 pr-4 transition-all ${darkMode ? "bg-[#23262d]" : "bg-white"}`} ref={mediaPickerRef}>
+                  <label className={`relative flex min-h-12 flex-1 items-center rounded-[20px] pl-2 pr-4 transition-all ${refiningMessage ? "forum-composer-refining" : ""} ${darkMode ? "bg-[#23262d]" : "bg-white"}`} ref={mediaPickerRef}>
                     <div className="relative shrink-0">
                       {attachmentMenuOpen && (
                         <div className={`absolute bottom-14 left-0 z-30 w-56 origin-bottom-left rounded-[18px] border-0 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] forum-ctx-actions ${darkMode ? "bg-[#1b1e25] text-white" : "bg-white text-[#111827]"}`}>
@@ -3819,6 +3928,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       className={`mr-2 grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
                     >
                       <Smile className={`h-[22px] w-[22px] transition ${mediaPickerOpen ? "text-[#2563eb]" : ""}`} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={refineComposerMessage}
+                      disabled={!composer.trim() || refiningMessage || !canSendSelectedConversation}
+                      title={refiningMessage ? "Refining with AI" : "Refine with AI"}
+                      className={`mr-2 grid h-8 w-8 shrink-0 place-items-center rounded-full transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
+                      aria-label="Refine with AI"
+                    >
+                      <Sparkles className={`h-[17px] w-[17px] transition ${refiningMessage ? "animate-spin text-[#10b981]" : ""}`} />
                     </button>
                     
                     {mediaPickerOpen && (
@@ -3903,6 +4023,28 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       }}
                       onBlur={() => emitTyping(false)}
                       onKeyDown={(event) => {
+                        if (mentionOptions.length > 0) {
+                          if (event.key === "ArrowDown") {
+                            event.preventDefault();
+                            setActiveMentionIndex((current) => (current + 1) % mentionOptions.length);
+                            return;
+                          }
+                          if (event.key === "ArrowUp") {
+                            event.preventDefault();
+                            setActiveMentionIndex((current) => (current - 1 + mentionOptions.length) % mentionOptions.length);
+                            return;
+                          }
+                          if (event.key === "Enter" || event.key === "Tab") {
+                            event.preventDefault();
+                            selectMention(mentionOptions[Math.min(activeMentionIndex, mentionOptions.length - 1)] || mentionOptions[0]);
+                            return;
+                          }
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            updateComposer(composer.replace(/(^|\s)@([a-zA-Z0-9_.-]*)$/, "$1"));
+                            return;
+                          }
+                        }
                         if (!isMobileViewport && event.key === "Enter" && !event.shiftKey) {
                           event.preventDefault();
                           sendMessage(event);
@@ -3952,6 +4094,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           </>
         )}
         </main>
+        {mobileProfileUser && (
+          <MobileUserProfileSheet
+            darkMode={darkMode}
+            user={mobileProfileUser}
+            online={online}
+            muted={muted}
+            onClose={() => setMobileProfileUser(null)}
+            onDirect={startDirectFromProfile}
+            activeDirectUserId={selectedConversation?.type === "direct" ? selectedOtherUser?.id : null}
+          />
+        )}
         {createGroupOpen && (
           <div
             className="fixed inset-0 z-[95] grid place-items-center bg-black/55 px-4 backdrop-blur-[2px] transition-all animate-in fade-in duration-200"

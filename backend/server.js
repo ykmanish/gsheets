@@ -2893,6 +2893,51 @@ app.post("/employee-daily-report/refine-description", async (req, res) => {
   }
 });
 
+app.post("/forum/refine-message", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "forum")) return res.status(403).json({ error: "Forum access required" });
+    const text = projectText(req.body?.text).slice(0, 2000);
+    if (!text.trim()) return res.status(400).json({ error: "Type a message first" });
+
+    const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+    if (!anthropicKey) return res.status(400).json({ error: "Claude is not configured" });
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: AbortSignal.timeout(15000),
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
+        max_tokens: 300,
+        temperature: 0.2,
+        system: [
+          "You refine short workplace chat messages.",
+          "Keep the sender's original meaning, language style, names, numbers, and intent.",
+          "Improve clarity, grammar, warmth, and readability without making it formal unless the original asks for that tone.",
+          "Do not add facts, greetings, signatures, markdown, quotes, or explanations.",
+          "Return only the refined message text.",
+        ].join(" "),
+        messages: [{ role: "user", content: text }],
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error?.message || "Claude request failed");
+    const refined = (data.content || [])
+      .filter((item) => item.type === "text")
+      .map((item) => item.text)
+      .join("\n")
+      .trim();
+    if (!refined) return res.status(502).json({ error: "Claude did not return refined text" });
+    res.json({ refined, provider: "claude", model: data.model || process.env.CLAUDE_MODEL || "claude-sonnet-4-6" });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Could not refine message" });
+  }
+});
+
 app.post("/employee-daily-report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });

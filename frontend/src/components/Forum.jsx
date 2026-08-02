@@ -3874,6 +3874,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                     </button>
                   </div>
                 )}
+                <div className="mx-auto mb-2 flex max-w-4xl justify-start lg:hidden">
+                  <button
+                    type="button"
+                    onClick={refineComposerMessage}
+                    disabled={!composer.trim() || refiningMessage || !canSendSelectedConversation}
+                    title={refiningMessage ? "Refining with AI" : "Refine with AI"}
+                    className={`inline-flex h-8 items-center gap-2 rounded-full px-2.5 text-xs font-normal transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
+                    aria-label="Refine with AI"
+                  >
+                    <Sparkles className={`h-[17px] w-[17px] transition ${refiningMessage ? "animate-spin text-[#10b981]" : ""}`} />
+                    <span>Refine with AI</span>
+                  </button>
+                </div>
                 <div className="mx-auto flex max-w-4xl items-end gap-2">
                   <input
                     ref={documentInputRef}
@@ -3935,7 +3948,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       onClick={refineComposerMessage}
                       disabled={!composer.trim() || refiningMessage || !canSendSelectedConversation}
                       title={refiningMessage ? "Refining with AI" : "Refine with AI"}
-                      className={`mr-2 grid h-8 w-8 shrink-0 place-items-center rounded-full transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
+                      className={`mr-2 hidden h-8 w-8 shrink-0 place-items-center rounded-full transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 lg:grid ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
                       aria-label="Refine with AI"
                     >
                       <Sparkles className={`h-[17px] w-[17px] transition ${refiningMessage ? "animate-spin text-[#10b981]" : ""}`} />

@@ -1268,6 +1268,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const photoInputRef = useRef(null);
   const mainChatRef = useRef(null);
   const messagesPaneRef = useRef(null);
+  const scrollAnimationRef = useRef(null);
   const swipeRef = useRef({ active: false, messageId: null, message: null, startX: 0, startY: 0, currentX: 0, locked: false });
   const typingClearTimersRef = useRef({});
   const [swipeOffset, setSwipeOffset] = useState({ id: null, x: 0 });
@@ -1302,11 +1303,43 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const currentUser = getStoredAuth().user;
 
   const scrollMessagesToBottom = useCallback((behavior = "auto") => {
+    if (scrollAnimationRef.current) {
+      window.cancelAnimationFrame(scrollAnimationRef.current);
+      scrollAnimationRef.current = null;
+    }
     window.requestAnimationFrame(() => {
       const pane = messagesPaneRef.current;
-      if (pane) pane.scrollTop = pane.scrollHeight;
-      endRef.current?.scrollIntoView({ behavior, block: "end" });
+      if (!pane) return;
+      const target = pane.scrollHeight - pane.clientHeight;
+      if (behavior !== "gentle") {
+        pane.scrollTop = target;
+        return;
+      }
+      const start = pane.scrollTop;
+      const distance = target - start;
+      if (Math.abs(distance) < 2) {
+        pane.scrollTop = target;
+        return;
+      }
+      const duration = Math.min(620, Math.max(320, Math.abs(distance) * 0.45));
+      const startedAt = performance.now();
+      const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+      const step = (now) => {
+        const progress = Math.min(1, (now - startedAt) / duration);
+        pane.scrollTop = start + distance * easeOutCubic(progress);
+        if (progress < 1) scrollAnimationRef.current = window.requestAnimationFrame(step);
+        else scrollAnimationRef.current = null;
+      };
+      scrollAnimationRef.current = window.requestAnimationFrame(step);
     });
+  }, []);
+
+  const clearMessageAnimation = useCallback((messageId) => {
+    window.setTimeout(() => {
+      setMessages((current) => current.map((message) => (
+        message.id === messageId ? { ...message, animate: false } : message
+      )));
+    }, 220);
   }, []);
 
   useEffect(() => {
@@ -1352,7 +1385,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   useEffect(() => {
     return () => {
+      if (scrollAnimationRef.current) window.cancelAnimationFrame(scrollAnimationRef.current);
       Object.values(typingClearTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+      scrollAnimationRef.current = null;
       typingClearTimersRef.current = {};
     };
   }, []);
@@ -1649,7 +1684,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     messagesCacheRef.current[conversationId] = fetchedMessages;
     if (selectedIdRef.current === conversationId && loadSeq === messagesLoadSeqRef.current) {
       setMessages(fetchedMessages);
-      scrollMessagesToBottom("auto");
+      scrollMessagesToBottom("gentle");
     }
   }, [scrollMessagesToBottom]);
 
@@ -1659,7 +1694,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     setSelectedId(conversationId);
     setMessages(messagesCacheRef.current[conversationId] || []);
     setMobileListOpen(false);
-    scrollMessagesToBottom("auto");
+    scrollMessagesToBottom("gentle");
   }, [scrollMessagesToBottom]);
 
   // Request browser notification permission & mark forum page as active
@@ -1732,7 +1767,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
         setTypingByConversation((current) => ({ ...current, [payload.conversationId]: [] }));
         if (isSelectedConversation) {
-          setMessages((current) => current.some((message) => message.id === payload.message.id) ? current : [...current, payload.message]);
+          setMessages((current) => {
+            if (current.some((message) => message.id === payload.message.id)) return current;
+            clearMessageAnimation(payload.message.id);
+            return [...current, { ...payload.message, animate: true }];
+          });
           scrollMessagesToBottom("auto");
         } else if (isIncomingMessage) {
           const mentionNeedle = `@${currentUser?.username || ""}`.toLowerCase();
@@ -1993,7 +2032,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       socketRef.current?.close();
     };
-  }, [createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, scrollMessagesToBottom, selectConversation, selectedId]);
+  }, [clearMessageAnimation, createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, scrollMessagesToBottom, selectConversation, selectedId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -2132,6 +2171,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       text,
       createdAt: new Date().toISOString(),
       pending: true,
+      animate: true,
       replyToMessage: currentReply,
     };
     
@@ -2165,9 +2205,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
         setMessages((current) => [
           ...current.filter((message) => message.id !== tempMessage.id && message.id !== data.message.id),
-          { ...data.message, clientKey: tempMessage.clientKey },
+          { ...data.message, clientKey: tempMessage.clientKey, animate: false },
         ]);
-        scrollMessagesToBottom("auto");
       }
     } catch (error) {
       setMessages((current) => current.filter((message) => message.id !== tempMessage.id));
@@ -2227,6 +2266,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       text: file.type?.startsWith("image/") ? (caption || "Photo") : file.name,
       createdAt: new Date().toISOString(),
       pending: true,
+      animate: true,
       attachment: {
         name: file.name,
         mimeType: file.type || "application/octet-stream",
@@ -2251,14 +2291,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (data.message) {
         setMessages((current) => [
           ...current.filter((message) => message.id !== tempId && message.id !== data.message.id),
-          { ...data.message, clientKey: tempMessage.clientKey },
+          { ...data.message, clientKey: tempMessage.clientKey, animate: false },
         ]);
         setConversations((current) => current.map((item) => (
           item.id === selectedId
             ? { ...item, lastMessage: data.message, updatedAt: data.message.createdAt }
             : item
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
-        scrollMessagesToBottom("auto");
       }
     } catch (error) {
       setMessages((current) => current.filter((message) => message.id !== tempId));
@@ -3371,7 +3410,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                               <UserAvatar user={message.sender} name={message.sender?.displayName} className="h-7 w-7 sm:h-8 sm:w-8" />
                             </span>
                           ) : <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />)}
-                          <div className={`forum-msg-pop flex min-w-0 flex-col ${mine ? "max-w-[85%] items-end sm:max-w-[75%]" : isGroupChat ? "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[85%] items-start sm:max-w-[75%]"}`}>
+                          <div className={`${message.animate ? "forum-msg-pop" : ""} flex min-w-0 flex-col ${mine ? "max-w-[85%] items-end sm:max-w-[75%]" : isGroupChat ? "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[85%] items-start sm:max-w-[75%]"}`}>
                             {showName && (
                               <div className={`mb-1 flex items-center gap-2 text-xs ${muted}`}>
                                 {mine || !message.sender ? (

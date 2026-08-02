@@ -2314,17 +2314,40 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       toast.error("Choose an image file");
       return;
     }
+    if (imageDraft?.previewUrl) URL.revokeObjectURL(imageDraft.previewUrl);
     setImageDraft({ file, previewUrl: URL.createObjectURL(file) });
     setImageCaption("");
+  }
+
+  function handleComposerPaste(event) {
+    if (!canSendSelectedConversation) return;
+    const clipboard = event.clipboardData;
+    if (!clipboard) return;
+    const imageFile = Array.from(clipboard.files || []).find((file) => file.type?.startsWith("image/"));
+    if (imageFile) {
+      event.preventDefault();
+      handlePhotoSelected(imageFile);
+      return;
+    }
+    const imageItem = Array.from(clipboard.items || []).find((item) => item.type?.startsWith("image/"));
+    const pastedFile = imageItem?.getAsFile?.();
+    if (pastedFile) {
+      event.preventDefault();
+      const extension = pastedFile.type.split("/")[1] || "png";
+      const namedFile = new File([pastedFile], pastedFile.name || `pasted-image.${extension}`, { type: pastedFile.type || "image/png" });
+      handlePhotoSelected(namedFile);
+    }
   }
 
   async function sendImageDraft(event) {
     event?.preventDefault();
     if (!imageDraft?.file) return;
     const file = imageDraft.file;
+    const previewUrl = imageDraft.previewUrl;
     const caption = imageCaption.trim();
     setImageDraft(null);
     setImageCaption("");
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
     await uploadForumFile(file, { caption });
   }
 
@@ -3268,7 +3291,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 {imageDraft && (
                   <div className={`flex min-h-0 flex-1 flex-col animate-in fade-in zoom-in-95 duration-150 ${subSurface}`}>
                     <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 ${divider}`}>
-                      <button type="button" onClick={() => setImageDraft(null)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close image preview">
+                      <button type="button" onClick={() => {
+                        if (imageDraft?.previewUrl) URL.revokeObjectURL(imageDraft.previewUrl);
+                        setImageDraft(null);
+                      }} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close image preview">
                         <X className="h-5 w-5" />
                       </button>
                       <span className="text-sm font-semibold">Photo</span>
@@ -3868,6 +3894,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       value={composer}
                       disabled={!canSendSelectedConversation}
                       onChange={(event) => updateComposer(event.target.value)}
+                      onPaste={handleComposerPaste}
                       onFocus={() => {
                         if (isMobileViewport) {
                           window.scrollTo(0, 0);

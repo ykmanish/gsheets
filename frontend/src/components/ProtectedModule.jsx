@@ -121,6 +121,9 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     if (typeof window === "undefined") return false;
     return window.innerWidth >= 1024;
   });
+  const [forumUnreadTotal, setForumUnreadTotal] = useState(0);
+  const forumWidgetVisibleRef = useRef(false);
+  const forumUnreadConversationIdsRef = useRef(new Set());
   const allowedMenus = useMemo(() => {
     const assigned = [
       ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "todos", "forum", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
@@ -165,6 +168,42 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     window.localStorage.setItem("uipl_docs_sidebar_collapsed", String(sidebarCollapsed));
   }, [sidebarCollapsed]);
 
+  useEffect(() => {
+    forumWidgetVisibleRef.current = Boolean(forumWidgetOpen && !forumWidgetMinimized && !forumWidgetClosing);
+  }, [forumWidgetClosing, forumWidgetMinimized, forumWidgetOpen]);
+
+  useEffect(() => {
+    if (!user?.id || !allowedMenus.includes("forum")) {
+      const resetTimer = window.setTimeout(() => setForumUnreadTotal(0), 0);
+      return () => window.clearTimeout(resetTimer);
+    }
+    let stopped = false;
+    async function loadForumUnread(event) {
+      if (typeof event?.detail?.total === "number") {
+        forumUnreadConversationIdsRef.current = new Set(event.detail.conversationIds || []);
+        setForumUnreadTotal(Math.max(0, Math.min(999, event.detail.total)));
+        return;
+      }
+      try {
+        const response = await fetch(`${API_URL}/forum/bootstrap`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (stopped) return;
+        const unreadIds = (data.conversations || []).filter((conversation) => Number(conversation.unreadCount || 0) > 0).map((conversation) => String(conversation.id));
+        forumUnreadConversationIdsRef.current = new Set(unreadIds);
+        setForumUnreadTotal(unreadIds.length);
+      } catch {
+        // The launcher badge is nice-to-have; the forum itself still loads normally.
+      }
+    }
+    void loadForumUnread();
+    window.addEventListener("uipl:forum-unread-changed", loadForumUnread);
+    return () => {
+      stopped = true;
+      window.removeEventListener("uipl:forum-unread-changed", loadForumUnread);
+    };
+  }, [allowedMenus, user?.id]);
+
   const closeForumWidget = useCallback(() => {
     setForumWidgetClosing(true);
     window.setTimeout(() => {
@@ -208,6 +247,10 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         try {
           const payload = JSON.parse(event.data || "{}");
           if (payload.type === "forum:message" && payload.message?.senderId !== user.id) {
+            if (!forumWidgetVisibleRef.current) {
+              forumUnreadConversationIdsRef.current.add(String(payload.conversationId));
+              setForumUnreadTotal(Math.min(999, forumUnreadConversationIdsRef.current.size));
+            }
             const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
             const fullText = String(payload.message?.text || "").trim();
             const previewText = fullText.length > 35 ? `${fullText.slice(0, 35)}…` : fullText;
@@ -453,11 +496,18 @@ function ProtectedModuleContent({ moduleId, projectId }) {
                 setForumWidgetOpen(true);
                 setForumWidgetMinimized(false);
                 setForumWidgetClosing(false);
+                forumUnreadConversationIdsRef.current = new Set();
+                setForumUnreadTotal(0);
               }}
-              className="fixed bottom-5 right-5 z-[80] grid h-14 w-14 place-items-center rounded-full bg-[#10b981] text-white shadow-[0_18px_45px_rgba(16,185,129,0.32)] transition hover:scale-105 active:scale-95"
+              className="fixed bottom-5 right-5 z-[80] grid h-14 w-14 place-items-center rounded-full bg-[#2563eb] text-white shadow-[0_18px_45px_rgba(37,99,235,0.34)] transition hover:scale-105 hover:bg-[#1d4ed8] active:scale-95"
               aria-label="Open forum chat"
             >
               <MessageCircleMore className="h-6 w-6" />
+              {forumUnreadTotal > 0 && (
+                <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white ring-2 ring-white dark:ring-[#0b0c0f]">
+                  {forumUnreadTotal > 99 ? "99+" : forumUnreadTotal}
+                </span>
+              )}
             </button>
           )}
           {forumWidgetOpen && !forumWidgetMinimized && (

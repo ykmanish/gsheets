@@ -903,7 +903,7 @@ function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDire
   );
 }
 
-function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup, embedded = false, widgetControls = null }) {
+function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup, onRequestDeleteGroup, onRequestRemoveGroupForMe, embedded = false, widgetControls = null }) {
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(group?.name || "Group Forum");
   const [editingName, setEditingName] = useState(false);
@@ -918,6 +918,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
   const adminIds = new Set((group?.adminIds || []).map(String));
   const participantIds = new Set((group?.participantIds || groupParticipants.map((member) => member.id)).map(String));
   const canManage = Boolean(currentUser?.isSuperAdmin || adminIds.has(String(currentUser?.id || "")));
+  const groupDeleted = Boolean(group?.deletedAt);
   const availableUsers = users.filter((user) => user.id && !participantIds.has(String(user.id)));
 
   useEffect(() => {
@@ -941,6 +942,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
   }, [avatarPickerOpen]);
 
   async function saveGroup(update, action = "group") {
+    if (groupDeleted) return;
     try {
       setPendingAction(action);
       await onUpdateGroup(update);
@@ -1069,10 +1071,16 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
         </div>
         <p className="mt-1 text-center text-xs font-semibold text-[#22c55e]">{groupParticipants.length} members · {onlineUserIds.length} online</p>
 
+        {groupDeleted && (
+          <div className={`mt-5 rounded-2xl border px-3 py-3 text-sm ${darkMode ? "border-rose-400/20 bg-rose-400/10 text-rose-100" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
+            This group has been deleted{group?.deletedByName ? ` by ${group.deletedByName}` : ""}. Messaging is disabled.
+          </div>
+        )}
+
         {canManage && (
           <PanelSection title="Group settings" muted={muted}>
             <div className="space-y-3">
-              <button type="button" disabled={Boolean(pendingAction)} onClick={() => saveGroup({ adminOnlyMessages: !group?.adminOnlyMessages }, "adminOnlyMessages")} className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold transition disabled:cursor-wait disabled:opacity-75 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
+              <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => saveGroup({ adminOnlyMessages: !group?.adminOnlyMessages }, "adminOnlyMessages")} className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
                 <span>Only admins can message</span>
                 <span className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${group?.adminOnlyMessages ? "bg-[#2563eb]" : darkMode ? "bg-white/15" : "bg-black/10"}`}>
                   <span className={`absolute top-1 grid h-4 w-4 place-items-center rounded-full bg-white shadow-sm transition-all duration-300 ${group?.adminOnlyMessages ? "left-6" : "left-1"}`}>
@@ -1080,11 +1088,11 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                   </span>
                 </span>
               </button>
-              <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
+              <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"} ${groupDeleted ? "opacity-50" : ""}`}>
                 <span className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>Add member</span>
                 <div className="flex gap-2">
                   <div ref={memberPickerRef} className="relative min-w-0 flex-1">
-                    <button type="button" onClick={() => setMemberPickerOpen((open) => !open)} className={`flex h-9 w-full items-center justify-between gap-2 rounded-xl border px-3 text-left text-xs font-semibold outline-none ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
+                    <button type="button" disabled={groupDeleted} onClick={() => setMemberPickerOpen((open) => !open)} className={`flex h-9 w-full items-center justify-between gap-2 rounded-xl border px-3 text-left text-xs font-semibold outline-none disabled:cursor-not-allowed ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
                       <span className={memberToAdd ? "truncate" : `truncate ${muted}`}>{availableUsers.find((user) => user.id === memberToAdd)?.displayName || "Choose user"}</span>
                       <ChevronDown className={`h-4 w-4 shrink-0 transition ${memberPickerOpen ? "rotate-180" : ""} ${muted}`} />
                     </button>
@@ -1100,13 +1108,34 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                       </div>
                     )}
                   </div>
-                  <button type="button" disabled={Boolean(pendingAction) || !memberToAdd} onClick={() => { const addingUserId = memberToAdd; void saveGroup({ participantIds: participantListWith(addingUserId, true) }, `add:${addingUserId}`).then(() => setMemberToAdd("")); }} className="inline-flex min-w-14 items-center justify-center gap-1.5 rounded-xl bg-[#2563eb] px-3 text-xs font-bold text-white transition disabled:cursor-wait disabled:opacity-35">
+                  <button type="button" disabled={Boolean(pendingAction) || !memberToAdd || groupDeleted} onClick={() => { const addingUserId = memberToAdd; void saveGroup({ participantIds: participantListWith(addingUserId, true) }, `add:${addingUserId}`).then(() => setMemberToAdd("")); }} className="inline-flex min-w-14 items-center justify-center gap-1.5 rounded-xl bg-[#2563eb] px-3 text-xs font-bold text-white transition disabled:cursor-wait disabled:opacity-35">
                     {pendingAction.startsWith("add:") ? <TinySpinner /> : null}
                     Add
                   </button>
                 </div>
               </div>
+              <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
+                <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>Delete group</span>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {!groupDeleted && (
+                    <button type="button" disabled={Boolean(pendingAction)} onClick={onRequestDeleteGroup} className="flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl bg-rose-500/10 px-2 text-center text-[11px] font-semibold leading-tight text-rose-500 transition hover:bg-rose-500/15 disabled:cursor-wait disabled:opacity-50">
+                      Delete for everyone
+                    </button>
+                  )}
+                  <button type="button" disabled={Boolean(pendingAction)} onClick={onRequestRemoveGroupForMe} className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-center text-[11px] font-semibold leading-tight transition disabled:cursor-wait disabled:opacity-50 ${groupDeleted ? "col-span-2" : ""} ${darkMode ? "bg-white/10 text-white/75 hover:bg-white/15" : "bg-white text-[#111827] hover:bg-[#eef1f5]"}`}>
+                    Remove from my side
+                  </button>
+                </div>
+              </div>
             </div>
+          </PanelSection>
+        )}
+
+        {groupDeleted && !canManage && (
+          <PanelSection title="Group actions" muted={muted}>
+            <button type="button" disabled={Boolean(pendingAction)} onClick={onRequestRemoveGroupForMe} className={`flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-50 ${darkMode ? "bg-white/10 text-white/75 hover:bg-white/15" : "bg-[#f4f7fb] text-[#111827] hover:bg-[#eef1f5]"}`}>
+              Remove from my side
+            </button>
           </PanelSection>
         )}
 
@@ -1267,6 +1296,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [reactionsPopoverTarget, setReactionsPopoverTarget] = useState(null);
   const [deleteMessageTarget, setDeleteMessageTarget] = useState(null);
   const [deleteSelectionTarget, setDeleteSelectionTarget] = useState(null);
+  const [groupDeleteConfirm, setGroupDeleteConfirm] = useState(null);
   const [pinMessageTarget, setPinMessageTarget] = useState(null);
   const [pinDurationHours, setPinDurationHours] = useState(24 * 7);
   const [pinSaving, setPinSaving] = useState(false);
@@ -1296,6 +1326,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [editingMessageTarget, setEditingMessageTarget] = useState(null);
   const [replyToMessageTarget, setReplyToMessageTarget] = useState(null);
   const [deletingMessage, setDeletingMessage] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const [activeScreenShareUserId, setActiveScreenShareUserId] = useState(null);
   const [activeScreenShareId, setActiveScreenShareId] = useState(null);
@@ -1418,6 +1449,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   useEffect(() => {
     if (selectedId) messagesCacheRef.current[selectedId] = messages;
   }, [messages, selectedId]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    const conversationIds = Object.entries(unreadByConversation)
+      .filter(([, unread]) => Number(unread?.count || 0) > 0)
+      .map(([conversationId]) => String(conversationId));
+    window.dispatchEvent(new CustomEvent("uipl:forum-unread-changed", { detail: { total: conversationIds.length, conversationIds } }));
+  }, [embedded, unreadByConversation]);
 
   const resetScreenSharePeers = useCallback(() => {
     peerConnectionsRef.current.forEach((pc) => pc.close());
@@ -1680,7 +1719,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     : null;
   const groupAdminIds = useMemo(() => new Set((selectedConversation?.type === "group" ? selectedConversation.adminIds || [] : []).map(String)), [selectedConversation?.adminIds, selectedConversation?.type]);
   const currentUserIsGroupAdmin = Boolean(currentUser?.isSuperAdmin || groupAdminIds.has(String(currentUser?.id || "")));
-  const canSendSelectedConversation = Boolean(selectedConversation && (selectedConversation.type !== "group" || !selectedConversation.adminOnlyMessages || currentUserIsGroupAdmin));
+  const selectedGroupDeleted = Boolean(selectedConversation?.type === "group" && selectedConversation.deletedAt);
+  const canSendSelectedConversation = Boolean(selectedConversation && !selectedGroupDeleted && (selectedConversation.type !== "group" || !selectedConversation.adminOnlyMessages || currentUserIsGroupAdmin));
   const messageMatches = useMemo(() => {
     const term = messageSearch.trim().toLowerCase();
     if (!term) return [];
@@ -2115,7 +2155,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
         return next;
       });
       if (selectedId) {
-        api(`/forum/conversations/${encodeURIComponent(selectedId)}/read`, { method: "POST" }).catch(() => {});
+        api(`/forum/conversations/${encodeURIComponent(selectedId)}/read`, { method: "POST" })
+          .then(() => window.dispatchEvent(new Event("uipl:forum-unread-changed")))
+          .catch(() => {});
       }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -2942,10 +2984,6 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   }
 
   async function deleteChat() {
-    if (selectedConversation?.type !== "direct") {
-      toast.error("Only direct chats can be deleted");
-      return;
-    }
     try {
       await api(`/forum/conversations/${encodeURIComponent(selectedId)}`, { method: "DELETE" });
       setConversations((current) => current.filter((item) => item.id !== selectedId));
@@ -2954,6 +2992,55 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       toast.success("Chat deleted");
     } catch (error) {
       toast.error(error.message);
+    }
+  }
+
+  async function deleteGroupForEveryone() {
+    if (selectedConversation?.type !== "group") return;
+    try {
+      const data = await api(`/forum/conversations/${encodeURIComponent(selectedId)}?mode=everyone`, { method: "DELETE" });
+      if (data.conversation) {
+        setConversations((current) => [data.conversation, ...current.filter((item) => item.id !== data.conversation.id)]);
+      }
+      toast.success("Group deleted");
+    } catch (error) {
+      toast.error(error.message);
+      throw error;
+    }
+  }
+
+  async function removeGroupForMe() {
+    if (selectedConversation?.type !== "group") return;
+    try {
+      await api(`/forum/conversations/${encodeURIComponent(selectedId)}?mode=me`, { method: "DELETE" });
+      setConversations((current) => current.filter((item) => item.id !== selectedId));
+      selectConversation(GROUP_ID);
+      toast.success("Group removed from your side");
+    } catch (error) {
+      toast.error(error.message);
+      throw error;
+    }
+  }
+
+  function requestDeleteGroupForEveryone() {
+    if (selectedConversation?.type !== "group") return;
+    setGroupDeleteConfirm({ mode: "everyone", groupName: selectedConversation.name || "this group" });
+  }
+
+  function requestRemoveGroupForMe() {
+    if (selectedConversation?.type !== "group") return;
+    setGroupDeleteConfirm({ mode: "me", groupName: selectedConversation.name || "this group" });
+  }
+
+  async function confirmGroupDelete() {
+    if (!groupDeleteConfirm || deletingGroup) return;
+    try {
+      setDeletingGroup(true);
+      if (groupDeleteConfirm.mode === "everyone") await deleteGroupForEveryone();
+      else await removeGroupForMe();
+      setGroupDeleteConfirm(null);
+    } finally {
+      setDeletingGroup(false);
     }
   }
 
@@ -3899,6 +3986,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     <span>Refine with AI</span>
                   </button>
                 </div>
+                {selectedGroupDeleted && (
+                  <div className={`mx-auto mb-2 max-w-4xl rounded-2xl border px-4 py-3 text-sm ${darkMode ? "border-rose-400/20 bg-rose-400/10 text-rose-100" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
+                    This group has been deleted. You can view older messages, but no one can send new messages.
+                  </div>
+                )}
                 <div className="mx-auto flex max-w-4xl items-end gap-2">
                   <input
                     ref={documentInputRef}
@@ -4079,7 +4171,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       }}
                       enterKeyHint={effectiveMobileViewport ? "enter" : "send"}
                       rows={1}
-                      placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"}
+                      placeholder={selectedGroupDeleted ? "This group has been deleted" : canSendSelectedConversation ? "Write Something" : "Only group admins can message"}
                       className={`max-h-32 min-h-7 flex-1 resize-none bg-transparent py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`}
                     />
                   </label>
@@ -4118,6 +4210,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 onDirect={startDirect}
                 onSelectUser={setSidebarUser}
                 onUpdateGroup={updateGroup}
+                onRequestDeleteGroup={requestDeleteGroupForEveryone}
+                onRequestRemoveGroupForMe={requestRemoveGroupForMe}
                 embedded={embedded}
                 widgetControls={widgetControls}
               />
@@ -4846,6 +4940,48 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 <button type="button" disabled={deletingMessage || selectionDeleting} onClick={() => deleteSelectionTarget ? deleteSelectedMessages("me") : deleteSingleMessage("me")} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-red-500 px-3 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-60">
                   {(deletingMessage || selectionDeleting) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                   <span className="truncate">Delete for me</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {groupDeleteConfirm && (
+          <div className="fixed inset-0 z-[90] grid place-items-center bg-black/60 px-4 dark:bg-black/80" onMouseDown={() => {
+            if (deletingGroup) return;
+            setGroupDeleteConfirm(null);
+          }}>
+            <div onMouseDown={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[22px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+              <button
+                type="button"
+                disabled={deletingGroup}
+                onClick={() => setGroupDeleteConfirm(null)}
+                className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-black/45 hover:bg-black/5 hover:text-black"} disabled:opacity-40`}
+                aria-label="Close group delete dialog"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="flex items-start gap-3 pr-9">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-rose-500/10 text-rose-500">
+                  <Trash2 className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-base font-black text-black dark:text-white">
+                    {groupDeleteConfirm.mode === "everyone" ? "Delete group?" : "Remove group?"}
+                  </h3>
+                  <p className={`mt-1 text-xs leading-5 ${muted}`}>
+                    {groupDeleteConfirm.mode === "everyone"
+                      ? `This will delete ${groupDeleteConfirm.groupName} for everyone and stop all new messages.`
+                      : `This will remove ${groupDeleteConfirm.groupName} only from your side.`}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 flex items-center gap-2">
+                <button type="button" disabled={deletingGroup} onClick={() => setGroupDeleteConfirm(null)} className={`flex h-9 min-w-0 flex-1 items-center justify-center rounded-full px-3 text-xs font-bold transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f3f4f6] text-[#111827] hover:bg-[#e5e7eb]"}`}>
+                  Cancel
+                </button>
+                <button type="button" disabled={deletingGroup} onClick={confirmGroupDelete} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-rose-500 px-3 text-xs font-bold text-white hover:bg-rose-600 disabled:opacity-60">
+                  {deletingGroup ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  <span className="truncate">{groupDeleteConfirm.mode === "everyone" ? "Delete" : "Remove"}</span>
                 </button>
               </div>
             </div>

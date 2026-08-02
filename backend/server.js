@@ -15789,10 +15789,14 @@ async function forumConversationSummary(conversation, authUserId) {
     participantIds,
     adminIds: (conversation.adminIds || []).map(String),
     adminOnlyMessages: Boolean(conversation.adminOnlyMessages),
+    deletedAt: conversation.deletedAt || null,
+    deletedByUserId: conversation.deletedByUserId || null,
+    deletedByName: conversation.deletedByName || "",
+    deletedForMe: (conversation.deletedForUsers || []).map(String).includes(String(authUserId)),
     avatarPreset: conversation.avatarPreset || (conversation.avatarUrl ? "" : "ocean"),
     avatarUrl: conversation.avatarUrl || "",
     canManage: conversation.type === "group" && (conversation.adminIds || []).map(String).includes(String(authUserId)),
-    canSendMessages: conversation.type !== "group" || !conversation.adminOnlyMessages || (conversation.adminIds || []).map(String).includes(String(authUserId)),
+    canSendMessages: !conversation.deletedAt && (conversation.type !== "group" || !conversation.adminOnlyMessages || (conversation.adminIds || []).map(String).includes(String(authUserId))),
     lastMessage,
     pinnedMessage,
     activeScreenShareUserId: activeScreenShares.get(String(conversation._id))?.userId || activeScreenShares.get(String(conversation._id)) || null,
@@ -15834,6 +15838,9 @@ async function createForumMessage({ req, conversationId, text, forwardedFrom = n
   }
   if (conversation.type === "group") {
     assertForumGroupMember(conversation, req);
+    if (conversation.deletedAt) {
+      throw Object.assign(new Error("This group has been deleted"), { status: 403 });
+    }
     if (conversation.adminOnlyMessages && !isForumGroupAdmin(conversation, req)) {
       throw Object.assign(new Error("Only group admins can message right now"), { status: 403 });
     }
@@ -15929,7 +15936,10 @@ app.get("/forum/bootstrap", async (req, res) => {
   try {
     const db = await connectAuthDb();
     const group = await ensureForumGroupConversation(db);
-    const conversations = await db.collection("forumConversations").find({ participantIds: req.authUser.id }).sort({ updatedAt: -1 }).toArray();
+    const conversations = await db.collection("forumConversations").find({
+      participantIds: req.authUser.id,
+      deletedForUsers: { $ne: String(req.authUser.id) },
+    }).sort({ updatedAt: -1 }).toArray();
     const users = await db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1, username: 1 }).toArray();
     const onlineUserIds = [...forumClients.keys()];
     res.json({
@@ -16076,6 +16086,7 @@ app.get("/forum/conversations/:id/messages", async (req, res) => {
       ? await ensureForumGroupConversation(db)
       : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
     if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if ((conversation.deletedForUsers || []).map(String).includes(String(req.authUser.id))) return res.status(404).json({ error: "Conversation not found" });
     if (conversation.type === "group") assertForumGroupMember(conversation, req);
     const messages = await db.collection("forumMessages").find({
       conversationId: conversation._id,
@@ -16321,6 +16332,7 @@ app.patch("/forum/conversations/:id/group", async (req, res) => {
     const conversation = await db.collection("forumConversations").findOne({ _id: req.params.id, type: "group" });
     if (!conversation) return res.status(404).json({ error: "Group not found" });
     assertForumGroupMember(conversation, req);
+    if (conversation.deletedAt) return res.status(403).json({ error: "This group has been deleted" });
     if (!isForumGroupAdmin(conversation, req)) return res.status(403).json({ error: "Only group admins can manage this group" });
 
     const activeUsers = await db.collection("users").find({ blacklisted: { $ne: true } }, { projection: { _id: 1 } }).toArray();
@@ -16435,6 +16447,9 @@ app.post("/forum/conversations/:id/files", upload.single("file"), async (req, re
     if (!conversation) return res.status(404).json({ error: "Conversation not found" });
     if (conversation.type === "group") {
       assertForumGroupMember(conversation, req);
+      if (conversation.deletedAt) {
+        return res.status(403).json({ error: "This group has been deleted" });
+      }
       if (conversation.adminOnlyMessages && !isForumGroupAdmin(conversation, req)) {
         return res.status(403).json({ error: "Only group admins can message right now" });
       }
@@ -16761,7 +16776,38 @@ app.delete("/forum/conversations/:id", async (req, res) => {
   try {
     const db = await connectAuthDb();
     const conversation = await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
-    if (!conversation || conversation.type !== "direct") return res.status(404).json({ error: "Direct conversation not found" });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if (conversation.type === "group") {
+      assertForumGroupMember(conversation, req);
+      const mode = req.query.mode || "me";
+      if (mode === "everyone") {
+        if (!isForumGroupAdmin(conversation, req) && !req.authUser?.isSuperAdmin) {
+          return res.status(403).json({ error: "Only group admins can delete this group" });
+        }
+        const now = new Date();
+        await db.collection("forumConversations").updateOne(
+          { _id: conversation._id },
+          {
+            $set: {
+              deletedAt: now,
+              deletedByUserId: req.authUser.id,
+              deletedByName: req.authUser.displayName || req.authUser.username || "User",
+              updatedAt: now,
+            },
+          }
+        );
+        const saved = await db.collection("forumConversations").findOne({ _id: conversation._id });
+        const recipients = conversation.participantIds || [];
+        broadcastForumPayload(recipients, { type: "forum:conversation", conversation: await forumConversationSummary(saved, req.authUser.id) });
+        return res.json({ success: true, mode: "everyone", conversation: await forumConversationSummary(saved, req.authUser.id) });
+      }
+      await db.collection("forumConversations").updateOne(
+        { _id: conversation._id },
+        { $addToSet: { deletedForUsers: String(req.authUser.id) } }
+      );
+      return res.json({ success: true, mode: "me", conversationId: conversation._id });
+    }
+    if (conversation.type !== "direct") return res.status(404).json({ error: "Conversation not found" });
     await db.collection("forumMessages").deleteMany({ conversationId: conversation._id });
     await db.collection("forumConversations").deleteOne({ _id: conversation._id });
     broadcastForumPayload(conversation.participantIds, { type: "forum:deleted", conversationId: conversation._id });

@@ -5,6 +5,7 @@ import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compas
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
+import { playForumNotificationSound } from "./forumNotificationSound";
 import UserAvatar from "./UserAvatar";
 import EmojiPicker from "emoji-picker-react";
 import { GiphyFetch } from "@giphy/js-fetch-api";
@@ -1662,16 +1663,22 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         setConversations((current) => [payload.conversation, ...current.filter((item) => item.id !== payload.conversation.id)]);
       }
       if (payload.type === "forum:message") {
+        const isIncomingMessage = payload.message?.senderId !== currentUser?.id;
+        const isSelectedConversation = sameConversation(payload.conversationId, selectedId);
+        const isVisibleSelectedConversation = isSelectedConversation && document.visibilityState === "visible";
+        if (isIncomingMessage && !isVisibleSelectedConversation) {
+          playForumNotificationSound();
+        }
         setConversations((current) => current.map((item) => (
           item.id === payload.conversationId
             ? { ...item, lastMessage: payload.message, updatedAt: payload.message.createdAt }
             : item
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
         setTypingByConversation((current) => ({ ...current, [payload.conversationId]: [] }));
-        if (sameConversation(payload.conversationId, selectedId)) {
+        if (isSelectedConversation) {
           setMessages((current) => current.some((message) => message.id === payload.message.id) ? current : [...current, payload.message]);
           window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
-        } else if (payload.message?.senderId !== currentUser?.id) {
+        } else if (isIncomingMessage) {
           const mentionNeedle = `@${currentUser?.username || ""}`.toLowerCase();
           const mentioned = mentionNeedle.length > 1 && String(payload.message?.text || "").toLowerCase().includes(mentionNeedle);
           setUnreadByConversation((current) => {

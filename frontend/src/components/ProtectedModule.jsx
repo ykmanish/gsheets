@@ -6,6 +6,7 @@ import { Toaster } from "react-hot-toast";
 import { BellRing, X } from "lucide-react";
 import { API_URL, AuthProvider, getStoredAuth, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
+import { playForumNotificationSound } from "./forumNotificationSound";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import Dashboard from "./Dashboard";
@@ -179,6 +180,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
             const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
             const fullText = String(payload.message?.text || "").trim();
             const previewText = fullText.length > 35 ? `${fullText.slice(0, 35)}…` : fullText;
+            playForumNotificationSound();
             // In-app toast
             showAppToast(`${senderName}: ${previewText}`, {
               type: "notification",

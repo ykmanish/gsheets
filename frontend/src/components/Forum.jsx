@@ -1733,7 +1733,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         setTypingByConversation((current) => ({ ...current, [payload.conversationId]: [] }));
         if (isSelectedConversation) {
           setMessages((current) => current.some((message) => message.id === payload.message.id) ? current : [...current, payload.message]);
-          scrollMessagesToBottom("smooth");
+          scrollMessagesToBottom("auto");
         } else if (isIncomingMessage) {
           const mentionNeedle = `@${currentUser?.username || ""}`.toLowerCase();
           const mentioned = mentionNeedle.length > 1 && String(payload.message?.text || "").toLowerCase().includes(mentionNeedle);
@@ -2124,6 +2124,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     optimisticMessageCounterRef.current += 1;
     const tempMessage = {
       id: `temp-${optimisticMessageCounterRef.current}`,
+      clientKey: `client-${optimisticMessageCounterRef.current}`,
       conversationId: selectedId,
       type: selectedConversation?.type || "group",
       senderId: currentUser?.id,
@@ -2150,7 +2151,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         ? { ...item, lastMessage: tempMessage, updatedAt: tempMessage.createdAt }
         : item
     )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
-    scrollMessagesToBottom("smooth");
+    scrollMessagesToBottom("auto");
     try {
       const data = await api(`/forum/conversations/${encodeURIComponent(selectedId)}/messages`, {
         method: "POST",
@@ -2164,9 +2165,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
         setMessages((current) => [
           ...current.filter((message) => message.id !== tempMessage.id && message.id !== data.message.id),
-          data.message,
+          { ...data.message, clientKey: tempMessage.clientKey },
         ]);
-        scrollMessagesToBottom("smooth");
+        scrollMessagesToBottom("auto");
       }
     } catch (error) {
       setMessages((current) => current.filter((message) => message.id !== tempMessage.id));
@@ -2218,6 +2219,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     const tempId = `temp-file-${optimisticMessageCounterRef.current}`;
     const tempMessage = {
       id: tempId,
+      clientKey: `client-file-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       conversationId: selectedId,
       type: selectedConversation?.type || "group",
       senderId: currentUser?.id,
@@ -2237,7 +2239,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       },
     };
     setMessages((current) => [...current, tempMessage]);
-    scrollMessagesToBottom("smooth");
+    scrollMessagesToBottom("auto");
     try {
       const data = await apiFormWithProgress(`/forum/conversations/${encodeURIComponent(selectedId)}/files`, formData, (progress) => {
         setMessages((current) => current.map((message) => (
@@ -2249,14 +2251,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (data.message) {
         setMessages((current) => [
           ...current.filter((message) => message.id !== tempId && message.id !== data.message.id),
-          data.message,
+          { ...data.message, clientKey: tempMessage.clientKey },
         ]);
         setConversations((current) => current.map((item) => (
           item.id === selectedId
             ? { ...item, lastMessage: data.message, updatedAt: data.message.createdAt }
             : item
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
-        scrollMessagesToBottom("smooth");
+        scrollMessagesToBottom("auto");
       }
     } catch (error) {
       setMessages((current) => current.filter((message) => message.id !== tempId));
@@ -3309,7 +3311,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                         : mine ? darkMode ? "bg-[#181a20] text-white" : "bg-[#e5f1ff] text-[#14213d]" : darkMode ? "bg-[#252830] text-white" : "bg-white text-[#14213d]";
                       const starMark = isStarred ? <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" /> : null;
                       return (
-                        <div key={message.id} className={`min-w-0 ${messageTopMargin} first:mt-0`}>
+                        <div key={message.clientKey || message.id} className={`min-w-0 ${messageTopMargin} first:mt-0`}>
                           {showDate && (
                             <div className="sticky top-2 z-10 my-2 flex justify-center">
                               <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
@@ -3487,7 +3489,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                   <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
                                     {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
                                   </p>
-                                  <span className={`inline-flex min-w-[54px] shrink-0 items-center justify-end gap-1 whitespace-nowrap pb-[3px] text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                  <span className={`inline-flex min-w-[72px] shrink-0 items-center justify-end gap-1 whitespace-nowrap pb-[3px] text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
                                     {starMark}
                                     {message.isEdited && <span className="opacity-70">Edited</span>}
                                     <span>{formatTime(message.createdAt)}</span>

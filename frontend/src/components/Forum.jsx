@@ -796,7 +796,7 @@ function LinkPreviewCard({ url, mine, darkMode, time, embedded = false, status =
   );
 }
 
-function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, activeDirectUserId }) {
+function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, activeDirectUserId, embedded = false, widgetControls = null }) {
   const panelBg = darkMode ? "bg-[#15171c] text-white" : "bg-[#fbfcff] text-black";
   const softBlock = darkMode ? "bg-white/[0.05]" : "bg-[#f4f7fb]";
   const divider = darkMode ? "border-white/[0.06]" : "border-[#eef1f5]";
@@ -804,11 +804,15 @@ function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, active
   if (!user) return null;
   return (
     <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-hidden ${panelBg} xl:flex`}>
-      <div className={`flex h-16 shrink-0 items-center justify-center border-b px-4 ${divider}`}>
-        <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
-          <ShieldCheck className="h-4.5 w-4.5 shrink-0" />
-          <span>Messages are end-to-end encrypted</span>
-        </span>
+      <div className={`flex h-16 shrink-0 items-center ${embedded && widgetControls ? "justify-end" : "justify-center"} border-b px-4 ${divider}`}>
+        {embedded && widgetControls ? (
+          widgetControls
+        ) : (
+          <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+            <ShieldCheck className="h-4.5 w-4.5 shrink-0" />
+            <span>Messages are end-to-end encrypted</span>
+          </span>
+        )}
         {onBack && (
           <button type="button" onClick={onBack} className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/[0.05] hover:bg-white/10" : "bg-[#f4f7fb] hover:bg-[#edf1f7]"}`}>
             Back
@@ -899,7 +903,7 @@ function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDire
   );
 }
 
-function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup }) {
+function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup, embedded = false, widgetControls = null }) {
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(group?.name || "Group Forum");
   const [editingName, setEditingName] = useState(false);
@@ -961,11 +965,15 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
 
   return (
     <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-hidden ${panelBg} xl:flex`}>
-      <div className={`flex h-16 shrink-0 items-center justify-center border-b px-4 ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"}`}>
-        <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
-          <ShieldCheck className="h-4.5 w-4.5 shrink-0" />
-          <span>Messages are end-to-end encrypted</span>
-        </span>
+      <div className={`flex h-16 shrink-0 items-center ${embedded && widgetControls ? "justify-end" : "justify-center"} border-b px-4 ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"}`}>
+        {embedded && widgetControls ? (
+          widgetControls
+        ) : (
+          <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+            <ShieldCheck className="h-4.5 w-4.5 shrink-0" />
+            <span>Messages are end-to-end encrypted</span>
+          </span>
+        )}
       </div>
       <div className="min-h-0 overflow-x-hidden overflow-y-auto px-5 py-7 2xl:px-6">
       <div className="mx-auto flex w-full max-w-[320px] flex-col">
@@ -1211,7 +1219,7 @@ function PanelSection({ title, action, muted, children, onAction }) {
   );
 }
 
-export default function Forum({ darkMode, onMobileChatOpenChange }) {
+export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileView = false, embedded = false, widgetControls = null }) {
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
   const [users, setUsers] = useState([]);
@@ -1338,6 +1346,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const divider = darkMode ? "border-white/[0.06]" : "border-[#eef1f5]";
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const softText = darkMode ? "text-white/72" : "text-black/68";
+  const effectiveMobileViewport = forceMobileView || isMobileViewport;
 
   useEffect(() => {
     const syncViewport = () => setIsMobileViewport(window.innerWidth < 1024);
@@ -1348,9 +1357,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
 
   useEffect(() => {
-    onMobileChatOpenChange?.(isMobileViewport && !mobileListOpen);
+    onMobileChatOpenChange?.(effectiveMobileViewport && !mobileListOpen);
     return () => onMobileChatOpenChange?.(false);
-  }, [isMobileViewport, mobileListOpen, onMobileChatOpenChange]);
+  }, [effectiveMobileViewport, mobileListOpen, onMobileChatOpenChange]);
 
   useEffect(() => {
     return () => {
@@ -2462,7 +2471,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   function openMentionProfile(user) {
     if (!user) return;
-    if (isMobileViewport) {
+    if (effectiveMobileViewport) {
       setMobileProfileUser(user);
       return;
     }
@@ -2658,7 +2667,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     const safeBottom = Math.min(mainBounds.bottom, (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight));
     const safeLeft = Math.max(mainBounds.left, viewport?.offsetLeft || 0);
     const safeRight = Math.min(mainBounds.right, (viewport?.offsetLeft || 0) + (viewport?.width || window.innerWidth));
-    const isTouchViewport = isMobileViewport || (viewport?.width || window.innerWidth) < 768;
+    const isTouchViewport = effectiveMobileViewport || (viewport?.width || window.innerWidth) < 768;
     const menuHeight = isTouchViewport ? Math.min(520, safeBottom - safeTop - 24) : 470;
     const padding = 12;
 
@@ -3012,7 +3021,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
   // Dynamic mobile visualViewport height handling (WhatsApp style)
   useEffect(() => {
-    if (!isMobileViewport || mobileListOpen) {
+    if (!effectiveMobileViewport || mobileListOpen) {
       setMobileViewportHeight(null);
       return;
     }
@@ -3038,20 +3047,20 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       }
       window.removeEventListener("scroll", updateViewport);
     };
-  }, [isMobileViewport, mobileListOpen]);
+  }, [effectiveMobileViewport, mobileListOpen]);
 
   if (loading) {
     return (
-      <div className={`grid h-[calc(100dvh-24px)] min-h-[560px] place-items-center ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f2f4f1] text-black"}`}>
+      <div className={`grid ${embedded ? "h-full min-h-0" : "h-[calc(100dvh-24px)] min-h-[560px]"} place-items-center ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f2f4f1] text-black"}`}>
         <MessageCircleMore className="h-8 w-8 animate-pulse text-[#2563eb]" />
       </div>
     );
   }
 
   return (
-    <div className={`min-h-0 w-full max-w-full flex-1 overflow-hidden ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f7f8fb] text-black"}`}>
-      <div className={`grid h-full min-h-0 w-full max-w-full overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] ${surface}`}>
-        <aside className={`min-h-0 min-w-0 w-screen max-w-full flex-col overflow-hidden border-x lg:w-full lg:flex ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"} ${mobileListOpen ? "flex" : "hidden lg:flex"}`}>
+    <div className={`min-h-0 w-full max-w-full ${embedded ? "h-full" : "flex-1"} overflow-hidden ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f7f8fb] text-black"}`}>
+      <div className={`grid h-full min-h-0 w-full max-w-full overflow-hidden ${forceMobileView ? "" : "lg:grid-cols-[320px_minmax(0,1fr)]"} ${surface}`}>
+        <aside className={`min-h-0 min-w-0 w-screen max-w-full flex-col overflow-hidden border-x ${forceMobileView ? "" : "lg:w-full lg:flex"} ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"} ${mobileListOpen ? "flex" : forceMobileView ? "hidden" : "hidden lg:flex"}`}>
           <div className={`min-w-0 shrink-0 overflow-hidden border-b p-4 ${divider}`}>
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#10b981] text-white">
@@ -3197,8 +3206,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
         <main
           ref={mainChatRef}
-          style={isMobileViewport && !mobileListOpen && mobileViewportHeight ? { height: `${mobileViewportHeight}px` } : undefined}
-          className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden lg:w-auto ${mobileListOpen ? "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}
+          style={effectiveMobileViewport && !mobileListOpen && mobileViewportHeight ? { height: `${mobileViewportHeight}px` } : undefined}
+          className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden ${forceMobileView ? "" : "lg:w-auto"} ${mobileListOpen ? forceMobileView ? "hidden" : "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}
         >
           {!selectedConversation ? (
             <div className={`flex flex-1 flex-col items-center justify-center p-8 text-center ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-black"}`}>
@@ -4034,7 +4043,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                       onChange={(event) => updateComposer(event.target.value)}
                       onPaste={handleComposerPaste}
                       onFocus={() => {
-                        if (isMobileViewport) {
+                        if (effectiveMobileViewport) {
                           window.scrollTo(0, 0);
                           document.body.scrollTop = 0;
                         }
@@ -4063,12 +4072,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                             return;
                           }
                         }
-                        if (!isMobileViewport && event.key === "Enter" && !event.shiftKey) {
+                        if (!effectiveMobileViewport && event.key === "Enter" && !event.shiftKey) {
                           event.preventDefault();
                           sendMessage(event);
                         }
                       }}
-                      enterKeyHint={isMobileViewport ? "enter" : "send"}
+                      enterKeyHint={effectiveMobileViewport ? "enter" : "send"}
                       rows={1}
                       placeholder={canSendSelectedConversation ? "Write Something" : "Only group admins can message"}
                       className={`max-h-32 min-h-7 flex-1 resize-none bg-transparent py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`}
@@ -4092,6 +4101,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 onDirect={startDirect}
                 onBack={sidebarUser ? () => setSidebarUser(null) : null}
                 activeDirectUserId={selectedConversation?.type === "direct" ? selectedOtherUser?.id : null}
+                embedded={embedded}
+                widgetControls={widgetControls}
               />
             ) : (
               <ForumInfoPanel
@@ -4107,6 +4118,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 onDirect={startDirect}
                 onSelectUser={setSidebarUser}
                 onUpdateGroup={updateGroup}
+                embedded={embedded}
+                widgetControls={widgetControls}
               />
             )}
           </>

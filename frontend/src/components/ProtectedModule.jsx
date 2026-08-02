@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Toaster } from "react-hot-toast";
-import { BellRing, X } from "lucide-react";
+import { BellRing, MessageCircleMore, Minimize, X } from "lucide-react";
 import { API_URL, AuthProvider, getStoredAuth, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import { playForumNotificationSound } from "./forumNotificationSound";
@@ -114,6 +114,13 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const [latestNotification, setLatestNotification] = useState(null);
   const [dismissedNotificationId, setDismissedNotificationId] = useState(null);
   const [forumMobileChatOpen, setForumMobileChatOpen] = useState(false);
+  const [forumWidgetOpen, setForumWidgetOpen] = useState(false);
+  const [forumWidgetMinimized, setForumWidgetMinimized] = useState(false);
+  const [forumWidgetClosing, setForumWidgetClosing] = useState(false);
+  const [forumWidgetDesktop, setForumWidgetDesktop] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth >= 1024;
+  });
   const allowedMenus = useMemo(() => {
     const assigned = [
       ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "todos", "forum", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
@@ -131,6 +138,21 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   }, []);
 
   useEffect(() => {
+    const syncForumWidgetViewport = () => {
+      const desktop = window.innerWidth >= 1024;
+      setForumWidgetDesktop(desktop);
+      if (!desktop) {
+        setForumWidgetOpen(false);
+        setForumWidgetMinimized(false);
+        setForumWidgetClosing(false);
+      }
+    };
+    syncForumWidgetViewport();
+    window.addEventListener("resize", syncForumWidgetViewport);
+    return () => window.removeEventListener("resize", syncForumWidgetViewport);
+  }, []);
+
+  useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [loading, router, user]);
 
@@ -142,6 +164,15 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   useEffect(() => {
     window.localStorage.setItem("uipl_docs_sidebar_collapsed", String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  const closeForumWidget = useCallback(() => {
+    setForumWidgetClosing(true);
+    window.setTimeout(() => {
+      setForumWidgetOpen(false);
+      setForumWidgetMinimized(false);
+      setForumWidgetClosing(false);
+    }, 500);
+  }, []);
 
   useEffect(() => {
     function openCommandPalette(event) {
@@ -326,6 +357,28 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     router.push(menuPaths[menu] || "/dashboard");
   };
   const hideTopChrome = moduleId === "forum" && forumMobileChatOpen;
+  const forumWidgetControls = (
+    <div className="flex items-center gap-2 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">
+      <button
+        type="button"
+        onClick={() => setForumWidgetMinimized(true)}
+        className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-normal transition duration-300 active:scale-95 ${darkMode ? "bg-sky-400/12 text-sky-200 hover:bg-sky-400/18" : "bg-sky-50 text-sky-700 hover:bg-sky-100"}`}
+        aria-label="Minimize forum chat"
+      >
+        <Minimize className="h-4.5 w-4.5" />
+        <span className="hidden sm:inline">Minimize</span>
+      </button>
+      <button
+        type="button"
+        onClick={closeForumWidget}
+        className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-normal transition duration-300 active:scale-95 ${darkMode ? "bg-rose-400/12 text-rose-200 hover:bg-rose-400/18" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}
+        aria-label="Close forum chat"
+      >
+        <X className="h-4.5 w-4.5" />
+        <span className="hidden sm:inline">Close</span>
+      </button>
+    </div>
+  );
 
   return (
     <div className={`flex newq ${hideTopChrome ? "h-dvh max-h-dvh overflow-hidden" : "min-h-dvh md:h-screen"} ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#eef3f2]"}`}>
@@ -391,6 +444,45 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "module-control" && user?.isSuperAdmin && <ModuleControl darkMode={darkMode} />}
         {moduleId === "profile" && <ProfilePage darkMode={darkMode} />}
       </div>
+      {forumWidgetDesktop && allowedMenus.includes("forum") && moduleId !== "forum" && (
+        <>
+          {(!forumWidgetOpen || forumWidgetMinimized) && (
+            <button
+              type="button"
+              onClick={() => {
+                setForumWidgetOpen(true);
+                setForumWidgetMinimized(false);
+                setForumWidgetClosing(false);
+              }}
+              className="fixed bottom-5 right-5 z-[80] grid h-14 w-14 place-items-center rounded-full bg-[#10b981] text-white shadow-[0_18px_45px_rgba(16,185,129,0.32)] transition hover:scale-105 active:scale-95"
+              aria-label="Open forum chat"
+            >
+              <MessageCircleMore className="h-6 w-6" />
+            </button>
+          )}
+          {forumWidgetOpen && !forumWidgetMinimized && (
+            <button
+              type="button"
+              className={`fixed inset-0 z-[87] cursor-default bg-black/30 backdrop-blur-[2px] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${forumWidgetClosing ? "opacity-0" : "opacity-100"}`}
+              aria-label="Close forum backdrop"
+              onClick={closeForumWidget}
+            />
+          )}
+          {forumWidgetOpen && (
+            <div className={`fixed inset-4 z-[88] overflow-hidden rounded-[24px] shadow-[0_24px_80px_rgba(0,0,0,0.28)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:inset-6 ${forumWidgetClosing || forumWidgetMinimized ? "pointer-events-none translate-y-4 scale-[0.96] opacity-0" : "translate-y-0 scale-100 opacity-100 forum-widget-pop"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+              <div className="pointer-events-auto absolute right-4 top-3 z-[92] xl:hidden">
+                {forumWidgetControls}
+              </div>
+              <Forum
+                darkMode={darkMode}
+                embedded
+                forceMobileView={false}
+                widgetControls={forumWidgetControls}
+              />
+            </div>
+          )}
+        </>
+      )}
       <NotificationDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} darkMode={darkMode} />
       <CommandPalette
         open={commandPaletteOpen}

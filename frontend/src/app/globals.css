@@ -435,6 +435,17 @@ body * {
   animation: forum-ctx-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+@keyframes forum-widget-pop {
+  0%   { opacity: 0; transform: scale(0.96) translateY(18px); }
+  70%  { opacity: 1; transform: scale(1.005) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.forum-widget-pop {
+  animation: forum-widget-pop 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: bottom right;
+}
+
 .forum-chat-message,
 .forum-chat-message * {
   -webkit-touch-callout: none;

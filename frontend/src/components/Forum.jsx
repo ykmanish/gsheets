@@ -903,6 +903,71 @@ function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDire
   );
 }
 
+function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds, muted, onClose, onSelectUser, onRequestDeleteGroup, onRequestRemoveGroupForMe, currentUser }) {
+  const adminIds = new Set((group?.adminIds || []).map(String));
+  const canManage = Boolean(currentUser?.isSuperAdmin || adminIds.has(String(currentUser?.id || "")));
+  const groupDeleted = Boolean(group?.deletedAt);
+  if (!group) return null;
+  return (
+    <div className="fixed inset-0 z-[96] flex items-end bg-black/45 backdrop-blur-[2px] xl:hidden" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose?.();
+    }}>
+      <div className={`max-h-[88vh] w-full overflow-hidden rounded-t-[28px] shadow-[0_-18px_60px_rgba(0,0,0,0.28)] animate-in slide-in-from-bottom-8 fade-in duration-200 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-black"}`}>
+        <div className="mx-auto mt-3 h-1.5 w-11 rounded-full bg-white/20" />
+        <div className="max-h-[calc(88vh-16px)] overflow-y-auto px-7 pb-8 pt-6">
+          <div className="relative">
+            <button type="button" onClick={onClose} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close group info">
+              <X className="h-4 w-4" />
+            </button>
+            <GroupAvatar group={group} className="mx-auto h-24 w-24" iconClassName="h-10 w-10" />
+            <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">{group.name || "Group Forum"}</h2>
+            <p className="mt-1 text-center text-sm font-semibold text-[#22c55e]">{members.length} members · {onlineUserIds.length} online</p>
+          </div>
+
+          {groupDeleted && (
+            <div className={`mt-6 rounded-2xl border px-3 py-3 text-sm ${darkMode ? "border-rose-400/20 bg-rose-400/10 text-rose-100" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
+              This group has been deleted{group.deletedByName ? ` by ${group.deletedByName}` : ""}. Messaging is disabled.
+            </div>
+          )}
+
+          <PanelSection title={canManage ? "Group actions" : "Group"} muted={muted}>
+            <div className="grid grid-cols-2 gap-2">
+              {canManage && !groupDeleted && (
+                <button type="button" onClick={onRequestDeleteGroup} className="flex min-h-11 min-w-0 items-center justify-center rounded-xl bg-rose-500/10 px-2 text-center text-xs font-semibold leading-tight text-rose-500">
+                  Delete for everyone
+                </button>
+              )}
+              <button type="button" onClick={onRequestRemoveGroupForMe} className={`flex min-h-11 min-w-0 items-center justify-center rounded-xl px-2 text-center text-xs font-semibold leading-tight ${canManage && !groupDeleted ? "" : "col-span-2"} ${darkMode ? "bg-white/10 text-white/75" : "bg-[#f4f7fb] text-[#111827]"}`}>
+                Remove from my side
+              </button>
+            </div>
+          </PanelSection>
+
+          <PanelSection title="Members" muted={muted}>
+            <div className="space-y-2">
+              {members.map((member) => (
+                <button key={member.id} type="button" onClick={() => onSelectUser(member)} className={`flex w-full items-center gap-3 rounded-2xl p-2 text-left ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+                  <span className="relative shrink-0">
+                    <UserAvatar user={member} name={member.displayName} className="h-10 w-10" />
+                    <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(member.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-sm font-semibold">{member.displayName || member.username}</span>
+                      {adminIds.has(String(member.id)) && <span className="shrink-0 rounded-full bg-[#dbeafe] px-1.5 py-0.5 text-[9px] font-black uppercase text-[#2563eb]">Admin</span>}
+                    </span>
+                    <span className={`block truncate text-xs ${muted}`}>{member.designation || member.department || member.username}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </PanelSection>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup, onRequestDeleteGroup, onRequestRemoveGroupForMe, embedded = false, widgetControls = null }) {
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(group?.name || "Group Forum");
@@ -1284,6 +1349,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [typingByConversation, setTypingByConversation] = useState({});
   const [sidebarUser, setSidebarUser] = useState(null);
   const [mobileProfileUser, setMobileProfileUser] = useState(null);
+  const [mobileGroupInfoOpen, setMobileGroupInfoOpen] = useState(false);
   const [mobileListOpen, setMobileListOpen] = useState(true);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [mobileViewportHeight, setMobileViewportHeight] = useState(null);
@@ -2520,6 +2586,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     setSidebarUser(user);
   }
 
+  function openMobileChatInfo() {
+    if (!effectiveMobileViewport || !selectedConversation) return;
+    if (selectedConversation.type === "group") {
+      setMobileGroupInfoOpen(true);
+      return;
+    }
+    if (selectedOtherUser) setMobileProfileUser(selectedOtherUser);
+  }
+
   async function startDirectFromProfile(user) {
     await startDirect(user);
     setMobileProfileUser(null);
@@ -3311,7 +3386,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   <button type="button" onClick={closeChat} className={`h-9 w-9 shrink-0 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Back to chats">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
-                  <div className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100 xl:max-w-none"}`}>
+                  <button type="button" onClick={openMobileChatInfo} className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${effectiveMobileViewport ? "cursor-pointer" : "cursor-default"} ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100 xl:max-w-none"}`} aria-label="Open chat info">
                     {selectedConversation?.type === "group" ? (
                       <GroupAvatar group={selectedConversation} className="h-10 w-10" iconClassName="h-5 w-5" />
                     ) : (
@@ -3325,7 +3400,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         </span>
                       )}
                     </span>
-                  </div>
+                  </button>
                   <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-full flex-1" : "hidden"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
                     <button type="button" onClick={() => setMessageSearchOpen(true)} className="flex h-7 shrink-0 items-center gap-2 rounded-full" aria-label="Search messages">
                       <Search className={`h-4 w-4 ${muted}`} />
@@ -4228,6 +4303,30 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
             onClose={() => setMobileProfileUser(null)}
             onDirect={startDirectFromProfile}
             activeDirectUserId={selectedConversation?.type === "direct" ? selectedOtherUser?.id : null}
+          />
+        )}
+        {mobileGroupInfoOpen && selectedConversation?.type === "group" && (
+          <MobileGroupInfoSheet
+            darkMode={darkMode}
+            group={selectedConversation}
+            members={groupParticipants}
+            online={online}
+            onlineUserIds={onlineUserIds}
+            muted={muted}
+            currentUser={currentUser}
+            onClose={() => setMobileGroupInfoOpen(false)}
+            onSelectUser={(user) => {
+              setMobileGroupInfoOpen(false);
+              setMobileProfileUser(user);
+            }}
+            onRequestDeleteGroup={() => {
+              setMobileGroupInfoOpen(false);
+              requestDeleteGroupForEveryone();
+            }}
+            onRequestRemoveGroupForMe={() => {
+              setMobileGroupInfoOpen(false);
+              requestRemoveGroupForMe();
+            }}
           />
         )}
         {createGroupOpen && (

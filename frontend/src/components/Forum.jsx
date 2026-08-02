@@ -1161,6 +1161,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const [onlineUserIds, setOnlineUserIds] = useState([]);
   const [selectedId, setSelectedId] = useState(GROUP_ID);
   const [messages, setMessages] = useState([]);
+  const selectedIdRef = useRef(GROUP_ID);
+  const messagesCacheRef = useRef({});
+  const messagesLoadSeqRef = useRef(0);
   const [composer, setComposer] = useState("");
   const [search, setSearch] = useState("");
   const [messageSearch, setMessageSearch] = useState("");
@@ -1295,6 +1298,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const selectedIsGroup = selectedConversation?.type === "group";
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
   const currentUser = getStoredAuth().user;
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (selectedId) messagesCacheRef.current[selectedId] = messages;
+  }, [messages, selectedId]);
 
   const resetScreenSharePeers = useCallback(() => {
     peerConnectionsRef.current.forEach((pc) => pc.close());
@@ -1599,14 +1610,27 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   }, []);
 
   const loadMessages = useCallback(async (conversationId) => {
+    const loadSeq = ++messagesLoadSeqRef.current;
     const data = await api(`/forum/conversations/${encodeURIComponent(conversationId)}/messages`);
     const savedMap = getSavedReactionsMap();
     const fetchedMessages = (data.messages || []).map((msg) => ({
       ...msg,
       reactions: savedMap[msg.id] || msg.reactions || [],
     }));
-    setMessages(fetchedMessages);
-    window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+    messagesCacheRef.current[conversationId] = fetchedMessages;
+    if (selectedIdRef.current === conversationId && loadSeq === messagesLoadSeqRef.current) {
+      setMessages(fetchedMessages);
+      window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "auto", block: "nearest" }), 0);
+    }
+  }, []);
+
+  const selectConversation = useCallback((conversationId) => {
+    selectedIdRef.current = conversationId;
+    messagesLoadSeqRef.current += 1;
+    setSelectedId(conversationId);
+    setMessages(messagesCacheRef.current[conversationId] || []);
+    setMobileListOpen(false);
+    window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "auto", block: "nearest" }), 0);
   }, []);
 
   // Request browser notification permission & mark forum page as active
@@ -1623,8 +1647,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     async function boot() {
       try {
         setLoading(true);
-        const bootData = await loadBootstrap();
-        if (!stopped && (bootData?.conversations || []).some((item) => item.id === GROUP_ID)) await loadMessages(GROUP_ID);
+        await loadBootstrap();
       } catch (error) {
         toast.error(error.message);
       } finally {
@@ -1633,7 +1656,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     }
     void boot();
     return () => { stopped = true; };
-  }, [loadBootstrap, loadMessages]);
+  }, [loadBootstrap]);
 
   useEffect(() => {
     if (!selectedId || !selectedConversation) return;
@@ -1711,12 +1734,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 icon: "/favicon.ico",
                 tag: `forum-${payload.conversationId}-${payload.message?.id}`,
               });
-              browserNotif.onclick = () => {
-                window.focus();
-                setSelectedId(payload.conversationId);
-                setMobileListOpen(false);
-                browserNotif.close();
-              };
+                browserNotif.onclick = () => {
+                  window.focus();
+                  selectConversation(payload.conversationId);
+                  browserNotif.close();
+                };
             } catch {}
           }
         }
@@ -1914,8 +1936,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (payload.type === "forum:deleted") {
         setConversations((current) => current.filter((item) => item.id !== payload.conversationId));
         if (sameConversation(payload.conversationId, selectedId)) {
-          setSelectedId(GROUP_ID);
-          setMessages([]);
+          selectConversation(GROUP_ID);
         }
       }
       };
@@ -1931,7 +1952,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       socketRef.current?.close();
     };
-  }, [createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, selectedId]);
+  }, [createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, selectConversation, selectedId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -2002,9 +2023,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         body: JSON.stringify({ userId: user.id }),
       });
       setConversations((current) => [data.conversation, ...current.filter((item) => item.id !== data.conversation.id)]);
-      setSelectedId(data.conversation.id);
+      selectConversation(data.conversation.id);
       setSidebarUser(null);
-      setMobileListOpen(false);
     } catch (error) {
       toast.error(error.message);
     }
@@ -2713,8 +2733,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     try {
       await api(`/forum/conversations/${encodeURIComponent(selectedId)}`, { method: "DELETE" });
       setConversations((current) => current.filter((item) => item.id !== selectedId));
-      setSelectedId(GROUP_ID);
-      setMessages([]);
+      selectConversation(GROUP_ID);
       setChatMenuOpen(false);
       toast.success("Chat deleted");
     } catch (error) {
@@ -2760,8 +2779,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         }
       }
       setConversations((current) => [createdConversation, ...current.filter((item) => item.id !== createdConversation.id)]);
-      setSelectedId(createdConversation.id);
-      setMobileListOpen(false);
+      selectConversation(createdConversation.id);
       setCreateGroupOpen(false);
       setCreateGroupStep(1);
       setCreateGroupName("");
@@ -2867,7 +2885,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 const pinActivity = pinActivityText(conversation.pinnedMessage, currentUser?.id);
                 const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, conversation.id === GROUP_ID ? "Workspace group forum" : "Group chat");
                 return (
-                  <button key={conversation.id} type="button" onClick={() => { setSelectedId(conversation.id); setMobileListOpen(false); }} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+                  <button key={conversation.id} type="button" onClick={() => selectConversation(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
                     {conversation.type === "group" ? (
                       <GroupAvatar group={conversation} className="h-11 w-11" iconClassName="h-5 w-5" />
                     ) : (
@@ -2914,7 +2932,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                 const pinActivity = pinActivityText(conversation.pinnedMessage, currentUser?.id);
                 const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, "Direct message");
                 return (
-                  <button key={conversation.id} type="button" onClick={() => { setSelectedId(conversation.id); setMobileListOpen(false); }} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+                  <button key={conversation.id} type="button" onClick={() => selectConversation(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
                     <span className="relative shrink-0">
                       <UserAvatar user={other} name={conversation.name} className="h-10 w-10" />
                       <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(other?.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />

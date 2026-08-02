@@ -530,3 +530,23 @@ body * {
   border-radius: 16px;
   animation: forum-msg-highlight-pulse 2s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+@keyframes forum-msg-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.015);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.forum-msg-pop {
+  transform-origin: bottom center;
+  animation: forum-msg-pop-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}

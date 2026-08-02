@@ -1267,7 +1267,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const documentInputRef = useRef(null);
   const photoInputRef = useRef(null);
   const mainChatRef = useRef(null);
+  const messagesPaneRef = useRef(null);
   const swipeRef = useRef({ active: false, messageId: null, message: null, startX: 0, startY: 0, currentX: 0, locked: false });
+  const typingClearTimersRef = useRef({});
   const [swipeOffset, setSwipeOffset] = useState({ id: null, x: 0 });
 
   const surface = darkMode ? "bg-[#15171c]" : "bg-white";
@@ -1298,6 +1300,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   const selectedIsGroup = selectedConversation?.type === "group";
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
   const currentUser = getStoredAuth().user;
+
+  const scrollMessagesToBottom = useCallback((behavior = "auto") => {
+    window.requestAnimationFrame(() => {
+      const pane = messagesPaneRef.current;
+      if (pane) pane.scrollTop = pane.scrollHeight;
+      endRef.current?.scrollIntoView({ behavior, block: "end" });
+    });
+  }, []);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -1339,6 +1349,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
   useEffect(() => {
     return () => stopScreenShare();
   }, [selectedId, stopScreenShare]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(typingClearTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+      typingClearTimersRef.current = {};
+    };
+  }, []);
 
   const startScreenShare = async () => {
     try {
@@ -1600,6 +1617,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     const list = data.conversations || [];
     setConversations(list);
     setSelectedId((current) => list.some((item) => item.id === current) ? current : (list[0]?.id || GROUP_ID));
+    setUnreadByConversation(() => {
+      const next = {};
+      for (const conversation of list) {
+        if (conversation.unreadCount > 0) {
+          next[conversation.id] = {
+            count: conversation.unreadCount,
+            mentioned: Boolean(conversation.unreadMentioned),
+          };
+        }
+      }
+      return next;
+    });
     setUsers(data.users || []);
     setOnlineUserIds(data.onlineUserIds || []);
     api("/forum/settings").then((settings) => {
@@ -1620,9 +1649,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     messagesCacheRef.current[conversationId] = fetchedMessages;
     if (selectedIdRef.current === conversationId && loadSeq === messagesLoadSeqRef.current) {
       setMessages(fetchedMessages);
-      window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "auto", block: "nearest" }), 0);
+      scrollMessagesToBottom("auto");
     }
-  }, []);
+  }, [scrollMessagesToBottom]);
 
   const selectConversation = useCallback((conversationId) => {
     selectedIdRef.current = conversationId;
@@ -1630,8 +1659,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
     setSelectedId(conversationId);
     setMessages(messagesCacheRef.current[conversationId] || []);
     setMobileListOpen(false);
-    window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "auto", block: "nearest" }), 0);
-  }, []);
+    scrollMessagesToBottom("auto");
+  }, [scrollMessagesToBottom]);
 
   // Request browser notification permission & mark forum page as active
   useEffect(() => {
@@ -1692,6 +1721,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         if (isIncomingMessage && !isVisibleSelectedConversation) {
           playForumNotificationSound();
         }
+        if (typingClearTimersRef.current[payload.conversationId]) {
+          window.clearTimeout(typingClearTimersRef.current[payload.conversationId]);
+          delete typingClearTimersRef.current[payload.conversationId];
+        }
         setConversations((current) => current.map((item) => (
           item.id === payload.conversationId
             ? { ...item, lastMessage: payload.message, updatedAt: payload.message.createdAt }
@@ -1700,7 +1733,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         setTypingByConversation((current) => ({ ...current, [payload.conversationId]: [] }));
         if (isSelectedConversation) {
           setMessages((current) => current.some((message) => message.id === payload.message.id) ? current : [...current, payload.message]);
-          window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+          scrollMessagesToBottom("smooth");
         } else if (isIncomingMessage) {
           const mentionNeedle = `@${currentUser?.username || ""}`.toLowerCase();
           const mentioned = mentionNeedle.length > 1 && String(payload.message?.text || "").toLowerCase().includes(mentionNeedle);
@@ -1819,13 +1852,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         }
       }
       if (payload.type === "forum:typing") {
-        setTypingByConversation((current) => {
-          const list = (current[payload.conversationId] || []).filter((item) => item.id !== payload.user?.id);
-          return {
-            ...current,
-            [payload.conversationId]: payload.typing ? [...list, payload.user] : list,
-          };
-        });
+        if (typingClearTimersRef.current[payload.conversationId]) {
+          window.clearTimeout(typingClearTimersRef.current[payload.conversationId]);
+          delete typingClearTimersRef.current[payload.conversationId];
+        }
+        const applyTyping = () => {
+          setTypingByConversation((current) => {
+            const list = (current[payload.conversationId] || []).filter((item) => item.id !== payload.user?.id);
+            return {
+              ...current,
+              [payload.conversationId]: payload.typing ? [...list, payload.user] : list,
+            };
+          });
+        };
+        if (payload.typing) applyTyping();
+        else typingClearTimersRef.current[payload.conversationId] = window.setTimeout(applyTyping, 900);
       }
       if (payload.type === "forum:cleared") {
         setConversations((current) => current.map((item) => (
@@ -1952,7 +1993,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       socketRef.current?.close();
     };
-  }, [createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, selectConversation, selectedId]);
+  }, [createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, scrollMessagesToBottom, selectConversation, selectedId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -2109,7 +2150,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
         ? { ...item, lastMessage: tempMessage, updatedAt: tempMessage.createdAt }
         : item
     )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
-    window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    scrollMessagesToBottom("smooth");
     try {
       const data = await api(`/forum/conversations/${encodeURIComponent(selectedId)}/messages`, {
         method: "POST",
@@ -2125,7 +2166,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
           ...current.filter((message) => message.id !== tempMessage.id && message.id !== data.message.id),
           data.message,
         ]);
-        window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+        scrollMessagesToBottom("smooth");
       }
     } catch (error) {
       setMessages((current) => current.filter((message) => message.id !== tempMessage.id));
@@ -2196,7 +2237,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
       },
     };
     setMessages((current) => [...current, tempMessage]);
-    window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    scrollMessagesToBottom("smooth");
     try {
       const data = await apiFormWithProgress(`/forum/conversations/${encodeURIComponent(selectedId)}/files`, formData, (progress) => {
         setMessages((current) => current.map((message) => (
@@ -2215,7 +2256,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
             ? { ...item, lastMessage: data.message, updatedAt: data.message.createdAt }
             : item
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
-        window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+        scrollMessagesToBottom("smooth");
       }
     } catch (error) {
       setMessages((current) => current.filter((message) => message.id !== tempId));
@@ -3213,7 +3254,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
 
                 {!imageDraft && (
                 <>
-                <section className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 sm:py-5 ${subSurface}`}>
+                <section ref={messagesPaneRef} className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 sm:py-5 ${subSurface}`}>
                   <div className="mx-auto flex w-full max-w-4xl flex-col">
                     {starredOnlyOpen && !visibleMessages.some((message) => message.isStarred) && (
                       <div className={`my-8 text-center text-sm ${muted}`}>No starred messages</div>
@@ -3321,7 +3362,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                               transform: swipeOffset.id === message.id ? `translateX(${swipeOffset.x}px)` : undefined,
                               transition: swipeOffset.id === message.id ? "none" : "transform 300ms cubic-bezier(0.22, 1, 0.36, 1)",
                             }}
-                            className={`forum-chat-message flex min-w-0 items-end gap-2 sm:gap-3 duration-200 ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[86] scale-[1.01]" : ""}`}
+                            className={`forum-chat-message forum-msg-pop flex min-w-0 items-end gap-2 sm:gap-3 duration-200 ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[86] scale-[1.01]" : ""}`}
                           >
                           {!mine && isGroupChat && (showAvatar ? (
                             <span className="self-end">

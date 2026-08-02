@@ -15729,6 +15729,13 @@ async function forumConversationSummary(conversation, authUserId) {
       };
     }
   }
+  const unreadCount = await db.collection("forumMessages").countDocuments({
+    conversationId: conversation._id,
+    senderId: { $ne: authUserId },
+    [`readBy.${authUserId}`]: { $exists: false },
+    deletedForUsers: { $ne: String(authUserId) },
+    system: { $ne: true },
+  });
   return {
     id: conversation._id,
     type: conversation.type,
@@ -15745,6 +15752,8 @@ async function forumConversationSummary(conversation, authUserId) {
     pinnedMessage,
     activeScreenShareUserId: activeScreenShares.get(String(conversation._id))?.userId || activeScreenShares.get(String(conversation._id)) || null,
     activeScreenShareId: activeScreenShares.get(String(conversation._id))?.shareId || null,
+    unreadCount,
+    unreadMentioned: false,
     updatedAt: conversation.updatedAt,
   };
 }

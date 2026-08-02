@@ -549,4 +549,5 @@ body * {
 .forum-msg-pop {
   transform-origin: bottom center;
   animation: forum-msg-pop-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
 }

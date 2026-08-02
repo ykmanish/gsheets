@@ -3362,14 +3362,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                               transform: swipeOffset.id === message.id ? `translateX(${swipeOffset.x}px)` : undefined,
                               transition: swipeOffset.id === message.id ? "none" : "transform 300ms cubic-bezier(0.22, 1, 0.36, 1)",
                             }}
-                            className={`forum-chat-message forum-msg-pop flex min-w-0 items-end gap-2 sm:gap-3 duration-200 ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[86] scale-[1.01]" : ""}`}
+                            className={`forum-chat-message flex min-w-0 items-end gap-2 sm:gap-3 duration-200 ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[86] scale-[1.01]" : ""}`}
                           >
                           {!mine && isGroupChat && (showAvatar ? (
                             <span className="self-end">
                               <UserAvatar user={message.sender} name={message.sender?.displayName} className="h-7 w-7 sm:h-8 sm:w-8" />
                             </span>
                           ) : <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />)}
-                          <div className={`flex min-w-0 flex-col ${mine ? "max-w-[85%] items-end sm:max-w-[75%]" : isGroupChat ? "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[85%] items-start sm:max-w-[75%]"}`}>
+                          <div className={`forum-msg-pop flex min-w-0 flex-col ${mine ? "max-w-[85%] items-end sm:max-w-[75%]" : isGroupChat ? "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[85%] items-start sm:max-w-[75%]"}`}>
                             {showName && (
                               <div className={`mb-1 flex items-center gap-2 text-xs ${muted}`}>
                                 {mine || !message.sender ? (
@@ -3464,7 +3464,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                               </div>
                             )}
                             {displayText && !previewUrl && (
-                              <div className={`max-w-full ${bubbleRounding} px-3.5 py-2 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : bubbleTone}`}>
+                              <div className={`min-w-[112px] max-w-full ${bubbleRounding} px-3.5 py-2 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : bubbleTone}`}>
                                 {message.forwardedFrom && (
                                   <div className={`mb-1 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
                                     Forwarded from {message.forwardedFrom.senderName || "User"}
@@ -3483,9 +3483,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                     </div>
                                   </button>
                                 )}
-                                <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
-                                  {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
-                                  <span className={`float-right ml-3 mt-[8px] inline-flex items-center gap-1 whitespace-nowrap text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                <div className="flex min-w-0 items-end gap-3">
+                                  <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
+                                    {renderMessageText(displayText, messageSearch, isActiveMatch, users, setSidebarUser, mine)}
+                                  </p>
+                                  <span className={`inline-flex min-w-[54px] shrink-0 items-center justify-end gap-1 whitespace-nowrap pb-[3px] text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
                                     {starMark}
                                     {message.isEdited && <span className="opacity-70">Edited</span>}
                                     <span>{formatTime(message.createdAt)}</span>
@@ -3501,7 +3503,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange }) {
                                       </span>
                                     )}
                                   </span>
-                                </p>
+                                </div>
                               </div>
                             )}
                             {previewUrl && !displayText && (

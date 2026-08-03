@@ -608,8 +608,13 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       doc.text(`Date Range: ${dateRangeLabel}`, 14, currentY + 6);
 
       const displayEmployees = activeEmployees.filter(emp => {
-        const name = emp.displayName || emp.username || "";
-        return !name.toLowerCase().replace(/\s+/g, '').includes("superadmin");
+        const name = (emp.displayName || emp.username || "").toLowerCase();
+        const role = (emp.roleName || emp.role || "employee").toLowerCase();
+        
+        if (role === "employee") return true;
+        if (name.includes("neelam") || name.includes("miti") || name.includes("iqbal")) return true;
+        
+        return false;
       });
 
       const employeeMap = {};
@@ -651,7 +656,12 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       const body = Object.values(employeeMap).map(emp => {
         const row = [emp.name];
         monthDates.forEach(date => {
-          row.push(emp.days[date] || "-");
+          const isSunday = new Date(date).getDay() === 0;
+          if (isSunday) {
+            row.push("SUN");
+          } else {
+            row.push(emp.days[date] || "-");
+          }
         });
         row.push((emp.totalMinutes / 60).toFixed(1));
         return row;
@@ -660,8 +670,13 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       const footRow = ["Total Hours"];
       let grandTotalMinutes = 0;
       monthDates.forEach(date => {
+        const isSunday = new Date(date).getDay() === 0;
         const dayTotalMins = filteredAttendanceRecords.filter(r => r.date === date).reduce((acc, r) => acc + (r.workMinutes || 0), 0);
-        footRow.push(dayTotalMins ? (dayTotalMins / 60).toFixed(1) : "-");
+        if (isSunday) {
+          footRow.push("SUN");
+        } else {
+          footRow.push(dayTotalMins ? (dayTotalMins / 60).toFixed(1) : "-");
+        }
         grandTotalMinutes += dayTotalMins;
       });
       footRow.push((grandTotalMinutes / 60).toFixed(1));
@@ -679,7 +694,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         headStyles: { fillColor: [4, 120, 87], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 6.5 },
         footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
         didParseCell: function(data) {
-          if (data.section === "body") {
+          if (data.cell.raw === "SUN") {
+            data.cell.styles.fillColor = [240, 240, 240]; // light gray background
+            data.cell.styles.textColor = [40, 40, 40];    // dark text
+            data.cell.styles.fontStyle = "normal";
+          } else if (data.section === "body") {
             if (data.cell.raw === "-") {
               data.cell.styles.fillColor = [254, 226, 226]; // light red
               data.cell.styles.textColor = [220, 38, 38];   // red text

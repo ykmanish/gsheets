@@ -606,6 +606,70 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         : formatDateLabel(monthDates[0]);
       
       doc.text(`Date Range: ${dateRangeLabel}`, 14, currentY + 6);
+      
+      doc.setFont("Geist", "normal");
+      
+      let legendX = doc.internal.pageSize.getWidth() - 130;
+      const legendY = currentY;
+      
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.text("Legend:", legendX, legendY + 6);
+      legendX += 13;
+      
+      // PL
+      doc.setFillColor(37, 99, 235);
+      doc.rect(legendX, legendY + 2.5, 8, 5, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(6);
+      doc.setFont("Geist", "bold");
+      doc.text("PL", legendX + 4, legendY + 6, { align: "center" });
+      doc.setFont("Geist", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.text("= Paid Leave", legendX + 9, legendY + 6);
+      
+      legendX += 27;
+      
+      // L
+      doc.setFillColor(153, 27, 27);
+      doc.rect(legendX, legendY + 2.5, 8, 5, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(6);
+      doc.setFont("Geist", "bold");
+      doc.text("L", legendX + 4, legendY + 6, { align: "center" });
+      doc.setFont("Geist", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.text("= Leave", legendX + 9, legendY + 6);
+      
+      legendX += 21;
+      
+      // -
+      doc.setFillColor(254, 226, 226);
+      doc.rect(legendX, legendY + 2.5, 8, 5, "F");
+      doc.setTextColor(220, 38, 38);
+      doc.setFontSize(6);
+      doc.setFont("Geist", "bold");
+      doc.text("-", legendX + 4, legendY + 6, { align: "center" });
+      doc.setFont("Geist", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.text("= Absent", legendX + 9, legendY + 6);
+      
+      legendX += 23;
+      
+      // SUN
+      doc.setFillColor(240, 240, 240);
+      doc.rect(legendX, legendY + 2.5, 10, 5, "F");
+      doc.setTextColor(40, 40, 40);
+      doc.setFontSize(6);
+      doc.setFont("Geist", "normal");
+      doc.text("SUN", legendX + 5, legendY + 6, { align: "center" });
+      doc.setFontSize(8);
+      doc.text("= Sunday", legendX + 11, legendY + 6);
+      
+      doc.setFontSize(10);
 
       const displayEmployees = activeEmployees.filter(emp => {
         const name = (emp.displayName || emp.username || "").toLowerCase();
@@ -651,24 +715,33 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         return d.toLocaleDateString("en-US", { day: "2-digit", month: "short" });
       };
 
-      const head = [["Employee", ...monthDates.map(formatHeaderDate), "Total Hrs"]];
+      const head = [["Employee", ...monthDates.map(formatHeaderDate), "Total Hrs", "Present Days", "Absent Days"]];
 
       const body = Object.values(employeeMap).map(emp => {
         const row = [emp.name];
+        let presentDays = 0;
+        let absentDays = 0;
         monthDates.forEach(date => {
           const isSunday = new Date(date).getDay() === 0;
           if (isSunday) {
             row.push("SUN");
           } else {
-            row.push(emp.days[date] || "-");
+            const val = emp.days[date] || "-";
+            row.push(val);
+            if (val === "-") absentDays += 1;
+            else if (val !== "PL" && val !== "L") presentDays += 1;
           }
         });
         row.push((emp.totalMinutes / 60).toFixed(1));
+        row.push(presentDays);
+        row.push(absentDays);
         return row;
       });
 
       const footRow = ["Total Hours"];
       let grandTotalMinutes = 0;
+      let totalPresents = 0;
+      let totalAbsents = 0;
       monthDates.forEach(date => {
         const isSunday = new Date(date).getDay() === 0;
         const dayTotalMins = filteredAttendanceRecords.filter(r => r.date === date).reduce((acc, r) => acc + (r.workMinutes || 0), 0);
@@ -679,11 +752,25 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         }
         grandTotalMinutes += dayTotalMins;
       });
+      
+      Object.values(employeeMap).forEach(emp => {
+        monthDates.forEach(date => {
+          const isSunday = new Date(date).getDay() === 0;
+          if (!isSunday) {
+            const val = emp.days[date] || "-";
+            if (val === "-") totalAbsents += 1;
+            else if (val !== "PL" && val !== "L") totalPresents += 1;
+          }
+        });
+      });
+
       footRow.push((grandTotalMinutes / 60).toFixed(1));
+      footRow.push(totalPresents);
+      footRow.push(totalAbsents);
 
       autoTable(doc, {
         startY: currentY + 11,
-        margin: { top: 8, bottom: 5, left: 10, right: 10 },
+        margin: { top: 8, bottom: 5, left: 5, right: 5 },
         showFoot: "lastPage",
         head: head,
         body: body,

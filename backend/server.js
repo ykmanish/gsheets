@@ -18,7 +18,7 @@ const { MongoClient, ObjectId } = require("mongodb");
 
 const { processDocument, processSheetText } = require("./lib/processDocument");
 const { createWhatsAppService, normalizePhone } = require("./lib/whatsappService");
-const { callClaude, retrieveRelevantChunks, routeClaudeModel } = require("./lib/claudeRag");
+const { callClaude, retrieveRelevantChunks, routeClaudeModel, modelIdForTier } = require("./lib/claudeRag");
 const { registerFormsModule } = require("./lib/formsModule");
 const adminMiscExpensesArchitecture = require("./sheetArchitectures/adminMiscExpenses");
 const assetPurchaseRequestsArchitecture = require("./sheetArchitectures/assetPurchaseRequests");
@@ -15750,6 +15750,9 @@ async function serializeForumMessage(message, viewerId = null) {
     senderId: message.senderId,
     sender: forumUserProfile(sender || { _id: message.senderId, username: "User" }),
     system: Boolean(message.system),
+    loopAssistant: Boolean(message.loopAssistant),
+    assistant: message.assistant || null,
+    assistantPayload: message.assistantPayload || null,
     event: message.event || null,
     text: attachmentMissing ? "" : decryptForumText(message.encrypted),
     encrypted: true,
@@ -15955,6 +15958,238 @@ async function createForumSystemMessage({ req, conversation, text, event }) {
   const serialized = await serializeForumMessage(saved, req.authUser.id);
   broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized });
   return serialized;
+}
+
+function shouldTriggerLoopAssistant(text = "") {
+  return /(^|\s)@loop\b/i.test(String(text || ""));
+}
+
+function projectDateKey(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+  return istDateKey(date);
+}
+
+function collectProjectTasks(project = {}) {
+  const tasks = [];
+  const addTask = (task = {}, phase = {}) => {
+    const item = {
+      id: task.id || task._id || "",
+      title: task.title || task.name || task.task || "Untitled task",
+      status: task.status || task.state || "",
+      priority: task.priority || "",
+      dueDate: task.dueDate || task.deadline || task.endDate || task.targetDate || "",
+      phase: phase.name || phase.title || phase.label || "",
+      assigneeIds: [
+        ...new Set([
+          ...(Array.isArray(task.assigneeIds) ? task.assigneeIds : []),
+          ...(task.assigneeId ? [task.assigneeId] : []),
+          ...(task.assignedTo ? [task.assignedTo] : []),
+        ].map(String).filter(Boolean)),
+      ],
+      description: task.description || task.notes || "",
+      subtasks: (Array.isArray(task.subtasks) ? task.subtasks : []).map((subtask) => ({
+        id: subtask.id || subtask._id || "",
+        title: subtask.title || subtask.name || subtask.task || "Untitled subtask",
+        status: subtask.status || "",
+        dueDate: subtask.dueDate || subtask.deadline || "",
+        assigneeIds: [
+          ...new Set([
+            ...(Array.isArray(subtask.assigneeIds) ? subtask.assigneeIds : []),
+            ...(subtask.assigneeId ? [subtask.assigneeId] : []),
+            ...(subtask.assignedTo ? [subtask.assignedTo] : []),
+          ].map(String).filter(Boolean)),
+        ],
+      })),
+    };
+    tasks.push(item);
+  };
+  for (const phase of Array.isArray(project.phases) ? project.phases : []) {
+    for (const task of Array.isArray(phase.tasks) ? phase.tasks : []) addTask(task, phase);
+  }
+  for (const task of Array.isArray(project.tasks) ? project.tasks : []) addTask(task, {});
+  for (const task of Array.isArray(project.manualTasks) ? project.manualTasks : []) addTask(task, {});
+  return tasks.slice(0, 160);
+}
+
+async function buildForumProjectAssistantContext(project = {}) {
+  const db = await connectAuthDb();
+  const memberIds = forumProjectMemberIds(project);
+  const taskAssigneeIds = collectProjectTasks(project).flatMap((task) => [
+    ...task.assigneeIds,
+    ...task.subtasks.flatMap((subtask) => subtask.assigneeIds),
+  ]);
+  const userIds = [...new Set([...memberIds, ...taskAssigneeIds].filter((id) => ObjectId.isValid(id)))];
+  const users = userIds.length
+    ? await db.collection("users").find({ _id: { $in: userIds.map((id) => new ObjectId(id)) } }, { projection: { displayName: 1, username: 1, email: 1 } }).toArray()
+    : [];
+  const userMap = new Map(users.map((user) => [String(user._id), user.displayName || user.username || user.email || "User"]));
+  const tasks = collectProjectTasks(project).map((task) => ({
+    ...task,
+    dueDateKey: projectDateKey(task.dueDate),
+    assignees: task.assigneeIds.map((id) => userMap.get(String(id)) || String(id)),
+    subtasks: task.subtasks.map((subtask) => ({
+      ...subtask,
+      dueDateKey: projectDateKey(subtask.dueDate),
+      assignees: subtask.assigneeIds.map((id) => userMap.get(String(id)) || String(id)),
+    })),
+  }));
+  return {
+    today: istDateKey(new Date()),
+    project: {
+      id: project.id,
+      name: project.name,
+      code: project.code || "",
+      client: project.client || project.clientName || "",
+      status: project.status || "",
+      manager: userMap.get(String(project.managerId || "")) || "",
+      progress: project.progress || project.completion || "",
+      startDate: project.startDate || "",
+      dueDate: project.dueDate || project.deadline || project.endDate || "",
+      location: project.location || "",
+    },
+    members: memberIds.map((id) => ({ id, name: userMap.get(String(id)) || id })),
+    tasks,
+    activity: Array.isArray(project.activity) ? project.activity.slice(-20) : [],
+    notes: Array.isArray(project.notes) ? project.notes.slice(-20) : [],
+  };
+}
+
+function buildLoopFallbackAnswer(question = "", context = {}) {
+  const today = context.today;
+  const wantsDueToday = /\b(due today|today|todays)\b/i.test(question);
+  const matchingTasks = wantsDueToday
+    ? (context.tasks || []).filter((task) => task.dueDateKey === today || task.subtasks.some((subtask) => subtask.dueDateKey === today))
+    : (context.tasks || []).slice(0, 12);
+  if (!matchingTasks.length && wantsDueToday) return `**${context.project?.name || "This project"}** has **no tasks due today**.`;
+  if (!matchingTasks.length) return `I could not find task data for **${context.project?.name || "this project"}** yet.`;
+  const lines = [`**${wantsDueToday ? "Tasks due today" : "Project task snapshot"}** for **${context.project?.name || "this project"}**:`];
+  matchingTasks.slice(0, 12).forEach((task, index) => {
+    lines.push(`${index + 1}. **${task.title}**`);
+    lines.push(`   - **Status:** ${task.status || "Not set"} | **Priority:** ${task.priority || "Not set"} | **Due:** ${task.dueDate || "Not set"}`);
+    if (task.phase) lines.push(`   - **Phase:** ${task.phase}`);
+    if (task.assignees?.length) lines.push(`   - **Assignee:** ${task.assignees.join(", ")}`);
+    const dueSubtasks = wantsDueToday ? task.subtasks.filter((subtask) => subtask.dueDateKey === today) : task.subtasks.slice(0, 3);
+    dueSubtasks.forEach((subtask) => lines.push(`   - **Subtask:** ${subtask.title} (${subtask.status || "Not set"})`));
+  });
+  return lines.join("\n");
+}
+
+async function askLoopProjectAssistant({ question, context }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { answer: buildLoopFallbackAnswer(question, context), model: "local-project-context", tier: "local" };
+  const routing = routeClaudeModel(question, 1, "auto");
+  const model = modelIdForTier(routing.tier);
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: routing.tier === "haiku" ? 1200 : 2200,
+      temperature: 0.1,
+      system: [
+        "You are Loop, the project assistant inside UIPL Loop chat.",
+        "Answer only from the supplied linked project JSON.",
+        "Use concise chat-friendly formatting with **bold labels** and clear bullets.",
+        "For task lists include title, status, priority, assignee, due date, phase, and relevant subtasks when available.",
+        "If the project data does not contain the answer, say what is missing instead of guessing.",
+        "Do not mention JSON, prompts, Claude, or implementation details.",
+      ].join(" "),
+      messages: [{
+        role: "user",
+        content: `Linked project data:\n${JSON.stringify(context, null, 2)}\n\nUser asked:\n${question.replace(/(^|\s)@loop\b/ig, "").trim() || "Give me the project summary."}`,
+      }],
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error?.message || `Anthropic API request failed with status ${response.status}`);
+  const answer = (payload.content || []).filter((block) => block.type === "text").map((block) => block.text).join("\n").trim();
+  return { answer: answer || buildLoopFallbackAnswer(question, context), model: payload.model || model, tier: routing.tier };
+}
+
+function broadcastForumLoopTyping(conversation = {}, typing = false) {
+  const recipients = conversation.participantIds || [];
+  if (!recipients.length) return;
+  broadcastForumPayload(recipients, {
+    type: "forum:loopTyping",
+    conversationId: conversation._id,
+    typing: Boolean(typing),
+    assistant: { id: "loop", name: "Loop" },
+  });
+}
+
+async function createForumLoopAssistantMessage({ req, conversation, text, assistantPayload = null }) {
+  const db = await connectAuthDb();
+  const now = new Date();
+  const encrypted = encryptForumText(text);
+  const recipientIds = conversation.participantIds || [];
+  const message = {
+    conversationId: conversation._id,
+    type: conversation.type,
+    senderId: req.authUser.id,
+    recipientIds,
+    encrypted,
+    loopAssistant: true,
+    assistant: { id: "loop", name: "Loop" },
+    assistantPayload,
+    createdAt: now,
+    readBy: {},
+    deliveredTo: {},
+  };
+  const result = await db.collection("forumMessages").insertOne(message);
+  const saved = { ...message, _id: result.insertedId };
+  await db.collection("forumConversations").updateOne(
+    { _id: conversation._id },
+    {
+      $set: {
+        updatedAt: now,
+        lastMessage: {
+          id: String(result.insertedId),
+          senderId: req.authUser.id,
+          encrypted,
+          loopAssistant: true,
+          assistant: message.assistant,
+          createdAt: now,
+        },
+      },
+    }
+  );
+  const serialized = await serializeForumMessage(saved, req.authUser.id);
+  broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized });
+  return serialized;
+}
+
+async function createLoopProjectAssistantReply({ req, conversation, question }) {
+  if (conversation.type !== "group" || conversation.groupKind !== "project" || !conversation.projectId) return null;
+  const project = projectDashboardConfig.projects.find((item) => item.id === conversation.projectId && item.status !== "archived");
+  if (!project) return null;
+  if (!canViewProject(project, req)) return null;
+  broadcastForumLoopTyping(conversation, true);
+  const context = await buildForumProjectAssistantContext(project);
+  try {
+    const claude = await askLoopProjectAssistant({ question, context });
+    return await createForumLoopAssistantMessage({
+      req,
+      conversation,
+      text: claude.answer,
+      assistantPayload: { projectId: project.id, projectName: project.name, model: claude.model, tier: claude.tier },
+    });
+  } catch (error) {
+    console.error("Loop project assistant error:", error);
+    return await createForumLoopAssistantMessage({
+      req,
+      conversation,
+      text: `I could not reach the project assistant right now, but I can still read **${project.name}** here. Try again in a moment.`,
+      assistantPayload: { projectId: project.id, projectName: project.name, error: true },
+    });
+  } finally {
+    broadcastForumLoopTyping(conversation, false);
+  }
 }
 
 app.get("/forum/bootstrap", async (req, res) => {
@@ -16484,7 +16719,15 @@ app.post("/forum/conversations/:id/messages", async (req, res) => {
       text,
       attachment
     });
-    res.json({ message });
+    let assistantMessage = null;
+    if (!attachment && shouldTriggerLoopAssistant(text)) {
+      const db = await connectAuthDb();
+      const conversation = req.params.id === FORUM_GROUP_ID
+        ? await ensureForumGroupConversation(db)
+        : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
+      if (conversation) assistantMessage = await createLoopProjectAssistantReply({ req, conversation, question: text });
+    }
+    res.json({ message, assistantMessage });
   } catch (error) {
     console.error("Forum send error:", error);
     res.status(error.status || 500).json({ error: error.message });

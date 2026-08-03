@@ -491,6 +491,43 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
   });
 }
 
+function renderLoopAssistantText(text) {
+  const renderInline = (line, lineIndex) => {
+    const parts = String(line || "").split(/(\*\*[^*]+\*\*)/g).filter((part) => part !== "");
+    return parts.map((part, partIndex) => {
+      if (/^\*\*[^*]+\*\*$/.test(part)) {
+        return <strong key={`${lineIndex}-${partIndex}`} className="font-black text-[#0f172a]">{part.slice(2, -2)}</strong>;
+      }
+      return <span key={`${lineIndex}-${partIndex}`}>{part}</span>;
+    });
+  };
+  return String(text || "")
+    .split(/\n+/)
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line, index) => {
+      const bullet = line.match(/^[-*]\s+(.+)$/);
+      const numbered = line.match(/^(\d+)\.\s+(.+)$/);
+      if (bullet) {
+        return (
+          <div key={index} className="flex gap-2">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" />
+            <p className="min-w-0 flex-1">{renderInline(bullet[1], index)}</p>
+          </div>
+        );
+      }
+      if (numbered) {
+        return (
+          <div key={index} className="flex gap-2">
+            <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-[#e8f7ef] px-1 text-[10px] font-black text-[#16a34a]">{numbered[1]}</span>
+            <p className="min-w-0 flex-1">{renderInline(numbered[2], index)}</p>
+          </div>
+        );
+      }
+      return <p key={index}>{renderInline(line, index)}</p>;
+    });
+}
+
 function getMessageStatus(message, selectedConversation, currentUserId, onlineUserIds = []) {
   if (!message || message.senderId !== currentUserId) return null;
   const readBy = message.readBy || {};
@@ -920,7 +957,7 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
             </button>
             <GroupAvatar group={group} className="mx-auto h-24 w-24" iconClassName="h-10 w-10" />
             <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">{group.name || "Loop Group"}</h2>
-            <p className="mt-1 text-center text-sm font-semibold text-[#22c55e]">{members.length} members · {onlineUserIds.length} online</p>
+            <p className="mt-1 text-center text-sm font-semibold text-[#22c55e]">{members.length} members · {members.filter((member) => online.has(member.id)).length} online</p>
             {group.groupKind === "project" && group.project && (
               <p className={`mt-2 truncate text-center text-xs font-semibold ${muted}`}>Project: {group.project.name}</p>
             )}
@@ -1137,7 +1174,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
             </>
           )}
         </div>
-        <p className="mt-1 text-center text-xs font-semibold text-[#22c55e]">{groupParticipants.length} members · {onlineUserIds.length} online</p>
+        <p className="mt-1 text-center text-xs font-semibold text-[#22c55e]">{groupParticipants.length} members · {groupParticipants.filter((member) => online.has(member.id)).length} online</p>
         {group?.groupKind === "project" && group.project && (
           <p className={`mt-2 truncate text-center text-xs font-semibold ${muted}`}>Project: {group.project.name}</p>
         )}
@@ -1377,6 +1414,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [unreadByConversation, setUnreadByConversation] = useState({});
   const [typingByConversation, setTypingByConversation] = useState({});
+  const [loopTypingByConversation, setLoopTypingByConversation] = useState({});
   const [sidebarUser, setSidebarUser] = useState(null);
   const [mobileProfileUser, setMobileProfileUser] = useState(null);
   const [mobileGroupInfoOpen, setMobileGroupInfoOpen] = useState(false);
@@ -1870,14 +1908,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   }, [composer, selectedIsGroup]);
   const mentionOptions = useMemo(() => {
     if (mentionQuery === null) return [];
-    return groupParticipants
+    const loopOption = selectedConversation?.groupKind === "project" && (!mentionQuery || "loop".includes(mentionQuery))
+      ? [{ id: "loop-assistant", displayName: "Loop", username: "loop", loopAssistant: true }]
+      : [];
+    const people = groupParticipants
       .filter((user) => user.id !== currentUser?.id)
       .filter((user) => {
         const searchable = [user.displayName, user.username, mentionHandleForUser(user)].join(" ").toLowerCase();
         return !mentionQuery || searchable.includes(mentionQuery);
       })
       .slice(0, 8);
-  }, [currentUser?.id, groupParticipants, mentionQuery]);
+    return [...loopOption, ...people].slice(0, 8);
+  }, [currentUser?.id, groupParticipants, mentionQuery, selectedConversation?.groupKind]);
   const createGroupUsers = useMemo(() => {
     const term = createGroupSearch.trim().toLowerCase();
     return users
@@ -2018,6 +2060,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
         const isIncomingMessage = payload.message?.senderId !== currentUser?.id;
         const isSelectedConversation = sameConversation(payload.conversationId, selectedId);
         const isVisibleSelectedConversation = isSelectedConversation && document.visibilityState === "visible";
+        if (payload.message?.loopAssistant) {
+          setLoopTypingByConversation((current) => ({ ...current, [payload.conversationId]: false }));
+        }
         if (isIncomingMessage && !isVisibleSelectedConversation) {
           playForumNotificationSound();
         }
@@ -2171,6 +2216,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
         };
         if (payload.typing) applyTyping();
         else typingClearTimersRef.current[payload.conversationId] = window.setTimeout(applyTyping, 900);
+      }
+      if (payload.type === "forum:loopTyping") {
+        setLoopTypingByConversation((current) => ({
+          ...current,
+          [payload.conversationId]: Boolean(payload.typing),
+        }));
       }
       if (payload.type === "forum:cleared") {
         setConversations((current) => current.map((item) => (
@@ -2439,6 +2490,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     setReplyToMessageTarget(null);
     window.setTimeout(() => composerRef.current?.focus(), 0);
     emitTyping(false);
+    const shouldAskLoop = selectedConversation?.groupKind === "project" && /(^|\s)@loop\b/i.test(text) && !giphy?.url;
+    if (shouldAskLoop) {
+      setLoopTypingByConversation((current) => ({ ...current, [selectedId]: true }));
+    }
     optimisticMessageCounterRef.current += 1;
     const tempMessage = {
       id: `temp-${optimisticMessageCounterRef.current}`,
@@ -2477,17 +2532,25 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
         body: JSON.stringify({ text, replyToMessage: currentReply, giphy }),
       });
       if (data.message) {
+        const nextMessages = [
+          { ...data.message, clientKey: tempMessage.clientKey, animate: false },
+          ...(data.assistantMessage ? [{ ...data.assistantMessage, animate: true }] : []),
+        ];
+        if (data.assistantMessage) {
+          setLoopTypingByConversation((current) => ({ ...current, [selectedId]: false }));
+        }
         setConversations((current) => current.map((item) => (
           item.id === selectedId
-            ? { ...item, lastMessage: data.message, updatedAt: data.message.createdAt }
+            ? { ...item, lastMessage: data.assistantMessage || data.message, updatedAt: (data.assistantMessage || data.message).createdAt }
             : item
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
         setMessages((current) => [
-          ...current.filter((message) => message.id !== tempMessage.id && message.id !== data.message.id),
-          { ...data.message, clientKey: tempMessage.clientKey, animate: false },
+          ...current.filter((message) => message.id !== tempMessage.id && message.id !== data.message.id && message.id !== data.assistantMessage?.id),
+          ...nextMessages,
         ]);
       }
     } catch (error) {
+      if (shouldAskLoop) setLoopTypingByConversation((current) => ({ ...current, [selectedId]: false }));
       setMessages((current) => current.filter((message) => message.id !== tempMessage.id));
       setComposer(text);
       window.setTimeout(() => composerRef.current?.focus(), 0);
@@ -3744,6 +3807,45 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           </div>
                         );
                       }
+                      if (message.loopAssistant) {
+                        return (
+                          <div key={message.clientKey || message.id} className="min-w-0 mt-4 first:mt-0">
+                            {showDate && (
+                              <div className="sticky top-2 z-10 my-2 flex justify-center">
+                                <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
+                                  {formatMessageDate(message.createdAt)}
+                                </span>
+                              </div>
+                            )}
+                            <div
+                              ref={(node) => {
+                                if (node) messageRefs.current.set(message.id, node);
+                                else messageRefs.current.delete(message.id);
+                              }}
+                              className="forum-msg-pop flex min-w-0 items-start gap-2 sm:gap-3"
+                            >
+                              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white shadow-[0_10px_24px_rgba(16,185,129,0.22)]">
+                                <Sparkles className="h-4 w-4" />
+                              </span>
+                              <article className={`max-w-[92%] overflow-hidden rounded-[24px] rounded-bl-[7px] border p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)] sm:max-w-[78%] ${darkMode ? "border-white/10 bg-[#f8fafc] text-[#14213d]" : "border-[#e5edf8] bg-white text-[#14213d]"}`}>
+                                <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-black text-[#0f172a]">Loop assistant</span>
+                                      <span className="rounded-full bg-[#e8f7ef] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-[#16a34a]">Project</span>
+                                    </div>
+                                    <p className="truncate text-xs text-[#7b8794]">{message.assistantPayload?.projectName || selectedConversation?.project?.name || selectedConversation?.name || "Project"}</p>
+                                  </div>
+                                  <span className="shrink-0 text-[10px] font-semibold text-[#98a2b3]">{formatTime(message.createdAt)}</span>
+                                </div>
+                                <div className="space-y-2 text-sm leading-6 text-[#334155]">
+                                  {renderLoopAssistantText(message.text)}
+                                </div>
+                              </article>
+                            </div>
+                          </div>
+                        );
+                      }
                       const mine = message.senderId === getStoredAuth().user?.id;
                       const groupedWithNext = nextMessage?.senderId === message.senderId;
                       const groupedWithPrevious = !showDate && previousMessage?.senderId === message.senderId;
@@ -4061,6 +4163,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       </div>
                     </div>
                   )}
+                  {loopTypingByConversation[selectedId] && (
+                    <div className="forum-msg-pop mt-3 flex items-start gap-2 sm:gap-3">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white shadow-[0_10px_24px_rgba(16,185,129,0.22)]">
+                        <Sparkles className="h-4 w-4" />
+                      </span>
+                      <div className={`flex items-center gap-3 rounded-[20px] rounded-bl-[7px] border px-4 py-3 shadow-[0_14px_36px_rgba(15,23,42,0.07)] ${darkMode ? "border-white/10 bg-[#f8fafc] text-[#14213d]" : "border-[#e5edf8] bg-white text-[#14213d]"}`} aria-label="Loop is thinking">
+                        <span className="text-xs font-black text-[#0f172a]">Loop is thinking</span>
+                        <span className="flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#10b981]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb] [animation-delay:0.15s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#10b981] [animation-delay:0.3s]" />
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   <div ref={endRef} />
                 </div>
               </section>
@@ -4073,13 +4190,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       const active = index === Math.min(activeMentionIndex, mentionOptions.length - 1);
                       return (
                       <button key={user.id} type="button" onMouseEnter={() => setActiveMentionIndex(index)} onClick={() => selectMention(user)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${active ? darkMode ? "bg-white/12" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
-                        <span className="relative shrink-0">
-                          <UserAvatar user={user} name={user.displayName} className="h-9 w-9" />
-                          <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 ${darkMode ? "border-[#1c1f26]" : "border-white"} ${online.has(user.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
-                        </span>
+                        {user.loopAssistant ? (
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white shadow-[0_10px_22px_rgba(16,185,129,0.18)]">
+                            <Sparkles className="h-4 w-4" />
+                          </span>
+                        ) : (
+                          <span className="relative shrink-0">
+                            <UserAvatar user={user} name={user.displayName} className="h-9 w-9" />
+                            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 ${darkMode ? "border-[#1c1f26]" : "border-white"} ${online.has(user.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
+                          </span>
+                        )}
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-semibold">{user.displayName || user.username || "User"}</span>
-                          <span className={`block truncate text-xs ${muted}`}>@{mentionHandleForUser(user)}</span>
+                          <span className={`block truncate text-xs ${muted}`}>{user.loopAssistant ? "Project assistant" : `@${mentionHandleForUser(user)}`}</span>
                         </span>
                         <AtSign className={`h-4 w-4 shrink-0 ${active ? "text-[#2563eb]" : muted}`} />
                       </button>

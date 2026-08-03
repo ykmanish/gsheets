@@ -579,14 +579,25 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
     const monthKeys = Object.keys(datesByMonth).sort();
 
+    let currentY = 12;
+
     monthKeys.forEach((month, index) => {
-      if (index > 0) doc.addPage("a4", "landscape");
+      if (index > 0) {
+        const finalY = doc.lastAutoTable?.finalY || currentY;
+        // Landscape A4 height is 210mm. If we are below 130mm, force new page.
+        if (finalY > 130) {
+          doc.addPage("a4", "landscape");
+          currentY = 12;
+        } else {
+          currentY = finalY + 15;
+        }
+      }
       
       const monthDates = datesByMonth[month];
       
       doc.setFont("Geist", "bold");
       doc.setFontSize(16);
-      doc.text("Attendance Report", 14, 12);
+      doc.text("Attendance Report", 14, currentY);
       doc.setFont("Geist", "normal");
       doc.setFontSize(10);
       
@@ -594,7 +605,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         ? `${formatDateLabel(monthDates[0])} - ${formatDateLabel(monthDates[monthDates.length - 1])}`
         : formatDateLabel(monthDates[0]);
       
-      doc.text(`Date Range: ${dateRangeLabel}`, 14, 18);
+      doc.text(`Date Range: ${dateRangeLabel}`, 14, currentY + 6);
 
       const displayEmployees = activeEmployees.filter(emp => {
         const name = emp.displayName || emp.username || "";
@@ -640,7 +651,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       footRow.push((grandTotalMinutes / 60).toFixed(1));
 
       autoTable(doc, {
-        startY: 23,
+        startY: currentY + 11,
         margin: { top: 12, bottom: 12, left: 10, right: 10 },
         showFoot: "lastPage",
         head: head,
@@ -660,7 +671,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       });
     });
 
-    doc.save(`Attendance_Report.pdf`);
+    const safeLabel = attendanceDateRangeLabel.replace(/\s+/g, '_').replace(/-/g, 'to');
+    doc.save(`Attendance_Report_${safeLabel}.pdf`);
   };
   const currentEmployeeProfile = employees.find((employee) => employee.id === user?.id);
   const remoteWorkEnabled = Boolean(currentEmployeeProfile?.remoteWorkEnabled || data?.remoteWorkEnabled || user?.remoteWorkEnabled);

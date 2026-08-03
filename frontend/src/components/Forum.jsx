@@ -1052,6 +1052,65 @@ function LoopAssistantProfilePanel({ darkMode, assistant, currentUser, muted, em
   );
 }
 
+function MobileLoopAssistantProfileSheet({ darkMode, assistant, currentUser, muted, onClose, onToggle, onAvatarUpload, uploading = false, saving = false }) {
+  const softBlock = darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]";
+  const canManage = Boolean(currentUser?.isSuperAdmin);
+  const enabled = assistant?.enabled !== false;
+  return (
+    <MobileBottomSheetFrame darkMode={darkMode} onClose={onClose} label="Loop profile">
+      {(closeSheet) => (
+        <>
+        <div className="mx-auto mt-3 h-1.5 w-11 rounded-full bg-white/20" />
+        <div className="max-h-[calc(88vh-16px)] overflow-y-auto px-7 pb-8 pt-6">
+          <div className="relative">
+            <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close Loop profile">
+              <X className="h-4 w-4" />
+            </button>
+            <div className="relative mx-auto w-24">
+              <LoopAssistantAvatar assistant={assistant} className="h-24 w-24" iconClassName="h-10 w-10" />
+              {canManage && (
+                <label className={`absolute bottom-0 right-0 grid h-9 w-9 cursor-pointer place-items-center rounded-full ${darkMode ? "bg-[#23262d] text-white" : "bg-white text-[#14213d]"} shadow-sm`}>
+                  {uploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                  <input type="file" accept="image/*" className="hidden" onChange={(event) => onAvatarUpload?.(event.target.files?.[0])} />
+                </label>
+              )}
+            </div>
+            <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">Loop</h2>
+            <p className={`mt-1 truncate text-center text-sm ${muted}`}>@loop</p>
+            <div className="mt-3 flex justify-center">
+              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${enabled ? "bg-[#dcfce7] text-[#16a34a]" : "bg-slate-100 text-slate-500"}`}>
+                {enabled ? "Available everywhere" : "Disabled"}
+              </span>
+            </div>
+          </div>
+          {canManage && (
+            <button type="button" disabled={saving} onClick={() => onToggle?.(!enabled)} className={`mt-8 flex w-full items-center justify-between gap-3 rounded-[14px] px-4 py-4 text-sm font-semibold ${softBlock}`}>
+              <span>{enabled ? "Turn Loop off" : "Turn Loop on"}</span>
+              <span className={`relative h-7 w-12 rounded-full transition ${enabled ? "bg-[#22c55e]" : "bg-slate-300"}`}>
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${enabled ? "left-6" : "left-1"}`} />
+              </span>
+            </button>
+          )}
+          <PanelSection title="Assistant profile" muted={muted}>
+            {[
+              ["Name", "Loop"],
+              ["Username", "@loop"],
+              ["Role", assistant?.title || "Project assistant"],
+              ["Access", enabled ? "Responds in project groups" : "Hidden from mentions and disabled"],
+            ].map(([label, value]) => (
+              <div key={label} className="py-1.5">
+                <p className={`text-xs ${muted}`}>{label}</p>
+                <p className="mt-0.5 min-w-0 break-words text-sm font-bold">{value}</p>
+              </div>
+            ))}
+          </PanelSection>
+        </div>
+        </>
+      )}
+    </MobileBottomSheetFrame>
+  );
+}
+
 function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds, muted, onClose, onSelectUser, onRequestDeleteGroup, onRequestRemoveGroupForMe, currentUser }) {
   const adminIds = new Set((group?.adminIds || []).map(String));
   const canManage = Boolean(currentUser?.isSuperAdmin || adminIds.has(String(currentUser?.id || "")));
@@ -3963,7 +4022,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       }
                       if (message.loopAssistant) {
                         const messageLoopProfile = { ...loopAssistant, avatarUrl: message.assistant?.avatarUrl || loopAssistant.avatarUrl };
-                        const mine = message.senderId === getStoredAuth().user?.id;
+                        const mine = message.senderId === getStoredAuth().user?.id && Boolean(message.forwardedFrom);
                         const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
                         const isSelectionMode = selectedMessageIds.length > 0;
                         const isSelectedMessage = selectedMessageIds.includes(message.id);
@@ -4702,7 +4761,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 )}
             </div>
 
-            {loopProfileOpen ? (
+            {loopProfileOpen && !effectiveMobileViewport ? (
               <LoopAssistantProfilePanel
                 darkMode={darkMode}
                 assistant={loopAssistant}
@@ -4763,6 +4822,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
             onClose={() => setMobileProfileUser(null)}
             onDirect={startDirectFromProfile}
             activeDirectUserId={selectedConversation?.type === "direct" ? selectedOtherUser?.id : null}
+          />
+        )}
+        {loopProfileOpen && effectiveMobileViewport && (
+          <MobileLoopAssistantProfileSheet
+            darkMode={darkMode}
+            assistant={loopAssistant}
+            currentUser={currentUser}
+            muted={muted}
+            onClose={() => setLoopProfileOpen(false)}
+            onToggle={updateLoopAssistantEnabled}
+            onAvatarUpload={uploadLoopAssistantAvatar}
+            uploading={uploadingLoopAvatar}
+            saving={savingLoopAssistant}
           />
         )}
         {mobileGroupInfoOpen && selectedConversation?.type === "group" && (

@@ -12585,10 +12585,8 @@ async function sendProjectGroupDailyReport(conversationId) {
   let manpowerSection = "";
   try {
     const dmr = await readDmrDashboard(date, { ensureToday: false, force: false });
-    const projectSiteNames = [project.name, project.code, ...(project.aliases || [])].map((s) => (s || "").toLowerCase().trim()).filter(Boolean);
     const matchingRecords = (dmr.today?.records || []).filter((r) => {
-      const site = (r.site || "").toLowerCase().trim();
-      return projectSiteNames.some((n) => site.includes(n) || n.includes(site));
+      return dmrProjectMatchesSite(project, project.dmr || {}, r.site);
     });
     if (matchingRecords.length) {
       const totalActual = matchingRecords.reduce((s, r) => s + (Number(r.actual) || 0), 0);
@@ -12609,13 +12607,7 @@ async function sendProjectGroupDailyReport(conversationId) {
   let stockSection = "";
   try {
     const stockDoc = await db.collection("platformSettings").findOne({ _id: "project-stock-sites" });
-    const stockSites = (stockDoc?.sites || []).filter((s) => {
-      const siteName = (s.name || "").toLowerCase();
-      return [project.name, project.code, ...(project.aliases || [])].some((n) => {
-        const pn = (n || "").toLowerCase();
-        return siteName.includes(pn) || pn.includes(siteName);
-      });
-    });
+    const stockSites = (stockDoc?.sites || []).filter((s) => stockSiteMatchesProject(s, project));
     let lowStockItems = [];
     for (const site of stockSites) {
       try {
@@ -16157,10 +16149,8 @@ async function buildForumProjectAssistantContext(project = {}) {
   let manpower = null;
   try {
     const dmr = await readDmrDashboard(istDateKey(new Date()), { ensureToday: false, force: false });
-    const projectSiteNames = [project.name, project.code, ...(project.aliases || [])].map((s) => (s || "").toLowerCase().trim()).filter(Boolean);
     const matchingRecords = (dmr.today?.records || []).filter((r) => {
-      const site = (r.site || "").toLowerCase().trim();
-      return projectSiteNames.some((n) => site.includes(n) || n.includes(site));
+      return dmrProjectMatchesSite(project, project.dmr || {}, r.site);
     }).slice(0, 50);
     if (matchingRecords.length) {
       const todayActual = matchingRecords.reduce((s, r) => s + (Number(r.actual) || 0), 0);
@@ -16179,13 +16169,7 @@ async function buildForumProjectAssistantContext(project = {}) {
   let stock = null;
   try {
     const stockDoc = await db.collection("platformSettings").findOne({ _id: "project-stock-sites" });
-    const stockSites = (stockDoc?.sites || []).filter((s) => {
-      const siteName = (s.name || "").toLowerCase();
-      return [project.name, project.code, ...(project.aliases || [])].some((n) => {
-        const pn = (n || "").toLowerCase();
-        return siteName.includes(pn) || pn.includes(siteName);
-      });
-    });
+    const stockSites = (stockDoc?.sites || []).filter((s) => stockSiteMatchesProject(s, project));
     let allItems = [];
     let lowStockItems = [];
     for (const site of stockSites) {

@@ -12598,10 +12598,10 @@ async function sendProjectGroupDailyReport(conversationId) {
         acc[key].actual += Number(r.actual) || 0;
         return acc;
       }, {}));
-      manpowerSection = `\n\n👷 **Manpower Today**\n| Trade | Planned | Actual |\n|---|---|---|\n${byTrade.map((t) => `| ${t.trade} | ${t.planned} | ${t.actual} |`).join("\n")}\n| **Total** | **${totalPlanned}** | **${totalActual}** |`;
+      manpowerSection = `\n\n**Manpower Today**\n${byTrade.map((t, i) => `${i + 1}. **${t.trade}** — Planned: ${t.planned} | Actual: ${t.actual}`).join("\n")}\n\n**Total** — Planned: ${totalPlanned} | Actual: ${totalActual}`;
     }
   } catch (err) { console.error("Daily report DMR error:", err.message); }
-  if (!manpowerSection) manpowerSection = "\n\n👷 **Manpower Today**\nNo manpower data available for this project today.";
+  if (!manpowerSection) manpowerSection = "\n\n**Manpower Today**\nNo manpower data available for this project today.";
   
   // Stock alerts
   let stockSection = "";
@@ -12609,32 +12609,38 @@ async function sendProjectGroupDailyReport(conversationId) {
     const stockDoc = await db.collection("platformSettings").findOne({ _id: "project-stock-sites" });
     const stockSites = (stockDoc?.sites || []).filter((s) => stockSiteMatchesProject(s, project));
     let lowStockItems = [];
+    let zeroQuantityCount = 0;
     for (const site of stockSites) {
       try {
         const parsed = await buildStockSiteDashboard(site);
-        lowStockItems.push(...(parsed.items || []).filter((item) => item.quantity <= Math.max(0, item.reorderMin || 0) && item.reorderMin > 0).map((item) => ({ ...item, siteName: site.name })));
+        const items = parsed.items || [];
+        lowStockItems.push(...items.filter((item) => item.quantity <= Math.max(0, item.reorderMin || 0) && item.reorderMin > 0).map((item) => ({ ...item, siteName: site.name })));
+        zeroQuantityCount += items.filter(item => item.quantity <= 0).length;
       } catch (e) { /* skip */ }
     }
     if (lowStockItems.length) {
-      stockSection = `\n\n📦 **Low Stock Alerts** ⚠️\n${lowStockItems.slice(0, 15).map((i) => `• **${i.itemName}**: ${i.quantity} ${i.unit || "units"} remaining (min: ${i.reorderMin})`).join("\n")}`;
-      if (lowStockItems.length > 15) stockSection += `\n• _...and ${lowStockItems.length - 15} more items_`;
+      stockSection = `\n\n**Low Stock Alerts**\n${lowStockItems.slice(0, 15).map((i, idx) => `${idx + 1}. **${i.itemName}**: ${i.quantity} ${i.unit || "units"} remaining (min: ${i.reorderMin})`).join("\n")}`;
+      if (lowStockItems.length > 15) stockSection += `\n...and ${lowStockItems.length - 15} more items`;
     } else {
-      stockSection = "\n\n📦 **Stock Status**\n✅ All stock levels are healthy.";
+      stockSection = "\n\n**Stock Status**\nAll stock levels are healthy.";
+    }
+    if (zeroQuantityCount > 0) {
+      stockSection += `\n\n**Out of Stock:** ${zeroQuantityCount} item${zeroQuantityCount > 1 ? "s" : ""} have 0 or less quantity.`;
     }
   } catch (err) { console.error("Daily report stock error:", err.message); stockSection = ""; }
   
   // Build the report
   const dayLabel = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
-  let report = `📊 **Daily Project Report — ${project.name}**\n🗓 ${dayLabel}`;
+  let report = `**Daily Project Report — ${project.name}**\n${dayLabel}`;
   report += manpowerSection;
   if (startingToday.length) {
-    report += `\n\n🚀 **Tasks Starting Today** (${startingToday.length})\n${startingToday.slice(0, 10).map((t, i) => `${i + 1}. **${t.title}** — ${t.assigneeIds?.length ? "Assigned" : "Unassigned"} · ${t.priority || "Medium"} priority`).join("\n")}`;
+    report += `\n\n**Tasks Starting Today** (${startingToday.length})\n${startingToday.slice(0, 10).map((t, i) => `${i + 1}. **${t.title}** — ${t.assigneeIds?.length ? "Assigned" : "Unassigned"} · ${t.priority || "Medium"} priority`).join("\n")}`;
     if (startingToday.length > 10) report += `\n_...and ${startingToday.length - 10} more_`;
   } else {
-    report += "\n\n🚀 **Tasks Starting Today**\nNo tasks scheduled to start today.";
+    report += "\n\n**Tasks Starting Today**\nNo tasks scheduled to start today.";
   }
   if (overdueTasks.length) {
-    report += `\n\n⚠️ **Delayed Tasks** (${overdueTasks.length})\n${overdueTasks.slice(0, 10).map((t, i) => {
+    report += `\n\n**Delayed Tasks** (${overdueTasks.length})\n${overdueTasks.slice(0, 10).map((t, i) => {
       const days = Math.ceil((new Date(date) - new Date(t.dueDate)) / 86400000);
       return `${i + 1}. **${t.title}** — ${days} day${days > 1 ? "s" : ""} overdue · Due: ${t.dueDate}`;
     }).join("\n")}`;

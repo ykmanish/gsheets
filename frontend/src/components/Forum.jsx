@@ -492,6 +492,28 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
 }
 
 function renderLoopAssistantText(text) {
+  const badgeClassFor = (label, value) => {
+    const key = `${label} ${value}`.toLowerCase();
+    if (/status/.test(key)) {
+      if (/done|complete/.test(key)) return "bg-[#dcfce7] text-[#15803d]";
+      if (/block|risk|delay|overdue/.test(key)) return "bg-[#ffe4e6] text-[#be123c]";
+      if (/progress|active|working/.test(key)) return "bg-[#dbeafe] text-[#1d4ed8]";
+      return "bg-[#f1f5f9] text-[#475569]";
+    }
+    if (/priority/.test(key)) {
+      if (/critical|urgent/.test(key)) return "bg-[#f3e8ff] text-[#7e22ce]";
+      if (/high/.test(key)) return "bg-[#fee2e2] text-[#dc2626]";
+      if (/medium/.test(key)) return "bg-[#fef3c7] text-[#b45309]";
+      return "bg-[#dcfce7] text-[#15803d]";
+    }
+    if (/due|deadline|target|date/.test(key)) {
+      if (/not set|not specified|no /.test(key)) return "bg-[#f1f5f9] text-[#64748b]";
+      return "bg-[#e0f2fe] text-[#0369a1]";
+    }
+    if (/assignee|manager/.test(key)) return "bg-[#ede9fe] text-[#6d28d9]";
+    if (/phase|health/.test(key)) return "bg-[#ecfdf5] text-[#047857]";
+    return "bg-[#f8fafc] text-[#475569]";
+  };
   const renderInline = (line, lineIndex) => {
     const parts = String(line || "").split(/(\*\*[^*]+\*\*)/g).filter((part) => part !== "");
     return parts.map((part, partIndex) => {
@@ -506,8 +528,20 @@ function renderLoopAssistantText(text) {
     .map((line) => line.trimEnd())
     .filter(Boolean)
     .map((line, index) => {
+      if (/^-{2,}$/.test(line.trim())) return null;
       const bullet = line.match(/^[-*]\s+(.+)$/);
       const numbered = line.match(/^(\d+)\.\s+(.+)$/);
+      const labelMatch = line.replace(/^[-*]\s+/, "").match(/^\*\*?([^:*]+):\*\*?\s*(.+)$/);
+      if (labelMatch) {
+        const label = labelMatch[1].trim();
+        const value = labelMatch[2].trim();
+        return (
+          <div key={index} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-black uppercase tracking-[0.08em] text-[#64748b]">{label}</span>
+            <span className={`max-w-full rounded-full px-2.5 py-1 text-xs font-black leading-none ${badgeClassFor(label, value)} break-words`}>{value}</span>
+          </div>
+        );
+      }
       if (bullet) {
         return (
           <div key={index} className="flex gap-2">
@@ -3824,10 +3858,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               }}
                               className="forum-msg-pop flex min-w-0 items-start gap-2 sm:gap-3"
                             >
-                              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white shadow-[0_10px_24px_rgba(16,185,129,0.22)]">
+                              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white">
                                 <Sparkles className="h-4 w-4" />
                               </span>
-                              <article className={`max-w-[92%] overflow-hidden rounded-[24px] rounded-bl-[7px] border p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)] sm:max-w-[78%] ${darkMode ? "border-white/10 bg-[#f8fafc] text-[#14213d]" : "border-[#e5edf8] bg-white text-[#14213d]"}`}>
+                              <article className={`max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] rounded-bl-[7px] p-4 sm:max-w-[78%] ${darkMode ? "bg-[#f8fafc] text-[#14213d]" : "bg-white text-[#14213d]"}`}>
                                 <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2">
@@ -3838,7 +3872,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   </div>
                                   <span className="shrink-0 text-[10px] font-semibold text-[#98a2b3]">{formatTime(message.createdAt)}</span>
                                 </div>
-                                <div className="space-y-2 text-sm leading-6 text-[#334155]">
+                                <div className="space-y-2 break-words text-sm leading-6 text-[#334155] [overflow-wrap:anywhere]">
                                   {renderLoopAssistantText(message.text)}
                                 </div>
                               </article>

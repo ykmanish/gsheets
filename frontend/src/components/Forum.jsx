@@ -3963,6 +3963,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       }
                       if (message.loopAssistant) {
                         const messageLoopProfile = { ...loopAssistant, avatarUrl: message.assistant?.avatarUrl || loopAssistant.avatarUrl };
+                        const mine = message.senderId === getStoredAuth().user?.id;
                         const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
                         const isSelectionMode = selectedMessageIds.length > 0;
                         const isSelectedMessage = selectedMessageIds.includes(message.id);
@@ -3988,7 +3989,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               onTouchMove={handleMessageTouchMove}
                               onTouchEnd={handleMessageTouchEnd}
                               onTouchCancel={handleMessageTouchEnd}
-                              className={`forum-msg-pop relative flex min-w-0 items-start gap-2 sm:gap-3 transition-transform ${isContextTarget ? "z-[86] scale-[1.01]" : ""} ${isSelectedMessage ? darkMode ? "rounded-[24px] bg-[#123c2c]/70" : "rounded-[24px] bg-[#dff8e8]" : ""}`}
+                              className={`forum-msg-pop relative flex min-w-0 items-start gap-2 sm:gap-3 transition-transform ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "z-[86] scale-[1.01]" : ""} ${isSelectedMessage ? darkMode ? "rounded-[24px] bg-[#123c2c]/70" : "rounded-[24px] bg-[#dff8e8]" : ""}`}
                             >
                               {isSelectionMode && (
                                 <button
@@ -4003,22 +4004,42 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   {isSelectedMessage && <Check className="h-4 w-4" />}
                                 </button>
                               )}
-                              <button type="button" onClick={() => setLoopProfileOpen(true)} className="shrink-0 rounded-full" aria-label="Open Loop profile">
-                                <LoopAssistantAvatar assistant={messageLoopProfile} className="h-8 w-8" iconClassName="h-4 w-4" />
-                              </button>
-                              <article className={`max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] rounded-bl-[7px] p-4 sm:max-w-[78%] ${darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]"}`}>
+                              {!mine && (
+                                <button type="button" onClick={() => setLoopProfileOpen(true)} className="shrink-0 rounded-full" aria-label="Open Loop profile">
+                                  <LoopAssistantAvatar assistant={messageLoopProfile} className="h-8 w-8" iconClassName="h-4 w-4" />
+                                </button>
+                              )}
+                              <article className={`max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] p-4 sm:max-w-[78%] ${mine ? "rounded-br-[7px]" : "rounded-bl-[7px]"} ${darkMode ? mine ? "bg-[#181a20] text-white" : "bg-[#242730] text-white" : mine ? "bg-[#e5f1ff] text-[#14213d]" : "bg-white text-[#14213d]"}`}>
                                 <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
                                   <div className="min-w-0">
+                                    {message.forwardedFrom && (
+                                      <div className={`mb-1 text-[11px] font-medium ${darkMode ? "text-white/55" : "text-[#64748b]"}`}>
+                                        Forwarded from {message.forwardedFrom.senderName || "User"}
+                                      </div>
+                                    )}
                                     <div className="flex items-center gap-2">
                                       <button type="button" onClick={() => setLoopProfileOpen(true)} className={`text-left text-sm font-black hover:underline hover:underline-offset-2 ${darkMode ? "text-white" : "text-[#0f172a]"}`}>Loop assistant</button>
                                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${darkMode ? "bg-emerald-400/15 text-emerald-300" : "bg-[#e8f7ef] text-[#16a34a]"}`}>Project</span>
                                     </div>
                                     <p className={`truncate text-xs ${darkMode ? "text-white/60" : "text-[#7b8794]"}`}>{message.assistantPayload?.projectName || selectedConversation?.project?.name || selectedConversation?.name || "Project"}</p>
                                   </div>
-                                  <span className={`shrink-0 text-[10px] font-semibold ${darkMode ? "text-white/55" : "text-[#98a2b3]"}`}>{formatTime(message.createdAt)}</span>
                                 </div>
                                 <div className={`space-y-2 break-words text-sm leading-6 [overflow-wrap:anywhere] ${darkMode ? "text-white/85" : "text-[#334155]"}`}>
                                   {renderLoopAssistantText(message.text, darkMode)}
+                                </div>
+                                <div className={`mt-2 flex justify-end`}>
+                                  <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold ${darkMode ? "text-white/55" : "text-[#71809a]"}`}>
+                                    <span>{formatTime(message.createdAt)}</span>
+                                    {mine && (
+                                      getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
+                                        <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+                                      ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
+                                        <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
+                                      ) : (
+                                        <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
+                                      )
+                                    )}
+                                  </span>
                                 </div>
                               </article>
                             </div>

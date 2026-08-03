@@ -15864,7 +15864,7 @@ function broadcastForumPayload(userIds, payload) {
   }
 }
 
-async function createForumMessage({ req, conversationId, text, forwardedFrom = null, attachment = null }) {
+async function createForumMessage({ req, conversationId, text, forwardedFrom = null, attachment = null, loopAssistant = false, assistant = null, assistantPayload = null }) {
   const db = await connectAuthDb();
   const now = new Date();
   let conversation = await db.collection("forumConversations").findOne({ _id: conversationId });
@@ -15902,6 +15902,9 @@ async function createForumMessage({ req, conversationId, text, forwardedFrom = n
     replyToMessage: req.body?.replyToMessage || null,
     forwardedFrom,
     attachment,
+    loopAssistant: Boolean(loopAssistant),
+    assistant: assistant || null,
+    assistantPayload: assistantPayload || null,
   };
   const result = await db.collection("forumMessages").insertOne(message);
   const saved = { ...message, _id: result.insertedId };
@@ -16907,7 +16910,16 @@ app.post("/forum/messages/forward", async (req, res) => {
           senderName: sourceSender?.displayName || sourceSender?.username || "User",
           forwardedAt: new Date(),
         };
-        created.push(await createForumMessage({ req, conversationId: target.conversationId, text, forwardedFrom, attachment: source.attachment || null }));
+        created.push(await createForumMessage({
+          req,
+          conversationId: target.conversationId,
+          text,
+          forwardedFrom,
+          attachment: source.attachment || null,
+          loopAssistant: Boolean(source.loopAssistant),
+          assistant: source.assistant || null,
+          assistantPayload: source.assistantPayload || null,
+        }));
       }
     }
 

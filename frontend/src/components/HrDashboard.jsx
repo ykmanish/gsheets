@@ -7,6 +7,9 @@ import { BadgeCheck, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, 
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { GeistRegularBase64 } from "../lib/geistFont";
 
 async function api(path) {
   const response = await fetch(`${API_URL}${path}`);
@@ -408,7 +411,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceSettingsExpanded, setAttendanceSettingsExpanded] = useState(false);
   const [attendanceSearchResults, setAttendanceSearchResults] = useState([]);
   const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100 });
-  const [attendanceDateFilter, setAttendanceDateFilter] = useState(todayInput());
+  const [attendanceDateFilter, setAttendanceDateFilter] = useState({ startDate: todayInput(), endDate: todayInput() });
   const [todayReportSubmitted, setTodayReportSubmitted] = useState(false);
   const [todayReportExempt, setTodayReportExempt] = useState(false);
   const [todayReportChecking, setTodayReportChecking] = useState(false);
@@ -527,7 +530,138 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const leavePeriodPreview = leaveForm.startDate && leaveForm.endDate ? `${formatDateLabel(leaveForm.startDate)} - ${formatDateLabel(leaveForm.endDate)}` : "Select dates";
   const myLeaveRequests = leaveRequests.filter((request) => data?.canManageHr || request.userId === user?.id);
   const myAttendanceRecords = attendanceRecords.filter((record) => data?.canManageHr || record.userId === user?.id);
-  const filteredAttendanceRecords = myAttendanceRecords.filter((record) => !attendanceDateFilter || record.date === attendanceDateFilter);
+  const filteredAttendanceRecords = myAttendanceRecords.filter((record) => {
+    if (!attendanceDateFilter.startDate && !attendanceDateFilter.endDate) return true;
+    if (attendanceDateFilter.startDate && record.date < attendanceDateFilter.startDate) return false;
+    if (attendanceDateFilter.endDate && record.date > attendanceDateFilter.endDate) return false;
+    return true;
+  });
+
+  const attendanceDateRangeLabel = attendanceDateFilter.startDate && attendanceDateFilter.endDate && attendanceDateFilter.startDate !== attendanceDateFilter.endDate 
+    ? `${formatDateLabel(attendanceDateFilter.startDate)} - ${formatDateLabel(attendanceDateFilter.endDate)}` 
+    : formatDateLabel(attendanceDateFilter.startDate || attendanceDateFilter.endDate) || "All dates";
+
+  const downloadAttendanceReport = () => {
+    const doc = new jsPDF("landscape");
+    doc.addFileToVFS("Geist-Regular.ttf", GeistRegularBase64);
+    doc.addFont("Geist-Regular.ttf", "Geist", "normal");
+    
+    doc.addFileToVFS("Geist-Bold.ttf", GeistRegularBase64);
+    doc.addFont("Geist-Bold.ttf", "Geist", "bold"); // Fallback for bold
+    
+    const allDates = [];
+    if (attendanceDateFilter.startDate && attendanceDateFilter.endDate) {
+      let current = new Date(attendanceDateFilter.startDate);
+      const end = new Date(attendanceDateFilter.endDate);
+      while (current <= end) {
+        const yyyy = current.getFullYear();
+        const mm = String(current.getMonth() + 1).padStart(2, '0');
+        const dd = String(current.getDate()).padStart(2, '0');
+        allDates.push(`${yyyy}-${mm}-${dd}`);
+        current.setDate(current.getDate() + 1);
+      }
+    } else if (attendanceDateFilter.startDate) {
+      allDates.push(attendanceDateFilter.startDate);
+    } else if (attendanceDateFilter.endDate) {
+      allDates.push(attendanceDateFilter.endDate);
+    } else {
+      allDates.push(todayInput());
+    }
+
+    if (allDates.length === 0) return;
+
+    const datesByMonth = {};
+    allDates.forEach(date => {
+      const month = date.substring(0, 7);
+      if (!datesByMonth[month]) datesByMonth[month] = [];
+      datesByMonth[month].push(date);
+    });
+
+    const monthKeys = Object.keys(datesByMonth).sort();
+
+    monthKeys.forEach((month, index) => {
+      if (index > 0) doc.addPage("a4", "landscape");
+      
+      const monthDates = datesByMonth[month];
+      
+      doc.setFont("Geist", "bold");
+      doc.setFontSize(16);
+      doc.text("Attendance Report", 14, 12);
+      doc.setFont("Geist", "normal");
+      doc.setFontSize(10);
+      
+      const dateRangeLabel = monthDates.length > 1 
+        ? `${formatDateLabel(monthDates[0])} - ${formatDateLabel(monthDates[monthDates.length - 1])}`
+        : formatDateLabel(monthDates[0]);
+      
+      doc.text(`Date Range: ${dateRangeLabel}`, 14, 18);
+
+      const displayEmployees = activeEmployees.filter(emp => {
+        const name = emp.displayName || emp.username || "";
+        return !name.toLowerCase().replace(/\s+/g, '').includes("superadmin");
+      });
+
+      const employeeMap = {};
+      displayEmployees.forEach(emp => {
+        employeeMap[emp.id] = { name: emp.displayName || emp.username || "Unknown", totalMinutes: 0, days: {} };
+      });
+
+      filteredAttendanceRecords.forEach(record => {
+        if (monthDates.includes(record.date) && employeeMap[record.userId]) {
+          const hours = record.workMinutes ? (record.workMinutes / 60).toFixed(1) : "-";
+          employeeMap[record.userId].days[record.date] = hours;
+          employeeMap[record.userId].totalMinutes += (record.workMinutes || 0);
+        }
+      });
+
+      const formatHeaderDate = (dateStr) => {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString("en-US", { day: "2-digit", month: "short" });
+      };
+
+      const head = [["Employee", ...monthDates.map(formatHeaderDate), "Total Hrs"]];
+
+      const body = Object.values(employeeMap).map(emp => {
+        const row = [emp.name];
+        monthDates.forEach(date => {
+          row.push(emp.days[date] || "-");
+        });
+        row.push((emp.totalMinutes / 60).toFixed(1));
+        return row;
+      });
+
+      const footRow = ["Total Hours"];
+      let grandTotalMinutes = 0;
+      monthDates.forEach(date => {
+        const dayTotalMins = filteredAttendanceRecords.filter(r => r.date === date).reduce((acc, r) => acc + (r.workMinutes || 0), 0);
+        footRow.push(dayTotalMins ? (dayTotalMins / 60).toFixed(1) : "-");
+        grandTotalMinutes += dayTotalMins;
+      });
+      footRow.push((grandTotalMinutes / 60).toFixed(1));
+
+      autoTable(doc, {
+        startY: 23,
+        margin: { top: 12, bottom: 12, left: 10, right: 10 },
+        showFoot: "lastPage",
+        head: head,
+        body: body,
+        foot: [footRow],
+        theme: "grid",
+        styles: { font: "Geist", fontSize: 7, cellPadding: 1.5, halign: "center", textColor: [40, 40, 40] },
+        columnStyles: { 0: { halign: "left", fontStyle: "bold", cellWidth: "wrap" } },
+        headStyles: { fillColor: [4, 120, 87], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 6.5 },
+        footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
+        didParseCell: function(data) {
+          if (data.section === "body" && data.cell.raw === "-") {
+            data.cell.styles.fillColor = [254, 226, 226]; // light red background
+            data.cell.styles.textColor = [220, 38, 38];   // red text
+          }
+        }
+      });
+    });
+
+    doc.save(`Attendance_Report.pdf`);
+  };
   const currentEmployeeProfile = employees.find((employee) => employee.id === user?.id);
   const remoteWorkEnabled = Boolean(currentEmployeeProfile?.remoteWorkEnabled || data?.remoteWorkEnabled || user?.remoteWorkEnabled);
   const todayAttendance = attendanceRecords.find((record) => record.userId === user?.id && record.date === todayInput());
@@ -1670,15 +1804,21 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 <div className={`flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-end sm:justify-between ${darkMode ? "border-white/[0.06]" : "border-[#edf0ea]"}`}>
                   <div>
                     <p className="text-sm font-black">Attendance records</p>
-                    <p className={`mt-1 text-xs ${muted}`}>Showing entries for {formatDateLabel(attendanceDateFilter) || "all dates"}.</p>
+                    <p className={`mt-1 text-xs ${muted}`}>Showing entries for {attendanceDateRangeLabel}.</p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <div className="w-full sm:w-[220px]">
-                      <DrawerDatePicker darkMode={darkMode} label="Date" value={attendanceDateFilter} placeholder="Select date" onChange={setAttendanceDateFilter} />
+                    <div className="w-full sm:w-[150px]">
+                      <DrawerDatePicker darkMode={darkMode} label="Start Date" value={attendanceDateFilter.startDate} placeholder="Start date" onChange={(startDate) => setAttendanceDateFilter(current => ({ ...current, startDate, endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate }))} />
                     </div>
-                    {attendanceDateFilter !== todayInput() && (
-                      <button type="button" onClick={() => setAttendanceDateFilter(todayInput())} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
-                        <X className="h-4 w-4" /> Today
+                    <div className="w-full sm:w-[150px]">
+                      <DrawerDatePicker darkMode={darkMode} label="End Date" value={attendanceDateFilter.endDate} placeholder="End date" minDate={attendanceDateFilter.startDate} onChange={(endDate) => setAttendanceDateFilter(current => ({ ...current, endDate }))} />
+                    </div>
+                    <button type="button" onClick={downloadAttendanceReport} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                      <Download className="h-4 w-4" /> Download Report
+                    </button>
+                    {(attendanceDateFilter.startDate !== todayInput() || attendanceDateFilter.endDate !== todayInput()) && (
+                      <button type="button" onClick={() => setAttendanceDateFilter({ startDate: todayInput(), endDate: todayInput() })} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                        <X className="h-4 w-4" /> Clear
                       </button>
                     )}
                   </div>
@@ -1725,7 +1865,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         );
                       })}
                       {!filteredAttendanceRecords.length && (
-                        <tr><td colSpan={7} className={`px-5 py-12 text-center ${muted}`}>No attendance records found for {formatDateLabel(attendanceDateFilter) || "this date"}.</td></tr>
+                        <tr><td colSpan={7} className={`px-5 py-12 text-center ${muted}`}>No attendance records found for {attendanceDateRangeLabel}.</td></tr>
                       )}
                     </tbody>
                   </table>

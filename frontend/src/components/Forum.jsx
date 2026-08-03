@@ -535,6 +535,9 @@ function renderLoopAssistantText(text, darkMode = false) {
       return <span key={`${lineIndex}-${partIndex}`}>{part}</span>;
     });
   };
+
+  let currentPlanned = null;
+
   return String(text || "")
     .split(/\n+/)
     .map((line) => line.trimEnd())
@@ -549,7 +552,7 @@ function renderLoopAssistantText(text, darkMode = false) {
         const level = headerMatch[1].length;
         const sizeClass = level === 1 ? "text-2xl" : level === 2 ? "text-xl" : "text-lg";
         return (
-          <div key={index} className={`${sizeClass} font-black mt-4 mb-2 ${darkMode ? "text-white" : "text-slate-800"}`}>
+          <div key={index} className={`small ${sizeClass} font-black tracking-wide mt-4 mb-2 ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
             {renderInline(headerMatch[2], index)}
           </div>
         );
@@ -557,10 +560,28 @@ function renderLoopAssistantText(text, darkMode = false) {
       if (labelMatch) {
         const label = labelMatch[1].trim();
         const value = labelMatch[2].trim();
+        let badgeColor = badgeClassFor(label, value);
+
+        if (label.toLowerCase() === "planned") {
+          currentPlanned = parseInt(value, 10);
+          badgeColor = darkMode ? "bg-[#1e3a8a] text-[#bfdbfe]" : "bg-[#dbeafe] text-[#1d4ed8]";
+        } else if (label.toLowerCase() === "actual") {
+          const actualVal = parseInt(value, 10);
+          if (currentPlanned !== null) {
+            if (actualVal >= currentPlanned) {
+              badgeColor = darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#dcfce7] text-[#15803d]";
+            } else {
+              badgeColor = darkMode ? "bg-[#450a0a] text-[#fecaca]" : "bg-[#fee2e2] text-[#dc2626]";
+            }
+          }
+        }
+
         return (
-          <div key={index} className="flex flex-wrap items-center gap-2">
-            <span className={`text-xs font-black uppercase tracking-[0.08em] ${darkMode ? "text-white/65" : "text-[#64748b]"}`}>{label}</span>
-            <span className={`max-w-full rounded-full px-3 py-1.5 text-xs leading-none tracking-[0.01em] ${darkMode ? "font-semibold" : "font-black"} ${badgeClassFor(label, value)} break-words`}>{value}</span>
+          <div key={index} className={`mr-2 mt-2 inline-flex flex-col gap-1 rounded-xl p-3 sm:min-w-[130px] ${badgeColor}`}>
+            <span className="text-[10px] font-black uppercase tracking-[0.1em] opacity-60">{label}</span>
+            <div className="flex items-center">
+              <span className={`text-xl leading-none ${darkMode ? "font-semibold" : "font-black"} break-words`}>{value}</span>
+            </div>
           </div>
         );
       }
@@ -1395,7 +1416,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                     <div className="mt-2 space-y-2">
                       <div className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
                         <span className={`text-sm font-semibold ${muted}`}>Report time</span>
-                        <input type="time" value={group?.dailyReportTime || "08:00"} disabled={Boolean(pendingAction) || groupDeleted} onChange={(e) => saveGroup({ dailyReportTime: e.target.value }, "dailyReportTime")} className={`rounded-lg border px-2 py-1 text-sm font-semibold outline-none ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`} />
+                        <TimePickerInput value={group?.dailyReportTime || "08:00"} disabled={Boolean(pendingAction) || groupDeleted} onSave={(val) => saveGroup({ dailyReportTime: val }, "dailyReportTime")} className={`rounded-lg border px-2 py-1 text-sm font-semibold outline-none ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`} />
                       </div>
                       <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => onSendDailyReport?.()} className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`}>
                         {pendingAction === "dailyReport" ? <TinySpinner className="h-3 w-3" /> : null}
@@ -1585,6 +1606,23 @@ function MobileBottomSheetFrame({ darkMode, children, onClose, label = "Close sh
         {children(closeWithAnimation)}
       </div>
     </div>
+  );
+}
+
+function TimePickerInput({ value, disabled, onSave, className }) {
+  const [localValue, setLocalValue] = useState(value || "08:00");
+  useEffect(() => { setLocalValue(value || "08:00"); }, [value]);
+  return (
+    <input
+      type="time"
+      value={localValue}
+      disabled={disabled}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={(e) => {
+        if (e.target.value !== value) onSave(e.target.value);
+      }}
+      className={className}
+    />
   );
 }
 
@@ -4121,7 +4159,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     <p className={`truncate text-xs ${darkMode ? "text-white/60" : "text-[#7b8794]"}`}>{message.assistantPayload?.projectName || selectedConversation?.project?.name || selectedConversation?.name || "Project"}</p>
                                   </div>
                                 </div>
-                                <div className={`space-y-2 break-words text-sm leading-6 [overflow-wrap:anywhere] ${darkMode ? "text-white/85" : "text-[#334155]"}`}>
+                                <div className={`antialiased transform-gpu space-y-2 break-words text-sm leading-6 [overflow-wrap:anywhere] ${darkMode ? "text-white/85" : "text-[#334155]"}`}>
                                   {renderLoopAssistantText(message.text, darkMode)}
                                 </div>
                                 <div className={`mt-2 flex justify-end`}>

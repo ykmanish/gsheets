@@ -543,7 +543,17 @@ function renderLoopAssistantText(text, darkMode = false) {
       if (/^-{2,}$/.test(line.trim())) return null;
       const bullet = line.match(/^[-*]\s+(.+)$/);
       const numbered = line.match(/^(\d+)\.\s+(.+)$/);
+      const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
       const labelMatch = line.replace(/^[-*]\s+/, "").match(/^\*\*?([^:*]+):\*\*?\s*(.+)$/);
+      if (headerMatch) {
+        const level = headerMatch[1].length;
+        const sizeClass = level === 1 ? "text-2xl" : level === 2 ? "text-xl" : "text-lg";
+        return (
+          <div key={index} className={`${sizeClass} font-black mt-4 mb-2 ${darkMode ? "text-white" : "text-slate-800"}`}>
+            {renderInline(headerMatch[2], index)}
+          </div>
+        );
+      }
       if (labelMatch) {
         const label = labelMatch[1].trim();
         const value = labelMatch[2].trim();

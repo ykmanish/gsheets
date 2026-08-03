@@ -1132,6 +1132,9 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
             {group.groupKind === "project" && group.project && (
               <p className={`mt-2 truncate text-center text-xs font-semibold ${muted}`}>Project: {group.project.name}</p>
             )}
+            {group?.groupKind === "project" && group?.dailyReportEnabled && (
+              <p className={`mt-1 text-center text-xs font-semibold ${muted}`}>📊 Daily report at {group.dailyReportTime || "08:00"} IST</p>
+            )}
           </div>
 
           {groupDeleted && (
@@ -1179,7 +1182,7 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
   );
 }
 
-function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup, onRequestDeleteGroup, onRequestRemoveGroupForMe, embedded = false, widgetControls = null }) {
+function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup, onRequestDeleteGroup, onRequestRemoveGroupForMe, onSendDailyReport, embedded = false, widgetControls = null }) {
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(group?.name || "Loop Group");
   const [editingName, setEditingName] = useState(false);
@@ -1367,6 +1370,31 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                   </span>
                 </span>
               </button>
+              {group?.groupKind === "project" && (
+                <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
+                  <span className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>Loop daily report</span>
+                  <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => saveGroup({ dailyReportEnabled: !group?.dailyReportEnabled }, "dailyReportEnabled")} className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                    <span>Auto daily report</span>
+                    <span className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${group?.dailyReportEnabled ? "bg-[#2563eb]" : darkMode ? "bg-white/15" : "bg-black/10"}`}>
+                      <span className={`absolute top-1 grid h-4 w-4 place-items-center rounded-full bg-white shadow-sm transition-all duration-300 ${group?.dailyReportEnabled ? "left-6" : "left-1"}`}>
+                        {pendingAction === "dailyReportEnabled" && <TinySpinner className="h-3 w-3 text-[#2563eb]" />}
+                      </span>
+                    </span>
+                  </button>
+                  {group?.dailyReportEnabled && (
+                    <div className="mt-2 space-y-2">
+                      <div className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                        <span className={`text-sm font-semibold ${muted}`}>Report time</span>
+                        <input type="time" value={group?.dailyReportTime || "08:00"} disabled={Boolean(pendingAction) || groupDeleted} onChange={(e) => saveGroup({ dailyReportTime: e.target.value }, "dailyReportTime")} className={`rounded-lg border px-2 py-1 text-sm font-semibold outline-none ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`} />
+                      </div>
+                      <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => onSendDailyReport?.()} className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`}>
+                        {pendingAction === "dailyReport" ? <TinySpinner className="h-3 w-3" /> : null}
+                        Send report now
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"} ${groupDeleted ? "opacity-50" : ""}`}>
                 <span className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>Add member</span>
                 <div className="flex gap-2">
@@ -4806,6 +4834,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 onUpdateGroup={updateGroup}
                 onRequestDeleteGroup={requestDeleteGroupForEveryone}
                 onRequestRemoveGroupForMe={requestRemoveGroupForMe}
+                onSendDailyReport={async () => {
+                  try {
+                    await api(`/forum/conversations/${encodeURIComponent(selectedId)}/daily-report`, { method: "POST" });
+                    toast.success("Daily report sent");
+                  } catch (error) {
+                    toast.error(error.message || "Failed to send report");
+                  }
+                }}
                 embedded={embedded}
                 widgetControls={widgetControls}
               />

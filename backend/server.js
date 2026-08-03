@@ -12565,6 +12565,97 @@ function summarizeManualProject(project = {}, date = istDateKey(new Date())) {
   };
 }
 
+async function sendProjectGroupDailyReport(conversationId) {
+  const db = await connectAuthDb();
+  const conversation = await db.collection("forumConversations").findOne({ _id: conversationId, type: "group", groupKind: "project" });
+  if (!conversation || !conversation.projectId || conversation.deletedAt) return null;
+  const project = projectDashboardConfig.projects.find((p) => p.id === conversation.projectId && p.status !== "archived");
+  if (!project) return null;
+  const date = istDateKey(new Date());
+  const summary = summarizeManualProject(project, date);
+  const tasks = projectManualTasks(project);
+  
+  // Tasks starting today
+  const startingToday = tasks.filter((t) => t.startDate === date && !/done|complete|completed/i.test(t.status || ""));
+  
+  // Overdue tasks with days count
+  const overdueTasks = tasks.filter((t) => t.dueDate && t.dueDate < date && !/done|complete|completed/i.test(t.status || ""));
+  
+  // Manpower data
+  let manpowerSection = "";
+  try {
+    const dmr = await readDmrDashboard(date, { ensureToday: false, force: false });
+    const projectSiteNames = [project.name, project.code, ...(project.aliases || [])].map((s) => (s || "").toLowerCase().trim()).filter(Boolean);
+    const matchingRecords = (dmr.today?.records || []).filter((r) => {
+      const site = (r.site || "").toLowerCase().trim();
+      return projectSiteNames.some((n) => site.includes(n) || n.includes(site));
+    });
+    if (matchingRecords.length) {
+      const totalActual = matchingRecords.reduce((s, r) => s + (Number(r.actual) || 0), 0);
+      const totalPlanned = matchingRecords.reduce((s, r) => s + (Number(r.planned) || 0), 0);
+      const byTrade = Object.values(matchingRecords.reduce((acc, r) => {
+        const key = r.trade || r.category || "General";
+        if (!acc[key]) acc[key] = { trade: key, planned: 0, actual: 0 };
+        acc[key].planned += Number(r.planned) || 0;
+        acc[key].actual += Number(r.actual) || 0;
+        return acc;
+      }, {}));
+      manpowerSection = `\n\n👷 **Manpower Today**\n| Trade | Planned | Actual |\n|---|---|---|\n${byTrade.map((t) => `| ${t.trade} | ${t.planned} | ${t.actual} |`).join("\n")}\n| **Total** | **${totalPlanned}** | **${totalActual}** |`;
+    }
+  } catch (err) { console.error("Daily report DMR error:", err.message); }
+  if (!manpowerSection) manpowerSection = "\n\n👷 **Manpower Today**\nNo manpower data available for this project today.";
+  
+  // Stock alerts
+  let stockSection = "";
+  try {
+    const stockDoc = await db.collection("platformSettings").findOne({ _id: "project-stock-sites" });
+    const stockSites = (stockDoc?.sites || []).filter((s) => {
+      const siteName = (s.name || "").toLowerCase();
+      return [project.name, project.code, ...(project.aliases || [])].some((n) => {
+        const pn = (n || "").toLowerCase();
+        return siteName.includes(pn) || pn.includes(siteName);
+      });
+    });
+    let lowStockItems = [];
+    for (const site of stockSites) {
+      try {
+        const parsed = await buildStockSiteDashboard(site);
+        lowStockItems.push(...(parsed.items || []).filter((item) => item.quantity <= Math.max(0, item.reorderMin || 0) && item.reorderMin > 0).map((item) => ({ ...item, siteName: site.name })));
+      } catch (e) { /* skip */ }
+    }
+    if (lowStockItems.length) {
+      stockSection = `\n\n📦 **Low Stock Alerts** ⚠️\n${lowStockItems.slice(0, 15).map((i) => `• **${i.itemName}**: ${i.quantity} ${i.unit || "units"} remaining (min: ${i.reorderMin})`).join("\n")}`;
+      if (lowStockItems.length > 15) stockSection += `\n• _...and ${lowStockItems.length - 15} more items_`;
+    } else {
+      stockSection = "\n\n📦 **Stock Status**\n✅ All stock levels are healthy.";
+    }
+  } catch (err) { console.error("Daily report stock error:", err.message); stockSection = ""; }
+  
+  // Build the report
+  const dayLabel = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+  let report = `📊 **Daily Project Report — ${project.name}**\n🗓 ${dayLabel}`;
+  report += manpowerSection;
+  if (startingToday.length) {
+    report += `\n\n🚀 **Tasks Starting Today** (${startingToday.length})\n${startingToday.slice(0, 10).map((t, i) => `${i + 1}. **${t.title}** — ${t.assigneeIds?.length ? "Assigned" : "Unassigned"} · ${t.priority || "Medium"} priority`).join("\n")}`;
+    if (startingToday.length > 10) report += `\n_...and ${startingToday.length - 10} more_`;
+  } else {
+    report += "\n\n🚀 **Tasks Starting Today**\nNo tasks scheduled to start today.";
+  }
+  if (overdueTasks.length) {
+    report += `\n\n⚠️ **Delayed Tasks** (${overdueTasks.length})\n${overdueTasks.slice(0, 10).map((t, i) => {
+      const days = Math.ceil((new Date(date) - new Date(t.dueDate)) / 86400000);
+      return `${i + 1}. **${t.title}** — ${days} day${days > 1 ? "s" : ""} overdue · Due: ${t.dueDate}`;
+    }).join("\n")}`;
+    if (overdueTasks.length > 10) report += `\n_...and ${overdueTasks.length - 10} more_`;
+  } else {
+    report += "\n\n⚠️ **Delayed Tasks**\n✅ No delayed tasks. Everything is on track!";
+  }
+  report += `\n\n📈 **Overall Progress**\n• **Completion:** ${summary.progress}%\n• **Total Tasks:** ${summary.totalTasks} · ✅ Done: ${summary.completed} · 🔄 Pending: ${summary.pending} · 🚫 Blocked: ${summary.blocked}`;
+  report += stockSection;
+  
+  return await createForumLoopSystemMessage({ conversation, text: report, assistantPayload: { projectId: project.id, projectName: project.name, reportType: "daily", date } });
+}
+
 app.get("/project-dashboard/config", async (req, res) => {
   const db = await connectAuthDb();
   const sheetDocs = (req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_control"))
@@ -15819,6 +15910,8 @@ async function forumConversationSummary(conversation, authUserId) {
     id: conversation._id,
     type: conversation.type,
     name: conversation.type === "direct" ? (other?.displayName || other?.username || "Direct message") : conversation.name || "Loop Group",
+    dailyReportEnabled: Boolean(conversation.dailyReportEnabled),
+    dailyReportTime: conversation.dailyReportTime || "",
     participants: participants.map(forumUserProfile),
     participantIds,
     adminIds: (conversation.adminIds || []).map(String),
@@ -16061,6 +16154,60 @@ async function buildForumProjectAssistantContext(project = {}) {
       assignees: subtask.assigneeIds.map((id) => userMap.get(String(id)) || String(id)),
     })),
   }));
+  let manpower = null;
+  try {
+    const dmr = await readDmrDashboard(istDateKey(new Date()), { ensureToday: false, force: false });
+    const projectSiteNames = [project.name, project.code, ...(project.aliases || [])].map((s) => (s || "").toLowerCase().trim()).filter(Boolean);
+    const matchingRecords = (dmr.today?.records || []).filter((r) => {
+      const site = (r.site || "").toLowerCase().trim();
+      return projectSiteNames.some((n) => site.includes(n) || n.includes(site));
+    }).slice(0, 50);
+    if (matchingRecords.length) {
+      const todayActual = matchingRecords.reduce((s, r) => s + (Number(r.actual) || 0), 0);
+      const todayPlanned = matchingRecords.reduce((s, r) => s + (Number(r.planned) || 0), 0);
+      const byTrade = Object.values(matchingRecords.reduce((acc, r) => {
+        const key = r.trade || r.category || "General";
+        if (!acc[key]) acc[key] = { trade: key, planned: 0, actual: 0 };
+        acc[key].planned += Number(r.planned) || 0;
+        acc[key].actual += Number(r.actual) || 0;
+        return acc;
+      }, {}));
+      manpower = { todayActual, todayPlanned, byTrade };
+    }
+  } catch (err) { console.error("Context DMR error:", err.message); }
+
+  let stock = null;
+  try {
+    const stockDoc = await db.collection("platformSettings").findOne({ _id: "project-stock-sites" });
+    const stockSites = (stockDoc?.sites || []).filter((s) => {
+      const siteName = (s.name || "").toLowerCase();
+      return [project.name, project.code, ...(project.aliases || [])].some((n) => {
+        const pn = (n || "").toLowerCase();
+        return siteName.includes(pn) || pn.includes(siteName);
+      });
+    });
+    let allItems = [];
+    let lowStockItems = [];
+    for (const site of stockSites) {
+      try {
+        const parsed = await buildStockSiteDashboard(site);
+        const items = parsed.items || [];
+        allItems.push(...items);
+        lowStockItems.push(...items.filter((item) => item.quantity <= Math.max(0, item.reorderMin || 0) && item.reorderMin > 0).map((item) => ({ ...item, siteName: site.name })));
+      } catch (e) { /* skip */ }
+    }
+    if (allItems.length) {
+      const totalItems = allItems.length;
+      const totalQuantity = allItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+      stock = {
+        totalItems,
+        totalQuantity,
+        lowStockCount: lowStockItems.length,
+        lowStockItems: lowStockItems.slice(0, 30),
+      };
+    }
+  } catch (err) { console.error("Context stock error:", err.message); }
+
   return {
     today: istDateKey(new Date()),
     project: {
@@ -16082,6 +16229,8 @@ async function buildForumProjectAssistantContext(project = {}) {
     tasks,
     activity: Array.isArray(project.activity) ? project.activity.slice(-20) : [],
     notes: Array.isArray(project.notes) ? project.notes.slice(-20) : [],
+    manpower,
+    stock,
   };
 }
 
@@ -16127,6 +16276,8 @@ async function askLoopProjectAssistant({ question, context }) {
         "Use concise chat-friendly formatting with **bold labels** and clear bullets.",
         "Treat project targetDate as the project deadline or due date.",
         "For task lists include title, status, priority, assignee, due date, phase, and relevant subtasks when available.",
+        "The context includes today's manpower data with planned vs actual counts by trade/site. Use this to answer manpower, workforce, and attendance questions.",
+        "The context includes stock inventory data with low stock alerts. When asked about stock or materials, reference the stock section. Proactively mention critically low items.",
         "Do not output markdown separators like ---.",
         "If the project data does not contain the answer, say what is missing instead of guessing.",
         "Do not mention JSON, prompts, Claude, or implementation details.",
@@ -16192,6 +16343,50 @@ async function createForumLoopAssistantMessage({ req, conversation, text, assist
     }
   );
   const serialized = await serializeForumMessage(saved, req.authUser.id);
+  broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized });
+  return serialized;
+}
+
+async function createForumLoopSystemMessage({ conversation, text, assistantPayload = null }) {
+  const db = await connectAuthDb();
+  const now = new Date();
+  const encrypted = encryptForumText(text);
+  const recipientIds = conversation.participantIds || [];
+  const profile = await forumLoopAssistantProfile(db);
+  const admin = await db.collection("users").findOne({ isSuperAdmin: true });
+  const senderId = admin ? String(admin._id) : "system";
+  const message = {
+    conversationId: conversation._id,
+    type: conversation.type,
+    senderId,
+    recipientIds,
+    encrypted,
+    loopAssistant: true,
+    assistant: { id: "loop", name: "Loop", avatarUrl: profile.avatarUrl || "" },
+    assistantPayload,
+    createdAt: now,
+    readBy: {},
+    deliveredTo: {},
+  };
+  const result = await db.collection("forumMessages").insertOne(message);
+  const saved = { ...message, _id: result.insertedId };
+  await db.collection("forumConversations").updateOne(
+    { _id: conversation._id },
+    {
+      $set: {
+        updatedAt: now,
+        lastMessage: {
+          id: String(result.insertedId),
+          senderId,
+          encrypted,
+          loopAssistant: true,
+          assistant: message.assistant,
+          createdAt: now,
+        },
+      },
+    }
+  );
+  const serialized = await serializeForumMessage(saved, senderId);
   broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized });
   return serialized;
 }
@@ -16711,6 +16906,12 @@ app.patch("/forum/conversations/:id/group", async (req, res) => {
       update.name = name;
     }
     if (req.body?.adminOnlyMessages !== undefined) update.adminOnlyMessages = Boolean(req.body.adminOnlyMessages);
+    if (req.body?.dailyReportEnabled !== undefined) update.dailyReportEnabled = Boolean(req.body.dailyReportEnabled);
+    if (req.body?.dailyReportTime !== undefined) {
+      const time = String(req.body.dailyReportTime || "").trim();
+      if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return res.status(400).json({ error: "Invalid time format. Use HH:MM (e.g. 08:00)" });
+      update.dailyReportTime = time;
+    }
     if (req.body?.avatarPreset !== undefined) {
       const avatarPreset = String(req.body.avatarPreset || "").trim();
       if (!FORUM_GROUP_AVATAR_PRESETS.has(avatarPreset)) return res.status(400).json({ error: "Choose a valid group avatar" });
@@ -16732,6 +16933,9 @@ app.patch("/forum/conversations/:id/group", async (req, res) => {
       ])];
     }
     await db.collection("forumConversations").updateOne({ _id: conversation._id }, { $set: update });
+    if (update.dailyReportEnabled !== undefined || update.dailyReportTime !== undefined) {
+      refreshSingleProjectGroupReportCron(conversation._id, { ...conversation, ...update });
+    }
     const saved = await db.collection("forumConversations").findOne({ _id: conversation._id });
     const recipients = [...new Set([...(conversation.participantIds || []), ...(saved.participantIds || [])])];
     const summaryForActor = await forumConversationSummary(saved, req.authUser.id);
@@ -16739,6 +16943,21 @@ app.patch("/forum/conversations/:id/group", async (req, res) => {
     res.json({ conversation: summaryForActor });
   } catch (error) {
     console.error("Forum custom group update error:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/conversations/:id/daily-report", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const conversation = await db.collection("forumConversations").findOne({ _id: req.params.id, type: "group", groupKind: "project" });
+    if (!conversation) return res.status(404).json({ error: "Project group not found" });
+    assertForumGroupMember(conversation, req);
+    if (!isForumGroupAdmin(conversation, req)) return res.status(403).json({ error: "Only group admins can trigger daily reports" });
+    const result = await sendProjectGroupDailyReport(conversation._id);
+    res.json({ success: true, sent: Boolean(result) });
+  } catch (error) {
+    console.error("Manual daily report trigger error:", error);
     res.status(error.status || 500).json({ error: error.message });
   }
 });
@@ -17478,6 +17697,42 @@ if (require.main === module) {
       console.error("Project daily digest cron error:", error);
     }
   }, { timezone: "Asia/Kolkata" });
+
+  // --- Project group daily report crons ---
+  const projectGroupReportCrons = new Map();
+
+  function refreshSingleProjectGroupReportCron(conversationId, conversation) {
+    const existing = projectGroupReportCrons.get(String(conversationId));
+    if (existing) { existing.stop(); projectGroupReportCrons.delete(String(conversationId)); }
+    if (!conversation.dailyReportEnabled || !conversation.dailyReportTime) return;
+    const [hours, minutes] = conversation.dailyReportTime.split(":").map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return;
+    const cronExpr = `${minutes} ${hours} * * *`;
+    const job = cron.schedule(cronExpr, async () => {
+      try {
+        const result = await sendProjectGroupDailyReport(String(conversationId));
+        if (result) console.log(`Project group daily report sent to ${conversationId}`);
+      } catch (error) {
+        console.error(`Project group daily report error for ${conversationId}:`, error.message);
+      }
+    }, { timezone: "Asia/Kolkata" });
+    projectGroupReportCrons.set(String(conversationId), job);
+  }
+
+  async function refreshProjectGroupReportCrons() {
+    try {
+      const db = await connectAuthDb();
+      const groups = await db.collection("forumConversations").find({ type: "group", groupKind: "project", dailyReportEnabled: true, dailyReportTime: { $exists: true, $ne: "" } }).toArray();
+      for (const group of groups) {
+        refreshSingleProjectGroupReportCron(group._id, group);
+      }
+      console.log(`Loaded ${groups.length} project group daily report cron(s)`);
+    } catch (error) {
+      console.error("Failed to load project group report crons:", error.message);
+    }
+  }
+
+  refreshProjectGroupReportCrons();
 
   server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);

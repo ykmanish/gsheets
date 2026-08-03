@@ -16186,7 +16186,7 @@ async function buildForumProjectAssistantContext(project = {}) {
         totalItems: allItems.length,
         totalQuantity: allItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0),
         lowStockItems: lowStockItems.slice(0, 50).map(i => ({ name: i.itemName, quantity: i.quantity, min: i.reorderMin, site: i.siteName })),
-        items: allItems.map(i => ({ name: i.itemName, quantity: i.quantity, site: i.siteName })),
+        items: allItems.map(i => ({ name: i.itemName, quantity: Number(i.quantity) || 0, site: i.siteName })).sort((a, b) => a.quantity - b.quantity).slice(0, 50),
         summaryOnly: false
       };
     }
@@ -16262,7 +16262,7 @@ async function askLoopProjectAssistant({ question, context }) {
         "For task lists include title, status, priority, assignee, due date, phase, and relevant subtasks when available.",
         "The context includes today's manpower data with planned vs actual counts by trade/site. Use this to answer manpower, workforce, and attendance questions.",
         "The context includes stock inventory data with low stock alerts. When asked about stock or materials, reference the stock section. Proactively mention critically low items.",
-        "Do not output markdown separators like ---.",
+        "Never use Markdown tables (e.g. using | bars). Use simple bullet points or plain text instead.",
         "If the project data does not contain the answer, say what is missing instead of guessing.",
         "Do not mention JSON, prompts, Claude, or implementation details.",
       ].join(" "),

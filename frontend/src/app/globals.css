@@ -446,6 +446,46 @@ body * {
   transform-origin: bottom right;
 }
 
+@keyframes forum-mobile-sheet-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes forum-mobile-sheet-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes forum-mobile-sheet-in {
+  0% { opacity: 0; transform: translateY(102%) scale(0.98); }
+  72% { opacity: 1; transform: translateY(-8px) scale(1.004); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes forum-mobile-sheet-out {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0.82; transform: translateY(102%) scale(0.985); }
+}
+
+.forum-mobile-sheet-backdrop {
+  animation: forum-mobile-sheet-backdrop-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.forum-mobile-sheet-backdrop.is-closing {
+  animation: forum-mobile-sheet-backdrop-out 240ms ease both;
+  pointer-events: none;
+}
+
+.forum-mobile-sheet {
+  animation: forum-mobile-sheet-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: bottom center;
+  will-change: transform, opacity;
+}
+
+.forum-mobile-sheet.is-closing {
+  animation: forum-mobile-sheet-out 260ms cubic-bezier(0.32, 0, 0.67, 0) both;
+}
+
 .forum-chat-message,
 .forum-chat-message * {
   -webkit-touch-callout: none;
@@ -525,6 +565,13 @@ body * {
 
 .forum-reply-card-in {
   animation: forum-reply-card-in 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forum-mobile-sheet,
+  .forum-mobile-sheet-backdrop {
+    animation-duration: 1ms !important;
+  }
 }
 
 /* ── Message Highlight on Reply Scroll ── */

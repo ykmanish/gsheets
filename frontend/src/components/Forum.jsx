@@ -859,14 +859,13 @@ function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDire
   const isActiveDirectUser = activeDirectUserId && String(activeDirectUserId) === String(user?.id);
   if (!user) return null;
   return (
-    <div className="fixed inset-0 z-[96] flex items-end bg-black/45 backdrop-blur-[2px] xl:hidden" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose?.();
-    }}>
-      <div className={`max-h-[88vh] w-full overflow-hidden rounded-t-[28px] shadow-[0_-18px_60px_rgba(0,0,0,0.28)] animate-in slide-in-from-bottom-8 fade-in duration-200 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-black"}`}>
+    <MobileBottomSheetFrame darkMode={darkMode} onClose={onClose} label="User profile">
+      {(closeSheet) => (
+        <>
         <div className="mx-auto mt-3 h-1.5 w-11 rounded-full bg-white/20" />
         <div className="max-h-[calc(88vh-16px)] overflow-y-auto px-7 pb-8 pt-6">
           <div className="relative">
-            <button type="button" onClick={onClose} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close profile">
+            <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close profile">
               <X className="h-4 w-4" />
             </button>
             <UserAvatar user={user} name={user.displayName} className="mx-auto h-24 w-24" />
@@ -898,8 +897,9 @@ function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDire
             ))}
           </PanelSection>
         </div>
-      </div>
-    </div>
+        </>
+      )}
+    </MobileBottomSheetFrame>
   );
 }
 
@@ -909,14 +909,13 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
   const groupDeleted = Boolean(group?.deletedAt);
   if (!group) return null;
   return (
-    <div className="fixed inset-0 z-[96] flex items-end bg-black/45 backdrop-blur-[2px] xl:hidden" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose?.();
-    }}>
-      <div className={`max-h-[88vh] w-full overflow-hidden rounded-t-[28px] shadow-[0_-18px_60px_rgba(0,0,0,0.28)] animate-in slide-in-from-bottom-8 fade-in duration-200 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-black"}`}>
+    <MobileBottomSheetFrame darkMode={darkMode} onClose={onClose} label="Group info">
+      {(closeSheet) => (
+        <>
         <div className="mx-auto mt-3 h-1.5 w-11 rounded-full bg-white/20" />
         <div className="max-h-[calc(88vh-16px)] overflow-y-auto px-7 pb-8 pt-6">
           <div className="relative">
-            <button type="button" onClick={onClose} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close group info">
+            <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close group info">
               <X className="h-4 w-4" />
             </button>
             <GroupAvatar group={group} className="mx-auto h-24 w-24" iconClassName="h-10 w-10" />
@@ -959,12 +958,13 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
                     <span className={`block truncate text-xs ${muted}`}>{member.designation || member.department || member.username}</span>
                   </span>
                 </button>
-              ))}
-            </div>
-          </PanelSection>
-        </div>
+            ))}
+          </div>
+        </PanelSection>
       </div>
-    </div>
+        </>
+      )}
+    </MobileBottomSheetFrame>
   );
 }
 
@@ -1313,6 +1313,29 @@ function PanelSection({ title, action, muted, children, onAction }) {
   );
 }
 
+function MobileBottomSheetFrame({ darkMode, children, onClose, label = "Close sheet" }) {
+  const [closing, setClosing] = useState(false);
+  const closeWithAnimation = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    window.setTimeout(() => onClose?.(), 260);
+  }, [closing, onClose]);
+
+  return (
+    <div
+      className={`forum-mobile-sheet-backdrop fixed inset-0 z-[96] flex items-end bg-black/45 backdrop-blur-[2px] xl:hidden ${closing ? "is-closing" : ""}`}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) closeWithAnimation();
+      }}
+      aria-label={label}
+    >
+      <div className={`forum-mobile-sheet max-h-[88vh] w-full overflow-hidden rounded-t-[28px] shadow-[0_-18px_60px_rgba(0,0,0,0.28)] ${closing ? "is-closing" : ""} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-black"}`}>
+        {children(closeWithAnimation)}
+      </div>
+    </div>
+  );
+}
+
 export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileView = false, embedded = false, widgetControls = null }) {
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
@@ -1444,6 +1467,22 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const muted = darkMode ? "text-white/45" : "text-black/45";
   const softText = darkMode ? "text-white/72" : "text-black/68";
   const effectiveMobileViewport = forceMobileView || isMobileViewport;
+
+  const returnToConversationListAfterRemoval = useCallback(() => {
+    selectedIdRef.current = null;
+    messagesLoadSeqRef.current += 1;
+    setSelectedId(null);
+    setMessages([]);
+    setSelectedMessageIds([]);
+    setChatMenuOpen(false);
+    setMobileGroupInfoOpen(false);
+    setMobileProfileUser(null);
+    if (effectiveMobileViewport) {
+      setMobileListOpen(true);
+      return;
+    }
+    setMobileListOpen(false);
+  }, [effectiveMobileViewport]);
 
   useEffect(() => {
     const syncViewport = () => setIsMobileViewport(window.innerWidth < 1024);
@@ -2194,7 +2233,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       if (payload.type === "forum:deleted") {
         setConversations((current) => current.filter((item) => item.id !== payload.conversationId));
         if (sameConversation(payload.conversationId, selectedId)) {
-          selectConversation(GROUP_ID);
+          returnToConversationListAfterRemoval();
         }
       }
       };
@@ -2210,7 +2249,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       socketRef.current?.close();
     };
-  }, [clearMessageAnimation, createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, scrollMessagesToBottom, selectConversation, selectedId]);
+  }, [clearMessageAnimation, createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, returnToConversationListAfterRemoval, scrollMessagesToBottom, selectConversation, selectedId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -2232,6 +2271,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   useEffect(() => {
     setSelectedMessageIds([]);
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!editingMessageTarget) return;
+    const length = String(editingMessageTarget.text || "").length;
+    const timer = window.setTimeout(() => {
+      const composerNode = composerRef.current;
+      if (!composerNode) return;
+      composerNode.focus?.({ preventScroll: true });
+      composerNode.setSelectionRange?.(length, length);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [editingMessageTarget]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveMatchIndex(0), 0);
@@ -3062,7 +3113,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     try {
       await api(`/forum/conversations/${encodeURIComponent(selectedId)}`, { method: "DELETE" });
       setConversations((current) => current.filter((item) => item.id !== selectedId));
-      selectConversation(GROUP_ID);
+      returnToConversationListAfterRemoval();
       setChatMenuOpen(false);
       toast.success("Chat deleted");
     } catch (error) {
@@ -3077,6 +3128,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       if (data.conversation) {
         setConversations((current) => [data.conversation, ...current.filter((item) => item.id !== data.conversation.id)]);
       }
+      returnToConversationListAfterRemoval();
       toast.success("Group deleted");
     } catch (error) {
       toast.error(error.message);
@@ -3089,7 +3141,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     try {
       await api(`/forum/conversations/${encodeURIComponent(selectedId)}?mode=me`, { method: "DELETE" });
       setConversations((current) => current.filter((item) => item.id !== selectedId));
-      selectConversation(GROUP_ID);
+      returnToConversationListAfterRemoval();
       toast.success("Group removed from your side");
     } catch (error) {
       toast.error(error.message);

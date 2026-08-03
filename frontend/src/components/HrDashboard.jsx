@@ -625,6 +625,22 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         }
       });
 
+      const approvedLeaves = (data?.leaveRequests || []).filter(r => r.status === "approved");
+      displayEmployees.forEach(emp => {
+        const empLeaves = approvedLeaves.filter(r => r.userId === emp.id);
+        monthDates.forEach(date => {
+          if (!employeeMap[emp.id].days[date] || employeeMap[emp.id].days[date] === "-") {
+            const leave = empLeaves.find(r => date >= r.startDate && date <= r.endDate);
+            if (leave) {
+              const isPaid = Number(leave.paidLeaveDays) > 0;
+              employeeMap[emp.id].days[date] = isPaid ? "PL" : "L";
+            } else {
+              employeeMap[emp.id].days[date] = "-";
+            }
+          }
+        });
+      });
+
       const formatHeaderDate = (dateStr) => {
         const d = new Date(dateStr);
         return d.toLocaleDateString("en-US", { day: "2-digit", month: "short" });
@@ -652,20 +668,30 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
       autoTable(doc, {
         startY: currentY + 11,
-        margin: { top: 12, bottom: 12, left: 10, right: 10 },
+        margin: { top: 8, bottom: 5, left: 10, right: 10 },
         showFoot: "lastPage",
         head: head,
         body: body,
         foot: [footRow],
         theme: "grid",
-        styles: { font: "Geist", fontSize: 7, cellPadding: 1.5, halign: "center", textColor: [40, 40, 40] },
+        styles: { font: "Geist", fontSize: 7, cellPadding: 1.0, halign: "center", textColor: [40, 40, 40] },
         columnStyles: { 0: { halign: "left", fontStyle: "bold", cellWidth: "wrap" } },
         headStyles: { fillColor: [4, 120, 87], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 6.5 },
         footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
         didParseCell: function(data) {
-          if (data.section === "body" && data.cell.raw === "-") {
-            data.cell.styles.fillColor = [254, 226, 226]; // light red background
-            data.cell.styles.textColor = [220, 38, 38];   // red text
+          if (data.section === "body") {
+            if (data.cell.raw === "-") {
+              data.cell.styles.fillColor = [254, 226, 226]; // light red
+              data.cell.styles.textColor = [220, 38, 38];   // red text
+            } else if (data.cell.raw === "PL") {
+              data.cell.styles.fillColor = [37, 99, 235];   // blue background
+              data.cell.styles.textColor = [255, 255, 255]; // white text
+              data.cell.styles.fontStyle = "bold";
+            } else if (data.cell.raw === "L") {
+              data.cell.styles.fillColor = [153, 27, 27];   // dark red background
+              data.cell.styles.textColor = [255, 255, 255]; // white text
+              data.cell.styles.fontStyle = "bold";
+            }
           }
         }
       });

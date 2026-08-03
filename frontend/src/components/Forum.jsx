@@ -295,6 +295,18 @@ function GroupAvatar({ group, className = "h-11 w-11", iconClassName = "h-5 w-5"
   );
 }
 
+function LoopAssistantAvatar({ assistant, className = "h-8 w-8", iconClassName = "h-4 w-4" }) {
+  if (assistant?.avatarUrl) {
+    const src = assistant.avatarUrl.startsWith("blob:") || assistant.avatarUrl.startsWith("data:") ? assistant.avatarUrl : `${API_URL}${assistant.avatarUrl}`;
+    return <img src={src} alt="Loop" className={`${className} shrink-0 rounded-full object-cover`} />;
+  }
+  return (
+    <span className={`grid ${className} shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white`}>
+      <Sparkles className={iconClassName} />
+    </span>
+  );
+}
+
 function TinySpinner({ className = "h-3.5 w-3.5" }) {
   return <LoaderCircle className={`${className} animate-spin`} />;
 }
@@ -491,34 +503,34 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
   });
 }
 
-function renderLoopAssistantText(text) {
+function renderLoopAssistantText(text, darkMode = false) {
   const badgeClassFor = (label, value) => {
     const key = `${label} ${value}`.toLowerCase();
     if (/status/.test(key)) {
-      if (/done|complete/.test(key)) return "bg-[#dcfce7] text-[#15803d]";
-      if (/block|risk|delay|overdue/.test(key)) return "bg-[#ffe4e6] text-[#be123c]";
-      if (/progress|active|working/.test(key)) return "bg-[#dbeafe] text-[#1d4ed8]";
-      return "bg-[#f1f5f9] text-[#475569]";
+      if (/done|complete/.test(key)) return darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#dcfce7] text-[#15803d]";
+      if (/block|risk|delay|overdue/.test(key)) return darkMode ? "bg-[#43202a] text-[#ffc0cb]" : "bg-[#ffe4e6] text-[#be123c]";
+      if (/progress|active|working/.test(key)) return darkMode ? "bg-[#153246] text-[#a9ddff]" : "bg-[#dbeafe] text-[#1d4ed8]";
+      return darkMode ? "bg-[#343842] text-[#d7dde8]" : "bg-[#f1f5f9] text-[#475569]";
     }
     if (/priority/.test(key)) {
-      if (/critical|urgent/.test(key)) return "bg-[#f3e8ff] text-[#7e22ce]";
-      if (/high/.test(key)) return "bg-[#fee2e2] text-[#dc2626]";
-      if (/medium/.test(key)) return "bg-[#fef3c7] text-[#b45309]";
-      return "bg-[#dcfce7] text-[#15803d]";
+      if (/critical|urgent/.test(key)) return darkMode ? "bg-[#39264d] text-[#e4c8ff]" : "bg-[#f3e8ff] text-[#7e22ce]";
+      if (/high/.test(key)) return darkMode ? "bg-[#452525] text-[#ffc4c4]" : "bg-[#fee2e2] text-[#dc2626]";
+      if (/medium/.test(key)) return darkMode ? "bg-[#463515] text-[#ffd88a]" : "bg-[#fef3c7] text-[#b45309]";
+      return darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#dcfce7] text-[#15803d]";
     }
     if (/due|deadline|target|date/.test(key)) {
-      if (/not set|not specified|no /.test(key)) return "bg-[#f1f5f9] text-[#64748b]";
-      return "bg-[#e0f2fe] text-[#0369a1]";
+      if (/not set|not specified|no /.test(key)) return darkMode ? "bg-[#343842] text-[#c8cfda]" : "bg-[#f1f5f9] text-[#64748b]";
+      return darkMode ? "bg-[#123948] text-[#9ee7ff]" : "bg-[#e0f2fe] text-[#0369a1]";
     }
-    if (/assignee|manager/.test(key)) return "bg-[#ede9fe] text-[#6d28d9]";
-    if (/phase|health/.test(key)) return "bg-[#ecfdf5] text-[#047857]";
-    return "bg-[#f8fafc] text-[#475569]";
+    if (/assignee|manager/.test(key)) return darkMode ? "bg-[#32294a] text-[#d8c9ff]" : "bg-[#ede9fe] text-[#6d28d9]";
+    if (/phase|health/.test(key)) return darkMode ? "bg-[#143b34] text-[#a5eadc]" : "bg-[#ecfdf5] text-[#047857]";
+    return darkMode ? "bg-[#343842] text-[#d7dde8]" : "bg-[#f8fafc] text-[#475569]";
   };
   const renderInline = (line, lineIndex) => {
     const parts = String(line || "").split(/(\*\*[^*]+\*\*)/g).filter((part) => part !== "");
     return parts.map((part, partIndex) => {
       if (/^\*\*[^*]+\*\*$/.test(part)) {
-        return <strong key={`${lineIndex}-${partIndex}`} className="font-black text-[#0f172a]">{part.slice(2, -2)}</strong>;
+        return <strong key={`${lineIndex}-${partIndex}`} className={`font-black ${darkMode ? "text-white" : "text-[#0f172a]"}`}>{part.slice(2, -2)}</strong>;
       }
       return <span key={`${lineIndex}-${partIndex}`}>{part}</span>;
     });
@@ -537,8 +549,8 @@ function renderLoopAssistantText(text) {
         const value = labelMatch[2].trim();
         return (
           <div key={index} className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-[0.08em] text-[#64748b]">{label}</span>
-            <span className={`max-w-full rounded-full px-2.5 py-1 text-xs font-black leading-none ${badgeClassFor(label, value)} break-words`}>{value}</span>
+            <span className={`text-xs font-black uppercase tracking-[0.08em] ${darkMode ? "text-white/65" : "text-[#64748b]"}`}>{label}</span>
+            <span className={`max-w-full rounded-full px-3 py-1.5 text-xs leading-none tracking-[0.01em] ${darkMode ? "font-semibold" : "font-black"} ${badgeClassFor(label, value)} break-words`}>{value}</span>
           </div>
         );
       }
@@ -553,7 +565,7 @@ function renderLoopAssistantText(text) {
       if (numbered) {
         return (
           <div key={index} className="flex gap-2">
-            <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-[#e8f7ef] px-1 text-[10px] font-black text-[#16a34a]">{numbered[1]}</span>
+            <span className={`grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1 text-[10px] ${darkMode ? "bg-[#143728] font-semibold text-[#9ee8bf]" : "bg-[#e8f7ef] font-black text-[#16a34a]"}`}>{numbered[1]}</span>
             <p className="min-w-0 flex-1">{renderInline(numbered[2], index)}</p>
           </div>
         );
@@ -971,6 +983,72 @@ function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDire
         </>
       )}
     </MobileBottomSheetFrame>
+  );
+}
+
+function LoopAssistantProfilePanel({ darkMode, assistant, currentUser, muted, embedded = false, widgetControls = null, onBack, onToggle, onAvatarUpload, uploading = false, saving = false }) {
+  const panelBg = darkMode ? "bg-[#15171c] text-white" : "bg-[#fbfcff] text-black";
+  const softBlock = darkMode ? "bg-white/[0.05]" : "bg-[#f4f7fb]";
+  const divider = darkMode ? "border-white/[0.06]" : "border-[#eef1f5]";
+  const canManage = Boolean(currentUser?.isSuperAdmin);
+  const enabled = assistant?.enabled !== false;
+  return (
+    <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-hidden ${panelBg} xl:flex`}>
+      <div className={`flex h-16 shrink-0 items-center ${embedded && widgetControls ? "justify-end" : "justify-center"} border-b px-4 ${divider}`}>
+        {embedded && widgetControls ? widgetControls : (
+          <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${enabled ? darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600" : darkMode ? "bg-white/10 text-white/60" : "bg-slate-100 text-slate-500"}`}>
+            <Sparkles className="h-4.5 w-4.5 shrink-0" />
+            <span>{enabled ? "Loop assistant is on" : "Loop assistant is off"}</span>
+          </span>
+        )}
+        {onBack && (
+          <button type="button" onClick={onBack} className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/[0.05] hover:bg-white/10" : "bg-[#f4f7fb] hover:bg-[#edf1f7]"}`}>
+            Back
+          </button>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="mx-auto flex w-[calc(100%-40px)] max-w-[320px] flex-col py-7">
+          <div className="relative mx-auto">
+            <LoopAssistantAvatar assistant={assistant} className="h-24 w-24" iconClassName="h-10 w-10" />
+            {canManage && (
+              <label className={`absolute bottom-0 right-0 grid h-9 w-9 cursor-pointer place-items-center rounded-full ${darkMode ? "bg-[#23262d] text-white" : "bg-white text-[#14213d]"} shadow-sm`}>
+                {uploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                <input type="file" accept="image/*" className="hidden" onChange={(event) => onAvatarUpload?.(event.target.files?.[0])} />
+              </label>
+            )}
+          </div>
+          <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">Loop</h2>
+          <p className={`mt-1 truncate text-center text-sm ${muted}`}>@loop</p>
+          <div className="mt-3 flex justify-center">
+            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${enabled ? "bg-[#dcfce7] text-[#16a34a]" : "bg-slate-100 text-slate-500"}`}>
+              {enabled ? "Available everywhere" : "Disabled"}
+            </span>
+          </div>
+          {canManage && (
+            <button type="button" disabled={saving} onClick={() => onToggle?.(!enabled)} className={`mt-8 flex w-full max-w-full items-center justify-between gap-3 rounded-[14px] px-4 py-4 text-sm font-semibold ${softBlock}`}>
+              <span>{enabled ? "Turn Loop off" : "Turn Loop on"}</span>
+              <span className={`relative h-7 w-12 rounded-full transition ${enabled ? "bg-[#22c55e]" : "bg-slate-300"}`}>
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${enabled ? "left-6" : "left-1"}`} />
+              </span>
+            </button>
+          )}
+          <PanelSection title="Assistant profile" muted={muted}>
+            {[
+              ["Name", "Loop"],
+              ["Username", "@loop"],
+              ["Role", assistant?.title || "Project assistant"],
+              ["Access", enabled ? "Responds in project groups" : "Hidden from mentions and disabled"],
+            ].map(([label, value]) => (
+              <div key={label} className="py-1.5">
+                <p className={`text-xs ${muted}`}>{label}</p>
+                <p className="mt-0.5 min-w-0 break-words text-sm font-bold">{value}</p>
+              </div>
+            ))}
+          </PanelSection>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -1450,6 +1528,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [typingByConversation, setTypingByConversation] = useState({});
   const [loopTypingByConversation, setLoopTypingByConversation] = useState({});
   const [sidebarUser, setSidebarUser] = useState(null);
+  const [loopProfileOpen, setLoopProfileOpen] = useState(false);
+  const [loopAssistant, setLoopAssistant] = useState({ id: "loop-assistant", displayName: "Loop", username: "loop", title: "Project assistant", enabled: true, avatarUrl: "" });
+  const [savingLoopAssistant, setSavingLoopAssistant] = useState(false);
+  const [uploadingLoopAvatar, setUploadingLoopAvatar] = useState(false);
   const [mobileProfileUser, setMobileProfileUser] = useState(null);
   const [mobileGroupInfoOpen, setMobileGroupInfoOpen] = useState(false);
   const [mobileListOpen, setMobileListOpen] = useState(true);
@@ -1942,8 +2024,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   }, [composer, selectedIsGroup]);
   const mentionOptions = useMemo(() => {
     if (mentionQuery === null) return [];
-    const loopOption = selectedConversation?.groupKind === "project" && (!mentionQuery || "loop".includes(mentionQuery))
-      ? [{ id: "loop-assistant", displayName: "Loop", username: "loop", loopAssistant: true }]
+    const loopOption = selectedConversation?.groupKind === "project" && loopAssistant.enabled !== false && (!mentionQuery || "loop".includes(mentionQuery))
+      ? [{ ...loopAssistant, id: "loop-assistant", displayName: "Loop", username: "loop", loopAssistant: true }]
       : [];
     const people = groupParticipants
       .filter((user) => user.id !== currentUser?.id)
@@ -1953,7 +2035,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       })
       .slice(0, 8);
     return [...loopOption, ...people].slice(0, 8);
-  }, [currentUser?.id, groupParticipants, mentionQuery, selectedConversation?.groupKind]);
+  }, [currentUser?.id, groupParticipants, loopAssistant, mentionQuery, selectedConversation?.groupKind]);
   const createGroupUsers = useMemo(() => {
     const term = createGroupSearch.trim().toLowerCase();
     return users
@@ -2006,6 +2088,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     });
     setUsers(data.users || []);
     setProjects(data.projects || []);
+    if (data.loopAssistant) setLoopAssistant(data.loopAssistant);
     setOnlineUserIds(data.onlineUserIds || []);
     api("/forum/settings").then((settings) => {
       setForumDriveFolderUrl(settings.driveFolderUrl || "");
@@ -2034,6 +2117,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     messagesLoadSeqRef.current += 1;
     setSelectedId(conversationId);
     setMessages(messagesCacheRef.current[conversationId] || []);
+    setLoopProfileOpen(false);
     setMobileListOpen(false);
     scrollMessagesToBottom("gentle");
   }, [scrollMessagesToBottom]);
@@ -2488,6 +2572,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     const giphy = event?.giphy;
     const text = composer.trim();
     if (!text && !giphy) return;
+    if (!giphy?.url && /(^|\s)@loop\b/i.test(text) && loopAssistant.enabled === false) {
+      toast.error("Loop assistant is turned off");
+      return;
+    }
     if (!canSendSelectedConversation) {
       toast.error("Only group admins can message right now");
       return;
@@ -2613,6 +2701,38 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       toast.error(error.message || "Could not connect Drive folder");
     } finally {
       setSavingForumSettings(false);
+    }
+  }
+
+  async function updateLoopAssistantEnabled(enabled) {
+    try {
+      setSavingLoopAssistant(true);
+      const data = await api("/forum/loop-assistant", {
+        method: "PATCH",
+        body: JSON.stringify({ enabled }),
+      });
+      if (data.loopAssistant) setLoopAssistant(data.loopAssistant);
+      toast.success(enabled ? "Loop assistant enabled" : "Loop assistant disabled");
+    } catch (error) {
+      toast.error(error.message || "Could not update Loop assistant");
+    } finally {
+      setSavingLoopAssistant(false);
+    }
+  }
+
+  async function uploadLoopAssistantAvatar(file) {
+    if (!file) return;
+    try {
+      setUploadingLoopAvatar(true);
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const data = await apiFormWithProgress("/forum/loop-assistant/avatar", formData);
+      if (data.loopAssistant) setLoopAssistant(data.loopAssistant);
+      toast.success("Loop avatar updated");
+    } catch (error) {
+      toast.error(error.message || "Could not upload Loop avatar");
+    } finally {
+      setUploadingLoopAvatar(false);
     }
   }
 
@@ -3842,6 +3962,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         );
                       }
                       if (message.loopAssistant) {
+                        const messageLoopProfile = { ...loopAssistant, avatarUrl: message.assistant?.avatarUrl || loopAssistant.avatarUrl };
+                        const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
+                        const isSelectionMode = selectedMessageIds.length > 0;
+                        const isSelectedMessage = selectedMessageIds.includes(message.id);
                         return (
                           <div key={message.clientKey || message.id} className="min-w-0 mt-4 first:mt-0">
                             {showDate && (
@@ -3856,24 +3980,45 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 if (node) messageRefs.current.set(message.id, node);
                                 else messageRefs.current.delete(message.id);
                               }}
-                              className="forum-msg-pop flex min-w-0 items-start gap-2 sm:gap-3"
+                              onContextMenu={(event) => openMessageMenu(event, message)}
+                              onClick={() => {
+                                if (isSelectionMode) toggleSelectedMessage(message);
+                              }}
+                              onTouchStart={(event) => handleMessageTouchStart(event, message)}
+                              onTouchMove={handleMessageTouchMove}
+                              onTouchEnd={handleMessageTouchEnd}
+                              onTouchCancel={handleMessageTouchEnd}
+                              className={`forum-msg-pop relative flex min-w-0 items-start gap-2 sm:gap-3 transition-transform ${isContextTarget ? "z-[86] scale-[1.01]" : ""} ${isSelectedMessage ? darkMode ? "rounded-[24px] bg-[#123c2c]/70" : "rounded-[24px] bg-[#dff8e8]" : ""}`}
                             >
-                              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white">
-                                <Sparkles className="h-4 w-4" />
-                              </span>
-                              <article className={`max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] rounded-bl-[7px] p-4 sm:max-w-[78%] ${darkMode ? "bg-[#f8fafc] text-[#14213d]" : "bg-white text-[#14213d]"}`}>
+                              {isSelectionMode && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleSelectedMessage(message);
+                                  }}
+                                  className={`absolute right-1 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border text-white shadow-sm ${isSelectedMessage ? "border-emerald-500 bg-emerald-500" : darkMode ? "border-white/20 bg-black/40" : "border-black/10 bg-white"}`}
+                                  aria-label={isSelectedMessage ? "Deselect message" : "Select message"}
+                                >
+                                  {isSelectedMessage && <Check className="h-4 w-4" />}
+                                </button>
+                              )}
+                              <button type="button" onClick={() => setLoopProfileOpen(true)} className="shrink-0 rounded-full" aria-label="Open Loop profile">
+                                <LoopAssistantAvatar assistant={messageLoopProfile} className="h-8 w-8" iconClassName="h-4 w-4" />
+                              </button>
+                              <article className={`max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] rounded-bl-[7px] p-4 sm:max-w-[78%] ${darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]"}`}>
                                 <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-sm font-black text-[#0f172a]">Loop assistant</span>
-                                      <span className="rounded-full bg-[#e8f7ef] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-[#16a34a]">Project</span>
+                                      <button type="button" onClick={() => setLoopProfileOpen(true)} className={`text-left text-sm font-black hover:underline hover:underline-offset-2 ${darkMode ? "text-white" : "text-[#0f172a]"}`}>Loop assistant</button>
+                                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${darkMode ? "bg-emerald-400/15 text-emerald-300" : "bg-[#e8f7ef] text-[#16a34a]"}`}>Project</span>
                                     </div>
-                                    <p className="truncate text-xs text-[#7b8794]">{message.assistantPayload?.projectName || selectedConversation?.project?.name || selectedConversation?.name || "Project"}</p>
+                                    <p className={`truncate text-xs ${darkMode ? "text-white/60" : "text-[#7b8794]"}`}>{message.assistantPayload?.projectName || selectedConversation?.project?.name || selectedConversation?.name || "Project"}</p>
                                   </div>
-                                  <span className="shrink-0 text-[10px] font-semibold text-[#98a2b3]">{formatTime(message.createdAt)}</span>
+                                  <span className={`shrink-0 text-[10px] font-semibold ${darkMode ? "text-white/55" : "text-[#98a2b3]"}`}>{formatTime(message.createdAt)}</span>
                                 </div>
-                                <div className="space-y-2 break-words text-sm leading-6 text-[#334155] [overflow-wrap:anywhere]">
-                                  {renderLoopAssistantText(message.text)}
+                                <div className={`space-y-2 break-words text-sm leading-6 [overflow-wrap:anywhere] ${darkMode ? "text-white/85" : "text-[#334155]"}`}>
+                                  {renderLoopAssistantText(message.text, darkMode)}
                                 </div>
                               </article>
                             </div>
@@ -4199,9 +4344,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   )}
                   {loopTypingByConversation[selectedId] && (
                     <div className="forum-msg-pop mt-3 flex items-start gap-2 sm:gap-3">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white shadow-[0_10px_24px_rgba(16,185,129,0.22)]">
-                        <Sparkles className="h-4 w-4" />
-                      </span>
+                      <button type="button" onClick={() => setLoopProfileOpen(true)} className="shrink-0 rounded-full" aria-label="Open Loop profile">
+                        <LoopAssistantAvatar assistant={loopAssistant} className="h-8 w-8" iconClassName="h-4 w-4" />
+                      </button>
                       <div className={`flex items-center gap-3 rounded-[20px] rounded-bl-[7px] border px-4 py-3 shadow-[0_14px_36px_rgba(15,23,42,0.07)] ${darkMode ? "border-white/10 bg-[#f8fafc] text-[#14213d]" : "border-[#e5edf8] bg-white text-[#14213d]"}`} aria-label="Loop is thinking">
                         <span className="text-xs font-black text-[#0f172a]">Loop is thinking</span>
                         <span className="flex items-center gap-1">
@@ -4225,9 +4370,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       return (
                       <button key={user.id} type="button" onMouseEnter={() => setActiveMentionIndex(index)} onClick={() => selectMention(user)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${active ? darkMode ? "bg-white/12" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
                         {user.loopAssistant ? (
-                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white shadow-[0_10px_22px_rgba(16,185,129,0.18)]">
-                            <Sparkles className="h-4 w-4" />
-                          </span>
+                          <LoopAssistantAvatar assistant={loopAssistant} className="h-9 w-9" iconClassName="h-4 w-4" />
                         ) : (
                           <span className="relative shrink-0">
                             <UserAvatar user={user} name={user.displayName} className="h-9 w-9" />
@@ -4538,7 +4681,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 )}
             </div>
 
-            {sidebarUser || selectedConversation?.type === "direct" ? (
+            {loopProfileOpen ? (
+              <LoopAssistantProfilePanel
+                darkMode={darkMode}
+                assistant={loopAssistant}
+                currentUser={currentUser}
+                muted={muted}
+                onBack={() => setLoopProfileOpen(false)}
+                onToggle={updateLoopAssistantEnabled}
+                onAvatarUpload={uploadLoopAssistantAvatar}
+                uploading={uploadingLoopAvatar}
+                saving={savingLoopAssistant}
+                embedded={embedded}
+                widgetControls={widgetControls}
+              />
+            ) : sidebarUser || selectedConversation?.type === "direct" ? (
               <UserInfoPanel
                 darkMode={darkMode}
                 user={sidebarUser || selectedOtherUser}
@@ -4562,7 +4719,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 onlineUserIds={onlineUserIds}
                 muted={muted}
                 onDirect={startDirect}
-                onSelectUser={setSidebarUser}
+                onSelectUser={(user) => {
+                  setLoopProfileOpen(false);
+                  setSidebarUser(user);
+                }}
                 onUpdateGroup={updateGroup}
                 onRequestDeleteGroup={requestDeleteGroupForEveryone}
                 onRequestRemoveGroupForMe={requestRemoveGroupForMe}
@@ -4857,6 +5017,27 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   <X className="h-4 w-4" />
                 </button>
               </div>
+              <div className={`mt-5 rounded-2xl p-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]"}`}>
+                <div className="flex items-center gap-3">
+                  <LoopAssistantAvatar assistant={loopAssistant} className="h-11 w-11" iconClassName="h-5 w-5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black">Loop assistant</p>
+                    <p className={`truncate text-xs ${muted}`}>@loop · {loopAssistant.enabled === false ? "Disabled" : "Available"}</p>
+                  </div>
+                  {currentUser?.isSuperAdmin && (
+                    <button type="button" disabled={savingLoopAssistant} onClick={() => updateLoopAssistantEnabled(loopAssistant.enabled === false)} className={`relative h-7 w-12 rounded-full transition ${loopAssistant.enabled === false ? "bg-slate-300" : "bg-[#22c55e]"}`} aria-label="Toggle Loop assistant">
+                      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${loopAssistant.enabled === false ? "left-1" : "left-6"}`} />
+                    </button>
+                  )}
+                </div>
+                {currentUser?.isSuperAdmin && (
+                  <label className={`mt-3 flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl text-sm font-bold ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-white hover:bg-[#eef4ff]"}`}>
+                    {uploadingLoopAvatar ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    Upload Loop avatar
+                    <input type="file" accept="image/*" className="hidden" onChange={(event) => uploadLoopAssistantAvatar(event.target.files?.[0])} />
+                  </label>
+                )}
+              </div>
               <label className="mt-5 block">
                 <span className={`mb-2 block text-xs font-semibold ${muted}`}>Drive folder link</span>
                 <input
@@ -5011,7 +5192,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     <Reply className="h-4 w-4 text-[#2563eb]" />
                     Reply
                   </button>
-                  {messageMenu.message?.senderId === currentUser?.id && (
+                  {messageMenu.message?.senderId === currentUser?.id && !messageMenu.message?.loopAssistant && (
                     <button
                       type="button"
                       onClick={() => {
@@ -5075,7 +5256,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     <Pin className="h-4 w-4 text-[#2563eb]" />
                     {selectedConversation?.pinnedMessage?.messageId === messageMenu.message?.id ? "Unpin" : "Pin message"}
                   </button>
-                  {messageMenu.message?.senderId === currentUser?.id && !messageMenu.message?.forwardedFrom && !messageMenu.message?.attachment && (
+                  {messageMenu.message?.senderId === currentUser?.id && !messageMenu.message?.loopAssistant && !messageMenu.message?.forwardedFrom && !messageMenu.message?.attachment && (
                     <button
                       type="button"
                       disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
@@ -5409,7 +5590,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 <p className="line-clamp-3 whitespace-pre-wrap break-words">{deleteMessageTarget.text || "Link preview message"}</p>
               </div> */}
               <div className="mt-5 flex items-center gap-2">
-                {(deleteSelectionTarget || deleteMessageTarget?.senderId === currentUser?.id) && (
+                {(deleteSelectionTarget || (deleteMessageTarget?.senderId === currentUser?.id && !deleteMessageTarget?.loopAssistant)) && (
                   <button type="button" disabled={deletingMessage || selectionDeleting} onClick={() => deleteSelectionTarget ? deleteSelectedMessages("everyone") : deleteSingleMessage("everyone")} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-red-500 px-3 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-60">
                     {(deletingMessage || selectionDeleting) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     <span className="truncate">Delete for everyone</span>

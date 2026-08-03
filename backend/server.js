@@ -15597,6 +15597,15 @@ const FORUM_GROUP_AVATAR_PRESETS = new Set([
   "sky", "forest", "coral", "royal", "mint", "fire", "plum", "teal", "gold", "night",
   "grape", "leaf", "ruby", "aqua", "orchid", "steel", "peach", "bluegrass", "magenta", "slate",
 ]);
+const LOOP_ASSISTANT_DEFAULT_PROFILE = {
+  id: "loop-assistant",
+  displayName: "Loop",
+  username: "loop",
+  title: "Project assistant",
+  bio: "Answers project questions inside Loop chats.",
+  enabled: true,
+  avatarUrl: "",
+};
 const forumClients = new Map();
 const activeScreenShares = new Map();
 
@@ -15964,6 +15973,20 @@ function shouldTriggerLoopAssistant(text = "") {
   return /(^|\s)@loop\b/i.test(String(text || ""));
 }
 
+async function forumLoopAssistantProfile(db) {
+  const settings = await db.collection("forumSettings").findOne({ _id: "loopAssistant" });
+  return {
+    ...LOOP_ASSISTANT_DEFAULT_PROFILE,
+    ...(settings?.profile || {}),
+    enabled: settings?.enabled !== false,
+  };
+}
+
+async function isForumLoopAssistantEnabled(db) {
+  const profile = await forumLoopAssistantProfile(db);
+  return profile.enabled !== false;
+}
+
 function projectDateKey(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -16133,6 +16156,7 @@ async function createForumLoopAssistantMessage({ req, conversation, text, assist
   const now = new Date();
   const encrypted = encryptForumText(text);
   const recipientIds = conversation.participantIds || [];
+  const profile = await forumLoopAssistantProfile(db);
   const message = {
     conversationId: conversation._id,
     type: conversation.type,
@@ -16140,7 +16164,7 @@ async function createForumLoopAssistantMessage({ req, conversation, text, assist
     recipientIds,
     encrypted,
     loopAssistant: true,
-    assistant: { id: "loop", name: "Loop" },
+    assistant: { id: "loop", name: "Loop", avatarUrl: profile.avatarUrl || "" },
     assistantPayload,
     createdAt: now,
     readBy: {},
@@ -16201,6 +16225,7 @@ app.get("/forum/bootstrap", async (req, res) => {
   try {
     const db = await connectAuthDb();
     const group = await ensureForumGroupConversation(db);
+    const loopAssistant = await forumLoopAssistantProfile(db);
     const conversations = await db.collection("forumConversations").find({
       participantIds: req.authUser.id,
       deletedForUsers: { $ne: String(req.authUser.id) },
@@ -16218,6 +16243,7 @@ app.get("/forum/bootstrap", async (req, res) => {
           ...forumProjectSummary(project),
           memberIds: forumProjectMemberIds(project),
         })),
+      loopAssistant,
       onlineUserIds,
     });
   } catch (error) {
@@ -16317,6 +16343,50 @@ app.put("/forum/settings", async (req, res) => {
   } catch (error) {
     console.error("Forum settings save error:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch("/forum/loop-assistant", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin) return res.status(403).json({ error: "Only super admin can manage Loop assistant" });
+    const db = await connectAuthDb();
+    const existing = await forumLoopAssistantProfile(db);
+    const enabled = req.body?.enabled === undefined ? existing.enabled : Boolean(req.body.enabled);
+    const profile = {
+      ...existing,
+      displayName: "Loop",
+      username: "loop",
+      title: "Project assistant",
+      bio: String(req.body?.bio ?? existing.bio ?? LOOP_ASSISTANT_DEFAULT_PROFILE.bio).slice(0, 240),
+    };
+    await db.collection("forumSettings").updateOne(
+      { _id: "loopAssistant" },
+      { $set: { enabled, profile, updatedAt: new Date(), updatedBy: req.authUser.id } },
+      { upsert: true }
+    );
+    res.json({ loopAssistant: await forumLoopAssistantProfile(db) });
+  } catch (error) {
+    console.error("Loop assistant settings error:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/loop-assistant/avatar", upload.single("avatar"), async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin) return res.status(403).json({ error: "Only super admin can update Loop assistant avatar" });
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    const db = await connectAuthDb();
+    const existing = await forumLoopAssistantProfile(db);
+    const profile = { ...existing, avatarUrl: `/uploads/${req.file.filename}` };
+    await db.collection("forumSettings").updateOne(
+      { _id: "loopAssistant" },
+      { $set: { enabled: existing.enabled !== false, profile, updatedAt: new Date(), updatedBy: req.authUser.id } },
+      { upsert: true }
+    );
+    res.json({ loopAssistant: await forumLoopAssistantProfile(db) });
+  } catch (error) {
+    console.error("Loop assistant avatar error:", error);
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -16727,10 +16797,12 @@ app.post("/forum/conversations/:id/messages", async (req, res) => {
     let assistantMessage = null;
     if (!attachment && shouldTriggerLoopAssistant(text)) {
       const db = await connectAuthDb();
-      const conversation = req.params.id === FORUM_GROUP_ID
-        ? await ensureForumGroupConversation(db)
-        : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
-      if (conversation) assistantMessage = await createLoopProjectAssistantReply({ req, conversation, question: text });
+      if (await isForumLoopAssistantEnabled(db)) {
+        const conversation = req.params.id === FORUM_GROUP_ID
+          ? await ensureForumGroupConversation(db)
+          : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
+        if (conversation) assistantMessage = await createLoopProjectAssistantReply({ req, conversation, question: text });
+      }
     }
     res.json({ message, assistantMessage });
   } catch (error) {

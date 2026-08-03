@@ -1,5 +1,5 @@
-import ProtectedModule from "../../components/ProtectedModule";
+import { redirect } from "next/navigation";
 
 export default function ForumPage() {
-  return <ProtectedModule moduleId="forum" />;
+  redirect("/loop");
 }

@@ -46,7 +46,7 @@ const menuPaths = {
   "hr-leave": "/hr/leave",
   "hr-attendance": "/hr/attendance",
   todos: "/todos",
-  forum: "/forum",
+  forum: "/loop",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
@@ -259,7 +259,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
             showAppToast(`${senderName}: ${previewText}`, {
               type: "notification",
               darkMode,
-              detail: "New forum message",
+              detail: "New Loop message",
               label: "Message",
               duration: 4500,
             });
@@ -273,7 +273,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
                 });
                 browserNotif.onclick = () => {
                   window.focus();
-                  window.location.href = "/forum";
+                  window.location.href = "/loop";
                   browserNotif.close();
                 };
               } catch {}
@@ -406,7 +406,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         type="button"
         onClick={() => setForumWidgetMinimized(true)}
         className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-normal transition duration-300 active:scale-95 ${darkMode ? "bg-sky-400/12 text-sky-200 hover:bg-sky-400/18" : "bg-sky-50 text-sky-700 hover:bg-sky-100"}`}
-        aria-label="Minimize forum chat"
+        aria-label="Minimize Loop chat"
       >
         <Minimize className="h-4.5 w-4.5" />
         <span className="hidden sm:inline">Minimize</span>
@@ -415,7 +415,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         type="button"
         onClick={closeForumWidget}
         className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-normal transition duration-300 active:scale-95 ${darkMode ? "bg-rose-400/12 text-rose-200 hover:bg-rose-400/18" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}
-        aria-label="Close forum chat"
+        aria-label="Close Loop chat"
       >
         <X className="h-4.5 w-4.5" />
         <span className="hidden sm:inline">Close</span>
@@ -500,7 +500,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
                 setForumUnreadTotal(0);
               }}
               className="fixed bottom-5 right-5 z-[80] grid h-14 w-14 place-items-center rounded-full bg-[#2563eb] text-white shadow-[0_18px_45px_rgba(37,99,235,0.34)] transition hover:scale-105 hover:bg-[#1d4ed8] active:scale-95"
-              aria-label="Open forum chat"
+              aria-label="Open Loop chat"
             >
               <MessageCircleMore className="h-6 w-6" />
               {forumUnreadTotal > 0 && (
@@ -514,7 +514,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
             <button
               type="button"
               className={`fixed inset-0 z-[87] cursor-default bg-black/30 backdrop-blur-[2px] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${forumWidgetClosing ? "opacity-0" : "opacity-100"}`}
-              aria-label="Close forum backdrop"
+              aria-label="Close Loop backdrop"
               onClick={closeForumWidget}
             />
           )}

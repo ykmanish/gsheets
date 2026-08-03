@@ -19,7 +19,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "hr-leave", label: "Leave", icon: CalendarDays, parent: "hr" },
     { id: "hr-attendance", label: "Attendance", icon: MapPin, parent: "hr" },
     { id: "todos", label: "Todos", icon: ListTodo },
-    { id: "forum", label: "Forum", icon: MessagesSquare },
+    { id: "forum", label: "Loop", icon: MessagesSquare },
     { id: "sheet-dashboard", label: "Sheet Dashboard", icon: Sheet },
     { id: "automations", label: "Automation", icon: Workflow },
     { id: "reports", label: "Reports", icon: ChartNoAxesCombined },

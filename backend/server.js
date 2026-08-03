@@ -74,7 +74,7 @@ const MENU_ITEMS = [
   { id: "hr-leave", label: "Leave", parent: "hr-dashboard", group: "hr" },
   { id: "hr-attendance", label: "Attendance", parent: "hr-dashboard", group: "hr" },
   { id: "todos", label: "Todos" },
-  { id: "forum", label: "Forum" },
+  { id: "forum", label: "Loop" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
@@ -2895,7 +2895,7 @@ app.post("/employee-daily-report/refine-description", async (req, res) => {
 
 app.post("/forum/refine-message", async (req, res) => {
   try {
-    if (!hasMenuAccess(req, "forum")) return res.status(403).json({ error: "Forum access required" });
+    if (!hasMenuAccess(req, "forum")) return res.status(403).json({ error: "Loop access required" });
     const text = projectText(req.body?.text).slice(0, 2000);
     if (!text.trim()) return res.status(400).json({ error: "Type a message first" });
 
@@ -15649,6 +15649,28 @@ function forumConversationIdForDirect(userA, userB) {
   return `dm:${[String(userA), String(userB)].sort().join(":")}`;
 }
 
+function forumProjectMemberIds(project = {}) {
+  const tasks = projectManualTasks(project);
+  return [...new Set([
+    project.managerId,
+    ...(project.projectAccess || []).map((entry) => entry.userId),
+    ...tasks.flatMap((task) => task.assigneeIds || []),
+    ...tasks.flatMap((task) => (task.subtasks || []).map((subtask) => subtask.assigneeId)),
+  ].filter(Boolean).map(String))];
+}
+
+function forumProjectSummary(project = {}) {
+  if (!project?.id) return null;
+  return {
+    id: project.id,
+    name: project.name || "Project",
+    code: project.code || "",
+    client: project.client || "",
+    location: project.location || "",
+    status: project.status || "",
+  };
+}
+
 async function ensureForumGroupConversation(db) {
   const now = new Date();
   const activeUsers = await db.collection("users").find({ blacklisted: { $ne: true } }, { projection: { _id: 1, isSuperAdmin: 1 } }).toArray();
@@ -15660,7 +15682,7 @@ async function ensureForumGroupConversation(db) {
       $setOnInsert: {
         _id: FORUM_GROUP_ID,
         type: "group",
-        name: "Group Forum",
+        name: "Loop Group",
         avatarPreset: "ocean",
         participantIds: activeUserIds,
         adminIds: superAdminIds,
@@ -15784,11 +15806,14 @@ async function forumConversationSummary(conversation, authUserId) {
   return {
     id: conversation._id,
     type: conversation.type,
-    name: conversation.type === "direct" ? (other?.displayName || other?.username || "Direct message") : conversation.name || "Group Forum",
+    name: conversation.type === "direct" ? (other?.displayName || other?.username || "Direct message") : conversation.name || "Loop Group",
     participants: participants.map(forumUserProfile),
     participantIds,
     adminIds: (conversation.adminIds || []).map(String),
     adminOnlyMessages: Boolean(conversation.adminOnlyMessages),
+    groupKind: conversation.groupKind || (conversation.projectId ? "project" : "general"),
+    projectId: conversation.projectId || "",
+    project: conversation.project || (conversation.projectId ? forumProjectSummary(projectDashboardConfig.projects.find((project) => project.id === conversation.projectId)) : null),
     deletedAt: conversation.deletedAt || null,
     deletedByUserId: conversation.deletedByUserId || null,
     deletedByName: conversation.deletedByName || "",
@@ -15947,6 +15972,12 @@ app.get("/forum/bootstrap", async (req, res) => {
       group: await forumConversationSummary(group, req.authUser.id),
       conversations: await Promise.all(conversations.map((item) => forumConversationSummary(item, req.authUser.id))),
       users: users.map(forumUserProfile),
+      projects: projectDashboardConfig.projects
+        .filter((project) => project.status !== "archived" && canViewProject(project, req))
+        .map((project) => ({
+          ...forumProjectSummary(project),
+          memberIds: forumProjectMemberIds(project),
+        })),
       onlineUserIds,
     });
   } catch (error) {
@@ -15995,13 +16026,13 @@ async function uploadForumFileToDrive(file, folderId) {
   } catch (error) {
     const message = String(error?.message || "");
     if (/storage quota|Service Accounts do not have storage quota/i.test(message)) {
-      throw new Error("Forum files must upload to a Google Shared Drive folder, or a Drive folder where the service account can create files.");
+      throw new Error("Loop files must upload to a Google Shared Drive folder, or a Drive folder where the service account can create files.");
     }
     throw error;
   }
   return {
     driveFileId: response.data.id,
-    name: response.data.name || file.originalname || "Forum file",
+    name: response.data.name || file.originalname || "Loop file",
     mimeType: response.data.mimeType || file.mimetype || "application/octet-stream",
     size: Number(response.data.size || file.size || 0),
     openUrl: response.data.webViewLink || `https://drive.google.com/file/d/${response.data.id}/view`,
@@ -16269,9 +16300,20 @@ app.post("/forum/conversations/group", async (req, res) => {
     if (!name || name.length > 80) return res.status(400).json({ error: "Group name must be 1-80 characters" });
     const avatarPreset = String(req.body?.avatarPreset || "ocean").trim();
     if (!FORUM_GROUP_AVATAR_PRESETS.has(avatarPreset)) return res.status(400).json({ error: "Choose a valid group avatar" });
+    const groupKind = String(req.body?.groupKind || "general") === "project" ? "project" : "general";
+    const projectId = String(req.body?.projectId || "").trim();
+    const linkedProject = groupKind === "project"
+      ? projectDashboardConfig.projects.find((project) => project.id === projectId && project.status !== "archived")
+      : null;
+    if (groupKind === "project") {
+      if (!linkedProject) return res.status(400).json({ error: "Choose a valid project" });
+      if (!canViewProject(linkedProject, req)) return res.status(403).json({ error: "Project access required" });
+    }
     const requestedMembers = Array.isArray(req.body?.participantIds) ? req.body.participantIds : [];
+    const projectMemberIds = linkedProject ? forumProjectMemberIds(linkedProject) : [];
     const participantIds = [...new Set([
       req.authUser.id,
+      ...projectMemberIds.filter((id) => activeUserIds.has(id)),
       ...requestedMembers.map(String).filter((id) => activeUserIds.has(id)),
     ])];
     if (participantIds.length < 2) return res.status(400).json({ error: "Add at least one member" });
@@ -16284,12 +16326,24 @@ app.post("/forum/conversations/group", async (req, res) => {
       participantIds,
       adminIds: [req.authUser.id],
       adminOnlyMessages: false,
+      groupKind,
+      projectId: linkedProject?.id || "",
+      project: linkedProject ? forumProjectSummary(linkedProject) : null,
       createdBy: req.authUser.id,
       createdAt: now,
       updatedAt: now,
     };
     await db.collection("forumConversations").insertOne(conversation);
-    const summary = await forumConversationSummary(conversation, req.authUser.id);
+    if (linkedProject) {
+      await createForumSystemMessage({
+        req,
+        conversation,
+        text: `Connected to project: ${linkedProject.name}`,
+        event: "project:linked",
+      });
+    }
+    const savedConversation = await db.collection("forumConversations").findOne({ _id: conversation._id });
+    const summary = await forumConversationSummary(savedConversation || conversation, req.authUser.id);
     broadcastForumPayload(participantIds, { type: "forum:conversation", conversation: summary });
     res.json({ conversation: summary });
   } catch (error) {

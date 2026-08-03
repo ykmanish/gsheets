@@ -308,7 +308,7 @@ async function api(path, options = {}) {
     },
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Forum request failed");
+  if (!response.ok) throw new Error(data.error || "Loop request failed");
   return data;
 }
 
@@ -331,9 +331,9 @@ function apiFormWithProgress(path, formData, onProgress) {
         }
       })();
       if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-      else reject(new Error(data.error || "Forum request failed"));
+      else reject(new Error(data.error || "Loop request failed"));
     };
-    xhr.onerror = () => reject(new Error("Forum request failed"));
+    xhr.onerror = () => reject(new Error("Loop request failed"));
     xhr.send(formData);
   });
 }
@@ -919,8 +919,11 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
               <X className="h-4 w-4" />
             </button>
             <GroupAvatar group={group} className="mx-auto h-24 w-24" iconClassName="h-10 w-10" />
-            <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">{group.name || "Group Forum"}</h2>
+            <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">{group.name || "Loop Group"}</h2>
             <p className="mt-1 text-center text-sm font-semibold text-[#22c55e]">{members.length} members · {onlineUserIds.length} online</p>
+            {group.groupKind === "project" && group.project && (
+              <p className={`mt-2 truncate text-center text-xs font-semibold ${muted}`}>Project: {group.project.name}</p>
+            )}
           </div>
 
           {groupDeleted && (
@@ -970,7 +973,7 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
 
 function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants, online, onlineUserIds, muted, onDirect, onSelectUser, onUpdateGroup, onRequestDeleteGroup, onRequestRemoveGroupForMe, embedded = false, widgetControls = null }) {
   const [showAllMembers, setShowAllMembers] = useState(false);
-  const [groupNameDraft, setGroupNameDraft] = useState(group?.name || "Group Forum");
+  const [groupNameDraft, setGroupNameDraft] = useState(group?.name || "Loop Group");
   const [editingName, setEditingName] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
@@ -1119,15 +1122,15 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
               <button type="button" disabled={Boolean(pendingAction) || !groupNameDraft.trim()} onClick={() => { void saveGroup({ name: groupNameDraft }, "name").then(() => setEditingName(false)); }} className="grid h-7 w-7 place-items-center rounded-full bg-[#2563eb] text-white disabled:opacity-35" aria-label="Save group name">
                 {pendingAction === "name" ? <TinySpinner /> : <Check className="h-3.5 w-3.5" />}
               </button>
-              <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Group Forum"); setEditingName(false); }} className={`grid h-7 w-7 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Cancel group name edit">
+              <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Loop Group"); setEditingName(false); }} className={`grid h-7 w-7 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Cancel group name edit">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
           ) : (
             <>
-              <h2 className="min-w-0 truncate text-center text-lg font-bold">{group?.name || "Group Forum"}</h2>
+              <h2 className="min-w-0 truncate text-center text-lg font-bold">{group?.name || "Loop Group"}</h2>
               {canManage && (
-                <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Group Forum"); setEditingName(true); }} className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Edit group name">
+                <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Loop Group"); setEditingName(true); }} className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Edit group name">
                   <Pencil className={`h-4 w-4 ${muted}`} />
                 </button>
               )}
@@ -1135,6 +1138,9 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
           )}
         </div>
         <p className="mt-1 text-center text-xs font-semibold text-[#22c55e]">{groupParticipants.length} members · {onlineUserIds.length} online</p>
+        {group?.groupKind === "project" && group.project && (
+          <p className={`mt-2 truncate text-center text-xs font-semibold ${muted}`}>Project: {group.project.name}</p>
+        )}
 
         {groupDeleted && (
           <div className={`mt-5 rounded-2xl border px-3 py-3 text-sm ${darkMode ? "border-rose-400/20 bg-rose-400/10 text-rose-100" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
@@ -1340,6 +1346,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
   const [users, setUsers] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [onlineUserIds, setOnlineUserIds] = useState([]);
   const [selectedId, setSelectedId] = useState(GROUP_ID);
   const [messages, setMessages] = useState([]);
@@ -1398,11 +1405,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [forumSettingsOpen, setForumSettingsOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [createGroupStep, setCreateGroupStep] = useState(1);
+  const [createGroupKind, setCreateGroupKind] = useState("general");
+  const [createGroupProjectId, setCreateGroupProjectId] = useState("");
   const [createGroupName, setCreateGroupName] = useState("");
   const [createGroupAvatar, setCreateGroupAvatar] = useState("ocean");
   const [createGroupAvatarFile, setCreateGroupAvatarFile] = useState(null);
   const [createGroupMemberIds, setCreateGroupMemberIds] = useState([]);
   const [createGroupSearch, setCreateGroupSearch] = useState("");
+  const [createGroupProjectPickerOpen, setCreateGroupProjectPickerOpen] = useState(false);
+  const [createGroupProjectSearch, setCreateGroupProjectSearch] = useState("");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [forumDriveFolderUrl, setForumDriveFolderUrl] = useState("");
   const [forumDriveConnectedUrl, setForumDriveConnectedUrl] = useState("");
@@ -1454,12 +1465,23 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const composerRef = useRef(null);
   const documentInputRef = useRef(null);
   const photoInputRef = useRef(null);
+  const createGroupProjectPickerRef = useRef(null);
   const mainChatRef = useRef(null);
   const messagesPaneRef = useRef(null);
   const scrollAnimationRef = useRef(null);
   const swipeRef = useRef({ active: false, messageId: null, message: null, startX: 0, startY: 0, currentX: 0, locked: false });
   const typingClearTimersRef = useRef({});
   const [swipeOffset, setSwipeOffset] = useState({ id: null, x: 0 });
+
+  useEffect(() => {
+    if (!createGroupProjectPickerOpen) return undefined;
+    function closeOnOutside(event) {
+      if (createGroupProjectPickerRef.current?.contains(event.target)) return;
+      setCreateGroupProjectPickerOpen(false);
+    }
+    window.addEventListener("mousedown", closeOnOutside);
+    return () => window.removeEventListener("mousedown", closeOnOutside);
+  }, [createGroupProjectPickerOpen]);
 
   const surface = darkMode ? "bg-[#15171c]" : "bg-white";
   const subSurface = darkMode ? "bg-[#101116]" : "bg-[#f7f8fb]";
@@ -1784,7 +1806,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     const term = forwardSearch.trim().toLowerCase();
     const items = [];
     for (const group of conversations.filter((item) => item.type === "group")) {
-      items.push({ key: `group:${group.id}`, type: "group", id: group.id, title: group.name || "Group Forum", subtitle: group.id === GROUP_ID ? "Workspace group" : "Group chat", avatarUser: null, group });
+      items.push({ key: `group:${group.id}`, type: "group", id: group.id, title: group.name || "Loop Group", subtitle: group.id === GROUP_ID ? "Workspace group" : "Group chat", avatarUser: null, group });
     }
     for (const conversation of conversations.filter((item) => item.type === "direct")) {
       const other = conversation.participants?.find((user) => String(user.id) !== String(currentUser?.id));
@@ -1863,6 +1885,31 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       .filter((user) => !term || [user.displayName, user.username, user.department, user.designation, user.email].join(" ").toLowerCase().includes(term))
       .sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
   }, [createGroupSearch, currentUser?.id, users]);
+  const selectedCreateProject = useMemo(() => (
+    projects.find((project) => String(project.id) === String(createGroupProjectId)) || null
+  ), [createGroupProjectId, projects]);
+  const filteredCreateGroupProjects = useMemo(() => {
+    const term = createGroupProjectSearch.trim().toLowerCase();
+    return projects.filter((project) => {
+      if (!term) return true;
+      return [project.name, project.code, project.client, project.location].join(" ").toLowerCase().includes(term);
+    });
+  }, [createGroupProjectSearch, projects]);
+  const createGroupProjectMemberIds = useMemo(() => (
+    createGroupKind === "project"
+      ? (selectedCreateProject?.memberIds || []).filter((id) => String(id) !== String(currentUser?.id))
+      : []
+  ), [createGroupKind, currentUser?.id, selectedCreateProject?.memberIds]);
+  const createGroupProjectMemberSet = useMemo(() => new Set(createGroupProjectMemberIds.map(String)), [createGroupProjectMemberIds]);
+  const createGroupEffectiveMemberIds = useMemo(() => [...new Set([
+    ...createGroupProjectMemberIds,
+    ...createGroupMemberIds,
+  ].map(String))], [createGroupMemberIds, createGroupProjectMemberIds]);
+  const createGroupProjectMembers = useMemo(() => (
+    users
+      .filter((user) => createGroupProjectMemberSet.has(String(user.id)))
+      .sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""))
+  ), [createGroupProjectMemberSet, users]);
 
   const loadBootstrap = useCallback(async () => {
     const data = await api("/forum/bootstrap");
@@ -1882,6 +1929,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       return next;
     });
     setUsers(data.users || []);
+    setProjects(data.projects || []);
     setOnlineUserIds(data.onlineUserIds || []);
     api("/forum/settings").then((settings) => {
       setForumDriveFolderUrl(settings.driveFolderUrl || "");
@@ -2011,7 +2059,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
           showAppToast(`${senderName}: ${previewText}`, {
             type: "notification",
             darkMode,
-            detail: mentioned ? "You were mentioned" : "New forum message",
+            detail: mentioned ? "You were mentioned" : "New Loop message",
             label: "Message",
             duration: 4500,
           });
@@ -3190,12 +3238,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     event?.preventDefault();
     const name = createGroupName.trim();
     if (!name) return toast.error("Enter group name");
-    if (!createGroupMemberIds.length) return toast.error("Add at least one member");
+    if (createGroupKind === "project" && !createGroupProjectId) return toast.error("Choose a project");
+    if (!createGroupEffectiveMemberIds.length) return toast.error(createGroupKind === "project" ? "This project has no assigned people yet" : "Add at least one member");
     try {
       setCreatingGroup(true);
       const data = await api("/forum/conversations/group", {
         method: "POST",
-        body: JSON.stringify({ name, avatarPreset: createGroupAvatar, participantIds: createGroupMemberIds }),
+        body: JSON.stringify({
+          name,
+          avatarPreset: createGroupAvatar,
+          participantIds: createGroupMemberIds,
+          groupKind: createGroupKind,
+          projectId: createGroupKind === "project" ? createGroupProjectId : "",
+        }),
       });
       let createdConversation = data.conversation;
       if (createGroupAvatarFile) {
@@ -3212,6 +3267,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       selectConversation(createdConversation.id);
       setCreateGroupOpen(false);
       setCreateGroupStep(1);
+      setCreateGroupKind("general");
+      setCreateGroupProjectId("");
       setCreateGroupName("");
       setCreateGroupAvatar("ocean");
       setCreateGroupAvatarFile(null);
@@ -3281,14 +3338,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 <MessagesSquare className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1 overflow-hidden">
-                <h1 className="truncate text-lg font-semibold">Forum</h1>
+                <h1 className="truncate text-lg font-semibold">Loop</h1>
                 <p className={`truncate text-xs ${muted}`}>{onlineUserIds.length} online now</p>
               </div>
               <button
                 type="button"
                 onClick={() => setForumSettingsOpen(true)}
                 className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f3f4f6]"}`}
-                aria-label="Forum Drive settings"
+                aria-label="Loop Drive settings"
               >
                 <Settings className="h-4 w-4" />
               </button>
@@ -3313,7 +3370,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 const unread = unreadByConversation[conversation.id];
                 const typingUsers = typingByConversation[conversation.id] || [];
                 const pinActivity = pinActivityText(conversation.pinnedMessage, currentUser?.id);
-                const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, conversation.id === GROUP_ID ? "Workspace group forum" : "Group chat");
+                const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, conversation.id === GROUP_ID ? "Workspace Loop group" : conversation.groupKind === "project" ? "Project group chat" : "Group chat");
                 return (
                   <button key={conversation.id} type="button" onClick={() => selectConversation(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
                     {conversation.type === "group" ? (
@@ -3323,7 +3380,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     )}
                     <span className="min-w-0 flex-1 overflow-hidden">
                       <span className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-semibold">{conversation.name}</span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 truncate text-sm font-semibold">{conversation.name}</span>
+                          {conversation.groupKind === "project" && (
+                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase ${darkMode ? "bg-sky-400/15 text-sky-200" : "bg-sky-50 text-sky-600"}`}>Project</span>
+                          )}
+                        </span>
                         {unread?.count ? (
                           <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] px-1.5 py-0.5 text-[10px] font-bold text-white">
                             {unread.mentioned ? "@" : unread.count}
@@ -3445,7 +3507,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       <UserAvatar user={selectedConversation?.participants?.find((user) => user.id !== getStoredAuth().user?.id)} name={selectedConversation?.name} className="h-10 w-10" />
                     )}
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold">{selectedConversation?.name || "Group Forum"}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="block truncate text-sm font-semibold">{selectedConversation?.name || "Loop Group"}</span>
+                        {selectedConversation?.groupKind === "project" && (
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase ${darkMode ? "bg-sky-400/15 text-sky-200" : "bg-sky-50 text-sky-600"}`}>Project</span>
+                        )}
+                      </span>
+                      {selectedConversation?.groupKind === "project" && selectedConversation.project && (
+                        <span className={`block truncate text-[11px] leading-4 ${muted}`}>{selectedConversation.project.name}</span>
+                      )}
                       {selectedConversation?.type === "direct" && selectedOtherUser && (
                         <span className={`block truncate text-[11px] leading-4 lg:hidden ${online.has(selectedOtherUser.id) ? "text-[#22c55e]" : muted}`}>
                           {online.has(selectedOtherUser.id) ? "Online" : "Offline"}
@@ -4325,7 +4395,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               />
             ) : (
               <ForumInfoPanel
-                key={`${selectedConversation?.id || GROUP_ID}-${selectedConversation?.name || "Group Forum"}`}
+                key={`${selectedConversation?.id || GROUP_ID}-${selectedConversation?.name || "Loop Group"}`}
                 darkMode={darkMode}
                 group={selectedConversation}
                 users={users}
@@ -4388,35 +4458,116 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               if (event.target === event.currentTarget && !creatingGroup) setCreateGroupOpen(false);
             }}
           >
-            <form onSubmit={createGroup} className={`w-full max-w-lg rounded-[26px] p-5 shadow-2xl animate-in zoom-in-95 duration-200 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}>
+            <form onSubmit={createGroup} className={`w-full max-w-[430px] overflow-hidden rounded-[18px] shadow-[0_18px_50px_rgba(15,23,42,0.24)] animate-in zoom-in-95 duration-200 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}>
+              <div className="px-4 pb-3 pt-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-black">Create group</h3>
-                  <p className={`mt-1 text-xs ${muted}`}>{createGroupStep === 1 ? "Step 1 of 2: name and avatar" : "Step 2 of 2: add members"}</p>
+                  <h3 className="text-base font-black">Create group</h3>
+                  <p className={`mt-0.5 text-xs ${muted}`}>{createGroupStep === 1 ? "Setup your Loop group" : "Choose who can join"}</p>
                 </div>
-                <button type="button" onClick={() => { setCreateGroupOpen(false); setCreateGroupStep(1); }} disabled={creatingGroup} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close create group">
+                <button type="button" onClick={() => { setCreateGroupOpen(false); setCreateGroupStep(1); setCreateGroupKind("general"); setCreateGroupProjectId(""); }} disabled={creatingGroup} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close create group">
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <span className={`h-1.5 rounded-full ${createGroupStep >= 1 ? "bg-[#2563eb]" : darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                <span className={`h-1.5 rounded-full ${createGroupStep >= 2 ? "bg-[#2563eb]" : darkMode ? "bg-white/10" : "bg-black/10"}`} />
-              </div>
-
               {createGroupStep === 1 ? (
                 <>
-                  <div className="mt-6 flex items-center gap-4">
-                    <GroupAvatar group={{ name: createGroupName || "Group", avatarPreset: createGroupAvatar, avatarUrl: createGroupAvatarFile ? URL.createObjectURL(createGroupAvatarFile) : "" }} className="h-16 w-16" iconClassName="h-7 w-7" />
-                    <label className="min-w-0 flex-1">
-                      <span className={`mb-1 block text-[11px] font-bold uppercase tracking-[0.12em] ${muted}`}>Group name</span>
-                      <input value={createGroupName} onChange={(event) => setCreateGroupName(event.target.value)} maxLength={80} placeholder="Enter group name" className={`h-11 w-full rounded-2xl px-3 text-sm font-semibold outline-none ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f6f8]"}`} />
-                    </label>
+                  <p className="mt-4 text-sm font-black">Share with</p>
+                  <div className="mt-3 flex items-start gap-4">
+                    {[
+                      ["general", "General", MessagesSquare, "bg-[#fde68a] text-[#92400e]"],
+                      ["project", "Project", Layers3, "bg-[#ddd6fe] text-[#5b21b6]"],
+                    ].map(([kind, label, Icon, tone]) => {
+                      const selected = createGroupKind === kind;
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          onClick={() => {
+                            setCreateGroupKind(kind);
+                            if (kind === "general") setCreateGroupProjectId("");
+                          }}
+                          title={label}
+                          className="flex w-16 flex-col items-center gap-1.5 text-center"
+                        >
+                          <span className={`grid h-12 w-12 place-items-center rounded-full transition active:scale-95 ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : ""} ${tone}`}>
+                            <Icon className="h-5 w-5" />
+                          </span>
+                          <span className={`max-w-full truncate text-[11px] font-semibold ${selected ? "text-[#2563eb]" : muted}`}>{label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  <div className="mt-6">
-                    <p className={`mb-3 text-[11px] font-bold uppercase tracking-[0.12em] ${muted}`}>Avatar</p>
-                    <div className="grid max-h-72 grid-cols-6 gap-3 overflow-y-auto p-2 -m-2 sm:grid-cols-8">
+                  <p className="mt-5 text-sm font-black">Group links</p>
+                  <div className="mt-3 space-y-2">
+                  {createGroupKind === "project" && (
+                    <div ref={createGroupProjectPickerRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => { setCreateGroupProjectPickerOpen((open) => !open); setCreateGroupProjectSearch(""); }}
+                        className={`flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f7f8fb]"}`}
+                      >
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-500">
+                          <CircleDot className="h-5 w-5" />
+                        </span>
+                        <span className={`min-w-0 truncate ${selectedCreateProject ? "" : muted}`}>
+                          <span className="block truncate text-sm font-semibold text-[#111827] dark:text-white">{selectedCreateProject ? selectedCreateProject.name : "Select project"}</span>
+                          <span className={`block truncate text-xs ${muted}`}>{selectedCreateProject ? [selectedCreateProject.code, selectedCreateProject.client].filter(Boolean).join(" · ") || "Project group" : "Connect project team automatically"}</span>
+                        </span>
+                        <ChevronDown className={`ml-auto h-4 w-4 shrink-0 transition ${createGroupProjectPickerOpen ? "rotate-180" : ""} ${muted}`} />
+                      </button>
+                      {createGroupProjectPickerOpen && (
+                        <div className={`absolute left-0 top-[calc(100%+8px)] z-[120] w-full rounded-2xl border p-1.5 shadow-2xl ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
+                          <div className="relative mb-1.5">
+                            <Search className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+                            <input value={createGroupProjectSearch} onChange={(event) => setCreateGroupProjectSearch(event.target.value)} placeholder="Search projects" className={`h-10 w-full rounded-xl border pl-9 pr-3 text-sm font-normal outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white text-[#111827]"}`} />
+                          </div>
+                          <div className="max-h-64 overflow-y-auto">
+                            {filteredCreateGroupProjects.map((project) => (
+                              <button
+                                key={project.id}
+                                type="button"
+                                onClick={() => {
+                                  setCreateGroupProjectId(project.id);
+                                  if (!createGroupName.trim()) setCreateGroupName(project.name);
+                                  setCreateGroupProjectPickerOpen(false);
+                                }}
+                                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-normal transition ${String(createGroupProjectId) === String(project.id) ? "bg-[#2563eb] text-white" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate font-semibold">{project.name}</span>
+                                  <span className={`block truncate text-[11px] ${String(createGroupProjectId) === String(project.id) ? "text-white/75" : muted}`}>{[project.code, project.client, project.location].filter(Boolean).join(" · ") || "Project"}</span>
+                                </span>
+                                {String(createGroupProjectId) === String(project.id) && <Check className="h-4 w-4 shrink-0" />}
+                              </button>
+                            ))}
+                            {!filteredCreateGroupProjects.length && <p className={`px-3 py-3 text-sm font-normal ${muted}`}>No project found</p>}
+                          </div>
+                        </div>
+                      )}
+                      {selectedCreateProject && (
+                        <span className={`mt-2 block text-xs ${muted}`}>
+                          {createGroupProjectMemberIds.length} assigned people will be added automatically.
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <label className={`flex items-center gap-3 rounded-2xl border px-3 py-3 transition ${darkMode ? "border-white/10 bg-white/[0.05] focus-within:border-[#2563eb]" : "border-[#dce3ea] bg-[#f8fafc] focus-within:border-[#2563eb] focus-within:bg-white"}`}>
+                    <GroupAvatar group={{ name: createGroupName || "Group", avatarPreset: createGroupAvatar, avatarUrl: createGroupAvatarFile ? URL.createObjectURL(createGroupAvatarFile) : "" }} className="h-10 w-10" iconClassName="h-5 w-5" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold">Group name</span>
+                      <input value={createGroupName} onChange={(event) => setCreateGroupName(event.target.value)} maxLength={80} placeholder="Enter group name" className={`mt-1 w-full bg-transparent text-base font-semibold outline-none ${darkMode ? "text-white placeholder:text-white/35" : "text-[#111827] placeholder:text-slate-400"}`} />
+                    </span>
+                  </label>
+
+                  <div className={`rounded-2xl px-2 py-2 ${darkMode ? "bg-white/[0.03]" : "bg-[#fbfbfc]"}`}>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm font-semibold">Avatar</span>
+                      <span className={`text-xs ${muted}`}>Pick one</span>
+                    </div>
+                    <div className="grid max-h-36 grid-cols-6 gap-2 overflow-y-auto p-1 -m-1">
                       <label className={`cursor-pointer grid h-11 w-11 place-items-center rounded-full outline-none focus:outline-none transition ${createGroupAvatarFile ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Upload custom avatar">
                         <input type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onClick={(e) => { e.target.value = null; }} onChange={(e) => {
                           const file = e.target.files[0];
@@ -4442,19 +4593,36 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       })}
                     </div>
                   </div>
+                  </div>
                 </>
               ) : (
                 <div className="mt-6">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-black">{createGroupName || "New group"}</p>
-                      <p className={`text-xs ${muted}`}>Choose people to add</p>
+                      <p className={`text-xs ${muted}`}>{createGroupKind === "project" ? "Project people are already included" : "Choose people to add"}</p>
                     </div>
-                    <span className={`text-xs ${muted}`}>{createGroupMemberIds.length} selected</span>
+                    <span className={`text-xs ${muted}`}>{createGroupEffectiveMemberIds.length} selected</span>
                   </div>
+                  {createGroupKind === "project" && (
+                    <div className={`mb-3 rounded-2xl px-3 py-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f6f8]"}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-black">Auto-added from project</p>
+                        <span className={`text-xs ${muted}`}>{createGroupProjectMembers.length}</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {createGroupProjectMembers.slice(0, 8).map((user) => (
+                          <span key={user.id} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${darkMode ? "bg-white/10 text-white/75" : "bg-white text-[#111827]"}`}>
+                            {user.displayName || user.username}
+                          </span>
+                        ))}
+                        {createGroupProjectMembers.length > 8 && <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${darkMode ? "bg-white/10 text-white/60" : "bg-white text-black/50"}`}>+{createGroupProjectMembers.length - 8}</span>}
+                      </div>
+                    </div>
+                  )}
                   <div className={`mb-3 flex h-10 items-center gap-2 rounded-2xl px-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f6f8]"}`}>
                     <Search className={`h-4 w-4 ${muted}`} />
-                    <input value={createGroupSearch} onChange={(event) => setCreateGroupSearch(event.target.value)} placeholder="Search users" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+                    <input value={createGroupSearch} onChange={(event) => setCreateGroupSearch(event.target.value)} placeholder={createGroupKind === "project" ? "Add extra users" : "Search users"} className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
                   </div>
                   <div className="max-h-[52vh] space-y-1 overflow-y-auto pr-1">
                     {createGroupUsers.map((user) => {
@@ -4463,16 +4631,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         <button
                           key={user.id}
                           type="button"
+                          disabled={createGroupProjectMemberSet.has(String(user.id))}
                           onClick={() => setCreateGroupMemberIds((current) => selected ? current.filter((id) => id !== user.id) : [...current, user.id])}
-                          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${selected ? darkMode ? "bg-emerald-500/15" : "bg-emerald-50" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}
+                          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition disabled:cursor-default disabled:opacity-60 ${createGroupProjectMemberSet.has(String(user.id)) ? darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]" : selected ? darkMode ? "bg-emerald-500/15" : "bg-emerald-50" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}
                         >
                           <UserAvatar user={user} name={user.displayName} className="h-9 w-9" />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold">{user.displayName}</span>
                             <span className={`block truncate text-xs ${muted}`}>{user.designation || user.department || user.email || user.username}</span>
                           </span>
-                          <span className={`grid h-5 w-5 place-items-center rounded-full border ${selected ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
-                            {selected && <Check className="h-3.5 w-3.5" />}
+                          <span className={`grid h-5 w-5 place-items-center rounded-full border ${selected || createGroupProjectMemberSet.has(String(user.id)) ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
+                            {(selected || createGroupProjectMemberSet.has(String(user.id))) && <Check className="h-3.5 w-3.5" />}
                           </span>
                         </button>
                       );
@@ -4481,18 +4650,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 </div>
               )}
 
-              <div className="mt-6 flex items-center justify-between gap-3">
+              </div>
+              <div className={`flex items-center justify-between gap-3 px-4 py-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f1f3f5]"}`}>
                 {createGroupStep === 2 ? (
-                  <button type="button" onClick={() => setCreateGroupStep(1)} disabled={creatingGroup} className={`h-11 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-[#f4f6f8] hover:bg-[#eef1f5]"}`}>
+                  <button type="button" onClick={() => setCreateGroupStep(1)} disabled={creatingGroup} className={`h-10 rounded-xl px-3 text-sm font-bold ${darkMode ? "hover:bg-white/10" : "hover:bg-white"}`}>
                     Back
                   </button>
-                ) : <span />}
+                ) : <span className={`text-xs ${muted}`}>{createGroupKind === "project" ? "Project members auto-added" : "Share all, or specific people"}</span>}
                 {createGroupStep === 1 ? (
-                  <button type="button" onClick={() => setCreateGroupStep(2)} disabled={!createGroupName.trim()} className="h-11 min-w-28 rounded-full bg-[#2563eb] px-6 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
-                    Next
+                  <button type="button" onClick={() => createGroupKind === "project" ? createGroup() : setCreateGroupStep(2)} disabled={!createGroupName.trim() || (createGroupKind === "project" && !createGroupProjectId)} className="h-10 min-w-20 rounded-xl bg-[#22c55e] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                    {createGroupKind === "project" ? "New" : "Next"}
                   </button>
                 ) : (
-                  <button type="submit" disabled={creatingGroup || !createGroupName.trim() || !createGroupMemberIds.length} className="inline-flex h-11 min-w-32 items-center justify-center gap-2 rounded-full bg-[#2563eb] px-6 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  <button type="submit" disabled={creatingGroup || !createGroupName.trim() || !createGroupEffectiveMemberIds.length} className="inline-flex h-10 min-w-20 items-center justify-center gap-2 rounded-xl bg-[#22c55e] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
                     {creatingGroup && <LoaderCircle className="h-4 w-4 animate-spin" />}
                     Create group
                   </button>
@@ -4517,7 +4687,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   <Settings className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-bold">Forum Drive folder</h3>
+                  <h3 className="text-base font-bold">Loop Drive folder</h3>
                   <p className={`mt-1 text-sm ${muted}`}>Files shared in groups and DMs will upload to this folder.</p>
                 </div>
                 <button

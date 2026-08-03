@@ -7103,7 +7103,7 @@ function projectSiteMatchKey(value) {
     .replace(/&/g, "and")
     .replace(/\bfarm\s+house\b/g, "farmhouse")
     .replace(/[^a-z0-9]+/g, "")
-    .replace(/([aeiou])\1+/g, "");
+    .replace(/([aeiou])\1+/g, "$1");
   const aliases = {
     devsharnam: "devsharnam",
     devsharanam: "devsharnam",
@@ -16152,6 +16152,7 @@ async function buildForumProjectAssistantContext(project = {}) {
     const matchingRecords = (dmr.today?.records || []).filter((r) => {
       return dmrProjectMatchesSite(project, project.dmr || {}, r.site);
     }).slice(0, 50);
+    console.log(`[DMR Context] Project: ${project.name}, matchingRecords: ${matchingRecords.length}, total records: ${dmr.today?.records?.length || 0}`);
     if (matchingRecords.length) {
       const todayActual = matchingRecords.reduce((s, r) => s + (Number(r.actual) || 0), 0);
       const todayPlanned = matchingRecords.reduce((s, r) => s + (Number(r.planned) || 0), 0);
@@ -16181,13 +16182,12 @@ async function buildForumProjectAssistantContext(project = {}) {
       } catch (e) { /* skip */ }
     }
     if (allItems.length) {
-      const totalItems = allItems.length;
-      const totalQuantity = allItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
       stock = {
-        totalItems,
-        totalQuantity,
-        lowStockCount: lowStockItems.length,
-        lowStockItems: lowStockItems.slice(0, 30),
+        totalItems: allItems.length,
+        totalQuantity: allItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0),
+        lowStockItems: lowStockItems.slice(0, 50).map(i => ({ name: i.itemName, quantity: i.quantity, min: i.reorderMin, site: i.siteName })),
+        items: allItems.map(i => ({ name: i.itemName, quantity: i.quantity, site: i.siteName })),
+        summaryOnly: false
       };
     }
   } catch (err) { console.error("Context stock error:", err.message); }

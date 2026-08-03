@@ -1,3 +1,1 @@
-const pdf = require("pdf-parse");
-
-console.log(pdf);
+console.log('kalhaar'.replace(/([aeiou])\1+/g, ''));

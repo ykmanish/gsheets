@@ -2914,7 +2914,6 @@ app.post("/forum/refine-message", async (req, res) => {
       body: JSON.stringify({
         model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
         max_tokens: 300,
-        temperature: 0.2,
         system: [
           "You refine short workplace chat messages.",
           "Keep the sender's original meaning, language style, names, numbers, and intent.",
@@ -3439,7 +3438,6 @@ async function buildEmployeeSiteTaskRemarks({ db, range, employeeReports }) {
         body: JSON.stringify({
           model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
           max_tokens: 1800,
-          temperature: 0.2,
           messages: [{
             role: "user",
             content: `Analyze employee daily-report tasks site-wise. Return strict JSON only: {"remarks":{"Site name":"one concise professional remark"}}.
@@ -11310,7 +11308,6 @@ async function enrichSheetArchitectureWithAi(architecture, sheetData, documentNa
           }),
         },
       ],
-      temperature: 0.1,
       max_tokens: 700,
     });
     const content = completion.choices?.[0]?.message?.content || "";
@@ -16655,7 +16652,6 @@ async function askLoopProjectAssistant({ question, context, maxTokensOverride })
     body: JSON.stringify({
       model,
       max_tokens: maxTokensOverride || (routing.tier === "haiku" ? 1200 : 2200),
-      temperature: 0.1,
       system: [
         "You are Loop, the project assistant inside UIPL Loop chat.",
         "Answer only from the supplied linked project JSON.",

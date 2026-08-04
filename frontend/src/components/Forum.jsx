@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, AtSign, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Pin, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, Smile, SmilePlus, Sparkles, Star, Sticker, SunMedium, Trash2, Upload, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, AtSign, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Forward, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Pin, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, Smile, SmilePlus, Sparkles, Star, Sticker, SunMedium, Trash2, Upload, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";

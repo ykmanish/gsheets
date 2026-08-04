@@ -16848,7 +16848,12 @@ ${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeN
       broadcastForumLoopTyping(conversation, true);
       try {
         const claude = await askLoopProjectAssistant({ question: prompt, context: { info: "Batch Employee Report Evaluation" } });
-        const jsonStr = claude.answer.replace(/```json/gi, "").replace(/```/g, "").trim();
+        let jsonStr = claude.answer;
+        const startIdx = jsonStr.indexOf("[");
+        const endIdx = jsonStr.lastIndexOf("]");
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+        }
         const results = JSON.parse(jsonStr);
         
         for (const result of results) {
@@ -16861,8 +16866,10 @@ ${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeN
         console.error("Error analyzing batched reports", err);
         await createForumLoopAssistantMessage({
           req, conversation, text: `I ran into an error while analyzing this batch. Please try again.`,
-          assistantPayload: { error: true },
+          assistantPayload: { error: true, type: "employee-report-analysis-more", date, offset },
         });
+        broadcastForumLoopTyping(conversation, false);
+        return; // Stop execution on error so it doesn't falsely claim completion
       }
       broadcastForumLoopTyping(conversation, false);
       

@@ -383,8 +383,9 @@ export default function ProfilePage({ darkMode }) {
 
   return (
     <main className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f12] text-white" : "bg-[#f4f6f2] text-[#171714]"}`}>
-      <form onSubmit={saveProfile} className="mx-auto w-full max-w-[1680px]">
-        <section className="pb-4">
+      <div className="mx-auto w-full max-w-[1680px]">
+        <form onSubmit={saveProfile}>
+          <section className="pb-4">
           <div className={`relative rounded-[28px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#e3e8df] bg-white"}`}>
             <div
               className="relative h-32 overflow-hidden rounded-t-[28px] bg-cover bg-center sm:h-40"
@@ -546,8 +547,9 @@ export default function ProfilePage({ darkMode }) {
             </div>
           </div>
         </section>
+        </form>
 
-        <section className={`mb-6 rounded-[26px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+        <form onSubmit={changePassword} className={`mb-6 rounded-[26px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-lg font-black">Password & security</h3>
@@ -590,8 +592,7 @@ export default function ProfilePage({ darkMode }) {
               placeholder="Confirm new password"
             />
             <button
-              type="button"
-              onClick={changePassword}
+              type="submit"
               disabled={passwordSaving}
               className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto ${darkMode ? "bg-[#d8f36a] text-black hover:bg-[#cbe95b]" : "bg-black text-white hover:bg-black/85"}`}
             >
@@ -599,7 +600,7 @@ export default function ProfilePage({ darkMode }) {
               {passwordSaving ? "Changing" : "Change password"}
             </button>
           </div>
-        </section>
+        </form>
 
         <section className={`mb-6 w-full min-w-0 overflow-hidden rounded-[22px] p-3 sm:rounded-[26px] sm:p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -665,7 +666,7 @@ export default function ProfilePage({ darkMode }) {
             })}
           </div>
         </section>
-      </form>
+      </div>
     </main>
   );
 }

@@ -2939,6 +2939,40 @@ app.post("/forum/refine-message", async (req, res) => {
   }
 });
 
+async function analyzeEmployeeReportAndNotifyLoop(report) {
+  try {
+    const db = await connectAuthDb();
+    const superAdmins = await db.collection("users").find({ isSuperAdmin: true }).toArray();
+    if (superAdmins.length === 0) return;
+
+    const taskData = report.taskItems || [];
+    const waitingData = report.waitingTaskItems || [];
+    
+    const prompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}).
+Evaluate if the tasks performed were appropriate and meaningful, or if they seem like filler tasks just added for the sake of it.
+Provide a crisp MIS summary for this employee's day, followed by your analysis of what the employee did, their intentions, and what actions (if any) should be taken regarding this employee.
+
+Tasks Done:
+${JSON.stringify(taskData, null, 2)}
+
+Waiting Tasks:
+${JSON.stringify(waitingData, null, 2)}`;
+
+    const claude = await askLoopProjectAssistant({ question: prompt, context: { info: "Employee Report Evaluation" } });
+    
+    for (const admin of superAdmins) {
+      const conversation = await ensureLoopAssistantConversation(db, admin._id);
+      await createForumLoopSystemMessage({
+        conversation,
+        text: claude.answer,
+        assistantPayload: { type: "employee-report-analysis", userId: report.userId, employeeName: report.employeeName },
+      });
+    }
+  } catch (error) {
+    console.error("Employee report analysis error:", error);
+  }
+}
+
 app.post("/employee-daily-report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
@@ -2987,6 +3021,7 @@ app.post("/employee-daily-report", async (req, res) => {
     const celebration = await generateEmployeeSubmissionPraise({ employeeName: report.employeeName, taskItems, waitingTaskItems, date: today });
     const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
     const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
+    analyzeEmployeeReportAndNotifyLoop(report).catch(console.error);
     res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }), celebration, executiveQuestions, executiveAnswers });
   } catch (error) {
     if (error.code === 11000 || error.code === "EMPLOYEE_REPORT_EXISTS") return res.status(409).json({ error: "Today's report is already submitted" });
@@ -16139,12 +16174,31 @@ async function ensureForumGroupConversation(db) {
   if (JSON.stringify(adminIds) !== JSON.stringify((group.adminIds || []).map(String))) updates.adminIds = adminIds;
   if (group.adminOnlyMessages === undefined) updates.adminOnlyMessages = false;
   if (!group.avatarPreset) updates.avatarPreset = "ocean";
-  if (Object.keys(updates).length) {
-    updates.updatedAt = group.updatedAt || now;
+  if (Object.keys(updates).length > 0) {
     await db.collection("forumConversations").updateOne({ _id: FORUM_GROUP_ID }, { $set: updates });
     return { ...group, ...updates };
   }
   return group;
+}
+
+async function ensureLoopAssistantConversation(db, userId) {
+  const now = new Date();
+  const convId = `assistant-loop-${userId}`;
+  const result = await db.collection("forumConversations").findOneAndUpdate(
+    { _id: convId },
+    {
+      $setOnInsert: {
+        _id: convId,
+        type: "direct",
+        name: "Loop",
+        participantIds: [String(userId), "loop"],
+        createdAt: now,
+        updatedAt: now,
+      },
+    },
+    { upsert: true, returnDocument: "after" }
+  );
+  return result.value || result;
 }
 
 function isForumGroupAdmin(conversation = {}, req) {
@@ -16213,8 +16267,9 @@ async function serializeForumMessage(message, viewerId = null) {
 async function forumConversationSummary(conversation, authUserId) {
   const db = await connectAuthDb();
   const participantIds = (conversation.participantIds || []).filter(Boolean);
-  const participants = participantIds.length
-    ? await db.collection("users").find({ _id: { $in: participantIds.map((id) => new ObjectId(id)) } }).toArray()
+  const userIds = participantIds.filter((id) => ObjectId.isValid(id));
+  const participants = userIds.length
+    ? await db.collection("users").find({ _id: { $in: userIds.map((id) => new ObjectId(id)) } }).toArray()
     : [];
   const other = participants.find((user) => String(user._id) !== authUserId);
   const lastMessage = conversation.lastMessage ? {
@@ -16610,6 +16665,7 @@ async function askLoopProjectAssistant({ question, context }) {
         "The context includes today's manpower data with planned vs actual counts by trade/site. Use this to answer manpower, workforce, and attendance questions.",
         "The context includes stock inventory data with low stock alerts. When asked about stock or materials, reference the stock section. Proactively mention critically low items.",
         "Never use Markdown tables (e.g. using | bars). Use simple bullet points or plain text instead.",
+        "Do NOT use any emojis in your response. Keep it strictly professional.",
         "If the project data does not contain the answer, say what is missing instead of guessing.",
         "Do not mention JSON, prompts, Claude, or implementation details.",
       ].join(" "),
@@ -16621,7 +16677,8 @@ async function askLoopProjectAssistant({ question, context }) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload?.error?.message || `Anthropic API request failed with status ${response.status}`);
-  const answer = (payload.content || []).filter((block) => block.type === "text").map((block) => block.text).join("\n").trim();
+  let answer = (payload.content || []).filter((block) => block.type === "text").map((block) => block.text).join("\n").trim();
+  answer = answer.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "");
   return { answer: answer || buildLoopFallbackAnswer(question, context), model: payload.model || model, tier: routing.tier };
 }
 
@@ -16722,6 +16779,75 @@ async function createForumLoopSystemMessage({ conversation, text, assistantPaylo
   return serialized;
 }
 
+async function createLoopGeneralAssistantReply({ req, conversation, question }) {
+  broadcastForumLoopTyping(conversation, true);
+  try {
+    const claude = await askLoopProjectAssistant({ question, context: { info: "General Conversation" } });
+    return await createForumLoopAssistantMessage({
+      req,
+      conversation,
+      text: claude.answer,
+      assistantPayload: { type: "general-chat", model: claude.model, tier: claude.tier },
+    });
+  } catch (error) {
+    console.error("Loop general assistant error:", error);
+    return await createForumLoopAssistantMessage({
+      req,
+      conversation,
+      text: `I encountered an error processing your request. Please try again.`,
+      assistantPayload: { error: true },
+    });
+  } finally {
+    broadcastForumLoopTyping(conversation, false);
+  }
+}
+
+async function createLoopEmployeeReportAnalysisReply({ req, conversation, date }) {
+  // Fire background job and return a placeholder immediately
+  (async () => {
+    try {
+      const db = await connectAuthDb();
+      const reports = await db.collection("employeeDailyReports").find({ reportDate: date }).toArray();
+      if (!reports.length) {
+         await createForumLoopAssistantMessage({
+           req, conversation, text: `I couldn't find any employee reports for ${date}.`,
+           assistantPayload: { type: "employee-report-analysis-summary", date },
+         });
+         return;
+      }
+      
+      await createForumLoopAssistantMessage({
+         req, conversation, text: `Found ${reports.length} employee reports for ${date}. Analyzing now...`,
+         assistantPayload: { type: "employee-report-analysis-summary", date },
+      });
+
+      for (const report of reports) {
+         broadcastForumLoopTyping(conversation, true);
+         try {
+           const indPrompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}). Evaluate if the tasks performed were appropriate and meaningful. Provide a crisp MIS summary for this employee's day, followed by your analysis. Tasks: ${JSON.stringify(report.taskItems)}`;
+           const indClaude = await askLoopProjectAssistant({ question: indPrompt, context: { info: "Employee Report Evaluation" } });
+           await createForumLoopAssistantMessage({
+             req, conversation, text: indClaude.answer,
+             assistantPayload: { type: "employee-report-analysis", userId: report.userId, employeeName: report.employeeName },
+           });
+         } catch (err) {
+           console.error("Error analyzing report for", report.employeeName, err);
+         }
+      }
+      broadcastForumLoopTyping(conversation, false);
+      await createForumLoopAssistantMessage({
+         req, conversation, text: `Analysis complete for ${date}.`,
+         assistantPayload: { type: "employee-report-analysis-summary", date },
+      });
+    } catch (error) {
+      console.error("Loop background analysis error:", error);
+    } finally {
+      broadcastForumLoopTyping(conversation, false);
+    }
+  })();
+  return null;
+}
+
 async function createLoopProjectAssistantReply({ req, conversation, question }) {
   if (conversation.type !== "group" || conversation.groupKind !== "project" || !conversation.projectId) return null;
   const project = projectDashboardConfig.projects.find((item) => item.id === conversation.projectId && item.status !== "archived");
@@ -16755,6 +16881,9 @@ app.get("/forum/bootstrap", async (req, res) => {
     const db = await connectAuthDb();
     const group = await ensureForumGroupConversation(db);
     const loopAssistant = await forumLoopAssistantProfile(db);
+    if (req.authUser?.isSuperAdmin) {
+      await ensureLoopAssistantConversation(db, req.authUser.id);
+    }
     const conversations = await db.collection("forumConversations").find({
       participantIds: req.authUser.id,
       deletedForUsers: { $ne: String(req.authUser.id) },
@@ -17347,20 +17476,72 @@ app.post("/forum/conversations/:id/messages", async (req, res) => {
       text,
       attachment
     });
+    
     let assistantMessage = null;
-    if (!attachment && shouldTriggerLoopAssistant(text)) {
+    const isLoopConversation = String(req.params.id).startsWith("assistant-loop");
+    const actionPayload = req.body?.actionPayload;
+    
+    if (!attachment && (isLoopConversation || shouldTriggerLoopAssistant(text))) {
       const db = await connectAuthDb();
       if (await isForumLoopAssistantEnabled(db)) {
         const conversation = req.params.id === FORUM_GROUP_ID
           ? await ensureForumGroupConversation(db)
           : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
-        if (conversation) assistantMessage = await createLoopProjectAssistantReply({ req, conversation, question: text });
+        if (conversation) {
+          if (isLoopConversation && actionPayload?.action === "employee-report-analysis" && actionPayload?.date) {
+            assistantMessage = await createLoopEmployeeReportAnalysisReply({ req, conversation, date: actionPayload.date });
+          } else if (isLoopConversation && !actionPayload) {
+            assistantMessage = await createLoopGeneralAssistantReply({ req, conversation, question: text });
+          } else {
+            assistantMessage = await createLoopProjectAssistantReply({ req, conversation, question: text });
+          }
+        }
       }
     }
     res.json({ message, assistantMessage });
   } catch (error) {
     console.error("Forum send error:", error);
     res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.post("/forum/messages/forward-analysis", async (req, res) => {
+  try {
+    const { targetUserId, text, originalMessageId } = req.body;
+    if (!targetUserId || !text) return res.status(400).json({ error: "Missing required fields" });
+    
+    const db = await connectAuthDb();
+    const targetUser = await db.collection("users").findOne({ _id: new ObjectId(targetUserId) });
+    if (!targetUser) return res.status(404).json({ error: "Employee not found" });
+
+    const participantIds = [String(req.authUser.id), String(targetUserId)];
+    participantIds.sort();
+    const convResult = await db.collection("forumConversations").findOneAndUpdate(
+      { type: "direct", participantIds: { $all: participantIds, $size: 2 } },
+      {
+        $setOnInsert: {
+          _id: new ObjectId().toString(),
+          type: "direct",
+          participantIds,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true, returnDocument: "after" }
+    );
+    const conversation = convResult.value || convResult;
+
+    const message = await createForumMessage({
+      req,
+      conversationId: conversation._id,
+      text,
+      forwardedFrom: { senderName: "Loop Assistant" }
+    });
+
+    res.json({ success: true, message });
+  } catch (error) {
+    console.error("Forum forward analysis error:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 

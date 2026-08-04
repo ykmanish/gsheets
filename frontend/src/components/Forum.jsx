@@ -507,30 +507,30 @@ function renderLoopAssistantText(text, darkMode = false) {
   const badgeClassFor = (label, value) => {
     const key = `${label} ${value}`.toLowerCase();
     if (/status/.test(key)) {
-      if (/done|complete/.test(key)) return darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#dcfce7] text-[#15803d]";
-      if (/block|risk|delay|overdue/.test(key)) return darkMode ? "bg-[#43202a] text-[#ffc0cb]" : "bg-[#ffe4e6] text-[#be123c]";
-      if (/progress|active|working/.test(key)) return darkMode ? "bg-[#153246] text-[#a9ddff]" : "bg-[#dbeafe] text-[#1d4ed8]";
-      return darkMode ? "bg-[#343842] text-[#d7dde8]" : "bg-[#f1f5f9] text-[#475569]";
+      if (/done|complete/.test(key)) return darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#f0fdf4] text-[#16a34a]";
+      if (/block|risk|delay|overdue/.test(key)) return darkMode ? "bg-[#43202a] text-[#ffc0cb]" : "bg-[#fef2f2] text-[#ef4444]";
+      if (/progress|active|working/.test(key)) return darkMode ? "bg-[#153246] text-[#a9ddff]" : "bg-[#eff6ff] text-[#2563eb]";
+      return darkMode ? "bg-[#343842] text-[#d7dde8]" : "bg-[#f8fafc] text-[#475569]";
     }
     if (/priority/.test(key)) {
-      if (/critical|urgent/.test(key)) return darkMode ? "bg-[#39264d] text-[#e4c8ff]" : "bg-[#f3e8ff] text-[#7e22ce]";
-      if (/high/.test(key)) return darkMode ? "bg-[#452525] text-[#ffc4c4]" : "bg-[#fee2e2] text-[#dc2626]";
-      if (/medium/.test(key)) return darkMode ? "bg-[#463515] text-[#ffd88a]" : "bg-[#fef3c7] text-[#b45309]";
-      return darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#dcfce7] text-[#15803d]";
+      if (/critical|urgent/.test(key)) return darkMode ? "bg-[#39264d] text-[#e4c8ff]" : "bg-[#faf5ff] text-[#9333ea]";
+      if (/high/.test(key)) return darkMode ? "bg-[#452525] text-[#ffc4c4]" : "bg-[#fef2f2] text-[#ef4444]";
+      if (/medium/.test(key)) return darkMode ? "bg-[#463515] text-[#ffd88a]" : "bg-[#fffbeb] text-[#d97706]";
+      return darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#f0fdf4] text-[#16a34a]";
     }
     if (/due|deadline|target|date/.test(key)) {
-      if (/not set|not specified|no /.test(key)) return darkMode ? "bg-[#343842] text-[#c8cfda]" : "bg-[#f1f5f9] text-[#64748b]";
-      return darkMode ? "bg-[#123948] text-[#9ee7ff]" : "bg-[#e0f2fe] text-[#0369a1]";
+      if (/not set|not specified|no /.test(key)) return darkMode ? "bg-[#343842] text-[#c8cfda]" : "bg-[#f8fafc] text-[#64748b]";
+      return darkMode ? "bg-[#123948] text-[#9ee7ff]" : "bg-[#f0f9ff] text-[#0284c7]";
     }
-    if (/assignee|manager/.test(key)) return darkMode ? "bg-[#32294a] text-[#d8c9ff]" : "bg-[#ede9fe] text-[#6d28d9]";
-    if (/phase|health/.test(key)) return darkMode ? "bg-[#143b34] text-[#a5eadc]" : "bg-[#ecfdf5] text-[#047857]";
+    if (/assignee|manager/.test(key)) return darkMode ? "bg-[#32294a] text-[#d8c9ff]" : "bg-[#f5f3ff] text-[#7c3aed]";
+    if (/phase|health/.test(key)) return darkMode ? "bg-[#143b34] text-[#a5eadc]" : "bg-[#f0fdfa] text-[#0d9488]";
     return darkMode ? "bg-[#343842] text-[#d7dde8]" : "bg-[#f8fafc] text-[#475569]";
   };
   const renderInline = (line, lineIndex) => {
     const parts = String(line || "").split(/(\*\*[^*]+\*\*)/g).filter((part) => part !== "");
     return parts.map((part, partIndex) => {
       if (/^\*\*[^*]+\*\*$/.test(part)) {
-        return <strong key={`${lineIndex}-${partIndex}`} className={`font-black ${darkMode ? "text-white" : "text-[#0f172a]"}`}>{part.slice(2, -2)}</strong>;
+        return <span key={`${lineIndex}-${partIndex}`} className={darkMode ? "text-white" : "text-[#0f172a]"}>{part.slice(2, -2)}</span>;
       }
       return <span key={`${lineIndex}-${partIndex}`}>{part}</span>;
     });
@@ -550,9 +550,9 @@ function renderLoopAssistantText(text, darkMode = false) {
       const labelMatch = line.replace(/^[-*]\s+/, "").match(/^\*\*?([^:*]+):\*\*?\s*(.+)$/);
       if (headerMatch) {
         const level = headerMatch[1].length;
-        const sizeClass = level === 1 ? "text-2xl" : level === 2 ? "text-xl" : "text-lg";
+        const sizeClass = level === 1 ? "text-lg" : level === 2 ? "text-base" : "text-[14px]";
         return (
-          <div key={index} className={`small ${sizeClass} font-black tracking-wide mt-4 mb-2 ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+          <div key={index} className={`small ${sizeClass} font-bold tracking-wider mt-4 mb-2 ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
             {renderInline(headerMatch[2], index)}
           </div>
         );
@@ -564,23 +564,23 @@ function renderLoopAssistantText(text, darkMode = false) {
 
         if (label.toLowerCase() === "planned") {
           currentPlanned = parseInt(value, 10);
-          badgeColor = darkMode ? "bg-[#1e3a8a] text-[#bfdbfe]" : "bg-[#dbeafe] text-[#1d4ed8]";
+          badgeColor = darkMode ? "bg-[#1e3a8a] text-[#bfdbfe]" : "bg-[#eff6ff] text-[#2563eb]";
         } else if (label.toLowerCase() === "actual") {
           const actualVal = parseInt(value, 10);
           if (currentPlanned !== null) {
             if (actualVal >= currentPlanned) {
-              badgeColor = darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#dcfce7] text-[#15803d]";
+              badgeColor = darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#f0fdf4] text-[#16a34a]";
             } else {
-              badgeColor = darkMode ? "bg-[#450a0a] text-[#fecaca]" : "bg-[#fee2e2] text-[#dc2626]";
+              badgeColor = darkMode ? "bg-[#450a0a] text-[#fecaca]" : "bg-[#fef2f2] text-[#ef4444]";
             }
           }
         }
 
         return (
-          <div key={index} className={`mr-2 mt-2 inline-flex flex-col gap-1 rounded-xl p-3 sm:min-w-[130px] ${badgeColor}`}>
-            <span className="text-[10px] font-black uppercase tracking-[0.1em] opacity-60">{label}</span>
+          <div key={index} className={`mr-2 mt-2 inline-flex flex-col gap-0.5 rounded-lg p-2.5 sm:min-w-[120px] ${badgeColor}`}>
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] opacity-70">{label}</span>
             <div className="flex items-center">
-              <span className={`text-xl leading-none ${darkMode ? "font-semibold" : "font-black"} break-words`}>{value}</span>
+              <span className={`text-[13px] leading-tight font-normal break-words`}>{value}</span>
             </div>
           </div>
         );
@@ -1688,6 +1688,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [selectedMessageIds, setSelectedMessageIds] = useState([]);
   const [selectionDeleting, setSelectionDeleting] = useState(false);
   const [forwardMessageIds, setForwardMessageIds] = useState([]);
+  const [forwardAnalysisPayload, setForwardAnalysisPayload] = useState(null);
+  const [forwardAnalysisComment, setForwardAnalysisComment] = useState("");
+  const [forwardAnalysisSending, setForwardAnalysisSending] = useState(false);
+  const [loopCapabilityPicker, setLoopCapabilityPicker] = useState(null);
+  const [loopCapabilityDate, setLoopCapabilityDate] = useState("");
   const [forwardSearch, setForwardSearch] = useState("");
   const [forwardTargetIds, setForwardTargetIds] = useState([]);
   const [forwardSending, setForwardSending] = useState(false);
@@ -2705,7 +2710,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   async function sendMessage(event) {
     event?.preventDefault?.();
     const giphy = event?.giphy;
-    const text = composer.trim();
+    const actionPayload = event?.actionPayload;
+    const text = event?.overrideText || composer.trim();
     if (!text && !giphy) return;
     if (!giphy?.url && /(^|\s)@loop\b/i.test(text) && loopAssistant.enabled === false) {
       toast.error("Loop assistant is turned off");
@@ -2786,7 +2792,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     try {
       const data = await api(`/forum/conversations/${encodeURIComponent(selectedId)}/messages`, {
         method: "POST",
-        body: JSON.stringify({ text, replyToMessage: currentReply, giphy }),
+        body: JSON.stringify({ text, replyToMessage: currentReply, giphy, actionPayload }),
       });
       if (data.message) {
         const nextMessages = [
@@ -3197,6 +3203,33 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
         touchTimerRef.current = null;
       }
     }
+  }
+
+  async function forwardEmployeeAnalysis(e) {
+    e.preventDefault();
+    if (!forwardAnalysisPayload) return;
+    setForwardAnalysisSending(true);
+    try {
+      const { message, targetUserId } = forwardAnalysisPayload;
+      const combinedText = forwardAnalysisComment ? `**Note from Admin:**\n${forwardAnalysisComment.trim()}\n\n---\n\n${message.text}` : message.text;
+      const response = await fetch(`${API_URL}/forum/messages/forward-analysis`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${getStoredAuth().token}` },
+        body: JSON.stringify({ targetUserId, text: combinedText, originalMessageId: message.id }),
+      });
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "Failed to forward");
+      setForwardAnalysisPayload(null);
+      setForwardAnalysisComment("");
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setForwardAnalysisSending(false);
+    }
+  }
+
+  function handleMediaPicker(type) {
+    setMediaPickerTab(type);
+    setMediaPickerOpen(true);
   }
 
   function handleMessageTouchEnd() {
@@ -3769,7 +3802,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
             <p className={`px-4 pb-2 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Direct messages</p>
             <div className="min-w-0 space-y-1 overflow-hidden px-2 pb-4">
               {filteredDirectConversations.map((conversation) => {
-                const other = conversation.participants?.find((user) => user.id !== getStoredAuth().user?.id);
+                let other = conversation.participants?.find((user) => user.id !== getStoredAuth().user?.id);
+                if (!other && conversation.id?.startsWith("assistant-loop")) other = { ...loopAssistant, isAssistant: true, id: "loop" };
                 const active = conversation.id === selectedId;
                 const unread = unreadByConversation[conversation.id];
                 const typingUsers = typingByConversation[conversation.id] || [];
@@ -3778,7 +3812,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 return (
                   <button key={conversation.id} type="button" onClick={() => selectConversation(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
                     <span className="relative shrink-0">
-                      <UserAvatar user={other} name={conversation.name} className="h-10 w-10" />
+                      {other?.isAssistant ? (
+                        <LoopAssistantAvatar assistant={other} className="h-10 w-10" iconClassName="h-5 w-5" />
+                      ) : (
+                        <UserAvatar user={other} name={conversation.name} className="h-10 w-10" />
+                      )}
                       <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(other?.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
                     </span>
                     <span className="min-w-0 flex-1 overflow-hidden">
@@ -3856,7 +3894,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     {selectedConversation?.type === "group" ? (
                       <GroupAvatar group={selectedConversation} className="h-10 w-10" iconClassName="h-5 w-5" />
                     ) : (
-                      <UserAvatar user={selectedConversation?.participants?.find((user) => user.id !== getStoredAuth().user?.id)} name={selectedConversation?.name} className="h-10 w-10" />
+                      (() => {
+                        const other = selectedConversation?.participants?.find((user) => user.id !== getStoredAuth().user?.id) || (selectedConversation?.id?.startsWith("assistant-loop") ? { ...loopAssistant, isAssistant: true, id: "loop" } : null);
+                        return other?.isAssistant ? (
+                          <LoopAssistantAvatar assistant={other} className="h-10 w-10" iconClassName="h-5 w-5" />
+                        ) : (
+                          <UserAvatar user={other} name={selectedConversation?.name} className="h-10 w-10" />
+                        );
+                      })()
                     )}
                     <span className="min-w-0">
                       <span className="flex min-w-0 items-center gap-1.5">
@@ -4162,6 +4207,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 <div className={`antialiased transform-gpu space-y-2 break-words text-sm leading-6 [overflow-wrap:anywhere] ${darkMode ? "text-white/85" : "text-[#334155]"}`}>
                                   {renderLoopAssistantText(message.text, darkMode)}
                                 </div>
+                                {message.assistantPayload?.type === "employee-report-analysis" && (
+                                  <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/10">
+                                    <button type="button" onClick={() => setForwardAnalysisPayload({ message, targetUserId: message.assistantPayload.userId, employeeName: message.assistantPayload.employeeName })} className={`flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition ${darkMode ? "bg-white/10 text-white hover:bg-white/20" : "bg-black/5 text-black hover:bg-black/10"}`}>
+                                      <Forward className="h-4 w-4" />
+                                      Forward to {message.assistantPayload.employeeName}
+                                    </button>
+                                  </div>
+                                )}
                                 <div className={`mt-2 flex justify-end`}>
                                   <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold ${darkMode ? "text-white/55" : "text-[#71809a]"}`}>
                                     <span>{formatTime(message.createdAt)}</span>
@@ -4517,6 +4570,36 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 </div>
               </section>
 
+              {selectedConversation?.id?.startsWith("assistant-loop") && (
+                <div className="px-4 py-2 sm:px-6 flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`text-xs font-semibold uppercase tracking-wider ${muted}`}>Capabilities:</span>
+                    <button type="button" onClick={() => setLoopCapabilityPicker(loopCapabilityPicker === "employee-report" ? null : "employee-report")} className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition ${darkMode ? "border-white/10 bg-[#16181d] text-white hover:bg-white/5" : "border-[#e5edf8] bg-white text-[#14213d] hover:bg-[#f7f9fc]"}`}>
+                      <FileText className="h-3.5 w-3.5 text-[#2563eb]" />
+                      Employee Report
+                    </button>
+                  </div>
+                  {loopCapabilityPicker === "employee-report" && (
+                    <div className="flex items-center gap-2 animate-in slide-in-from-top-2 duration-200">
+                      <input 
+                        type="date" 
+                        value={loopCapabilityDate} 
+                        onChange={(e) => setLoopCapabilityDate(e.target.value)} 
+                        className={`rounded-lg border px-3 py-1.5 text-xs outline-none focus:border-[#2563eb] ${darkMode ? "border-white/10 bg-black/20 text-white" : "border-black/10 bg-white text-black"}`} 
+                      />
+                      <button type="button" disabled={!loopCapabilityDate || refiningMessage} onClick={() => {
+                        const dateObj = new Date(loopCapabilityDate);
+                        const displayDate = !Number.isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : loopCapabilityDate;
+                        sendMessage({ preventDefault: () => {}, overrideText: `Analyze employee reports for ${displayDate}`, actionPayload: { action: "employee-report-analysis", date: loopCapabilityDate } });
+                        setLoopCapabilityPicker(null);
+                        setLoopCapabilityDate("");
+                      }} className="rounded-lg bg-[#2563eb] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#1d4ed8] disabled:opacity-50">
+                        Analyze
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               <form onSubmit={sendMessage} className={`relative shrink-0 px-3 py-2 sm:px-6 ${subSurface}`}>
                 {mentionOptions.length > 0 && (
                   <div className={`absolute bottom-[76px] left-6 z-30 w-80 max-w-[calc(100vw-48px)] overflow-hidden rounded-[18px] p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
@@ -5820,6 +5903,48 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   <span className="truncate">{groupDeleteConfirm.mode === "everyone" ? "Delete" : "Remove"}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {forwardAnalysisPayload && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm sm:p-6" onClick={() => {
+            setForwardAnalysisPayload(null);
+            setForwardAnalysisComment("");
+          }}>
+            <div onMouseDown={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[22px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-base font-bold text-black dark:text-white">Forward Analysis</h3>
+                <button type="button" disabled={forwardAnalysisSending} onClick={() => {
+                  setForwardAnalysisPayload(null);
+                  setForwardAnalysisComment("");
+                }} className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-black/45 hover:bg-black/5 hover:text-black"} disabled:opacity-40`}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className={`mb-4 text-sm ${muted}`}>Forwarding performance analysis to <strong>{forwardAnalysisPayload.employeeName}</strong>.</p>
+              <form onSubmit={forwardEmployeeAnalysis}>
+                <textarea
+                  value={forwardAnalysisComment}
+                  onChange={(e) => setForwardAnalysisComment(e.target.value)}
+                  placeholder="Add a comment... (optional)"
+                  className={`w-full resize-none rounded-xl p-3 text-sm outline-none transition focus:ring-2 focus:ring-[#2563eb] ${darkMode ? "bg-white/5 text-white placeholder:text-white/30" : "bg-black/5 text-black placeholder:text-black/40"}`}
+                  rows={4}
+                  disabled={forwardAnalysisSending}
+                />
+                <div className="mt-4 flex items-center gap-2">
+                  <button type="button" disabled={forwardAnalysisSending} onClick={() => {
+                    setForwardAnalysisPayload(null);
+                    setForwardAnalysisComment("");
+                  }} className={`flex h-10 min-w-0 flex-1 items-center justify-center rounded-full px-3 text-sm font-bold transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f3f4f6] text-[#111827] hover:bg-[#e5e7eb]"}`}>
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={forwardAnalysisSending} className="flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-[#2563eb] px-3 text-sm font-bold text-white hover:bg-[#1d4ed8] disabled:opacity-60">
+                    {forwardAnalysisSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Forward className="h-4 w-4" />}
+                    <span>Forward</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

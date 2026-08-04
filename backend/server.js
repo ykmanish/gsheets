@@ -16640,7 +16640,7 @@ function buildLoopFallbackAnswer(question = "", context = {}) {
   return lines.join("\n");
 }
 
-async function askLoopProjectAssistant({ question, context }) {
+async function askLoopProjectAssistant({ question, context, maxTokensOverride }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { answer: buildLoopFallbackAnswer(question, context), model: "local-project-context", tier: "local" };
   const routing = routeClaudeModel(question, 1, "auto");
@@ -16654,7 +16654,7 @@ async function askLoopProjectAssistant({ question, context }) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: routing.tier === "haiku" ? 1200 : 2200,
+      max_tokens: maxTokensOverride || (routing.tier === "haiku" ? 1200 : 2200),
       temperature: 0.1,
       system: [
         "You are Loop, the project assistant inside UIPL Loop chat.",
@@ -16817,7 +16817,8 @@ async function createLoopEmployeeReportAnalysisReply({ req, conversation, date, 
       }
       
       const total = allReports.length;
-      const reports = allReports.slice(offset, offset + 10);
+      const batchSize = 5;
+      const reports = allReports.slice(offset, offset + batchSize);
       
       await createForumLoopAssistantMessage({
          req, conversation, text: `Analyzing reports ${offset + 1} to ${offset + reports.length} (out of ${total}) for ${date}...`,
@@ -16847,12 +16848,11 @@ ${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeN
 
       broadcastForumLoopTyping(conversation, true);
       try {
-        const claude = await askLoopProjectAssistant({ question: prompt, context: { info: "Batch Employee Report Evaluation" } });
+        const claude = await askLoopProjectAssistant({ question: prompt, context: { info: "Batch Employee Report Evaluation" }, maxTokensOverride: 4000 });
         let jsonStr = claude.answer;
-        const startIdx = jsonStr.indexOf("[");
-        const endIdx = jsonStr.lastIndexOf("]");
-        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-          jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+        const match = jsonStr.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (match) {
+          jsonStr = match[0];
         }
         const results = JSON.parse(jsonStr);
         
@@ -16865,7 +16865,7 @@ ${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeN
       } catch (err) {
         console.error("Error analyzing batched reports", err);
         await createForumLoopAssistantMessage({
-          req, conversation, text: `I ran into an error while analyzing this batch. Please try again.`,
+          req, conversation, text: `I ran into an error while analyzing this batch: **${err.message}**. Please try again.`,
           assistantPayload: { error: true, type: "employee-report-analysis-more", date, offset },
         });
         broadcastForumLoopTyping(conversation, false);
@@ -16873,7 +16873,7 @@ ${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeN
       }
       broadcastForumLoopTyping(conversation, false);
       
-      const hasMore = offset + 10 < total;
+      const hasMore = offset + batchSize < total;
       
       await createForumLoopAssistantMessage({
          req, conversation, text: hasMore 
@@ -16882,7 +16882,7 @@ ${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeN
          assistantPayload: { 
            type: hasMore ? "employee-report-analysis-more" : "employee-report-analysis-summary", 
            date, 
-           offset: hasMore ? offset + 10 : 0 
+           offset: hasMore ? offset + batchSize : 0 
          },
       });
     } catch (error) {

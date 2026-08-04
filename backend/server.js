@@ -16802,13 +16802,13 @@ async function createLoopGeneralAssistantReply({ req, conversation, question }) 
   }
 }
 
-async function createLoopEmployeeReportAnalysisReply({ req, conversation, date }) {
+async function createLoopEmployeeReportAnalysisReply({ req, conversation, date, offset = 0 }) {
   // Fire background job and return a placeholder immediately
   (async () => {
     try {
       const db = await connectAuthDb();
-      const reports = await db.collection("employeeDailyReports").find({ reportDate: date }).toArray();
-      if (!reports.length) {
+      const allReports = await db.collection("employeeDailyReports").find({ reportDate: date }).toArray();
+      if (!allReports.length) {
          await createForumLoopAssistantMessage({
            req, conversation, text: `I couldn't find any employee reports for ${date}.`,
            assistantPayload: { type: "employee-report-analysis-summary", date },
@@ -16816,15 +16816,18 @@ async function createLoopEmployeeReportAnalysisReply({ req, conversation, date }
          return;
       }
       
+      const total = allReports.length;
+      const reports = allReports.slice(offset, offset + 10);
+      
       await createForumLoopAssistantMessage({
-         req, conversation, text: `Found ${reports.length} employee reports for ${date}. Analyzing now...`,
+         req, conversation, text: `Analyzing reports ${offset + 1} to ${offset + reports.length} (out of ${total}) for ${date}...`,
          assistantPayload: { type: "employee-report-analysis-summary", date },
       });
 
       for (const report of reports) {
          broadcastForumLoopTyping(conversation, true);
          try {
-           const indPrompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}). Evaluate if the tasks performed were appropriate and meaningful. Provide a crisp MIS summary for this employee's day, followed by your analysis. Tasks: ${JSON.stringify(report.taskItems)}`;
+           const indPrompt = `Act as an executive assistant to a busy CEO. Analyze the following daily report from employee ${report.employeeName} (${report.department}). \n\nProvide a very short, crisp, and highly meaningful summary that takes only seconds to read. \n1. Briefly list the core tasks done.\n2. Evaluate productivity/relevance in 1-2 sentences.\n\nBe highly concise. Tasks: ${JSON.stringify(report.taskItems)}`;
            const indClaude = await askLoopProjectAssistant({ question: indPrompt, context: { info: "Employee Report Evaluation" } });
            await createForumLoopAssistantMessage({
              req, conversation, text: indClaude.answer,
@@ -16835,9 +16838,18 @@ async function createLoopEmployeeReportAnalysisReply({ req, conversation, date }
          }
       }
       broadcastForumLoopTyping(conversation, false);
+      
+      const hasMore = offset + 10 < total;
+      
       await createForumLoopAssistantMessage({
-         req, conversation, text: `Analysis complete for ${date}.`,
-         assistantPayload: { type: "employee-report-analysis-summary", date },
+         req, conversation, text: hasMore 
+           ? `Analyzed ${offset + reports.length} of ${total} reports. Would you like to analyze the next batch?` 
+           : `Analysis complete. All ${total} reports for ${date} have been analyzed.`,
+         assistantPayload: { 
+           type: hasMore ? "employee-report-analysis-more" : "employee-report-analysis-summary", 
+           date, 
+           offset: hasMore ? offset + 10 : 0 
+         },
       });
     } catch (error) {
       console.error("Loop background analysis error:", error);
@@ -17489,7 +17501,7 @@ app.post("/forum/conversations/:id/messages", async (req, res) => {
           : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
         if (conversation) {
           if (isLoopConversation && actionPayload?.action === "employee-report-analysis" && actionPayload?.date) {
-            assistantMessage = await createLoopEmployeeReportAnalysisReply({ req, conversation, date: actionPayload.date });
+            assistantMessage = await createLoopEmployeeReportAnalysisReply({ req, conversation, date: actionPayload.date, offset: actionPayload.offset || 0 });
           } else if (isLoopConversation && !actionPayload) {
             assistantMessage = await createLoopGeneralAssistantReply({ req, conversation, question: text });
           } else {

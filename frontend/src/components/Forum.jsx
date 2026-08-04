@@ -4215,6 +4215,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     </button>
                                   </div>
                                 )}
+                                {message.assistantPayload?.type === "employee-report-analysis-more" && (
+                                  <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/10">
+                                    <button type="button" disabled={refiningMessage} onClick={() => {
+                                      sendMessage({ preventDefault: () => {}, overrideText: `Analyze next batch of employee reports for ${message.assistantPayload.date}`, actionPayload: { action: "employee-report-analysis", date: message.assistantPayload.date, offset: message.assistantPayload.offset } });
+                                    }} className={`flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563eb] py-2 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-50`}>
+                                      Analyze next 10
+                                    </button>
+                                  </div>
+                                )}
                                 <div className={`mt-2 flex justify-end`}>
                                   <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold ${darkMode ? "text-white/55" : "text-[#71809a]"}`}>
                                     <span>{formatTime(message.createdAt)}</span>

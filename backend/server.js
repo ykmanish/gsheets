@@ -16824,18 +16824,45 @@ async function createLoopEmployeeReportAnalysisReply({ req, conversation, date, 
          assistantPayload: { type: "employee-report-analysis-summary", date },
       });
 
-      for (const report of reports) {
-         broadcastForumLoopTyping(conversation, true);
-         try {
-           const indPrompt = `Act as an executive assistant to a busy CEO. Analyze the following daily report from employee ${report.employeeName} (${report.department}). \n\nProvide a very short, crisp, and highly meaningful summary that takes only seconds to read. \n1. Briefly list the core tasks done.\n2. Evaluate productivity/relevance in 1-2 sentences.\n\nBe highly concise. Tasks: ${JSON.stringify(report.taskItems)}`;
-           const indClaude = await askLoopProjectAssistant({ question: indPrompt, context: { info: "Employee Report Evaluation" } });
-           await createForumLoopAssistantMessage({
-             req, conversation, text: indClaude.answer,
-             assistantPayload: { type: "employee-report-analysis", userId: report.userId, employeeName: report.employeeName },
-           });
-         } catch (err) {
-           console.error("Error analyzing report for", report.employeeName, err);
-         }
+      const prompt = `Act as an executive assistant to a busy CEO. I will provide you with a list of daily reports from different employees. 
+For each employee, provide a very short, crisp, and highly meaningful summary that takes only seconds to read. 
+1. Briefly list the core tasks done.
+2. Evaluate productivity/relevance in 1-2 sentences.
+
+Be highly concise.
+
+Format your response strictly as a JSON array of objects matching this exact structure:
+[
+  {
+    "userId": "exact userId provided",
+    "employeeName": "exact employeeName provided",
+    "analysis": "your short summary and evaluation formatted with Markdown"
+  }
+]
+
+Do not include any other text before or after the JSON array.
+
+Reports to analyze:
+${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeName, department: r.department, taskItems: r.taskItems })), null, 2)}`;
+
+      broadcastForumLoopTyping(conversation, true);
+      try {
+        const claude = await askLoopProjectAssistant({ question: prompt, context: { info: "Batch Employee Report Evaluation" } });
+        const jsonStr = claude.answer.replace(/```json/gi, "").replace(/```/g, "").trim();
+        const results = JSON.parse(jsonStr);
+        
+        for (const result of results) {
+          await createForumLoopAssistantMessage({
+            req, conversation, text: result.analysis,
+            assistantPayload: { type: "employee-report-analysis", userId: result.userId, employeeName: result.employeeName },
+          });
+        }
+      } catch (err) {
+        console.error("Error analyzing batched reports", err);
+        await createForumLoopAssistantMessage({
+          req, conversation, text: `I ran into an error while analyzing this batch. Please try again.`,
+          assistantPayload: { error: true },
+        });
       }
       broadcastForumLoopTyping(conversation, false);
       

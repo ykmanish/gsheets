@@ -410,7 +410,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceSettingsOpen, setAttendanceSettingsOpen] = useState(false);
   const [attendanceSettingsExpanded, setAttendanceSettingsExpanded] = useState(false);
   const [attendanceSearchResults, setAttendanceSearchResults] = useState([]);
-  const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100 });
+  const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100, googleSheetLink: "" });
   const [attendanceDateFilter, setAttendanceDateFilter] = useState({ startDate: todayInput(), endDate: todayInput() });
   const [todayReportSubmitted, setTodayReportSubmitted] = useState(false);
   const [todayReportExempt, setTodayReportExempt] = useState(false);
@@ -459,6 +459,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
           latitude: overview.attendanceSettings.latitude || "",
           longitude: overview.attendanceSettings.longitude || "",
           radiusMeters: overview.attendanceSettings.radiusMeters || 100,
+          googleSheetLink: overview.attendanceSettings.googleSheetLink || "",
         });
       }
       if (section === "attendance") void loadTodayReportStatus();
@@ -540,6 +541,45 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const attendanceDateRangeLabel = attendanceDateFilter.startDate && attendanceDateFilter.endDate && attendanceDateFilter.startDate !== attendanceDateFilter.endDate 
     ? `${formatDateLabel(attendanceDateFilter.startDate)} - ${formatDateLabel(attendanceDateFilter.endDate)}` 
     : formatDateLabel(attendanceDateFilter.startDate || attendanceDateFilter.endDate) || "All dates";
+
+  const downloadExcelReport = () => {
+    let url = `${API_URL}/hr/attendance/export/excel?`;
+    if (attendanceDateFilter.startDate) url += `startDate=${attendanceDateFilter.startDate}&`;
+    if (attendanceDateFilter.endDate) url += `endDate=${attendanceDateFilter.endDate}`;
+    
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error("Export failed");
+        return res.blob();
+      })
+      .then(blob => {
+        const urlObj = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = urlObj;
+        a.download = "attendance-report.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(urlObj);
+      })
+      .catch(err => hrToast.error("Failed to download Excel: " + err.message));
+  };
+
+  const exportToGoogleSheet = async () => {
+    try {
+      const toastId = Math.random().toString();
+      showAppToast("Exporting to Google Sheets...", { type: "info", darkMode, id: toastId });
+      const response = await fetch(`${API_URL}/hr/attendance/export/google-sheet`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: attendanceDateFilter.startDate || todayInput() })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Export failed");
+      showAppToast("Exported to Google Sheets", { type: "success", darkMode, id: toastId });
+    } catch (error) {
+      hrToast.error("Failed to export: " + error.message);
+    }
+  };
 
   const downloadAttendanceReport = () => {
     const doc = new jsPDF("landscape");
@@ -1957,9 +1997,17 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     <div className="w-full sm:w-[150px]">
                       <DrawerDatePicker darkMode={darkMode} label="End Date" value={attendanceDateFilter.endDate} placeholder="End date" minDate={attendanceDateFilter.startDate} onChange={(endDate) => setAttendanceDateFilter(current => ({ ...current, endDate }))} />
                     </div>
-                    <button type="button" onClick={downloadAttendanceReport} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
-                      <Download className="h-4 w-4" /> Download Report
-                    </button>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={downloadAttendanceReport} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                        <Download className="h-4 w-4" /> PDF
+                      </button>
+                      <button type="button" onClick={downloadExcelReport} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                        <FileText className="h-4 w-4" /> Excel
+                      </button>
+                      <button type="button" onClick={exportToGoogleSheet} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-emerald-500/20 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-[#118f5e]/20 bg-[#e7f6ed] text-[#08764f] hover:bg-[#d6eedf]"}`}>
+                        <Upload className="h-4 w-4" /> Sheet
+                      </button>
+                    </div>
                     {(attendanceDateFilter.startDate !== todayInput() || attendanceDateFilter.endDate !== todayInput()) && (
                       <button type="button" onClick={() => setAttendanceDateFilter({ startDate: todayInput(), endDate: todayInput() })} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
                         <X className="h-4 w-4" /> Clear
@@ -2091,6 +2139,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                           <input type="number" min="25" value={attendanceForm.radiusMeters} onChange={(event) => setAttendanceForm((current) => ({ ...current, radiusMeters: event.target.value }))} className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none" />
                           <span className={`text-xs font-bold ${muted}`}>meters</span>
                         </div>
+                      </label>
+                      <label className="block text-xs font-medium mt-3">Google Sheet URL (for export)
+                        <input type="url" value={attendanceForm.googleSheetLink} onChange={(event) => setAttendanceForm((current) => ({ ...current, googleSheetLink: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} placeholder="https://docs.google.com/spreadsheets/d/..." />
+                        <p className={`mt-1.5 text-[10px] ${muted}`}>Attendance will be appended daily at 11 PM to this sheet.</p>
                       </label>
                     </div>
                     </>

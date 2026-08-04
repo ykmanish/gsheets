@@ -11,6 +11,7 @@ const cron = require("node-cron");
 const nodemailer = require("nodemailer");
 const { google } = require("googleapis");
 const XLSX = require("xlsx");
+const ExcelJS = require("exceljs");
 const PDFDocument = require("pdfkit");
 const { pipeline } = require("@xenova/transformers");
 const crypto = require("crypto");
@@ -4432,6 +4433,7 @@ async function getAttendanceSettings(db) {
     latitude: Number(existing?.latitude) || 0,
     longitude: Number(existing?.longitude) || 0,
     radiusMeters: Math.max(25, Number(existing?.radiusMeters) || 100),
+    googleSheetLink: existing?.googleSheetLink || "",
     updatedAt: existing?.updatedAt || null,
     updatedBy: existing?.updatedBy || "",
   };
@@ -4544,6 +4546,7 @@ app.put("/hr/attendance/settings", async (req, res) => {
       latitude,
       longitude,
       radiusMeters: Math.max(25, Math.round(moneyNumber(req.body?.radiusMeters || 100))),
+      googleSheetLink: String(req.body?.googleSheetLink || "").trim(),
       updatedAt: new Date(),
       updatedBy: String(req.authUser.id || ""),
     };
@@ -4553,6 +4556,351 @@ app.put("/hr/attendance/settings", async (req, res) => {
   } catch (error) {
     console.error("Attendance settings error:", error);
     res.status(500).json({ error: "Could not save attendance settings" });
+  }
+});
+
+async function buildMonthlyAttendancePivot(db, targetDate) {
+  const month = targetDate.substring(0, 7);
+  const [yearStr, monthStr] = month.split("-");
+  const year = parseInt(yearStr);
+  const monthIndex = parseInt(monthStr) - 1;
+
+  const numDays = new Date(year, monthIndex + 1, 0).getDate();
+  const monthDates = [];
+  for (let i = 1; i <= numDays; i++) {
+    const d = String(i).padStart(2, '0');
+    monthDates.push(`${month}-${d}`);
+  }
+
+  const reqMock = { authUser: { isSuperAdmin: true } };
+  const records = await loadHrAttendanceRecords(reqMock, db, true);
+  const allLeaves = await loadHrLeaveRequests(reqMock, db, true);
+  const approvedLeaves = allLeaves.filter(r => r.status === "approved");
+
+  const users = await db.collection("users").find({}).sort({ displayName: 1, username: 1 }).toArray();
+  const roles = await db.collection("roles").find({}).toArray();
+  const roleMap = new Map(roles.map((role) => [String(role._id), role]));
+  const activeEmployees = users.map((user) => sanitizeUser(user, roleMap.get(String(user.roleId)))).filter(e => !e.blacklisted);
+
+  const displayEmployees = activeEmployees.filter(emp => {
+    const name = (emp.displayName || emp.username || "").toLowerCase();
+    const role = (emp.roleName || emp.role || "employee").toLowerCase();
+    if (role === "employee") return true;
+    if (name.includes("neelam") || name.includes("miti") || name.includes("iqbal")) return true;
+    return false;
+  });
+
+  const employeeMap = {};
+  displayEmployees.forEach(emp => {
+    employeeMap[emp.id] = { name: emp.displayName || emp.username || "Unknown", totalMinutes: 0, days: {} };
+  });
+
+  records.forEach(record => {
+    if (monthDates.includes(record.date) && employeeMap[record.userId]) {
+      const hours = record.workMinutes ? (record.workMinutes / 60).toFixed(1) : "-";
+      employeeMap[record.userId].days[record.date] = hours;
+      employeeMap[record.userId].totalMinutes += (record.workMinutes || 0);
+    }
+  });
+
+  displayEmployees.forEach(emp => {
+    const empLeaves = approvedLeaves.filter(r => r.userId === emp.id);
+    monthDates.forEach(date => {
+      if (!employeeMap[emp.id].days[date] || employeeMap[emp.id].days[date] === "-") {
+        const leave = empLeaves.find(r => date >= r.startDate && date <= r.endDate);
+        if (leave) {
+          const isPaid = Number(leave.paidLeaveDays) > 0;
+          employeeMap[emp.id].days[date] = isPaid ? "PL" : "L";
+        } else {
+          employeeMap[emp.id].days[date] = "-";
+        }
+      }
+    });
+  });
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const mName = monthNames[monthIndex];
+
+  const headers = ["Employee"];
+  monthDates.forEach(dateStr => {
+    const day = dateStr.split("-")[2];
+    headers.push(`${mName}\n${day}`);
+  });
+  headers.push("Total\nHrs", "Present\nDays", "Absent\nDays");
+
+  const rows = [];
+  
+  Object.values(employeeMap).forEach(emp => {
+    const row = [emp.name];
+    let presentDays = 0;
+    let absentDays = 0;
+    monthDates.forEach(date => {
+      const isSunday = new Date(date).getDay() === 0;
+      if (isSunday) {
+        row.push("SUN");
+      } else {
+        const val = emp.days[date] || "-";
+        row.push(val);
+        if (val === "-") absentDays += 1;
+        else if (val !== "PL" && val !== "L") presentDays += 1;
+      }
+    });
+    row.push((emp.totalMinutes / 60).toFixed(1));
+    row.push(presentDays);
+    row.push(absentDays);
+    rows.push(row);
+  });
+
+  const footRow = ["Total Hours"];
+  let grandTotalMinutes = 0;
+  let totalPresents = 0;
+  let totalAbsents = 0;
+  monthDates.forEach(date => {
+    const isSunday = new Date(date).getDay() === 0;
+    const dayTotalMins = records.filter(r => r.date === date).reduce((acc, r) => acc + (r.workMinutes || 0), 0);
+    if (isSunday) {
+      footRow.push("SUN");
+    } else {
+      footRow.push(dayTotalMins ? (dayTotalMins / 60).toFixed(1) : "-");
+    }
+    grandTotalMinutes += dayTotalMins;
+  });
+  
+  Object.values(employeeMap).forEach(emp => {
+    monthDates.forEach(date => {
+      const isSunday = new Date(date).getDay() === 0;
+      if (!isSunday) {
+        const val = emp.days[date] || "-";
+        if (val === "-") totalAbsents += 1;
+        else if (val !== "PL" && val !== "L") totalPresents += 1;
+      }
+    });
+  });
+
+  footRow.push((grandTotalMinutes / 60).toFixed(1));
+  footRow.push(totalPresents);
+  footRow.push(totalAbsents);
+  
+  rows.push(footRow);
+
+  return { headers, rows, monthDates };
+}
+
+async function pushAttendanceToGoogleSheet(db, targetDate, manualSheetLink = null) {
+  const settings = await getAttendanceSettings(db);
+  const link = manualSheetLink || settings.googleSheetLink;
+  const sheetId = extractDriveFileId(link);
+  if (!sheetId) throw new Error("Google Sheet is not configured or invalid link.");
+
+  const { headers, rows } = await buildMonthlyAttendancePivot(db, targetDate);
+  const allData = [headers, ...rows];
+
+  const month = targetDate.substring(0, 7);
+  const [yearStr, monthStr] = month.split("-");
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const sheetTitle = `${monthNames[parseInt(monthStr)-1]} ${yearStr}`;
+
+  const auth = await getGoogleAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+
+  let sheetTabId = null;
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+  const existingSheet = spreadsheet.data.sheets.find(s => s.properties.title === sheetTitle);
+  
+  if (existingSheet) {
+    sheetTabId = existingSheet.properties.sheetId;
+  } else {
+    try {
+      const response = await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: [
+            {
+              addSheet: {
+                properties: { title: sheetTitle }
+              }
+            }
+          ]
+        }
+      });
+      sheetTabId = response.data.replies[0].addSheet.properties.sheetId;
+    } catch (error) {
+      console.log("Error creating sheet tab:", error.message);
+    }
+  }
+
+  const range = `'${sheetTitle}'!A1`;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: allData }
+  });
+
+  if (sheetTabId !== null) {
+    const numCols = headers.length;
+    const numRows = allData.length;
+
+    const requests = [
+      {
+        repeatCell: {
+          range: { sheetId: sheetTabId, startRowIndex: 0, endRowIndex: numRows, startColumnIndex: 0, endColumnIndex: numCols },
+          cell: {
+            userEnteredFormat: {
+              horizontalAlignment: "CENTER",
+              verticalAlignment: "MIDDLE",
+              borders: {
+                top: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                bottom: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                left: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                right: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
+              }
+            }
+          },
+          fields: "userEnteredFormat(horizontalAlignment,verticalAlignment,borders)"
+        }
+      },
+      {
+        repeatCell: {
+          range: { sheetId: sheetTabId, startRowIndex: 0, endRowIndex: numRows, startColumnIndex: 0, endColumnIndex: 1 },
+          cell: { userEnteredFormat: { horizontalAlignment: "LEFT" } },
+          fields: "userEnteredFormat.horizontalAlignment"
+        }
+      },
+      {
+        repeatCell: {
+          range: { sheetId: sheetTabId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: numCols },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: { red: 4/255, green: 120/255, blue: 87/255 },
+              textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true }
+            }
+          },
+          fields: "userEnteredFormat(backgroundColor,textFormat)"
+        }
+      }
+    ];
+
+    for (let r = 1; r < numRows; r++) {
+      for (let c = 1; c < numCols; c++) {
+        const val = allData[r][c];
+        let format = null;
+        if (val === "SUN") {
+          format = { backgroundColor: { red: 243/255, green: 244/255, blue: 246/255 }, textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 } } };
+        } else if (val === "-") {
+          format = { backgroundColor: { red: 254/255, green: 226/255, blue: 226/255 }, textFormat: { foregroundColor: { red: 220/255, green: 38/255, blue: 38/255 } } };
+        } else if (val === "PL") {
+          format = { backgroundColor: { red: 37/255, green: 99/255, blue: 235/255 }, textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true } };
+        } else if (val === "L") {
+          format = { backgroundColor: { red: 153/255, green: 27/255, blue: 27/255 }, textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true } };
+        }
+        
+        if (format) {
+          requests.push({
+            updateCells: {
+              rows: [{ values: [{ userEnteredFormat: format }] }],
+              fields: "userEnteredFormat(backgroundColor,textFormat)",
+              range: { sheetId: sheetTabId, startRowIndex: r, endRowIndex: r+1, startColumnIndex: c, endColumnIndex: c+1 }
+            }
+          });
+        }
+      }
+    }
+
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: { requests }
+      });
+    } catch (e) {
+      console.log("Formatting error:", e.message);
+    }
+  }
+  
+  return { success: true };
+}
+
+app.post("/hr/attendance/export/google-sheet", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-attendance")) return res.status(403).json({ error: "HR attendance access required" });
+    const canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"));
+    if (!canManageHr) return res.status(403).json({ error: "HR manage access required" });
+
+    const db = await connectAuthDb();
+    const date = req.body.date || new Date().toISOString().split("T")[0];
+    
+    await pushAttendanceToGoogleSheet(db, date);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Google sheet export error:", error);
+    res.status(500).json({ error: error.message || "Could not export to Google Sheet" });
+  }
+});
+
+app.get("/hr/attendance/export/excel", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-attendance")) return res.status(403).json({ error: "HR attendance access required" });
+    
+    const db = await connectAuthDb();
+    let targetDate = req.query.startDate;
+    if (!targetDate) targetDate = new Date().toISOString().split("T")[0];
+
+    const { headers, rows } = await buildMonthlyAttendancePivot(db, targetDate);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Attendance");
+
+    const headerRow = worksheet.addRow(headers.map(h => h.replace('\n', ' ')));
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF047857' } };
+      cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+      };
+    });
+
+    rows.forEach(r => {
+      const row = worksheet.addRow(r);
+      row.eachCell((cell, colNumber) => {
+        cell.alignment = { horizontal: colNumber === 1 ? 'left' : 'center', vertical: 'middle' };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+          left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+          bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+          right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+        };
+        const val = cell.value;
+        if (val === "SUN") {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+        } else if (val === "-") {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+          cell.font = { color: { argb: 'FFDC2626' } };
+        } else if (val === "PL") {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+          cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+        } else if (val === "L") {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF991B1B' } };
+          cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+        }
+      });
+    });
+
+    worksheet.columns.forEach((column, i) => {
+      column.width = i === 0 ? 20 : 8;
+    });
+
+    res.setHeader("Content-Disposition", 'attachment; filename="attendance-report.xlsx"');
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error("Excel export error:", error);
+    res.status(500).json({ error: "Could not generate Excel report" });
   }
 });
 
@@ -17724,6 +18072,18 @@ if (require.main === module) {
     console.log(`📁 Data: ${dataDir}`);
   });
 }
+
+cron.schedule("0 23 * * *", async () => {
+  try {
+    console.log("Running daily attendance export to Google Sheets at 11 PM...");
+    const db = await connectAuthDb();
+    const targetDate = new Date().toISOString().split("T")[0];
+    await pushAttendanceToGoogleSheet(db, targetDate);
+    console.log("Successfully exported attendance to Google Sheets for", targetDate);
+  } catch (error) {
+    console.error("Cron: Google sheet export error:", error.message);
+  }
+});
 
 module.exports = { app, generateEmployeeDailyReportPdf };
 

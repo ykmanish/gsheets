@@ -5372,7 +5372,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
           >
             <form
               onSubmit={saveForumDriveSettings}
-              className={`w-full max-w-md rounded-[24px] p-5 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}
+              className={`max-h-[88vh] w-full max-w-md overflow-y-auto rounded-[24px] p-5 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}
             >
               <div className="flex items-start gap-3">
                 <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-emerald-400/15 text-emerald-300" : "bg-emerald-50 text-emerald-600"}`}>
@@ -5417,19 +5417,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 <div className="mt-5">
                   <span className={`mb-2 block text-xs font-semibold ${muted}`}>Loop assistant DM access</span>
                   <p className={`mb-2 text-xs ${muted}`}>Only super admins get Loop DM by default. Check who else can chat with Loop assistant directly — they won't see employee report analysis, that stays super-admin only.</p>
-                  <div className={`max-h-48 overflow-y-auto rounded-2xl p-2 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]"}`}>
+                  <div className={`grid max-h-48 grid-cols-2 gap-1 overflow-y-auto rounded-2xl p-2 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]"}`}>
                     {users.filter((user) => !user.isSuperAdmin && user.id !== currentUser?.id).map((user) => {
                       const checked = loopAccessUserIds.includes(user.id);
                       return (
-                        <label key={user.id} className={`flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 text-sm ${darkMode ? "hover:bg-white/5" : "hover:bg-white"}`}>
+                        <label key={user.id} className={`flex min-w-0 cursor-pointer items-center gap-1.5 rounded-xl px-2 py-1.5 text-sm ${darkMode ? "hover:bg-white/5" : "hover:bg-white"}`}>
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => setLoopAccessUserIds((current) => checked ? current.filter((id) => id !== user.id) : [...current, user.id])}
                             className="h-4 w-4 shrink-0 rounded"
                           />
-                          <span className="min-w-0 flex-1 truncate">{user.displayName}</span>
-                          {user.department && <span className={`shrink-0 text-xs ${muted}`}>{user.department}</span>}
+                          <span className="min-w-0 flex-1 truncate" title={user.displayName}>{user.displayName}</span>
                         </label>
                       );
                     })}

@@ -16334,6 +16334,11 @@ async function forumConversationSummary(conversation, authUserId) {
     ? await db.collection("users").find({ _id: { $in: userIds.map((id) => new ObjectId(id)) } }).toArray()
     : [];
   const other = participants.find((user) => String(user._id) !== authUserId);
+  // The Loop assistant DM has "loop" as its second participant, which isn't a real user
+  // record. From the employee's own viewpoint `other` above resolves to nothing (the only
+  // real participant IS them), so without this check the name would wrongly fall back to
+  // "Direct message" instead of identifying the conversation as the Loop assistant.
+  const isLoopAssistantConversation = conversation.type === "direct" && (participantIds.includes("loop") || String(conversation._id).startsWith("assistant-loop-"));
   const lastMessage = conversation.lastMessage ? {
     ...conversation.lastMessage,
     text: decryptForumText(conversation.lastMessage.encrypted),
@@ -16365,7 +16370,10 @@ async function forumConversationSummary(conversation, authUserId) {
   return {
     id: conversation._id,
     type: conversation.type,
-    name: conversation.type === "direct" ? (other?.displayName || other?.username || "Direct message") : conversation.name || "Loop Group",
+    name: conversation.type === "direct"
+      ? (isLoopAssistantConversation ? "Loop Assistant" : (other?.displayName || other?.username || "Direct message"))
+      : conversation.name || "Loop Group",
+    isLoopAssistantConversation,
     dailyReportEnabled: Boolean(conversation.dailyReportEnabled),
     dailyReportTime: conversation.dailyReportTime || "",
     participants: participants.map(forumUserProfile),
@@ -16918,11 +16926,21 @@ ${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeN
           jsonStr = match[0];
         }
         const results = JSON.parse(jsonStr);
-        
+
         for (const result of results) {
+          // Never trust the userId Claude echoed back in JSON as-is — LLMs can subtly mangle
+          // long opaque MongoDB ids (a flipped hex char breaks ObjectId parsing entirely, or
+          // silently points "Forward to" at a conversation the real employee never sees).
+          // Re-resolve it against the trusted source report by employeeName/department instead.
+          const sourceReport = reports.find((r) => String(r.userId) === String(result.userId))
+            || reports.find((r) => r.employeeName === result.employeeName);
+          if (!sourceReport) {
+            console.error("Batch analysis: could not match result to a source report", result);
+            continue;
+          }
           await createForumLoopAssistantMessage({
             req, conversation, text: normalizeAnalysisSections(result.analysis),
-            assistantPayload: { type: "employee-report-analysis", userId: result.userId, employeeName: result.employeeName },
+            assistantPayload: { type: "employee-report-analysis", userId: sourceReport.userId, employeeName: sourceReport.employeeName },
           });
         }
       } catch (err) {
@@ -18018,6 +18036,10 @@ app.delete("/forum/conversations/:id", async (req, res) => {
       return res.json({ success: true, mode: "me", conversationId: conversation._id });
     }
     if (conversation.type !== "direct") return res.status(404).json({ error: "Conversation not found" });
+    const isLoopAssistantConversation = (conversation.participantIds || []).includes("loop") || String(conversation._id).startsWith("assistant-loop-");
+    if (isLoopAssistantConversation) {
+      return res.status(403).json({ error: "The Loop assistant chat can't be deleted. Use Clear messages instead." });
+    }
     await db.collection("forumMessages").deleteMany({ conversationId: conversation._id });
     await db.collection("forumConversations").deleteOne({ _id: conversation._id });
     broadcastForumPayload(conversation.participantIds, { type: "forum:deleted", conversationId: conversation._id });

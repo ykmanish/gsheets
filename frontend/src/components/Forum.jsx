@@ -4022,7 +4022,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           <Sparkles className="h-3.5 w-3.5 text-[#2563eb]" />
                           Clear messages
                         </button>
-                        <button type="button" onClick={deleteChat} disabled={selectedConversation?.type !== "direct"} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35">
+                        <button type="button" onClick={deleteChat} disabled={selectedConversation?.type !== "direct" || selectedConversation?.id?.startsWith("assistant-loop")} title={selectedConversation?.id?.startsWith("assistant-loop") ? "The Loop assistant chat can't be deleted — use Clear messages instead" : undefined} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35">
                           <Trash2 className="h-3.5 w-3.5" />
                           Delete chat
                         </button>

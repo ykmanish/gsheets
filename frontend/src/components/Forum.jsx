@@ -4179,7 +4179,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       }
                       if (message.loopAssistant) {
                         const messageLoopProfile = { ...loopAssistant, avatarUrl: message.assistant?.avatarUrl || loopAssistant.avatarUrl };
-                        const mine = message.senderId === getStoredAuth().user?.id && Boolean(message.forwardedFrom);
+                        // Loop-authored content always renders as the assistant's own bubble, even when
+                        // an admin relays it via forward — the message is never "mine" just because I'm
+                        // the one who forwarded it. Prevents it flipping to the sender's own outgoing style.
+                        const mine = false;
                         const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
                         const isSelectionMode = selectedMessageIds.length > 0;
                         const isSelectedMessage = selectedMessageIds.includes(message.id);
@@ -4243,7 +4246,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 <div className={`antialiased transform-gpu space-y-2 break-words text-sm leading-6 font-[500] [overflow-wrap:anywhere] ${darkMode ? "text-white" : "text-black"}`}>
                                   {renderLoopAssistantText(message.text, darkMode)}
                                 </div>
-                                {message.assistantPayload?.type === "employee-report-analysis" && (
+                                {message.assistantPayload?.type === "employee-report-analysis" && !message.forwardedFrom && (
                                   <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/10">
                                     <button type="button" onClick={() => setForwardAnalysisPayload({ message, targetUserId: message.assistantPayload.userId, employeeName: message.assistantPayload.employeeName })} className={`flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition ${darkMode ? "bg-white/10 text-white hover:bg-white/20" : "bg-black/5 text-black hover:bg-black/10"}`}>
                                       <Forward className="h-4 w-4" />
@@ -5957,7 +5960,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
             setForwardAnalysisPayload(null);
             setForwardAnalysisComment("");
           }}>
-            <div onMouseDown={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[22px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+            <div onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[22px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-base font-bold text-black dark:text-white">Forward Analysis</h3>
                 <button type="button" disabled={forwardAnalysisSending} onClick={() => {

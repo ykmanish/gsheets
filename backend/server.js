@@ -2974,20 +2974,19 @@ async function analyzeEmployeeReportAndNotifyLoop(report) {
 
     let prompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}).\n`;
     if (questions.length > 0) {
-      prompt += `Please answer the following questions based on the employee's task data:\n`;
+      prompt += `Please evaluate the employee's report strictly based on the following questions:\n`;
       questions.forEach((q, i) => {
         prompt += `${i + 1}. ${q}\n`;
       });
-      prompt += `\nStructure your response by answering these questions directly. Also, please include these distinct sections at the end:\n**Impact:** (Detailing the impact on project progress)\n**Suggestion:** (A suggestion for the employee)`;
+      prompt += `\nStructure your output using clear sections. Your "Evaluation" section MUST directly and exclusively address the questions above. You MUST include the following 4 distinct sections:\n`;
     } else {
-      prompt += `Evaluate if the tasks performed were appropriate and meaningful, or if they seem like filler tasks just added for the sake of it.
-Provide a crisp MIS summary for this employee's day, followed by your analysis of what the employee did, their intentions, and what actions (if any) should be taken regarding this employee.
-Structure your output using clear sections, ensuring you include:
-**Core Tasks:** (Brief summary of tasks done)
-**Evaluation:** (Your evaluation of their work)
-**Impact:** (Impact on project progress)
-**Suggestion:** (Suggestions for this employee)`;
+      prompt += `Evaluate if the tasks performed were appropriate and meaningful, or if they seem like filler tasks just added for the sake of it.\nStructure your output using clear sections, ensuring you MUST include the following 4 distinct sections:\n`;
     }
+    
+    prompt += `**Core Tasks:** (Brief summary of tasks done)
+**Evaluation:** (${questions.length > 0 ? "Answer the specific evaluation questions here, clearly addressing each one" : "Your evaluation of their work"})
+**Impact:** (Impact on project progress)
+**Suggestion:** (A suggestion for the employee based on your evaluation)`;
     
     prompt += `\n\nTasks Done:\n${JSON.stringify(taskData, null, 2)}\n\nWaiting Tasks:\n${JSON.stringify(waitingData, null, 2)}`;
 
@@ -16765,7 +16764,7 @@ async function createForumLoopAssistantMessage({ req, conversation, text, assist
   return serialized;
 }
 
-async function createForumLoopSystemMessage({ conversation, text, assistantPayload = null }) {
+async function createForumLoopSystemMessage({ conversation, text, assistantPayload = null, forwardedFrom = null }) {
   const db = await connectAuthDb();
   const now = new Date();
   const encrypted = encryptForumText(text);
@@ -16785,6 +16784,7 @@ async function createForumLoopSystemMessage({ conversation, text, assistantPaylo
     createdAt: now,
     readBy: {},
     deliveredTo: {},
+    ...(forwardedFrom ? { forwardedFrom } : {}),
   };
   const result = await db.collection("forumMessages").insertOne(message);
   const saved = { ...message, _id: result.insertedId };
@@ -17590,28 +17590,12 @@ app.post("/forum/messages/forward-analysis", async (req, res) => {
     const targetUser = await db.collection("users").findOne({ _id: new ObjectId(targetUserId) });
     if (!targetUser) return res.status(404).json({ error: "Employee not found" });
 
-    const participantIds = [String(req.authUser.id), String(targetUserId)];
-    participantIds.sort();
-    const convResult = await db.collection("forumConversations").findOneAndUpdate(
-      { type: "direct", participantIds: { $all: participantIds, $size: 2 } },
-      {
-        $setOnInsert: {
-          _id: new ObjectId().toString(),
-          type: "direct",
-          participantIds,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      },
-      { upsert: true, returnDocument: "after" }
-    );
-    const conversation = convResult.value || convResult;
+    const conversation = await ensureLoopAssistantConversation(db, targetUserId);
 
-    const message = await createForumMessage({
-      req,
-      conversationId: conversation._id,
+    const message = await createForumLoopSystemMessage({
+      conversation,
       text,
-      forwardedFrom: { senderName: "Loop Assistant" }
+      forwardedFrom: { senderName: req.authUser.displayName || req.authUser.username || "Admin" },
     });
 
     res.json({ success: true, message });

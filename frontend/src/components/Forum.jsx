@@ -1673,6 +1673,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [loopAssistant, setLoopAssistant] = useState({ id: "loop-assistant", displayName: "Loop", username: "loop", title: "Project assistant", enabled: true, avatarUrl: "" });
   const [savingLoopAssistant, setSavingLoopAssistant] = useState(false);
   const [uploadingLoopAvatar, setUploadingLoopAvatar] = useState(false);
+  const [loopAccessUserIds, setLoopAccessUserIds] = useState([]);
+  const [savingLoopAccess, setSavingLoopAccess] = useState(false);
   const [mobileProfileUser, setMobileProfileUser] = useState(null);
   const [mobileGroupInfoOpen, setMobileGroupInfoOpen] = useState(false);
   const [mobileListOpen, setMobileListOpen] = useState(true);
@@ -2864,6 +2866,30 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     }
   }
 
+  async function openForumSettings() {
+    setForumSettingsOpen(true);
+    if (!currentUser?.isSuperAdmin) return;
+    try {
+      const data = await api("/loop-assistant-settings");
+      setLoopAccessUserIds((data.allowedUserIds || []).map(String));
+    } catch (e) {}
+  }
+
+  async function saveLoopAccessList() {
+    try {
+      setSavingLoopAccess(true);
+      await api("/loop-assistant-settings", {
+        method: "POST",
+        body: JSON.stringify({ allowedUserIds: loopAccessUserIds }),
+      });
+      toast.success("Loop assistant access updated");
+    } catch (error) {
+      toast.error(error.message || "Could not update Loop assistant access");
+    } finally {
+      setSavingLoopAccess(false);
+    }
+  }
+
   async function saveForumDriveSettings(event) {
     event?.preventDefault();
     const driveFolderUrl = forumDriveFolderUrl.trim();
@@ -2927,7 +2953,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       return;
     }
     if (!forumDriveConnectedUrl) {
-      setForumSettingsOpen(true);
+      openForumSettings();
       toast.error("Connect a Drive folder first");
       return;
     }
@@ -3783,7 +3809,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               </div>
               <button
                 type="button"
-                onClick={() => setForumSettingsOpen(true)}
+                onClick={openForumSettings}
                 className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f3f4f6]"}`}
                 aria-label="Loop Drive settings"
               >
@@ -4659,7 +4685,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 </div>
               </section>
 
-              {selectedConversation?.id?.startsWith("assistant-loop") && (
+              {selectedConversation?.id?.startsWith("assistant-loop") && currentUser?.isSuperAdmin && (
                 <div className="px-4 py-2 sm:px-6 flex flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`text-xs font-semibold uppercase tracking-wider ${muted}`}>Capabilities:</span>
@@ -5387,6 +5413,38 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   </label>
                 )}
               </div>
+              {currentUser?.isSuperAdmin && (
+                <div className="mt-5">
+                  <span className={`mb-2 block text-xs font-semibold ${muted}`}>Loop assistant DM access</span>
+                  <p className={`mb-2 text-xs ${muted}`}>Only super admins get Loop DM by default. Check who else can chat with Loop assistant directly — they won't see employee report analysis, that stays super-admin only.</p>
+                  <div className={`max-h-48 overflow-y-auto rounded-2xl p-2 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]"}`}>
+                    {users.filter((user) => !user.isSuperAdmin && user.id !== currentUser?.id).map((user) => {
+                      const checked = loopAccessUserIds.includes(user.id);
+                      return (
+                        <label key={user.id} className={`flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 text-sm ${darkMode ? "hover:bg-white/5" : "hover:bg-white"}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setLoopAccessUserIds((current) => checked ? current.filter((id) => id !== user.id) : [...current, user.id])}
+                            className="h-4 w-4 shrink-0 rounded"
+                          />
+                          <span className="min-w-0 flex-1 truncate">{user.displayName}</span>
+                          {user.department && <span className={`shrink-0 text-xs ${muted}`}>{user.department}</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={savingLoopAccess}
+                    onClick={saveLoopAccessList}
+                    className={`mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f3f4f6] text-[#111827] hover:bg-[#e5e7eb]"}`}
+                  >
+                    {savingLoopAccess ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    Save access
+                  </button>
+                </div>
+              )}
               <label className="mt-5 block">
                 <span className={`mb-2 block text-xs font-semibold ${muted}`}>Drive folder link</span>
                 <input

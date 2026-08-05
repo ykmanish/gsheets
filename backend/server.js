@@ -2942,7 +2942,10 @@ app.get("/loop-assistant-settings", async (req, res) => {
   try {
     const db = await connectAuthDb();
     const settings = await db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" });
-    res.json({ questions: settings?.analysisQuestions || [] });
+    const payload = { questions: settings?.analysisQuestions || [] };
+    // Only super admins need to see (and edit) who else has Loop DM access.
+    if (req.user?.isSuperAdmin) payload.allowedUserIds = (settings?.allowedUserIds || []).map(String);
+    res.json(payload);
   } catch (error) {
     res.status(500).json({ error: "Could not fetch settings" });
   }
@@ -2952,9 +2955,15 @@ app.post("/loop-assistant-settings", async (req, res) => {
   try {
     if (!req.user || !req.user.isSuperAdmin) return res.status(403).json({ error: "Admin access required" });
     const db = await connectAuthDb();
-    const questions = Array.isArray(req.body.questions) ? req.body.questions.map(q => String(q).trim()).filter(Boolean) : [];
-    await db.collection("platformSettings").updateOne({ _id: "loop-assistant-settings" }, { $set: { analysisQuestions: questions } }, { upsert: true });
-    res.json({ success: true, questions });
+    const update = {};
+    if (Array.isArray(req.body.questions)) {
+      update.analysisQuestions = req.body.questions.map(q => String(q).trim()).filter(Boolean);
+    }
+    if (Array.isArray(req.body.allowedUserIds)) {
+      update.allowedUserIds = req.body.allowedUserIds.map(String).filter(Boolean);
+    }
+    await db.collection("platformSettings").updateOne({ _id: "loop-assistant-settings" }, { $set: update }, { upsert: true });
+    res.json({ success: true, ...update });
   } catch (error) {
     res.status(500).json({ error: "Could not update settings" });
   }
@@ -17011,13 +17020,25 @@ app.get("/forum/bootstrap", async (req, res) => {
     const db = await connectAuthDb();
     const group = await ensureForumGroupConversation(db);
     const loopAssistant = await forumLoopAssistantProfile(db);
-    if (req.authUser?.isSuperAdmin) {
+    // The Loop assistant DM (direct AI chat) is off by default for everyone except super
+    // admins — a regular employee only gets it if a super admin explicitly grants access
+    // via the Loop Drive folder settings' access list.
+    const loopSettings = await db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" });
+    const loopAllowedUserIds = (loopSettings?.allowedUserIds || []).map(String);
+    const hasLoopDmAccess = Boolean(req.authUser?.isSuperAdmin) || loopAllowedUserIds.includes(String(req.authUser.id));
+    if (hasLoopDmAccess) {
       await ensureLoopAssistantConversation(db, req.authUser.id);
     }
-    const conversations = await db.collection("forumConversations").find({
+    let conversations = await db.collection("forumConversations").find({
       participantIds: req.authUser.id,
       deletedForUsers: { $ne: String(req.authUser.id) },
     }).sort({ updatedAt: -1 }).toArray();
+    // Even if a leftover Loop assistant conversation exists in someone's participant list
+    // (e.g. from older behavior), hide it unless they currently have access. Forwarded
+    // analyses land in a normal 1:1 chat, not this one, so hiding it here never affects delivery.
+    if (!hasLoopDmAccess) {
+      conversations = conversations.filter((item) => !((item.participantIds || []).includes("loop") || String(item._id).startsWith("assistant-loop-")));
+    }
     const users = await db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1, username: 1 }).toArray();
     const onlineUserIds = [...forumClients.keys()];
     res.json({
@@ -17619,6 +17640,9 @@ app.post("/forum/conversations/:id/messages", async (req, res) => {
           : await db.collection("forumConversations").findOne({ _id: req.params.id, participantIds: req.authUser.id });
         if (conversation) {
           if (isLoopConversation && actionPayload?.action === "employee-report-analysis" && actionPayload?.date) {
+            // Employee report analysis surfaces every employee's daily report — CEO-only data,
+            // even for a non-admin who's been granted general Loop DM access.
+            if (!req.authUser?.isSuperAdmin) throw Object.assign(new Error("Admin access required"), { status: 403 });
             assistantMessage = await createLoopEmployeeReportAnalysisReply({ req, conversation, date: actionPayload.date, offset: actionPayload.offset || 0 });
           } else if (isLoopConversation && !actionPayload) {
             assistantMessage = await createLoopGeneralAssistantReply({ req, conversation, question: text });

@@ -1705,20 +1705,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const openQuestionScope = async () => {
     setQuestionScopeOpen(true);
     try {
-      const res = await fetch("/loop-assistant-settings");
-      if (res.ok) {
-        const data = await res.json();
-        setAnalysisQuestions(data.questions?.length ? data.questions : [""]);
-      }
+      const data = await api("/loop-assistant-settings");
+      setAnalysisQuestions(data.questions?.length ? data.questions : [""]);
     } catch (e) {}
   };
 
   const saveQuestionScope = async () => {
     setSavingQuestions(true);
     try {
-      await fetch("/loop-assistant-settings", {
+      await api("/loop-assistant-settings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ questions: analysisQuestions.filter(Boolean) })
       });
       setQuestionScopeOpen(false);

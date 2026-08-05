@@ -4022,9 +4022,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           <Monitor className="h-4 w-4" />
                         </button>
                       )}
-                      <button type="button" onClick={openQuestionScope} className={`hidden sm:flex h-9 px-3 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition ${darkMode ? "bg-white/10 hover:bg-white/20 text-white" : "bg-[#f7f8fb] hover:bg-[#e2e8f0] text-[#111827]"}`} aria-label="Question Scope">
-                        Question Scope
-                      </button>
+                      {selectedConversation?.id?.startsWith("assistant-loop") && currentUser?.isSuperAdmin && (
+                        <button type="button" onClick={openQuestionScope} className={`hidden sm:flex h-9 px-3 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition ${darkMode ? "bg-white/10 hover:bg-white/20 text-white" : "bg-[#f7f8fb] hover:bg-[#e2e8f0] text-[#111827]"}`} aria-label="Question Scope">
+                          Question Scope
+                        </button>
+                      )}
                       <button type="button" onClick={() => setMessageSearchOpen(true)} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Search messages">
                         <Search className="h-4 w-4" />
                       </button>

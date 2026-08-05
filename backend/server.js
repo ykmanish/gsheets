@@ -2962,22 +2962,25 @@ app.post("/loop-assistant-settings", async (req, res) => {
 
 // Shared prompt scaffold so every employee-report analysis (single, auto-notified on submit,
 // or batched on-demand) reads the same way: a short CEO-style brief with exactly 3 sections.
-// When the admin has set an Analysis Question Scope, those questions become the evaluation
-// criteria; otherwise Claude falls back to a general appropriateness/meaningfulness check.
+// The filler/impact check always runs; any Analysis Question Scope set by the admin is
+// ADDITIVE to that (never replaces it) — a CEO-defined scope should sharpen the evaluation,
+// not switch off the baseline "was this real work or busywork" check.
 function buildEmployeeReportAnalysisInstructions(questions = []) {
   const scoped = Array.isArray(questions) ? questions.filter(Boolean) : [];
-  const criteria = scoped.length
-    ? `Evaluate the employee strictly against these parameters set by the CEO (do not evaluate anything outside this scope):\n${scoped.map((q, i) => `${i + 1}. ${q}`).join("\n")}`
-    : `Evaluate whether the tasks performed were appropriate and meaningful, or if they look like filler tasks added just for the sake of it.`;
+  const scopeBlock = scoped.length
+    ? `\nThe CEO has also set these specific parameters — address them directly as well:\n${scoped.map((q, i) => `${i + 1}. ${q}`).join("\n")}\n`
+    : "";
 
   return `Act as an executive assistant preparing this for a busy CEO who has no time for detail — be sharp, concise, and say only what matters. Do not pad, repeat the task list, or add pleasantries.
 
-${criteria}
-
+In the Evaluation, ALWAYS do both of the following, regardless of anything else below:
+1. State plainly whether today's tasks were meaningful, high-impact work, or mostly routine/low-value "filler" (small one-off calls, minor admin, vague or repeated entries with no real business outcome). Name the specific filler task(s) if any exist — don't just say "some tasks were minor."
+2. Flag anything blocking progress that genuinely needs CEO or management attention (a decision, an approval, an unresponsive contact, an overdue delivery/payment). Say "none" if there is nothing blocking.
+${scopeBlock}
 Your response MUST contain EXACTLY 3 lines, in this order, and NOTHING else (no title, no intro, no closing remark):
 Line 1: **Tasks:** <1-2 sentence plain summary of what the employee actually did>
-Line 2: **Evaluation:** <your direct assessment against the criteria above, 1-3 sentences, no filler>
-Line 3: **Suggestion:** <one concise, actionable suggestion for this employee based on the evaluation>
+Line 2: **Evaluation:** <cover both mandatory points above (and the CEO's parameters if given), 1-4 sentences, no filler>
+Line 3: **Suggestion:** <one concise, actionable suggestion — if filler tasks were flagged, suggest what to stop/replace them with; if a blocker was flagged, suggest who should escalate it and to whom>
 
 STRICT RULES:
 - Each line starts on its own new line (put a line break between every section — never combine two sections into the same line or paragraph).
@@ -2986,8 +2989,8 @@ STRICT RULES:
 
 Example of the exact shape expected (do not reuse this content, it is only to show the format):
 **Tasks:** Closed out vendor follow-ups and reviewed two site drawings.
-**Evaluation:** Solid coverage on open items; one blocker (design approval) is outside their control.
-**Suggestion:** Escalate the design approval blocker directly instead of waiting on it.`;
+**Evaluation:** Solid, meaningful coverage — no filler tasks here. One blocker: the design approval is stuck with an unconfirmed contact, which is outside their control and needs escalation.
+**Suggestion:** Have the CEO or project lead identify the correct design contact directly instead of leaving this employee to wait on it.`;
 }
 
 // Safety net: even if Claude ignores the "one section per line" instruction and runs

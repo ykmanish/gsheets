@@ -4,6 +4,9 @@ import Image from "next/image";
 import { API_URL } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
 
+const ACCENT = "#2563eb";
+const ACCENT_DARK_TEXT = "#93c5fd";
+
 export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen, collapsed = false, setCollapsed, user, onLogout, onOpenSearch }) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -43,8 +46,10 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
   const [menuSearch, setMenuSearch] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [newSiteImages, setNewSiteImages] = useState(false);
+  const [flyout, setFlyout] = useState(null);
   const navRef = useRef(null);
   const profileRef = useRef(null);
+  const flyoutHideTimerRef = useRef(null);
   const searchTerm = menuSearch.trim().toLowerCase();
   const filteredProjectSubMenu = projectSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
   const filteredHrSubMenu = hrSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
@@ -98,6 +103,34 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     const timer = window.setInterval(check, 60000);
     return () => { stopped = true; window.clearInterval(timer); };
   }, [activeMenu, user?.id]);
+
+  // The collapsed icon-only rail hides sidebar groups' children entirely (no room to show
+  // them). Expanding the sidebar isn't the only way to reach them — hovering a group's icon
+  // pops a flyout card with its children, positioned via viewport coordinates (not relative to
+  // the scrollable nav, which would otherwise clip anything past its right edge). The flyout
+  // only makes sense while collapsed, so it's cleared right in the collapse toggle below
+  // rather than reacted to via an effect.
+  function openFlyout(groupId, targetEl, label, GroupIcon, children) {
+    if (!collapsed || !children.length) return;
+    if (flyoutHideTimerRef.current) {
+      window.clearTimeout(flyoutHideTimerRef.current);
+      flyoutHideTimerRef.current = null;
+    }
+    const rect = targetEl.getBoundingClientRect();
+    setFlyout({ id: groupId, top: rect.top, left: rect.right + 10, label, GroupIcon, children });
+  }
+
+  function scheduleCloseFlyout() {
+    flyoutHideTimerRef.current = window.setTimeout(() => setFlyout(null), 180);
+  }
+
+  function cancelCloseFlyout() {
+    if (flyoutHideTimerRef.current) {
+      window.clearTimeout(flyoutHideTimerRef.current);
+      flyoutHideTimerRef.current = null;
+    }
+  }
+
   const shell = darkMode
     ? "border-white/10 bg-[#101114]"
     : "border-[#e7eaee] bg-white";
@@ -109,33 +142,111 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     setProfileOpen(false);
   }
 
-  const itemClass = ({ active = false, child = false, parentActive = false } = {}) => `newq flex h-10 items-center gap-3 rounded-[14px] text-left transition-all duration-300 ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-[16px] md:p-0" : "w-full px-3"} ${child ? "px-3" : ""} ${
-    parentActive
-      ? darkMode
-        ? "bg-white/[0.07] text-white/80"
-        : "bg-[#a8f0cf] text-[#163f32]"
-      : active
-      ? darkMode
-        ? "bg-white/10 text-white"
-        : "bg-[#a8f0cf] text-[#163f32]"
+  // Top-level leaf items (no children): active state is the same light-blue tint used for
+  // active/hovered sub-module rows — no solid fill — for one consistent visual language
+  // across the whole sidebar, in both themes.
+  const leafItemClass = ({ active = false } = {}) => `newq group flex h-11 items-center gap-3 rounded-2xl text-left font-medium transition-all duration-300 ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-2xl md:p-0" : "w-full px-3"} ${
+    active
+      ? darkMode ? "bg-[#2563eb]/20 text-[#93c5fd] font-semibold" : "bg-[#2563eb]/10 text-[#2563eb] font-semibold"
       : darkMode
-      ? "text-white/58 hover:bg-white/5 hover:text-white"
-      : "text-slate-600 hover:bg-[#f3f6f8] hover:text-slate-950"
+      ? "text-white/60 hover:bg-[#2563eb]/15 hover:text-[#93c5fd]"
+      : "text-slate-600 hover:bg-[#2563eb]/8 hover:text-[#2563eb]"
   }`;
 
-  const iconClass = ({ active = false, child = false, parentActive = false } = {}) => `${child ? "h-7 w-7" : "h-7 w-7"} flex shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${collapsed ? "md:h-10 md:w-10" : ""} ${
-    parentActive
-      ? darkMode
-        ? "bg-white/10 text-white/70"
-        : "text-[#163f32]"
-      : active
-      ? darkMode
-        ? "bg-[#d8f36a] text-black"
-        : "text-[#163f32]"
-      : darkMode
-      ? "text-white/55"
-      : "text-slate-500"
+  const leafIconClass = ({ active = false } = {}) => `flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${collapsed ? "md:h-10 md:w-10" : ""} ${
+    active
+      ? darkMode ? "bg-[#2563eb]/30 text-[#93c5fd]" : "bg-[#2563eb]/15 text-[#2563eb]"
+      : darkMode ? "text-white/55 group-hover:text-[#93c5fd]" : "text-slate-500 group-hover:text-[#2563eb]"
   }`;
+
+  // Group headers (Projects / HR / Access Control) are plain, bold rows — never a solid pill
+  // like a top-level active item — but they DO get the same light-blue tint when one of their
+  // children is the current page (parentActive) or on hover, so the collapsed icon-only rail
+  // still shows which section you're in even without the label visible.
+  const groupHeaderClass = ({ parentActive = false } = {}) => `newq group flex h-11 w-full items-center gap-3 rounded-2xl text-left font-semibold transition-all duration-300 ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-2xl md:p-0" : "px-3"} ${
+    parentActive
+      ? darkMode ? "bg-[#2563eb]/20" : "bg-[#2563eb]/12"
+      : darkMode ? "text-white/90 hover:bg-[#2563eb]/15 hover:text-[#93c5fd]" : "text-slate-800 hover:bg-[#2563eb]/8 hover:text-[#2563eb]"
+  }`;
+
+  const groupHeaderIconClass = ({ parentActive = false } = {}) => `flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${collapsed ? "md:h-10 md:w-10" : ""} ${
+    parentActive
+      ? darkMode ? "bg-[#2563eb]/25" : "bg-white"
+      : darkMode ? "text-white/75 group-hover:text-[#93c5fd]" : "text-slate-600 group-hover:text-[#2563eb]"
+  }`;
+
+  const childItemClass = ({ active = false } = {}) => `newq group relative flex h-9 items-center gap-2.5 rounded-xl px-3 text-left transition-all duration-200 w-full ${
+    active
+      ? darkMode ? "bg-[#2563eb]/20 font-semibold" : "bg-[#2563eb]/10 font-semibold"
+      : darkMode ? "font-normal text-white/55 hover:bg-[#2563eb]/15 hover:text-[#93c5fd]" : "font-normal text-slate-500 hover:bg-[#2563eb]/8 hover:text-[#2563eb]"
+  }`;
+
+  const childIconClass = ({ active = false } = {}) => `flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-lg ${
+    active ? (darkMode ? "bg-[#2563eb]/30" : "bg-[#2563eb]/15") : darkMode ? "text-white/40 group-hover:text-[#93c5fd]" : "text-slate-400 group-hover:text-[#2563eb]"
+  }`;
+
+  function renderGroup({ groupKey, label, GroupIcon, allChildren, filtered }) {
+    if (!allChildren.length) return null;
+    const isOpen = Boolean(openGroups[groupKey]);
+    const list = searchTerm ? filtered : allChildren;
+    // Highlight the parent group whenever one of its children is the active page — matters
+    // most on the collapsed icon-only rail, where the label is hidden and the icon tint is
+    // the only cue for "your current page lives in this section".
+    const childActive = allChildren.some((child) => child.id === activeMenu);
+    const parentTint = childActive ? { color: darkMode ? ACCENT_DARK_TEXT : ACCENT } : undefined;
+
+    return (
+      <div key={`${groupKey}-group`} className="transition-all duration-300">
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) return;
+            // Accordion behavior: opening one group closes any other open group instead of
+            // stacking them all expanded at once.
+            setOpenGroups((current) => (current[groupKey] ? { ...current, [groupKey]: false } : { projects: false, hr: false, access: false, [groupKey]: true }));
+          }}
+          onMouseEnter={(event) => openFlyout(groupKey, event.currentTarget, label, GroupIcon, list)}
+          onMouseLeave={scheduleCloseFlyout}
+          className={groupHeaderClass({ parentActive: childActive })}
+          title={collapsed ? label : undefined}
+        >
+          <span className={groupHeaderIconClass({ parentActive: childActive })}>
+            <GroupIcon className="h-4.5 w-4.5" style={parentTint} />
+          </span>
+          <span className={`min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`} style={parentTint}>{label}</span>
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/40" : "text-black/35"}`} />
+        </button>
+
+        <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:grid-rows-[0fr] md:opacity-0" : isOpen || searchTerm ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+          <div className="min-h-0 overflow-hidden">
+            <div className="relative ml-6 mt-1 space-y-0.5 pb-2 pl-4">
+              <span className={`absolute bottom-4 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+              {list.map((child) => {
+                const ChildIcon = child.icon;
+                const active = activeMenu === child.id;
+                return (
+                  <button
+                    key={child.id}
+                    data-sidebar-menu={child.id}
+                    type="button"
+                    onClick={() => setActiveMenu(child.id)}
+                    className={childItemClass({ active })}
+                  >
+                    <span className={`absolute -left-4 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+                    <span className={childIconClass({ active })}>
+                      <ChildIcon className="h-3.5 w-3.5" style={active ? { color: ACCENT } : undefined} />
+                    </span>
+                    <span className="max-w-full truncate text-[13px]" style={active ? { color: darkMode ? ACCENT_DARK_TEXT : ACCENT } : undefined}>{child.label}</span>
+                    {child.id === "site-images" && newSiteImages && <span className="ml-auto flex h-2 w-2 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" title="New site photos" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -176,7 +287,10 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
             </button>
             <button
               type="button"
-              onClick={() => setCollapsed?.(!collapsed)}
+              onClick={() => {
+                setCollapsed?.(!collapsed);
+                setFlyout(null);
+              }}
               className={`absolute -right-3.5 top-4 z-[60] hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-sm transition-[background-color,color,transform] duration-300 hover:scale-105 md:flex ${darkMode ? "border-white/10 bg-[#17181c] text-white/65 hover:bg-[#22242a]" : "border-[#dfe4e8] bg-white text-slate-500 hover:bg-[#f3f6f8]"}`}
               title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -199,151 +313,20 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
 
         <nav ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-2 transition-all duration-500 ${collapsed ? "md:px-0" : ""}`}>
           <p className={`overflow-hidden px-3 newq text-[9px] font-bold uppercase tracking-[0.14em] transition-[max-height,opacity,margin] duration-300 ${muted} ${collapsed ? "md:mb-0 md:max-h-0 md:opacity-0" : "mb-2 max-h-5 opacity-100"}`}>Workspace</p>
-          <div className={`space-y-1 ${collapsed ? "md:flex md:flex-col md:items-center md:gap-1 md:space-y-0" : ""}`}>
+          <div className={`space-y-1 ${collapsed ? "md:flex md:flex-col md:items-center md:gap-2 md:space-y-0" : ""}`}>
           {filteredMenuItems.map((item) => {
             if (item.parent === "projects") return null;
             if (item.parent === "hr") return null;
             if (item.parent === "access-management") return null;
+
             if (item.id === "projects" && projectSubMenu.length) {
-              const isOpen = Boolean(openGroups.projects);
-              const childActive = projectSubMenu.some((child) => child.id === activeMenu);
-              return (
-                <div key="projects-group" className="transition-all duration-300">
-                  <button
-                    type="button"
-                    onClick={() => setOpenGroups((current) => ({ ...current, projects: !current.projects }))}
-                    className={itemClass({ parentActive: childActive })}
-                  >
-                    <span className={iconClass({ parentActive: childActive })}>
-                      <Building2 className="h-4.5 w-4.5" />
-                    </span>
-                    <span className={`min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`}>Projects</span>
-                    <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
-                  </button>
-
-                  <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:grid-rows-[0fr] md:opacity-0" : isOpen || searchTerm ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                    <div className="min-h-0 overflow-hidden">
-                      <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
-                        <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                        {(searchTerm ? filteredProjectSubMenu : projectSubMenu).map((child) => {
-                          const ChildIcon = child.icon;
-                          const active = activeMenu === child.id;
-                          return (
-                            <button
-                              key={child.id}
-                              data-sidebar-menu={child.id}
-                              type="button"
-                              onClick={() => setActiveMenu(child.id)}
-                              className={itemClass({ active, child: true })}
-                            >
-                              <span className={`absolute left-0 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                              <span className={iconClass({ active, child: true })}>
-                                <ChildIcon className="h-4 w-4" />
-                              </span>
-                              <span className="max-w-full truncate text-[13px]">{child.label}</span>
-                              {child.id === "site-images" && newSiteImages && <span className="ml-auto flex h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" title="New site photos" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
+              return renderGroup({ groupKey: "projects", label: "Projects", GroupIcon: Building2, allChildren: projectSubMenu, filtered: filteredProjectSubMenu });
             }
-
             if (item.id === "hr-dashboard" && hrSubMenu.length) {
-              const isOpen = Boolean(openGroups.hr);
-              const childActive = hrSubMenu.some((child) => child.id === activeMenu);
-              return (
-                <div key="hr-group" className="transition-all duration-300">
-                  <button
-                    type="button"
-                    onClick={() => setOpenGroups((current) => ({ ...current, hr: !current.hr }))}
-                    className={itemClass({ parentActive: childActive })}
-                  >
-                    <span className={iconClass({ parentActive: childActive })}>
-                      <BriefcaseBusiness className="h-4.5 w-4.5" />
-                    </span>
-                    <span className={`min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`}>HR</span>
-                    <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
-                  </button>
-
-                  <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:grid-rows-[0fr] md:opacity-0" : isOpen || searchTerm ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                    <div className="min-h-0 overflow-hidden">
-                      <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
-                        <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                        {(searchTerm ? filteredHrSubMenu : hrSubMenu).map((child) => {
-                          const ChildIcon = child.icon;
-                          const active = activeMenu === child.id;
-                          return (
-                            <button
-                              key={child.id}
-                              data-sidebar-menu={child.id}
-                              type="button"
-                              onClick={() => setActiveMenu(child.id)}
-                              className={itemClass({ active, child: true })}
-                            >
-                              <span className={`absolute left-0 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                              <span className={iconClass({ active, child: true })}>
-                                <ChildIcon className="h-4 w-4" />
-                              </span>
-                              <span className="max-w-full truncate text-[13px]">{child.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
+              return renderGroup({ groupKey: "hr", label: "HR", GroupIcon: BriefcaseBusiness, allChildren: hrSubMenu, filtered: filteredHrSubMenu });
             }
-
             if (item.id === "access-management" && accessSubMenu.length) {
-              const isOpen = Boolean(openGroups.access);
-              const childActive = accessSubMenu.some((child) => child.id === activeMenu);
-              return (
-                <div key="access-group" className="transition-all duration-300">
-                  <button
-                    type="button"
-                    onClick={() => setOpenGroups((current) => ({ ...current, access: !current.access }))}
-                    className={itemClass({ parentActive: childActive })}
-                  >
-                    <span className={iconClass({ parentActive: childActive })}>
-                      <ShieldCheck className="h-4.5 w-4.5" />
-                    </span>
-                    <span className={`min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`}>Access Control</span>
-                    <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
-                  </button>
-
-                  <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:grid-rows-[0fr] md:opacity-0" : isOpen || searchTerm ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                    <div className="min-h-0 overflow-hidden">
-                      <div className="relative ml-7 mt-1 space-y-1 pb-2 pl-5">
-                        <span className={`absolute bottom-5 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                        {(searchTerm ? filteredAccessSubMenu : accessSubMenu).map((child) => {
-                          const ChildIcon = child.icon;
-                          const active = activeMenu === child.id;
-                          return (
-                            <button
-                              key={child.id}
-                              data-sidebar-menu={child.id}
-                              type="button"
-                              onClick={() => setActiveMenu(child.id)}
-                              className={itemClass({ active, child: true })}
-                            >
-                              <span className={`absolute left-0 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                              <span className={iconClass({ active, child: true })}>
-                                <ChildIcon className="h-4 w-4" />
-                              </span>
-                              <span className="max-w-full truncate text-[12px]">{child.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
+              return renderGroup({ groupKey: "access", label: "Access Control", GroupIcon: ShieldCheck, allChildren: accessSubMenu, filtered: filteredAccessSubMenu });
             }
 
             const Icon = item.icon;
@@ -354,9 +337,10 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                 key={item.id}
                 data-sidebar-menu={item.id}
                 onClick={() => setActiveMenu(item.id)}
-                className={itemClass({ active: isActive })}
+                className={leafItemClass({ active: isActive })}
+                title={collapsed ? item.label : undefined}
               >
-                <span className={iconClass({ active: isActive })}>
+                <span className={leafIconClass({ active: isActive })}>
                   <Icon className="w-4.5 h-4.5" />
                 </span>
                 <span className={`overflow-hidden whitespace-nowrap text-[13px] transition-[max-width,opacity,transform] duration-300 ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[160px] opacity-100"}`}>{item.label}</span>
@@ -411,6 +395,43 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
         </div>
 
       </aside>
+
+      {flyout && (
+        <div
+          className={`fixed z-[80] w-56 rounded-2xl p-2 shadow-[0_24px_60px_rgba(15,23,42,0.28)] ring-1 ${darkMode ? "bg-[#17181d] text-white ring-white/10" : "bg-white text-[#171714] ring-black/5"}`}
+          style={{ top: Math.max(8, flyout.top), left: flyout.left }}
+          onMouseEnter={cancelCloseFlyout}
+          onMouseLeave={scheduleCloseFlyout}
+        >
+          <div className={`mb-1 flex items-center gap-2 px-2 py-1.5 text-xs font-bold uppercase tracking-wide ${darkMode ? "text-white/50" : "text-slate-400"}`}>
+            <flyout.GroupIcon className="h-3.5 w-3.5" />
+            {flyout.label}
+          </div>
+          <div className="space-y-0.5">
+            {flyout.children.map((child) => {
+              const ChildIcon = child.icon;
+              const active = activeMenu === child.id;
+              return (
+                <button
+                  key={child.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveMenu(child.id);
+                    setFlyout(null);
+                  }}
+                  className={childItemClass({ active })}
+                >
+                  <span className={childIconClass({ active })}>
+                    <ChildIcon className="h-3.5 w-3.5" style={active ? { color: ACCENT } : undefined} />
+                  </span>
+                  <span className="max-w-full truncate text-[13px]" style={active ? { color: darkMode ? ACCENT_DARK_TEXT : ACCENT } : undefined}>{child.label}</span>
+                  {child.id === "site-images" && newSiteImages && <span className="ml-auto flex h-2 w-2 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </>
   );
 }

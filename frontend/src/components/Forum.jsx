@@ -583,10 +583,10 @@ function renderLoopAssistantText(text, darkMode = false) {
         }
 
         return (
-          <div key={index} className={`mr-2 mt-2 inline-flex flex-col gap-0.5 rounded-lg p-2.5 sm:min-w-[120px] ${badgeColor}`}>
+          <div key={index} className={`mr-2 mt-2 inline-flex flex-col gap-0.5 rounded-xl p-2 sm:min-w-[120px] ${badgeColor}`}>
             <span className="text-[10px] font-bold uppercase tracking-[0.08em] opacity-70">{label}</span>
             <div className="flex items-center">
-              <span className={`text-[16px] leading-snug font-normal break-words`}>{value}</span>
+              <span className={`text-[13px] leading-[1.5] font-normal break-words`}>{value}</span>
             </div>
           </div>
         );
@@ -4283,12 +4283,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 </button>
                               )}
                               <article className={[
-                                "max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] p-4 sm:max-w-[78%]",
+                                "relative max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] p-4 sm:max-w-[78%]",
                                 mine ? "rounded-br-[7px]" : "rounded-bl-[7px]",
-                                pendingForward
-                                  ? (darkMode ? "ring-2 ring-amber-400/60 bg-[#2a2410] text-white" : "ring-2 ring-amber-400/70 bg-amber-50 text-[#14213d]")
-                                  : (darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]"),
+                                darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]",
                               ].join(" ")}>
+                                {pendingForward && (
+                                  <span className="absolute inset-y-3 left-1.5 w-1 rounded-full bg-amber-400" aria-hidden="true" title="Not yet forwarded" />
+                                )}
                                 <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
                                   <div className="min-w-0">
                                     {message.forwardedFrom && (
@@ -4298,9 +4299,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     )}
                                     <div className="flex items-center gap-2">
                                       <button type="button" onClick={() => setLoopProfileOpen(true)} className={`text-left text-sm font-black hover:underline hover:underline-offset-2 ${darkMode ? "text-white" : "text-[#0f172a]"}`}>Loop assistant</button>
-                                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${darkMode ? "bg-emerald-400/15 text-emerald-300" : "bg-[#e8f7ef] text-[#16a34a]"}`}>Project</span>
+                                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${darkMode ? "bg-emerald-400/15 text-emerald-300" : "bg-[#e8f7ef] text-[#16a34a]"}`}>
+                                        {message.assistantPayload?.type === "employee-report-analysis" ? "Report" : "Project"}
+                                      </span>
                                     </div>
-                                    <p className={`truncate text-xs ${darkMode ? "text-white/60" : "text-[#7b8794]"}`}>{message.assistantPayload?.projectName || selectedConversation?.project?.name || selectedConversation?.name || "Project"}</p>
+                                    {(() => {
+                                      const subtitle = message.assistantPayload?.type === "employee-report-analysis"
+                                        ? message.assistantPayload?.employeeName
+                                        : (message.assistantPayload?.projectName || selectedConversation?.project?.name || selectedConversation?.name || "Project");
+                                      return subtitle ? <p className={`truncate text-xs ${darkMode ? "text-white/60" : "text-[#7b8794]"}`}>{subtitle}</p> : null;
+                                    })()}
                                   </div>
                                 </div>
                                 <div className={`antialiased transform-gpu space-y-2 break-words text-sm leading-6 font-[500] [overflow-wrap:anywhere] ${darkMode ? "text-white" : "text-black"}`}>

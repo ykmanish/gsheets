@@ -3014,38 +3014,6 @@ function normalizeAnalysisSections(text) {
   return withBreaks.trim();
 }
 
-async function analyzeEmployeeReportAndNotifyLoop(report) {
-  try {
-    const db = await connectAuthDb();
-    const superAdmins = await db.collection("users").find({ isSuperAdmin: true }).toArray();
-    if (superAdmins.length === 0) return;
-
-    const taskData = report.taskItems || [];
-    const waitingData = report.waitingTaskItems || [];
-
-    const settings = await db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" });
-    const questions = settings?.analysisQuestions || [];
-
-    let prompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}).\n\n`;
-    prompt += buildEmployeeReportAnalysisInstructions(questions);
-    prompt += `\n\nTasks Done:\n${JSON.stringify(taskData, null, 2)}\n\nWaiting Tasks:\n${JSON.stringify(waitingData, null, 2)}`;
-
-    const claude = await askLoopProjectAssistant({ question: prompt, context: { info: "Employee Report Evaluation" } });
-    const analysisText = normalizeAnalysisSections(claude.answer);
-
-    for (const admin of superAdmins) {
-      const conversation = await ensureLoopAssistantConversation(db, admin._id);
-      await createForumLoopSystemMessage({
-        conversation,
-        text: analysisText,
-        assistantPayload: { type: "employee-report-analysis", userId: report.userId, employeeName: report.employeeName },
-      });
-    }
-  } catch (error) {
-    console.error("Employee report analysis error:", error);
-  }
-}
-
 app.post("/employee-daily-report", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
@@ -3094,7 +3062,8 @@ app.post("/employee-daily-report", async (req, res) => {
     const celebration = await generateEmployeeSubmissionPraise({ employeeName: report.employeeName, taskItems, waitingTaskItems, date: today });
     const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
     const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
-    analyzeEmployeeReportAndNotifyLoop(report).catch(console.error);
+    // Analysis is on-demand only, via the "Employee Report" capability in the Loop assistant
+    // DM — it no longer auto-fires for every single report submission.
     res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }), celebration, executiveQuestions, executiveAnswers });
   } catch (error) {
     if (error.code === 11000 || error.code === "EMPLOYEE_REPORT_EXISTS") return res.status(409).json({ error: "Today's report is already submitted" });

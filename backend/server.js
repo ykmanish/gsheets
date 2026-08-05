@@ -16956,15 +16956,17 @@ ${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeN
       broadcastForumLoopTyping(conversation, false);
       
       const hasMore = offset + batchSize < total;
-      
+      const nextBatchSize = hasMore ? Math.min(batchSize, total - (offset + batchSize)) : 0;
+
       await createForumLoopAssistantMessage({
-         req, conversation, text: hasMore 
-           ? `Analyzed ${offset + reports.length} of ${total} reports. Would you like to analyze the next batch?` 
+         req, conversation, text: hasMore
+           ? `Analyzed ${offset + reports.length} of ${total} reports. Would you like to analyze the next batch?`
            : `Analysis complete. All ${total} reports for ${date} have been analyzed.`,
-         assistantPayload: { 
-           type: hasMore ? "employee-report-analysis-more" : "employee-report-analysis-summary", 
-           date, 
-           offset: hasMore ? offset + batchSize : 0 
+         assistantPayload: {
+           type: hasMore ? "employee-report-analysis-more" : "employee-report-analysis-summary",
+           date,
+           offset: hasMore ? offset + batchSize : 0,
+           nextBatchSize,
          },
       });
     } catch (error) {

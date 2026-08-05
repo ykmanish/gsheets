@@ -4300,7 +4300,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     <button type="button" disabled={refiningMessage} onClick={() => {
                                       sendMessage({ preventDefault: () => {}, overrideText: `Analyze next batch of employee reports for ${message.assistantPayload.date}`, actionPayload: { action: "employee-report-analysis", date: message.assistantPayload.date, offset: message.assistantPayload.offset } });
                                     }} className={`flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563eb] py-2 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-50`}>
-                                      Analyze next 10
+                                      Analyze next {message.assistantPayload.nextBatchSize || 10}
                                     </button>
                                   </div>
                                 )}

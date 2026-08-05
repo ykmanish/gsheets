@@ -4283,7 +4283,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     {message.analysisForwardedAt ? (
                                       <button type="button" disabled className={`flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold opacity-60 ${darkMode ? "bg-white/5 text-white/70" : "bg-black/5 text-black/50"}`}>
                                         <Check className="h-4 w-4" />
-                                        Forwarded
+                                        Forwarded to {message.assistantPayload.employeeName}
                                       </button>
                                     ) : (
                                       <button type="button" onClick={() => setForwardAnalysisPayload({ message, targetUserId: message.assistantPayload.userId, employeeName: message.assistantPayload.employeeName })} className={`flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition ${darkMode ? "bg-white/10 text-white hover:bg-white/20" : "bg-black/5 text-black hover:bg-black/10"}`}>

@@ -1856,6 +1856,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
   const currentUser = getStoredAuth().user;
 
+  // Only auto-scroll when the user is already near the bottom of the pane. Without this,
+  // every incoming message (e.g. a Loop batch analysis posting several messages in a row)
+  // yanks the view back down even while the user is mid-scroll reading an earlier message.
+  const isMessagesPaneNearBottom = useCallback((threshold = 160) => {
+    const pane = messagesPaneRef.current;
+    if (!pane) return true;
+    return pane.scrollHeight - pane.scrollTop - pane.clientHeight <= threshold;
+  }, []);
+
   const scrollMessagesToBottom = useCallback((behavior = "auto") => {
     if (scrollAnimationRef.current) {
       window.cancelAnimationFrame(scrollAnimationRef.current);
@@ -2368,12 +2377,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
         )).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
         setTypingByConversation((current) => ({ ...current, [payload.conversationId]: [] }));
         if (isSelectedConversation) {
+          const wasNearBottom = isMessagesPaneNearBottom();
           setMessages((current) => {
             if (current.some((message) => message.id === payload.message.id)) return current;
             clearMessageAnimation(payload.message.id);
             return [...current, { ...payload.message, animate: true }];
           });
-          scrollMessagesToBottom("auto");
+          if (wasNearBottom) scrollMessagesToBottom("auto");
         } else if (isIncomingMessage) {
           const mentionNeedle = `@${currentUser?.username || ""}`.toLowerCase();
           const mentioned = mentionNeedle.length > 1 && String(payload.message?.text || "").toLowerCase().includes(mentionNeedle);
@@ -3241,20 +3251,30 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   async function forwardEmployeeAnalysis(e) {
     e.preventDefault();
     if (!forwardAnalysisPayload) return;
+    const { message, targetUserId, employeeName } = forwardAnalysisPayload;
     setForwardAnalysisSending(true);
     try {
-      const { message, targetUserId } = forwardAnalysisPayload;
-      const combinedText = forwardAnalysisComment ? `**Note from Admin:**\n${forwardAnalysisComment.trim()}\n\n---\n\n${message.text}` : message.text;
-      const response = await fetch(`${API_URL}/forum/messages/forward-analysis`, {
+      // Reuse the exact same mechanism as the normal context-menu "Forward" (proven to
+      // reliably deliver), instead of the separate bespoke endpoint that was unreliable.
+      const data = await api("/forum/messages/forward", {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${getStoredAuth().token}` },
-        body: JSON.stringify({ targetUserId, text: combinedText, originalMessageId: message.id }),
+        body: JSON.stringify({ messageIds: [message.id], targets: [{ type: "user", id: targetUserId }] }),
       });
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "Failed to forward");
+      const forwardedConversationId = data.messages?.[0]?.conversationId;
+      const comment = forwardAnalysisComment.trim();
+      if (comment && forwardedConversationId) {
+        await api(`/forum/conversations/${encodeURIComponent(forwardedConversationId)}/messages`, {
+          method: "POST",
+          body: JSON.stringify({ text: `Note from Admin: ${comment}` }),
+        });
+      }
+      const forwardedAt = new Date().toISOString();
+      setMessages((current) => current.map((m) => (m.id === message.id ? { ...m, analysisForwardedAt: forwardedAt } : m)));
       setForwardAnalysisPayload(null);
       setForwardAnalysisComment("");
+      toast.success(`Forwarded to ${employeeName}`);
     } catch (error) {
-      alert(error.message);
+      toast.error(error.message || "Could not forward");
     } finally {
       setForwardAnalysisSending(false);
     }
@@ -4183,6 +4203,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         // an admin relays it via forward — the message is never "mine" just because I'm
                         // the one who forwarded it. Prevents it flipping to the sender's own outgoing style.
                         const mine = false;
+                        // An original (not-yet-relayed) employee analysis still awaiting a forward to the
+                        // employee gets a distinct highlight so it's obvious at a glance which ones still
+                        // need action, versus ones already forwarded.
+                        const pendingForward = message.assistantPayload?.type === "employee-report-analysis" && !message.forwardedFrom && !message.analysisForwardedAt;
                         const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
                         const isSelectionMode = selectedMessageIds.length > 0;
                         const isSelectedMessage = selectedMessageIds.includes(message.id);
@@ -4228,7 +4252,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   <LoopAssistantAvatar assistant={messageLoopProfile} className="h-8 w-8" iconClassName="h-4 w-4" />
                                 </button>
                               )}
-                              <article className={`max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] p-4 sm:max-w-[78%] ${mine ? "rounded-br-[7px]" : "rounded-bl-[7px]"} ${darkMode ? mine ? "bg-[#181a20] text-white" : "bg-[#242730] text-white" : mine ? "bg-[#e5f1ff] text-[#14213d]" : "bg-white text-[#14213d]"}`}>
+                              <article className={[
+                                "max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] p-4 sm:max-w-[78%]",
+                                mine ? "rounded-br-[7px]" : "rounded-bl-[7px]",
+                                pendingForward
+                                  ? (darkMode ? "ring-2 ring-amber-400/60 bg-[#2a2410] text-white" : "ring-2 ring-amber-400/70 bg-amber-50 text-[#14213d]")
+                                  : (darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]"),
+                              ].join(" ")}>
                                 <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
                                   <div className="min-w-0">
                                     {message.forwardedFrom && (
@@ -4248,10 +4278,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 </div>
                                 {message.assistantPayload?.type === "employee-report-analysis" && !message.forwardedFrom && (
                                   <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/10">
-                                    <button type="button" onClick={() => setForwardAnalysisPayload({ message, targetUserId: message.assistantPayload.userId, employeeName: message.assistantPayload.employeeName })} className={`flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition ${darkMode ? "bg-white/10 text-white hover:bg-white/20" : "bg-black/5 text-black hover:bg-black/10"}`}>
-                                      <Forward className="h-4 w-4" />
-                                      Forward to {message.assistantPayload.employeeName}
-                                    </button>
+                                    {message.analysisForwardedAt ? (
+                                      <button type="button" disabled className={`flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold opacity-60 ${darkMode ? "bg-white/5 text-white/70" : "bg-black/5 text-black/50"}`}>
+                                        <Check className="h-4 w-4" />
+                                        Forwarded
+                                      </button>
+                                    ) : (
+                                      <button type="button" onClick={() => setForwardAnalysisPayload({ message, targetUserId: message.assistantPayload.userId, employeeName: message.assistantPayload.employeeName })} className={`flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition ${darkMode ? "bg-white/10 text-white hover:bg-white/20" : "bg-black/5 text-black hover:bg-black/10"}`}>
+                                        <Forward className="h-4 w-4" />
+                                        Forward to {message.assistantPayload.employeeName}
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                                 {message.assistantPayload?.type === "employee-report-analysis-more" && (

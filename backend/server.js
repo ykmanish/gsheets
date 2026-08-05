@@ -16321,6 +16321,7 @@ async function serializeForumMessage(message, viewerId = null) {
     isStarred: (message.starredBy || []).map(String).includes(String(viewerId || "")),
     replyToMessage: message.replyToMessage || null,
     forwardedFrom: message.forwardedFrom || null,
+    analysisForwardedAt: message.analysisForwardedAt || null,
     attachment,
     attachmentMissing,
   };
@@ -17721,6 +17722,7 @@ app.post("/forum/messages/forward", async (req, res) => {
     if (!normalizedTargets.length) return res.status(400).json({ error: "No valid recipients selected" });
 
     const created = [];
+    const forwardedAnalysisSourceIds = new Set();
     for (const target of normalizedTargets) {
       if (target.userId) {
         const targetUser = await db.collection("users").findOne({ _id: new ObjectId(target.userId), blacklisted: { $ne: true } });
@@ -17762,7 +17764,18 @@ app.post("/forum/messages/forward", async (req, res) => {
           assistant: source.assistant || null,
           assistantPayload: source.assistantPayload || null,
         }));
+        if (source.assistantPayload?.type === "employee-report-analysis") forwardedAnalysisSourceIds.add(String(source._id));
       }
+    }
+
+    // Mark the original analysis message as forwarded so its "Forward to [employee]" CTA
+    // flips to a disabled "Forwarded" state and its bubble stops flagging as pending action.
+    if (forwardedAnalysisSourceIds.size) {
+      const now = new Date();
+      await db.collection("forumMessages").updateMany(
+        { _id: { $in: [...forwardedAnalysisSourceIds].map((id) => ObjectId.isValid(id) ? new ObjectId(id) : id) } },
+        { $set: { analysisForwardedAt: now } }
+      );
     }
 
     res.json({ success: true, messages: created });

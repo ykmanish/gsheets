@@ -16888,7 +16888,7 @@ async function createLoopEmployeeReportAnalysisReply({ req, conversation, date, 
       }
       
       const total = allReports.length;
-      const batchSize = 5;
+      const batchSize = 10;
       const reports = allReports.slice(offset, offset + batchSize);
       
       await createForumLoopAssistantMessage({

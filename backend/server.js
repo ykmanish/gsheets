@@ -2974,11 +2974,11 @@ async function analyzeEmployeeReportAndNotifyLoop(report) {
 
     let prompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}).\n`;
     if (questions.length > 0) {
-      prompt += `Please provide your analysis and output strictly addressing the following parameters/questions:\n`;
+      prompt += `Please evaluate the employee's report strictly based on the following parameters/questions:\n`;
       questions.forEach((q, i) => {
         prompt += `${i + 1}. ${q}\n`;
       });
-      prompt += `\nStructure your response clearly using Markdown. You may use bold headers (like **Summary:** or **Priority Tasks:**) to organize your output based on the requested parameters.`;
+      prompt += `\nBe highly concise and crisp. Structure your output using EXACTLY these 2 distinct sections, and write the content on the SAME line as the header:\n**Tasks:** (A very brief 1-2 sentence summary of tasks done)\n**Evaluation:** (Answer the specific parameters/questions here based strictly on the tasks, and add your own brief meaningful assessment)`;
     } else {
       prompt += `Evaluate if the tasks performed were appropriate and meaningful, or if they seem like filler tasks just added for the sake of it.\nStructure your output using clear sections, ensuring you MUST include the following 4 distinct sections:\n`;
       prompt += `**Core Tasks:** (Brief summary of tasks done)\n**Evaluation:** (Your evaluation of their work)\n**Impact:** (Impact on project progress)\n**Suggestion:** (A suggestion for the employee based on your evaluation)`;
@@ -16857,11 +16857,11 @@ async function createLoopEmployeeReportAnalysisReply({ req, conversation, date, 
       let instructions = `1. Briefly list the core tasks done.\n2. Evaluate productivity/relevance in 1-2 sentences.\n\nStructure the "analysis" string using clear Markdown sections, ensuring you MUST include the following 4 distinct sections:\n**Core Tasks:** (Brief summary of tasks done)\n**Evaluation:** (Your evaluation of their work)\n**Impact:** (Impact on project progress)\n**Suggestion:** (Suggestions for this employee)`;
 
       if (questions.length > 0) {
-        instructions = `Provide your analysis strictly addressing the following parameters/questions:\n`;
+        instructions = `Evaluate the employee's report strictly based on the following parameters/questions:\n`;
         questions.forEach((q, i) => {
           instructions += `${i + 1}. ${q}\n`;
         });
-        instructions += `\nStructure the "analysis" string clearly using Markdown. You may use bold headers to organize your output based on the requested parameters. Do not include the 4 default sections unless they are requested.`;
+        instructions += `\nBe highly concise and crisp. Structure the "analysis" string using EXACTLY these 2 distinct Markdown sections, and write the content on the SAME line as the header:\n**Tasks:** (A very brief 1-2 sentence summary of tasks done)\n**Evaluation:** (Answer the specific parameters/questions here based strictly on the tasks, and add your own brief meaningful assessment)`;
       }
 
       const prompt = `Act as an executive assistant to a busy CEO. I will provide you with a list of daily reports from different employees. 

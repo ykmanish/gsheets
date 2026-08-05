@@ -2960,6 +2960,48 @@ app.post("/loop-assistant-settings", async (req, res) => {
   }
 });
 
+// Shared prompt scaffold so every employee-report analysis (single, auto-notified on submit,
+// or batched on-demand) reads the same way: a short CEO-style brief with exactly 3 sections.
+// When the admin has set an Analysis Question Scope, those questions become the evaluation
+// criteria; otherwise Claude falls back to a general appropriateness/meaningfulness check.
+function buildEmployeeReportAnalysisInstructions(questions = []) {
+  const scoped = Array.isArray(questions) ? questions.filter(Boolean) : [];
+  const criteria = scoped.length
+    ? `Evaluate the employee strictly against these parameters set by the CEO (do not evaluate anything outside this scope):\n${scoped.map((q, i) => `${i + 1}. ${q}`).join("\n")}`
+    : `Evaluate whether the tasks performed were appropriate and meaningful, or if they look like filler tasks added just for the sake of it.`;
+
+  return `Act as an executive assistant preparing this for a busy CEO who has no time for detail — be sharp, concise, and say only what matters. Do not pad, repeat the task list, or add pleasantries.
+
+${criteria}
+
+Your response MUST contain EXACTLY 3 lines, in this order, and NOTHING else (no title, no intro, no closing remark):
+Line 1: **Tasks:** <1-2 sentence plain summary of what the employee actually did>
+Line 2: **Evaluation:** <your direct assessment against the criteria above, 1-3 sentences, no filler>
+Line 3: **Suggestion:** <one concise, actionable suggestion for this employee based on the evaluation>
+
+STRICT RULES:
+- Each line starts on its own new line (put a line break between every section — never combine two sections into the same line or paragraph).
+- Never merge, skip, or omit a section. All 3 must always be present, even if the answer is short (e.g. "**Suggestion:** None — keep up the current pace.").
+- Do not add a 4th section, a summary line, or any text after Line 3.
+
+Example of the exact shape expected (do not reuse this content, it is only to show the format):
+**Tasks:** Closed out vendor follow-ups and reviewed two site drawings.
+**Evaluation:** Solid coverage on open items; one blocker (design approval) is outside their control.
+**Suggestion:** Escalate the design approval blocker directly instead of waiting on it.`;
+}
+
+// Safety net: even if Claude ignores the "one section per line" instruction and runs
+// Tasks/Evaluation/Suggestion together in one paragraph, force each onto its own line
+// before the message is rendered, so the chat UI always shows 3 distinct boxes.
+function normalizeAnalysisSections(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return raw;
+  const withBreaks = raw.replace(/\s*\*\*\s*(Tasks|Core Tasks|Evaluation|Impact|Suggestion)\s*:\s*\*\*\s*/gi, (match, label, offset) => {
+    return `${offset === 0 ? "" : "\n"}**${label}:** `;
+  });
+  return withBreaks.trim();
+}
+
 async function analyzeEmployeeReportAndNotifyLoop(report) {
   try {
     const db = await connectAuthDb();
@@ -2968,31 +3010,22 @@ async function analyzeEmployeeReportAndNotifyLoop(report) {
 
     const taskData = report.taskItems || [];
     const waitingData = report.waitingTaskItems || [];
-    
+
     const settings = await db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" });
     const questions = settings?.analysisQuestions || [];
 
-    let prompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}).\n`;
-    if (questions.length > 0) {
-      prompt += `Please evaluate the employee's report strictly based on the following parameters/questions:\n`;
-      questions.forEach((q, i) => {
-        prompt += `${i + 1}. ${q}\n`;
-      });
-      prompt += `\nBe highly concise and crisp. Structure your output using EXACTLY these 2 distinct sections, and write the content on the SAME line as the header:\n**Tasks:** (A very brief 1-2 sentence summary of tasks done)\n**Evaluation:** (Answer the specific parameters/questions here based strictly on the tasks, and add your own brief meaningful assessment)`;
-    } else {
-      prompt += `Evaluate if the tasks performed were appropriate and meaningful, or if they seem like filler tasks just added for the sake of it.\nStructure your output using clear sections, ensuring you MUST include the following 4 distinct sections:\n`;
-      prompt += `**Core Tasks:** (Brief summary of tasks done)\n**Evaluation:** (Your evaluation of their work)\n**Impact:** (Impact on project progress)\n**Suggestion:** (A suggestion for the employee based on your evaluation)`;
-    }
-    
+    let prompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}).\n\n`;
+    prompt += buildEmployeeReportAnalysisInstructions(questions);
     prompt += `\n\nTasks Done:\n${JSON.stringify(taskData, null, 2)}\n\nWaiting Tasks:\n${JSON.stringify(waitingData, null, 2)}`;
 
     const claude = await askLoopProjectAssistant({ question: prompt, context: { info: "Employee Report Evaluation" } });
-    
+    const analysisText = normalizeAnalysisSections(claude.answer);
+
     for (const admin of superAdmins) {
       const conversation = await ensureLoopAssistantConversation(db, admin._id);
       await createForumLoopSystemMessage({
         conversation,
-        text: claude.answer,
+        text: analysisText,
         assistantPayload: { type: "employee-report-analysis", userId: report.userId, employeeName: report.employeeName },
       });
     }
@@ -16853,19 +16886,9 @@ async function createLoopEmployeeReportAnalysisReply({ req, conversation, date, 
 
       const settings = await db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" });
       const questions = settings?.analysisQuestions || [];
+      const instructions = buildEmployeeReportAnalysisInstructions(questions);
 
-      let instructions = `1. Briefly list the core tasks done.\n2. Evaluate productivity/relevance in 1-2 sentences.\n\nStructure the "analysis" string using clear Markdown sections, ensuring you MUST include the following 4 distinct sections:\n**Core Tasks:** (Brief summary of tasks done)\n**Evaluation:** (Your evaluation of their work)\n**Impact:** (Impact on project progress)\n**Suggestion:** (Suggestions for this employee)`;
-
-      if (questions.length > 0) {
-        instructions = `Evaluate the employee's report strictly based on the following parameters/questions:\n`;
-        questions.forEach((q, i) => {
-          instructions += `${i + 1}. ${q}\n`;
-        });
-        instructions += `\nBe highly concise and crisp. Structure the "analysis" string using EXACTLY these 2 distinct Markdown sections, and write the content on the SAME line as the header:\n**Tasks:** (A very brief 1-2 sentence summary of tasks done)\n**Evaluation:** (Answer the specific parameters/questions here based strictly on the tasks, and add your own brief meaningful assessment)`;
-      }
-
-      const prompt = `Act as an executive assistant to a busy CEO. I will provide you with a list of daily reports from different employees. 
-For each employee, provide a highly meaningful summary according to the following instructions:
+      const prompt = `I will provide you with a list of daily reports from different employees. Apply the same instructions independently to each employee and produce one entry per employee.
 
 ${instructions}
 
@@ -16874,7 +16897,7 @@ Format your response strictly as a JSON array of objects matching this exact str
   {
     "userId": "exact userId provided",
     "employeeName": "exact employeeName provided",
-    "analysis": "your summary and evaluation formatted with Markdown exactly as instructed above"
+    "analysis": "the 3-section Markdown analysis for this employee, formatted exactly as instructed above"
   }
 ]
 
@@ -16895,7 +16918,7 @@ ${JSON.stringify(reports.map(r => ({ userId: r.userId, employeeName: r.employeeN
         
         for (const result of results) {
           await createForumLoopAssistantMessage({
-            req, conversation, text: result.analysis,
+            req, conversation, text: normalizeAnalysisSections(result.analysis),
             assistantPayload: { type: "employee-report-analysis", userId: result.userId, employeeName: result.employeeName },
           });
         }

@@ -2980,7 +2980,7 @@ ${scopeBlock}
 Your response MUST contain EXACTLY 3 lines, in this order, and NOTHING else (no title, no intro, no closing remark):
 Line 1: **Tasks:** <1-2 sentence plain summary of what the employee actually did>
 Line 2: **Evaluation:** <cover both mandatory points above (and the CEO's parameters if given), 1-4 sentences, no filler>
-Line 3: **Suggestion:** <one concise, actionable suggestion — if filler tasks were flagged, suggest what to stop/replace them with; if a blocker was flagged, suggest who should escalate it and to whom>
+Line 3: **Suggestion:** <one concise, actionable suggestion — if filler tasks were flagged, suggest what to stop/replace them with; if a blocker was flagged, suggest who should escalate it and to whom. THEN add one short, specific line coaching how they should log tasks going forward to add more real value — e.g. capture the outcome/decision reached instead of a call count, or name the specific blocker instead of a vague "in progress". Only include this coaching line when the report actually shows the habit it's correcting (vague entries, call/activity counts, no outcome stated) — skip it if the report is already specific and outcome-focused. Keep it to one line, not a lecture.>
 
 STRICT RULES:
 - Each line starts on its own new line (put a line break between every section — never combine two sections into the same line or paragraph).
@@ -2990,7 +2990,7 @@ STRICT RULES:
 Example of the exact shape expected (do not reuse this content, it is only to show the format):
 **Tasks:** Closed out vendor follow-ups and reviewed two site drawings.
 **Evaluation:** Solid, meaningful coverage — no filler tasks here. One blocker: the design approval is stuck with an unconfirmed contact, which is outside their control and needs escalation.
-**Suggestion:** Have the CEO or project lead identify the correct design contact directly instead of leaving this employee to wait on it.`;
+**Suggestion:** Have the CEO or project lead identify the correct design contact directly instead of leaving this employee to wait on it. Next time, log the specific document/date awaited instead of just "in progress" so its age is visible at a glance.`;
 }
 
 // Safety net: even if Claude ignores the "one section per line" instruction and runs
@@ -17633,26 +17633,24 @@ app.post("/forum/conversations/:id/messages", async (req, res) => {
   }
 });
 
-app.post("/forum/messages/forward-analysis", async (req, res) => {
+// Posts an admin's optional comment (attached when forwarding an analysis) as a Loop-styled
+// system message, rather than the admin's own outgoing bubble — the note should read as
+// coming from Loop assistant just like the analysis it accompanies, not as a personal DM.
+app.post("/forum/messages/loop-note", async (req, res) => {
   try {
-    const { targetUserId, text, originalMessageId } = req.body;
-    if (!targetUserId || !text) return res.status(400).json({ error: "Missing required fields" });
-    
+    if (!req.authUser?.isSuperAdmin) return res.status(403).json({ error: "Admin access required" });
+    const conversationId = String(req.body?.conversationId || "");
+    const text = String(req.body?.text || "").trim();
+    if (!conversationId || !text) return res.status(400).json({ error: "Missing required fields" });
+
     const db = await connectAuthDb();
-    const targetUser = await db.collection("users").findOne({ _id: new ObjectId(targetUserId) });
-    if (!targetUser) return res.status(404).json({ error: "Employee not found" });
+    const conversation = await db.collection("forumConversations").findOne({ _id: conversationId, participantIds: req.authUser.id });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
 
-    const conversation = await ensureLoopAssistantConversation(db, targetUserId);
-
-    const message = await createForumLoopSystemMessage({
-      conversation,
-      text,
-      forwardedFrom: { senderName: req.authUser.displayName || req.authUser.username || "Admin" },
-    });
-
+    const message = await createForumLoopSystemMessage({ conversation, text });
     res.json({ success: true, message });
   } catch (error) {
-    console.error("Forum forward analysis error:", error);
+    console.error("Forum loop note error:", error);
     res.status(500).json({ error: error.message });
   }
 });

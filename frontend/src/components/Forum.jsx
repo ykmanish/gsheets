@@ -3263,9 +3263,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       const forwardedConversationId = data.messages?.[0]?.conversationId;
       const comment = forwardAnalysisComment.trim();
       if (comment && forwardedConversationId) {
-        await api(`/forum/conversations/${encodeURIComponent(forwardedConversationId)}/messages`, {
+        // Post as a Loop-styled message, not a personal DM from me — the note should read
+        // as part of the Loop assistant's delivery, not as the admin's own outgoing bubble.
+        await api("/forum/messages/loop-note", {
           method: "POST",
-          body: JSON.stringify({ text: `Note from Admin: ${comment}` }),
+          body: JSON.stringify({ conversationId: forwardedConversationId, text: `Note from Admin: ${comment}` }),
         });
       }
       const forwardedAt = new Date().toISOString();

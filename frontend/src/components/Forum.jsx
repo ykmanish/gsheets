@@ -505,6 +505,12 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
 
 function renderLoopAssistantText(text, darkMode = false) {
   const badgeClassFor = (label, value) => {
+    const lowerLabel = String(label).toLowerCase();
+    if (/task/.test(lowerLabel)) return darkMode ? "bg-[#343842] text-white" : "bg-[#f1f5f9] text-[#0f172a]";
+    if (/evaluation/.test(lowerLabel)) return darkMode ? "bg-[#143728] text-white" : "bg-[#f0fdf4] text-[#0f172a]";
+    if (/impact/.test(lowerLabel)) return darkMode ? "bg-[#1e3a8a] text-white" : "bg-[#eff6ff] text-[#0f172a]";
+    if (/suggestion/.test(lowerLabel)) return darkMode ? "bg-[#450a0a] text-white" : "bg-[#fef2f2] text-[#0f172a]";
+
     const key = `${label} ${value}`.toLowerCase();
     if (/status/.test(key)) {
       if (/done|complete/.test(key)) return darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#f0fdf4] text-[#16a34a]";
@@ -524,7 +530,7 @@ function renderLoopAssistantText(text, darkMode = false) {
     }
     if (/assignee|manager/.test(key)) return darkMode ? "bg-[#32294a] text-[#d8c9ff]" : "bg-[#f5f3ff] text-[#7c3aed]";
     if (/phase|health/.test(key)) return darkMode ? "bg-[#143b34] text-[#a5eadc]" : "bg-[#f0fdfa] text-[#0d9488]";
-    return darkMode ? "bg-[#343842] text-[#d7dde8]" : "bg-[#f8fafc] text-[#475569]";
+    return darkMode ? "bg-[#343842] text-white" : "bg-[#f8fafc] text-[#0f172a]";
   };
   const renderInline = (line, lineIndex) => {
     const parts = String(line || "").split(/(\*\*[^*]+\*\*)/g).filter((part) => part !== "");
@@ -580,7 +586,7 @@ function renderLoopAssistantText(text, darkMode = false) {
           <div key={index} className={`mr-2 mt-2 inline-flex flex-col gap-0.5 rounded-lg p-2.5 sm:min-w-[120px] ${badgeColor}`}>
             <span className="text-[10px] font-bold uppercase tracking-[0.08em] opacity-70">{label}</span>
             <div className="flex items-center">
-              <span className={`text-[13px] leading-tight font-normal break-words`}>{value}</span>
+              <span className={`text-[16px] leading-snug font-normal break-words`}>{value}</span>
             </div>
           </div>
         );
@@ -1691,6 +1697,37 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [forwardAnalysisPayload, setForwardAnalysisPayload] = useState(null);
   const [forwardAnalysisComment, setForwardAnalysisComment] = useState("");
   const [forwardAnalysisSending, setForwardAnalysisSending] = useState(false);
+
+  const [questionScopeOpen, setQuestionScopeOpen] = useState(false);
+  const [analysisQuestions, setAnalysisQuestions] = useState([""]);
+  const [savingQuestions, setSavingQuestions] = useState(false);
+
+  const openQuestionScope = async () => {
+    setQuestionScopeOpen(true);
+    try {
+      const res = await fetch("/loop-assistant-settings");
+      if (res.ok) {
+        const data = await res.json();
+        setAnalysisQuestions(data.questions?.length ? data.questions : [""]);
+      }
+    } catch (e) {}
+  };
+
+  const saveQuestionScope = async () => {
+    setSavingQuestions(true);
+    try {
+      await fetch("/loop-assistant-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questions: analysisQuestions.filter(Boolean) })
+      });
+      setQuestionScopeOpen(false);
+    } catch (e) {
+      toast.error("Could not save questions");
+    } finally {
+      setSavingQuestions(false);
+    }
+  };
   const [loopCapabilityPicker, setLoopCapabilityPicker] = useState(null);
   const [loopCapabilityDate, setLoopCapabilityDate] = useState("");
   const [forwardSearch, setForwardSearch] = useState("");
@@ -3967,6 +4004,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           <Monitor className="h-4 w-4" />
                         </button>
                       )}
+                      <button type="button" onClick={openQuestionScope} className={`hidden sm:flex h-9 px-3 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition ${darkMode ? "bg-white/10 hover:bg-white/20 text-white" : "bg-[#f7f8fb] hover:bg-[#e2e8f0] text-[#111827]"}`} aria-label="Question Scope">
+                        Question Scope
+                      </button>
                       <button type="button" onClick={() => setMessageSearchOpen(true)} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Search messages">
                         <Search className="h-4 w-4" />
                       </button>
@@ -4204,7 +4244,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     <p className={`truncate text-xs ${darkMode ? "text-white/60" : "text-[#7b8794]"}`}>{message.assistantPayload?.projectName || selectedConversation?.project?.name || selectedConversation?.name || "Project"}</p>
                                   </div>
                                 </div>
-                                <div className={`antialiased transform-gpu space-y-2 break-words text-sm leading-6 [overflow-wrap:anywhere] ${darkMode ? "text-white/85" : "text-[#334155]"}`}>
+                                <div className={`antialiased transform-gpu space-y-2 break-words text-sm leading-6 font-[500] [overflow-wrap:anywhere] ${darkMode ? "text-white" : "text-black"}`}>
                                   {renderLoopAssistantText(message.text, darkMode)}
                                 </div>
                                 {message.assistantPayload?.type === "employee-report-analysis" && (
@@ -4929,7 +4969,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 )}
             </div>
 
-            {loopProfileOpen && !effectiveMobileViewport ? (
+            {(loopProfileOpen || (!sidebarUser && selectedConversation?.id?.startsWith("assistant-loop"))) && !effectiveMobileViewport ? (
               <LoopAssistantProfilePanel
                 darkMode={darkMode}
                 assistant={loopAssistant}
@@ -5954,6 +5994,59 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {questionScopeOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm sm:p-6" onMouseDown={() => !savingQuestions && setQuestionScopeOpen(false)}>
+            <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} className={`relative flex w-full max-w-[500px] flex-col rounded-[22px] shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+              <div className="flex items-center justify-between p-5 pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-black dark:text-white">Analysis Question Scope</h3>
+                  <p className={`mt-1 text-xs ${muted}`}>Loop assistant will answer these questions for each employee report.</p>
+                </div>
+                <button type="button" disabled={savingQuestions} onClick={() => setQuestionScopeOpen(false)} className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-black/45 hover:bg-black/5 hover:text-black"} disabled:opacity-40`}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="max-h-[60vh] overflow-y-auto px-5 pb-5">
+                <div className="space-y-3 mt-2">
+                  {analysisQuestions.map((q, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="shrink-0 text-sm font-bold opacity-50">{i + 1}.</span>
+                      <input
+                        type="text"
+                        value={q}
+                        onChange={(e) => {
+                          const newQ = [...analysisQuestions];
+                          newQ[i] = e.target.value;
+                          setAnalysisQuestions(newQ);
+                        }}
+                        placeholder="e.g. Did the employee complete their planned tasks?"
+                        className={`min-w-0 flex-1 rounded-xl p-3 text-sm font-medium outline-none transition focus:ring-2 focus:ring-[#2563eb] ${darkMode ? "bg-white/5 text-white placeholder:text-white/30" : "bg-black/5 text-black placeholder:text-black/40"}`}
+                      />
+                      <button type="button" onClick={() => setAnalysisQuestions(analysisQuestions.filter((_, idx) => idx !== i))} className="shrink-0 p-2 opacity-50 hover:opacity-100 hover:text-red-500 transition">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setAnalysisQuestions([...analysisQuestions, ""])} className={`flex items-center gap-1.5 text-sm font-bold text-[#2563eb] hover:underline mt-2`}>
+                    <Plus className="h-4 w-4" /> Add Question
+                  </button>
+                </div>
+              </div>
+              <div className="border-t border-black/5 dark:border-white/10 p-5 pt-4">
+                <div className="flex items-center justify-end gap-2">
+                  <button type="button" disabled={savingQuestions} onClick={() => setQuestionScopeOpen(false)} className={`flex h-10 items-center justify-center rounded-full px-4 text-sm font-bold transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f3f4f6] text-[#111827] hover:bg-[#e5e7eb]"}`}>
+                    Cancel
+                  </button>
+                  <button type="button" disabled={savingQuestions} onClick={saveQuestionScope} className="flex h-10 items-center justify-center gap-1.5 rounded-full bg-[#2563eb] px-5 text-sm font-bold text-white hover:bg-[#1d4ed8] disabled:opacity-60">
+                    {savingQuestions ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    <span>Save Scope</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

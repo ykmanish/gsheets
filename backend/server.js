@@ -2938,6 +2938,28 @@ app.post("/forum/refine-message", async (req, res) => {
   }
 });
 
+app.get("/loop-assistant-settings", async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const settings = await db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" });
+    res.json({ questions: settings?.analysisQuestions || [] });
+  } catch (error) {
+    res.status(500).json({ error: "Could not fetch settings" });
+  }
+});
+
+app.post("/loop-assistant-settings", async (req, res) => {
+  try {
+    if (!req.user || !req.user.isSuperAdmin) return res.status(403).json({ error: "Admin access required" });
+    const db = await connectAuthDb();
+    const questions = Array.isArray(req.body.questions) ? req.body.questions.map(q => String(q).trim()).filter(Boolean) : [];
+    await db.collection("platformSettings").updateOne({ _id: "loop-assistant-settings" }, { $set: { analysisQuestions: questions } }, { upsert: true });
+    res.json({ success: true, questions });
+  } catch (error) {
+    res.status(500).json({ error: "Could not update settings" });
+  }
+});
+
 async function analyzeEmployeeReportAndNotifyLoop(report) {
   try {
     const db = await connectAuthDb();
@@ -2947,15 +2969,27 @@ async function analyzeEmployeeReportAndNotifyLoop(report) {
     const taskData = report.taskItems || [];
     const waitingData = report.waitingTaskItems || [];
     
-    const prompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}).
-Evaluate if the tasks performed were appropriate and meaningful, or if they seem like filler tasks just added for the sake of it.
+    const settings = await db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" });
+    const questions = settings?.analysisQuestions || [];
+
+    let prompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}).\n`;
+    if (questions.length > 0) {
+      prompt += `Please answer the following questions based on the employee's task data:\n`;
+      questions.forEach((q, i) => {
+        prompt += `${i + 1}. ${q}\n`;
+      });
+      prompt += `\nStructure your response by answering these questions directly. Also, please include these distinct sections at the end:\n**Impact:** (Detailing the impact on project progress)\n**Suggestion:** (A suggestion for the employee)`;
+    } else {
+      prompt += `Evaluate if the tasks performed were appropriate and meaningful, or if they seem like filler tasks just added for the sake of it.
 Provide a crisp MIS summary for this employee's day, followed by your analysis of what the employee did, their intentions, and what actions (if any) should be taken regarding this employee.
-
-Tasks Done:
-${JSON.stringify(taskData, null, 2)}
-
-Waiting Tasks:
-${JSON.stringify(waitingData, null, 2)}`;
+Structure your output using clear sections, ensuring you include:
+**Core Tasks:** (Brief summary of tasks done)
+**Evaluation:** (Your evaluation of their work)
+**Impact:** (Impact on project progress)
+**Suggestion:** (Suggestions for this employee)`;
+    }
+    
+    prompt += `\n\nTasks Done:\n${JSON.stringify(taskData, null, 2)}\n\nWaiting Tasks:\n${JSON.stringify(waitingData, null, 2)}`;
 
     const claude = await askLoopProjectAssistant({ question: prompt, context: { info: "Employee Report Evaluation" } });
     

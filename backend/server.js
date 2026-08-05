@@ -2974,19 +2974,15 @@ async function analyzeEmployeeReportAndNotifyLoop(report) {
 
     let prompt = `Analyze the following daily report from employee ${report.employeeName} (${report.department}).\n`;
     if (questions.length > 0) {
-      prompt += `Please evaluate the employee's report strictly based on the following questions:\n`;
+      prompt += `Please provide your analysis and output strictly addressing the following parameters/questions:\n`;
       questions.forEach((q, i) => {
         prompt += `${i + 1}. ${q}\n`;
       });
-      prompt += `\nStructure your output using clear sections. Your "Evaluation" section MUST directly and exclusively address the questions above. You MUST include the following 4 distinct sections:\n`;
+      prompt += `\nStructure your response clearly using Markdown. You may use bold headers (like **Summary:** or **Priority Tasks:**) to organize your output based on the requested parameters.`;
     } else {
       prompt += `Evaluate if the tasks performed were appropriate and meaningful, or if they seem like filler tasks just added for the sake of it.\nStructure your output using clear sections, ensuring you MUST include the following 4 distinct sections:\n`;
+      prompt += `**Core Tasks:** (Brief summary of tasks done)\n**Evaluation:** (Your evaluation of their work)\n**Impact:** (Impact on project progress)\n**Suggestion:** (A suggestion for the employee based on your evaluation)`;
     }
-    
-    prompt += `**Core Tasks:** (Brief summary of tasks done)
-**Evaluation:** (${questions.length > 0 ? "Answer the specific evaluation questions here, clearly addressing each one" : "Your evaluation of their work"})
-**Impact:** (Impact on project progress)
-**Suggestion:** (A suggestion for the employee based on your evaluation)`;
     
     prompt += `\n\nTasks Done:\n${JSON.stringify(taskData, null, 2)}\n\nWaiting Tasks:\n${JSON.stringify(waitingData, null, 2)}`;
 
@@ -16855,19 +16851,30 @@ async function createLoopEmployeeReportAnalysisReply({ req, conversation, date, 
          assistantPayload: { type: "employee-report-analysis-summary", date },
       });
 
-      const prompt = `Act as an executive assistant to a busy CEO. I will provide you with a list of daily reports from different employees. 
-For each employee, provide a very short, crisp, and highly meaningful summary that takes only seconds to read. 
-1. Briefly list the core tasks done.
-2. Evaluate productivity/relevance in 1-2 sentences.
+      const settings = await db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" });
+      const questions = settings?.analysisQuestions || [];
 
-Be highly concise.
+      let instructions = `1. Briefly list the core tasks done.\n2. Evaluate productivity/relevance in 1-2 sentences.\n\nStructure the "analysis" string using clear Markdown sections, ensuring you MUST include the following 4 distinct sections:\n**Core Tasks:** (Brief summary of tasks done)\n**Evaluation:** (Your evaluation of their work)\n**Impact:** (Impact on project progress)\n**Suggestion:** (Suggestions for this employee)`;
+
+      if (questions.length > 0) {
+        instructions = `Provide your analysis strictly addressing the following parameters/questions:\n`;
+        questions.forEach((q, i) => {
+          instructions += `${i + 1}. ${q}\n`;
+        });
+        instructions += `\nStructure the "analysis" string clearly using Markdown. You may use bold headers to organize your output based on the requested parameters. Do not include the 4 default sections unless they are requested.`;
+      }
+
+      const prompt = `Act as an executive assistant to a busy CEO. I will provide you with a list of daily reports from different employees. 
+For each employee, provide a highly meaningful summary according to the following instructions:
+
+${instructions}
 
 Format your response strictly as a JSON array of objects matching this exact structure:
 [
   {
     "userId": "exact userId provided",
     "employeeName": "exact employeeName provided",
-    "analysis": "your short summary and evaluation formatted with Markdown"
+    "analysis": "your summary and evaluation formatted with Markdown exactly as instructed above"
   }
 ]
 

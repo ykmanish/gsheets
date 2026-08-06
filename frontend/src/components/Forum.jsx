@@ -1,19 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, AtSign, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Forward, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Pin, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, Smile, SmilePlus, Sparkles, Star, Sticker, SunMedium, Trash2, Upload, UsersRound, Waves, X, Zap } from "lucide-react";
 import toast from "react-hot-toast";
 import { showAppToast } from "./ToastPill";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import { playForumNotificationSound } from "./forumNotificationSound";
 import UserAvatar from "./UserAvatar";
-import EmojiPicker from "emoji-picker-react";
+import dynamic from "next/dynamic";
 import { GiphyFetch } from "@giphy/js-fetch-api";
-import { Grid } from "@giphy/react-components";
+
+const PickerFallback = () => (
+  <div className="grid h-full w-full place-items-center text-xs opacity-60">Loading…</div>
+);
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false, loading: PickerFallback });
+const Grid = dynamic(() => import("@giphy/react-components").then((mod) => mod.Grid), { ssr: false, loading: PickerFallback });
 
 const gf = new GiphyFetch(process.env.NEXT_PUBLIC_GIPHY_API_KEY || "eGCEt3kYBuQiWaTPQhS2lSod97pS9Fpi");
 
 const GROUP_ID = "workspace-forum";
+// Stable identity for "no one is typing" so memoized rows are not invalidated by a
+// fresh [] on every render.
+const EMPTY_TYPING = [];
 
 const GROUP_AVATAR_PRESETS = [
   ["ocean", "linear-gradient(135deg,#2563eb,#06b6d4)", MessagesSquare],
@@ -279,7 +287,10 @@ function groupAvatarPreset(id) {
   return GROUP_AVATAR_PRESETS.find((preset) => preset.id === id) || GROUP_AVATAR_PRESETS[0];
 }
 
-function GroupAvatar({ group, className = "h-11 w-11", iconClassName = "h-5 w-5", rounded = "full" }) {
+// Memoized: pure presentational leaves rendered once per message/conversation row.
+// Without this they all re-render on every socket tick (typing, presence, new
+// message) even when their own props are identical.
+const GroupAvatar = memo(function GroupAvatar({ group, className = "h-11 w-11", iconClassName = "h-5 w-5", rounded = "full" }) {
   if (group?.avatarUrl) {
     const src = group.avatarUrl.startsWith("blob:") || group.avatarUrl.startsWith("data:") ? group.avatarUrl : `${API_URL}${group.avatarUrl}`;
     return (
@@ -293,9 +304,9 @@ function GroupAvatar({ group, className = "h-11 w-11", iconClassName = "h-5 w-5"
       <Icon className={iconClassName} />
     </span>
   );
-}
+});
 
-function LoopAssistantAvatar({ assistant, className = "h-8 w-8", iconClassName = "h-4 w-4" }) {
+const LoopAssistantAvatar = memo(function LoopAssistantAvatar({ assistant, className = "h-8 w-8", iconClassName = "h-4 w-4" }) {
   if (assistant?.avatarUrl) {
     const src = assistant.avatarUrl.startsWith("blob:") || assistant.avatarUrl.startsWith("data:") ? assistant.avatarUrl : `${API_URL}${assistant.avatarUrl}`;
     return <img src={src} alt="Loop" className={`${className} shrink-0 rounded-full object-cover`} />;
@@ -305,11 +316,11 @@ function LoopAssistantAvatar({ assistant, className = "h-8 w-8", iconClassName =
       <Sparkles className={iconClassName} />
     </span>
   );
-}
+});
 
-function TinySpinner({ className = "h-3.5 w-3.5" }) {
+const TinySpinner = memo(function TinySpinner({ className = "h-3.5 w-3.5" }) {
   return <LoaderCircle className={`${className} animate-spin`} />;
-}
+});
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -478,7 +489,7 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
       const username = match[2].toLowerCase();
       const user = users.find((item) => mentionHandleForUser(item).toLowerCase() === username);
       parts.push(
-        <button key={`${start}-${match[0]}`} type="button" onClick={() => user && onMentionClick?.(user)} className={`font-normal underline underline-offset-2 ${mine ? "text-[#2563eb] decoration-[#2563eb]/35" : "text-[#2563eb] decoration-[#2563eb]/35"}`}>
+        <button key={`${start}-${match[0]}`} type="button" onClick={() => user && onMentionClick?.(user)} className="mx-0.5 inline-flex rounded-md bg-[#eef4ff] px-1.5 py-0.5 align-baseline text-[13px] font-medium text-[#2563eb] no-underline transition hover:bg-[#e0ecff] dark:bg-[#2563eb]/15 dark:text-[#93b4fb] dark:hover:bg-[#2563eb]/25">
           {match[0]}
         </button>
       );
@@ -731,7 +742,7 @@ function attachmentImageUrl(attachment = {}) {
   return attachment.openUrl || attachment.downloadUrl || "";
 }
 
-function FileAttachmentCard({ attachment, mine, darkMode, time, status = null, isEdited = false }) {
+const FileAttachmentCard = memo(function FileAttachmentCard({ attachment, mine, darkMode, time, status = null, isEdited = false }) {
   if (!attachment) return null;
   const { Icon, label, color } = fileVisualForAttachment(attachment);
   const isUploading = attachment.uploading;
@@ -778,9 +789,9 @@ function FileAttachmentCard({ attachment, mine, darkMode, time, status = null, i
       )}
     </div>
   );
-}
+});
 
-function ImageAttachmentCard({ attachment, mine, darkMode, time, status = null, onOpen, onMissing }) {
+const ImageAttachmentCard = memo(function ImageAttachmentCard({ attachment, mine, darkMode, time, status = null, onOpen, onMissing }) {
   if (!attachment) return null;
   const caption = String(attachment.caption || "").trim();
   const imageUrl = attachmentImageUrl(attachment);
@@ -795,7 +806,7 @@ function ImageAttachmentCard({ attachment, mine, darkMode, time, status = null, 
       />
       </span>
       {caption && (
-        <p className="whitespace-pre-wrap break-words px-2 pb-1 pt-2 text-sm leading-6 [overflow-wrap:anywhere]">
+        <p className="whitespace-pre-wrap break-words px-2 pb-1 pt-2 text-[15px] leading-[1.55] [overflow-wrap:anywhere]">
           {caption}
         </p>
       )}
@@ -807,7 +818,7 @@ function ImageAttachmentCard({ attachment, mine, darkMode, time, status = null, 
       </span>
     </button>
   );
-}
+});
 
 function getSavedReactionsMap() {
   try {
@@ -865,7 +876,7 @@ function systemMessageText(message, currentUserId) {
   return message?.text || "";
 }
 
-function LinkPreviewCard({ url, mine, darkMode, time, embedded = false, status = null, isEdited = false }) {
+const LinkPreviewCard = memo(function LinkPreviewCard({ url, mine, darkMode, time, embedded = false, status = null, isEdited = false }) {
   const [faviconSourceIndex, setFaviconSourceIndex] = useState(0);
   const meta = linkPreviewMeta(url);
   if (!meta) return null;
@@ -914,7 +925,7 @@ function LinkPreviewCard({ url, mine, darkMode, time, embedded = false, status =
       )}
     </a>
   );
-}
+});
 
 function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, activeDirectUserId, embedded = false, widgetControls = null }) {
   const panelBg = darkMode ? "bg-[#15171c] text-white" : "bg-[#fbfcff] text-black";
@@ -1615,6 +1626,99 @@ function MobileBottomSheetFrame({ darkMode, children, onClose, label = "Close sh
   );
 }
 
+// Memoized sidebar rows. The conversation list used to rebuild every row's whole
+// subtree (avatar, unread pill, receipt icons, preview text) on every socket
+// event; now only the row whose own props changed re-renders.
+const GroupConversationRow = memo(function GroupConversationRow({ conversation, active, unread, typingUsers, darkMode, muted, currentUserId, onlineUserIds, onSelect }) {
+  const pinActivity = pinActivityText(conversation.pinnedMessage, currentUserId);
+  const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, conversation.id === GROUP_ID ? "Workspace Loop group" : conversation.groupKind === "project" ? "Project group chat" : "Group chat");
+  const lastFromMe = !pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUserId || "");
+  const lastStatus = lastFromMe ? getMessageStatus(conversation.lastMessage, conversation, currentUserId, onlineUserIds) : null;
+  return (
+    <button type="button" onClick={() => onSelect(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+      <GroupAvatar group={conversation} className="h-11 w-11" iconClassName="h-5 w-5" />
+      <span className="min-w-0 flex-1 overflow-hidden">
+        <span className="flex min-w-0 items-center justify-between gap-3">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate text-sm font-semibold">{conversation.name}</span>
+            {conversation.groupKind === "project" && (
+              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase ${darkMode ? "bg-sky-400/15 text-sky-200" : "bg-sky-50 text-sky-600"}`}>Project</span>
+            )}
+          </span>
+          {unread?.count ? (
+            <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {unread.mentioned ? "@" : unread.count}
+            </span>
+          ) : (
+            <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.pinnedMessage?.pinnedAt || conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
+          )}
+        </span>
+        <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? `${typingUsers[0].displayName} typing...` : previewText}>
+          {typingUsers.length ? `${typingUsers[0].displayName} typing...` : (
+            <>
+              {lastFromMe && (
+                lastStatus === "read"
+                  ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
+                  : lastStatus === "delivered"
+                  ? <CheckCheck className="h-3.5 w-3.5 shrink-0" />
+                  : <Check className="h-3.5 w-3.5 shrink-0" />
+              )}
+              <span className="min-w-0 truncate">{previewText}</span>
+            </>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+});
+
+const DirectConversationRow = memo(function DirectConversationRow({ conversation, active, unread, typingUsers, darkMode, muted, currentUserId, onlineUserIds, online, loopAssistant, onSelect }) {
+  let other = conversation.participants?.find((user) => String(user.id) !== String(currentUserId));
+  if (!other && conversation.id?.startsWith("assistant-loop")) other = { ...loopAssistant, isAssistant: true, id: "loop" };
+  const pinActivity = pinActivityText(conversation.pinnedMessage, currentUserId);
+  const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, "Direct message");
+  const lastFromMe = !pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUserId || "");
+  const lastStatus = lastFromMe ? getMessageStatus(conversation.lastMessage, conversation, currentUserId, onlineUserIds) : null;
+  return (
+    <button type="button" onClick={() => onSelect(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+      <span className="relative shrink-0">
+        {other?.isAssistant ? (
+          <LoopAssistantAvatar assistant={other} className="h-10 w-10" iconClassName="h-5 w-5" />
+        ) : (
+          <UserAvatar user={other} name={conversation.name} className="h-10 w-10" />
+        )}
+        <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(other?.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
+      </span>
+      <span className="min-w-0 flex-1 overflow-hidden">
+        <span className="flex min-w-0 items-center justify-between gap-3">
+          <span className="min-w-0 truncate text-sm font-semibold">{conversation.name}</span>
+          {unread?.count ? (
+            <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {unread.mentioned ? "@" : unread.count}
+            </span>
+          ) : (
+            <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.pinnedMessage?.pinnedAt || conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
+          )}
+        </span>
+        <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? "typing..." : previewText}>
+          {typingUsers.length ? "typing..." : (
+            <>
+              {lastFromMe && (
+                lastStatus === "read"
+                  ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
+                  : lastStatus === "delivered"
+                  ? <CheckCheck className="h-3.5 w-3.5 shrink-0" />
+                  : <Check className="h-3.5 w-3.5 shrink-0" />
+              )}
+              <span className="min-w-0 truncate">{previewText}</span>
+            </>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+});
+
 function TimePickerInput({ value, disabled, onSave, className }) {
   const [localValue, setLocalValue] = useState(value || "08:00");
   useEffect(() => { setLocalValue(value || "08:00"); }, [value]);
@@ -1854,6 +1958,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     };
   }, [imageDraft?.previewUrl]);
   const selectedConversation = selectedId ? conversations.find((item) => item.id === selectedId) || null : null;
+  // Stable primitive for effects that only care *whether* a conversation is open.
+  // selectedConversation itself is a fresh object every render, so depending on it
+  // directly makes an effect re-run on every unrelated conversations-array update.
+  const hasSelectedConversation = Boolean(selectedConversation);
   const selectedIsGroup = selectedConversation?.type === "group";
   const online = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
   const currentUser = getStoredAuth().user;
@@ -2332,12 +2440,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   }, [loadBootstrap]);
 
   useEffect(() => {
-    if (!selectedId || !selectedConversation) return;
+    if (!selectedId || !hasSelectedConversation) return;
     const timer = window.setTimeout(() => {
       void loadMessages(selectedId).catch((error) => toast.error(error.message));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadMessages, selectedConversation, selectedId]);
+  }, [loadMessages, hasSelectedConversation, selectedId]);
 
   useEffect(() => {
     setStarredOnlyOpen(false);
@@ -3831,104 +3939,40 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               </button>
             </div>
             <div className="min-w-0 space-y-1 overflow-hidden px-2">
-              {groupConversations.map((conversation) => {
-                const active = conversation.id === selectedId;
-                const unread = unreadByConversation[conversation.id];
-                const typingUsers = typingByConversation[conversation.id] || [];
-                const pinActivity = pinActivityText(conversation.pinnedMessage, currentUser?.id);
-                const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, conversation.id === GROUP_ID ? "Workspace Loop group" : conversation.groupKind === "project" ? "Project group chat" : "Group chat");
-                return (
-                  <button key={conversation.id} type="button" onClick={() => selectConversation(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
-                    {conversation.type === "group" ? (
-                      <GroupAvatar group={conversation} className="h-11 w-11" iconClassName="h-5 w-5" />
-                    ) : (
-                      <UserAvatar user={conversation.participants?.find((user) => user.id !== getStoredAuth().user?.id)} name={conversation.name} className="h-11 w-11" />
-                    )}
-                    <span className="min-w-0 flex-1 overflow-hidden">
-                      <span className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="min-w-0 truncate text-sm font-semibold">{conversation.name}</span>
-                          {conversation.groupKind === "project" && (
-                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase ${darkMode ? "bg-sky-400/15 text-sky-200" : "bg-sky-50 text-sky-600"}`}>Project</span>
-                          )}
-                        </span>
-                        {unread?.count ? (
-                          <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] px-1.5 py-0.5 text-[10px] font-bold text-white">
-                            {unread.mentioned ? "@" : unread.count}
-                          </span>
-                        ) : (
-                          <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.pinnedMessage?.pinnedAt || conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
-                        )}
-                      </span>
-                      <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? `${typingUsers[0].displayName} typing...` : previewText}>
-                        {typingUsers.length ? `${typingUsers[0].displayName} typing...` : (
-                          <>
-                            {!pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
-                              getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "read"
-                                ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
-                                : getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "delivered"
-                                ? <CheckCheck className="h-3.5 w-3.5 shrink-0" />
-                                : <Check className="h-3.5 w-3.5 shrink-0" />
-                            )}
-                            <span className="min-w-0 truncate">{previewText}</span>
-                          </>
-                        )}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
+              {groupConversations.map((conversation) => (
+                <GroupConversationRow
+                  key={conversation.id}
+                  conversation={conversation}
+                  active={conversation.id === selectedId}
+                  unread={unreadByConversation[conversation.id]}
+                  typingUsers={typingByConversation[conversation.id] || EMPTY_TYPING}
+                  darkMode={darkMode}
+                  muted={muted}
+                  currentUserId={currentUser?.id}
+                  onlineUserIds={onlineUserIds}
+                  onSelect={selectConversation}
+                />
+              ))}
             </div>
 
             <p className={`px-4 pb-2 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Direct messages</p>
             <div className="min-w-0 space-y-1 overflow-hidden px-2 pb-4">
-              {filteredDirectConversations.map((conversation) => {
-                let other = conversation.participants?.find((user) => user.id !== getStoredAuth().user?.id);
-                if (!other && conversation.id?.startsWith("assistant-loop")) other = { ...loopAssistant, isAssistant: true, id: "loop" };
-                const active = conversation.id === selectedId;
-                const unread = unreadByConversation[conversation.id];
-                const typingUsers = typingByConversation[conversation.id] || [];
-                const pinActivity = pinActivityText(conversation.pinnedMessage, currentUser?.id);
-                const previewText = pinActivity || conversationPreviewText(conversation.lastMessage, "Direct message");
-                return (
-                  <button key={conversation.id} type="button" onClick={() => selectConversation(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
-                    <span className="relative shrink-0">
-                      {other?.isAssistant ? (
-                        <LoopAssistantAvatar assistant={other} className="h-10 w-10" iconClassName="h-5 w-5" />
-                      ) : (
-                        <UserAvatar user={other} name={conversation.name} className="h-10 w-10" />
-                      )}
-                      <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(other?.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
-                    </span>
-                    <span className="min-w-0 flex-1 overflow-hidden">
-                      <span className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-semibold">{conversation.name}</span>
-                        {unread?.count ? (
-                          <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] px-1.5 py-0.5 text-[10px] font-bold text-white">
-                            {unread.mentioned ? "@" : unread.count}
-                          </span>
-                        ) : (
-                          <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.pinnedMessage?.pinnedAt || conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
-                        )}
-                      </span>
-                      <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? "typing..." : previewText}>
-                        {typingUsers.length ? "typing..." : (
-                          <>
-                            {!pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUser?.id || "") && (
-                              getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "read"
-                                ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
-                                : getMessageStatus(conversation.lastMessage, conversation, currentUser?.id, onlineUserIds) === "delivered"
-                                ? <CheckCheck className="h-3.5 w-3.5 shrink-0" />
-                                : <Check className="h-3.5 w-3.5 shrink-0" />
-                            )}
-                            <span className="min-w-0 truncate">{previewText}</span>
-                          </>
-                        )}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
+              {filteredDirectConversations.map((conversation) => (
+                <DirectConversationRow
+                  key={conversation.id}
+                  conversation={conversation}
+                  active={conversation.id === selectedId}
+                  unread={unreadByConversation[conversation.id]}
+                  typingUsers={typingByConversation[conversation.id] || EMPTY_TYPING}
+                  darkMode={darkMode}
+                  muted={muted}
+                  currentUserId={currentUser?.id}
+                  onlineUserIds={onlineUserIds}
+                  online={online}
+                  loopAssistant={loopAssistant}
+                  onSelect={selectConversation}
+                />
+              ))}
               {!filteredDirectConversations.length && (
                 <p className={`px-3 py-3 text-sm ${muted}`}>No direct conversations yet</p>
               )}
@@ -4204,6 +4248,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     {starredOnlyOpen && !visibleMessages.some((message) => message.isStarred) && (
                       <div className={`my-8 text-center text-sm ${muted}`}>No starred messages</div>
                     )}
+                    {!starredOnlyOpen && !visibleMessages.length && (
+                      <div className="flex justify-center px-4 py-20">
+                        <div className={`flex w-full max-w-sm flex-col items-center gap-4 rounded-[20px] px-8 py-10 text-center ${darkMode ? "bg-[#1c1f26]" : "bg-white"}`}>
+                          <span className={`grid h-14 w-14 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] text-white/40" : "bg-[#eef1f6] text-[#9aa6b8]"}`}>
+                            <MessagesSquare className="h-6 w-6" />
+                          </span>
+                          <div>
+                            <p className={`text-lg font-semibold ${darkMode ? "text-white/85" : "text-[#111827]"}`}>No messages yet</p>
+                            <p className={`mt-1.5 text-sm leading-relaxed ${muted}`}>Send the first message to start this conversation.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {visibleMessages.map((message, index) => {
                       if (message.attachmentMissing) return null;
                       const nextMessage = messages[index + 1];
@@ -4213,15 +4270,20 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         return (
                           <div key={message.id} className="min-w-0 mt-3 first:mt-0">
                             {showDate && (
-                              <div className="sticky top-2 z-10 my-2 flex justify-center">
-                                <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
-                                  {formatMessageDate(message.createdAt)}
-                                </span>
+                              <div className="my-4 flex items-center gap-3">
+                                <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
+                                <span className={`shrink-0 text-[11px] font-medium ${muted}`}>{formatMessageDate(message.createdAt)}</span>
+                                <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
                               </div>
                             )}
-                            <div className="my-2 flex justify-center">
-                              <span className={`rounded-xl px-3 py-1.5 text-xs ${darkMode ? "bg-[#252830] text-white/70" : "bg-white text-black/60"}`}>
+                            <div className="my-1.5 flex items-center gap-2.5 px-1">
+                              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${darkMode ? "bg-white/[0.08] text-white/60" : "bg-[#eef1f6] text-[#7a8699]"}`}>
+                                <Pin className="h-3 w-3" />
+                              </span>
+                              <span className={`min-w-0 truncate text-xs ${muted}`}>
                                 {systemMessageText(message, currentUser?.id)}
+                                <span className="mx-1.5 opacity-50">·</span>
+                                {formatTime(message.createdAt)}
                               </span>
                             </div>
                           </div>
@@ -4243,10 +4305,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         return (
                           <div key={message.clientKey || message.id} className="min-w-0 mt-4 first:mt-0">
                             {showDate && (
-                              <div className="sticky top-2 z-10 my-2 flex justify-center">
-                                <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
-                                  {formatMessageDate(message.createdAt)}
-                                </span>
+                              <div className="my-4 flex items-center gap-3">
+                                <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
+                                <span className={`shrink-0 text-[11px] font-medium ${muted}`}>{formatMessageDate(message.createdAt)}</span>
+                                <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
                               </div>
                             )}
                             <div
@@ -4283,9 +4345,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 </button>
                               )}
                               <article className={[
-                                "relative max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] p-5 sm:max-w-[78%]",
-                                mine ? "rounded-br-[7px]" : "rounded-bl-[7px]",
-                                darkMode ? "bg-[#242730] text-white shadow-[0_6px_20px_rgba(0,0,0,0.25)]" : "bg-white text-[#14213d] shadow-[0_6px_20px_rgba(15,23,42,0.08)]",
+                                "relative max-w-[calc(100%-44px)] overflow-hidden rounded-[18px] p-5 sm:max-w-[78%]",
+                                mine ? "rounded-br-[4px]" : "rounded-bl-[4px]",
+                                // No border and no drop shadow — the fill alone lifts it off the pane.
+                                darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]",
                               ].join(" ")}>
                                 <div className="mb-4 flex min-w-0 items-start justify-between gap-3">
                                   <div className="min-w-0">
@@ -4362,6 +4425,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         );
                       }
                       const mine = message.senderId === getStoredAuth().user?.id;
+                      // Computed once per message instead of calling getMessageStatus()
+                      // up to three times per bubble for the same answer.
+                      const messageStatus = mine ? getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) : null;
                       const groupedWithNext = nextMessage?.senderId === message.senderId;
                       const groupedWithPrevious = !showDate && previousMessage?.senderId === message.senderId;
                       const compactWithPrevious = groupedWithPrevious || (!showDate && message.attachment && previousMessage?.attachment);
@@ -4369,6 +4435,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
 
                       const isGroupChat = selectedConversation?.type === "group";
                       const showAvatar = isGroupChat && !mine && !groupedWithNext;
+                      // Only for other people in group chats: the filled bubble already carries
+                      // its own inline timestamp, so a header on every message would just repeat it.
                       const showName = isGroupChat && !mine && !groupedWithPrevious;
                       const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
                       const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
@@ -4380,7 +4448,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       const displayText = message.attachment ? "" : (previewUrl ? textWithoutUrls(message.text) : message.text);
                       const isGroupedWithNext = groupedWithNext && (nextMessage ? messageDateKey(nextMessage.createdAt) === messageDateKey(message.createdAt) : false);
 
-                      // Smooth 18px rounded speech bubble with soft 4px tail
+                      // Filled speech bubble with a soft tail on the sender's side.
                       const bubbleRounding = mine ? "rounded-t-[18px] rounded-bl-[18px] rounded-br-[4px]" : "rounded-t-[18px] rounded-br-[18px] rounded-bl-[4px]";
                       const bubbleTone = isActiveMatch
                         ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]"
@@ -4390,10 +4458,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       return (
                         <div key={message.clientKey || message.id} className={`min-w-0 ${messageTopMargin} first:mt-0`}>
                           {showDate && (
-                            <div className="sticky top-2 z-10 my-2 flex justify-center">
-                              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${darkMode ? "bg-[#1f232b] text-white/70" : "bg-white text-black/45"}`}>
-                                {formatMessageDate(message.createdAt)}
-                              </span>
+                            <div className="my-4 flex items-center gap-3">
+                              <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
+                              <span className={`shrink-0 text-[11px] font-medium ${muted}`}>{formatMessageDate(message.createdAt)}</span>
+                              <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
                             </div>
                           )}
                           <div
@@ -4450,14 +4518,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           ) : <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />)}
                           <div className={`${message.animate ? "forum-msg-pop" : ""} flex min-w-0 flex-col ${mine ? "max-w-[85%] items-end sm:max-w-[75%]" : isGroupChat ? "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[85%] items-start sm:max-w-[75%]"}`}>
                             {showName && (
-                              <div className={`mb-1 flex items-center gap-2 text-xs ${muted}`}>
+                              <div className={`mb-1 flex items-center gap-1.5 text-[13px] ${muted}`}>
                                 {mine || !message.sender ? (
-                                  <span>{mine ? "You" : selectedConversation?.name || "User"}</span>
+                                  <span className={`font-semibold ${darkMode ? "text-white/90" : "text-[#111827]"}`}>{mine ? "You" : selectedConversation?.name || "User"}</span>
                                 ) : (
                                   <button
                                     type="button"
                                     onClick={() => setSidebarUser(message.sender)}
-                                    className="font-normal hover:text-[#2563eb] hover:underline hover:underline-offset-2"
+                                    className={`font-semibold hover:text-[#2563eb] hover:underline hover:underline-offset-2 ${darkMode ? "text-white/90" : "text-[#111827]"}`}
                                   >
                                     {message.sender.displayName || "User"}
                                   </button>
@@ -4478,7 +4546,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     mine={mine}
                                     darkMode={darkMode}
                                     time={formatTime(message.createdAt)}
-                                    status={getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds)}
+                                    status={messageStatus}
                                     onOpen={() => {
                                       if (selectedMessageIds.length || messageMenu) return;
                                       setFullscreenImage(message.attachment);
@@ -4493,7 +4561,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     mine={mine}
                                     darkMode={darkMode}
                                     time={formatTime(message.createdAt)}
-                                    status={getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds)}
+                                    status={messageStatus}
                                     isEdited={message.isEdited}
                                   />
                                 )}
@@ -4520,7 +4588,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   </button>
                                 )}
                                 <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} embedded />
-                                <p className="flex min-w-0 items-end gap-3 px-2 pb-1 pt-2 text-sm leading-6">
+                                <p className="flex min-w-0 items-end gap-3 px-2 pb-1 pt-2 text-[15px] leading-[1.55]">
                                   <span className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                                     {renderMessageText(displayText, messageSearch, isActiveMatch, users, openMentionProfile, mine)}
                                   </span>
@@ -4529,9 +4597,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     <span>{formatTime(message.createdAt)}</span>
                                     {mine && (
                                       <span className="inline-flex items-center justify-center translate-y-[0.5px]">
-                                        {getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
+                                        {messageStatus === "read" ? (
                                           <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
-                                        ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
+                                        ) : messageStatus === "delivered" ? (
                                           <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
                                         ) : (
                                           <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
@@ -4563,7 +4631,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   </button>
                                 )}
                                 <div className="flex min-w-0 items-end gap-3">
-                                  <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
+                                  <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[15px] leading-[1.55] [overflow-wrap:anywhere]">
                                   {renderMessageText(displayText, messageSearch, isActiveMatch, users, openMentionProfile, mine)}
                                   </p>
                                   <span className={`inline-flex min-w-[72px] shrink-0 items-center justify-end gap-1 whitespace-nowrap pb-[3px] text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
@@ -4572,9 +4640,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     <span>{formatTime(message.createdAt)}</span>
                                     {mine && (
                                       <span className="inline-flex items-center justify-center translate-y-[0.5px]">
-                                        {getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
+                                        {messageStatus === "read" ? (
                                           <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
-                                        ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
+                                        ) : messageStatus === "delivered" ? (
                                           <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
                                         ) : (
                                           <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
@@ -4606,7 +4674,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     </div>
                                   </button>
                                 )}
-                                <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} status={getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds)} isEdited={message.isEdited} />
+                                <LinkPreviewCard url={previewUrl} mine={mine} darkMode={darkMode} time={formatTime(message.createdAt)} status={messageStatus} isEdited={message.isEdited} />
                               </div>
                             )}
                             {message.reactions && message.reactions.length > 0 && (
@@ -4683,7 +4751,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       <button type="button" onClick={() => setLoopProfileOpen(true)} className="shrink-0 rounded-full" aria-label="Open Loop profile">
                         <LoopAssistantAvatar assistant={loopAssistant} className="h-8 w-8" iconClassName="h-4 w-4" />
                       </button>
-                      <div className={`flex items-center gap-3 rounded-[20px] rounded-bl-[7px] border px-4 py-3 shadow-[0_14px_36px_rgba(15,23,42,0.07)] ${darkMode ? "border-white/10 bg-[#f8fafc] text-[#14213d]" : "border-[#e5edf8] bg-white text-[#14213d]"}`} aria-label="Loop is thinking">
+                      <div className={`flex items-center gap-3 rounded-[18px] rounded-bl-[4px] px-4 py-3 ${darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]"}`} aria-label="Loop is thinking">
                         <span className="text-xs font-black text-[#0f172a]">Loop is thinking</span>
                         <span className="flex items-center gap-1">
                           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#10b981]" />

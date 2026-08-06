@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+
 const DICEBEAR_STYLE = "lorelei";
 const DICEBEAR_BASE = `https://api.dicebear.com/9.x/${DICEBEAR_STYLE}/svg`;
 
@@ -60,7 +62,7 @@ function diceBearUrl(preset, fallbackSeed) {
   return `${DICEBEAR_BASE}?seed=${seed}&radius=${radius}&backgroundColor=${backgroundColor}`;
 }
 
-export default function UserAvatar({ user, name, size = "md", className = "", rounded = "full" }) {
+function UserAvatarBase({ user, name, size = "md", className = "", rounded = "full" }) {
   const label = name || user?.displayName || user?.username || "User";
   const sizes = size === "sm" ? "h-6 w-6" : size === "lg" ? "h-14 w-14" : size === "xl" ? "h-28 w-28" : "h-9 w-9";
   const shape = rounded === "lg" ? "rounded-2xl" : "rounded-full";
@@ -73,3 +75,9 @@ export default function UserAvatar({ user, name, size = "md", className = "", ro
   }
   return <span title={label} className={`inline-grid shrink-0 place-items-center bg-[#10a66b] text-sm font-black text-white ${sizes} ${shape} ${className}`}>{initials(label)}</span>;
 }
+
+// Rendered once per message and per conversation row, and its output depends only
+// on its own props — memoizing stops every avatar in the list from re-rendering on
+// each socket tick.
+const UserAvatar = memo(UserAvatarBase);
+export default UserAvatar;

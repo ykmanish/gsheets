@@ -5,10 +5,12 @@ import {
   AlertTriangle,
   CalendarClock,
   ChevronRight,
+  ClipboardList,
   HardHat,
   Images,
   Loader2,
   RefreshCw,
+  UserCheck,
   X,
 } from "lucide-react";
 import { API_URL } from "./AuthProvider";
@@ -55,6 +57,21 @@ function formatDay(key) {
   const date = new Date(`${key}T12:00:00`);
   if (Number.isNaN(date.getTime())) return key;
   return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function formatClock(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+}
+
+function formatDuration(minutes) {
+  const total = Number(minutes) || 0;
+  if (total <= 0) return "";
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  return hours ? `${hours}h ${mins}m` : `${mins}m`;
 }
 
 function cellValue(row, header) {
@@ -134,6 +151,25 @@ async function loadManpower() {
     missing: Number(totals.missing) || 0,
     sites: data.today?.siteBreakdown || [],
     agencies: data.today?.agencyBreakdown || [],
+  };
+}
+
+async function loadAttendance() {
+  // Non-HR users only receive their own rows (loadHrAttendanceRecords scopes the
+  // query by userId), so this card shows whatever the caller is allowed to see.
+  const data = await getJson("/hr/attendance");
+  return { records: data.records || [], canManageHr: Boolean(data.canManageHr) };
+}
+
+async function loadMrn() {
+  // Default range is the last 7 days, which still contains today, and the payload
+  // carries allSummary for the all-time total — so one call covers both the card
+  // count and the today-only drawer.
+  const data = await getJson("/mrn-dashboard");
+  return {
+    records: data.records || [],
+    total: data.allSummary?.total ?? data.summary?.total ?? 0,
+    open: data.allSummary?.open ?? 0,
   };
 }
 
@@ -322,9 +358,11 @@ export default function DailySummary({ darkMode }) {
   // Pure fetch — resolves to the next state and touches no setters, so the mount
   // effect below can await it without firing setState synchronously.
   const fetchAll = useCallback(async () => {
-    const [projectRes, manpowerRes, imagesRes] = await Promise.allSettled([
+    const [projectRes, manpowerRes, attendanceRes, mrnRes, imagesRes] = await Promise.allSettled([
       loadProjectData(),
       loadManpower(),
+      loadAttendance(),
+      loadMrn(),
       loadSiteImages(),
     ]);
     return {
@@ -333,6 +371,10 @@ export default function DailySummary({ darkMode }) {
       projectError: projectRes.status === "rejected" ? projectRes.reason?.message : "",
       manpower: manpowerRes.status === "fulfilled" ? manpowerRes.value : null,
       manpowerError: manpowerRes.status === "rejected" ? manpowerRes.reason?.message : "",
+      attendance: attendanceRes.status === "fulfilled" ? attendanceRes.value : null,
+      attendanceError: attendanceRes.status === "rejected" ? attendanceRes.reason?.message : "",
+      mrn: mrnRes.status === "fulfilled" ? mrnRes.value : null,
+      mrnError: mrnRes.status === "rejected" ? mrnRes.reason?.message : "",
       images: imagesRes.status === "fulfilled" ? imagesRes.value : null,
       imagesError: imagesRes.status === "rejected" ? imagesRes.reason?.message : "",
     };
@@ -362,6 +404,14 @@ export default function DailySummary({ darkMode }) {
   const todayPhotos = useMemo(
     () => (state.images?.photos || []).filter((photo) => photo.date === today),
     [state.images, today],
+  );
+  const todayAttendance = useMemo(
+    () => (state.attendance?.records || []).filter((record) => record.date === today),
+    [state.attendance, today],
+  );
+  const todayMrn = useMemo(
+    () => (state.mrn?.records || []).filter((record) => record.date === today),
+    [state.mrn, today],
   );
 
   const cards = useMemo(() => {
@@ -417,6 +467,32 @@ export default function DailySummary({ darkMode }) {
         unavailableReason: state.manpowerError,
       },
       {
+        id: "attendance",
+        icon: UserCheck,
+        label: "Today's attendance",
+        value: todayAttendance.length,
+        count: todayAttendance.length,
+        hint: todayAttendance.length
+          ? `${todayAttendance.filter((r) => r.clockOutAt).length} clocked out`
+          : "No one clocked in yet",
+        tone: "bg-violet-50 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300",
+        unavailable: !state.attendance,
+        unavailableReason: state.attendanceError,
+      },
+      {
+        id: "mrn",
+        icon: ClipboardList,
+        label: "Total MRN",
+        value: state.mrn?.total ?? 0,
+        count: state.mrn?.total || 0,
+        hint: state.mrn
+          ? `${todayMrn.length} raised today · ${state.mrn.open} open`
+          : "",
+        tone: "bg-sky-50 text-sky-600 dark:bg-sky-400/10 dark:text-sky-300",
+        unavailable: !state.mrn,
+        unavailableReason: state.mrnError,
+      },
+      {
         id: "images",
         icon: Images,
         label: "New site images",
@@ -430,7 +506,7 @@ export default function DailySummary({ darkMode }) {
         unavailableReason: state.imagesError,
       },
     ];
-  }, [state, today, todayPhotos]);
+  }, [state, today, todayPhotos, todayAttendance, todayMrn]);
 
   if (state.loading) {
     return (
@@ -580,6 +656,153 @@ export default function DailySummary({ darkMode }) {
               </ListCard>
             )}
           </div>
+        </Drawer>
+      )}
+
+      {open === "attendance" && (
+        <Drawer
+          darkMode={darkMode}
+          title="Today's attendance"
+          subtitle={formatDay(today)}
+          count={todayAttendance.length}
+          onClose={() => setOpen(null)}
+        >
+          {!todayAttendance.length ? (
+            <EmptyNote darkMode={darkMode}>No one has clocked in today.</EmptyNote>
+          ) : (
+            <ListCard darkMode={darkMode}>
+              {todayAttendance.map((record) => {
+                const duration = formatDuration(record.workMinutes);
+                return (
+                  <Row key={record.id} darkMode={darkMode}>
+                    <span
+                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${record.clockOutAt ? "bg-slate-400" : "bg-emerald-500"}`}
+                      title={record.clockOutAt ? "Clocked out" : "Currently in"}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{record.employeeName}</span>
+                      <span className={`mt-0.5 block truncate text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                        {[record.designation || record.department, record.workMode === "remote" ? "Remote" : "Office"]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-xs font-medium tabular-nums">
+                        {formatClock(record.clockInAt)}
+                        <span className="opacity-40"> → </span>
+                        {formatClock(record.clockOutAt)}
+                      </span>
+                      {duration && (
+                        <span className={`mt-0.5 block text-[11px] tabular-nums ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                          {duration}
+                        </span>
+                      )}
+                    </span>
+                  </Row>
+                );
+              })}
+            </ListCard>
+          )}
+        </Drawer>
+      )}
+
+      {open === "mrn" && (
+        <Drawer
+          darkMode={darkMode}
+          title="MRN raised today"
+          subtitle={formatDay(today)}
+          count={todayMrn.length}
+          onClose={() => setOpen(null)}
+        >
+          {!todayMrn.length ? (
+            <EmptyNote darkMode={darkMode}>No material request was raised today.</EmptyNote>
+          ) : (
+            <div className="space-y-3">
+              {todayMrn.map((record) => {
+                const delivered = /delivered|closed|complete/i.test(record.status || "");
+                const details = [
+                  ["Project", record.project],
+                  ["Category", record.category],
+                  ["Vendor", record.vendorName],
+                  ["Quotation", record.quotationAmount],
+                  ["Required by", record.requiredDate],
+                  ["Issued by", record.issuedBy],
+                  ["Assigned to", record.assignTo],
+                  ["Lead time", record.leadTime],
+                ].filter(([, value]) => String(value || "").trim());
+                return (
+                  <article
+                    key={record.id}
+                    className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">{record.mrnNo}</p>
+                        {record.materialRequirement && (
+                          <p className={`mt-1 text-[13px] leading-5 ${darkMode ? "text-white/70" : "text-black/70"}`}>
+                            {record.materialRequirement}
+                          </p>
+                        )}
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                          delivered
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
+                            : "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300"
+                        }`}
+                      >
+                        {record.status || "Open"}
+                      </span>
+                    </div>
+                    {details.length > 0 && (
+                      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                        {details.map(([label, value]) => (
+                          <div key={label} className="min-w-0">
+                            <dt className={`text-[10px] uppercase tracking-wide ${darkMode ? "text-white/35" : "text-black/35"}`}>
+                              {label}
+                            </dt>
+                            <dd className="mt-0.5 truncate text-xs font-medium" title={String(value)}>
+                              {value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                    {record.remark && (
+                      <p className={`mt-3 rounded-xl px-3 py-2 text-[11px] leading-5 ${darkMode ? "bg-white/[0.04] text-white/55" : "bg-black/[0.03] text-black/55"}`}>
+                        {record.remark}
+                      </p>
+                    )}
+                    {(record.mrnPhoto || record.quotationPhoto) && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {record.mrnPhoto && (
+                          <a
+                            href={record.mrnPhoto}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition ${darkMode ? "bg-white/[0.07] hover:bg-white/10" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
+                          >
+                            MRN photo
+                          </a>
+                        )}
+                        {record.quotationPhoto && (
+                          <a
+                            href={record.quotationPhoto}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition ${darkMode ? "bg-white/[0.07] hover:bg-white/10" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
+                          >
+                            Quotation
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </Drawer>
       )}
 

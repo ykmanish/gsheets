@@ -1,12 +1,7 @@
 import { useCallback, useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import {
   Send,
   Loader2,
-  FileText,
-  CalendarDays,
-  Images,
-  ClipboardCheck,
   MessageCircle,
   RefreshCw,
   Eye,
@@ -19,6 +14,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { DocumentIcon } from "./ui";
 import { API_URL } from "./AuthProvider";
+import DailySummary from "./DailySummary";
 
 const CHAT_STORAGE_KEY = "raga-dashboard-chat-messages";
 
@@ -199,28 +195,6 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
     toast.success("Chat cleared");
   };
 
-  const quickLinks = [
-    
-    {
-      label: "Check Daily Man Power",
-      helper: "Open DMR planned vs actuals",
-      icon: CalendarDays,
-      href: "/projects/dmr",
-    },
-    {
-      label: "Check Site Daily Images",
-      helper: "Open Site Daily Images",
-      icon: Images,
-      href: "/projects/site-images",
-    },
-    {
-      label: "Employee Report",
-      helper: "Review daily employee updates",
-      icon: ClipboardCheck,
-      href: "/employee-daily-report",
-    },
-  ];
-
   const activeDocuments = documents.filter((doc) => doc.isReady && doc.isActive);
   const activeDocumentCount = activeDocuments.filter((d) => selectedDocs.includes(d.id)).length;
   const totalReadyDocuments = activeDocuments.length;
@@ -258,67 +232,8 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
       <div className="flex-1 flex min-h-[58vh] flex-col overflow-hidden lg:min-h-0">
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 space-y-4 sm:px-6 lg:px-8 lg:py-8">
           {messages.length === 0 && (
-            <div className="flex min-h-full items-center justify-center py-3 sm:py-5">
-              <div
-                className={`w-full max-w-5xl rounded-[28px]  p-5 text-center -[0_18px_55px_rgba(15,23,42,0.07)] sm:p-6 lg:p-7 ${
-                  darkMode ? "border-white/10 bg-[#151612]" : "border-[#dfe7e4] bg-white"
-                }`}
-              >
-                <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full -inner sm:h-16 sm:w-16 ${
-                  darkMode ? "bg-white/5 text-[#d8f36a] -black/20" : "bg-[#f2f6e8] text-[#171714] -white/60"
-                }`}>
-                  <FileText className="h-7 w-7 sm:h-8 sm:w-8" />
-                </div>
-
-                <div className="mt-4">
-                  <p className={`text-[10px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-[#8c948f]"}`}>
-                    Ask anything
-                  </p>
-                  <h2 className={`mt-2 text-3xl small font-semibold leading-tight tracking-tight sm:text-4xl ${darkMode ? "text-white" : "text-[#171714]"}`}>
-                    Chat with your documents
-                  </h2>
-                  <p className={`mx-auto mt-3 max-w-2xl text-sm leading-6 ${darkMode ? "text-white/55" : "text-[#8c948f]"}`}>
-                    {totalReadyDocuments === 0
-                      ? "No documents ready. Go to Documents to upload files or add a Google Sheet."
-                      : selectedDocs.length === 0
-                      ? "No documents selected. Go to Documents and enable at least one document."
-                      : `Querying ${activeDocumentCount} of ${totalReadyDocuments} source(s). Ask anything!`}
-                  </p>
-                </div>
-
-                <div className="mt-5 max-w-4xl mx-auto grid gap-3 sm:grid-cols-3">
-                  {quickLinks.map((link) => {
-                    const Icon = link.icon;
-                    return (
-                      <Link
-                        key={link.label}
-                        href={link.href}
-                        className={`group flex min-h-[72px] border-2 border-dotted items-center gap-3 rounded-[22px]  p-3 text-left transition duration-300 hover:-translate-y-0.5 ${
-                          link.primary
-                            ? "border-[#89ed3f] bg-[#89ed3f] text-[#171714] -[0_18px_40px_rgba(137,237,63,0.22)]"
-                            : darkMode
-                            ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.07]"
-                            : "border-[#dfe7e4]  text-[#173b2e] hover:border-[#9fe8ca] bg-[#fbfff7]"
-                        }`}
-                      >
-                        <span
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
-                            link.primary ? "bg-white/35 text-[#171714]" : "bg-[#f7faf8] text-[#89ed3f]"
-                          }`}
-                        >
-                          <Icon className="h-5 w-5" />
-                        </span>
-                        <span className="min-w-0">
-                          <span className={`block text-md tracking-wide small font-semibold ${darkMode ? "text-white" : "text-[#171714]"}`}>{link.label}</span>
-                          <span className={`mt-1 block text-xs leading-5 ${link.primary ? "text-[#294018]/75" : darkMode ? "text-white/45" : "text-[#8c948f]"}`}>
-                            {link.helper}
-                          </span>
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
+            <div className="mx-auto w-full max-w-5xl py-2">
+              <DailySummary darkMode={darkMode} />
             </div>
           )}
 

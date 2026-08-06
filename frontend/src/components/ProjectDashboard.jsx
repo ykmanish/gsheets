@@ -2897,6 +2897,171 @@ function ProjectAccessDrawer({
   );
 }
 
+// Portfolio-wide delayed (overdue) task roll-up.
+//
+// "Delayed" uses the exact same rule the backend applies when it computes
+// metrics.overdue (see summarizeManualProject in server.js): a task has a due
+// date, that date is before today, and the task is not in a done/complete
+// state. Keeping the rule identical means this list can never disagree with the
+// "Projects at risk" tile or the per-project overdue counts.
+//
+// `today` comes from the server payload (project.date, an IST date key) rather
+// than the browser clock, so a user in another timezone sees the same cutoff the
+// backend used.
+const DONE_STATUS = /done|complete|completed/i;
+
+function collectDelayedTasks(projects, today) {
+  if (!today) return [];
+  const rows = [];
+  for (const project of projects) {
+    for (const task of project.manualTasks || []) {
+      const due = dateKeyFromValue(task.dueDate);
+      if (!due || due >= today || DONE_STATUS.test(task.status || "")) continue;
+      const daysLate = Math.max(
+        1,
+        Math.round(
+          (new Date(`${today}T00:00:00`) - new Date(`${due}T00:00:00`)) / 86400000,
+        ),
+      );
+      rows.push({
+        key: `${project.id}:${task.id || task.title}`,
+        task,
+        project,
+        due,
+        daysLate,
+      });
+    }
+  }
+  return rows.sort(
+    (a, b) =>
+      b.daysLate - a.daysLate ||
+      String(a.project.name || "").localeCompare(String(b.project.name || "")),
+  );
+}
+
+function delayTone(daysLate) {
+  if (daysLate >= 8) return "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300";
+  if (daysLate >= 4) return "bg-orange-50 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300";
+  return "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300";
+}
+
+function DelayedTasksDrawer({ projects, users, onClose, onOpenProject }) {
+  const today = useMemo(
+    () => projects.find((project) => project.date)?.date || dateKeyFromValue(new Date()),
+    [projects],
+  );
+  const delayed = useMemo(() => collectDelayedTasks(projects, today), [projects, today]);
+
+  // Group by project so each block mirrors the "Tasks in this phase" list in the
+  // phase drawer — same container, same row anatomy, same avatar stack.
+  const groups = useMemo(() => {
+    const byProject = new Map();
+    for (const row of delayed) {
+      if (!byProject.has(row.project.id)) {
+        byProject.set(row.project.id, { project: row.project, rows: [] });
+      }
+      byProject.get(row.project.id).rows.push(row);
+    }
+    return [...byProject.values()];
+  }, [delayed]);
+
+  return (
+    <SlideOver
+      title="Delayed tasks"
+      eyebrow="Project Control"
+      onClose={onClose}
+      width="max-w-[640px]"
+    >
+      <div className="px-6 pb-8 pt-6 sm:px-7">
+        <section className="rounded-xl bg-white p-4 dark:bg-white/[0.03]">
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-xs text-[#777d74]">Past their due date</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums">
+                {delayed.length}
+              </p>
+            </div>
+            <p className="text-xs text-[#777d74]">
+              across {groups.length} {groups.length === 1 ? "project" : "projects"}
+            </p>
+          </div>
+        </section>
+
+        {!delayed.length ? (
+          <div className="mt-6 rounded-xl bg-white px-6 py-12 text-center dark:bg-white/[0.03]">
+            <CheckCircle2 className="mx-auto h-7 w-7 text-[#65984f]" />
+            <p className="mt-3 text-sm font-semibold">Everything is on schedule</p>
+            <p className="mt-1 text-xs text-[#858b82]">
+              No task has slipped past its due date.
+            </p>
+          </div>
+        ) : (
+          groups.map((group) => (
+            <section key={group.project.id} className="mt-6">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="min-w-0 truncate text-sm font-semibold">
+                  {group.project.name}
+                  <span className="ml-2 text-xs font-normal text-[#858b82]">
+                    {group.rows.length} {group.rows.length === 1 ? "task" : "tasks"}
+                  </span>
+                </h4>
+                {onOpenProject && (
+                  <Button onClick={() => onOpenProject(group.project)}>
+                    Open
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <div className="mt-3 divide-y divide-[#eff1ed] overflow-hidden rounded-xl bg-white dark:divide-white/[0.06] dark:bg-white/[0.03]">
+                {group.rows.map((row) => {
+                  const assignees = users.filter((person) =>
+                    (row.task.assigneeIds || []).includes(person.id),
+                  );
+                  return (
+                    <div
+                      key={row.key}
+                      className="flex items-center gap-3 px-3 py-3"
+                    >
+                      <span
+                        className={cn(
+                          "h-2.5 w-2.5 shrink-0 rounded-full",
+                          row.task.status === "blocked"
+                            ? "bg-rose-500"
+                            : row.task.status === "in_progress"
+                              ? "bg-amber-400"
+                              : "border-2 border-[#9ba096]",
+                        )}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {row.task.title || "Untitled task"}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[11px] text-[#858b82]">
+                          {row.task.phaseName ? `${row.task.phaseName} · ` : ""}
+                          Due {formatDate(row.due)}
+                        </span>
+                      </span>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold tabular-nums",
+                          delayTone(row.daysLate),
+                        )}
+                      >
+                        {row.daysLate}d late
+                      </span>
+                      <AvatarStack people={assignees} limit={2} />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))
+        )}
+      </div>
+    </SlideOver>
+  );
+}
+
 function PortfolioView({
   darkMode,
   projects,
@@ -2919,11 +3084,16 @@ function PortfolioView({
     (sum, project) => sum + (project.metrics?.completed || 0),
     0,
   );
-  const atRisk = projects.filter(
-    (project) =>
-      project.health === "red" || (project.metrics?.blocked || 0) > 0,
-  ).length;
   const progress = totalTasks ? Math.round((completed / totalTasks) * 100) : 0;
+  const [delayedOpen, setDelayedOpen] = useState(false);
+  const delayedToday = useMemo(
+    () => projects.find((project) => project.date)?.date || dateKeyFromValue(new Date()),
+    [projects],
+  );
+  const delayedCount = useMemo(
+    () => collectDelayedTasks(projects, delayedToday).length,
+    [projects, delayedToday],
+  );
 
   return (
     <div
@@ -2974,11 +3144,16 @@ function PortfolioView({
 
         <section className="mt-7 grid grid-cols-2 overflow-hidden rounded-xl  border-[#dfe3dc] bg-white xl:grid-cols-4 dark:border-white/10 dark:bg-white/[0.03]">
           {[
-            [FolderKanban, "Active projects", projects.length],
-            [ListChecks, "Open tasks", Math.max(0, totalTasks - completed)],
-            [AlertCircle, "Projects at risk", atRisk],
-            [BarChart3, "Portfolio progress", `${progress}%`],
-          ].map(([Icon, label, value], index) => (
+            [FolderKanban, "Active projects", projects.length, null],
+            [ListChecks, "Open tasks", Math.max(0, totalTasks - completed), null],
+            [
+              AlertCircle,
+              "Delayed tasks",
+              delayedCount,
+              delayedCount ? () => setDelayedOpen(true) : null,
+            ],
+            [BarChart3, "Portfolio progress", `${progress}%`, null],
+          ].map(([Icon, label, value, action], index) => (
             <div
               key={label}
               className={cn(
@@ -2992,15 +3167,31 @@ function PortfolioView({
                 "dark:border-white/10",
               )}
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#f0f3ed] text-[#5e6759] dark:bg-white/[0.06] dark:text-white/60">
+              <span
+                className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-lg",
+                  action
+                    ? "bg-rose-50 text-rose-600 dark:bg-rose-400/10 dark:text-rose-300"
+                    : "bg-[#f0f3ed] text-[#5e6759] dark:bg-white/[0.06] dark:text-white/60",
+                )}
+              >
                 <Icon className="h-4.5 w-4.5" />
               </span>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xl font-semibold tabular-nums">{value}</p>
                 <p className="text-xs text-[#777d74] dark:text-white/45">
                   {label}
                 </p>
               </div>
+              {action && (
+                <button
+                  type="button"
+                  onClick={action}
+                  className="ml-auto shrink-0 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-semibold text-[#5e6759] underline-offset-2 transition hover:bg-black/[0.04] hover:underline dark:text-white/60 dark:hover:bg-white/[0.06]"
+                >
+                  See all
+                </button>
+              )}
             </div>
           ))}
         </section>
@@ -3196,6 +3387,17 @@ function PortfolioView({
           )}
         </section>
       </div>
+      {delayedOpen && (
+        <DelayedTasksDrawer
+          projects={projects}
+          users={users}
+          onClose={() => setDelayedOpen(false)}
+          onOpenProject={(project) => {
+            setDelayedOpen(false);
+            onOpen(project);
+          }}
+        />
+      )}
     </div>
   );
 }

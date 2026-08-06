@@ -607,7 +607,17 @@ const EMPLOYEE_REPORT_OPTIONS = {
 };
 const EMPLOYEE_REPORT_APP_TAB = "_AppData";
 const EMPLOYEE_REPORT_APP_HEADERS = ["Report ID", "User ID", "Employee", "Department", "Report Date", "Submitted At", "Client", "Site", "Task Type", "Task Status", "Involvement", "Tomorrow Plan", "Note", "Task Items JSON", "Waiting Items JSON"];
-const EMPLOYEE_REPORT_EXEMPT_USERNAMES = new Set(["neelamverma", "iqbalpatel"]);
+// Usernames excluded from daily reporting. Extra names can be added at deploy
+// time via EMPLOYEE_REPORT_EXEMPT_USERNAMES (comma separated) so this does not
+// need a code change every time someone becomes exempt.
+const EMPLOYEE_REPORT_EXEMPT_USERNAMES = new Set([
+  "neelamverma",
+  "iqbalpatel",
+  ...String(process.env.EMPLOYEE_REPORT_EXEMPT_USERNAMES || "")
+    .split(",")
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean),
+]);
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_TEMPLATE || "daily_report_reminder";
 const EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE = process.env.EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE || process.env.WHATSAPP_EMPLOYEE_REPORT_REMINDER_LANGUAGE || "en";
 const EMPLOYEE_REPORT_REMINDER_LINK = process.env.EMPLOYEE_REPORT_REMINDER_LINK || process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "http://localhost:3000/employee-daily-report";
@@ -825,6 +835,21 @@ function employeeReportToday(req = null) {
   const headerDate = allowDateOverride ? dmrDateKey(req?.headers?.["x-employee-report-date"]) : "";
   const envDate = allowDateOverride ? dmrDateKey(process.env.EMPLOYEE_REPORT_TEST_DATE) : "";
   return headerDate || envDate || istDateKey(new Date());
+}
+
+// Daily cut-off for the employee report. After this the day's submissions are
+// closed and the PDF is generated once and cached; the dashboard surfaces the
+// same time so the UI and the job can never disagree.
+const EMPLOYEE_REPORT_PDF_CRON_TIME = process.env.EMPLOYEE_REPORT_PDF_TIME || "21:30";
+
+function employeeReportPdfCronExpression(time = EMPLOYEE_REPORT_PDF_CRON_TIME) {
+  // Validate the whole string first: a partial value like "" would otherwise
+  // parse to hour 0 and silently schedule the job at 00:30.
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(time).trim());
+  const hour = match ? Number(match[1]) : NaN;
+  const minute = match ? Number(match[2]) : NaN;
+  const valid = hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+  return valid ? `${minute} ${hour} * * *` : "30 21 * * *";
 }
 
 function employeeReportReminderRunId(dateKey) {
@@ -2520,7 +2545,13 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const linkedUsers = isAdmin
     ? await db.collection("users").find({ employeeDailySpreadsheetId: { $exists: true, $ne: "" } }).limit(500).toArray()
     : [req.user];
-  const reportEligibleLinkedUsers = linkedUsers.filter((user) => !isEmployeeDailyReportExempt(user));
+  // Must match the filters buildEmployeeReportExportData applies, otherwise the
+  // dashboard lists people as "Pending" who are never in the report at all —
+  // notably the super admin and DMR managers.
+  const reportEligibleLinkedUsers = linkedUsers
+    .filter((user) => !isEmployeeDailyReportExempt(user))
+    .filter((user) => projectText(user.usernameLower || user.username).toLowerCase() !== SUPER_ADMIN_USERNAME.toLowerCase())
+    .filter((user) => projectText(user.roleName).toLowerCase() !== "dmr manager");
   const allCachedReports = await getCachedEmployeeReportsForUsers(db, reportEligibleLinkedUsers);
   const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(allCachedReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] }))
     .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
@@ -3692,9 +3723,84 @@ app.get("/employee-daily-report/report", async (req, res) => {
   }
 });
 
+function employeeReportPdfPath(dateKey) {
+  return path.join(employeeReportPdfDir, `employee-daily-report-${dateKey}.pdf`);
+}
+
+function employeeReportPdfMetaPath(dateKey) {
+  return path.join(employeeReportPdfDir, `employee-daily-report-${dateKey}.meta.json`);
+}
+
+function readEmployeeReportPdfMeta(dateKey) {
+  try {
+    if (!fs.existsSync(employeeReportPdfPath(dateKey))) return null;
+    if (!fs.existsSync(employeeReportPdfMetaPath(dateKey))) return { date: dateKey, generatedAt: null };
+    return JSON.parse(fs.readFileSync(employeeReportPdfMetaPath(dateKey), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/*
+ * Builds the daily employee report PDF for a date, optionally persisting it.
+ *
+ * buildEmployeeReportExportData() reads `req` only to resolve "today" via
+ * employeeReportToday(req), which already tolerates a null request — so the
+ * cron below can call this with no request at all. `date` is always passed
+ * explicitly here, making the request irrelevant either way.
+ */
+async function buildEmployeeDailyReportPdfFor(date, { save = false } = {}) {
+  const dateKey = dmrDateKey(date) || istDateKey(new Date());
+  const report = await buildEmployeeReportExportData(null, { dateFrom: dateKey, dateTo: dateKey });
+  const buffer = await generateEmployeeDailyReportPdf(report);
+  if (save) {
+    const generatedAt = new Date().toISOString();
+    fs.writeFileSync(employeeReportPdfPath(dateKey), buffer);
+    fs.writeFileSync(
+      employeeReportPdfMetaPath(dateKey),
+      JSON.stringify({ date: dateKey, generatedAt, bytes: buffer.length }, null, 2),
+    );
+  }
+  return { date: dateKey, buffer };
+}
+
+// Tells the dashboard whether the scheduled PDF for a date is already on disk.
+app.get("/employee-daily-report/report/pdf/status", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) {
+      return res.status(403).json({ error: "Employee report admin access required" });
+    }
+    const date = dmrDateKey(req.query?.date) || employeeReportToday(req);
+    const meta = readEmployeeReportPdfMeta(date);
+    res.json({
+      date,
+      available: Boolean(meta),
+      generatedAt: meta?.generatedAt || null,
+      cutoff: EMPLOYEE_REPORT_PDF_CRON_TIME,
+    });
+  } catch (error) {
+    console.error("Employee report PDF status error:", error);
+    res.status(500).json({ error: "Could not read employee report status" });
+  }
+});
+
 app.get("/employee-daily-report/report/pdf", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report") || !canViewEmployeeDailyReports(req)) return res.status(403).json({ error: "Employee report admin access required" });
+    // A single-day request with no user filter is exactly what the nightly cron
+    // stores, so serve that file instead of regenerating (the build hits Google
+    // Sheets and takes seconds).
+    const singleDay = dmrDateKey(req.query?.dateFrom) && req.query?.dateFrom === req.query?.dateTo && !projectText(req.query?.userIds);
+    if (singleDay) {
+      const cachedPath = employeeReportPdfPath(dmrDateKey(req.query.dateFrom));
+      if (fs.existsSync(cachedPath)) {
+        const cached = fs.readFileSync(cachedPath);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="employee-daily-report-${dmrDateKey(req.query.dateFrom)}.pdf"`);
+        res.setHeader("Content-Length", cached.length);
+        return res.send(cached);
+      }
+    }
     const report = await buildEmployeeReportExportData(req, req.query || {});
     const buffer = await generateEmployeeDailyReportPdf(report);
     const rangeName = report.range.from === report.range.to ? report.range.from : `${report.range.from}_to_${report.range.to}`;
@@ -5675,6 +5781,7 @@ const dmrSettingsPath = path.join(dataDir, "dmr-settings.json");
 const dmrPdfDir = path.join(dataDir, "dmr-pdfs");
 const dmrAiCacheDir = path.join(dataDir, "dmr-ai-cache");
 const sheetSnapshotDir = path.join(dataDir, "sheet-snapshots");
+const employeeReportPdfDir = path.join(dataDir, "employee-report-pdfs");
 const dmrPdfBuilds = new Map();
 const dmrPdfRefreshes = new Map();
 const DMR_PDF_CACHE_TTL_MS = Math.max(30_000, Number(process.env.DMR_PDF_CACHE_TTL_MS) || 5 * 60_000);
@@ -5683,6 +5790,7 @@ const mrnSettingsPath = path.join(dataDir, "mrn-settings.json");
 if (!fs.existsSync(dmrPdfDir)) fs.mkdirSync(dmrPdfDir, { recursive: true });
 if (!fs.existsSync(dmrAiCacheDir)) fs.mkdirSync(dmrAiCacheDir, { recursive: true });
 if (!fs.existsSync(sheetSnapshotDir)) fs.mkdirSync(sheetSnapshotDir, { recursive: true });
+if (!fs.existsSync(employeeReportPdfDir)) fs.mkdirSync(employeeReportPdfDir, { recursive: true });
 
 let documents = [];
 let documentFolders = [];
@@ -18347,6 +18455,19 @@ if (require.main === module) {
       console.error("Scheduled DMR PDF generation error:", error);
     }
   }, { timezone: "Asia/Kolkata" });
+
+  // Employee daily report: build once at the cut-off and cache it, so the
+  // dashboard's download is instant instead of rebuilding from Google Sheets.
+  cron.schedule(employeeReportPdfCronExpression(), async () => {
+    const date = istDateKey(new Date());
+    try {
+      const result = await buildEmployeeDailyReportPdfFor(date, { save: true });
+      console.log(`Generated scheduled employee report PDF for ${result.date} (${result.buffer.length} bytes)`);
+    } catch (error) {
+      console.error(`Scheduled employee report PDF generation error for ${date}:`, error.message);
+    }
+  }, { timezone: "Asia/Kolkata" });
+  console.log(`Employee report PDF cron scheduled at ${EMPLOYEE_REPORT_PDF_CRON_TIME} IST (${employeeReportPdfCronExpression()})`);
 
   cron.schedule(process.env.PROJECT_DAILY_DIGEST_CRON || "0 8 * * *", async () => {
     try {

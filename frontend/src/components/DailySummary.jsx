@@ -4,8 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CalendarClock,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Clock,
+  Download,
+  FileText,
   HardHat,
   Images,
   Loader2,
@@ -13,7 +17,9 @@ import {
   UserCheck,
   X,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
+import { DatePicker } from "./ui";
 
 /*
  * Dashboard daily summary.
@@ -78,6 +84,37 @@ function mrnDateKey(value) {
   return Number.isNaN(parsed.getTime()) ? "" : localDateKey(parsed);
 }
 
+// Material requirement cells hold one item per line (and sometimes "*" markers).
+// Rendered as a plain paragraph the newlines collapse into one run-on string, so
+// split them the same way MrnDashboard's materialItems does.
+function materialItems(value) {
+  const text = String(value || "").trim();
+  if (!text) return [];
+  return text
+    .replace(/\r/g, "\n")
+    .split(/\n+|(?=\s*\*)/)
+    .map((item) => item.replace(/^\s*\*\s*/, "").trim())
+    .filter(Boolean);
+}
+
+// The employee report is only considered final after the daily cut-off. Read the
+// clock in IST explicitly rather than trusting the browser's zone, so a user in
+// another timezone sees the same availability the office does.
+const REPORT_CUTOFF_MINUTES = 21 * 60 + 30; // 21:30 IST
+const REPORT_CUTOFF_LABEL = "9:30 PM IST";
+
+function istMinutesNow() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || 0);
+  return hour * 60 + minute;
+}
+
 function formatDay(key) {
   if (!key) return "No date";
   const date = new Date(`${key}T12:00:00`);
@@ -116,12 +153,18 @@ function pickHeader(headers, tests) {
   return "";
 }
 
-function driveThumb(url) {
+// Drive share links can't be used as an <img> src directly — they must go through
+// the thumbnail endpoint. Grid tiles ask for a small render, the preview a large
+// one (matching SiteImagesDashboard's imageUrl).
+function driveRender(url, width) {
   const id = url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || url.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
   return id && /drive\.google\.com|docs\.google\.com/i.test(url)
-    ? `https://drive.google.com/thumbnail?id=${id}&sz=w600`
+    ? `https://drive.google.com/thumbnail?id=${id}&sz=w${width}`
     : url;
 }
+
+const driveThumb = (url) => driveRender(url, 600);
+const driveFull = (url) => driveRender(url, 1600);
 
 async function getJson(path) {
   const response = await fetch(`${API_URL}${path}`);
@@ -199,6 +242,99 @@ async function loadMrn() {
   };
 }
 
+async function loadManpowerFor(date) {
+  const data = await getJson(`/dmr-dashboard?date=${encodeURIComponent(date)}`);
+  const totals = data.today?.totals || {};
+  return {
+    date: data.date || date,
+    planned: Number(totals.planned) || 0,
+    actual: Number(totals.actual) || 0,
+    variance: Number(totals.variance) || 0,
+    records: Number(totals.records) || 0,
+    missing: Number(totals.missing) || 0,
+    sites: data.today?.siteBreakdown || [],
+    agencies: data.today?.agencyBreakdown || [],
+  };
+}
+
+async function loadMrnFor(date) {
+  const data = await getJson(
+    `/mrn-dashboard?startDate=${encodeURIComponent(date)}&endDate=${encodeURIComponent(date)}`,
+  );
+  return data.records || [];
+}
+
+// Builds "who submitted on this date" from the eligible-user roster plus the
+// reports returned for that date. This is the same pairing the backend does for
+// todaySubmissionStatus, just not pinned to today.
+function submissionStatusFor(users, reports, date) {
+  const byUser = new Map(
+    (reports || [])
+      .filter((report) => report.reportDate === date)
+      .map((report) => [String(report.userId), report]),
+  );
+  return (users || []).map((user) => {
+    const report = byUser.get(String(user.userId || user._id));
+    return {
+      userId: String(user.userId || user._id),
+      employeeName: user.employeeName || "Employee",
+      department: user.department || "",
+      submitted: Boolean(report),
+      submittedAt: report?.submittedAt || null,
+    };
+  });
+}
+
+async function loadEmployeeReportFor(date) {
+  const data = await getJson(
+    `/employee-daily-report?dateFrom=${encodeURIComponent(date)}&dateTo=${encodeURIComponent(date)}`,
+  );
+  const people = submissionStatusFor(data.reportUsers, data.reports, date);
+  return {
+    people,
+    submitted: people.filter((person) => person.submitted).length,
+    total: people.length,
+  };
+}
+
+async function loadEmployeeReport() {
+  const data = await getJson("/employee-daily-report");
+  const status = data.todaySubmissionStatus || [];
+  // Whether the nightly job has already produced today's PDF. Non-admins are not
+  // allowed to read this, so a failure here must not fail the whole card.
+  const pdf = await getJson("/employee-daily-report/report/pdf/status").catch(() => null);
+  return {
+    today: data.today || "",
+    isAdmin: Boolean(data.isAdmin),
+    todaySubmitted: Boolean(data.todaySubmitted),
+    people: status,
+    submitted: status.filter((person) => person.submitted).length,
+    total: status.length,
+    pdfReady: Boolean(pdf?.available),
+    pdfGeneratedAt: pdf?.generatedAt || null,
+  };
+}
+
+// Same endpoint the Employee Report page uses for its "Today PDF" button, so the
+// generated document is byte-for-byte the one people already expect.
+async function downloadEmployeeReportPdf(date) {
+  const params = new URLSearchParams({ dateFrom: date, dateTo: date });
+  const response = await fetch(`${API_URL}/employee-daily-report/report/pdf?${params.toString()}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || "Could not download employee report PDF");
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `employee-daily-report-${date}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+}
+
 async function loadSiteImages() {
   // No backend route for site images — replicate the sheet scrape that
   // SiteImagesDashboard already performs, so both screens agree.
@@ -244,7 +380,9 @@ async function loadSiteImages() {
 
 /* ------------------------------------------------------------------- UI --- */
 
-function Drawer({ darkMode, title, subtitle, count, onClose, children }) {
+// blockEscape lets a layer stacked above the drawer (the image preview) claim
+// the Escape key, so the first press closes that layer, not the whole drawer.
+function Drawer({ darkMode, title, subtitle, count, onClose, blockEscape = false, toolbar = null, children }) {
   const [closing, setClosing] = useState(false);
   const requestClose = useCallback(() => {
     setClosing(true);
@@ -252,12 +390,13 @@ function Drawer({ darkMode, title, subtitle, count, onClose, children }) {
   }, [onClose]);
 
   useEffect(() => {
+    if (blockEscape) return undefined;
     const onKey = (event) => {
       if (event.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [requestClose]);
+  }, [requestClose, blockEscape]);
 
   return (
     <div
@@ -290,17 +429,123 @@ function Drawer({ darkMode, title, subtitle, count, onClose, children }) {
               </p>
             )}
           </div>
-          <button
-            type="button"
-            onClick={requestClose}
-            aria-label="Close"
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {toolbar}
+            <button
+              type="button"
+              onClick={requestClose}
+              aria-label="Close"
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
       </aside>
+    </div>
+  );
+}
+
+// Full-screen image preview, mirroring the Site Images page: backdrop/Escape to
+// close, arrows or side buttons to page through, position counter at the bottom.
+function ImagePreview({ photos, index, onIndex, onClose }) {
+  const photo = photos[index];
+  const canNavigate = photos.length > 1;
+  const step = useCallback(
+    (direction) => onIndex((index + direction + photos.length) % photos.length),
+    [index, onIndex, photos.length],
+  );
+
+  // Drive's large renders (sz=w1600) are not always available for a file even
+  // when the small one is, which showed a broken image beside a working grid
+  // thumbnail. Only the failure count is stored and src derived from it, so no
+  // effect is needed on navigation, and a size already known to fail is not
+  // retried when paging back.
+  const [fallbackLevel, setFallbackLevel] = useState({});
+  const level = photo ? fallbackLevel[photo.url] || 0 : 0;
+  const src = !photo ? "" : level === 0 ? driveFull(photo.url) : level === 1 ? driveThumb(photo.url) : photo.url;
+  const handleImageError = useCallback(() => {
+    if (!photo) return;
+    setFallbackLevel((current) => ({
+      ...current,
+      [photo.url]: Math.min((current[photo.url] || 0) + 1, 2),
+    }));
+  }, [photo]);
+
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft" && photos.length > 1) step(-1);
+      if (event.key === "ArrowRight" && photos.length > 1) step(1);
+    };
+    window.addEventListener("keydown", onKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose, step, photos.length]);
+
+  if (!photo) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Site image preview"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+        aria-label="Close image preview"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      {canNavigate && (
+        <>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              step(-1);
+            }}
+            className="absolute left-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:left-6 sm:h-14 sm:w-14"
+            aria-label="Previous image"
+          >
+            <ChevronLeft className="h-7 w-7" />
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              step(1);
+            }}
+            className="absolute right-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:right-6 sm:h-14 sm:w-14"
+            aria-label="Next image"
+          >
+            <ChevronRight className="h-7 w-7" />
+          </button>
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
+            {index + 1} / {photos.length}
+          </div>
+        </>
+      )}
+      <img
+        key={`${photo.id}:${level}`}
+        src={src}
+        alt={photo.trade || "Site preview"}
+        onError={handleImageError}
+        onClick={(event) => event.stopPropagation()}
+        className="max-h-[88vh] max-w-[94vw] object-contain"
+      />
+      <div className="pointer-events-none absolute bottom-16 left-1/2 max-w-[80vw] -translate-x-1/2 truncate text-center text-xs text-white/70">
+        {[photo.site, photo.trade, photo.uploadedBy].filter(Boolean).join(" · ")}
+      </div>
     </div>
   );
 }
@@ -312,31 +557,33 @@ function SummaryCard({ darkMode, card, onOpen }) {
       type="button"
       onClick={() => !card.unavailable && onOpen(card.id)}
       disabled={card.unavailable}
-      className={`group flex min-h-[104px] w-full flex-col justify-between rounded-[22px] p-4 text-left transition disabled:cursor-not-allowed ${
+      className={`group flex min-h-[124px] w-full flex-col justify-between rounded-[22px] p-4 text-left transition disabled:cursor-not-allowed ${
         darkMode
           ? "bg-white/[0.045] hover:bg-white/[0.075] disabled:hover:bg-white/[0.045]"
           : "bg-white hover:-translate-y-0.5 disabled:hover:translate-y-0"
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${card.tone}`}>
+      {/* Title sits beside the icon so the card is identifiable from the header
+          row alone; it is therefore not repeated under the value. */}
+      <div className="flex items-center gap-2">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${card.tone}`}>
           <card.icon className="h-4.5 w-4.5" />
+        </span>
+        <span className={`small min-w-0 flex-1 truncate text-sm font-medium ${darkMode ? "text-white/50" : "text-black/45"}`}>
+          {card.label}
         </span>
         {!card.unavailable && (
           <ChevronRight
-            className={`h-4 w-4 transition group-hover:translate-x-0.5 ${darkMode ? "text-white/30" : "text-black/25"}`}
+            className={`h-4 w-4 shrink-0 transition group-hover:translate-x-0.5 ${darkMode ? "text-white/30" : "text-black/25"}`}
           />
         )}
       </div>
       <div className="mt-3 min-w-0">
-        <p className="truncate text-2xl font-semibold tabular-nums">
+        <p className="small truncate text-[32px] font-bold leading-tight tabular-nums">
           {card.unavailable ? "—" : card.value}
         </p>
-        <p className={`mt-0.5 truncate text-xs ${darkMode ? "text-white/50" : "text-black/50"}`}>
-          {card.label}
-        </p>
         {card.hint && (
-          <p className={`mt-1 truncate text-[11px] ${darkMode ? "text-white/35" : "text-black/35"}`}>
+          <p className={`small mt-1.5 truncate text-xs font-medium ${darkMode ? "text-white/45" : "text-black/45"}`}>
             {card.unavailable ? card.unavailableReason || "Not available" : card.hint}
           </p>
         )}
@@ -379,18 +626,32 @@ function ListCard({ darkMode, children }) {
 export default function DailySummary({ darkMode }) {
   const [state, setState] = useState({ loading: true });
   const [open, setOpen] = useState(null);
+  // Index into the photos currently listed in the drawer; -1 means closed.
+  const [previewIndex, setPreviewIndex] = useState(-1);
+  // Per-drawer selected date. Absent means "today" — the cards always report
+  // today regardless; only the drawers are browsable.
+  const [drawerDate, setDrawerDate] = useState({});
+  // Manpower and MRN are filtered server-side, so other dates need a fetch.
+  // Cached by date so re-opening a day is instant.
+  const [manpowerByDate, setManpowerByDate] = useState({});
+  const [mrnByDate, setMrnByDate] = useState({});
+  const [dateLoading, setDateLoading] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [reportByDate, setReportByDate] = useState({});
   const [refreshing, setRefreshing] = useState(false);
 
   // Pure fetch — resolves to the next state and touches no setters, so the mount
   // effect below can await it without firing setState synchronously.
   const fetchAll = useCallback(async () => {
-    const [projectRes, manpowerRes, attendanceRes, mrnRes, imagesRes] = await Promise.allSettled([
-      loadProjectData(),
-      loadManpower(),
-      loadAttendance(),
-      loadMrn(),
-      loadSiteImages(),
-    ]);
+    const [projectRes, manpowerRes, attendanceRes, mrnRes, imagesRes, employeeRes] =
+      await Promise.allSettled([
+        loadProjectData(),
+        loadManpower(),
+        loadAttendance(),
+        loadMrn(),
+        loadSiteImages(),
+        loadEmployeeReport(),
+      ]);
     return {
       loading: false,
       project: projectRes.status === "fulfilled" ? projectRes.value : null,
@@ -403,6 +664,8 @@ export default function DailySummary({ darkMode }) {
       mrnError: mrnRes.status === "rejected" ? mrnRes.reason?.message : "",
       images: imagesRes.status === "fulfilled" ? imagesRes.value : null,
       imagesError: imagesRes.status === "rejected" ? imagesRes.reason?.message : "",
+      employee: employeeRes.status === "fulfilled" ? employeeRes.value : null,
+      employeeError: employeeRes.status === "rejected" ? employeeRes.reason?.message : "",
     };
   }, []);
 
@@ -438,12 +701,125 @@ export default function DailySummary({ darkMode }) {
   // Counted off the sheet's own Timestamp column — the moment the row was added.
   // That is the only trustworthy field here: the typed request-date cells contain
   // real typos (MRN794 has "06/08/0025"), whereas the timestamp is generated.
-  const todayMrn = useMemo(
-    () =>
-      (state.mrn?.records || []).filter(
-        (record) => (mrnDateKey(record.timestamp) || record.date) === today,
+  const mrnOn = useCallback(
+    (records, date) =>
+      (records || []).filter(
+        (record) => (mrnDateKey(record.timestamp) || record.date) === date,
       ),
-    [state.mrn, today],
+    [],
+  );
+  const todayMrn = useMemo(() => mrnOn(state.mrn?.records, today), [mrnOn, state.mrn, today]);
+
+  /* -------- date browsing (drawers only; the cards always show today) ------ */
+
+  const dateFor = useCallback((id) => drawerDate[id] || today, [drawerDate, today]);
+
+  const pickDate = useCallback(
+    async (id, date) => {
+      if (!date) return;
+      setDrawerDate((current) => ({ ...current, [id]: date }));
+      setPreviewIndex(-1);
+      // Attendance and site images already hold every date client-side; only the
+      // two server-filtered sources need a request, and only once per date.
+      if (id === "manpower" && !manpowerByDate[date]) {
+        setDateLoading(`manpower:${date}`);
+        try {
+          const value = await loadManpowerFor(date);
+          setManpowerByDate((current) => ({ ...current, [date]: value }));
+        } catch {
+          setManpowerByDate((current) => ({ ...current, [date]: null }));
+        } finally {
+          setDateLoading("");
+        }
+      }
+      if (id === "report" && !reportByDate[date]) {
+        setDateLoading(`report:${date}`);
+        try {
+          setReportByDate((current) => ({ ...current, [date]: null }));
+          const value = await loadEmployeeReportFor(date);
+          setReportByDate((current) => ({ ...current, [date]: value }));
+        } catch {
+          setReportByDate((current) => ({ ...current, [date]: { people: [], submitted: 0, total: 0 } }));
+        } finally {
+          setDateLoading("");
+        }
+      }
+      if (id === "mrn" && !mrnByDate[date]) {
+        setDateLoading(`mrn:${date}`);
+        try {
+          const records = await loadMrnFor(date);
+          setMrnByDate((current) => ({ ...current, [date]: records }));
+        } catch {
+          setMrnByDate((current) => ({ ...current, [date]: [] }));
+        } finally {
+          setDateLoading("");
+        }
+      }
+    },
+    [manpowerByDate, mrnByDate, reportByDate],
+  );
+
+  const manpowerDate = dateFor("manpower");
+  const drawerManpower =
+    manpowerDate === today ? state.manpower : manpowerByDate[manpowerDate] || null;
+
+  const mrnDate = dateFor("mrn");
+  const drawerMrn = useMemo(() => {
+    if (mrnDate === today) return todayMrn;
+    // The first payload already covers the last 7 days, so nearby dates resolve
+    // without an extra request; the cache only fills for dates outside it.
+    const cached = mrnByDate[mrnDate];
+    return mrnOn(cached || state.mrn?.records, mrnDate);
+  }, [mrnDate, today, todayMrn, mrnByDate, mrnOn, state.mrn]);
+
+  const attendanceDate = dateFor("attendance");
+  const drawerAttendance = useMemo(
+    () => (state.attendance?.records || []).filter((record) => record.date === attendanceDate),
+    [state.attendance, attendanceDate],
+  );
+
+  const imagesDate = dateFor("images");
+  const drawerPhotos = useMemo(
+    () => (state.images?.photos || []).filter((photo) => photo.date === imagesDate),
+    [state.images, imagesDate],
+  );
+
+  const reportDate = dateFor("report");
+  // The drawer must reflect the picked date, not the backend's "today" — after
+  // midnight those differ, which made every employee read as Pending.
+  const reportSubmissions =
+    reportDate === today
+      ? state.employee
+        ? { people: state.employee.people, submitted: state.employee.submitted, total: state.employee.total }
+        : null
+      : reportByDate[reportDate] || null;
+  // Ready when the nightly job has already stored the file, or — for a past day,
+  // or today after the cut-off — when it can be generated on demand.
+  const reportReady =
+    (reportDate === today && state.employee?.pdfReady) ||
+    reportDate < today ||
+    (reportDate === today && istMinutesNow() >= REPORT_CUTOFF_MINUTES);
+
+  const downloadReport = useCallback(async () => {
+    setDownloading(true);
+    try {
+      await downloadEmployeeReportPdf(reportDate);
+      toast.success("Employee report PDF downloaded");
+    } catch (error) {
+      toast.error(error.message || "Could not download employee report");
+    } finally {
+      setDownloading(false);
+    }
+  }, [reportDate]);
+
+  const dateToolbar = useCallback(
+    (id) => (
+      <div className="flex items-center gap-2">
+        {dateLoading.startsWith(`${id}:`) && <Loader2 className="h-4 w-4 animate-spin opacity-60" />}
+        <DatePicker darkMode={darkMode} value={dateFor(id)} onChange={(value) => pickDate(id, value)} />
+      </div>
+    ),
+    [darkMode, dateFor, pickDate, dateLoading],
   );
 
   const cards = useMemo(() => {
@@ -525,6 +901,29 @@ export default function DailySummary({ darkMode }) {
         unavailableReason: state.mrnError,
       },
       {
+        id: "report",
+        icon: FileText,
+        label: "Employee report",
+        value: state.employee
+          ? state.employee.isAdmin
+            ? `${state.employee.submitted}/${state.employee.total}`
+            : state.employee.todaySubmitted
+              ? "Sent"
+              : "Pending"
+          : "—",
+        count: 1,
+        // Prefer the server's answer (has the nightly job actually produced the
+        // file?) and fall back to the clock only if the status call was denied.
+        hint: !state.employee
+          ? ""
+          : state.employee.pdfReady || istMinutesNow() >= REPORT_CUTOFF_MINUTES
+            ? "Today's report available"
+            : `Available after ${REPORT_CUTOFF_LABEL}`,
+        tone: "bg-teal-50 text-teal-600 dark:bg-teal-400/10 dark:text-teal-300",
+        unavailable: !state.employee,
+        unavailableReason: state.employeeError,
+      },
+      {
         id: "images",
         icon: Images,
         label: "New site images",
@@ -556,7 +955,7 @@ export default function DailySummary({ darkMode }) {
           <p className={`text-[10px] uppercase tracking-[0.24em] ${darkMode ? "text-white/40" : "text-[#8c948f]"}`}>
             Daily report
           </p>
-          <h2 className={`mt-1 text-xl font-semibold ${darkMode ? "text-white" : "text-[#171714]"}`}>
+          <h2 className={`small mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-[#171714]"}`}>
             Today at a glance
           </h2>
         </div>
@@ -570,7 +969,7 @@ export default function DailySummary({ darkMode }) {
         </button>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         {cards.map((card) => (
           <SummaryCard key={card.id} darkMode={darkMode} card={card} onOpen={setOpen} />
         ))}
@@ -637,22 +1036,27 @@ export default function DailySummary({ darkMode }) {
         </Drawer>
       )}
 
-      {open === "manpower" && state.manpower && (
+      {open === "manpower" && (
         <Drawer
           darkMode={darkMode}
-          title="Today's manpower"
-          subtitle={formatDay(state.manpower.date || today)}
+          title="Manpower"
+          subtitle={formatDay(manpowerDate)}
+          toolbar={dateToolbar("manpower")}
           onClose={() => setOpen(null)}
         >
+          {!drawerManpower ? (
+            <EmptyNote darkMode={darkMode}>No manpower data for this date.</EmptyNote>
+          ) : (
+          <>
           <div className={`grid grid-cols-3 gap-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
             {(() => {
               // Same rule as the card: met-or-beat the plan is green, short is red.
-              const short = state.manpower.actual < state.manpower.planned;
+              const short = drawerManpower.actual < drawerManpower.planned;
               const tone = short ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400";
               return [
-                ["Planned", state.manpower.planned, ""],
-                ["Actual", state.manpower.actual, tone],
-                ["Variance", `${state.manpower.variance >= 0 ? "+" : ""}${state.manpower.variance}`, tone],
+                ["Planned", drawerManpower.planned, ""],
+                ["Actual", drawerManpower.actual, tone],
+                ["Variance", `${drawerManpower.variance >= 0 ? "+" : ""}${drawerManpower.variance}`, tone],
               ].map(([label, value, valueTone]) => (
                 <div key={label}>
                   <p className={`text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>{label}</p>
@@ -661,18 +1065,18 @@ export default function DailySummary({ darkMode }) {
               ));
             })()}
           </div>
-          {state.manpower.missing > 0 && (
+          {drawerManpower.missing > 0 && (
             <p className={`mt-3 rounded-2xl px-4 py-3 text-xs ${darkMode ? "bg-amber-400/10 text-amber-300" : "bg-amber-50 text-amber-700"}`}>
-              {state.manpower.missing} of {state.manpower.records} rows have no actual filled in yet.
+              {drawerManpower.missing} of {drawerManpower.records} rows have no actual filled in yet.
             </p>
           )}
           <h3 className="mt-6 text-sm font-semibold">By site</h3>
           <div className="mt-3">
-            {!state.manpower.sites.length ? (
+            {!drawerManpower.sites.length ? (
               <EmptyNote darkMode={darkMode}>No site rows for today.</EmptyNote>
             ) : (
               <ListCard darkMode={darkMode}>
-                {state.manpower.sites.map((site) => (
+                {drawerManpower.sites.map((site) => (
                   <Row key={site.label} darkMode={darkMode}>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{site.label}</span>
@@ -688,22 +1092,25 @@ export default function DailySummary({ darkMode }) {
               </ListCard>
             )}
           </div>
+          </>
+          )}
         </Drawer>
       )}
 
       {open === "attendance" && (
         <Drawer
           darkMode={darkMode}
-          title="Today's attendance"
-          subtitle={formatDay(today)}
-          count={todayAttendance.length}
+          title="Attendance"
+          subtitle={formatDay(attendanceDate)}
+          count={drawerAttendance.length}
+          toolbar={dateToolbar("attendance")}
           onClose={() => setOpen(null)}
         >
-          {!todayAttendance.length ? (
-            <EmptyNote darkMode={darkMode}>No one has clocked in today.</EmptyNote>
+          {!drawerAttendance.length ? (
+            <EmptyNote darkMode={darkMode}>No one clocked in on this date.</EmptyNote>
           ) : (
             <ListCard darkMode={darkMode}>
-              {todayAttendance.map((record) => {
+              {drawerAttendance.map((record) => {
                 const duration = formatDuration(record.workMinutes);
                 return (
                   <Row key={record.id} darkMode={darkMode}>
@@ -742,17 +1149,19 @@ export default function DailySummary({ darkMode }) {
       {open === "mrn" && (
         <Drawer
           darkMode={darkMode}
-          title="MRN raised today"
-          subtitle={formatDay(today)}
-          count={todayMrn.length}
+          title="MRN raised"
+          subtitle={formatDay(mrnDate)}
+          count={drawerMrn.length}
+          toolbar={dateToolbar("mrn")}
           onClose={() => setOpen(null)}
         >
-          {!todayMrn.length ? (
-            <EmptyNote darkMode={darkMode}>No material request was raised today.</EmptyNote>
+          {!drawerMrn.length ? (
+            <EmptyNote darkMode={darkMode}>No material request was raised on this date.</EmptyNote>
           ) : (
             <div className="space-y-3">
-              {todayMrn.map((record) => {
+              {drawerMrn.map((record) => {
                 const delivered = /delivered|closed|complete/i.test(record.status || "");
+                const materials = materialItems(record.materialRequirement);
                 // Spelled out ("8 Jun 2026") so a day-first cell can't be misread
                 // as month-first. Blank stays blank so the filter below still
                 // drops fields the sheet never filled in.
@@ -772,19 +1181,29 @@ export default function DailySummary({ darkMode }) {
                 return (
                   <article
                     key={record.id}
-                    className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}
+                    className={`rounded-2xl p-5 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{record.mrnNo}</p>
-                        {record.materialRequirement && (
-                          <p className={`mt-1 text-[13px] leading-5 ${darkMode ? "text-white/70" : "text-black/70"}`}>
-                            {record.materialRequirement}
+                        <p className="truncate text-base font-semibold">{record.mrnNo}</p>
+                        {materials.length === 1 && (
+                          <p className={`mt-1.5 text-[15px] leading-6 ${darkMode ? "text-white/75" : "text-black/75"}`}>
+                            {materials[0]}
                           </p>
+                        )}
+                        {materials.length > 1 && (
+                          <ul className={`mt-2 space-y-2 ${darkMode ? "text-white/75" : "text-black/75"}`}>
+                            {materials.map((item, index) => (
+                              <li key={`${record.id}-m${index}`} className="flex gap-2.5 text-[15px] leading-6">
+                                <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#89ed3f]" />
+                                <span className="min-w-0">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </div>
                       <span
-                        className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
                           delivered
                             ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
                             : "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300"
@@ -794,13 +1213,13 @@ export default function DailySummary({ darkMode }) {
                       </span>
                     </div>
                     {details.length > 0 && (
-                      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
                         {details.map(([label, value]) => (
                           <div key={label} className="min-w-0">
-                            <dt className={`text-[10px] uppercase tracking-wide ${darkMode ? "text-white/35" : "text-black/35"}`}>
+                            <dt className={`text-[11px] uppercase tracking-wide ${darkMode ? "text-white/40" : "text-black/40"}`}>
                               {label}
                             </dt>
-                            <dd className="mt-0.5 truncate text-xs font-medium" title={String(value)}>
+                            <dd className="mt-1 truncate text-sm font-medium" title={String(value)}>
                               {value}
                             </dd>
                           </div>
@@ -808,7 +1227,7 @@ export default function DailySummary({ darkMode }) {
                       </dl>
                     )}
                     {record.remark && (
-                      <p className={`mt-3 rounded-xl px-3 py-2 text-[11px] leading-5 ${darkMode ? "bg-white/[0.04] text-white/55" : "bg-black/[0.03] text-black/55"}`}>
+                      <p className={`mt-3 rounded-xl px-3 py-2.5 text-[13px] leading-6 ${darkMode ? "bg-white/[0.04] text-white/60" : "bg-black/[0.03] text-black/60"}`}>
                         {record.remark}
                       </p>
                     )}
@@ -819,7 +1238,7 @@ export default function DailySummary({ darkMode }) {
                             href={record.mrnPhoto}
                             target="_blank"
                             rel="noreferrer"
-                            className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition ${darkMode ? "bg-white/[0.07] hover:bg-white/10" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
+                            className={`rounded-full px-3.5 py-2 text-[13px] font-medium transition ${darkMode ? "bg-white/[0.07] hover:bg-white/10" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
                           >
                             MRN photo
                           </a>
@@ -829,7 +1248,7 @@ export default function DailySummary({ darkMode }) {
                             href={record.quotationPhoto}
                             target="_blank"
                             rel="noreferrer"
-                            className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition ${darkMode ? "bg-white/[0.07] hover:bg-white/10" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
+                            className={`rounded-full px-3.5 py-2 text-[13px] font-medium transition ${darkMode ? "bg-white/[0.07] hover:bg-white/10" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
                           >
                             Quotation
                           </a>
@@ -844,20 +1263,126 @@ export default function DailySummary({ darkMode }) {
         </Drawer>
       )}
 
+      {open === "report" && (
+        <Drawer
+          darkMode={darkMode}
+          title="Employee report"
+          subtitle={formatDay(reportDate)}
+          toolbar={dateToolbar("report")}
+          onClose={() => setOpen(null)}
+        >
+          <button
+            type="button"
+            onClick={downloadReport}
+            disabled={!reportReady || downloading}
+            className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-4 text-sm font-semibold transition disabled:cursor-not-allowed ${
+              reportReady
+                ? "bg-[#171714] text-white hover:bg-black disabled:opacity-60 dark:bg-[#d8f36a] dark:text-[#11150f] dark:hover:bg-[#cdea5e]"
+                : darkMode
+                  ? "bg-white/[0.06] text-white/40"
+                  : "bg-black/[0.04] text-black/35"
+            }`}
+          >
+            {downloading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Preparing PDF…
+              </>
+            ) : reportReady ? (
+              <>
+                <Download className="h-4 w-4" />
+                {reportDate === today ? "Today's report available — Download" : "Download report"}
+              </>
+            ) : (
+              <>
+                <Clock className="h-4 w-4" />
+                Available after {REPORT_CUTOFF_LABEL}
+              </>
+            )}
+          </button>
+          {!reportReady && (
+            <p className={`mt-2 text-center text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
+              Employees can still submit until the cut-off, so the report is only
+              final after {REPORT_CUTOFF_LABEL}. Pick an earlier date to download it now.
+            </p>
+          )}
+          {reportDate === today && state.employee?.pdfGeneratedAt && (
+            <p className={`mt-2 text-center text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
+              Generated automatically at {formatClock(state.employee.pdfGeneratedAt)}
+            </p>
+          )}
+
+          {state.employee?.isAdmin && (
+            <>
+              <div className="mt-6 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold">
+                  {reportDate === today ? "Submissions today" : `Submissions on ${formatDay(reportDate)}`}
+                </h3>
+                <span className={`text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                  {reportSubmissions ? `${reportSubmissions.submitted} of ${reportSubmissions.total}` : "Loading…"}
+                </span>
+              </div>
+              <div className="mt-3">
+                {!reportSubmissions ? (
+                  <EmptyNote darkMode={darkMode}>Loading submissions…</EmptyNote>
+                ) : !reportSubmissions.people.length ? (
+                  <EmptyNote darkMode={darkMode}>No employees linked for reporting.</EmptyNote>
+                ) : (
+                  <ListCard darkMode={darkMode}>
+                    {[...reportSubmissions.people]
+                      // Outstanding first — that is the list anyone chasing
+                      // submissions actually needs to see.
+                      .sort((a, b) => Number(a.submitted) - Number(b.submitted))
+                      .map((person) => (
+                        <Row key={person.userId} darkMode={darkMode}>
+                          <span
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${person.submitted ? "bg-emerald-500" : "bg-amber-400"}`}
+                            title={person.submitted ? "Submitted" : "Pending"}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{person.employeeName}</span>
+                            <span className={`mt-0.5 block truncate text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                              {person.department || "—"}
+                            </span>
+                          </span>
+                          <span
+                            className={`shrink-0 text-[11px] font-medium ${
+                              person.submitted
+                                ? darkMode ? "text-emerald-300" : "text-emerald-600"
+                                : darkMode ? "text-amber-300" : "text-amber-600"
+                            }`}
+                          >
+                            {person.submitted ? formatClock(person.submittedAt) || "Submitted" : "Pending"}
+                          </span>
+                        </Row>
+                      ))}
+                  </ListCard>
+                )}
+              </div>
+            </>
+          )}
+        </Drawer>
+      )}
+
       {open === "images" && (
         <Drawer
           darkMode={darkMode}
-          title="New site images"
-          subtitle={formatDay(today)}
-          count={todayPhotos.length}
-          onClose={() => setOpen(null)}
+          title="Site images"
+          subtitle={formatDay(imagesDate)}
+          count={drawerPhotos.length}
+          toolbar={dateToolbar("images")}
+          blockEscape={previewIndex >= 0}
+          onClose={() => {
+            setPreviewIndex(-1);
+            setOpen(null);
+          }}
         >
-          {!todayPhotos.length ? (
-            <EmptyNote darkMode={darkMode}>No images uploaded today.</EmptyNote>
+          {!drawerPhotos.length ? (
+            <EmptyNote darkMode={darkMode}>No images uploaded on this date.</EmptyNote>
           ) : (
             <div className="space-y-6">
-              {[...new Set(todayPhotos.map((photo) => photo.site))].map((site) => {
-                const sitePhotos = todayPhotos.filter((photo) => photo.site === site);
+              {[...new Set(drawerPhotos.map((photo) => photo.site))].map((site) => {
+                const sitePhotos = drawerPhotos.filter((photo) => photo.site === site);
                 return (
                   <section key={site}>
                     <div className="flex items-center justify-between gap-3">
@@ -868,12 +1393,14 @@ export default function DailySummary({ darkMode }) {
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {sitePhotos.map((photo) => (
-                        <a
+                        <button
                           key={photo.id}
-                          href={photo.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="group block overflow-hidden rounded-xl"
+                          type="button"
+                          // Index into the flat list for this date, so prev/next
+                          // pages through every image rather than stopping at
+                          // the end of a site block.
+                          onClick={() => setPreviewIndex(drawerPhotos.indexOf(photo))}
+                          className="group block w-full overflow-hidden rounded-xl text-left"
                           title={`${photo.trade} · ${photo.uploadedBy}`}
                         >
                           <img
@@ -883,11 +1410,11 @@ export default function DailySummary({ darkMode }) {
                             className="h-24 w-full bg-black/5 object-cover transition group-hover:scale-[1.03]"
                           />
                           <span
-                            className={`block truncate px-1 pt-1 text-[10px] ${darkMode ? "text-white/45" : "text-black/45"}`}
+                            className={`block truncate px-1 pt-1 text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}
                           >
                             {photo.trade}
                           </span>
-                        </a>
+                        </button>
                       ))}
                     </div>
                   </section>
@@ -896,6 +1423,16 @@ export default function DailySummary({ darkMode }) {
             </div>
           )}
         </Drawer>
+      )}
+
+      {/* Tied to the images drawer so the preview can never outlive it. */}
+      {open === "images" && previewIndex >= 0 && drawerPhotos.length > 0 && (
+        <ImagePreview
+          photos={drawerPhotos}
+          index={Math.min(previewIndex, drawerPhotos.length - 1)}
+          onIndex={setPreviewIndex}
+          onClose={() => setPreviewIndex(-1)}
+        />
       )}
     </>
   );

@@ -52,6 +52,32 @@ function dateKeyFromValue(value) {
   return Number.isNaN(parsed.getTime()) ? "" : localDateKey(parsed);
 }
 
+// MRN sheet dates are day-first (08/06/2026 = 8 June), unlike the Google Form
+// site-images sheet which is month-first. Mirrors MrnDashboard's parseMrnDate so
+// the dashboard and the MRN page always read a given cell the same way. Do NOT
+// route MRN values through dateKeyFromValue — its month-first heuristic turns
+// 08/06/2026 into 6 August.
+function mrnDateKey(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  // Timestamps arrive as "06/08/2026 13:34:31" — drop the time before parsing.
+  const [datePart] = text.split(/\s+/);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+  const dayFirst = datePart.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+  if (dayFirst) {
+    const day = Number(dayFirst[1]);
+    const month = Number(dayFirst[2]);
+    const year = dayFirst[3].length === 2 ? Number(`20${dayFirst[3]}`) : Number(dayFirst[3]);
+    // Validating the month lets an unambiguous month-first value ("8/25/2026")
+    // fall through to Date parsing instead of being read as day 8, month 25.
+    if (year && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? "" : localDateKey(parsed);
+}
+
 function formatDay(key) {
   if (!key) return "No date";
   const date = new Date(`${key}T12:00:00`);
@@ -409,8 +435,14 @@ export default function DailySummary({ darkMode }) {
     () => (state.attendance?.records || []).filter((record) => record.date === today),
     [state.attendance, today],
   );
+  // Counted off the sheet's own Timestamp column — the moment the row was added.
+  // That is the only trustworthy field here: the typed request-date cells contain
+  // real typos (MRN794 has "06/08/0025"), whereas the timestamp is generated.
   const todayMrn = useMemo(
-    () => (state.mrn?.records || []).filter((record) => record.date === today),
+    () =>
+      (state.mrn?.records || []).filter(
+        (record) => (mrnDateKey(record.timestamp) || record.date) === today,
+      ),
     [state.mrn, today],
   );
 
@@ -721,12 +753,18 @@ export default function DailySummary({ darkMode }) {
             <div className="space-y-3">
               {todayMrn.map((record) => {
                 const delivered = /delivered|closed|complete/i.test(record.status || "");
+                // Spelled out ("8 Jun 2026") so a day-first cell can't be misread
+                // as month-first. Blank stays blank so the filter below still
+                // drops fields the sheet never filled in.
+                const asDay = (key) => (key ? formatDay(key) : "");
                 const details = [
+                  ["Added on", asDay(mrnDateKey(record.timestamp) || record.date)],
+                  ["Request date", asDay(mrnDateKey(record.materialRequestDate))],
                   ["Project", record.project],
                   ["Category", record.category],
                   ["Vendor", record.vendorName],
                   ["Quotation", record.quotationAmount],
-                  ["Required by", record.requiredDate],
+                  ["Required by", asDay(mrnDateKey(record.requiredDate))],
                   ["Issued by", record.issuedBy],
                   ["Assigned to", record.assignTo],
                   ["Lead time", record.leadTime],

@@ -13725,10 +13725,33 @@ async function repairShiftedMrnRows(sheets, spreadsheetId, values = []) {
   return updates.length;
 }
 
+// The MRN sheet stores dates day-first: "06/08/2026 13:34:31" is 6 August, not
+// 8 June. projectDateKey() cannot be used here because it tries `new Date(text)`
+// first, and JS reads a slash date as month-first — which silently shifted every
+// ambiguous MRN date and broke both the dashboard's "raised today" count and the
+// MRN page's date-range filter. Kept scoped to MRN (this helper is only used by
+// mapMrnRows) so projectDateKey stays as-is for the other modules.
+//
+// The day-first branch validates the month, so an unambiguous month-first value
+// such as "8/25/2026" fails it and still falls through to Date parsing.
 function parseMrnDate(value) {
-  const key = projectDateKey(value);
-  if (key) return key;
-  const parsed = new Date(value);
+  const text = projectText(value);
+  if (!text) return "";
+  const [datePart] = text.split(/\s+/);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+  const dayFirst = datePart.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+  if (dayFirst) {
+    const day = Number(dayFirst[1]);
+    const month = Number(dayFirst[2]);
+    const year = dayFirst[3].length === 2 ? Number(`20${dayFirst[3]}`) : Number(dayFirst[3]);
+    if (year && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      // Year is padded to 4 digits so the key stays lexicographically comparable:
+      // the MRN range filter compares these as strings, and a typo'd cell like
+      // "06/08/0025" must sort before 2026 rather than after it.
+      return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+  const parsed = new Date(text);
   return Number.isNaN(parsed.getTime()) ? "" : istDateKey(parsed);
 }
 

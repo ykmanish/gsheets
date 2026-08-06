@@ -5054,7 +5054,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                             onClick={() => { setMediaPickerTab("sticker"); setGiphySearch(""); }}
                             className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${mediaPickerTab === "sticker" ? (darkMode ? "bg-white/15 text-white" : "bg-white text-black") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
                           >
-                            Sticker
+                            Stickers
                           </button>
                         </div>
                       </div>

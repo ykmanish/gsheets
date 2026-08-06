@@ -583,10 +583,10 @@ function renderLoopAssistantText(text, darkMode = false) {
         }
 
         return (
-          <div key={index} className={`mr-2 mt-2 inline-flex flex-col gap-0.5 rounded-xl p-2 sm:min-w-[120px] ${badgeColor}`}>
+          <div key={index} className={`mr-2 mt-2 inline-flex flex-col gap-1 rounded-2xl p-3 sm:min-w-[120px] ${badgeColor}`}>
             <span className="text-[10px] font-bold uppercase tracking-[0.08em] opacity-70">{label}</span>
             <div className="flex items-center">
-              <span className={`text-[13px] leading-[1.5] font-normal break-words`}>{value}</span>
+              <span className={`text-[16px] leading-[1.6] font-normal break-words`}>{value}</span>
             </div>
           </div>
         );
@@ -4283,14 +4283,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 </button>
                               )}
                               <article className={[
-                                "relative max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] p-4 sm:max-w-[78%]",
+                                "relative max-w-[calc(100%-44px)] overflow-hidden rounded-[24px] p-5 sm:max-w-[78%]",
                                 mine ? "rounded-br-[7px]" : "rounded-bl-[7px]",
-                                darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]",
+                                darkMode ? "bg-[#242730] text-white shadow-[0_6px_20px_rgba(0,0,0,0.25)]" : "bg-white text-[#14213d] shadow-[0_6px_20px_rgba(15,23,42,0.08)]",
                               ].join(" ")}>
-                                {pendingForward && (
-                                  <span className="absolute inset-y-3 left-1.5 w-1 rounded-full bg-amber-400" aria-hidden="true" title="Not yet forwarded" />
-                                )}
-                                <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+                                <div className="mb-4 flex min-w-0 items-start justify-between gap-3">
                                   <div className="min-w-0">
                                     {message.forwardedFrom && (
                                       <div className={`mb-1 text-[11px] font-medium ${darkMode ? "text-white/55" : "text-[#64748b]"}`}>
@@ -4310,8 +4307,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                       return subtitle ? <p className={`truncate text-xs ${darkMode ? "text-white/60" : "text-[#7b8794]"}`}>{subtitle}</p> : null;
                                     })()}
                                   </div>
+                                  {/* A small corner badge — not an edge/border treatment — flags an analysis
+                                      that's still awaiting a forward. Can never be mistaken for a stray border. */}
+                                  {pendingForward && (
+                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${darkMode ? "bg-amber-400/20 text-amber-300" : "bg-amber-50 text-amber-600"}`} title="Not yet forwarded">
+                                      Pending
+                                    </span>
+                                  )}
                                 </div>
-                                <div className={`antialiased transform-gpu space-y-2 break-words text-sm leading-6 font-[500] [overflow-wrap:anywhere] ${darkMode ? "text-white" : "text-black"}`}>
+                                <div className={`antialiased transform-gpu space-y-3 break-words text-[15px] leading-[1.6] font-[500] [overflow-wrap:anywhere] ${darkMode ? "text-white" : "text-black"}`}>
                                   {renderLoopAssistantText(message.text, darkMode)}
                                 </div>
                                 {message.assistantPayload?.type === "employee-report-analysis" && !message.forwardedFrom && (

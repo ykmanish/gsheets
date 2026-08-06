@@ -2982,23 +2982,26 @@ function buildEmployeeReportAnalysisInstructions(questions = []) {
 
   return `Act as an executive assistant preparing this for a busy CEO who has no time for detail — be sharp, concise, and say only what matters. Do not pad, repeat the task list, or add pleasantries.
 
-In the Evaluation, ALWAYS do both of the following, regardless of anything else below:
-1. State plainly whether today's tasks were meaningful, high-impact work, or mostly routine/low-value "filler" (small one-off calls, minor admin, vague or repeated entries with no real business outcome). Name the specific filler task(s) if any exist — don't just say "some tasks were minor."
-2. Flag anything blocking progress that genuinely needs CEO or management attention (a decision, an approval, an unresponsive contact, an overdue delivery/payment). Say "none" if there is nothing blocking.
+The Evaluation is a VERDICT, not a list of observations. A CEO reading only the first word of Line 2 should immediately know whether this was a good day of work or not — don't make them infer it from a pile of facts.
+
+In the Evaluation:
+1. Open with a one- or two-word verdict on this specific report — e.g. "Strong", "Solid", "Mixed", "Weak", "Needs attention" — your actual judgment call, not a hedge.
+2. Then justify that verdict in 1-3 more sentences, which must cover: whether today's tasks were meaningful/high-impact or mostly routine/low-value "filler" (name the specific filler task(s) if any — don't just say "some tasks were minor"), and anything blocking progress that genuinely needs CEO or management attention (say "no blockers" if there is nothing). Every fact you mention must serve the verdict — cut anything that doesn't change whether the day was good, mixed, or bad.
 ${scopeBlock}
 Your response MUST contain EXACTLY 3 lines, in this order, and NOTHING else (no title, no intro, no closing remark):
 Line 1: **Tasks:** <1-2 sentence plain summary of what the employee actually did>
-Line 2: **Evaluation:** <cover both mandatory points above (and the CEO's parameters if given), 1-4 sentences, no filler>
+Line 2: **Evaluation:** <the verdict, then its justification per the rules above (and the CEO's parameters if given), 2-4 sentences total, no filler>
 Line 3: **Suggestion:** <one concise, actionable suggestion — if filler tasks were flagged, suggest what to stop/replace them with; if a blocker was flagged, suggest who should escalate it and to whom. THEN add one short, specific line coaching how they should log tasks going forward to add more real value — e.g. capture the outcome/decision reached instead of a call count, or name the specific blocker instead of a vague "in progress". Only include this coaching line when the report actually shows the habit it's correcting (vague entries, call/activity counts, no outcome stated) — skip it if the report is already specific and outcome-focused. Keep it to one line, not a lecture.>
 
 STRICT RULES:
 - Each line starts on its own new line (put a line break between every section — never combine two sections into the same line or paragraph).
 - Never merge, skip, or omit a section. All 3 must always be present, even if the answer is short (e.g. "**Suggestion:** None — keep up the current pace.").
 - Do not add a 4th section, a summary line, or any text after Line 3.
+- Line 2 must start with the verdict word/phrase itself — not "Evaluation:" repeated, not "Overall," as a preamble, just the verdict as the first word(s).
 
 Example of the exact shape expected (do not reuse this content, it is only to show the format):
 **Tasks:** Closed out vendor follow-ups and reviewed two site drawings.
-**Evaluation:** Solid, meaningful coverage — no filler tasks here. One blocker: the design approval is stuck with an unconfirmed contact, which is outside their control and needs escalation.
+**Evaluation:** Solid — meaningful coverage with no filler tasks here. One blocker: the design approval is stuck with an unconfirmed contact, which is outside their control and needs escalation.
 **Suggestion:** Have the CEO or project lead identify the correct design contact directly instead of leaving this employee to wait on it. Next time, log the specific document/date awaited instead of just "in progress" so its age is visible at a glance.`;
 }
 

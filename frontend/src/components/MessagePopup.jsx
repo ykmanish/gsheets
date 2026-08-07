@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { LoaderCircle, MessageCircleMore, Send, X } from "lucide-react";
+import { LoaderCircle, Send, X } from "lucide-react";
 import { API_URL } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
@@ -144,7 +144,7 @@ function MessagePopupCard({ item, darkMode, onView }) {
 
   return (
     <div
-      className={`forum-message-popup pointer-events-auto w-full max-w-[420px] overflow-hidden rounded-[22px] border shadow-[0_24px_64px_rgba(15,23,42,0.26)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.07] bg-white text-[#111827]"}`}
+      className={`forum-message-popup pointer-events-auto w-full max-w-[min(840px,calc(100vw-2.5rem))] overflow-hidden rounded-[22px] border shadow-[0_24px_64px_rgba(15,23,42,0.26)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.07] bg-white text-[#111827]"}`}
       role="alert"
     >
       <div className="flex items-start gap-3.5 px-4 pt-4">
@@ -170,52 +170,49 @@ function MessagePopupCard({ item, darkMode, onView }) {
           <X className="h-4.5 w-4.5" />
         </button>
       </div>
-      <div className="flex items-center justify-between gap-3 px-4 pt-3">
-        {item.mentioned ? (
-          <span className="inline-flex h-8 items-center rounded-full bg-amber-50 px-3 text-xs font-bold text-amber-700 dark:bg-amber-400/12 dark:text-amber-200">
+      {/* One footer row on a wide card — reply box, then View — so the extra width gets used
+          instead of leaving two sparse rows stacked on top of each other. */}
+      <div className="flex flex-col gap-2.5 px-4 pb-4 pt-3 sm:flex-row sm:items-center sm:gap-3">
+        {item.mentioned && (
+          <span className="inline-flex h-8 shrink-0 items-center self-start rounded-full bg-amber-50 px-3 text-xs font-bold text-amber-700 sm:self-auto dark:bg-amber-400/12 dark:text-amber-200">
             Mentioned you
           </span>
-        ) : (
-          <span className={`inline-flex items-center gap-2 text-xs font-semibold ${darkMode ? "text-white/40" : "text-black/40"}`}>
-            <MessageCircleMore className="h-4 w-4" />
-            New Loop message
-          </span>
         )}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void sendReply();
+              }
+            }}
+            maxLength={4000}
+            disabled={sending}
+            placeholder={`Reply to ${replyTarget}…`}
+            aria-label="Reply message"
+            className={`h-11 min-w-0 flex-1 rounded-full border px-4 text-[15px] outline-none transition disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.06] text-white placeholder:text-white/35 focus:border-[#2563eb]" : "border-[#e3e8ef] bg-[#f6f8fb] text-[#111827] placeholder:text-slate-400 focus:border-[#2563eb] focus:bg-white"}`}
+          />
+          <button
+            type="button"
+            onClick={() => void sendReply()}
+            disabled={sending || !draft.trim()}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#22c55e] text-white transition hover:bg-[#16a34a] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Send reply"
+          >
+            {sending ? <LoaderCircle className="h-4.5 w-4.5 animate-spin" /> : <Send className="h-4.5 w-4.5" />}
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => {
             dismissMessagePopup(item.id);
             onView?.(item);
           }}
-          className="h-10 shrink-0 rounded-full bg-[#2563eb] px-6 text-[15px] font-bold text-white transition hover:bg-[#1d4ed8] active:scale-95"
+          className="h-11 shrink-0 rounded-full bg-[#2563eb] px-6 text-[15px] font-bold text-white transition hover:bg-[#1d4ed8] active:scale-95"
         >
           View
-        </button>
-      </div>
-      <div className="flex items-center gap-2 px-4 pb-4 pt-3">
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void sendReply();
-            }
-          }}
-          maxLength={4000}
-          disabled={sending}
-          placeholder={`Reply to ${replyTarget}…`}
-          aria-label="Reply message"
-          className={`h-11 min-w-0 flex-1 rounded-full border px-4 text-[15px] outline-none transition disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.06] text-white placeholder:text-white/35 focus:border-[#2563eb]" : "border-[#e3e8ef] bg-[#f6f8fb] text-[#111827] placeholder:text-slate-400 focus:border-[#2563eb] focus:bg-white"}`}
-        />
-        <button
-          type="button"
-          onClick={() => void sendReply()}
-          disabled={sending || !draft.trim()}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#22c55e] text-white transition hover:bg-[#16a34a] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="Send reply"
-        >
-          {sending ? <LoaderCircle className="h-4.5 w-4.5 animate-spin" /> : <Send className="h-4.5 w-4.5" />}
         </button>
       </div>
     </div>

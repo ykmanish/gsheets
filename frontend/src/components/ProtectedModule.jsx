@@ -210,6 +210,15 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     };
   }, [allowedMenus, user?.id]);
 
+  // Opens (or restores) the desktop Loop widget — the navbar button and the popup's View share it.
+  const openForumWidget = useCallback(() => {
+    setForumWidgetOpen(true);
+    setForumWidgetMinimized(false);
+    setForumWidgetClosing(false);
+    forumUnreadConversationIdsRef.current = new Set();
+    setForumUnreadTotal(0);
+  }, []);
+
   // Where "View" on a message popup lands: straight into that conversation, whichever surface
   // Loop happens to be available on from the current page.
   const openForumConversation = useCallback((conversationId) => {
@@ -223,15 +232,11 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     }
     requestForumConversation(id);
     if (forumWidgetDesktop && allowedMenus.includes("forum")) {
-      setForumWidgetOpen(true);
-      setForumWidgetMinimized(false);
-      setForumWidgetClosing(false);
-      forumUnreadConversationIdsRef.current = new Set();
-      setForumUnreadTotal(0);
+      openForumWidget();
       return;
     }
     router.push("/loop");
-  }, [allowedMenus, forumWidgetClosing, forumWidgetDesktop, forumWidgetOpen, moduleId, router]);
+  }, [allowedMenus, forumWidgetClosing, forumWidgetDesktop, forumWidgetOpen, moduleId, openForumWidget, router]);
 
   const closeForumWidget = useCallback(() => {
     setForumWidgetClosing(true);
@@ -441,10 +446,12 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     router.push(menuPaths[menu] || "/dashboard");
   };
   const hideTopChrome = moduleId === "forum" && forumMobileChatOpen;
-  const forumWidgetAvailable = forumWidgetDesktop && allowedMenus.includes("forum") && moduleId !== "forum";
-  // The floating Loop button owns the bottom-right corner whenever it is on screen, so message
-  // popups stack on top of it instead of over it.
-  const forumLauncherVisible = forumWidgetAvailable && (!forumWidgetOpen || forumWidgetMinimized);
+  const forumReachable = allowedMenus.includes("forum") && moduleId !== "forum";
+  const forumWidgetAvailable = forumWidgetDesktop && forumReachable;
+  // Desktop opens Loop from the navbar button; the widget overlay is desktop-only, so small screens
+  // keep a floating button that goes to the Loop page. Message popups stack on top of that button
+  // when it is on screen rather than over it.
+  const forumLauncherVisible = forumReachable && !forumWidgetDesktop;
   const forumWidgetControls = (
     <div className="flex items-center gap-2 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">
       <button
@@ -494,6 +501,9 @@ function ProtectedModuleContent({ moduleId, projectId }) {
               onMenuClick={() => setSidebarOpen(true)}
               onNotificationsClick={() => setNotificationsOpen(true)}
               onNewNotification={showLatestUnreadNotification}
+              showLoopButton={forumWidgetAvailable}
+              loopUnreadCount={forumUnreadTotal}
+              onLoopClick={openForumWidget}
             />
             <NotificationStrip
               notification={latestNotification}
@@ -532,29 +542,23 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "module-control" && user?.isSuperAdmin && <ModuleControl darkMode={darkMode} />}
         {moduleId === "profile" && <ProfilePage darkMode={darkMode} />}
       </div>
+      {forumLauncherVisible && (
+        <button
+          type="button"
+          onClick={() => router.push("/loop")}
+          className="fixed bottom-5 right-5 z-[80] grid h-14 w-14 place-items-center rounded-full bg-[#2563eb] text-white shadow-[0_18px_45px_rgba(37,99,235,0.34)] transition hover:scale-105 hover:bg-[#1d4ed8] active:scale-95 lg:hidden"
+          aria-label="Open Loop chat"
+        >
+          <MessageCircleMore className="h-6 w-6" />
+          {forumUnreadTotal > 0 && (
+            <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white ring-2 ring-white dark:ring-[#0b0c0f]">
+              {forumUnreadTotal > 99 ? "99+" : forumUnreadTotal}
+            </span>
+          )}
+        </button>
+      )}
       {forumWidgetAvailable && (
         <>
-          {forumLauncherVisible && (
-            <button
-              type="button"
-              onClick={() => {
-                setForumWidgetOpen(true);
-                setForumWidgetMinimized(false);
-                setForumWidgetClosing(false);
-                forumUnreadConversationIdsRef.current = new Set();
-                setForumUnreadTotal(0);
-              }}
-              className="fixed bottom-5 right-5 z-[80] grid h-14 w-14 place-items-center rounded-full bg-[#2563eb] text-white shadow-[0_18px_45px_rgba(37,99,235,0.34)] transition hover:scale-105 hover:bg-[#1d4ed8] active:scale-95"
-              aria-label="Open Loop chat"
-            >
-              <MessageCircleMore className="h-6 w-6" />
-              {forumUnreadTotal > 0 && (
-                <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white ring-2 ring-white dark:ring-[#0b0c0f]">
-                  {forumUnreadTotal > 99 ? "99+" : forumUnreadTotal}
-                </span>
-              )}
-            </button>
-          )}
           {forumWidgetOpen && !forumWidgetMinimized && (
             <button
               type="button"

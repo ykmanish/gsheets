@@ -452,10 +452,25 @@ body * {
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes forum-message-popup-drop {
+  0%   { opacity: 0; transform: translateY(-20px) scale(0.96); }
+  70%  { opacity: 1; transform: translateY(3px) scale(1.006); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Cards rise from the floating Loop button on small screens... */
 .forum-message-popup {
   animation: forum-message-popup-in 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
   transform-origin: bottom right;
   will-change: transform, opacity;
+}
+
+/* ...and drop out of the navbar Loop button once that is the way in. */
+@media (min-width: 1024px) {
+  .forum-message-popup {
+    animation-name: forum-message-popup-drop;
+    transform-origin: top right;
+  }
 }
 
 @keyframes forum-mobile-sheet-backdrop-in {

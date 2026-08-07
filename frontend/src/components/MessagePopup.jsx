@@ -219,8 +219,9 @@ function MessagePopupCard({ item, darkMode, onView }) {
   );
 }
 
-// `aboveLauncher` leaves room for the floating Loop button so the newest card sits just on top of
-// it; without the button (Loop page, mobile) the stack drops down to the normal corner inset.
+// Cards hang below the navbar Loop button on desktop, since that is where Loop is opened from.
+// Smaller screens open Loop from the floating button instead, so there the stack sits in the bottom
+// corner — lifted clear of that button when `aboveLauncher` says it is on screen.
 export function MessagePopupStack({ darkMode = false, onView, aboveLauncher = false }) {
   const items = useSyncExternalStore(subscribe, snapshot, snapshot);
 
@@ -228,7 +229,7 @@ export function MessagePopupStack({ darkMode = false, onView, aboveLauncher = fa
 
   return (
     <div
-      className={`pointer-events-none fixed inset-x-0 bottom-5 z-[96] flex flex-col-reverse items-center gap-3 px-3 sm:inset-x-auto sm:right-5 sm:items-end sm:px-0 ${aboveLauncher ? "sm:bottom-24" : "sm:bottom-5"}`}
+      className={`pointer-events-none fixed inset-x-0 z-[96] flex flex-col-reverse items-center gap-3 px-3 sm:inset-x-auto sm:right-5 sm:items-end sm:px-0 lg:bottom-auto lg:top-24 lg:flex-col ${aboveLauncher ? "bottom-24" : "bottom-5"}`}
     >
       {items.map((item) => (
         <MessagePopupCard key={item.id} item={item} darkMode={darkMode} onView={onView} />

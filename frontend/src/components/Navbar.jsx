@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Bell, Menu, Wifi, WifiOff } from "lucide-react";
+import { Activity, Bell, Menu, MessageCircleMore, Wifi, WifiOff } from "lucide-react";
 import { ThemeSwitch } from "./ui";
 import { API_URL } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 
-export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNotificationsClick, onNewNotification }) {
+export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNotificationsClick, onNewNotification, onLoopClick, loopUnreadCount = 0, showLoopButton = false }) {
   const currentHour = new Date().getHours();
   const greeting =
     currentHour < 12 ? "Good morning" : currentHour < 17 ? "Good afternoon" : "Good evening";
@@ -170,6 +170,24 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
       </div>
 
       <div className="flex newq items-center gap-2 sm:gap-3">
+        {/* Loop lives up here on desktop; small screens get the floating button instead. */}
+        {showLoopButton && (
+          <button
+            onClick={onLoopClick}
+            className="relative hidden h-10 items-center gap-2 rounded-full bg-[#2563eb] px-4 text-sm font-bold text-white transition-all duration-300 hover:bg-[#1d4ed8] active:scale-95 sm:h-11 lg:flex"
+            title="Loop chat"
+            aria-label="Open Loop chat"
+          >
+            <MessageCircleMore className="h-5 w-5" />
+            <span>Loop</span>
+            {loopUnreadCount > 0 && (
+              <span className={`absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white ring-2 ${darkMode ? "ring-[#0f1115]" : "ring-white"}`}>
+                {loopUnreadCount > 99 ? "99+" : loopUnreadCount}
+              </span>
+            )}
+          </button>
+        )}
+
         <div
           className={`hidden h-10 items-center gap-2 rounded-full px-3 text-xs font-semibold ring-1 transition-all duration-300 sm:flex ${networkMeta.className}`}
           title={networkMeta.title}

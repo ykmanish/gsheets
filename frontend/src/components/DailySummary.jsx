@@ -208,8 +208,8 @@ async function loadProjectData() {
   return { today, delayed, starting };
 }
 
-async function loadManpower() {
-  const data = await getJson("/dmr-dashboard");
+async function loadManpower(force = false) {
+  const data = await getJson(force ? "/dmr-dashboard?force=true" : "/dmr-dashboard");
   const totals = data.today?.totals || {};
   return {
     date: data.date || "",
@@ -242,8 +242,8 @@ async function loadMrn() {
   };
 }
 
-async function loadManpowerFor(date) {
-  const data = await getJson(`/dmr-dashboard?date=${encodeURIComponent(date)}`);
+async function loadManpowerFor(date, force = false) {
+  const data = await getJson(`/dmr-dashboard?date=${encodeURIComponent(date)}${force ? "&force=true" : ""}`);
   const totals = data.today?.totals || {};
   return {
     date: data.date || date,
@@ -812,14 +812,42 @@ export default function DailySummary({ darkMode }) {
     }
   }, [reportDate]);
 
+  const refreshManpower = useCallback(async () => {
+    const date = dateFor("manpower");
+    setDateLoading(`manpower:${date}`);
+    try {
+      if (date === today) {
+        const value = await loadManpower(true);
+        setState((current) => ({ ...current, manpower: value }));
+      } else {
+        const value = await loadManpowerFor(date, true);
+        setManpowerByDate((current) => ({ ...current, [date]: value }));
+      }
+    } catch {
+      toast.error("Failed to refresh manpower data");
+    } finally {
+      setDateLoading("");
+    }
+  }, [dateFor, today]);
+
   const dateToolbar = useCallback(
     (id) => (
       <div className="flex items-center gap-2">
         {dateLoading.startsWith(`${id}:`) && <Loader2 className="h-4 w-4 animate-spin opacity-60" />}
+        {id === "manpower" && (
+          <button
+            type="button"
+            onClick={refreshManpower}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${darkMode ? "border-white/10 text-white/70 hover:bg-white/5 hover:text-white" : "border-black/10 text-black/60 hover:bg-black/5 hover:text-black"}`}
+            title="Pull latest data"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        )}
         <DatePicker darkMode={darkMode} value={dateFor(id)} onChange={(value) => pickDate(id, value)} />
       </div>
     ),
-    [darkMode, dateFor, pickDate, dateLoading],
+    [darkMode, dateFor, pickDate, dateLoading, refreshManpower],
   );
 
   const cards = useMemo(() => {

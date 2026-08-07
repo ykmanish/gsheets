@@ -2496,6 +2496,22 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     return () => window.removeEventListener("uipl:forum-open-conversation", openRequestedConversation);
   }, [selectConversation]);
 
+  // Replying straight from a popup marks that chat read on the server, so drop its badge here too.
+  useEffect(() => {
+    function clearUnreadForConversation(event) {
+      const conversationId = String(event?.detail?.conversationId || "");
+      if (!conversationId) return;
+      setUnreadByConversation((current) => {
+        if (!current[conversationId]) return current;
+        const next = { ...current };
+        delete next[conversationId];
+        return next;
+      });
+    }
+    window.addEventListener("uipl:forum-conversation-read", clearUnreadForConversation);
+    return () => window.removeEventListener("uipl:forum-conversation-read", clearUnreadForConversation);
+  }, []);
+
   useEffect(() => {
     let stopped = false;
     async function boot() {

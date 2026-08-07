@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore } from "react";
-import { MessageCircleMore, X } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import { LoaderCircle, MessageCircleMore, Send, X } from "lucide-react";
+import { API_URL } from "./AuthProvider";
+import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
 
-const POPUP_TTL = 9000;
+// Cards never time out — they stay until the user hits View or closes them, so an unread message
+// can't slip past while they are looking at another tab. MAX_VISIBLE only caps how many chats
+// stack at once; each chat keeps a single card no matter how many messages arrive.
 const MAX_VISIBLE = 3;
 const PENDING_CONVERSATION_KEY = "uipl_forum_open_conversation";
 
@@ -36,7 +40,7 @@ export function showMessagePopup(popup) {
   const rest = popups.filter((item) => item.conversationId !== conversationId);
   sequence += 1;
   publish([
-    { ...popup, conversationId, id: `${conversationId}:${sequence}`, shownAt: Date.now() },
+    { ...popup, conversationId, id: `${conversationId}:${sequence}` },
     ...rest,
   ].slice(0, MAX_VISIBLE));
 }
@@ -91,85 +95,146 @@ function popupTime(value) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+// Replying from the popup posts to the same endpoint Loop's composer uses; the socket then
+// delivers the sent message back to Loop like any other, so nothing has to be kept in sync here.
+async function postForumReply(conversationId, text) {
+  const response = await fetch(`${API_URL}/forum/conversations/${encodeURIComponent(conversationId)}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Could not send reply");
+  return data;
+}
+
+// Answering a chat means you have read it — clear the server-side unread and let the launcher
+// badge and Loop's own list know.
+function markForumConversationRead(conversationId) {
+  fetch(`${API_URL}/forum/conversations/${encodeURIComponent(conversationId)}/read`, { method: "POST" })
+    .then(() => {
+      window.dispatchEvent(new CustomEvent("uipl:forum-conversation-read", { detail: { conversationId } }));
+      window.dispatchEvent(new Event("uipl:forum-unread-changed"));
+    })
+    .catch(() => {
+      // The reply already landed; a stale unread badge sorts itself out on the next load.
+    });
+}
+
+function MessagePopupCard({ item, darkMode, onView }) {
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const replyTarget = String(item.senderName || "").split(/\s+/)[0] || "chat";
+
+  async function sendReply() {
+    const text = draft.trim();
+    if (!text || sending) return;
+    try {
+      setSending(true);
+      await postForumReply(item.conversationId, text);
+      markForumConversationRead(item.conversationId);
+      dismissMessagePopup(item.id);
+      showAppToast("Reply sent", { type: "success", darkMode, detail: item.senderName });
+    } catch (error) {
+      showAppToast(error.message || "Could not send reply", { type: "error", darkMode });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div
+      className={`forum-message-popup pointer-events-auto w-full max-w-[420px] overflow-hidden rounded-[22px] border shadow-[0_24px_64px_rgba(15,23,42,0.26)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.07] bg-white text-[#111827]"}`}
+      role="alert"
+    >
+      <div className="flex items-start gap-3.5 px-4 pt-4">
+        <UserAvatar user={item.sender} name={item.senderName} className="h-11 w-11" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 truncate text-[15px] font-bold leading-tight">{item.senderName || "Someone"}</p>
+            <span className={`shrink-0 text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>{popupTime(item.createdAt)}</span>
+          </div>
+          {item.context && (
+            <p className={`mt-0.5 truncate text-xs font-semibold ${darkMode ? "text-white/45" : "text-black/45"}`}>{item.context}</p>
+          )}
+          <p className={`mt-1.5 line-clamp-3 break-words text-[15px] leading-6 ${darkMode ? "text-white/80" : "text-black/72"}`}>
+            {item.text || "Sent a message"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => dismissMessagePopup(item.id)}
+          className={`-mr-1.5 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${darkMode ? "text-white/45 hover:bg-white/10 hover:text-white" : "text-black/35 hover:bg-black/[0.05] hover:text-black"}`}
+          aria-label="Dismiss message notification"
+        >
+          <X className="h-4.5 w-4.5" />
+        </button>
+      </div>
+      <div className="flex items-center justify-between gap-3 px-4 pt-3">
+        {item.mentioned ? (
+          <span className="inline-flex h-8 items-center rounded-full bg-amber-50 px-3 text-xs font-bold text-amber-700 dark:bg-amber-400/12 dark:text-amber-200">
+            Mentioned you
+          </span>
+        ) : (
+          <span className={`inline-flex items-center gap-2 text-xs font-semibold ${darkMode ? "text-white/40" : "text-black/40"}`}>
+            <MessageCircleMore className="h-4 w-4" />
+            New Loop message
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            dismissMessagePopup(item.id);
+            onView?.(item);
+          }}
+          className="h-10 shrink-0 rounded-full bg-[#2563eb] px-6 text-[15px] font-bold text-white transition hover:bg-[#1d4ed8] active:scale-95"
+        >
+          View
+        </button>
+      </div>
+      <div className="flex items-center gap-2 px-4 pb-4 pt-3">
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void sendReply();
+            }
+          }}
+          maxLength={4000}
+          disabled={sending}
+          placeholder={`Reply to ${replyTarget}…`}
+          aria-label="Reply message"
+          className={`h-11 min-w-0 flex-1 rounded-full border px-4 text-[15px] outline-none transition disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.06] text-white placeholder:text-white/35 focus:border-[#2563eb]" : "border-[#e3e8ef] bg-[#f6f8fb] text-[#111827] placeholder:text-slate-400 focus:border-[#2563eb] focus:bg-white"}`}
+        />
+        <button
+          type="button"
+          onClick={() => void sendReply()}
+          disabled={sending || !draft.trim()}
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#22c55e] text-white transition hover:bg-[#16a34a] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Send reply"
+        >
+          {sending ? <LoaderCircle className="h-4.5 w-4.5 animate-spin" /> : <Send className="h-4.5 w-4.5" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // `aboveLauncher` leaves room for the floating Loop button so the newest card sits just on top of
 // it; without the button (Loop page, mobile) the stack drops down to the normal corner inset.
 export function MessagePopupStack({ darkMode = false, onView, aboveLauncher = false }) {
   const items = useSyncExternalStore(subscribe, snapshot, snapshot);
-  const pausedRef = useRef(false);
-
-  // Cards expire on their own, but not while the pointer is on the stack — losing a message
-  // under the cursor as you reach for View is worse than a card that lingers.
-  useEffect(() => {
-    if (!items.length) return;
-    const timer = window.setInterval(() => {
-      if (pausedRef.current) return;
-      const cutoff = Date.now() - POPUP_TTL;
-      const kept = popups.filter((item) => item.shownAt > cutoff);
-      if (kept.length !== popups.length) publish(kept);
-    }, 500);
-    return () => window.clearInterval(timer);
-  }, [items.length]);
 
   if (!items.length) return null;
 
   return (
     <div
       className={`pointer-events-none fixed inset-x-0 bottom-5 z-[96] flex flex-col-reverse items-center gap-3 px-3 sm:inset-x-auto sm:right-5 sm:items-end sm:px-0 ${aboveLauncher ? "sm:bottom-24" : "sm:bottom-5"}`}
-      onMouseEnter={() => { pausedRef.current = true; }}
-      onMouseLeave={() => { pausedRef.current = false; }}
     >
       {items.map((item) => (
-        <div
-          key={item.id}
-          className={`forum-message-popup pointer-events-auto w-full max-w-[420px] overflow-hidden rounded-[22px] border shadow-[0_24px_64px_rgba(15,23,42,0.26)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.07] bg-white text-[#111827]"}`}
-          role="alert"
-        >
-          <div className="flex items-start gap-3.5 px-4 pt-4">
-            <UserAvatar user={item.sender} name={item.senderName} className="h-11 w-11" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate text-[15px] font-bold leading-tight">{item.senderName || "Someone"}</p>
-                <span className={`shrink-0 text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>{popupTime(item.createdAt)}</span>
-              </div>
-              {item.context && (
-                <p className={`mt-0.5 truncate text-xs font-semibold ${darkMode ? "text-white/45" : "text-black/45"}`}>{item.context}</p>
-              )}
-              <p className={`mt-1.5 line-clamp-3 break-words text-[15px] leading-6 ${darkMode ? "text-white/80" : "text-black/72"}`}>
-                {item.text || "Sent a message"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => dismissMessagePopup(item.id)}
-              className={`-mr-1.5 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${darkMode ? "text-white/45 hover:bg-white/10 hover:text-white" : "text-black/35 hover:bg-black/[0.05] hover:text-black"}`}
-              aria-label="Dismiss message notification"
-            >
-              <X className="h-4.5 w-4.5" />
-            </button>
-          </div>
-          <div className="flex items-center justify-between gap-3 px-4 pb-4 pt-3">
-            {item.mentioned ? (
-              <span className="inline-flex h-8 items-center rounded-full bg-amber-50 px-3 text-xs font-bold text-amber-700 dark:bg-amber-400/12 dark:text-amber-200">
-                Mentioned you
-              </span>
-            ) : (
-              <span className={`inline-flex items-center gap-2 text-xs font-semibold ${darkMode ? "text-white/40" : "text-black/40"}`}>
-                <MessageCircleMore className="h-4 w-4" />
-                New Loop message
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                dismissMessagePopup(item.id);
-                onView?.(item);
-              }}
-              className="h-10 shrink-0 rounded-full bg-[#2563eb] px-6 text-[15px] font-bold text-white transition hover:bg-[#1d4ed8] active:scale-95"
-            >
-              View
-            </button>
-          </div>
-        </div>
+        <MessagePopupCard key={item.id} item={item} darkMode={darkMode} onView={onView} />
       ))}
     </div>
   );

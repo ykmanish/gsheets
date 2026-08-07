@@ -1075,21 +1075,35 @@ export default function DailySummary({ darkMode }) {
             {!drawerManpower.sites.length ? (
               <EmptyNote darkMode={darkMode}>No site rows for today.</EmptyNote>
             ) : (
-              <ListCard darkMode={darkMode}>
-                {drawerManpower.sites.map((site) => (
-                  <Row key={site.label} darkMode={darkMode}>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{site.label}</span>
-                      <span className={`mt-0.5 block text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
-                        {site.records} {site.records === 1 ? "row" : "rows"}
+              <>
+                {/* "22/7" says nothing about which number is which, so label the two columns and
+                    keep the same actual-then-planned order the dashboard card uses. Paddings match
+                    Row's px-4/gap-3 so the headings sit over their own numbers. */}
+                <div className={`mb-1.5 flex items-center gap-3 px-4 text-[10px] font-bold uppercase tracking-[0.1em] ${darkMode ? "text-white/40" : "text-black/40"}`}>
+                  <span className="min-w-0 flex-1">Site</span>
+                  <span className="w-14 shrink-0 text-right">Actual</span>
+                  <span className="w-14 shrink-0 text-right">Planned</span>
+                </div>
+                <ListCard darkMode={darkMode}>
+                  {drawerManpower.sites.map((site) => (
+                    <Row key={site.label} darkMode={darkMode}>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{site.label}</span>
+                        <span className={`mt-0.5 block text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                          {site.records} {site.records === 1 ? "row" : "rows"}
+                        </span>
                       </span>
-                    </span>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums">
-                      {site.actual}/{site.planned}
-                    </span>
-                  </Row>
-                ))}
-              </ListCard>
+                      {/* Same tone rule as the totals above: met-or-beat the plan is green, short is red. */}
+                      <span className={`w-14 shrink-0 text-right text-sm font-semibold tabular-nums ${site.actual >= site.planned ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                        {site.actual}
+                      </span>
+                      <span className={`w-14 shrink-0 text-right text-sm font-medium tabular-nums ${darkMode ? "text-white/55" : "text-black/55"}`}>
+                        {site.planned}
+                      </span>
+                    </Row>
+                  ))}
+                </ListCard>
+              </>
             )}
           </div>
           </>

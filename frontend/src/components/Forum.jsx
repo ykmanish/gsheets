@@ -4562,10 +4562,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       const messageTopMargin = compactWithPrevious ? "mt-1" : message.attachment ? "mt-2" : "mt-3";
 
                       const isGroupChat = selectedConversation?.type === "group";
-                      const showAvatar = isGroupChat && !mine && !groupedWithNext;
-                      // Only for other people in group chats: the filled bubble already carries
-                      // its own inline timestamp, so a header on every message would just repeat it.
-                      const showName = isGroupChat && !mine && !groupedWithPrevious;
+                      // A direct chat pictures and names both people, so a 1:1 thread reads like the
+                      // group view; group chats stay as they were and only label other people, since
+                      // repeating your own name against every outgoing bubble adds nothing there.
+                      const showsBothSides = !isGroupChat;
+                      const showAvatar = (showsBothSides || !mine) && !groupedWithNext;
+                      // The filled bubble already carries its own inline timestamp, so only the first
+                      // message of a run gets a name header — otherwise it just repeats.
+                      const showName = (showsBothSides || !mine) && !groupedWithPrevious;
+                      // Both sides of a direct chat reserve room for an avatar, so the bubble column
+                      // has to give that width back.
+                      const bubbleColumnWidth = mine
+                        ? isGroupChat
+                          ? "max-w-[85%] items-end sm:max-w-[75%]"
+                          : "max-w-[calc(100%-44px)] items-end sm:max-w-[72%]"
+                        : "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]";
                       const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
                       const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
                       const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
@@ -4639,21 +4650,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                             }}
                             className={`forum-chat-message flex min-w-0 items-end gap-2 sm:gap-3 duration-200 ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "relative z-[86] scale-[1.01]" : ""}`}
                           >
-                          {!mine && isGroupChat && (showAvatar ? (
+                          {!mine && (showAvatar ? (
                             <span className="self-end">
                               <UserAvatar user={message.sender} name={message.sender?.displayName} className="h-7 w-7 sm:h-8 sm:w-8" />
                             </span>
                           ) : <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />)}
-                          <div className={`${message.animate ? "forum-msg-pop" : ""} flex min-w-0 flex-col ${mine ? "max-w-[85%] items-end sm:max-w-[75%]" : isGroupChat ? "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]" : "max-w-[85%] items-start sm:max-w-[75%]"}`}>
+                          <div className={`${message.animate ? "forum-msg-pop" : ""} flex min-w-0 flex-col ${bubbleColumnWidth}`}>
                             {showName && (
                               <div className={`mb-1 flex items-center gap-1.5 text-[13px] ${muted}`}>
                                 {mine || !message.sender ? (
-                                  <span className={`font-semibold ${darkMode ? "text-white/90" : "text-[#111827]"}`}>{mine ? "You" : selectedConversation?.name || "User"}</span>
+                                  <span className={`font-normal ${darkMode ? "text-white/90" : "text-[#111827]"}`}>{mine ? "You" : selectedConversation?.name || "User"}</span>
                                 ) : (
                                   <button
                                     type="button"
                                     onClick={() => setSidebarUser(message.sender)}
-                                    className={`font-semibold hover:text-[#2563eb] hover:underline hover:underline-offset-2 ${darkMode ? "text-white/90" : "text-[#111827]"}`}
+                                    className={`font-normal hover:text-[#2563eb] hover:underline hover:underline-offset-2 ${darkMode ? "text-white/90" : "text-[#111827]"}`}
                                   >
                                     {message.sender.displayName || "User"}
                                   </button>
@@ -4859,6 +4870,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               </span>
                             )}
                           </div>
+                          {mine && showsBothSides && (showAvatar ? (
+                            <span className="self-end">
+                              <UserAvatar user={currentUser} name={currentUser?.displayName} className="h-7 w-7 sm:h-8 sm:w-8" />
+                            </span>
+                          ) : <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />)}
                         </div>
                       </div>
                       </div>
@@ -4866,7 +4882,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   })}
                   {(typingByConversation[selectedId] || []).length > 0 && (
                     <div className="flex items-end gap-2 sm:gap-3">
-                      {selectedConversation?.type === "group" && <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />}
+                      {/* Incoming bubbles sit behind an avatar in every chat type now, so the typing
+                          bubble lines up with them. */}
+                      <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
                       <div className={`flex items-center gap-1 rounded-[18px] rounded-bl-[6px] px-4 py-3 ${darkMode ? "bg-white/[0.08]" : "bg-white"}`} aria-label={`${(typingByConversation[selectedId] || []).map((user) => user.displayName).join(", ")} typing`}>
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb]" />
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb] [animation-delay:0.15s]" />

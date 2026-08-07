@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { Toaster } from "react-hot-toast";
 import { BellRing, MessageCircleMore, Minimize, X } from "lucide-react";
 import { API_URL, AuthProvider, getStoredAuth, useAuth } from "./AuthProvider";
-import { showAppToast } from "./ToastPill";
+import {
+  MessagePopupStack,
+  forumMessagePopupContext,
+  forumMessagePreviewText,
+  requestForumConversation,
+  showMessagePopup,
+} from "./MessagePopup";
 import { playForumNotificationSound } from "./forumNotificationSound";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
@@ -204,6 +210,29 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     };
   }, [allowedMenus, user?.id]);
 
+  // Where "View" on a message popup lands: straight into that conversation, whichever surface
+  // Loop happens to be available on from the current page.
+  const openForumConversation = useCallback((conversationId) => {
+    const id = String(conversationId || "");
+    if (!id) return;
+    const loopMounted = moduleId === "forum" || (forumWidgetOpen && !forumWidgetClosing);
+    if (loopMounted) {
+      setForumWidgetMinimized(false);
+      window.dispatchEvent(new CustomEvent("uipl:forum-open-conversation", { detail: { conversationId: id } }));
+      return;
+    }
+    requestForumConversation(id);
+    if (forumWidgetDesktop && allowedMenus.includes("forum")) {
+      setForumWidgetOpen(true);
+      setForumWidgetMinimized(false);
+      setForumWidgetClosing(false);
+      forumUnreadConversationIdsRef.current = new Set();
+      setForumUnreadTotal(0);
+      return;
+    }
+    router.push("/loop");
+  }, [allowedMenus, forumWidgetClosing, forumWidgetDesktop, forumWidgetOpen, moduleId, router]);
+
   const closeForumWidget = useCallback(() => {
     setForumWidgetClosing(true);
     window.setTimeout(() => {
@@ -226,6 +255,12 @@ function ProtectedModuleContent({ moduleId, projectId }) {
 
   // ── Global forum WebSocket: delivers notifications on ALL pages ──
   const globalForumWsRef = useRef(null);
+  // Read inside the socket handler so menu changes don't tear the socket down. Someone without
+  // Loop access has nowhere for "View" to go, so they get no popup either.
+  const forumAllowedRef = useRef(false);
+  useEffect(() => {
+    forumAllowedRef.current = allowedMenus.includes("forum");
+  }, [allowedMenus]);
   useEffect(() => {
     if (!user?.id) return;
     // Request browser notification permission early
@@ -242,26 +277,31 @@ function ProtectedModuleContent({ moduleId, projectId }) {
       const ws = new WebSocket(wsUrl);
       globalForumWsRef.current = ws;
       ws.onmessage = (event) => {
-        // Skip if the Forum page is already active (it handles its own notifications)
+        // Skip while Loop is on screen — it announces its own messages, and it knows which chat
+        // is already open. A minimized Loop widget clears this flag so we take over again.
         if (window.__forumPageActive) return;
         try {
           const payload = JSON.parse(event.data || "{}");
-          if (payload.type === "forum:message" && payload.message?.senderId !== user.id) {
+          if (payload.type === "forum:message" && payload.message?.senderId !== user.id && !payload.message?.system && forumAllowedRef.current) {
             if (!forumWidgetVisibleRef.current) {
               forumUnreadConversationIdsRef.current.add(String(payload.conversationId));
               setForumUnreadTotal(Math.min(999, forumUnreadConversationIdsRef.current.size));
             }
             const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
-            const fullText = String(payload.message?.text || "").trim();
+            const fullText = forumMessagePreviewText(payload.message);
             const previewText = fullText.length > 35 ? `${fullText.slice(0, 35)}…` : fullText;
+            const mentionNeedle = `@${user?.username || ""}`.toLowerCase();
             playForumNotificationSound();
-            // In-app toast
-            showAppToast(`${senderName}: ${previewText}`, {
-              type: "notification",
-              darkMode,
-              detail: "New Loop message",
-              label: "Message",
-              duration: 4500,
+            // The popup carries the sender, the message, and a View button — on whatever page
+            // this user happens to be sitting on.
+            showMessagePopup({
+              conversationId: payload.conversationId,
+              sender: payload.message?.sender,
+              senderName,
+              text: fullText,
+              createdAt: payload.message?.createdAt,
+              context: forumMessagePopupContext(payload.conversation),
+              mentioned: mentionNeedle.length > 1 && fullText.toLowerCase().includes(mentionNeedle),
             });
             // Browser push notification only when tab is hidden
             if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
@@ -273,6 +313,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
                 });
                 browserNotif.onclick = () => {
                   window.focus();
+                  requestForumConversation(payload.conversationId);
                   window.location.href = "/loop";
                   browserNotif.close();
                 };
@@ -293,7 +334,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       globalForumWsRef.current?.close();
     };
-  }, [darkMode, user?.id]);
+  }, [user?.id, user?.username]);
 
   useEffect(() => {
     if (loading || !user) return;
@@ -528,11 +569,13 @@ function ProtectedModuleContent({ moduleId, projectId }) {
                 embedded
                 forceMobileView={false}
                 widgetControls={forumWidgetControls}
+                surfaceHidden={forumWidgetMinimized || forumWidgetClosing}
               />
             </div>
           )}
         </>
       )}
+      <MessagePopupStack darkMode={darkMode} onView={(item) => openForumConversation(item.conversationId)} />
       <NotificationDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} darkMode={darkMode} />
       <CommandPalette
         open={commandPaletteOpen}

@@ -16310,6 +16310,19 @@ function forumUserProfile(user = {}) {
   };
 }
 
+// Enough conversation context to render a notification popup on any page: a receiver who never
+// opened Loop in this session has no conversation list to look the name or avatar up in.
+function forumMessageConversationMeta(conversation = {}) {
+  return {
+    id: String(conversation._id || ""),
+    type: conversation.type || "group",
+    name: conversation.name || "",
+    groupKind: conversation.groupKind || (conversation.projectId ? "project" : "general"),
+    avatarPreset: conversation.avatarPreset || "",
+    avatarUrl: conversation.avatarUrl || "",
+  };
+}
+
 function forumConversationIdForDirect(userA, userB) {
   return `dm:${[String(userA), String(userB)].sort().join(":")}`;
 }
@@ -16669,7 +16682,7 @@ async function createForumMessage({ req, conversationId, text, forwardedFrom = n
   const recipients = conversation.type === "direct"
     ? conversation.participantIds
     : conversation.participantIds;
-  broadcastForumPayload(recipients, { type: "forum:message", conversationId, message: serialized });
+  broadcastForumPayload(recipients, { type: "forum:message", conversationId, message: serialized, conversation: forumMessageConversationMeta(conversation) });
 
   return serialized;
 }
@@ -16710,7 +16723,7 @@ async function createForumSystemMessage({ req, conversation, text, event }) {
     }
   );
   const serialized = await serializeForumMessage(saved, req.authUser.id);
-  broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized });
+  broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized, conversation: forumMessageConversationMeta(conversation) });
   return serialized;
 }
 
@@ -16985,7 +16998,7 @@ async function createForumLoopAssistantMessage({ req, conversation, text, assist
     }
   );
   const serialized = await serializeForumMessage(saved, req.authUser.id);
-  broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized });
+  broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized, conversation: forumMessageConversationMeta(conversation) });
   return serialized;
 }
 
@@ -17030,7 +17043,7 @@ async function createForumLoopSystemMessage({ conversation, text, assistantPaylo
     }
   );
   const serialized = await serializeForumMessage(saved, senderId);
-  broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized });
+  broadcastForumPayload(recipientIds, { type: "forum:message", conversationId: conversation._id, message: serialized, conversation: forumMessageConversationMeta(conversation) });
   return serialized;
 }
 

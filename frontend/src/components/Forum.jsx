@@ -1,9 +1,9 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, AtSign, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Compass, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Forward, Gem, Globe2, ImageIcon, Info, Landmark, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Network, Pencil, Pin, Plus, Reply, Rocket, Search, Send, Settings, ShieldCheck, Smile, SmilePlus, Sparkles, Star, Sticker, SunMedium, Trash2, Upload, UsersRound, Waves, X, Zap } from "lucide-react";
+import { ArrowLeft, AtSign, Check, CheckCheck, ChevronDown, ChevronUp, CircleDot, Copy, ExternalLink, File, FileArchive, FileCode, FileSpreadsheet, FileText, Forward, Globe2, ImageIcon, Info, Layers3, Link as LinkIcon, LoaderCircle, LockKeyhole, Maximize, Minimize, MessageCircleMore, MessagesSquare, Monitor, MoreVertical, Pencil, Pin, Plus, Reply, Search, Send, Settings, ShieldCheck, Smile, SmilePlus, Sparkles, Star, Sticker, Trash2, Upload, UsersRound, X } from "lucide-react";
 import toast from "react-hot-toast";
-import { showAppToast } from "./ToastPill";
+import { dismissMessagePopupsFor, forumMessagePopupContext, forumMessagePreviewText, showMessagePopup, takeRequestedForumConversation } from "./MessagePopup";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import { playForumNotificationSound } from "./forumNotificationSound";
 import UserAvatar from "./UserAvatar";
@@ -23,38 +23,41 @@ const GROUP_ID = "workspace-forum";
 // fresh [] on every render.
 const EMPTY_TYPING = [];
 
+// Flat, muted avatar colours in the European editorial vein — no gradients, no icons, just the
+// group's initials in white. Every colour clears 4.2:1 against white text. The ids are unchanged
+// so groups keep whatever colour they were already saved with.
 const GROUP_AVATAR_PRESETS = [
-  ["ocean", "linear-gradient(135deg,#2563eb,#06b6d4)", MessagesSquare],
-  ["emerald", "linear-gradient(135deg,#059669,#84cc16)", Sparkles],
-  ["sunset", "linear-gradient(135deg,#f97316,#ec4899)", Rocket],
-  ["violet", "linear-gradient(135deg,#7c3aed,#2563eb)", Globe2],
-  ["rose", "linear-gradient(135deg,#e11d48,#fb7185)", Network],
-  ["amber", "linear-gradient(135deg,#f59e0b,#ef4444)", Compass],
-  ["cyan", "linear-gradient(135deg,#0891b2,#22c55e)", Zap],
-  ["indigo", "linear-gradient(135deg,#4f46e5,#8b5cf6)", Star],
-  ["lime", "linear-gradient(135deg,#65a30d,#14b8a6)", ShieldCheck],
-  ["pink", "linear-gradient(135deg,#db2777,#9333ea)", Gem],
-  ["sky", "linear-gradient(135deg,#0284c7,#38bdf8)", Layers3],
-  ["forest", "linear-gradient(135deg,#166534,#0f766e)", CircleDot],
-  ["coral", "linear-gradient(135deg,#fb7185,#f97316)", SunMedium],
-  ["royal", "linear-gradient(135deg,#1d4ed8,#7c3aed)", Waves],
-  ["mint", "linear-gradient(135deg,#10b981,#a3e635)", Landmark],
-  ["fire", "linear-gradient(135deg,#dc2626,#f59e0b)", MessagesSquare],
-  ["plum", "linear-gradient(135deg,#9333ea,#e879f9)", Sparkles],
-  ["teal", "linear-gradient(135deg,#0d9488,#06b6d4)", Rocket],
-  ["gold", "linear-gradient(135deg,#ca8a04,#facc15)", Globe2],
-  ["night", "linear-gradient(135deg,#111827,#2563eb)", Network],
-  ["grape", "linear-gradient(135deg,#581c87,#c026d3)", Compass],
-  ["leaf", "linear-gradient(135deg,#15803d,#4ade80)", Zap],
-  ["ruby", "linear-gradient(135deg,#9f1239,#f43f5e)", Star],
-  ["aqua", "linear-gradient(135deg,#0e7490,#67e8f9)", ShieldCheck],
-  ["orchid", "linear-gradient(135deg,#a21caf,#f0abfc)", Gem],
-  ["steel", "linear-gradient(135deg,#334155,#64748b)", Layers3],
-  ["peach", "linear-gradient(135deg,#fb923c,#fda4af)", CircleDot],
-  ["bluegrass", "linear-gradient(135deg,#1d4ed8,#22c55e)", SunMedium],
-  ["magenta", "linear-gradient(135deg,#be185d,#7c3aed)", Waves],
-  ["slate", "linear-gradient(135deg,#0f172a,#475569)", Landmark],
-].map(([id, gradient, Icon]) => ({ id, gradient, Icon }));
+  ["ocean", "#2C5F8A"],
+  ["emerald", "#2F6E5A"],
+  ["sunset", "#B25730"],
+  ["violet", "#5B4B8A"],
+  ["rose", "#A8465F"],
+  ["amber", "#A26522"],
+  ["cyan", "#24717F"],
+  ["indigo", "#3B4A8C"],
+  ["lime", "#5E7B33"],
+  ["pink", "#B75C82"],
+  ["sky", "#4A7FA8"],
+  ["forest", "#2A5544"],
+  ["coral", "#C1584F"],
+  ["royal", "#23408F"],
+  ["mint", "#3F7D6A"],
+  ["fire", "#A93A2C"],
+  ["plum", "#75405F"],
+  ["teal", "#1F6B66"],
+  ["gold", "#8E6C1C"],
+  ["night", "#1E2A38"],
+  ["grape", "#5A3870"],
+  ["leaf", "#4A8348"],
+  ["ruby", "#93304A"],
+  ["aqua", "#35808E"],
+  ["orchid", "#85539F"],
+  ["steel", "#55677A"],
+  ["peach", "#A9613F"],
+  ["bluegrass", "#5C8071"],
+  ["magenta", "#97376B"],
+  ["slate", "#3E4C5A"],
+].map(([id, color]) => ({ id, color }));
 
 const EMOJI_KEYWORDS = {
   "😀": "grinning happy smile face joy",
@@ -287,10 +290,30 @@ function groupAvatarPreset(id) {
   return GROUP_AVATAR_PRESETS.find((preset) => preset.id === id) || GROUP_AVATAR_PRESETS[0];
 }
 
+// "Silver White Factory" -> SW, "Paramdham" -> PA. Falls back to the first character as-is so an
+// emoji-only group name still shows something recognisable.
+function groupInitials(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  const chars = words.length > 1
+    ? [[...words[0]][0], [...words[1]][0]]
+    : [...(words[0] || "")].slice(0, 2);
+  const initials = chars.filter(Boolean).join("").replace(/[^\p{L}\p{N}]/gu, "");
+  if (initials) return initials.toUpperCase();
+  return [...String(name || "").trim()][0] || "G";
+}
+
+// Initials have to scale with whatever size the avatar was asked for, and every caller sizes it
+// with a Tailwind h-* class, so read the size back out of the class name.
+function groupAvatarFontSize(className) {
+  const match = /(?:^|\s)h-(\d+(?:\.\d+)?)(?=\s|$)/.exec(String(className || ""));
+  const pixels = match ? Number(match[1]) * 4 : 44;
+  return Math.max(10, Math.round(pixels * 0.38));
+}
+
 // Memoized: pure presentational leaves rendered once per message/conversation row.
 // Without this they all re-render on every socket tick (typing, presence, new
 // message) even when their own props are identical.
-const GroupAvatar = memo(function GroupAvatar({ group, className = "h-11 w-11", iconClassName = "h-5 w-5", rounded = "full" }) {
+const GroupAvatar = memo(function GroupAvatar({ group, className = "h-11 w-11", rounded = "full" }) {
   if (group?.avatarUrl) {
     const src = group.avatarUrl.startsWith("blob:") || group.avatarUrl.startsWith("data:") ? group.avatarUrl : `${API_URL}${group.avatarUrl}`;
     return (
@@ -298,10 +321,12 @@ const GroupAvatar = memo(function GroupAvatar({ group, className = "h-11 w-11", 
     );
   }
   const preset = groupAvatarPreset(group?.avatarPreset);
-  const Icon = preset.Icon || MessagesSquare;
   return (
-    <span className={`grid shrink-0 place-items-center overflow-hidden ${rounded === "lg" ? "rounded-2xl" : "rounded-full"} text-white ${className}`} style={{ background: preset.gradient }}>
-      <Icon className={iconClassName} />
+    <span
+      className={`grid shrink-0 select-none place-items-center overflow-hidden font-bold uppercase leading-none tracking-[0.01em] text-white ${rounded === "lg" ? "rounded-2xl" : "rounded-full"} ${className}`}
+      style={{ backgroundColor: preset.color, fontSize: `${groupAvatarFontSize(className)}px` }}
+    >
+      {groupInitials(group?.name)}
     </span>
   );
 });
@@ -1178,7 +1203,7 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
             <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close group info">
               <X className="h-4 w-4" />
             </button>
-            <GroupAvatar group={group} className="mx-auto h-24 w-24" iconClassName="h-10 w-10" />
+            <GroupAvatar group={group} className="mx-auto h-24 w-24" />
             <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">{group.name || "Loop Group"}</h2>
             <p className="mt-1 text-center text-sm font-semibold text-[#22c55e]">{members.length} members · {members.filter((member) => online.has(member.id)).length} online</p>
             {group.groupKind === "project" && group.project && (
@@ -1311,7 +1336,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
       <div className="min-h-0 overflow-x-hidden overflow-y-auto px-5 py-7 2xl:px-6">
       <div className="mx-auto flex w-full max-w-[320px] flex-col">
         <div ref={avatarPickerRef} className="relative mx-auto">
-          <GroupAvatar group={group} className="h-20 w-20 min-w-20" iconClassName="h-9 w-9" />
+          <GroupAvatar group={group} className="h-20 w-20 min-w-20" />
           {pendingAction === "avatar" && (
             <div className="absolute inset-0 z-10 flex items-center justify-center rounded-full bg-black/50 text-white">
               <TinySpinner className="h-6 w-6" />
@@ -1327,7 +1352,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${muted}`}>Group avatar</p>
-                  <p className="text-sm font-black">Choose avatar</p>
+                  <p className="text-sm font-black">Choose colour</p>
                 </div>
                 <button type="button" onClick={() => setAvatarPickerOpen(false)} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close avatar picker">
                   <X className="h-4 w-4" />
@@ -1362,15 +1387,12 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                   Upload Custom Image
                 </label>
               </div>
-              <div className="grid max-h-64 grid-cols-5 gap-2 overflow-y-auto p-2 -m-2">
+              <div className="grid max-h-64 grid-cols-5 gap-3 overflow-y-auto p-2 -m-2">
                 {GROUP_AVATAR_PRESETS.map((preset) => {
-                  const selected = (group?.avatarPreset || "ocean") === preset.id;
-                  const Icon = preset.Icon || MessagesSquare;
+                  const selected = !group?.avatarUrl && (group?.avatarPreset || "ocean") === preset.id;
                   return (
-                    <button key={preset.id} type="button" disabled={Boolean(pendingAction)} onClick={() => { void saveGroup({ avatarPreset: preset.id }, "avatar"); setAvatarPickerOpen(false); }} className={`grid h-12 w-12 place-items-center rounded-full outline-none focus:outline-none transition active:scale-[0.96] disabled:cursor-wait disabled:opacity-60 ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label={`Choose ${preset.id} avatar`}>
-                      <span className="grid h-10 w-10 place-items-center rounded-full text-white" style={{ background: preset.gradient }}>
-                        <Icon className="h-4 w-4" />
-                      </span>
+                    <button key={preset.id} type="button" disabled={Boolean(pendingAction)} onClick={() => { void saveGroup({ avatarPreset: preset.id }, "avatar"); setAvatarPickerOpen(false); }} className={`grid h-10 w-10 place-items-center rounded-full outline-none focus:outline-none transition active:scale-[0.96] disabled:cursor-wait disabled:opacity-60 ${selected ? "ring-2 ring-[#111827] ring-offset-2 ring-offset-white dark:ring-[#f8fafc] dark:ring-offset-[#1c1f26]" : ""}`} style={{ backgroundColor: preset.color }} aria-label={`Use ${preset.id} colour`}>
+                      {selected && <Check className="h-4 w-4 text-white" />}
                     </button>
                   );
                 })}
@@ -1640,7 +1662,7 @@ const GroupConversationRow = memo(function GroupConversationRow({ conversation, 
   const lastStatus = lastFromMe ? getMessageStatus(conversation.lastMessage, conversation, currentUserId, onlineUserIds) : null;
   return (
     <button type="button" onClick={() => onSelect(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
-      <GroupAvatar group={conversation} className="h-11 w-11" iconClassName="h-5 w-5" />
+      <GroupAvatar group={conversation} className="h-11 w-11" />
       <span className="min-w-0 flex-1 overflow-hidden">
         <span className="flex min-w-0 items-center justify-between gap-3">
           <span className="flex min-w-0 items-center gap-1.5">
@@ -1740,7 +1762,7 @@ function TimePickerInput({ value, disabled, onSave, className }) {
   );
 }
 
-export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileView = false, embedded = false, widgetControls = null }) {
+export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileView = false, embedded = false, widgetControls = null, surfaceHidden = false }) {
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
   const [users, setUsers] = useState([]);
@@ -2387,7 +2409,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     const data = await api("/forum/bootstrap");
     const list = data.conversations || [];
     setConversations(list);
-    setSelectedId((current) => list.some((item) => item.id === current) ? current : (list[0]?.id || GROUP_ID));
+    // A popup's View button on another page parks its conversation here for us to open on arrival.
+    const requestedId = takeRequestedForumConversation();
+    const openId = list.some((item) => item.id === requestedId) ? requestedId : "";
+    if (openId) {
+      selectedIdRef.current = openId;
+      dismissMessagePopupsFor(openId);
+    }
+    setSelectedId((current) => openId || (list.some((item) => item.id === current) ? current : (list[0]?.id || GROUP_ID)));
     setUnreadByConversation(() => {
       const next = {};
       for (const conversation of list) {
@@ -2434,6 +2463,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     setMessages(messagesCacheRef.current[conversationId] || []);
     setLoopProfileOpen(false);
     setMobileListOpen(false);
+    dismissMessagePopupsFor(conversationId);
     scrollMessagesToBottom("gentle");
   }, [scrollMessagesToBottom]);
 
@@ -2442,9 +2472,29 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
-    window.__forumPageActive = true;
-    return () => { window.__forumPageActive = false; };
   }, []);
+
+  // While Loop is on screen it owns message notifications, because it knows which chat is open
+  // and can name the conversation. A minimized widget is not on screen, so it hands that job back
+  // to the app-wide listener in ProtectedModule — exactly one popup per message either way.
+  const surfaceHiddenRef = useRef(surfaceHidden);
+  useEffect(() => {
+    surfaceHiddenRef.current = surfaceHidden;
+    window.__forumPageActive = !surfaceHidden;
+    return () => { window.__forumPageActive = false; };
+  }, [surfaceHidden]);
+
+  // A popup's View button, or a Loop launch from another page, asks for a specific conversation.
+  useEffect(() => {
+    function openRequestedConversation(event) {
+      const conversationId = String(event?.detail?.conversationId || "");
+      if (!conversationId) return;
+      selectConversation(conversationId);
+      dismissMessagePopupsFor(conversationId);
+    }
+    window.addEventListener("uipl:forum-open-conversation", openRequestedConversation);
+    return () => window.removeEventListener("uipl:forum-open-conversation", openRequestedConversation);
+  }, [selectConversation]);
 
   useEffect(() => {
     let stopped = false;
@@ -2504,11 +2554,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       if (payload.type === "forum:message") {
         const isIncomingMessage = payload.message?.senderId !== currentUser?.id;
         const isSelectedConversation = sameConversation(payload.conversationId, selectedId);
-        const isVisibleSelectedConversation = isSelectedConversation && document.visibilityState === "visible";
+        const isVisibleSelectedConversation = isSelectedConversation && document.visibilityState === "visible" && !surfaceHiddenRef.current;
+        // When Loop is minimized the app-wide listener announces the message instead.
+        const notifiedElsewhere = surfaceHiddenRef.current;
         if (payload.message?.loopAssistant) {
           setLoopTypingByConversation((current) => ({ ...current, [payload.conversationId]: false }));
         }
-        if (isIncomingMessage && !isVisibleSelectedConversation) {
+        if (isIncomingMessage && !isVisibleSelectedConversation && !notifiedElsewhere) {
           playForumNotificationSound();
         }
         if (typingClearTimersRef.current[payload.conversationId]) {
@@ -2545,17 +2597,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
 
           // Notify for messages in other conversations
           const senderName = payload.message?.sender?.displayName || payload.message?.sender?.username || "Someone";
-          const fullText = String(payload.message?.text || "").trim();
+          const fullText = forumMessagePreviewText(payload.message);
           const previewText = fullText.length > 35 ? `${fullText.slice(0, 35)}…` : fullText;
-          showAppToast(`${senderName}: ${previewText}`, {
-            type: "notification",
-            darkMode,
-            detail: mentioned ? "You were mentioned" : "New Loop message",
-            label: "Message",
-            duration: 4500,
-          });
+          if (!notifiedElsewhere) {
+            showMessagePopup({
+              conversationId: payload.conversationId,
+              sender: payload.message?.sender,
+              senderName,
+              text: fullText,
+              createdAt: payload.message?.createdAt,
+              context: forumMessagePopupContext(payload.conversation),
+              mentioned,
+            });
+          }
 
-          if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+          if (!notifiedElsewhere && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
             try {
               const browserNotif = new Notification(senderName, {
                 body: previewText || "Sent a message",
@@ -2794,7 +2850,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       socketRef.current?.close();
     };
-  }, [clearMessageAnimation, createPeerConnection, currentUser?.id, currentUser?.username, darkMode, resetScreenSharePeers, returnToConversationListAfterRemoval, scrollMessagesToBottom, selectConversation, selectedId]);
+  }, [clearMessageAnimation, createPeerConnection, currentUser?.id, currentUser?.username, resetScreenSharePeers, returnToConversationListAfterRemoval, scrollMessagesToBottom, selectConversation, selectedId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -4073,7 +4129,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   </button>
                   <button type="button" onClick={openMobileChatInfo} className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${effectiveMobileViewport ? "cursor-pointer" : "cursor-default"} ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100 xl:max-w-none"}`} aria-label="Open chat info">
                     {selectedConversation?.type === "group" ? (
-                      <GroupAvatar group={selectedConversation} className="h-10 w-10" iconClassName="h-5 w-5" />
+                      <GroupAvatar group={selectedConversation} className="h-10 w-10" />
                     ) : (
                       (() => {
                         const other = selectedConversation?.participants?.find((user) => user.id !== getStoredAuth().user?.id) || (selectedConversation?.id?.startsWith("assistant-loop") ? { ...loopAssistant, isAssistant: true, id: "loop" } : null);
@@ -5416,7 +5472,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   )}
 
                   <label className={`flex items-center gap-3 rounded-2xl border px-3 py-3 transition ${darkMode ? "border-white/10 bg-white/[0.05] focus-within:border-[#2563eb]" : "border-[#dce3ea] bg-[#f8fafc] focus-within:border-[#2563eb] focus-within:bg-white"}`}>
-                    <GroupAvatar group={{ name: createGroupName || "Group", avatarPreset: createGroupAvatar, avatarUrl: createGroupAvatarFile ? URL.createObjectURL(createGroupAvatarFile) : "" }} className="h-10 w-10" iconClassName="h-5 w-5" />
+                    <GroupAvatar group={{ name: createGroupName || "Group", avatarPreset: createGroupAvatar, avatarUrl: createGroupAvatarFile ? URL.createObjectURL(createGroupAvatarFile) : "" }} className="h-10 w-10" />
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold">Group name</span>
                       <input value={createGroupName} onChange={(event) => setCreateGroupName(event.target.value)} maxLength={80} placeholder="Enter group name" className={`mt-1 w-full bg-transparent text-base font-semibold outline-none ${darkMode ? "text-white placeholder:text-white/35" : "text-[#111827] placeholder:text-slate-400"}`} />
@@ -5425,11 +5481,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
 
                   <div className={`rounded-2xl px-2 py-2 ${darkMode ? "bg-white/[0.03]" : "bg-[#fbfbfc]"}`}>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-sm font-semibold">Avatar</span>
-                      <span className={`text-xs ${muted}`}>Pick one</span>
+                      <span className="text-sm font-semibold">Avatar colour</span>
+                      <span className={`text-xs ${muted}`}>Initials on a solid colour</span>
                     </div>
-                    <div className="grid max-h-36 grid-cols-6 gap-2 overflow-y-auto p-1 -m-1">
-                      <label className={`cursor-pointer grid h-11 w-11 place-items-center rounded-full outline-none focus:outline-none transition ${createGroupAvatarFile ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Upload custom avatar">
+                    <div className="grid max-h-36 grid-cols-6 gap-2.5 overflow-y-auto p-1 -m-1">
+                      <label className={`cursor-pointer grid h-10 w-10 place-items-center rounded-full border border-dashed outline-none focus:outline-none transition ${createGroupAvatarFile ? "ring-2 ring-[#111827] ring-offset-2 ring-offset-white dark:ring-[#f8fafc] dark:ring-offset-[#1c1f26]" : ""} ${darkMode ? "border-white/25 text-white/60 hover:bg-white/10" : "border-black/20 text-black/45 hover:bg-black/[0.04]"}`} aria-label="Upload custom avatar">
                         <input type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onClick={(e) => { e.target.value = null; }} onChange={(e) => {
                           const file = e.target.files[0];
                           if (file) {
@@ -5437,18 +5493,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                             setCreateGroupAvatar("");
                           }
                         }} />
-                        <span className="grid h-9 w-9 place-items-center rounded-full bg-gray-500 text-white">
-                          <Upload className="h-4 w-4" />
-                        </span>
+                        <Upload className="h-4 w-4" />
                       </label>
                       {GROUP_AVATAR_PRESETS.map((preset) => {
-                        const Icon = preset.Icon || MessagesSquare;
                         const selected = !createGroupAvatarFile && createGroupAvatar === preset.id;
                         return (
-                          <button key={preset.id} type="button" onClick={() => { setCreateGroupAvatar(preset.id); setCreateGroupAvatarFile(null); }} className={`grid h-11 w-11 place-items-center rounded-full outline-none focus:outline-none transition ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label={`Choose ${preset.id}`}>
-                            <span className="grid h-9 w-9 place-items-center rounded-full text-white" style={{ background: preset.gradient }}>
-                              <Icon className="h-4 w-4" />
-                            </span>
+                          <button key={preset.id} type="button" onClick={() => { setCreateGroupAvatar(preset.id); setCreateGroupAvatarFile(null); }} className={`grid h-10 w-10 place-items-center rounded-full outline-none focus:outline-none transition ${selected ? "ring-2 ring-[#111827] ring-offset-2 ring-offset-white dark:ring-[#f8fafc] dark:ring-offset-[#1c1f26]" : ""}`} style={{ backgroundColor: preset.color }} aria-label={`Use ${preset.id} colour`}>
+                            {selected && <Check className="h-4 w-4 text-white" />}
                           </button>
                         );
                       })}
@@ -5998,7 +6049,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${selected ? darkMode ? "bg-emerald-500/15" : "bg-emerald-50" : darkMode ? "hover:bg-white/8" : "hover:bg-[#f6f8fb]"}`}
                     >
                       {target.type === "group" ? (
-                        <GroupAvatar group={target.group} className="h-10 w-10" iconClassName="h-5 w-5" />
+                        <GroupAvatar group={target.group} className="h-10 w-10" />
                       ) : (
                         <UserAvatar user={target.avatarUser} name={target.title} className="h-10 w-10" />
                       )}

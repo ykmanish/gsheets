@@ -331,7 +331,11 @@ async function api(path, options = {}) {
     },
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Loop request failed");
+  if (!response.ok) {
+    // Keep the response body on the error — some failures carry state the caller needs
+    // (e.g. the group that already owns a project link).
+    throw Object.assign(new Error(data.error || "Loop request failed"), { status: response.status, data });
+  }
   return data;
 }
 
@@ -1847,6 +1851,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   const [createGroupSearch, setCreateGroupSearch] = useState("");
   const [createGroupProjectPickerOpen, setCreateGroupProjectPickerOpen] = useState(false);
   const [createGroupProjectSearch, setCreateGroupProjectSearch] = useState("");
+  // projectId -> the group that already owns that project link, for everyone in Loop
+  const [projectGroupLinks, setProjectGroupLinks] = useState({});
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [forumDriveFolderUrl, setForumDriveFolderUrl] = useState("");
   const [forumDriveConnectedUrl, setForumDriveConnectedUrl] = useState("");
@@ -2345,6 +2351,22 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       return [project.name, project.code, project.client, project.location].join(" ").toLowerCase().includes(term);
     });
   }, [createGroupProjectSearch, projects]);
+  // A project can carry only one group. Resolve who owns the existing link so the picker can say so
+  // instead of letting a second group be created.
+  const projectGroupLinkFor = useCallback((projectId) => {
+    const link = projectGroupLinks[String(projectId || "")];
+    if (!link) return null;
+    const creator = users.find((user) => String(user.id) === String(link.createdBy));
+    return {
+      ...link,
+      createdByName: link.createdByName || creator?.displayName || creator?.username || "",
+      isMember: conversations.some((item) => String(item.id) === String(link.conversationId)),
+    };
+  }, [conversations, projectGroupLinks, users]);
+  const selectedCreateProjectGroupLink = useMemo(
+    () => projectGroupLinkFor(createGroupProjectId),
+    [createGroupProjectId, projectGroupLinkFor]
+  );
   const createGroupProjectMemberIds = useMemo(() => (
     createGroupKind === "project"
       ? (selectedCreateProject?.memberIds || []).filter((id) => String(id) !== String(currentUser?.id))
@@ -2380,6 +2402,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     });
     setUsers(data.users || []);
     setProjects(data.projects || []);
+    setProjectGroupLinks(Object.fromEntries((data.projectGroupLinks || []).map((link) => [String(link.projectId), link])));
     if (data.loopAssistant) setLoopAssistant(data.loopAssistant);
     setOnlineUserIds(data.onlineUserIds || []);
     api("/forum/settings").then((settings) => {
@@ -2465,6 +2488,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       }
       if (payload.type === "forum:pin" && payload.conversation) {
         setConversations((current) => [payload.conversation, ...current.filter((item) => item.id !== payload.conversation.id)]);
+      }
+      // Project links are workspace-wide, so these arrive for every user — even people who aren't
+      // in the group — to keep the create-group project picker honest in real time.
+      if (payload.type === "forum:projectGroupLink" && payload.link?.projectId) {
+        setProjectGroupLinks((current) => ({ ...current, [String(payload.link.projectId)]: payload.link }));
+      }
+      if (payload.type === "forum:projectGroupUnlink" && payload.projectId) {
+        setProjectGroupLinks((current) => {
+          const next = { ...current };
+          delete next[String(payload.projectId)];
+          return next;
+        });
       }
       if (payload.type === "forum:message") {
         const isIncomingMessage = payload.message?.senderId !== currentUser?.id;
@@ -3813,6 +3848,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
     const name = createGroupName.trim();
     if (!name) return toast.error("Enter group name");
     if (createGroupKind === "project" && !createGroupProjectId) return toast.error("Choose a project");
+    if (createGroupKind === "project" && selectedCreateProjectGroupLink) {
+      return toast.error(`A group for this project is already created${selectedCreateProjectGroupLink.createdByName ? ` by ${selectedCreateProjectGroupLink.createdByName}` : ""}`);
+    }
     if (!createGroupEffectiveMemberIds.length) return toast.error(createGroupKind === "project" ? "This project has no assigned people yet" : "Add at least one member");
     try {
       setCreatingGroup(true);
@@ -3838,6 +3876,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
         }
       }
       setConversations((current) => [createdConversation, ...current.filter((item) => item.id !== createdConversation.id)]);
+      if (createGroupKind === "project" && createGroupProjectId) {
+        setProjectGroupLinks((current) => ({
+          ...current,
+          [String(createGroupProjectId)]: {
+            projectId: String(createGroupProjectId),
+            conversationId: createdConversation.id,
+            name: createdConversation.name || name,
+            createdBy: String(currentUser?.id || ""),
+            createdByName: currentUser?.displayName || currentUser?.username || "",
+          },
+        }));
+      }
       selectConversation(createdConversation.id);
       setCreateGroupOpen(false);
       setCreateGroupStep(1);
@@ -3850,6 +3900,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
       setCreateGroupSearch("");
       toast.success("Group created");
     } catch (error) {
+      // Someone else linked this project first — mark it taken right away instead of waiting for
+      // the broadcast, so the picker stops offering it.
+      const existingLink = error?.data?.projectGroupLink;
+      if (existingLink?.projectId) {
+        setProjectGroupLinks((current) => ({ ...current, [String(existingLink.projectId)]: existingLink }));
+      }
       toast.error(error.message || "Could not create group");
     } finally {
       setCreatingGroup(false);
@@ -5296,32 +5352,65 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                             <input value={createGroupProjectSearch} onChange={(event) => setCreateGroupProjectSearch(event.target.value)} placeholder="Search projects" className={`h-10 w-full rounded-xl border pl-9 pr-3 text-sm font-normal outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white text-[#111827]"}`} />
                           </div>
                           <div className="max-h-64 overflow-y-auto">
-                            {filteredCreateGroupProjects.map((project) => (
-                              <button
-                                key={project.id}
-                                type="button"
-                                onClick={() => {
-                                  setCreateGroupProjectId(project.id);
-                                  if (!createGroupName.trim()) setCreateGroupName(project.name);
-                                  setCreateGroupProjectPickerOpen(false);
-                                }}
-                                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-normal transition ${String(createGroupProjectId) === String(project.id) ? "bg-[#2563eb] text-white" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
-                              >
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate font-semibold">{project.name}</span>
-                                  <span className={`block truncate text-[11px] ${String(createGroupProjectId) === String(project.id) ? "text-white/75" : muted}`}>{[project.code, project.client, project.location].filter(Boolean).join(" · ") || "Project"}</span>
-                                </span>
-                                {String(createGroupProjectId) === String(project.id) && <Check className="h-4 w-4 shrink-0" />}
-                              </button>
-                            ))}
+                            {filteredCreateGroupProjects.map((project) => {
+                              const link = projectGroupLinkFor(project.id);
+                              const selected = !link && String(createGroupProjectId) === String(project.id);
+                              return (
+                                <button
+                                  key={project.id}
+                                  type="button"
+                                  title={link ? `${link.name} is already linked to ${project.name}` : project.name}
+                                  onClick={() => {
+                                    if (link) {
+                                      setCreateGroupProjectPickerOpen(false);
+                                      if (link.isMember) {
+                                        setCreateGroupOpen(false);
+                                        setCreateGroupStep(1);
+                                        setCreateGroupKind("general");
+                                        setCreateGroupProjectId("");
+                                        selectConversation(link.conversationId);
+                                      } else {
+                                        toast.error(`A group for ${project.name} is already created${link.createdByName ? ` by ${link.createdByName}` : ""}`);
+                                      }
+                                      return;
+                                    }
+                                    setCreateGroupProjectId(project.id);
+                                    if (!createGroupName.trim()) setCreateGroupName(project.name);
+                                    setCreateGroupProjectPickerOpen(false);
+                                  }}
+                                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-normal transition ${selected ? "bg-[#2563eb] text-white" : link ? (darkMode ? "text-white/40 hover:bg-white/[0.06]" : "text-black/40 hover:bg-black/[0.03]") : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
+                                >
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate font-semibold">{project.name}</span>
+                                    <span className={`block truncate text-[11px] ${selected ? "text-white/75" : muted}`}>
+                                      {link
+                                        ? `Group already created${link.createdByName ? ` by ${link.createdByName}` : ""}`
+                                        : [project.code, project.client, project.location].filter(Boolean).join(" · ") || "Project"}
+                                    </span>
+                                  </span>
+                                  {link ? (
+                                    <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/55" : "bg-black/[0.06] text-black/45"}`}>
+                                      <LockKeyhole className="h-3 w-3" />
+                                      {link.isMember ? "Open" : "Created"}
+                                    </span>
+                                  ) : selected ? <Check className="h-4 w-4 shrink-0" /> : null}
+                                </button>
+                              );
+                            })}
                             {!filteredCreateGroupProjects.length && <p className={`px-3 py-3 text-sm font-normal ${muted}`}>No project found</p>}
                           </div>
                         </div>
                       )}
                       {selectedCreateProject && (
-                        <span className={`mt-2 block text-xs ${muted}`}>
-                          {createGroupProjectMemberIds.length} assigned people will be added automatically.
-                        </span>
+                        selectedCreateProjectGroupLink ? (
+                          <span className="mt-2 block text-xs font-semibold text-red-500">
+                            A group for {selectedCreateProject.name} is already created{selectedCreateProjectGroupLink.createdByName ? ` by ${selectedCreateProjectGroupLink.createdByName}` : ""}. Pick another project.
+                          </span>
+                        ) : (
+                          <span className={`mt-2 block text-xs ${muted}`}>
+                            {createGroupProjectMemberIds.length} assigned people will be added automatically.
+                          </span>
+                        )
                       )}
                     </div>
                   )}
@@ -5430,7 +5519,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   </button>
                 ) : <span className={`text-xs ${muted}`}>{createGroupKind === "project" ? "Project members auto-added" : "Share all, or specific people"}</span>}
                 {createGroupStep === 1 ? (
-                  <button type="button" onClick={() => createGroupKind === "project" ? createGroup() : setCreateGroupStep(2)} disabled={!createGroupName.trim() || (createGroupKind === "project" && !createGroupProjectId)} className="h-10 min-w-20 rounded-xl bg-[#22c55e] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  <button type="button" onClick={() => createGroupKind === "project" ? createGroup() : setCreateGroupStep(2)} disabled={!createGroupName.trim() || (createGroupKind === "project" && (!createGroupProjectId || Boolean(selectedCreateProjectGroupLink)))} className="h-10 min-w-20 rounded-xl bg-[#22c55e] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
                     {createGroupKind === "project" ? "New" : "Next"}
                   </button>
                 ) : (

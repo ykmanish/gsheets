@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  # Manual trigger, so a deploy can be re-run from the Actions tab without
+  # having to push another commit.
+  workflow_dispatch:
 
 jobs:
   deploy:

@@ -133,6 +133,23 @@ async function connectAuthDb() {
   await authDb.collection("personalTodos").createIndex({ userId: 1, createdAt: -1 });
   await authDb.collection("forumConversations").createIndex({ type: 1, updatedAt: -1 });
   await authDb.collection("forumConversations").createIndex({ participantIds: 1, updatedAt: -1 });
+  // A project can have only one live Loop group. The partial filter indexes just the groups that
+  // hold a live link (deletedAt explicitly null), so general groups and groups deleted for everyone
+  // stay out of it — deleting a project group frees that project up again. Legacy project groups
+  // saved before this index have no deletedAt field at all and are skipped; the create endpoint
+  // still blocks duplicates for those.
+  try {
+    await authDb.collection("forumConversations").createIndex(
+      { projectId: 1 },
+      {
+        name: "liveProjectGroupUnique",
+        unique: true,
+        partialFilterExpression: { groupKind: "project", projectId: { $gt: "" }, deletedAt: { $type: "null" } },
+      }
+    );
+  } catch (error) {
+    console.warn("Could not create live project group index:", error.message);
+  }
   await authDb.collection("forumMessages").createIndex({ conversationId: 1, createdAt: 1 });
   await authDb.collection("forumMessages").createIndex({ recipientIds: 1, createdAt: -1 });
   try {
@@ -16319,6 +16336,61 @@ function forumProjectSummary(project = {}) {
   };
 }
 
+function forumProjectGroupLink(conversation = {}) {
+  if (!conversation?.projectId) return null;
+  return {
+    projectId: String(conversation.projectId),
+    conversationId: String(conversation._id),
+    name: conversation.name || "Project group",
+    createdBy: String(conversation.createdBy || ""),
+    createdByName: conversation.createdByName || "",
+    createdAt: conversation.createdAt || null,
+  };
+}
+
+// Every project group that currently holds a project link. Groups deleted for everyone are
+// excluded so the project becomes available again.
+async function forumProjectGroupLinks(db) {
+  const groups = await db.collection("forumConversations")
+    .find(
+      { type: "group", groupKind: "project", projectId: { $nin: ["", null] }, deletedAt: null },
+      { projection: { name: 1, projectId: 1, createdBy: 1, createdByName: 1, createdAt: 1 } }
+    )
+    .toArray();
+  return groups.map(forumProjectGroupLink).filter(Boolean);
+}
+
+// Older project groups were saved without createdByName, so fall back to the creator's user doc.
+async function forumProjectGroupCreatorName(db, conversation = {}) {
+  if (conversation.createdByName) return conversation.createdByName;
+  const createdBy = String(conversation.createdBy || "");
+  if (!ObjectId.isValid(createdBy)) return "";
+  const creator = await db.collection("users").findOne(
+    { _id: new ObjectId(createdBy) },
+    { projection: { displayName: 1, username: 1 } }
+  );
+  return creator?.displayName || creator?.username || "";
+}
+
+async function findForumProjectGroup(db, projectId) {
+  const id = String(projectId || "").trim();
+  if (!id) return null;
+  return db.collection("forumConversations").findOne({
+    type: "group",
+    groupKind: "project",
+    projectId: id,
+    deletedAt: null,
+  });
+}
+
+async function respondProjectGroupTaken(db, res, project, existingGroup) {
+  const creatorName = existingGroup ? await forumProjectGroupCreatorName(db, existingGroup) : "";
+  return res.status(409).json({
+    error: `A group for ${project.name} is already created${creatorName ? ` by ${creatorName}` : ""}. Only one group can be linked to a project.`,
+    projectGroupLink: existingGroup ? { ...forumProjectGroupLink(existingGroup), createdByName: creatorName } : null,
+  });
+}
+
 async function ensureForumGroupConversation(db) {
   const now = new Date();
   const activeUsers = await db.collection("users").find({ blacklisted: { $ne: true } }, { projection: { _id: 1, isSuperAdmin: 1 } }).toArray();
@@ -17155,6 +17227,7 @@ app.get("/forum/bootstrap", async (req, res) => {
           ...forumProjectSummary(project),
           memberIds: forumProjectMemberIds(project),
         })),
+      projectGroupLinks: await forumProjectGroupLinks(db),
       loopAssistant,
       onlineUserIds,
     });
@@ -17530,6 +17603,10 @@ app.post("/forum/conversations/group", async (req, res) => {
     if (groupKind === "project") {
       if (!linkedProject) return res.status(400).json({ error: "Choose a valid project" });
       if (!canViewProject(linkedProject, req)) return res.status(403).json({ error: "Project access required" });
+      // One group per project, workspace-wide: whoever links a project first owns that link until
+      // the group is deleted for everyone.
+      const existingGroup = await findForumProjectGroup(db, linkedProject.id);
+      if (existingGroup) return respondProjectGroupTaken(db, res, linkedProject, existingGroup);
     }
     const requestedMembers = Array.isArray(req.body?.participantIds) ? req.body.participantIds : [];
     const projectMemberIds = linkedProject ? forumProjectMemberIds(linkedProject) : [];
@@ -17552,10 +17629,21 @@ app.post("/forum/conversations/group", async (req, res) => {
       projectId: linkedProject?.id || "",
       project: linkedProject ? forumProjectSummary(linkedProject) : null,
       createdBy: req.authUser.id,
+      createdByName: req.authUser.displayName || req.authUser.username || "",
+      // Explicit null keeps this group inside the one-live-group-per-project unique index.
+      deletedAt: null,
       createdAt: now,
       updatedAt: now,
     };
-    await db.collection("forumConversations").insertOne(conversation);
+    try {
+      await db.collection("forumConversations").insertOne(conversation);
+    } catch (error) {
+      // Two people linked the same project at the same moment — the unique index caught the loser.
+      if (error?.code === 11000 && linkedProject) {
+        return respondProjectGroupTaken(db, res, linkedProject, await findForumProjectGroup(db, linkedProject.id));
+      }
+      throw error;
+    }
     if (linkedProject) {
       await createForumSystemMessage({
         req,
@@ -17567,6 +17655,13 @@ app.post("/forum/conversations/group", async (req, res) => {
     const savedConversation = await db.collection("forumConversations").findOne({ _id: conversation._id });
     const summary = await forumConversationSummary(savedConversation || conversation, req.authUser.id);
     broadcastForumPayload(participantIds, { type: "forum:conversation", conversation: summary });
+    if (linkedProject) {
+      // Everyone in Loop — not just this group's members — needs the project marked as taken.
+      broadcastForumPayload([...forumClients.keys()], {
+        type: "forum:projectGroupLink",
+        link: forumProjectGroupLink(savedConversation || conversation),
+      });
+    }
     res.json({ conversation: summary });
   } catch (error) {
     console.error("Forum group create error:", error);
@@ -18167,6 +18262,14 @@ app.delete("/forum/conversations/:id", async (req, res) => {
         const saved = await db.collection("forumConversations").findOne({ _id: conversation._id });
         const recipients = conversation.participantIds || [];
         broadcastForumPayload(recipients, { type: "forum:conversation", conversation: await forumConversationSummary(saved, req.authUser.id) });
+        if (conversation.groupKind === "project" && conversation.projectId) {
+          // The project is linkable again — tell all of Loop, not just this group's members.
+          broadcastForumPayload([...forumClients.keys()], {
+            type: "forum:projectGroupUnlink",
+            projectId: String(conversation.projectId),
+            conversationId: String(conversation._id),
+          });
+        }
         return res.json({ success: true, mode: "everyone", conversation: await forumConversationSummary(saved, req.authUser.id) });
       }
       await db.collection("forumConversations").updateOne(

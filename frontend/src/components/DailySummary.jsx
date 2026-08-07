@@ -234,15 +234,19 @@ function parseManpowerData(data, fallbackDate) {
   const mergedSitesMap = new Map();
   
   for (const siteRow of siteBreakdown) {
-    const siteKey = String(siteRow.site || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const siteName = siteRow.label || siteRow.site || "";
+    const siteKey = String(siteName).trim().toLowerCase().replace(/[^a-z0-9]/g, "");
     const plannedForSite = planSitesMap.has(siteKey) ? planSitesMap.get(siteKey) : (Number(siteRow.planned) || 0);
     const actualForSite = Number(siteRow.actual) || 0;
     
     mergedSitesMap.set(siteKey, {
-      site: siteRow.site || "Unknown",
+      ...siteRow,
+      label: siteName || "Unknown",
+      site: siteName || "Unknown",
       planned: plannedForSite,
       actual: actualForSite,
       variance: actualForSite - plannedForSite,
+      records: siteRow.records || 0,
     });
   }
   
@@ -251,16 +255,18 @@ function parseManpowerData(data, fallbackDate) {
     if (siteKey && !mergedSitesMap.has(siteKey)) {
       const plannedForSite = planSitesMap.get(siteKey) || 0;
       mergedSitesMap.set(siteKey, {
+        label: record.site || "Unknown",
         site: record.site || "Unknown",
         planned: plannedForSite,
         actual: 0,
         variance: -plannedForSite,
+        records: 0,
       });
     }
   }
   
   const mergedSites = Array.from(mergedSitesMap.values());
-  mergedSites.sort((a, b) => b.planned - a.planned || b.actual - a.actual || a.site.localeCompare(b.site));
+  mergedSites.sort((a, b) => b.planned - a.planned || b.actual - a.actual || String(a.label || "").localeCompare(String(b.label || "")));
 
   return {
     date: data.date || fallbackDate,

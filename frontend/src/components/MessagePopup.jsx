@@ -91,7 +91,9 @@ function popupTime(value) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function MessagePopupStack({ darkMode = false, onView }) {
+// `aboveLauncher` leaves room for the floating Loop button so the newest card sits just on top of
+// it; without the button (Loop page, mobile) the stack drops down to the normal corner inset.
+export function MessagePopupStack({ darkMode = false, onView, aboveLauncher = false }) {
   const items = useSyncExternalStore(subscribe, snapshot, snapshot);
   const pausedRef = useRef(false);
 
@@ -112,47 +114,47 @@ export function MessagePopupStack({ darkMode = false, onView }) {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 top-3 z-[96] flex flex-col items-center gap-2.5 px-3 sm:inset-x-auto sm:right-5 sm:top-5 sm:items-end sm:px-0"
+      className={`pointer-events-none fixed inset-x-0 bottom-5 z-[96] flex flex-col-reverse items-center gap-3 px-3 sm:inset-x-auto sm:right-5 sm:items-end sm:px-0 ${aboveLauncher ? "sm:bottom-24" : "sm:bottom-5"}`}
       onMouseEnter={() => { pausedRef.current = true; }}
       onMouseLeave={() => { pausedRef.current = false; }}
     >
       {items.map((item) => (
         <div
           key={item.id}
-          className={`forum-message-popup pointer-events-auto w-full max-w-[380px] overflow-hidden rounded-2xl border shadow-[0_18px_50px_rgba(15,23,42,0.22)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.08] bg-white text-[#111827]"}`}
+          className={`forum-message-popup pointer-events-auto w-full max-w-[420px] overflow-hidden rounded-[22px] border shadow-[0_24px_64px_rgba(15,23,42,0.26)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.07] bg-white text-[#111827]"}`}
           role="alert"
         >
-          <div className="flex items-start gap-3 px-3.5 pt-3.5">
-            <UserAvatar user={item.sender} name={item.senderName} />
+          <div className="flex items-start gap-3.5 px-4 pt-4">
+            <UserAvatar user={item.sender} name={item.senderName} className="h-11 w-11" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate text-sm font-bold">{item.senderName || "Someone"}</p>
-                <span className={`shrink-0 text-[11px] ${darkMode ? "text-white/40" : "text-black/40"}`}>{popupTime(item.createdAt)}</span>
+                <p className="min-w-0 flex-1 truncate text-[15px] font-bold leading-tight">{item.senderName || "Someone"}</p>
+                <span className={`shrink-0 text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>{popupTime(item.createdAt)}</span>
               </div>
               {item.context && (
-                <p className={`truncate text-[11px] font-semibold ${darkMode ? "text-white/45" : "text-black/45"}`}>{item.context}</p>
+                <p className={`mt-0.5 truncate text-xs font-semibold ${darkMode ? "text-white/45" : "text-black/45"}`}>{item.context}</p>
               )}
-              <p className={`mt-1 line-clamp-2 break-words text-sm ${darkMode ? "text-white/75" : "text-black/70"}`}>
+              <p className={`mt-1.5 line-clamp-3 break-words text-[15px] leading-6 ${darkMode ? "text-white/80" : "text-black/72"}`}>
                 {item.text || "Sent a message"}
               </p>
             </div>
             <button
               type="button"
               onClick={() => dismissMessagePopup(item.id)}
-              className={`-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-full transition ${darkMode ? "text-white/45 hover:bg-white/10 hover:text-white" : "text-black/35 hover:bg-black/[0.05] hover:text-black"}`}
+              className={`-mr-1.5 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${darkMode ? "text-white/45 hover:bg-white/10 hover:text-white" : "text-black/35 hover:bg-black/[0.05] hover:text-black"}`}
               aria-label="Dismiss message notification"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4.5 w-4.5" />
             </button>
           </div>
-          <div className="flex items-center justify-between gap-3 px-3.5 pb-3 pt-2.5">
+          <div className="flex items-center justify-between gap-3 px-4 pb-4 pt-3">
             {item.mentioned ? (
-              <span className="inline-flex h-7 items-center rounded-full bg-amber-50 px-2.5 text-[11px] font-bold text-amber-700 dark:bg-amber-400/12 dark:text-amber-200">
+              <span className="inline-flex h-8 items-center rounded-full bg-amber-50 px-3 text-xs font-bold text-amber-700 dark:bg-amber-400/12 dark:text-amber-200">
                 Mentioned you
               </span>
             ) : (
-              <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${darkMode ? "text-white/40" : "text-black/40"}`}>
-                <MessageCircleMore className="h-3.5 w-3.5" />
+              <span className={`inline-flex items-center gap-2 text-xs font-semibold ${darkMode ? "text-white/40" : "text-black/40"}`}>
+                <MessageCircleMore className="h-4 w-4" />
                 New Loop message
               </span>
             )}
@@ -162,7 +164,7 @@ export function MessagePopupStack({ darkMode = false, onView }) {
                 dismissMessagePopup(item.id);
                 onView?.(item);
               }}
-              className="h-9 shrink-0 rounded-full bg-[#2563eb] px-5 text-sm font-bold text-white transition hover:bg-[#1d4ed8] active:scale-95"
+              className="h-10 shrink-0 rounded-full bg-[#2563eb] px-6 text-[15px] font-bold text-white transition hover:bg-[#1d4ed8] active:scale-95"
             >
               View
             </button>

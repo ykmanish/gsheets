@@ -441,6 +441,10 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     router.push(menuPaths[menu] || "/dashboard");
   };
   const hideTopChrome = moduleId === "forum" && forumMobileChatOpen;
+  const forumWidgetAvailable = forumWidgetDesktop && allowedMenus.includes("forum") && moduleId !== "forum";
+  // The floating Loop button owns the bottom-right corner whenever it is on screen, so message
+  // popups stack on top of it instead of over it.
+  const forumLauncherVisible = forumWidgetAvailable && (!forumWidgetOpen || forumWidgetMinimized);
   const forumWidgetControls = (
     <div className="flex items-center gap-2 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">
       <button
@@ -528,9 +532,9 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "module-control" && user?.isSuperAdmin && <ModuleControl darkMode={darkMode} />}
         {moduleId === "profile" && <ProfilePage darkMode={darkMode} />}
       </div>
-      {forumWidgetDesktop && allowedMenus.includes("forum") && moduleId !== "forum" && (
+      {forumWidgetAvailable && (
         <>
-          {(!forumWidgetOpen || forumWidgetMinimized) && (
+          {forumLauncherVisible && (
             <button
               type="button"
               onClick={() => {
@@ -575,7 +579,11 @@ function ProtectedModuleContent({ moduleId, projectId }) {
           )}
         </>
       )}
-      <MessagePopupStack darkMode={darkMode} onView={(item) => openForumConversation(item.conversationId)} />
+      <MessagePopupStack
+        darkMode={darkMode}
+        aboveLauncher={forumLauncherVisible}
+        onView={(item) => openForumConversation(item.conversationId)}
+      />
       <NotificationDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} darkMode={darkMode} />
       <CommandPalette
         open={commandPaletteOpen}

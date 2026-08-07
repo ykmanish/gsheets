@@ -4570,13 +4570,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       // The filled bubble already carries its own inline timestamp, so only the first
                       // message of a run gets a name header — otherwise it just repeats.
                       const showName = (showsBothSides || !mine) && !groupedWithPrevious;
-                      // Both sides of a direct chat reserve room for an avatar, so the bubble column
-                      // has to give that width back.
-                      const bubbleColumnWidth = mine
-                        ? isGroupChat
+                      // Both sides of a direct chat reserve room for an avatar, so the column gives that
+                      // width back — and both get the same ceiling, so the same text wraps identically
+                      // whoever sent it.
+                      const bubbleColumnWidth = isGroupChat
+                        ? mine
                           ? "max-w-[85%] items-end sm:max-w-[75%]"
-                          : "max-w-[calc(100%-44px)] items-end sm:max-w-[72%]"
-                        : "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]";
+                          : "max-w-[calc(100%-36px)] items-start sm:max-w-[86%] xl:max-w-[82%]"
+                        : `max-w-[calc(100%-44px)] sm:max-w-[78%] ${mine ? "items-end" : "items-start"}`;
                       const isContextTarget = messageMenu?.message?.id === message.id || reactionsPopoverTarget?.message?.id === message.id || messageInfoTarget?.id === message.id;
                       const matchPosition = messageMatches.findIndex((match) => match.message.id === message.id);
                       const isActiveMatch = matchPosition === activeMatchIndex && messageSearch.trim();
@@ -4594,6 +4595,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         : isStarred ? darkMode ? "bg-[#3a2f13] text-[#fff7d6]" : "bg-[#fff4c7] text-[#14213d]"
                         : mine ? darkMode ? "bg-[#181a20] text-white" : "bg-[#e5f1ff] text-[#14213d]" : darkMode ? "bg-[#252830] text-white" : "bg-white text-[#14213d]";
                       const starMark = isStarred ? <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" /> : null;
+                      // Room the inline stamp needs at the end of the text: the time, a delivery tick on
+                      // my own messages, plus the optional Edited note and star.
+                      const stampWidth = 52 + (mine ? 18 : 0) + (message.isEdited ? 40 : 0) + (isStarred ? 18 : 0);
                       return (
                         <div key={message.clientKey || message.id} className={`min-w-0 ${messageTopMargin} first:mt-0`}>
                           {showDate && (
@@ -4769,11 +4773,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     </div>
                                   </button>
                                 )}
-                                <div className="flex min-w-0 items-end gap-3">
-                                  <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[15px] leading-[1.55] [overflow-wrap:anywhere]">
-                                  {renderMessageText(displayText, messageSearch, isActiveMatch, users, openMentionProfile, mine)}
+                                {/* The stamp overlays a matching spacer at the end of the text rather than
+                                    taking a column of its own. Every line but the last can then use the
+                                    bubble's full width, so a wrapped message stops leaving an empty strip
+                                    down its right side; an overlong last line just pushes the stamp to a
+                                    line of its own. */}
+                                <div className="relative min-w-0">
+                                  <p className="min-w-0 whitespace-pre-wrap break-words text-[15px] leading-[1.55] [overflow-wrap:anywhere]">
+                                    {renderMessageText(displayText, messageSearch, isActiveMatch, users, openMentionProfile, mine)}
+                                    <span className="inline-block h-1 align-baseline" style={{ width: `${stampWidth}px` }} aria-hidden="true" />
                                   </p>
-                                  <span className={`inline-flex min-w-[72px] shrink-0 items-center justify-end gap-1 whitespace-nowrap pb-[3px] text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                  <span className={`absolute bottom-[2px] right-0 inline-flex items-center gap-1 whitespace-nowrap text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
                                     {starMark}
                                     {message.isEdited && <span className="opacity-70">Edited</span>}
                                     <span>{formatTime(message.createdAt)}</span>

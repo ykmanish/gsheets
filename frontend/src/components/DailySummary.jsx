@@ -208,19 +208,75 @@ async function loadProjectData() {
   return { today, delayed, starting };
 }
 
-async function loadManpower(force = false) {
-  const data = await getJson(force ? "/dmr-dashboard?force=true" : "/dmr-dashboard");
+function parseManpowerData(data, fallbackDate) {
   const totals = data.today?.totals || {};
+  const planRecords = data.todayPlan?.records || [];
+  
+  const planSitesMap = new Map();
+  let totalPlanned = 0;
+  for (const record of planRecords) {
+    const siteKey = String(record.site || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (siteKey) {
+      const plannedVal = Number(record.plannedManpower) || 0;
+      planSitesMap.set(siteKey, (planSitesMap.get(siteKey) || 0) + plannedVal);
+      totalPlanned += plannedVal;
+    }
+  }
+
+  if (totalPlanned === 0) {
+    totalPlanned = Number(data.todayPlan?.summary?.plannedManpower) || Number(totals.planned) || 0;
+  }
+
+  const actual = Number(totals.actual) || 0;
+  const variance = actual - totalPlanned;
+  
+  const siteBreakdown = data.today?.siteBreakdown || [];
+  const mergedSitesMap = new Map();
+  
+  for (const siteRow of siteBreakdown) {
+    const siteKey = String(siteRow.site || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const plannedForSite = planSitesMap.has(siteKey) ? planSitesMap.get(siteKey) : (Number(siteRow.planned) || 0);
+    const actualForSite = Number(siteRow.actual) || 0;
+    
+    mergedSitesMap.set(siteKey, {
+      site: siteRow.site || "Unknown",
+      planned: plannedForSite,
+      actual: actualForSite,
+      variance: actualForSite - plannedForSite,
+    });
+  }
+  
+  for (const record of planRecords) {
+    const siteKey = String(record.site || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (siteKey && !mergedSitesMap.has(siteKey)) {
+      const plannedForSite = planSitesMap.get(siteKey) || 0;
+      mergedSitesMap.set(siteKey, {
+        site: record.site || "Unknown",
+        planned: plannedForSite,
+        actual: 0,
+        variance: -plannedForSite,
+      });
+    }
+  }
+  
+  const mergedSites = Array.from(mergedSitesMap.values());
+  mergedSites.sort((a, b) => b.planned - a.planned || b.actual - a.actual || a.site.localeCompare(b.site));
+
   return {
-    date: data.date || "",
-    planned: Number(totals.planned) || 0,
-    actual: Number(totals.actual) || 0,
-    variance: Number(totals.variance) || 0,
+    date: data.date || fallbackDate,
+    planned: totalPlanned,
+    actual,
+    variance,
     records: Number(totals.records) || 0,
     missing: Number(totals.missing) || 0,
-    sites: data.today?.siteBreakdown || [],
+    sites: mergedSites,
     agencies: data.today?.agencyBreakdown || [],
   };
+}
+
+async function loadManpower(force = false) {
+  const data = await getJson(force ? "/dmr-dashboard?force=true" : "/dmr-dashboard");
+  return parseManpowerData(data, "");
 }
 
 async function loadAttendance() {
@@ -244,17 +300,7 @@ async function loadMrn() {
 
 async function loadManpowerFor(date, force = false) {
   const data = await getJson(`/dmr-dashboard?date=${encodeURIComponent(date)}${force ? "&force=true" : ""}`);
-  const totals = data.today?.totals || {};
-  return {
-    date: data.date || date,
-    planned: Number(totals.planned) || 0,
-    actual: Number(totals.actual) || 0,
-    variance: Number(totals.variance) || 0,
-    records: Number(totals.records) || 0,
-    missing: Number(totals.missing) || 0,
-    sites: data.today?.siteBreakdown || [],
-    agencies: data.today?.agencyBreakdown || [],
-  };
+  return parseManpowerData(data, date);
 }
 
 async function loadMrnFor(date) {

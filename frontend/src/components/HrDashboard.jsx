@@ -649,7 +649,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       
       doc.setFont("Geist", "normal");
       
-      let legendX = doc.internal.pageSize.getWidth() - 130;
+      let legendX = doc.internal.pageSize.getWidth() - 165;
       const legendY = currentY;
       
       doc.setFontSize(8);
@@ -699,6 +699,20 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       
       legendX += 23;
       
+      // NCO
+      doc.setFillColor(255, 237, 213);
+      doc.rect(legendX, legendY + 2.5, 10, 5, "F");
+      doc.setTextColor(234, 88, 12);
+      doc.setFontSize(6);
+      doc.setFont("Geist", "bold");
+      doc.text("NCO", legendX + 5, legendY + 6, { align: "center" });
+      doc.setFont("Geist", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.text("= No Clock Out", legendX + 11, legendY + 6);
+      
+      legendX += 32;
+      
       // SUN
       doc.setFillColor(240, 240, 240);
       doc.rect(legendX, legendY + 2.5, 10, 5, "F");
@@ -728,8 +742,13 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
       filteredAttendanceRecords.forEach(record => {
         if (monthDates.includes(record.date) && employeeMap[record.userId]) {
-          const hours = record.workMinutes ? (record.workMinutes / 60).toFixed(1) : "-";
-          employeeMap[record.userId].days[record.date] = hours;
+          let val = "-";
+          if (record.clockInAt && !record.clockOutAt) {
+            val = "NCO";
+          } else if (record.workMinutes != null) {
+            val = (record.workMinutes / 60).toFixed(1);
+          }
+          employeeMap[record.userId].days[record.date] = val;
           employeeMap[record.userId].totalMinutes += (record.workMinutes || 0);
         }
       });
@@ -829,6 +848,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             if (data.cell.raw === "-") {
               data.cell.styles.fillColor = [254, 226, 226]; // light red
               data.cell.styles.textColor = [220, 38, 38];   // red text
+            } else if (data.cell.raw === "NCO") {
+              data.cell.styles.fillColor = [255, 237, 213]; // light orange
+              data.cell.styles.textColor = [234, 88, 12];   // dark orange
+              data.cell.styles.fontStyle = "bold";
             } else if (data.cell.raw === "PL") {
               data.cell.styles.fillColor = [37, 99, 235];   // blue background
               data.cell.styles.textColor = [255, 255, 255]; // white text
@@ -2004,9 +2027,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       <button type="button" onClick={downloadExcelReport} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
                         <FileText className="h-4 w-4" /> Excel
                       </button>
-                      <button type="button" onClick={exportToGoogleSheet} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-emerald-500/20 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-[#118f5e]/20 bg-[#e7f6ed] text-[#08764f] hover:bg-[#d6eedf]"}`}>
-                        <Upload className="h-4 w-4" /> Sheet
-                      </button>
+                      {user?.isSuperAdmin && (
+                        <button type="button" onClick={exportToGoogleSheet} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-emerald-500/20 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-[#118f5e]/20 bg-[#e7f6ed] text-[#08764f] hover:bg-[#d6eedf]"}`}>
+                          <Upload className="h-4 w-4" /> Sheet
+                        </button>
+                      )}
                     </div>
                     {(attendanceDateFilter.startDate !== todayInput() || attendanceDateFilter.endDate !== todayInput()) && (
                       <button type="button" onClick={() => setAttendanceDateFilter({ startDate: todayInput(), endDate: todayInput() })} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>

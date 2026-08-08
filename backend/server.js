@@ -4799,8 +4799,13 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
 
   records.forEach(record => {
     if (monthDates.includes(record.date) && employeeMap[record.userId]) {
-      const hours = record.workMinutes ? (record.workMinutes / 60).toFixed(1) : "-";
-      employeeMap[record.userId].days[record.date] = hours;
+      let val = "-";
+      if (record.clockInAt && !record.clockOutAt) {
+        val = "NCO";
+      } else if (record.workMinutes != null) {
+        val = (record.workMinutes / 60).toFixed(1);
+      }
+      employeeMap[record.userId].days[record.date] = val;
       employeeMap[record.userId].totalMinutes += (record.workMinutes || 0);
     }
   });
@@ -4991,6 +4996,8 @@ async function pushAttendanceToGoogleSheet(db, targetDate, manualSheetLink = nul
           format = { backgroundColor: { red: 243/255, green: 244/255, blue: 246/255 }, textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 } } };
         } else if (val === "-") {
           format = { backgroundColor: { red: 254/255, green: 226/255, blue: 226/255 }, textFormat: { foregroundColor: { red: 220/255, green: 38/255, blue: 38/255 } } };
+        } else if (val === "NCO") {
+          format = { backgroundColor: { red: 255/255, green: 237/255, blue: 213/255 }, textFormat: { foregroundColor: { red: 234/255, green: 88/255, blue: 12/255 }, bold: true } };
         } else if (val === "PL") {
           format = { backgroundColor: { red: 37/255, green: 99/255, blue: 235/255 }, textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true } };
         } else if (val === "L") {
@@ -5081,6 +5088,9 @@ app.get("/hr/attendance/export/excel", async (req, res) => {
         } else if (val === "-") {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
           cell.font = { color: { argb: 'FFDC2626' } };
+        } else if (val === "NCO") {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+          cell.font = { color: { argb: 'FFEA580C' }, bold: true };
         } else if (val === "PL") {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
           cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };

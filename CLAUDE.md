@@ -8,6 +8,30 @@ Database: **`sheets`** on `cluster0.zm7l2fa`. Read access is via the `raga-mongo
 
 *Schema notes below were verified against live data on 2026-08-10: 524 reports, 3013 task items, 23 employees, `reportDate` spanning 2026-07-02 → 2026-08-10.*
 
+### Route the question to the right collection FIRST
+
+Each module owns its own collection. Read this table before writing any query — do not default to `employeeDailyReports` because it happens to contain the word "task".
+
+| The user asks about… | Query this | Not this |
+|---|---|---|
+| **Projects**, project tasks, phases, milestones, deadlines, project health/status, "Project Control" | `projectDashboard` | ✗ not `employeeDailyReports` |
+| **DMR**, daily report, "what did X do on date Y", site work logs | `employeeDailyReports` | |
+| **Attendance**, clock-in/out, present/absent, NCO | `hrAttendanceRecords` | |
+| **Leave**, paid leave, PL, leave balance | `hrLeaveRequests` | |
+| **Personal to-dos** | `personalTodos` | |
+| **Salary**, payroll, slips | `hrSalaryProfiles`, `hrSalarySlips` | |
+| **Forms** and submissions | `forms`, `formSubmissions` | |
+| **Forum** / internal chat | `forumConversations`, `forumMessages` | |
+| **People**, roles, permissions | `users`, `roles` | |
+
+"Tasks" is ambiguous in this system and exists in **three** unrelated places. When the question could mean more than one, ask or answer from both and label each — never silently pick one:
+
+1. `projectDashboard` — **project** tasks, inside `config.projects[].phases[].tasks[]`. Structured: status, priority, due date, assignees, subtasks.
+2. `employeeDailyReports` — **daily-report** tasks, inside `taskItems[]`. Free text, one row per person per day.
+3. `personalTodos` — private per-user to-dos.
+
+A site name appearing in both systems does **not** mean they're linked. `projectDashboard` has `dmr.enabled = false` on every project, and its project names don't match DMR site spellings (`Kalhar` vs `Kalhaar`, `Devsharanam` vs `Devsharnam`, `Silver White Factory` vs `Silver White`).
+
 ### Traps — read before writing any query
 
 - **`userId` is not the same type everywhere.** `employeeDailyReports.userId` is a **string** (hex form of the user `_id`, see `employeeReportCacheDocument`). Everywhere else — `personalTodos`, `hrLeaveRequests`, `hrAttendanceRecords`, `hrSalaryProfiles` — it is an **ObjectId**. Joining DMR to any other collection needs `$toString`/`$toObjectId` in the pipeline, or it returns zero rows with no error.
@@ -16,11 +40,41 @@ Database: **`sheets`** on `cluster0.zm7l2fa`. Read access is via the `raga-mongo
 - **3 documents have a garbage `reportDate`** — sheet header/description text ingested as a date (all Chirag Gajjar; e.g. `"CHECKING OPTIONS AND THEN DISCUSSION"`). They poison `$min`/`$max`/sorts on `reportDate`. A **bounded range filter already excludes them** (letters sort above digits, so `"CHECKING…" > "2026-08-10"`) — so don't add a regex guard to a range query. Guard with a separate `{ reportDate: { $regex: "^\\d{4}-\\d{2}-\\d{2}$" } }` stage only for `$min`/`$max`, sorts, or open-ended queries.
 - **Over MCP, write regexes in operator form** — `{ $regex: "^completed$", $options: "i" }`, not `/^completed$/i`. JSON transport can't carry a regex literal.
 - **Site names need normalizing before grouping.** 5 sites exist in case/spacing variants and will silently split a per-site rollup: `OFFICE`/`Office`/`office` (869 items), `Paramdham`/`PARAMDHAM` (498), `Swati senor`/`Swati Senor`/`SWATI SENOR`/`swati senor` (161), `All Projects`/`all projects`, `Harmony`/`harmony`. Group on `{ $toLower: { $trim: { input: "$taskItems.site" } } }`. Beyond those there are ~50 distinct free-text site values including `Kalhaar` vs `Kalhar`, `NO SITE`, `NONE`, `WFH`, and personal names.
-- **There is no `tasks` collection.** Tasks live inside arrays and sub-documents — see below.
+- **There is no `tasks` collection.** Every kind of task lives inside arrays and sub-documents of its owning module — see the routing table above.
+- **`projectDashboard` is a single document.** One doc, `_id: "default"`, holding the entire Project Control config under `config.projects[]`. Never `find()` it expecting one doc per project — `$unwind` `config.projects` first.
 - **`employeeDailyReports` is a cache** of per-employee Google Sheets, upserted on `{ userId, reportDate }`. It can lag the sheet.
 - Exclude the `Super Admin` account from people-facing rollups (1 report); `sanitizeEmployeeReport` callers filter it by name.
 
-### Where tasks actually live
+### `projectDashboard` — Project Control (the projects module)
+
+One document, `_id: "default"`. Everything hangs off `config.projects[]`:
+
+```
+config.projects[]                      4 projects, all status "active"
+  ├ id, name, code, client, location   e.g. "Kalhar", "KAL-01", "Anirudh Sharma"
+  ├ manager, managerId                 manager is a display name string
+  ├ status                             "active" | …
+  ├ health                             "green" | "yellow" | "red"  ← set by hand, often stale
+  ├ priority                           "high" | "medium" | …
+  ├ startDate, targetDate, budget      strings; startDate and budget are empty on all 4
+  ├ dmr{ enabled, spreadsheetId, siteNames[], agencyNames[], assignedUserIds[], editableUserIds[] }
+  ├ phases[]                           ← project tasks live in here
+  │   ├ id, name, description, status, startDate, dueDate, order, ownerId
+  │   └ tasks[]
+  │       ├ id, title, description, status ("todo"|"in_progress"|"done")
+  │       ├ priority, startDate, dueDate, completedAt
+  │       ├ assigneeIds[]              ← hex STRINGS; $toObjectId to join `users`
+  │       └ subtasks[]{ title, description, done, dueDate, assigneeId }
+  ├ tasks[]                            top-level; empty on all 4 — real tasks are under phases
+  ├ projectActivity[], projectChat[], projectDocuments[], projectAccess[], assignments[], aliases[]
+  └ createdAt, updatedAt, createdBy    ISO strings, not Dates
+```
+
+Task/phase `status` uses `todo`/`in_progress`/`done` — **completely different vocabulary** from DMR's `Completed`/`In Progress`/`Work Halt`. Don't reuse a DMR status filter here.
+
+Overdue = `status != "done"` and `dueDate` non-empty and `dueDate < today`. Many tasks have an empty `dueDate` and can never be overdue.
+
+### Where daily-report tasks live
 
 | Collection | Task shape |
 |---|---|

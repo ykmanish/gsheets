@@ -412,11 +412,14 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceSearchResults, setAttendanceSearchResults] = useState([]);
   const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100, googleSheetLink: "" });
   const [attendanceDateFilter, setAttendanceDateFilter] = useState({ startDate: todayInput(), endDate: todayInput() });
+  const [attendanceQuery, setAttendanceQuery] = useState("");
+  const [attendanceExportOpen, setAttendanceExportOpen] = useState(false);
   const [todayReportSubmitted, setTodayReportSubmitted] = useState(false);
   const [todayReportExempt, setTodayReportExempt] = useState(false);
   const [todayReportChecking, setTodayReportChecking] = useState(false);
   const attendanceSearchTimerRef = useRef(null);
   const attendanceGoogleGeocoderRef = useRef(null);
+  const attendanceExportRef = useRef(null);
   const [reviewComment, setReviewComment] = useState("");
   const [leaveForm, setLeaveForm] = useState({ leaveType: "", startDate: "", endDate: "", reason: "" });
   const [salaryForm, setSalaryForm] = useState({
@@ -498,6 +501,16 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     };
   }, [section]);
 
+  useEffect(() => {
+    if (!attendanceExportOpen) return undefined;
+    function closeAttendanceExport(event) {
+      if (attendanceExportRef.current?.contains(event.target)) return;
+      setAttendanceExportOpen(false);
+    }
+    document.addEventListener("mousedown", closeAttendanceExport);
+    return () => document.removeEventListener("mousedown", closeAttendanceExport);
+  }, [attendanceExportOpen]);
+
   const employees = data?.employees || [];
   const documents = data?.documents || [];
   const salarySlips = data?.salarySlips || [];
@@ -531,12 +544,51 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const leavePeriodPreview = leaveForm.startDate && leaveForm.endDate ? `${formatDateLabel(leaveForm.startDate)} - ${formatDateLabel(leaveForm.endDate)}` : "Select dates";
   const myLeaveRequests = leaveRequests.filter((request) => data?.canManageHr || request.userId === user?.id);
   const myAttendanceRecords = attendanceRecords.filter((record) => data?.canManageHr || record.userId === user?.id);
+  const attendanceSearch = attendanceQuery.trim().toLowerCase();
+  const attendanceEmployeeMatchesSearch = (employee = {}) => {
+    if (!attendanceSearch) return true;
+    return [
+      employee.displayName,
+      employee.username,
+      employee.department,
+      employee.designation,
+      employee.roleName,
+      employee.employeeCode,
+    ].some((value) => String(value || "").toLowerCase().includes(attendanceSearch));
+  };
+  const attendanceRecordMatchesSearch = (record = {}) => {
+    if (!attendanceSearch) return true;
+    const matchedEmployee = activeEmployees.find((employee) => String(employee.id || "") === String(record.userId || ""));
+    return [
+      record.employeeName,
+      record.designation,
+      record.department,
+      record.date,
+      record.status,
+      record.workMode,
+      matchedEmployee?.displayName,
+      matchedEmployee?.username,
+      matchedEmployee?.employeeCode,
+      matchedEmployee?.roleName,
+    ].some((value) => String(value || "").toLowerCase().includes(attendanceSearch));
+  };
   const filteredAttendanceRecords = myAttendanceRecords.filter((record) => {
-    if (!attendanceDateFilter.startDate && !attendanceDateFilter.endDate) return true;
     if (attendanceDateFilter.startDate && record.date < attendanceDateFilter.startDate) return false;
     if (attendanceDateFilter.endDate && record.date > attendanceDateFilter.endDate) return false;
+    if (!attendanceRecordMatchesSearch(record)) return false;
     return true;
   });
+  const attendanceReportEmployees = activeEmployees.filter((emp) => {
+    if (!data?.canManageHr && String(emp.id || "") !== String(user?.id || "")) return false;
+    const name = (emp.displayName || emp.username || "").toLowerCase();
+    const role = (emp.roleName || emp.role || "employee").toLowerCase();
+    const defaultIncluded = role === "employee" || name.includes("neelam") || name.includes("miti") || name.includes("iqbal");
+    if (!defaultIncluded) return false;
+    return attendanceEmployeeMatchesSearch(emp) || filteredAttendanceRecords.some((record) => String(record.userId || "") === String(emp.id || ""));
+  });
+  const attendanceReportSubject = attendanceSearch
+    ? (attendanceReportEmployees.length === 1 ? (attendanceReportEmployees[0].displayName || attendanceReportEmployees[0].username || "Employee") : `Search: ${attendanceQuery.trim()}`)
+    : "";
 
   const attendanceDateRangeLabel = attendanceDateFilter.startDate && attendanceDateFilter.endDate && attendanceDateFilter.startDate !== attendanceDateFilter.endDate 
     ? `${formatDateLabel(attendanceDateFilter.startDate)} - ${formatDateLabel(attendanceDateFilter.endDate)}` 
@@ -582,6 +634,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   };
 
   const downloadAttendanceReport = () => {
+    if (!attendanceReportEmployees.length) {
+      hrToast.error("No employee found for this attendance search");
+      return;
+    }
     const doc = new jsPDF("landscape");
     doc.addFileToVFS("Geist-Regular.ttf", GeistRegularBase64);
     doc.addFont("Geist-Regular.ttf", "Geist", "normal");
@@ -637,7 +693,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       
       doc.setFont("Geist", "bold");
       doc.setFontSize(16);
-      doc.text("Attendance Report", 14, currentY);
+      doc.text(attendanceReportSubject ? `Attendance Report - ${attendanceReportSubject}` : "Attendance Report", 14, currentY);
       doc.setFont("Geist", "normal");
       doc.setFontSize(10);
       
@@ -725,15 +781,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       
       doc.setFontSize(10);
 
-      const displayEmployees = activeEmployees.filter(emp => {
-        const name = (emp.displayName || emp.username || "").toLowerCase();
-        const role = (emp.roleName || emp.role || "employee").toLowerCase();
-        
-        if (role === "employee") return true;
-        if (name.includes("neelam") || name.includes("miti") || name.includes("iqbal")) return true;
-        
-        return false;
-      });
+      const displayEmployees = attendanceReportEmployees;
 
       const employeeMap = {};
       displayEmployees.forEach(emp => {
@@ -867,7 +915,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     });
 
     const safeLabel = attendanceDateRangeLabel.replace(/\s+/g, '_').replace(/-/g, 'to');
-    doc.save(`Attendance_Report_${safeLabel}.pdf`);
+    const safeSubject = attendanceReportSubject ? `_${attendanceReportSubject.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "")}` : "";
+    doc.save(`Attendance_Report${safeSubject}_${safeLabel}.pdf`);
   };
   const currentEmployeeProfile = employees.find((employee) => employee.id === user?.id);
   const remoteWorkEnabled = Boolean(currentEmployeeProfile?.remoteWorkEnabled || data?.remoteWorkEnabled || user?.remoteWorkEnabled);
@@ -2014,27 +2063,50 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     <p className={`mt-1 text-xs ${muted}`}>Showing entries for {attendanceDateRangeLabel}.</p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <label className="w-full text-xs font-medium sm:w-[220px]">Search
+                      <div className={`mt-2 flex h-12 items-center gap-2 rounded-2xl border px-3 ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
+                        <Search className={`h-4 w-4 shrink-0 ${muted}`} />
+                        <input
+                          value={attendanceQuery}
+                          onChange={(event) => setAttendanceQuery(event.target.value)}
+                          placeholder="Employee, status, mode..."
+                          className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-black/35 dark:placeholder:text-white/35"
+                        />
+                        {attendanceQuery && (
+                          <button type="button" onClick={() => setAttendanceQuery("")} className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Clear attendance search">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </label>
                     <div className="w-full sm:w-[150px]">
                       <DrawerDatePicker darkMode={darkMode} label="Start Date" value={attendanceDateFilter.startDate} placeholder="Start date" onChange={(startDate) => setAttendanceDateFilter(current => ({ ...current, startDate, endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate }))} />
                     </div>
                     <div className="w-full sm:w-[150px]">
                       <DrawerDatePicker darkMode={darkMode} label="End Date" value={attendanceDateFilter.endDate} placeholder="End date" minDate={attendanceDateFilter.startDate} onChange={(endDate) => setAttendanceDateFilter(current => ({ ...current, endDate }))} />
                     </div>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={downloadAttendanceReport} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
-                        <Download className="h-4 w-4" /> PDF
+                    <div ref={attendanceExportRef} className="relative">
+                      <button type="button" onClick={() => setAttendanceExportOpen((current) => !current)} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`} aria-expanded={attendanceExportOpen} aria-haspopup="menu">
+                        <Download className="h-4 w-4" /> Export to <ChevronDown className={`h-4 w-4 transition ${attendanceExportOpen ? "rotate-180" : ""}`} />
                       </button>
-                      <button type="button" onClick={downloadExcelReport} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
-                        <FileText className="h-4 w-4" /> Excel
-                      </button>
-                      {user?.isSuperAdmin && (
-                        <button type="button" onClick={exportToGoogleSheet} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-emerald-500/20 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-[#118f5e]/20 bg-[#e7f6ed] text-[#08764f] hover:bg-[#d6eedf]"}`}>
-                          <Upload className="h-4 w-4" /> Sheet
-                        </button>
+                      {attendanceExportOpen && (
+                        <div className={`absolute right-0 top-[calc(100%+8px)] z-30 w-44 overflow-hidden rounded-2xl border p-1 shadow-[0_18px_45px_rgba(15,23,42,0.14)] ${darkMode ? "border-white/10 bg-[#0f151c]" : "border-[#e1e5df] bg-white"}`} role="menu">
+                          <button type="button" onClick={() => { setAttendanceExportOpen(false); downloadAttendanceReport(); }} className={`flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold transition ${darkMode ? "text-white/75 hover:bg-white/[0.08]" : "text-black/70 hover:bg-[#f6faf2]"}`} role="menuitem">
+                            <Download className="h-4 w-4" /> PDF
+                          </button>
+                          <button type="button" onClick={() => { setAttendanceExportOpen(false); downloadExcelReport(); }} className={`flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold transition ${darkMode ? "text-white/75 hover:bg-white/[0.08]" : "text-black/70 hover:bg-[#f6faf2]"}`} role="menuitem">
+                            <FileText className="h-4 w-4" /> Excel
+                          </button>
+                          {user?.isSuperAdmin && (
+                            <button type="button" onClick={() => { setAttendanceExportOpen(false); exportToGoogleSheet(); }} className={`flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold transition ${darkMode ? "text-emerald-200 hover:bg-emerald-400/10" : "text-[#08764f] hover:bg-[#e7f6ed]"}`} role="menuitem">
+                              <Upload className="h-4 w-4" /> Sheet
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-                    {(attendanceDateFilter.startDate !== todayInput() || attendanceDateFilter.endDate !== todayInput()) && (
-                      <button type="button" onClick={() => setAttendanceDateFilter({ startDate: todayInput(), endDate: todayInput() })} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                    {(attendanceQuery || attendanceDateFilter.startDate !== todayInput() || attendanceDateFilter.endDate !== todayInput()) && (
+                      <button type="button" onClick={() => { setAttendanceQuery(""); setAttendanceDateFilter({ startDate: todayInput(), endDate: todayInput() }); }} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
                         <X className="h-4 w-4" /> Clear
                       </button>
                     )}

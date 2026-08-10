@@ -1,0 +1,1100 @@
+<title>Attendance Register — August 2026</title>
+
+<style>
+  :root {
+    color-scheme: light;
+    --ground:      #F2F5F4;
+    --surface:     #FFFFFF;
+    --surface-2:   #EBF0EE;
+    --line:        #DCE3E1;
+    --line-strong: #C4CFCB;
+    --ink:         #12191C;
+    --ink-2:       #556169;
+    --ink-3:       #85938F;
+    --teal:        #0F8C7E;
+    --teal-deep:   #0A6B60;
+    --teal-hatch:  #6FBFB4;
+    --teal-wash:   #E2F1EE;
+    --amber:       #B87514;
+    --amber-wash:  #F7EEDC;
+    --crit:        #B0433C;
+    --crit-wash:   #F8E9E8;
+    --grid-empty:  #E4EAE8;
+    --shadow:      0 1px 2px rgba(18,25,28,.05), 0 4px 14px rgba(18,25,28,.045);
+
+    --serif: "Palatino Linotype", "Book Antiqua", Palatino, "Iowan Old Style", ui-serif, Georgia, serif;
+    --sans:  "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --mono:  Consolas, "Cascadia Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --ground:      #0E1416;
+      --surface:     #171D1E;
+      --surface-2:   #1E2628;
+      --line:        #2B3537;
+      --line-strong: #3C4749;
+      --ink:         #E7EDEB;
+      --ink-2:       #A3B0AC;
+      --ink-3:       #71807C;
+      --teal:        #1E9E8C;
+      --teal-deep:   #34B5A2;
+      --teal-hatch:  #0D5B51;
+      --teal-wash:   #123230;
+      --amber:       #BC862B;
+      --amber-wash:  #302614;
+      --crit:        #D9736B;
+      --crit-wash:   #33201E;
+      --grid-empty:  #232C2E;
+      --shadow:      0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground:      #0E1416;
+    --surface:     #171D1E;
+    --surface-2:   #1E2628;
+    --line:        #2B3537;
+    --line-strong: #3C4749;
+    --ink:         #E7EDEB;
+    --ink-2:       #A3B0AC;
+    --ink-3:       #71807C;
+    --teal:        #1E9E8C;
+    --teal-deep:   #34B5A2;
+    --teal-hatch:  #0D5B51;
+    --teal-wash:   #123230;
+    --amber:       #BC862B;
+    --amber-wash:  #302614;
+    --crit:        #D9736B;
+    --crit-wash:   #33201E;
+    --grid-empty:  #232C2E;
+    --shadow:      0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --ground:      #F2F5F4;
+    --surface:     #FFFFFF;
+    --surface-2:   #EBF0EE;
+    --line:        #DCE3E1;
+    --line-strong: #C4CFCB;
+    --ink:         #12191C;
+    --ink-2:       #556169;
+    --ink-3:       #85938F;
+    --teal:        #0F8C7E;
+    --teal-deep:   #0A6B60;
+    --teal-hatch:  #6FBFB4;
+    --teal-wash:   #E2F1EE;
+    --amber:       #B87514;
+    --amber-wash:  #F7EEDC;
+    --crit:        #B0433C;
+    --crit-wash:   #F8E9E8;
+    --grid-empty:  #E4EAE8;
+    --shadow:      0 1px 2px rgba(18,25,28,.05), 0 4px 14px rgba(18,25,28,.045);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 24px 72px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead { display: flex; flex-direction: column; gap: 14px; }
+  .eyebrow {
+    font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--teal-deep); font-weight: 600;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(30px, 4.6vw, 44px);
+    font-weight: 400; line-height: 1.1; letter-spacing: -.01em;
+    text-wrap: balance; margin: 0;
+  }
+  .standfirst {
+    color: var(--ink-2); max-width: 62ch; font-size: 15.5px;
+  }
+  .rule { height: 2px; background: var(--ink); opacity: .82; }
+
+  /* ---------- tiles ---------- */
+  .tiles {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  }
+  .tile {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 3px; padding: 14px 16px 15px;
+    display: flex; flex-direction: column; gap: 3px;
+    box-shadow: var(--shadow);
+  }
+  .tile-k {
+    font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600;
+  }
+  .tile-v {
+    font-family: var(--serif); font-size: 32px; line-height: 1.05;
+    letter-spacing: -.015em;
+  }
+  .tile-v small { font-size: 17px; color: var(--ink-2); }
+  .tile-s { font-size: 12.5px; color: var(--ink-2); }
+  .tile.flag { border-color: var(--amber); background: var(--amber-wash); }
+  .tile.flag .tile-v, .tile.flag .tile-k { color: var(--amber); }
+  .tile.flag .tile-s { color: var(--ink-2); }
+
+  /* ---------- panels ---------- */
+  .panel {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 3px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column;
+  }
+  .panel-head {
+    padding: 15px 18px 13px; border-bottom: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    justify-content: space-between; gap: 8px 16px;
+  }
+  .panel-head h2 {
+    font-family: var(--serif); font-size: 19px; font-weight: 400;
+    margin: 0; letter-spacing: -.005em;
+  }
+  .panel-head .note { font-size: 12.5px; color: var(--ink-3); }
+  .panel-body { padding: 16px 18px 18px; }
+
+  /* ---------- filters ---------- */
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding: 12px 18px; background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: 3px;
+  }
+  .filters label {
+    font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600;
+  }
+  .filters input, .filters select {
+    font-family: var(--sans); font-size: 14px; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 2px; padding: 6px 9px;
+  }
+  .filters input { min-width: 190px; }
+  .filters input:focus-visible, .filters select:focus-visible,
+  .cell:focus-visible, .col:focus-visible {
+    outline: 2px solid var(--teal); outline-offset: 2px;
+  }
+  .count-note { font-size: 12.5px; color: var(--ink-2); margin-left: auto; }
+
+  /* ---------- register ---------- */
+  .scroller { overflow-x: auto; }
+  table.reg { border-collapse: collapse; width: 100%; min-width: 900px; }
+  table.reg th {
+    font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; text-align: left;
+    padding: 0 8px 9px; vertical-align: bottom; white-space: nowrap;
+  }
+  table.reg td {
+    padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: middle;
+  }
+  table.reg tbody tr:hover { background: var(--surface-2); }
+  .who { min-width: 178px; }
+  .who .nm { font-weight: 600; font-size: 14.5px; }
+  .who .rl { font-size: 11.5px; color: var(--ink-3); }
+  .num {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: 13px; text-align: right; white-space: nowrap;
+  }
+
+  /* day-cell strip */
+  .strip { display: flex; gap: 3px; }
+  .dh { display: flex; gap: 3px; }
+  .dh span {
+    width: 24px; text-align: center; font-family: var(--mono);
+    font-size: 10.5px; color: var(--ink-3); line-height: 1.25;
+  }
+  .dh span b { display: block; font-weight: 600; color: var(--ink-2); font-size: 11px; }
+  .dh span.sun { color: var(--line-strong); }
+  .cell {
+    width: 24px; height: 24px; border-radius: 2px; box-sizing: border-box;
+    background: var(--grid-empty); border: 1px solid transparent;
+    display: block; padding: 0; cursor: default;
+  }
+  .cell.office  { background: var(--teal); }
+  .cell.remote  {
+    background: repeating-linear-gradient(45deg,
+      var(--teal) 0 3px, var(--teal-hatch) 3px 6px);
+  }
+  .cell.live    { background: var(--teal-wash); border: 2px dashed var(--teal); }
+  .cell.missed  { background: var(--amber); }
+  .cell.absent  { background: transparent; border: 1px solid var(--line-strong); }
+  .cell.leave   {
+    background: repeating-linear-gradient(45deg,
+      transparent 0 4px, var(--line-strong) 4px 5px);
+    border: 1px solid var(--line-strong);
+  }
+  .cell.sunday  { background: transparent; border: none; }
+  .cell.norec   { background: transparent; border: 1px dotted var(--crit); }
+
+  /* inline arrival + hours plots */
+  .plot { position: relative; height: 22px; min-width: 150px; }
+  .plot .axline {
+    position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line);
+  }
+  .plot .axline.key { background: var(--line-strong); }
+  .plot .track {
+    position: absolute; left: 0; right: 0; top: 9px; height: 3px;
+    background: var(--surface-2); border-radius: 2px;
+  }
+  .plot .dot {
+    position: absolute; top: 4px; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--teal); border: 2px solid var(--surface); margin-left: -6.5px;
+  }
+  .plot .bar {
+    position: absolute; left: 0; top: 4px; height: 14px;
+    background: var(--teal); border-radius: 0 3px 3px 0;
+  }
+  .plot .bar.thin { background: var(--ink-3); }
+  .axis-cap {
+    display: flex; justify-content: space-between; font-family: var(--mono);
+    font-size: 10px; color: var(--ink-3); padding-top: 2px;
+  }
+
+  /* ---------- legend ---------- */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 13px 18px;
+    border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2);
+  }
+  .legend i {
+    width: 13px; height: 13px; border-radius: 2px; display: inline-block;
+    vertical-align: -2px; margin-right: 6px; box-sizing: border-box;
+  }
+  .lg-office { background: var(--teal); }
+  .lg-remote { background: repeating-linear-gradient(45deg, var(--teal) 0 2px, var(--teal-hatch) 2px 4px); }
+  .lg-live   { background: var(--teal-wash); border: 2px dashed var(--teal); }
+  .lg-missed { background: var(--amber); }
+  .lg-absent { border: 1px solid var(--line-strong); }
+  .lg-leave  { background: repeating-linear-gradient(45deg, transparent 0 3px, var(--line-strong) 3px 4px); border: 1px solid var(--line-strong); }
+
+  /* ---------- two-up ---------- */
+  .two-up { display: grid; gap: 20px; grid-template-columns: 1.15fr 1fr; align-items: start; }
+  @media (max-width: 860px) { .two-up { grid-template-columns: 1fr; } }
+
+  /* ---------- column chart ---------- */
+  .cols { display: flex; align-items: flex-end; gap: 6px; height: 190px; }
+  .colwrap {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    gap: 5px; height: 100%; justify-content: flex-end;
+  }
+  .col {
+    width: 100%; display: flex; flex-direction: column-reverse; gap: 2px;
+    background: none; border: 0; padding: 0; cursor: default;
+  }
+  .seg { width: 100%; border-radius: 0; }
+  .seg:last-child { border-radius: 3px 3px 0 0; }
+  .seg.closed { background: var(--teal); }
+  .seg.missed { background: var(--amber); }
+  .seg.live   { background: var(--teal-wash); border: 2px dashed var(--teal); box-sizing: border-box; }
+  .colwrap .cap {
+    font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+    text-align: center; line-height: 1.3;
+  }
+  .colwrap .cap b { display: block; color: var(--ink); font-size: 12px; }
+  .colwrap.off .col { opacity: 1; }
+  .col .rest { width: 100%; background: var(--grid-empty); border-radius: 3px 3px 0 0; }
+
+  /* ---------- exceptions ---------- */
+  .exc { display: flex; flex-direction: column; }
+  .exc-item {
+    display: flex; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line);
+  }
+  .exc-item:last-child { border-bottom: 0; }
+  .exc-badge {
+    flex: none; width: 34px; height: 34px; border-radius: 3px;
+    display: grid; place-items: center; font-family: var(--mono);
+    font-size: 14px; font-weight: 700;
+  }
+  .exc-badge.warn { background: var(--amber-wash); color: var(--amber); }
+  .exc-badge.crit { background: var(--crit-wash); color: var(--crit); }
+  .exc-badge.info { background: var(--surface-2); color: var(--ink-2); }
+  .exc-t { font-weight: 600; font-size: 14px; }
+  .exc-d { font-size: 13px; color: var(--ink-2); }
+  .exc-d code {
+    font-family: var(--mono); font-size: 12px; background: var(--surface-2);
+    padding: 0 4px; border-radius: 2px;
+  }
+
+  /* ---------- log table ---------- */
+  table.log { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13.5px; }
+  table.log th {
+    position: sticky; top: 0; background: var(--surface);
+    font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; text-align: left;
+    padding: 9px 10px; border-bottom: 1px solid var(--line-strong); white-space: nowrap;
+  }
+  table.log td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.log td.n {
+    font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right;
+  }
+  table.log tbody tr:hover { background: var(--surface-2); }
+  .logbox { max-height: 460px; overflow: auto; }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 9px;
+    border: 1px solid; font-weight: 600;
+  }
+  .pill.ok    { color: var(--teal-deep); border-color: var(--teal); background: var(--teal-wash); }
+  .pill.live  { color: var(--teal-deep); border-color: var(--teal); background: transparent; }
+  .pill.miss  { color: var(--amber); border-color: var(--amber); background: var(--amber-wash); }
+
+  /* ---------- tooltip ---------- */
+  #tip {
+    position: fixed; z-index: 50; pointer-events: none; opacity: 0;
+    transition: opacity .1s linear;
+    background: var(--ink); color: var(--ground);
+    font-family: var(--mono); font-size: 12px; line-height: 1.5;
+    padding: 7px 10px; border-radius: 3px; max-width: 260px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.28);
+  }
+  #tip b { font-family: var(--sans); font-size: 12.5px; }
+  #tip.on { opacity: 1; }
+
+  footer {
+    font-size: 12.5px; color: var(--ink-3); line-height: 1.65;
+    border-top: 1px solid var(--line); padding-top: 16px;
+  }
+  footer strong { color: var(--ink-2); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Uttam Aditya &middot; HR attendance</div>
+    <h1>August 2026 attendance register</h1>
+    <div class="rule"></div>
+    <p class="standfirst">
+      Month-to-date, <strong>1&ndash;10 August</strong>. Eight working days &mdash; the two Sundays
+      carry no records. Monday 10 August is still in progress, so its shifts are open by design.
+      Times are IST. Source: <code style="font-family:var(--mono);font-size:12.5px">hrAttendanceRecords</code>, 146 records.
+    </p>
+  </header>
+
+  <section class="tiles" id="tiles"></section>
+
+  <div class="filters">
+    <label for="q">Find</label>
+    <input id="q" type="search" placeholder="Employee name&hellip;" autocomplete="off">
+    <label for="dept">Department</label>
+    <select id="dept"></select>
+    <span class="count-note" id="countNote"></span>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Who was in, and for how long</h2>
+      <span class="note">One row per person &middot; sorted by days present, then hours</span>
+    </div>
+    <div class="scroller">
+      <table class="reg">
+        <thead>
+          <tr>
+            <th class="who">Employee</th>
+            <th id="dayHead">1&ndash;10 August</th>
+            <th style="text-align:right">Days</th>
+            <th>Typical arrival</th>
+            <th>Average day</th>
+          </tr>
+        </thead>
+        <tbody id="regBody"></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><i class="lg-office"></i>In office</span>
+      <span><i class="lg-remote"></i>Remote</span>
+      <span><i class="lg-live"></i>Open now (10 Aug)</span>
+      <span><i class="lg-missed"></i>No clock-out recorded</span>
+      <span><i class="lg-absent"></i>Absent</span>
+      <span><i class="lg-leave"></i>Approved leave</span>
+    </div>
+  </section>
+
+  <div class="two-up">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Headcount by day</h2>
+        <span class="note">Out of 22 on the roster</span>
+      </div>
+      <div class="panel-body">
+        <div class="cols" id="cols"></div>
+      </div>
+      <div class="legend">
+        <span><i class="lg-office"></i>Shift closed</span>
+        <span><i class="lg-missed"></i>No clock-out</span>
+        <span><i class="lg-live"></i>Still open</span>
+      </div>
+    </section>
+
+    <section class="panel exc">
+      <div class="panel-head">
+        <h2>Needs attention</h2>
+        <span class="note">Read before quoting these numbers</span>
+      </div>
+      <div id="excList"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Shift log</h2>
+      <span class="note" id="logNote"></span>
+    </div>
+    <div class="logbox scroller">
+      <table class="log">
+        <thead>
+          <tr>
+            <th>Date</th><th>Employee</th><th>Department</th><th>Mode</th>
+            <th style="text-align:right">In</th><th style="text-align:right">Out</th>
+            <th style="text-align:right">Hours</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <strong>How these figures are built.</strong>
+    Present = a record exists for that person and date. A day&rsquo;s length uses
+    <code style="font-family:var(--mono)">workMinutes</code> where stored; for Dipak Patel on 3 August that
+    field is missing and the length is derived from clock-in to clock-out. Averages for hours cover
+    closed shifts only, so the 19 sessions still open on 10 August are excluded &mdash; arrival averages
+    include them, since clock-in is recorded either way. &ldquo;Typical arrival&rdquo; on a person&rsquo;s row is
+    their own mean clock-in; the headline figure is the median across people.
+    Roster of 22 excludes the two Super Admin service accounts and six accounts that carry no department.
+  </footer>
+
+</div>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------- source data: hrAttendanceRecords, 2026-08-01 .. 2026-08-10 -------------- */
+  /* [name, day, mode(o|r), state(c=closed|k=open), workMinutes, clockIn, clockOut]            */
+  const R = [
+    ["Ayushi Choray",1,"o","c",532,"10:08","19:00"],["Ayushi Choray",3,"o","c",591,"10:03","19:55"],
+    ["Ayushi Choray",4,"o","k",null,"10:00",null],["Ayushi Choray",5,"o","c",525,"10:16","19:01"],
+    ["Ayushi Choray",6,"o","c",528,"10:12","19:00"],["Ayushi Choray",8,"o","c",545,"09:55","19:00"],
+    ["Ayushi Choray",10,"o","k",null,"10:14",null],
+
+    ["Bhavesh Rathod",1,"o","k",null,"10:03",null],["Bhavesh Rathod",3,"o","c",545,"09:58","19:03"],
+    ["Bhavesh Rathod",4,"o","c",542,"09:59","19:01"],["Bhavesh Rathod",5,"o","c",549,"09:54","19:03"],
+    ["Bhavesh Rathod",8,"o","c",547,"09:54","19:01"],["Bhavesh Rathod",10,"o","k",null,"10:03",null],
+
+    ["Chirag Gajjar",1,"o","c",530,"11:37","20:26"],["Chirag Gajjar",3,"o","c",583,"10:55","20:38"],
+    ["Chirag Gajjar",4,"o","c",596,"10:43","20:39"],["Chirag Gajjar",5,"o","c",595,"10:59","20:55"],
+    ["Chirag Gajjar",6,"o","k",null,"12:05",null],["Chirag Gajjar",7,"o","c",569,"10:51","20:20"],
+    ["Chirag Gajjar",8,"o","c",563,"11:14","20:37"],["Chirag Gajjar",10,"o","k",null,"13:58",null],
+
+    ["Devang Shah",1,"o","k",null,"11:27",null],["Devang Shah",3,"o","c",439,"11:10","18:29"],
+    ["Devang Shah",4,"o","k",null,"11:10",null],["Devang Shah",5,"o","c",415,"11:18","18:13"],
+    ["Devang Shah",6,"o","c",407,"11:16","18:03"],["Devang Shah",7,"o","c",408,"11:15","18:03"],
+    ["Devang Shah",8,"o","c",425,"11:12","18:17"],["Devang Shah",10,"o","k",null,"11:04",null],
+
+    ["Dhwani Singh",1,"o","c",580,"11:01","20:42"],["Dhwani Singh",3,"o","c",577,"11:05","20:42"],
+    ["Dhwani Singh",4,"o","c",564,"11:11","20:35"],["Dhwani Singh",5,"o","c",620,"11:09","21:29"],
+    ["Dhwani Singh",6,"o","c",564,"11:24","20:49"],["Dhwani Singh",7,"o","c",563,"09:52","19:15"],
+    ["Dhwani Singh",8,"o","c",599,"11:07","21:06"],["Dhwani Singh",10,"o","k",null,"10:31",null],
+
+    ["Dipak Patel",3,"o","c",null,"09:50","19:10"],["Dipak Patel",4,"r","c",588,"09:09","18:57"],
+    ["Dipak Patel",5,"r","c",547,"09:55","19:02"],["Dipak Patel",6,"r","c",596,"08:54","18:50"],
+    ["Dipak Patel",7,"r","c",575,"09:50","19:24"],["Dipak Patel",8,"r","c",628,"08:34","19:02"],
+    ["Dipak Patel",10,"r","k",null,"09:49",null],
+
+    ["Iqbal Patel",1,"o","c",515,"11:06","19:41"],["Iqbal Patel",3,"o","c",544,"11:20","20:24"],
+    ["Iqbal Patel",4,"o","c",571,"10:37","20:08"],["Iqbal Patel",5,"o","c",701,"10:31","22:12"],
+    ["Iqbal Patel",6,"o","c",659,"10:36","21:35"],["Iqbal Patel",7,"o","k",null,"10:46",null],
+    ["Iqbal Patel",10,"o","k",null,"11:06",null],
+
+    ["Jash Thakkar",1,"o","c",521,"10:40","19:21"],["Jash Thakkar",3,"o","c",519,"10:23","19:02"],
+    ["Jash Thakkar",4,"o","c",536,"10:04","19:00"],["Jash Thakkar",5,"o","c",585,"09:10","18:55"],
+    ["Jash Thakkar",6,"o","c",548,"09:52","19:01"],["Jash Thakkar",7,"o","c",511,"10:30","19:01"],
+    ["Jash Thakkar",8,"o","c",525,"10:22","19:06"],["Jash Thakkar",10,"o","k",null,"10:08",null],
+
+    ["Kamil Dave",3,"o","c",539,"10:23","19:22"],["Kamil Dave",4,"o","c",493,"09:50","18:03"],
+    ["Kamil Dave",5,"o","c",541,"10:04","19:05"],["Kamil Dave",6,"o","c",530,"10:14","19:05"],
+    ["Kamil Dave",7,"o","c",528,"10:23","19:10"],["Kamil Dave",8,"o","c",551,"09:56","19:07"],
+    ["Kamil Dave",10,"o","k",null,"10:34",null],
+
+    ["Kanan Soni",5,"o","c",534,"10:08","19:03"],["Kanan Soni",6,"o","k",null,"10:18",null],
+    ["Kanan Soni",7,"o","c",525,"10:23","19:08"],["Kanan Soni",8,"o","c",524,"10:16","19:00"],
+    ["Kanan Soni",10,"o","k",null,"09:56",null],
+
+    ["Krupali Lathia",3,"o","c",540,"11:26","20:26"],["Krupali Lathia",4,"o","k",null,"10:45",null],
+    ["Krupali Lathia",5,"o","c",580,"10:13","19:53"],["Krupali Lathia",6,"o","c",508,"12:18","20:45"],
+    ["Krupali Lathia",7,"o","c",610,"09:50","20:00"],["Krupali Lathia",8,"o","k",null,"09:43",null],
+    ["Krupali Lathia",10,"o","k",null,"11:01",null],
+
+    ["Manish Yadav",1,"o","c",450,"11:55","19:25"],["Manish Yadav",3,"o","c",514,"10:33","19:07"],
+    ["Manish Yadav",4,"o","c",539,"10:31","19:31"],["Manish Yadav",5,"o","c",527,"10:28","19:15"],
+    ["Manish Yadav",6,"o","c",522,"10:43","19:25"],["Manish Yadav",7,"o","c",527,"10:25","19:11"],
+    ["Manish Yadav",8,"o","k",null,"10:31",null],["Manish Yadav",10,"o","k",null,"10:34",null],
+
+    ["Milind Chaurasiya",1,"o","c",540,"10:34","19:34"],["Milind Chaurasiya",3,"o","c",535,"10:38","19:33"],
+    ["Milind Chaurasiya",4,"o","c",540,"10:42","19:42"],["Milind Chaurasiya",5,"o","c",527,"10:57","19:44"],
+    ["Milind Chaurasiya",6,"o","c",526,"10:51","19:37"],["Milind Chaurasiya",7,"o","c",514,"10:36","19:11"],
+    ["Milind Chaurasiya",8,"o","k",null,"10:32",null],["Milind Chaurasiya",10,"o","k",null,"10:34",null],
+
+    ["Miti",1,"o","c",568,"10:33","20:01"],["Miti",3,"o","c",556,"10:12","19:28"],
+    ["Miti",4,"o","c",533,"10:58","19:51"],["Miti",5,"o","c",539,"09:10","18:10"],
+    ["Miti",6,"o","c",750,"10:34","23:04"],["Miti",10,"o","k",null,"10:30",null],
+
+    ["Nayna Leva",3,"o","k",null,"10:40",null],["Nayna Leva",4,"o","c",504,"10:35","18:58"],
+    ["Nayna Leva",5,"o","c",503,"10:34","18:56"],["Nayna Leva",6,"o","c",504,"10:32","18:57"],
+    ["Nayna Leva",7,"o","c",494,"10:32","18:46"],["Nayna Leva",8,"o","k",null,"10:14",null],
+
+    ["Neelam Verma",1,"o","c",561,"09:58","19:20"],["Neelam Verma",3,"o","c",562,"09:57","19:19"],
+    ["Neelam Verma",4,"o","c",554,"09:49","19:03"],["Neelam Verma",5,"o","c",567,"09:52","19:19"],
+    ["Neelam Verma",6,"o","c",560,"10:24","19:43"],["Neelam Verma",7,"o","c",551,"09:54","19:05"],
+    ["Neelam Verma",8,"o","c",566,"09:46","19:12"],["Neelam Verma",10,"o","k",null,"09:50",null],
+
+    ["Nishi Mehta",1,"o","c",510,"11:12","19:41"],["Nishi Mehta",3,"o","c",561,"11:05","20:27"],
+    ["Nishi Mehta",4,"o","k",null,"10:55",null],["Nishi Mehta",5,"o","c",579,"10:46","20:26"],
+    ["Nishi Mehta",6,"o","c",585,"11:00","20:45"],["Nishi Mehta",7,"o","c",532,"11:09","20:01"],
+    ["Nishi Mehta",8,"o","c",458,"11:42","19:20"],["Nishi Mehta",10,"o","k",null,"10:59",null],
+
+    ["Rajan Patel",1,"o","c",548,"09:59","19:07"],["Rajan Patel",3,"o","c",542,"10:06","19:08"],
+    ["Rajan Patel",4,"o","c",578,"10:10","19:48"],["Rajan Patel",5,"o","c",544,"10:03","19:07"],
+    ["Rajan Patel",6,"o","c",533,"10:13","19:06"],["Rajan Patel",7,"o","c",537,"10:10","19:07"],
+    ["Rajan Patel",8,"o","c",549,"09:57","19:06"],["Rajan Patel",10,"o","k",null,"10:08",null],
+
+    ["Rhythm Nahar",1,"o","c",481,"11:40","19:41"],["Rhythm Nahar",3,"o","c",561,"11:06","20:26"],
+    ["Rhythm Nahar",4,"o","c",515,"10:34","19:09"],["Rhythm Nahar",5,"o","c",544,"10:49","19:52"],
+    ["Rhythm Nahar",6,"o","c",597,"10:49","20:45"],["Rhythm Nahar",7,"o","c",533,"11:08","20:01"],
+    ["Rhythm Nahar",8,"o","c",521,"10:39","19:20"],["Rhythm Nahar",10,"o","k",null,"10:47",null],
+
+    ["Shruti Vaidya",1,"o","c",560,"09:56","19:16"],["Shruti Vaidya",3,"o","c",16,"18:53","19:09"],
+    ["Shruti Vaidya",4,"o","c",560,"09:50","19:10"],["Shruti Vaidya",5,"o","c",559,"09:51","19:10"],
+    ["Shruti Vaidya",6,"o","c",550,"10:04","19:14"],["Shruti Vaidya",7,"o","c",549,"09:55","19:04"],
+    ["Shruti Vaidya",8,"o","c",557,"09:55","19:12"],["Shruti Vaidya",10,"o","k",null,"09:52",null]
+  ];
+
+  /* roster — users collection, staff accounts only */
+  const STAFF = [
+    ["Ayushi Choray","Design","Junior interior designer"],
+    ["Bhavesh Rathod","Execution",""],
+    ["Chirag Gajjar","Design",""],
+    ["Devang Shah","Accounts",""],
+    ["Dhwani Singh","Administration","EA"],
+    ["Dipak Patel","Store","Store Manager"],
+    ["Iqbal Patel","Projects","Project Manager"],
+    ["Jash Thakkar","Social Media","Content Creator"],
+    ["Kamil Dave","Accounts",""],
+    ["Kanan Soni","Accounts","CA"],
+    ["Krupali Lathia","Design","Design Manager"],
+    ["Manish Yadav","Design","IT & AI Consultant"],
+    ["Milind Chaurasiya","Procurement",""],
+    ["Miti","Human Resource","Manager, HR & Admin"],
+    ["Namrata Pathak","Design","Architect"],
+    ["Nayna Leva","Horticulturist",""],
+    ["Neelam Verma","Administration","EA"],
+    ["Nishi Mehta","Coordination",""],
+    ["Rajan Patel","Design",""],
+    ["Rhythm Nahar","Design","Designer"],
+    ["Sanjay Sharma","Design",""],
+    ["Shruti Vaidya","EA","EA"]
+  ];
+
+  /* approved leave overlapping the window — hrLeaveRequests */
+  const LEAVE = {
+    "Krupali Lathia|1": "Paid leave, approved",
+    "Dipak Patel|1":    "Casual leave (unpaid), approved"
+  };
+
+  const DAYS = [
+    {n:1,dow:"Sat"},{n:2,dow:"Sun",off:true},{n:3,dow:"Mon"},{n:4,dow:"Tue"},{n:5,dow:"Wed"},
+    {n:6,dow:"Thu"},{n:7,dow:"Fri"},{n:8,dow:"Sat"},{n:9,dow:"Sun",off:true},{n:10,dow:"Mon"}
+  ];
+  const WORKDAYS = DAYS.filter(function (d) { return !d.off; });
+  const TODAY = 10;
+
+  /* ---------------- helpers ---------------- */
+  function toMin(t) { const p = t.split(":"); return (+p[0]) * 60 + (+p[1]); }
+  function hm(m) {
+    if (m == null) return "—";
+    const h = Math.floor(m / 60), r = Math.round(m % 60);
+    return h + "h " + String(r).padStart(2, "0") + "m";
+  }
+  function clock(m) {
+    if (m == null) return "—";
+    const h = Math.floor(m / 60), r = Math.round(m % 60);
+    return String(h).padStart(2, "0") + ":" + String(r).padStart(2, "0");
+  }
+  function dstr(n) { return String(n).padStart(2, "0") + " Aug"; }
+  function mean(a) { return a.length ? a.reduce(function (x, y) { return x + y; }, 0) / a.length : null; }
+  function median(a) {
+    if (!a.length) return null;
+    const s = a.slice().sort(function (x, y) { return x - y; });
+    const i = Math.floor(s.length / 2);
+    return s.length % 2 ? s[i] : (s[i - 1] + s[i]) / 2;
+  }
+  function el(tag, cls, txt) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+
+  /* ---------------- build per-record + per-person models ---------------- */
+  const DEPT = {};
+  STAFF.forEach(function (s) { DEPT[s[0]] = { dept: s[1], role: s[2] }; });
+
+  const recs = R.map(function (r) {
+    const inM = toMin(r[5]);
+    const outM = r[6] ? toMin(r[6]) : null;
+    let mins = r[4];
+    let derived = false;
+    if (mins == null && outM != null) { mins = outM - inM; derived = true; }
+    return {
+      name: r[0], day: r[1], mode: r[2], state: r[3],
+      mins: mins, derived: derived, inM: inM, outM: outM,
+      inS: r[5], outS: r[6],
+      dept: DEPT[r[0]].dept,
+      /* an open session on a past day is a missed clock-out; on 10 Aug it is simply live */
+      kind: r[3] === "c" ? (r[2] === "r" ? "remote" : "office")
+                         : (r[1] === TODAY ? "live" : "missed")
+    };
+  });
+
+  const people = STAFF.map(function (s) {
+    const name = s[0];
+    const mine = recs.filter(function (r) { return r.name === name; });
+    const byDay = {};
+    mine.forEach(function (r) { byDay[r.day] = r; });
+    const closed = mine.filter(function (r) { return r.state === "c" && r.mins != null; });
+    const absents = WORKDAYS.filter(function (d) { return !byDay[d.n]; }).map(function (d) { return d.n; });
+    return {
+      name: name, dept: s[1], role: s[2],
+      recs: mine, byDay: byDay,
+      days: mine.length,
+      remote: mine.filter(function (r) { return r.mode === "r"; }).length,
+      missed: mine.filter(function (r) { return r.kind === "missed"; }).length,
+      live: mine.filter(function (r) { return r.kind === "live"; }).length,
+      avgIn: mean(mine.map(function (r) { return r.inM; })),
+      avgMins: mean(closed.map(function (r) { return r.mins; })),
+      totalMins: closed.reduce(function (a, r) { return a + r.mins; }, 0),
+      absents: absents,
+      noRecords: mine.length === 0
+    };
+  });
+
+  people.sort(function (a, b) {
+    if (b.days !== a.days) return b.days - a.days;
+    return (b.avgMins || 0) - (a.avgMins || 0);
+  });
+
+  /* ---------------- headline figures ---------------- */
+  const closedAll  = recs.filter(function (r) { return r.state === "c" && r.mins != null; });
+  const totalMins  = closedAll.reduce(function (a, r) { return a + r.mins; }, 0);
+  const missedAll  = recs.filter(function (r) { return r.kind === "missed"; }).length;
+  const liveAll    = recs.filter(function (r) { return r.kind === "live"; }).length;
+  const remoteAll  = recs.filter(function (r) { return r.mode === "r"; }).length;
+  const tracked    = people.filter(function (p) { return !p.noRecords; });
+  const noRec      = people.filter(function (p) { return p.noRecords; });
+  const rosterDays = STAFF.length * WORKDAYS.length;
+  const medIn      = median(tracked.map(function (p) { return p.avgIn; }));
+  const absCount   = tracked.reduce(function (a, p) { return a + p.absents.length; }, 0);
+  const leaveCount = Object.keys(LEAVE).length;
+
+  const TILES = [
+    { k: "Working days",   v: String(WORKDAYS.length),
+      s: "1–10 Aug · both Sundays off" },
+    { k: "On the roster",  v: String(STAFF.length),
+      s: tracked.length + " clocked in · " + noRec.length + " never did" },
+    { k: "Shifts logged",  v: String(recs.length),
+      s: Math.round(recs.length / rosterDays * 100) + "% of " + rosterDays + " roster-days" },
+    { k: "Hours logged",   v: Math.round(totalMins / 60).toLocaleString() + "<small>&thinsp;h</small>",
+      s: closedAll.length + " closed shifts" },
+    { k: "Average day",    v: hm(totalMins / closedAll.length).replace(/ (\d+)m/, "<small>&thinsp;$1m</small>"),
+      s: "Median arrival " + clock(medIn) },
+    { k: "Missed clock-outs", v: String(missedAll), flag: true,
+      s: "Excludes " + liveAll + " open on 10 Aug" }
+  ];
+
+  const tiles = document.getElementById("tiles");
+  TILES.forEach(function (t) {
+    const d = el("div", "tile" + (t.flag ? " flag" : ""));
+    d.appendChild(el("div", "tile-k", t.k));
+    const v = el("div", "tile-v"); v.innerHTML = t.v; d.appendChild(v);
+    d.appendChild(el("div", "tile-s", t.s));
+    tiles.appendChild(d);
+  });
+
+  /* ---------------- tooltip ---------------- */
+  const tip = document.getElementById("tip");
+  function showTip(e, html) {
+    tip.innerHTML = html;
+    tip.classList.add("on");
+    const pad = 14;
+    let x = e.clientX + pad, y = e.clientY + pad;
+    const r = tip.getBoundingClientRect();
+    if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - pad;
+    if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - pad;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  }
+  function hideTip() { tip.classList.remove("on"); }
+  function bindTip(node, html) {
+    node.addEventListener("mousemove", function (e) { showTip(e, html); });
+    node.addEventListener("mouseleave", hideTip);
+    node.addEventListener("focus", function () {
+      const b = node.getBoundingClientRect();
+      showTip({ clientX: b.left, clientY: b.bottom }, html);
+    });
+    node.addEventListener("blur", hideTip);
+  }
+
+  /* ---------------- day header ---------------- */
+  const dayHead = document.getElementById("dayHead");
+  dayHead.textContent = "";
+  const dh = el("div", "dh");
+  DAYS.forEach(function (d) {
+    const s = el("span", d.off ? "sun" : "");
+    s.innerHTML = "<b>" + String(d.n).padStart(2, "0") + "</b>" + d.dow.slice(0, 2);
+    dh.appendChild(s);
+  });
+  dayHead.appendChild(dh);
+
+  /* ---------------- arrival + hours scales ---------------- */
+  const IN_LO = 8 * 60 + 30, IN_HI = 12 * 60 + 30;      /* 08:30 – 12:30 */
+  const HR_MAX = 660;                                    /* 0 – 11h, bars start at zero */
+
+  function arrivalPlot(p) {
+    const plot = el("div", "plot");
+    plot.appendChild(el("div", "track"));
+    [9, 10, 11, 12].forEach(function (h) {
+      const l = el("div", "axline" + (h === 10 ? " key" : ""));
+      l.style.left = ((h * 60 - IN_LO) / (IN_HI - IN_LO) * 100) + "%";
+      plot.appendChild(l);
+    });
+    if (p.avgIn != null) {
+      const dot = el("div", "dot");
+      dot.style.left = ((p.avgIn - IN_LO) / (IN_HI - IN_LO) * 100) + "%";
+      plot.appendChild(dot);
+    }
+    return plot;
+  }
+
+  function hoursPlot(p) {
+    const plot = el("div", "plot");
+    plot.appendChild(el("div", "track"));
+    const nine = el("div", "axline key");
+    nine.style.left = (540 / HR_MAX * 100) + "%";
+    plot.appendChild(nine);
+    if (p.avgMins != null) {
+      const bar = el("div", "bar");
+      bar.style.width = Math.min(100, p.avgMins / HR_MAX * 100) + "%";
+      plot.appendChild(bar);
+    }
+    return plot;
+  }
+
+  /* ---------------- register ---------------- */
+  const regBody = document.getElementById("regBody");
+
+  function cellFor(p, d) {
+    const btn = el("div", "cell");
+    btn.tabIndex = 0;
+    if (d.off) { btn.className = "cell sunday"; btn.tabIndex = -1; return btn; }
+
+    const r = p.byDay[d.n];
+    if (r) {
+      btn.classList.add(r.kind);
+      const rows = [
+        "<b>" + p.name + "</b> · " + dstr(d.n),
+        "In " + r.inS + (r.outS ? "  Out " + r.outS : "  Out —"),
+        r.mins != null ? hm(r.mins) + (r.derived ? " (derived)" : "") : "no duration recorded",
+        r.mode === "r" ? "Remote" : "Office"
+      ];
+      if (r.kind === "missed") rows.push("⚠ never clocked out");
+      if (r.kind === "live")   rows.push("still clocked in");
+      bindTip(btn, rows.join("<br>"));
+      return btn;
+    }
+
+    if (p.noRecords) {
+      btn.classList.add("norec");
+      bindTip(btn, "<b>" + p.name + "</b> · " + dstr(d.n) + "<br>no attendance record at all");
+      return btn;
+    }
+    const lv = LEAVE[p.name + "|" + d.n];
+    btn.classList.add(lv ? "leave" : "absent");
+    bindTip(btn, "<b>" + p.name + "</b> · " + dstr(d.n) + "<br>" + (lv || "absent — no leave on file"));
+    return btn;
+  }
+
+  function renderRegister(list) {
+    regBody.textContent = "";
+    list.forEach(function (p) {
+      const tr = el("tr");
+
+      const who = el("td", "who");
+      who.appendChild(el("div", "nm", p.name));
+      who.appendChild(el("div", "rl", p.dept + (p.role ? " · " + p.role : "")));
+      tr.appendChild(who);
+
+      const tdStrip = el("td");
+      const strip = el("div", "strip");
+      DAYS.forEach(function (d) { strip.appendChild(cellFor(p, d)); });
+      tdStrip.appendChild(strip);
+      tr.appendChild(tdStrip);
+
+      const tdDays = el("td", "num");
+      tdDays.innerHTML = p.noRecords
+        ? '<span style="color:var(--crit)">0</span>'
+        : p.days + '<span style="color:var(--ink-3)">/8</span>';
+      tr.appendChild(tdDays);
+
+      const tdIn = el("td");
+      if (p.noRecords) { tdIn.className = "num"; tdIn.textContent = "—"; }
+      else {
+        const box = el("div");
+        box.style.display = "flex";
+        box.style.alignItems = "center";
+        box.style.gap = "9px";
+        const lab = el("span", "num", clock(p.avgIn));
+        lab.style.minWidth = "44px";
+        box.appendChild(lab);
+        const pl = arrivalPlot(p);
+        pl.style.flex = "1";
+        box.appendChild(pl);
+        tdIn.appendChild(box);
+        bindTip(tdIn, "<b>" + p.name + "</b><br>mean clock-in " + clock(p.avgIn) +
+          "<br>earliest " + clock(Math.min.apply(null, p.recs.map(function (r) { return r.inM; }))) +
+          "  latest " + clock(Math.max.apply(null, p.recs.map(function (r) { return r.inM; }))));
+      }
+      tr.appendChild(tdIn);
+
+      const tdHr = el("td");
+      if (p.avgMins == null) { tdHr.className = "num"; tdHr.textContent = "—"; }
+      else {
+        const box = el("div");
+        box.style.display = "flex";
+        box.style.alignItems = "center";
+        box.style.gap = "9px";
+        const lab = el("span", "num", hm(p.avgMins));
+        lab.style.minWidth = "50px";
+        box.appendChild(lab);
+        const pl = hoursPlot(p);
+        pl.style.flex = "1";
+        box.appendChild(pl);
+        tdHr.appendChild(box);
+        const closed = p.recs.filter(function (r) { return r.state === "c" && r.mins != null; });
+        bindTip(tdHr, "<b>" + p.name + "</b><br>mean over " + closed.length + " closed shift" +
+          (closed.length === 1 ? "" : "s") + "<br>total " + hm(p.totalMins) +
+          "<br>vs 9h 00m mark");
+      }
+      tr.appendChild(tdHr);
+
+      regBody.appendChild(tr);
+    });
+  }
+
+  /* ---------------- headcount columns ---------------- */
+  const colsBox = document.getElementById("cols");
+  const CH = 150;
+  const dayStats = DAYS.map(function (d) {
+    const rs = recs.filter(function (r) { return r.day === d.n; });
+    return {
+      d: d,
+      present: rs.length,
+      closed: rs.filter(function (r) { return r.kind === "office" || r.kind === "remote"; }).length,
+      missed: rs.filter(function (r) { return r.kind === "missed"; }).length,
+      live: rs.filter(function (r) { return r.kind === "live"; }).length
+    };
+  });
+  const maxRoster = STAFF.length;
+
+  dayStats.forEach(function (s) {
+    const wrap = el("div", "colwrap" + (s.d.off ? " off" : ""));
+    const col = el("div", "col");
+    col.tabIndex = s.d.off ? -1 : 0;
+
+    if (s.d.off) {
+      const rest = el("div", "rest");
+      rest.style.height = "6px";
+      col.appendChild(rest);
+    } else {
+      [["closed", s.closed], ["missed", s.missed], ["live", s.live]].forEach(function (pair) {
+        if (!pair[1]) return;
+        const seg = el("div", "seg " + pair[0]);
+        seg.style.height = (pair[1] / maxRoster * CH) + "px";
+        col.appendChild(seg);
+      });
+      bindTip(col,
+        "<b>" + dstr(s.d.n) + "</b> · " + s.d.dow + "<br>" +
+        s.present + " of " + maxRoster + " present<br>" +
+        s.closed + " closed" +
+        (s.missed ? "<br>" + s.missed + " missed clock-out" : "") +
+        (s.live ? "<br>" + s.live + " still open" : "") +
+        "<br>" + (maxRoster - s.present) + " not in");
+    }
+
+    wrap.appendChild(col);
+    const cap = el("div", "cap");
+    cap.innerHTML = "<b>" + (s.d.off ? "—" : s.present) + "</b>" +
+                    String(s.d.n).padStart(2, "0") + " " + s.d.dow.slice(0, 2);
+    wrap.appendChild(cap);
+    colsBox.appendChild(wrap);
+  });
+
+  /* ---------------- exceptions ---------------- */
+  const missedList = recs.filter(function (r) { return r.kind === "missed"; })
+    .sort(function (a, b) { return a.day - b.day || a.name.localeCompare(b.name); });
+  const missedByName = {};
+  missedList.forEach(function (r) {
+    (missedByName[r.name] = missedByName[r.name] || []).push(String(r.day).padStart(2, "0"));
+  });
+  const missedText = Object.keys(missedByName).sort().map(function (n) {
+    return n.split(" ")[0] + " (" + missedByName[n].join(", ") + ")";
+  }).join(", ");
+
+  const unexplained = absCount - leaveCount;
+  const shortDay = tracked.filter(function (p) { return p.avgMins != null && p.avgMins < 480; });
+
+  const EXC = [
+    { t: missedAll + " shifts have no clock-out", c: "warn", b: String(missedAll),
+      d: "On days already finished, so the hours are unrecoverable and every hours average " +
+         "below is computed without them. " + missedText + "." },
+    { t: noRec.length + " staff have no record at all", c: "crit", b: "0",
+      d: noRec.map(function (p) { return p.name; }).join(" and ") +
+         " (both Design) never appear in August attendance. Either they are not using the clock, " +
+         "or their accounts are dormant — worth confirming before the roster is treated as 22." },
+    { t: "Shruti Vaidya, 3 Aug — 16-minute shift", c: "warn", b: "!",
+      d: "Clocked in 18:53, out 19:09. Reads as a forgotten clock-in caught at the end of the day, " +
+         "not a real 16-minute shift. It drags her 8-day average down by roughly an hour." },
+    { t: "Dipak Patel, 3 Aug — duration missing", c: "warn", b: "!",
+      d: "Status is <code>completed</code> with both timestamps, but <code>workMinutes</code> was never " +
+         "written. Derived here as 9h 20m from 09:50–19:10; the stored field is still empty." },
+    { t: unexplained + " absences with no leave on file", c: "warn", b: String(unexplained),
+      d: "Of " + absCount + " missed working days across the 20 who clock in, only " + leaveCount +
+         " are covered by an approved request (Krupali Lathia and Dipak Patel, both 1 Aug). " +
+         "Kanan Soni accounts for 3 of the rest." },
+    { t: "Department labels are inconsistent", c: "info", b: "i",
+      d: "Attendance records carry both <code>Admin</code> and <code>Administration</code>, and " +
+         "<code>EA</code> appears as a department as well as a designation. Grouped here under the " +
+         "roster spelling; the underlying records were not changed." },
+    { t: "10 August is still running", c: "info", b: "i",
+      d: liveAll + " people are clocked in right now and one — Nayna Leva — has not appeared. " +
+         "Today contributes arrivals but no hours." }
+  ];
+  if (shortDay.length) {
+    EXC.splice(5, 0, {
+      t: shortDay.length + " averaging under 8 hours", c: "warn", b: String(shortDay.length),
+      d: shortDay.map(function (p) { return p.name + " " + hm(p.avgMins); }).join(", ") +
+         ". Consistent short days rather than one-off early leaves — worth a look at the shift log."
+    });
+  }
+
+  const excList = document.getElementById("excList");
+  EXC.forEach(function (x) {
+    const item = el("div", "exc-item");
+    item.appendChild(el("div", "exc-badge " + x.c, x.b));
+    const body = el("div");
+    body.appendChild(el("div", "exc-t", x.t));
+    const d = el("div", "exc-d"); d.innerHTML = x.d; body.appendChild(d);
+    item.appendChild(body);
+    excList.appendChild(item);
+  });
+
+  /* ---------------- shift log ---------------- */
+  const logBody = document.getElementById("logBody");
+  const logSorted = recs.slice().sort(function (a, b) {
+    return a.day - b.day || a.name.localeCompare(b.name);
+  });
+
+  function renderLog(list) {
+    logBody.textContent = "";
+    const frag = document.createDocumentFragment();
+    list.forEach(function (r) {
+      const tr = el("tr");
+      tr.appendChild(el("td", "n", dstr(r.day)));
+      tr.appendChild(el("td", null, r.name));
+      tr.appendChild(el("td", null, r.dept));
+      tr.appendChild(el("td", null, r.mode === "r" ? "Remote" : "Office"));
+      tr.appendChild(el("td", "n", r.inS));
+      tr.appendChild(el("td", "n", r.outS || "—"));
+      const h = el("td", "n", r.mins != null ? hm(r.mins) : "—");
+      if (r.derived) h.style.color = "var(--amber)";
+      tr.appendChild(h);
+      const st = el("td");
+      const cls = r.kind === "missed" ? "miss" : (r.kind === "live" ? "live" : "ok");
+      const lbl = r.kind === "missed" ? "No clock-out"
+                : r.kind === "live" ? "Open now" : "Closed";
+      st.appendChild(el("span", "pill " + cls, lbl));
+      tr.appendChild(st);
+      frag.appendChild(tr);
+    });
+    logBody.appendChild(frag);
+  }
+
+  /* ---------------- filters ---------------- */
+  const q = document.getElementById("q");
+  const deptSel = document.getElementById("dept");
+  const countNote = document.getElementById("countNote");
+  const logNote = document.getElementById("logNote");
+
+  const depts = Array.from(new Set(STAFF.map(function (s) { return s[1]; }))).sort();
+  const optAll = el("option", null, "All departments");
+  optAll.value = "";
+  deptSel.appendChild(optAll);
+  depts.forEach(function (d) {
+    const o = el("option", null, d); o.value = d; deptSel.appendChild(o);
+  });
+
+  function apply() {
+    const term = q.value.trim().toLowerCase();
+    const dv = deptSel.value;
+    const pl = people.filter(function (p) {
+      return (!term || p.name.toLowerCase().indexOf(term) >= 0) && (!dv || p.dept === dv);
+    });
+    const rl = logSorted.filter(function (r) {
+      return (!term || r.name.toLowerCase().indexOf(term) >= 0) &&
+             (!dv || DEPT[r.name].dept === dv);
+    });
+    renderRegister(pl);
+    renderLog(rl);
+    countNote.textContent = pl.length + " of " + people.length + " staff · " +
+                            rl.length + " shifts";
+    logNote.textContent = rl.length + " records · earliest 1 Aug, latest 10 Aug";
+  }
+
+  q.addEventListener("input", apply);
+  deptSel.addEventListener("change", apply);
+  apply();
+
+  /* self-check against the figures verified in MongoDB */
+  console.table({
+    records:        { got: recs.length,        expected: 146 },
+    people:         { got: tracked.length,     expected: 20 },
+    closedShifts:   { got: closedAll.length,   expected: 113 },
+    missedClockOut: { got: missedAll,          expected: 14 },
+    openToday:      { got: liveAll,            expected: 19 },
+    remoteShifts:   { got: remoteAll,          expected: 6 },
+    absences:       { got: absCount,           expected: 14 }
+  });
+})();
+</script>

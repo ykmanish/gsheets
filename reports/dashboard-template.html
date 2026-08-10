@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Control — Daily Report</title>
+<style>
+  :root {
+    color-scheme: light;
+    --plane:    #f9f9f7;
+    --surface:  #fcfcfb;
+    --ink:      #0b0b0b;
+    --ink-2:    #52514e;
+    --muted:    #898781;
+    --grid:     #e1e0d9;
+    --baseline: #c3c2b7;
+    --border:   rgba(11,11,11,0.10);
+    --series:   #2a78d6;
+    --good:     #0ca30c;
+    --warning:  #fab219;
+    --serious:  #ec835a;
+    --critical: #d03b3b;
+    --track:    #e1e0d9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane:    #0d0d0d;
+      --surface:  #1a1a19;
+      --ink:      #ffffff;
+      --ink-2:    #c3c2b7;
+      --muted:    #898781;
+      --grid:     #2c2c2a;
+      --baseline: #383835;
+      --border:   rgba(255,255,255,0.10);
+      --series:   #3987e5;
+      --track:    #2c2c2a;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:    #0d0d0d;
+    --surface:  #1a1a19;
+    --ink:      #ffffff;
+    --ink-2:    #c3c2b7;
+    --muted:    #898781;
+    --grid:     #2c2c2a;
+    --baseline: #383835;
+    --border:   rgba(255,255,255,0.10);
+    --series:   #3987e5;
+    --track:    #2c2c2a;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 20px 64px;
+    background: var(--plane);
+    color: var(--ink);
+    font: 400 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  /* ---------- header ---------- */
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; margin-bottom: 22px; }
+  h1 { margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
+  .datestamp { font-size: 14px; color: var(--ink-2); }
+  .gen { margin-left: auto; font-size: 12px; color: var(--muted); text-align: right; }
+  .themebtn {
+    appearance: none; border: 1px solid var(--border); background: var(--surface);
+    color: var(--ink-2); font: inherit; font-size: 12px; padding: 5px 11px;
+    border-radius: 7px; cursor: pointer;
+  }
+  .themebtn:hover { color: var(--ink); }
+
+  /* ---------- cards ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;
+  }
+  .card > h2 {
+    margin: 0 0 3px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
+    text-transform: uppercase; color: var(--ink-2);
+  }
+  .card > .sub { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
+  .empty { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); font-style: italic; }
+
+  /* ---------- KPI tiles ---------- */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(162px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 15px 17px 14px;
+  }
+  .kpi .label { font-size: 12px; color: var(--ink-2); margin-bottom: 7px; }
+  .kpi .val { font-size: 34px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; }
+  .kpi .val .of { font-size: 17px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+  .kpi .foot { margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+  .kpi.flag .val { color: var(--critical); }
+
+  /* ---------- status badge (icon + label, never colour alone) ---------- */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px; flex: none;
+    font-size: 11.5px; font-weight: 500; color: var(--ink-2);
+    padding: 2px 8px 2px 6px; border: 1px solid var(--border); border-radius: 999px;
+    white-space: nowrap;
+  }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .badge.good     .dot { background: var(--good); }
+  .badge.warning  .dot { background: var(--warning); }
+  .badge.serious  .dot { background: var(--serious); }
+  .badge.critical .dot { background: var(--critical); }
+  .badge.neutral  .dot { background: var(--muted); }
+
+  /* ---------- starting today ---------- */
+  .today { display: grid; gap: 2px; }
+  .today-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 16px;
+    padding: 11px 0; border-top: 1px solid var(--grid);
+  }
+  .today-row:first-child { border-top: 0; }
+  .today-title { font-size: 14.5px; font-weight: 500; }
+  .today-meta { font-size: 12px; color: var(--muted); grid-column: 1; }
+  .today-when { font-size: 12px; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+  .today-desc { grid-column: 1 / -1; font-size: 12.5px; color: var(--ink-2); }
+
+  /* ---------- project progress ---------- */
+  .proj { padding: 13px 0; border-top: 1px solid var(--grid); }
+  .proj:first-of-type { border-top: 0; padding-top: 2px; }
+  .proj-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 9px; }
+  .proj-name { font-size: 15px; font-weight: 600; }
+  .proj-code { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .proj-mgr { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .bar-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
+  .track { height: 11px; background: var(--track); border-radius: 4px; overflow: hidden; }
+  .fill { height: 100%; background: var(--series); border-radius: 4px; min-width: 3px; }
+  .fill.zero { background: var(--track); box-shadow: inset 0 0 0 1px var(--baseline); }
+  .bar-val { font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .proj-foot { margin-top: 7px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .proj-foot .late { color: var(--critical); font-weight: 500; }
+
+  /* ---------- delayed chart ---------- */
+  .grp { margin-top: 16px; }
+  .grp:first-of-type { margin-top: 2px; }
+  .grp-hd {
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--muted); padding-bottom: 7px; margin-bottom: 3px; border-bottom: 1px solid var(--grid);
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  .grp-hd .n { font-weight: 400; letter-spacing: 0; text-transform: none; }
+  .drow {
+    display: grid; grid-template-columns: minmax(140px, 390px) 1fr 74px;
+    align-items: center; gap: 12px; padding: 4px 0; cursor: default;
+  }
+  .drow:hover { background: color-mix(in srgb, var(--series) 7%, transparent); }
+  .dlabel { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dlabel .parent { color: var(--muted); }
+  .dbar-cell { position: relative; height: 15px; }
+  .dbar {
+    position: absolute; left: 0; top: 2px; height: 11px;
+    background: var(--series); border-radius: 0 4px 4px 0; min-width: 3px;
+  }
+  .dval { font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+  .dval b { font-weight: 600; color: var(--ink); }
+  .dperson { font-size: 12px; color: var(--muted); }
+
+  /* ---------- assignee load ---------- */
+  .arow { display: grid; grid-template-columns: 150px 1fr 30px; align-items: center; gap: 12px; padding: 5px 0; }
+  .aname { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .abar-cell { position: relative; height: 15px; }
+  .abar { position: absolute; left: 0; top: 2px; height: 11px; background: var(--series); border-radius: 0 4px 4px 0; min-width: 3px; }
+  .aval { font-size: 12.5px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .amax { font-size: 11.5px; color: var(--muted); }
+
+  /* ---------- notes ---------- */
+  .notes { margin: 0; padding-left: 19px; }
+  .notes li { font-size: 13.5px; color: var(--ink-2); margin-bottom: 8px; }
+  .notes li:last-child { margin-bottom: 0; }
+  .notes b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- table view (accessibility / print) ---------- */
+  details.tv { margin-top: 4px; }
+  details.tv summary {
+    cursor: pointer; font-size: 12.5px; color: var(--ink-2);
+    padding: 8px 0; list-style: none;
+  }
+  details.tv summary::-webkit-details-marker { display: none; }
+  details.tv summary::before { content: "▸ "; color: var(--muted); }
+  details.tv[open] summary::before { content: "▾ "; }
+  .tvwrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { text-align: left; padding: 7px 12px 7px 0; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+  td.num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- tooltip ---------- */
+  #tip {
+    position: fixed; z-index: 50; pointer-events: none; opacity: 0;
+    transition: opacity .09s; max-width: 300px;
+    background: var(--ink); color: var(--surface);
+    font-size: 12px; line-height: 1.45; padding: 7px 10px; border-radius: 7px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.22);
+  }
+  #tip .t { font-weight: 600; }
+  #tip .m { opacity: .78; }
+
+  footer { margin-top: 26px; font-size: 11.5px; color: var(--muted); text-align: center; }
+
+  @media (max-width: 560px) {
+    .drow { grid-template-columns: 1fr 58px; }
+    .drow .dbar-cell { display: none; }
+    .arow { grid-template-columns: 1fr 30px; }
+    .arow .abar-cell { display: none; }
+    .gen { margin-left: 0; text-align: left; width: 100%; }
+  }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .themebtn, #tip { display: none; }
+    details.tv { display: block; }
+    details.tv > summary { display: none; }
+    details.tv > *:not(summary) { display: block !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Project Control — Daily Report</h1>
+      <div class="datestamp" id="datestamp"></div>
+    </div>
+    <div class="gen">
+      <div id="gen"></div>
+      <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section class="card">
+    <h2>Starting today</h2>
+    <p class="sub" id="today-sub"></p>
+    <div id="today"></div>
+  </section>
+
+  <section class="card">
+    <h2>Project progress</h2>
+    <p class="sub">Share of all work items (tasks + subtasks) marked complete.</p>
+    <div id="projects"></div>
+  </section>
+
+  <section class="card">
+    <h2>Delayed work</h2>
+    <p class="sub" id="delayed-sub"></p>
+    <div id="delayed"></div>
+    <details class="tv" id="delayed-tv">
+      <summary>Table view</summary>
+      <div class="tvwrap"><table id="delayed-table"></table></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Overdue load by person</h2>
+    <p class="sub">Number of delayed items each person owns. Longest single delay shown alongside.</p>
+    <div id="load"></div>
+  </section>
+
+  <section class="card" id="notes-card">
+    <h2>Notes</h2>
+    <p class="sub">Things that look worth acting on today.</p>
+    <ul class="notes" id="notes"></ul>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const DATA = __DATA__;
+
+const $  = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pct = (a, b) => b > 0 ? Math.round((a / b) * 100) : 0;
+
+/* severity bands drive the reserved status colours; every use is paired with a text label */
+function band(days) {
+  if (days >= 20) return { cls: "critical", word: "critical" };
+  if (days >= 15) return { cls: "serious",  word: "serious"  };
+  return            { cls: "warning",  word: "slipping" };
+}
+
+/* ---------- tooltip ---------- */
+const tip = $("tip");
+function bindTip(el, html) {
+  el.addEventListener("pointerenter", () => { tip.innerHTML = html; tip.style.opacity = "1"; });
+  el.addEventListener("pointermove", (e) => {
+    const r = tip.getBoundingClientRect();
+    let x = e.clientX + 14, y = e.clientY + 16;
+    if (x + r.width  > innerWidth  - 8) x = e.clientX - r.width  - 12;
+    if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 12;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  });
+  el.addEventListener("pointerleave", () => { tip.style.opacity = "0"; });
+}
+
+/* ---------- header ---------- */
+$("datestamp").textContent = DATA.reportDateLabel;
+$("gen").textContent = "Generated " + DATA.generatedAt;
+$("footer").textContent = "Source: projectDashboard · " + DATA.projects.length +
+  " active projects · " + DATA.totals.items + " work items";
+
+const root = document.documentElement;
+$("themebtn").addEventListener("click", () => {
+  const dark = getComputedStyle(root).getPropertyValue("--surface").trim() === "#1a1a19";
+  root.setAttribute("data-theme", dark ? "light" : "dark");
+});
+
+/* ---------- KPI tiles ---------- */
+const k = DATA.kpi;
+$("kpis").innerHTML = [
+  { label: "Starting today", val: k.startingToday, foot: k.startingTodayFoot },
+  { label: "Delayed items",  val: k.delayed, foot: k.delayedFoot, flag: k.delayed > 0 },
+  { label: "Past target date", val: k.pastTarget, of: " of " + DATA.projects.length, foot: k.pastTargetFoot, flag: k.pastTarget > 0 },
+  { label: "Open work items", val: DATA.totals.items - DATA.totals.done, of: " of " + DATA.totals.items,
+    foot: pct(DATA.totals.done, DATA.totals.items) + "% complete" }
+].map(t => `<div class="kpi${t.flag ? " flag" : ""}">
+    <div class="label">${esc(t.label)}</div>
+    <div class="val">${t.val}${t.of ? `<span class="of">${esc(t.of)}</span>` : ""}</div>
+    <div class="foot">${esc(t.foot)}</div>
+  </div>`).join("");
+
+/* ---------- starting today ---------- */
+const today = DATA.startingToday;
+$("today-sub").textContent = today.length
+  ? "Work scheduled to begin on " + DATA.reportDate + "."
+  : "";
+$("today").innerHTML = today.length
+  ? today.map(t => `<div class="today-row">
+        <div class="today-title">${esc(t.title)}</div>
+        <div class="today-when">${esc(t.start)} → ${esc(t.due || "no end date")}</div>
+        <div class="today-meta">${esc(t.project)} › ${esc(t.phase)}${t.parent ? " › " + esc(t.parent) : ""} · ${
+          t.assignee ? esc(t.assignee) : "<i>unassigned</i>"}</div>
+        ${t.description ? `<div class="today-desc">${esc(t.description)}</div>` : ""}
+      </div>`).join("")
+  : `<p class="empty">Nothing starting today.</p>`;
+
+/* ---------- project progress ---------- */
+$("projects").innerHTML = DATA.projects.map(p => {
+  const done = p.tasks.done + p.subtasks.done;
+  const tot  = p.tasks.total + p.subtasks.total;
+  const p100 = pct(done, tot);
+  const tgt  = !p.target
+    ? `<span class="badge neutral"><span class="dot"></span>No target date</span>`
+    : p.pastTarget
+      ? `<span class="badge critical"><span class="dot"></span>Past target ${esc(p.target)}</span>`
+      : `<span class="badge good"><span class="dot"></span>Target ${esc(p.target)}</span>`;
+  return `<div class="proj">
+    <div class="proj-head">
+      <span class="proj-name">${esc(p.name)}</span>
+      ${p.code ? `<span class="proj-code">${esc(p.code)}</span>` : ""}
+      <span class="badge ${p.health === "green" ? "good" : p.health === "yellow" ? "warning" : p.health === "red" ? "critical" : "neutral"}"
+        ><span class="dot"></span>Health: ${esc(p.health || "unset")}</span>
+      ${tgt}
+      <span class="proj-mgr">${esc(p.manager)}</span>
+    </div>
+    <div class="bar-row">
+      <div class="track" data-p="${p100}"><div class="fill${done === 0 ? " zero" : ""}" style="width:${p100}%"></div></div>
+      <span class="bar-val">${done} / ${tot} done · ${p100}%</span>
+    </div>
+    <div class="proj-foot">
+      <span>${p.phases} phase${p.phases === 1 ? "" : "s"}</span>
+      <span>${p.tasks.done}/${p.tasks.total} tasks</span>
+      <span>${p.subtasks.done}/${p.subtasks.total} subtasks</span>
+      ${p.delayed ? `<span class="late">${p.delayed} delayed</span>` : `<span>0 delayed</span>`}
+    </div>
+  </div>`;
+}).join("");
+
+document.querySelectorAll(".proj").forEach((el, i) => {
+  const p = DATA.projects[i];
+  bindTip(el, `<div class="t">${esc(p.name)}</div><div class="m">${
+    p.tasks.done + p.subtasks.done} of ${p.tasks.total + p.subtasks.total} items complete · ${
+    p.delayed} delayed · manager ${esc(p.manager)}</div>`);
+});
+
+/* ---------- delayed work ---------- */
+const del = DATA.delayed;
+const maxDays = del.reduce((m, d) => Math.max(m, d.daysLate), 0) || 1;
+$("delayed-sub").textContent = del.length
+  ? del.length + " items are past their due date, longest first. Bar length is days late."
+  : "";
+
+if (!del.length) {
+  $("delayed").innerHTML = `<p class="empty">No delayed items.</p>`;
+  $("delayed-tv").style.display = "none";
+} else {
+  const groups = [];
+  del.forEach(d => {
+    let g = groups.find(g => g.project === d.project);
+    if (!g) groups.push(g = { project: d.project, rows: [] });
+    g.rows.push(d);
+  });
+  $("delayed").innerHTML = groups.map(g => `<div class="grp">
+      <div class="grp-hd"><span>${esc(g.project)}</span><span class="n">${g.rows.length} item${
+        g.rows.length === 1 ? "" : "s"} · worst ${Math.max(...g.rows.map(r => r.daysLate))} days</span></div>
+      ${g.rows.map(d => {
+        return `<div class="drow" data-k="${esc(d.key)}">
+          <div class="dlabel">${d.parent ? `<span class="parent">${esc(d.parent)} › </span>` : ""}${esc(d.title)}
+            <span class="dperson">— ${d.assignee ? esc(d.assignee) : "unassigned"}</span></div>
+          <div class="dbar-cell"><div class="dbar" style="width:${Math.max(3, (d.daysLate / maxDays) * 100)}%"></div></div>
+          <div class="dval"><b>${d.daysLate}</b> days</div>
+        </div>`;
+      }).join("")}
+    </div>`).join("");
+
+  document.querySelectorAll(".drow").forEach(el => {
+    const d = del.find(x => x.key === el.dataset.k);
+    const b = band(d.daysLate);
+    bindTip(el, `<div class="t">${esc(d.title)}</div><div class="m">${
+      esc(d.project)} › ${esc(d.phase)}${d.parent ? " › " + esc(d.parent) : ""}<br>
+      Due ${esc(d.due)} — ${d.daysLate} days late (${b.word})<br>
+      Status ${esc(d.status)}${d.priority && d.priority !== "medium" ? " · " + esc(d.priority) + " priority" : ""}<br>
+      ${d.assignee ? esc(d.assignee) : "unassigned"}${d.note ? "<br>" + esc(d.note) : ""}</div>`);
+  });
+
+  $("delayed-table").innerHTML =
+    `<thead><tr><th>Project</th><th>Phase</th><th>Item</th><th>Owner</th><th>Due</th><th>Days late</th><th>Status</th></tr></thead>
+     <tbody>${del.map(d => `<tr>
+        <td>${esc(d.project)}</td><td>${esc(d.phase)}</td>
+        <td>${d.parent ? esc(d.parent) + " › " : ""}${esc(d.title)}</td>
+        <td>${d.assignee ? esc(d.assignee) : "unassigned"}</td>
+        <td class="num">${esc(d.due)}</td><td class="num">${d.daysLate}</td><td>${esc(d.status)}</td>
+      </tr>`).join("")}</tbody>`;
+}
+
+/* ---------- assignee load ---------- */
+const load = DATA.assigneeLoad;
+const maxLoad = load.reduce((m, a) => Math.max(m, a.count), 0) || 1;
+$("load").innerHTML = load.length
+  ? load.map(a => `<div class="arow" data-n="${esc(a.name)}">
+        <div class="aname">${esc(a.name)}</div>
+        <div class="abar-cell"><div class="abar" style="width:${Math.max(3, (a.count / maxLoad) * 100)}%"></div></div>
+        <div class="aval">${a.count}</div>
+      </div>`).join("")
+  : `<p class="empty">No delayed items to attribute.</p>`;
+
+document.querySelectorAll(".arow").forEach(el => {
+  const a = load.find(x => x.name === el.dataset.n);
+  bindTip(el, `<div class="t">${esc(a.name)}</div><div class="m">${a.count} delayed item${
+    a.count === 1 ? "" : "s"} · longest ${a.maxDays} days late<br>${esc(a.projects.join(", "))}</div>`);
+});
+
+/* ---------- notes ---------- */
+if (DATA.notes && DATA.notes.length) {
+  $("notes").innerHTML = DATA.notes.map(n => `<li>${n}</li>`).join("");
+} else {
+  $("notes-card").style.display = "none";
+}
+</script>
+</body>
+</html>

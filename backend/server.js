@@ -1064,6 +1064,9 @@ function sanitizeEmployeeTaskItems(items = []) {
       ...(Array.isArray(item?.involvement) ? item.involvement : String(item?.involvement || "").split(",")),
     ]),
     description: projectText(item?.description),
+    startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.startTime)) ? projectText(item?.startTime) : "",
+    endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.endTime)) ? projectText(item?.endTime) : "",
+    timeFormat: projectText(item?.timeFormat) === "12" ? "12" : "24",
     recurring: Boolean(item?.recurring),
     recurringId: projectText(item?.recurringId),
   })).filter((item) => item.category && item.description).slice(0, 30);
@@ -1128,8 +1131,16 @@ function sanitizeEmployeeTaskPreferences(input = {}) {
   };
 }
 
+function employeeTaskTimeText(item = {}) {
+  if (item.startTime && item.endTime) return `${item.startTime}-${item.endTime}`;
+  return item.startTime || item.endTime || "";
+}
+
 function taskItemsToText(items = []) {
-  return items.map((item) => `${item.site ? `${item.site} · ` : ""}${item.category}${item.status ? ` [${item.status}]` : ""}${item.involvement ? ` (${item.involvement})` : ""}: ${item.description}`).join("\n");
+  return items.map((item) => {
+    const time = employeeTaskTimeText(item);
+    return `${item.site ? `${item.site} · ` : ""}${item.category}${item.status ? ` [${item.status}]` : ""}${item.involvement ? ` (${item.involvement})` : ""}${time ? ` {${time}}` : ""}: ${item.description}`;
+  }).join("\n");
 }
 
 function employeeRecurringKey(item = {}) {
@@ -1161,6 +1172,9 @@ function employeeRecurringTasksFromReports(reports = [], today) {
       involvement: item.involvement,
       involvementValues: item.involvementValues || [],
       description: item.description,
+      startTime: item.startTime || "",
+      endTime: item.endTime || "",
+      timeFormat: item.timeFormat || "24",
       recurring: true,
       recurringId: item.recurringId,
       recurringFrom: item.recurringFrom,

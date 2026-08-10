@@ -113,11 +113,11 @@ function buildMonthGrid(monthDate) {
 }
 
 function createEmptyTaskRow() {
-  return { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", recurring: false, recurringId: "" };
+  return { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", startTime: "", endTime: "", timeFormat: "24", recurring: false, recurringId: "" };
 }
 
 function createEmptyWaitingRow() {
-  return { site: "", category: "", categoryOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "" };
+  return { site: "", category: "", categoryOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", startTime: "", endTime: "", timeFormat: "24" };
 }
 
 const emptyForm = {
@@ -322,6 +322,159 @@ function ReminderTimeWheel({ value, onChange, darkMode }) {
       <div className={`mt-4 flex items-center justify-between rounded-2xl px-4 py-3 ${darkMode ? "bg-white/[0.055]" : "bg-[#f5f7f2]"}`}>
         <span className={`text-xs font-bold ${darkMode ? "text-white/45" : "text-black/45"}`}>Selected</span>
         <span className="font-black">{formatReminderTime(hour, minute)} IST</span>
+      </div>
+    </div>
+  );
+}
+
+function timeDisplayParts(value = "", format = "24") {
+  const hasValue = /^\d{2}:\d{2}$/.test(String(value || ""));
+  if (!hasValue) return { hour: "", minute: "", period: "AM" };
+  const [rawHour, minute] = value.split(":");
+  const hour24 = Number(rawHour);
+  if (format === "12") {
+    return {
+      hour: padTimePart(hour24 % 12 || 12),
+      minute,
+      period: hour24 >= 12 ? "PM" : "AM",
+    };
+  }
+  return { hour: rawHour, minute, period: hour24 >= 12 ? "PM" : "AM" };
+}
+
+function timePartsToValue(hour, minute, period, format = "24") {
+  if (!hour || !minute) return "";
+  let hourNumber = Number(hour);
+  if (format === "12") {
+    if (period === "PM" && hourNumber !== 12) hourNumber += 12;
+    if (period === "AM" && hourNumber === 12) hourNumber = 0;
+  }
+  return `${padTimePart(hourNumber)}:${padTimePart(minute)}`;
+}
+
+function TimePartDropdown({ label, value, placeholder, options, onChange, darkMode, columns = 3, compact = false }) {
+  const ref = useRef(null);
+  const popupRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState({ vertical: "down", horizontal: "right" });
+  useClickOutside(ref, () => setOpen(false));
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return undefined;
+    function updatePlacement() {
+      const trigger = ref.current?.getBoundingClientRect();
+      if (!trigger) return;
+      const popupWidth = popupRef.current?.offsetWidth || (compact ? 96 : 180);
+      const popupHeight = popupRef.current?.offsetHeight || 220;
+      const spaceBelow = window.innerHeight - trigger.bottom;
+      const spaceAbove = trigger.top;
+      const vertical = spaceBelow < popupHeight + 12 && spaceAbove > spaceBelow ? "up" : "down";
+      const horizontal = trigger.right - popupWidth < 12 && window.innerWidth - trigger.left >= popupWidth + 12 ? "left" : "right";
+      setPlacement({ vertical, horizontal });
+    }
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [compact, open]);
+
+  return (
+    <div ref={ref} className="relative min-w-0 flex-1">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-label={label}
+        className={`flex h-8 w-full items-center justify-center rounded-lg px-1 text-xs font-black tabular-nums transition ${value ? darkMode ? "bg-[#d8f36a]/14 text-[#d8f36a]" : "bg-[#eafbdc] text-[#34780d]" : darkMode ? "bg-white/[0.045] text-white/35 hover:bg-white/10 hover:text-white/65" : "bg-[#f4f6f1] text-black/35 hover:bg-[#eafbdc] hover:text-black/65"}`}
+      >
+        {value || placeholder}
+      </button>
+      {open && (
+        <div
+          ref={popupRef}
+          className={`absolute z-50 ${compact ? "w-[96px]" : "w-[180px]"} overflow-hidden rounded-2xl border p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] ${placement.vertical === "up" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"} ${placement.horizontal === "left" ? "left-0" : "right-0"} ${darkMode ? "border-white/10 bg-[#11171f]" : "border-[#e1e5df] bg-white"}`}
+        >
+          <p className={`px-1 pb-1.5 text-[9px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/40" : "text-black/40"}`}>{label}</p>
+          <div className={`grid gap-1 ${columns === 2 ? "grid-cols-2" : columns === 1 ? "grid-cols-1" : "grid-cols-3"} max-h-44 overflow-y-auto pr-1`}>
+            {options.map((item) => {
+              const active = value === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => { onChange(item); setOpen(false); }}
+                  className={`h-8 rounded-lg text-xs font-black tabular-nums transition ${active ? "bg-[#89ed3f] text-black shadow-[0_8px_18px_rgba(137,237,63,0.22)]" : darkMode ? "bg-white/[0.045] text-white/70 hover:bg-white/10" : "bg-[#f6f7f3] text-black/65 hover:bg-[#eafbdc]"}`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaskTimeField({ label, value, onChange, format = "24", darkMode }) {
+  const initialParts = timeDisplayParts(value, format);
+  const [draftHour, setDraftHour] = useState(initialParts.hour);
+  const [draftMinute, setDraftMinute] = useState(initialParts.minute);
+  const [draftPeriod, setDraftPeriod] = useState(initialParts.period);
+  const hourOptions = format === "12"
+    ? Array.from({ length: 12 }, (_, index) => padTimePart(index + 1))
+    : Array.from({ length: 24 }, (_, index) => padTimePart(index));
+  const minuteOptions = Array.from({ length: 60 }, (_, index) => padTimePart(index));
+
+  function commit(nextHour = draftHour, nextMinute = draftMinute, nextPeriod = draftPeriod) {
+    const next = timePartsToValue(nextHour, nextMinute, nextPeriod, format);
+    if (!next) {
+      onChange("");
+      return;
+    }
+    onChange(next);
+  }
+
+  function selectHour(nextHour) {
+    setDraftHour(nextHour);
+    commit(nextHour, draftMinute, draftPeriod);
+  }
+
+  function selectMinute(nextMinute) {
+    setDraftMinute(nextMinute);
+    commit(draftHour, nextMinute, draftPeriod);
+  }
+
+  function selectPeriod(nextPeriod) {
+    setDraftPeriod(nextPeriod);
+    commit(draftHour, draftMinute, nextPeriod);
+  }
+
+  function clearTime() {
+    setDraftHour("");
+    setDraftMinute("");
+    onChange("");
+  }
+
+  return (
+    <div className="min-w-0">
+      <span className={`mb-1 block text-[10px] font-bold ${darkMode ? "text-white/40" : "text-black/40"}`}>{label}</span>
+      <div className={`flex h-10 items-center gap-1 rounded-xl border px-1.5 transition focus-within:ring-4 ${darkMode ? "border-white/10 bg-[#0f151c] focus-within:border-[#d8f36a]/25 focus-within:ring-[#d8f36a]/10" : "border-black/10 bg-[#fbfcf9] focus-within:border-[#8bd85b]/40 focus-within:ring-[#8bd85b]/15"}`}>
+        <TimePartDropdown label={`${label} hour`} value={draftHour} placeholder="HH" options={hourOptions} onChange={selectHour} darkMode={darkMode} columns={3} />
+        <span className={`px-1 text-xs font-black ${darkMode ? "text-white/30" : "text-black/30"}`}>:</span>
+        <TimePartDropdown label={`${label} minute`} value={draftMinute} placeholder="MM" options={minuteOptions} onChange={selectMinute} darkMode={darkMode} columns={3} />
+        {format === "12" && (
+          <TimePartDropdown label={`${label} period`} value={draftPeriod} placeholder="AM" options={["AM", "PM"]} onChange={selectPeriod} darkMode={darkMode} columns={1} compact />
+        )}
+        {draftHour || draftMinute ? (
+          <button type="button" onClick={clearTime} className={`ml-1 grid h-6 w-6 shrink-0 place-items-center rounded-full transition ${darkMode ? "text-white/35 hover:bg-white/10 hover:text-white" : "text-black/35 hover:bg-black/[0.05] hover:text-black"}`} aria-label={`Clear ${label} time`}>
+            <X className="h-3 w-3" />
+          </button>
+        ) : (
+          <Clock3 className={`ml-1 h-3.5 w-3.5 shrink-0 ${darkMode ? "text-white/35" : "text-black/35"}`} />
+        )}
       </div>
     </div>
   );
@@ -539,6 +692,28 @@ function taskRowValue(row, field) {
   return "";
 }
 
+function taskTimeLabel(item = {}) {
+  const start = String(item.startTime || "").trim();
+  const end = String(item.endTime || "").trim();
+  if (start && end) return `${start} - ${end}`;
+  return start || end || "";
+}
+
+function taskDurationLabel(item = {}) {
+  const start = String(item.startTime || "");
+  const end = String(item.endTime || "");
+  if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return "";
+  const [startHour, startMinute] = start.split(":").map(Number);
+  const [endHour, endMinute] = end.split(":").map(Number);
+  let minutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+  if (minutes < 0) minutes += 24 * 60;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (!hours) return `${remainder}m`;
+  if (!remainder) return `${hours}h`;
+  return `${hours}h ${remainder}m`;
+}
+
 function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], involvements = [], popularSites = [], popularCategories = [], popularInvolvements = [], showStatus = false, showInvolvement = false, onRowsChange, onRefineDescription, required = false, darkMode = false }) {
   const [expandedIndex, setExpandedIndex] = useState(0);
   const [refiningIndex, setRefiningIndex] = useState(null);
@@ -582,6 +757,9 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
         involvementValues: involvementValuesFromRow(source),
         involvementOther: source.involvementOther || "",
         description: "",
+        startTime: source.startTime || "",
+        endTime: source.endTime || "",
+        timeFormat: source.timeFormat || "24",
         recurring: Boolean(source.recurring),
         recurringId: source.recurringId || "",
       },
@@ -709,7 +887,38 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                         )}
                       </button>
                     </div>
-                    <textarea required={required && index === 0} value={row.description} onChange={(event) => updateRow(index, { description: event.target.value })} rows={2} placeholder="Describe this task..." className={`min-h-12 w-full rounded-2xl border px-4 py-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_420px]">
+                      <textarea required={required && index === 0} value={row.description} onChange={(event) => updateRow(index, { description: event.target.value })} rows={2} placeholder="Describe this task..." className={`min-h-20 w-full rounded-2xl border px-4 py-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                      <div className={`rounded-2xl border px-3 py-2 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className={`flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>
+                            <Clock3 className="h-3.5 w-3.5" /> Time
+                          </div>
+                          <div className={`grid grid-cols-2 rounded-full p-0.5 text-[10px] font-black ${darkMode ? "bg-[#0f151c]" : "bg-[#f2f4ef]"}`}>
+                            {["12", "24"].map((format) => (
+                              <button
+                                key={format}
+                                type="button"
+                                onClick={() => updateRow(index, { timeFormat: format })}
+                                className={`h-6 rounded-full px-2 transition ${String(row.timeFormat || "24") === format ? "bg-[#89ed3f] text-black shadow-[0_8px_16px_rgba(137,237,63,0.18)]" : darkMode ? "text-white/45 hover:text-white" : "text-black/45 hover:text-black"}`}
+                              >
+                                {format}h
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-[1fr_1fr_96px] items-end gap-2">
+                          <TaskTimeField key={`start-${index}-${row.timeFormat || "24"}-${row.startTime || ""}`} label="Start" value={row.startTime || ""} onChange={(startTime) => updateRow(index, { startTime })} format={row.timeFormat || "24"} darkMode={darkMode} />
+                          <TaskTimeField key={`end-${index}-${row.timeFormat || "24"}-${row.endTime || ""}`} label="End" value={row.endTime || ""} onChange={(endTime) => updateRow(index, { endTime })} format={row.timeFormat || "24"} darkMode={darkMode} />
+                          <div className={`grid h-16 place-items-center rounded-xl border text-center ${taskDurationLabel(row) ? darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a]/12 text-[#d8f36a]" : "border-[#8bd85b]/30 bg-[#eafbdc] text-[#34780d]" : darkMode ? "border-white/10 bg-[#0f151c] text-white/25" : "border-black/10 bg-[#fbfcf9] text-black/30"}`}>
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-[0.12em]">Total</p>
+                              <p className="mt-0.5 text-xl font-black tabular-nums">{taskDurationLabel(row) || "--"}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div className="order-5 flex flex-col lg:self-start">
                     <p className="mb-2 select-none text-[10px] font-semibold uppercase tracking-[0.12em] opacity-0">Actions</p>
@@ -760,6 +969,7 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = 
                   <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Category</p><p className="mt-1 font-semibold break-words">{item.category || "-"}</p></div>
                   {showInvolvement && <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Involvement</p><p className="mt-1 font-semibold break-words">{item.involvement || "-"}</p></div>}
                   {showStatus && <div className="col-span-2"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Status</p><p className="mt-1 font-semibold">{item.status || "-"}</p></div>}
+                  {taskTimeLabel(item) && <div className="col-span-2"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Time</p><p className="mt-1 font-semibold">{taskTimeLabel(item)}</p></div>}
                   <div className="col-span-2 border-t border-black/[0.06] pt-3 dark:border-white/10"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Description</p><p className="mt-2 whitespace-pre-wrap break-words leading-6">{item.description || "-"}</p></div>
                 </div>
               </article>
@@ -773,6 +983,7 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = 
                 <th className="w-48 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Task Category</th>
                 {showStatus && <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Status</th>}
                 {showInvolvement && <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Involvement</th>}
+                <th className="w-32 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Time</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Description</th>
               </tr>
             </thead>
@@ -788,6 +999,7 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = 
                   </td>
                   {showStatus && <td className="px-4 py-3">{item.status || "-"}</td>}
                   {showInvolvement && <td className="px-4 py-3">{item.involvement || "-"}</td>}
+                  <td className="px-4 py-3 font-semibold">{taskTimeLabel(item) || "-"}</td>
                   <td className="whitespace-pre-wrap break-words rounded-r-2xl px-5 py-3 leading-6">{item.description || "-"}</td>
                 </tr>
               ))}
@@ -1774,6 +1986,9 @@ export default function EmployeeDailyReport({ darkMode }) {
           involvement: involvementValues.join(", "),
           involvementValues,
           description,
+          startTime: item.startTime || "",
+          endTime: item.endTime || "",
+          timeFormat: item.timeFormat || "24",
           recurring: Boolean(item.recurring),
           recurringId: item.recurringId || recurringIdForTask({ site, category, description }),
         };
@@ -1786,6 +2001,9 @@ export default function EmployeeDailyReport({ darkMode }) {
           involvement: involvementValues.join(", "),
           involvementValues,
           description: item.description.trim(),
+          startTime: item.startTime || "",
+          endTime: item.endTime || "",
+          timeFormat: item.timeFormat || "24",
         };
       }).filter((item) => item.site && item.category && item.involvement && item.description);
       const payload = {

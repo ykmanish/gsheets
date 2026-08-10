@@ -113,14 +113,28 @@ const PRIVILEGE_ITEMS = [
 
 let mongoClient;
 let authDb;
+let mongoConnectPromise;
 let moduleControlCache = { disabledModules: [], expiresAt: 0 };
 const employeeDailyQuoteBuilds = new Map();
 
 async function connectAuthDb() {
   if (authDb) return authDb;
-  mongoClient = new MongoClient(MONGODB_URI);
-  await mongoClient.connect();
-  authDb = mongoClient.db();
+  if (mongoConnectPromise) return mongoConnectPromise;
+  mongoConnectPromise = (async () => {
+    mongoClient = new MongoClient(MONGODB_URI, {
+      serverSelectionTimeoutMS: 15000,
+      connectTimeoutMS: 15000,
+    });
+    await mongoClient.connect();
+    authDb = mongoClient.db();
+    return authDb;
+  })().catch((error) => {
+    mongoConnectPromise = null;
+    mongoClient = null;
+    authDb = null;
+    throw error;
+  });
+  await mongoConnectPromise;
   await authDb.collection("users").createIndex({ usernameLower: 1 }, { unique: true });
   await authDb.collection("roles").createIndex({ nameLower: 1 }, { unique: true });
   await authDb.collection("sessions").createIndex({ tokenHash: 1 }, { unique: true });

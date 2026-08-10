@@ -131,6 +131,7 @@ async function connectAuthDb() {
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
   await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
   await authDb.collection("personalTodos").createIndex({ userId: 1, createdAt: -1 });
+  await authDb.collection("projectDashboard").createIndex({ updatedAt: -1 });
   await authDb.collection("forumConversations").createIndex({ type: 1, updatedAt: -1 });
   await authDb.collection("forumConversations").createIndex({ participantIds: 1, updatedAt: -1 });
   // A project can have only one live Loop group. The partial filter indexes just the groups that
@@ -5841,6 +5842,7 @@ let mrnSettings = {
   linkedBy: null,
 };
 let projectDashboardConfig = { projects: [] };
+let projectDashboardSaveQueue = Promise.resolve();
 const scheduledAutomationJobs = new Map();
 
 if (fs.existsSync(documentsPath)) {
@@ -5956,6 +5958,67 @@ if (fs.existsSync(projectDashboardPath)) {
   }
 }
 
+function normalizeProjectDashboardConfig(config) {
+  return {
+    projects: Array.isArray(config?.projects) ? config.projects : [],
+  };
+}
+
+function mirrorProjectDashboardConfigToFile(snapshot = projectDashboardConfig) {
+  try {
+    fs.writeFileSync(projectDashboardPath, JSON.stringify(normalizeProjectDashboardConfig(snapshot), null, 2));
+  } catch (error) {
+    console.error("Error saving project dashboard configuration backup:", error);
+  }
+}
+
+async function loadProjectDashboardConfigFromMongo() {
+  try {
+    const db = await connectAuthDb();
+    const collection = db.collection("projectDashboard");
+    const stored = await collection.findOne({ _id: "default" });
+    if (stored?.config) {
+      projectDashboardConfig = normalizeProjectDashboardConfig(stored.config);
+      mirrorProjectDashboardConfigToFile(projectDashboardConfig);
+      console.log(`Loaded ${projectDashboardConfig.projects.length} Project Control projects from MongoDB`);
+      return;
+    }
+
+    projectDashboardConfig = normalizeProjectDashboardConfig(projectDashboardConfig);
+    await collection.updateOne(
+      { _id: "default" },
+      {
+        $set: {
+          config: projectDashboardConfig,
+          source: "json-migration",
+          updatedAt: new Date(),
+        },
+        $setOnInsert: { createdAt: new Date() },
+      },
+      { upsert: true }
+    );
+    console.log(`Migrated ${projectDashboardConfig.projects.length} Project Control projects to MongoDB`);
+  } catch (error) {
+    console.error("Error loading Project Control data from MongoDB; using local JSON backup:", error.message);
+  }
+}
+
+async function persistProjectDashboardConfigToMongo(snapshot) {
+  const db = await connectAuthDb();
+  await db.collection("projectDashboard").updateOne(
+    { _id: "default" },
+    {
+      $set: {
+        config: normalizeProjectDashboardConfig(snapshot),
+        source: "app",
+        updatedAt: new Date(),
+      },
+      $setOnInsert: { createdAt: new Date() },
+    },
+    { upsert: true }
+  );
+}
+
 function saveDocuments() {
   try {
     fs.writeFileSync(documentsPath, JSON.stringify(documents, null, 2));
@@ -5965,11 +6028,14 @@ function saveDocuments() {
 }
 
 function saveProjectDashboardConfig() {
-  try {
-    fs.writeFileSync(projectDashboardPath, JSON.stringify(projectDashboardConfig, null, 2));
-  } catch (error) {
-    console.error("Error saving project dashboard configuration:", error);
-  }
+  const snapshot = normalizeProjectDashboardConfig(projectDashboardConfig);
+  mirrorProjectDashboardConfigToFile(snapshot);
+  projectDashboardSaveQueue = projectDashboardSaveQueue
+    .then(() => persistProjectDashboardConfigToMongo(snapshot))
+    .catch((error) => {
+      console.error("Error saving Project Control data to MongoDB:", error.message);
+    });
+  return projectDashboardSaveQueue;
 }
 
 function inspectVectorFile(documentId) {
@@ -18640,11 +18706,14 @@ if (require.main === module) {
 
   refreshProjectGroupReportCrons();
 
-  server.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📁 Uploads: ${uploadsDir}`);
-    console.log(`📁 Vectors: ${vectorsDir}`);
-    console.log(`📁 Data: ${dataDir}`);
+  loadProjectDashboardConfigFromMongo().finally(() => {
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📁 Uploads: ${uploadsDir}`);
+      console.log(`📁 Vectors: ${vectorsDir}`);
+      console.log(`📁 Data: ${dataDir}`);
+      console.log("📁 Project Control: MongoDB collection projectDashboard");
+    });
   });
 }
 

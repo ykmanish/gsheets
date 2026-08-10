@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "raga-mongo": {
+      "command": "npx",
+      "args": ["-y", "mongodb-mcp-server@latest", "--readOnly"],
+      "env": {
+        "MDB_MCP_CONNECTION_STRING": "${RAGA_MONGODB_READONLY_URI}"
+      }
+    }
+  }
+}

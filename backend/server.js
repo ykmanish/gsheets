@@ -141,6 +141,10 @@ async function connectAuthDb() {
   await authDb.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await authDb.collection("employeeDailyReports").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
   await authDb.collection("employeeDailyReports").createIndex({ reportDate: -1, submittedAt: -1 });
+  await authDb.collection("employeeReportSubmissions").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
+  await authDb.collection("employeeReportSubmissions").createIndex({ reportDate: -1, submittedAt: -1 });
+  await authDb.collection("dmrDailySnapshots").createIndex({ spreadsheetId: 1, date: 1 }, { unique: true });
+  await authDb.collection("dmrDailySnapshots").createIndex({ date: -1, updatedAt: -1 });
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
   await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
@@ -1051,25 +1055,33 @@ function uniqueEmployeeValues(values = []) {
 
 function sanitizeEmployeeTaskItems(items = []) {
   if (!Array.isArray(items)) return [];
-  return items.map((item) => ({
-    site: projectText(item?.site),
-    category: projectText(item?.category),
-    status: projectText(item?.status),
-    involvement: uniqueEmployeeValues([
-      ...(Array.isArray(item?.involvementValues) ? item.involvementValues : []),
-      ...(Array.isArray(item?.involvement) ? item.involvement : [item?.involvement]),
-    ]).join(", "),
-    involvementValues: uniqueEmployeeValues([
-      ...(Array.isArray(item?.involvementValues) ? item.involvementValues : []),
-      ...(Array.isArray(item?.involvement) ? item.involvement : String(item?.involvement || "").split(",")),
-    ]),
-    description: projectText(item?.description),
-    startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.startTime)) ? projectText(item?.startTime) : "",
-    endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.endTime)) ? projectText(item?.endTime) : "",
-    timeFormat: projectText(item?.timeFormat) === "12" ? "12" : "24",
-    recurring: Boolean(item?.recurring),
-    recurringId: projectText(item?.recurringId),
-  })).filter((item) => item.category && item.description).slice(0, 30);
+  return items.map((item) => {
+    const durationHours = Math.min(999, Math.max(0, Number.parseInt(item?.durationHours ?? item?.duration?.hours, 10) || 0));
+    const durationMinutes = Math.min(59, Math.max(0, Number.parseInt(item?.durationMinutes ?? item?.duration?.minutes, 10) || 0));
+    const durationTotalMinutes = Math.max(0, Number.parseInt(item?.durationTotalMinutes ?? item?.durationMinutesTotal, 10) || (durationHours * 60 + durationMinutes));
+    return {
+      site: projectText(item?.site),
+      category: projectText(item?.category),
+      status: projectText(item?.status),
+      involvement: uniqueEmployeeValues([
+        ...(Array.isArray(item?.involvementValues) ? item.involvementValues : []),
+        ...(Array.isArray(item?.involvement) ? item.involvement : [item?.involvement]),
+      ]).join(", "),
+      involvementValues: uniqueEmployeeValues([
+        ...(Array.isArray(item?.involvementValues) ? item.involvementValues : []),
+        ...(Array.isArray(item?.involvement) ? item.involvement : String(item?.involvement || "").split(",")),
+      ]),
+      description: projectText(item?.description),
+      durationHours: durationHours ? String(durationHours) : "",
+      durationMinutes: durationMinutes ? String(durationMinutes) : "",
+      durationTotalMinutes,
+      startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.startTime)) ? projectText(item?.startTime) : "",
+      endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.endTime)) ? projectText(item?.endTime) : "",
+      timeFormat: projectText(item?.timeFormat) === "12" ? "12" : "24",
+      recurring: Boolean(item?.recurring),
+      recurringId: projectText(item?.recurringId),
+    };
+  }).filter((item) => item.category && item.description).slice(0, 30);
 }
 
 function employeeReportOptionUsage(reports = []) {
@@ -1717,13 +1729,15 @@ function employeeReportCacheDocument(report) {
 async function cacheEmployeeReports(db, reports = []) {
   const valid = reports.map(employeeReportCacheDocument).filter((report) => report.userId && report.reportDate);
   if (!valid.length) return;
-  await db.collection("employeeDailyReports").bulkWrite(valid.map((report) => ({
+  const writes = valid.map((report) => ({
     updateOne: {
       filter: { userId: report.userId, reportDate: report.reportDate },
       update: { $set: report },
       upsert: true,
     },
-  })), { ordered: false });
+  }));
+  await db.collection("employeeDailyReports").bulkWrite(writes, { ordered: false });
+  await db.collection("employeeReportSubmissions").bulkWrite(writes, { ordered: false });
 }
 
 async function getCachedEmployeeReportsForUsers(db, users = []) {
@@ -3227,14 +3241,15 @@ app.delete("/employee-daily-report/:reportDate", async (req, res) => {
     const cachedReport = await db.collection("employeeDailyReports").findOne({ userId: targetUserId, reportDate });
     const result = await deleteEmployeeReportFromSheet({ user: targetUser, reportDate, fallbackReport: cachedReport });
     const cacheDelete = await db.collection("employeeDailyReports").deleteOne({ userId: targetUserId, reportDate });
+    const mirrorDelete = await db.collection("employeeReportSubmissions").deleteOne({ userId: targetUserId, reportDate });
     await db.collection("employeeExecutiveReportAnswers").deleteOne({ userId: targetUserId, reportDate });
     await db.collection("users").updateOne(
       { _id: targetUser._id },
       { $set: { employeeReportCacheHydratedAt: new Date(), updatedAt: new Date() } },
     );
     employeeReportCache.delete(employeeReportCacheKey(targetUser));
-    addActivityLog({ req, action: "Deleted employee daily report", target: `${targetUser.displayName || targetUser.username || "Employee"} · ${reportDate}`, details: { ...result, cacheDeleted: cacheDelete.deletedCount } });
-    res.json({ success: true, ...result, cacheDeleted: cacheDelete.deletedCount });
+    addActivityLog({ req, action: "Deleted employee daily report", target: `${targetUser.displayName || targetUser.username || "Employee"} · ${reportDate}`, details: { ...result, cacheDeleted: cacheDelete.deletedCount, mirrorDeleted: mirrorDelete.deletedCount } });
+    res.json({ success: true, ...result, cacheDeleted: cacheDelete.deletedCount, mirrorDeleted: mirrorDelete.deletedCount });
   } catch (error) {
     if (/linked google sheet|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
     console.error("Employee daily report delete error:", employeeSheetErrorMessage(error));
@@ -8062,6 +8077,50 @@ async function readDmrSheet(spreadsheetId, dateKey, { ensure = false } = {}) {
     dateKey,
   });
   return { ...parsed, sheetName: sheetInfo.sheetName, created: sheetInfo.created };
+}
+
+function dmrSnapshotDocument({ spreadsheetId, dateKey, sheet = {}, source = "dmr-dashboard", actor = null } = {}) {
+  const records = Array.isArray(sheet.records) ? sheet.records : [];
+  const equipment = Array.isArray(sheet.equipment) ? sheet.equipment : [];
+  const materials = Array.isArray(sheet.materials) ? sheet.materials : [];
+  const notes = Array.isArray(sheet.notes) ? sheet.notes : [];
+  const staffAttendance = Array.isArray(sheet.staffAttendance) ? sheet.staffAttendance : [];
+  const now = new Date();
+  return {
+    spreadsheetId: normalizeSpreadsheetId(spreadsheetId),
+    date: dmrDateKey(dateKey) || istDateKey(now),
+    sheetName: sheet.sheetName || dmrTabName(dateKey),
+    source,
+    updatedAt: now,
+    updatedBy: actor ? {
+      userId: String(actor.id || actor._id || ""),
+      username: actor.username || "",
+      displayName: actor.displayName || actor.name || actor.username || "",
+      roleName: actor.roleName || "",
+    } : null,
+    records,
+    equipment,
+    materials,
+    notes,
+    staffAttendance,
+    totals: dmrSummary(records),
+    siteBreakdown: dmrBreakdown(records, "site"),
+    agencyBreakdown: dmrBreakdown(records, "agency"),
+    sites: [...new Set(records.map((record) => projectText(record.site)).filter(Boolean))],
+    agencies: [...new Set(records.map((record) => projectText(record.agency)).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+  };
+}
+
+async function persistDmrDailySnapshot({ spreadsheetId, dateKey, source = "dmr-dashboard", actor = null } = {}) {
+  const sheet = await readDmrSheet(spreadsheetId, dateKey, { ensure: false });
+  const doc = dmrSnapshotDocument({ spreadsheetId, dateKey, sheet, source, actor });
+  const db = await connectAuthDb();
+  await db.collection("dmrDailySnapshots").updateOne(
+    { spreadsheetId: doc.spreadsheetId, date: doc.date },
+    { $set: doc, $setOnInsert: { createdAt: doc.updatedAt } },
+    { upsert: true },
+  );
+  return doc;
 }
 
 async function refreshDmrManpowerTotals(spreadsheetId, sheetName) {
@@ -15461,6 +15520,10 @@ app.get("/dmr-dashboard", async (req, res) => {
     const dashboard = publicDmrSettings().linked
       ? await readDmrDashboard(date, { ensureToday: isToday, force })
       : emptyDmrDashboard(date);
+    if (dashboard.spreadsheetId) {
+      persistDmrDailySnapshot({ spreadsheetId: dashboard.spreadsheetId, dateKey: date, source: "dmr-dashboard-read", actor: req.authUser })
+        .catch((snapshotError) => console.warn("DMR snapshot persist skipped:", snapshotError.message));
+    }
     res.json({
       ...dashboard,
       canEdit: hasPrivilege(req, "edit_project_dmr"),
@@ -15738,6 +15801,7 @@ app.patch("/dmr-dashboard", async (req, res) => {
     }).filter(Boolean);
     if (!updates.length) return res.status(400).json({ error: "No matching DMR rows found for this date" });
     const result = await writeDmrRecords(spreadsheetId, date, updates);
+    await persistDmrDailySnapshot({ spreadsheetId, dateKey: date, source: "dmr-dashboard", actor: req.authUser });
     addDmrHistory(req, historyEntries);
     addActivityLog({
       req,
@@ -15763,6 +15827,7 @@ app.post("/dmr-dashboard/section-row", async (req, res) => {
     const submissionId = projectText(req.body?.submissionId) || `dmr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const spreadsheetId = getActiveDmrSpreadsheetId();
     const result = await addDmrSectionRow(spreadsheetId, date, req.body?.section, values);
+    await persistDmrDailySnapshot({ spreadsheetId, dateKey: date, source: "dmr-dashboard-section-row", actor: req.authUser });
     addDmrHistory(req, [{
       submissionId,
       dmrDate: date,
@@ -15925,6 +15990,7 @@ app.patch("/project-dashboard/dmr", async (req, res) => {
     if (!updates.length) return res.status(403).json({ error: "No editable DMR rows matched this project scope" });
 
     const result = await writeDmrRecords(project.dmr.spreadsheetId, date, updates);
+    await persistDmrDailySnapshot({ spreadsheetId: project.dmr.spreadsheetId, dateKey: date, source: "project-dashboard-dmr", actor: req.authUser });
     addActivityLog({
       req,
       action: "Updated project DMR",

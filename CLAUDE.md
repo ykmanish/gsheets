@@ -15,7 +15,8 @@ Each module owns its own collection. Read this table before writing any query �
 | The user asks about… | Query this | Not this |
 |---|---|---|
 | **Projects**, project tasks, phases, milestones, deadlines, project health/status, "Project Control" | `projectDashboard` | ✗ not `employeeDailyReports` |
-| **DMR**, daily report, "what did X do on date Y", site work logs | `employeeDailyReports` | |
+| **Employee reports**, "what did X do on date Y", employee site work logs | `employeeDailyReports` or `employeeReportSubmissions` | |
+| **Project DMR**, manpower, DMR equipment/materials/notes/staff attendance | `dmrDailySnapshots` | ✗ not `employeeDailyReports` |
 | **Attendance**, clock-in/out, present/absent, NCO | `hrAttendanceRecords` | |
 | **Leave**, paid leave, PL, leave balance | `hrLeaveRequests` | |
 | **Personal to-dos** | `personalTodos` | |
@@ -27,7 +28,7 @@ Each module owns its own collection. Read this table before writing any query �
 "Tasks" is ambiguous in this system and exists in **three** unrelated places. When the question could mean more than one, ask or answer from both and label each — never silently pick one:
 
 1. `projectDashboard` — **project** tasks, inside `config.projects[].phases[].tasks[]`. Structured: status, priority, due date, assignees, subtasks.
-2. `employeeDailyReports` — **daily-report** tasks, inside `taskItems[]`. Free text, one row per person per day.
+2. `employeeDailyReports` / `employeeReportSubmissions` — **employee daily-report** tasks, inside `taskItems[]`. Free text, one row per person per day.
 3. `personalTodos` — private per-user to-dos.
 
 A site name appearing in both systems does **not** mean they're linked. `projectDashboard` has `dmr.enabled = false` on every project, and its project names don't match DMR site spellings (`Kalhar` vs `Kalhaar`, `Devsharanam` vs `Devsharnam`, `Silver White Factory` vs `Silver White`).
@@ -42,7 +43,8 @@ A site name appearing in both systems does **not** mean they're linked. `project
 - **Site names need normalizing before grouping.** 5 sites exist in case/spacing variants and will silently split a per-site rollup: `OFFICE`/`Office`/`office` (869 items), `Paramdham`/`PARAMDHAM` (498), `Swati senor`/`Swati Senor`/`SWATI SENOR`/`swati senor` (161), `All Projects`/`all projects`, `Harmony`/`harmony`. Group on `{ $toLower: { $trim: { input: "$taskItems.site" } } }`. Beyond those there are ~50 distinct free-text site values including `Kalhaar` vs `Kalhar`, `NO SITE`, `NONE`, `WFH`, and personal names.
 - **There is no `tasks` collection.** Every kind of task lives inside arrays and sub-documents of its owning module — see the routing table above.
 - **`projectDashboard` is a single document.** One doc, `_id: "default"`, holding the entire Project Control config under `config.projects[]`. Never `find()` it expecting one doc per project — `$unwind` `config.projects` first.
-- **`employeeDailyReports` is a cache** of per-employee Google Sheets, upserted on `{ userId, reportDate }`. It can lag the sheet.
+- **`employeeDailyReports` is a cache** of per-employee Google Sheets, upserted on `{ userId, reportDate }`. `employeeReportSubmissions` mirrors the same documents under a clearer collection name for MCP/Claude discovery.
+- **`dmrDailySnapshots` is the Mongo mirror of Project DMR Google Sheets.** It is upserted after successful DMR sheet writes on `{ spreadsheetId, date }` and stores `records`, `equipment`, `materials`, `notes`, `staffAttendance`, `totals`, `siteBreakdown`, and `agencyBreakdown`.
 - Exclude the `Super Admin` account from people-facing rollups (1 report); `sanitizeEmployeeReport` callers filter it by name.
 
 ### `projectDashboard` — Project Control (the projects module)

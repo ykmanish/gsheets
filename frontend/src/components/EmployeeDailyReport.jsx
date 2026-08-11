@@ -113,11 +113,11 @@ function buildMonthGrid(monthDate) {
 }
 
 function createEmptyTaskRow() {
-  return { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", startTime: "", endTime: "", timeFormat: "24", recurring: false, recurringId: "" };
+  return { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24", recurring: false, recurringId: "" };
 }
 
 function createEmptyWaitingRow() {
-  return { site: "", category: "", categoryOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", startTime: "", endTime: "", timeFormat: "24" };
+  return { site: "", category: "", categoryOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24" };
 }
 
 const emptyForm = {
@@ -224,6 +224,12 @@ function formatDraftTime(value) {
 
 function padTimePart(value) {
   return String(Number(value) || 0).padStart(2, "0");
+}
+
+function cleanDurationPart(value, max = 999) {
+  const text = String(value ?? "").replace(/[^\d]/g, "");
+  if (!text) return "";
+  return String(Math.min(max, Math.max(0, Number.parseInt(text, 10) || 0)));
 }
 
 function parseReminderTime(value) {
@@ -480,6 +486,54 @@ function TaskTimeField({ label, value, onChange, format = "24", darkMode }) {
   );
 }
 
+function TaskDurationField({ row, onChange, darkMode }) {
+  const hours = cleanDurationPart(row.durationHours ?? row.duration?.hours ?? "");
+  const minutes = cleanDurationPart(row.durationMinutes ?? row.duration?.minutes ?? "", 59);
+  const totalMinutes = (Number(hours) || 0) * 60 + (Number(minutes) || 0);
+  const label = totalMinutes
+    ? `${Math.floor(totalMinutes / 60)}h${totalMinutes % 60 ? ` ${totalMinutes % 60}m` : ""}`
+    : "--";
+  const inputClass = `h-11 w-full rounded-xl border px-3 text-center text-sm font-black tabular-nums outline-none transition focus:ring-4 ${darkMode ? "border-white/10 bg-[#0f151c] text-white placeholder:text-white/25 focus:border-[#d8f36a]/25 focus:ring-[#d8f36a]/10" : "border-black/10 bg-[#fbfcf9] text-black placeholder:text-black/30 focus:border-[#8bd85b]/40 focus:ring-[#8bd85b]/15"}`;
+
+  return (
+    <div className={`rounded-2xl border px-3 py-2 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
+      <div className={`mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>
+        <Clock3 className="h-3.5 w-3.5" /> Duration
+      </div>
+      <div className="grid grid-cols-[1fr_1fr_92px] items-end gap-2">
+        <label className="min-w-0">
+          <span className={`mb-1 block text-[10px] font-bold ${darkMode ? "text-white/40" : "text-black/40"}`}>Hours</span>
+          <input
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={hours}
+            onChange={(event) => onChange({ durationHours: cleanDurationPart(event.target.value), durationMinutes: minutes, startTime: "", endTime: "", timeFormat: "24" })}
+            placeholder="0"
+            className={inputClass}
+          />
+        </label>
+        <label className="min-w-0">
+          <span className={`mb-1 block text-[10px] font-bold ${darkMode ? "text-white/40" : "text-black/40"}`}>Minutes</span>
+          <input
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={minutes}
+            onChange={(event) => onChange({ durationHours: hours, durationMinutes: cleanDurationPart(event.target.value, 59), startTime: "", endTime: "", timeFormat: "24" })}
+            placeholder="0"
+            className={inputClass}
+          />
+        </label>
+        <div className={`grid h-16 place-items-center rounded-xl border text-center ${totalMinutes ? darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a]/12 text-[#d8f36a]" : "border-[#8bd85b]/30 bg-[#eafbdc] text-[#34780d]" : darkMode ? "border-white/10 bg-[#0f151c] text-white/25" : "border-black/10 bg-[#fbfcf9] text-black/30"}`}>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-[0.12em]">Total</p>
+            <p className="mt-0.5 text-lg font-black tabular-nums">{label}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function hasEmployeeDraftContent(form = {}) {
   const hasText = [form.note].some((value) => String(value || "").trim());
   const hasRows = [...(Array.isArray(form.taskItems) ? form.taskItems : []), ...(Array.isArray(form.waitingTaskItems) ? form.waitingTaskItems : [])]
@@ -693,6 +747,8 @@ function taskRowValue(row, field) {
 }
 
 function taskTimeLabel(item = {}) {
+  const duration = taskDurationLabel(item);
+  if (duration) return duration;
   const start = String(item.startTime || "").trim();
   const end = String(item.endTime || "").trim();
   if (start && end) return `${start} - ${end}`;
@@ -700,6 +756,24 @@ function taskTimeLabel(item = {}) {
 }
 
 function taskDurationLabel(item = {}) {
+  const directMinutes = Number(item.durationTotalMinutes ?? item.durationMinutesTotal);
+  if (Number.isFinite(directMinutes) && directMinutes > 0) {
+    const hours = Math.floor(directMinutes / 60);
+    const remainder = directMinutes % 60;
+    if (!hours) return `${remainder}m`;
+    if (!remainder) return `${hours}h`;
+    return `${hours}h ${remainder}m`;
+  }
+  const hoursValue = Number.parseInt(item.durationHours, 10) || Number.parseInt(item.duration?.hours, 10) || 0;
+  const minutesValue = Number.parseInt(item.durationMinutes, 10) || Number.parseInt(item.duration?.minutes, 10) || 0;
+  const enteredMinutes = Math.max(0, hoursValue) * 60 + Math.min(59, Math.max(0, minutesValue));
+  if (enteredMinutes > 0) {
+    const hours = Math.floor(enteredMinutes / 60);
+    const remainder = enteredMinutes % 60;
+    if (!hours) return `${remainder}m`;
+    if (!remainder) return `${hours}h`;
+    return `${hours}h ${remainder}m`;
+  }
   const start = String(item.startTime || "");
   const end = String(item.endTime || "");
   if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return "";
@@ -757,6 +831,8 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
         involvementValues: involvementValuesFromRow(source),
         involvementOther: source.involvementOther || "",
         description: "",
+        durationHours: source.durationHours || source.duration?.hours || "",
+        durationMinutes: source.durationMinutes || source.duration?.minutes || "",
         startTime: source.startTime || "",
         endTime: source.endTime || "",
         timeFormat: source.timeFormat || "24",
@@ -887,37 +963,9 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                         )}
                       </button>
                     </div>
-                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_420px]">
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
                       <textarea required={required && index === 0} value={row.description} onChange={(event) => updateRow(index, { description: event.target.value })} rows={2} placeholder="Describe this task..." className={`min-h-20 w-full rounded-2xl border px-4 py-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
-                      <div className={`rounded-2xl border px-3 py-2 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <div className={`flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>
-                            <Clock3 className="h-3.5 w-3.5" /> Time
-                          </div>
-                          <div className={`grid grid-cols-2 rounded-full p-0.5 text-[10px] font-black ${darkMode ? "bg-[#0f151c]" : "bg-[#f2f4ef]"}`}>
-                            {["12", "24"].map((format) => (
-                              <button
-                                key={format}
-                                type="button"
-                                onClick={() => updateRow(index, { timeFormat: format })}
-                                className={`h-6 rounded-full px-2 transition ${String(row.timeFormat || "24") === format ? "bg-[#89ed3f] text-black shadow-[0_8px_16px_rgba(137,237,63,0.18)]" : darkMode ? "text-white/45 hover:text-white" : "text-black/45 hover:text-black"}`}
-                              >
-                                {format}h
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-[1fr_1fr_96px] items-end gap-2">
-                          <TaskTimeField key={`start-${index}-${row.timeFormat || "24"}-${row.startTime || ""}`} label="Start" value={row.startTime || ""} onChange={(startTime) => updateRow(index, { startTime })} format={row.timeFormat || "24"} darkMode={darkMode} />
-                          <TaskTimeField key={`end-${index}-${row.timeFormat || "24"}-${row.endTime || ""}`} label="End" value={row.endTime || ""} onChange={(endTime) => updateRow(index, { endTime })} format={row.timeFormat || "24"} darkMode={darkMode} />
-                          <div className={`grid h-16 place-items-center rounded-xl border text-center ${taskDurationLabel(row) ? darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a]/12 text-[#d8f36a]" : "border-[#8bd85b]/30 bg-[#eafbdc] text-[#34780d]" : darkMode ? "border-white/10 bg-[#0f151c] text-white/25" : "border-black/10 bg-[#fbfcf9] text-black/30"}`}>
-                            <div>
-                              <p className="text-[9px] font-black uppercase tracking-[0.12em]">Total</p>
-                              <p className="mt-0.5 text-xl font-black tabular-nums">{taskDurationLabel(row) || "--"}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <TaskDurationField row={row} onChange={(patch) => updateRow(index, patch)} darkMode={darkMode} />
                     </div>
                   </div>
                   <div className="order-5 flex flex-col lg:self-start">
@@ -969,7 +1017,7 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = 
                   <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Category</p><p className="mt-1 font-semibold break-words">{item.category || "-"}</p></div>
                   {showInvolvement && <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Involvement</p><p className="mt-1 font-semibold break-words">{item.involvement || "-"}</p></div>}
                   {showStatus && <div className="col-span-2"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Status</p><p className="mt-1 font-semibold">{item.status || "-"}</p></div>}
-                  {taskTimeLabel(item) && <div className="col-span-2"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Time</p><p className="mt-1 font-semibold">{taskTimeLabel(item)}</p></div>}
+                  {taskTimeLabel(item) && <div className="col-span-2"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Duration</p><p className="mt-1 font-semibold">{taskTimeLabel(item)}</p></div>}
                   <div className="col-span-2 border-t border-black/[0.06] pt-3 dark:border-white/10"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Description</p><p className="mt-2 whitespace-pre-wrap break-words leading-6">{item.description || "-"}</p></div>
                 </div>
               </article>
@@ -983,7 +1031,7 @@ function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = 
                 <th className="w-48 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Task Category</th>
                 {showStatus && <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Status</th>}
                 {showInvolvement && <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Involvement</th>}
-                <th className="w-32 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Time</th>
+                <th className="w-32 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Duration</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Description</th>
               </tr>
             </thead>
@@ -1979,6 +2027,9 @@ export default function EmployeeDailyReport({ darkMode }) {
         const site = fieldValue(item.site, item.siteOther).trim();
         const category = fieldValue(item.category, item.categoryOther).trim();
         const description = item.description.trim();
+        const durationHours = cleanDurationPart(item.durationHours ?? item.duration?.hours ?? "");
+        const durationMinutes = cleanDurationPart(item.durationMinutes ?? item.duration?.minutes ?? "", 59);
+        const durationTotalMinutes = (Number(durationHours) || 0) * 60 + (Number(durationMinutes) || 0);
         return {
           site,
           category,
@@ -1986,24 +2037,33 @@ export default function EmployeeDailyReport({ darkMode }) {
           involvement: involvementValues.join(", "),
           involvementValues,
           description,
-          startTime: item.startTime || "",
-          endTime: item.endTime || "",
-          timeFormat: item.timeFormat || "24",
+          durationHours,
+          durationMinutes,
+          durationTotalMinutes,
+          startTime: "",
+          endTime: "",
+          timeFormat: "24",
           recurring: Boolean(item.recurring),
           recurringId: item.recurringId || recurringIdForTask({ site, category, description }),
         };
       }).filter((item) => item.site && item.category && item.status && item.involvement && item.description);
       const waitingTaskItems = (form.waitingTaskItems || []).map((item) => {
         const involvementValues = uniqueClean([...involvementValuesFromRow(item), item.involvementOther]);
+        const durationHours = cleanDurationPart(item.durationHours ?? item.duration?.hours ?? "");
+        const durationMinutes = cleanDurationPart(item.durationMinutes ?? item.duration?.minutes ?? "", 59);
+        const durationTotalMinutes = (Number(durationHours) || 0) * 60 + (Number(durationMinutes) || 0);
         return {
           site: fieldValue(item.site, item.siteOther).trim(),
           category: fieldValue(item.category, item.categoryOther).trim(),
           involvement: involvementValues.join(", "),
           involvementValues,
           description: item.description.trim(),
-          startTime: item.startTime || "",
-          endTime: item.endTime || "",
-          timeFormat: item.timeFormat || "24",
+          durationHours,
+          durationMinutes,
+          durationTotalMinutes,
+          startTime: "",
+          endTime: "",
+          timeFormat: "24",
         };
       }).filter((item) => item.site && item.category && item.involvement && item.description);
       const payload = {

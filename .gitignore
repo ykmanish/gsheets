@@ -1,0 +1,7 @@
+node_modules/
+remote-mcp/node_modules/
+.env
+*.log
+dist/
+build/
+.next/

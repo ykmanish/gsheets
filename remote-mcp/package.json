@@ -1,0 +1,22 @@
+{
+  "name": "remote-mcp",
+  "version": "1.0.0",
+  "description": "Remote MCP connector for Raga MongoDB report snapshots.",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mongodb": "^7.5.0",
+    "zod": "^4.4.3"
+  }
+}

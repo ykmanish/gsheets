@@ -145,6 +145,10 @@ async function connectAuthDb() {
   await authDb.collection("employeeReportSubmissions").createIndex({ reportDate: -1, submittedAt: -1 });
   await authDb.collection("dmrDailySnapshots").createIndex({ spreadsheetId: 1, date: 1 }, { unique: true });
   await authDb.collection("dmrDailySnapshots").createIndex({ date: -1, updatedAt: -1 });
+  await authDb.collection("stockDailySnapshots").createIndex({ date: 1 }, { unique: true });
+  await authDb.collection("stockDailySnapshots").createIndex({ updatedAt: -1 });
+  await authDb.collection("stockSiteSnapshots").createIndex({ siteId: 1, spreadsheetId: 1 }, { unique: true });
+  await authDb.collection("stockSiteSnapshots").createIndex({ updatedAt: -1 });
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
   await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
@@ -6232,6 +6236,15 @@ function getActiveMrnSpreadsheetId() {
 const STOCK_SETTINGS_ID = "project-stock-sites";
 const stockDashboardCache = new Map();
 const STOCK_DASHBOARD_CACHE_TTL_MS = 1000 * 60 * 3;
+const DEFAULT_STOCK_SITES = [
+  { id: "paramdham", name: "Paramdham", spreadsheetId: "1nXEcEou44aqs2nG04lk4ZolsdduMQ3yK1M_IR7RfUcY", linkedFileName: "Paramdham Stock" },
+  { id: "warehouse-store-inventory", name: "U&I Warehouse Store Inventory", spreadsheetId: "1u7rw_urCGinw4wnxePz2vwGsCG-8dr7EUGEtgFCpSYw", linkedFileName: "U&I Warehouse Store Inventory" },
+  { id: "asteria", name: "Asteria", spreadsheetId: "1kchq6TRdBTtdZktKd9o-ioW5g8ctcTE6J_oxKxUaKPc", linkedFileName: "Asteria Stock" },
+  { id: "gharana", name: "Gharana", spreadsheetId: "1Jm7GsVgGaaOr_MX2d86fQTRapv9q_dA_9KU-iG7qMyI", linkedFileName: "Gharana Stock" },
+  { id: "imperial", name: "Imperial", spreadsheetId: "18pHYf4wvNfaGm07cPHCTYiSvZ4PnOMp_BPGlyUbPxrM", linkedFileName: "Imperial Stock" },
+  { id: "kalhar", name: "Kalhar", spreadsheetId: "12IMw6MbPSt1vsR3KFoFNHygCx7OXYfpVHwkGC-jZnLM", linkedFileName: "Kalhar Stock" },
+  { id: "devsharnam", name: "Devsharnam", spreadsheetId: "1iKbF18nfJ05h4ugJ5kYax4E5bXel6auoBZgCSjxjsY8", linkedFileName: "Devsharnam Stock" },
+];
 
 function normalizeStockSite(input = {}) {
   const name = profileText(input.name || input.siteName || input.title, 80);
@@ -6254,8 +6267,18 @@ function normalizeStockSite(input = {}) {
 async function getStockSettings() {
   const db = await connectAuthDb();
   const setting = await db.collection("platformSettings").findOne({ _id: STOCK_SETTINGS_ID });
+  const savedSites = (Array.isArray(setting?.sites) ? setting.sites : []).map(normalizeStockSite).filter((site) => site.name && site.spreadsheetId);
+  const defaultSites = DEFAULT_STOCK_SITES.map((site) => normalizeStockSite({
+    ...site,
+    architecture: "auto",
+    notes: "Default stock sheet",
+    linkedAt: "2026-08-11T00:00:00.000Z",
+    linkedBy: "System",
+  }));
+  const sitesByName = new Map(savedSites.map((site) => [stockHeaderKey(site.name), site]));
+  defaultSites.forEach((site) => sitesByName.set(stockHeaderKey(site.name), site));
   return {
-    sites: (Array.isArray(setting?.sites) ? setting.sites : []).map(normalizeStockSite).filter((site) => site.name && site.spreadsheetId),
+    sites: [...sitesByName.values()],
     updatedAt: setting?.updatedAt || null,
   };
 }
@@ -6459,6 +6482,98 @@ async function readStockDashboard({ force = false } = {}) {
     },
     generatedAt: new Date().toISOString(),
   };
+}
+
+function stockSnapshotActor(actor = null) {
+  return actor ? {
+    userId: String(actor.id || actor._id || ""),
+    username: actor.username || "",
+    displayName: actor.displayName || actor.name || actor.username || "",
+    roleName: actor.roleName || "",
+  } : null;
+}
+
+function stockSnapshotDocument({ dashboard = {}, source = "project-stock", actor = null } = {}) {
+  const now = new Date();
+  const date = istDateKey(now);
+  const sites = Array.isArray(dashboard.sites) ? dashboard.sites : [];
+  const items = sites.flatMap((site) => (Array.isArray(site.items) ? site.items : []).map((item) => ({
+    ...item,
+    siteId: site.id || "",
+    siteName: site.name || "",
+    spreadsheetId: site.spreadsheetId || "",
+    linkedFileName: site.linkedFileName || null,
+  })));
+  return {
+    date,
+    source,
+    generatedAt: dashboard.generatedAt || now.toISOString(),
+    updatedAt: now,
+    updatedBy: stockSnapshotActor(actor),
+    summary: dashboard.summary || {
+      sites: sites.length,
+      linkedSites: sites.filter((site) => site.spreadsheetId).length,
+      totalSheets: sites.reduce((sum, site) => sum + (site.summary?.sheets || 0), 0),
+      totalItems: items.length,
+      totalQuantity: items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
+      lowStock: items.filter((item) => Number(item.quantity) <= Math.max(0, Number(item.reorderMin) || 0)).length,
+      totalValue: items.reduce((sum, item) => sum + (Number(item.value) || 0), 0),
+    },
+    sites,
+    items,
+    lowStockItems: sites.flatMap((site) => (Array.isArray(site.lowStockItems) ? site.lowStockItems : []).map((item) => ({
+      ...item,
+      siteId: site.id || "",
+      siteName: site.name || "",
+      spreadsheetId: site.spreadsheetId || "",
+    }))).slice(0, 200),
+  };
+}
+
+function stockSiteSnapshotDocument(site = {}, { source = "project-stock", actor = null } = {}) {
+  const now = new Date();
+  return {
+    siteId: site.id || "",
+    siteName: site.name || "",
+    spreadsheetId: site.spreadsheetId || "",
+    sheetUrl: site.sheetUrl || "",
+    linkedFileName: site.linkedFileName || null,
+    source,
+    fetchedAt: site.fetchedAt || now.toISOString(),
+    updatedAt: now,
+    updatedBy: stockSnapshotActor(actor),
+    summary: site.summary || {},
+    sheets: Array.isArray(site.sheets) ? site.sheets : [],
+    categories: Array.isArray(site.categories) ? site.categories : [],
+    lowStockItems: Array.isArray(site.lowStockItems) ? site.lowStockItems : [],
+    items: Array.isArray(site.items) ? site.items : [],
+    recentItems: Array.isArray(site.recentItems) ? site.recentItems : [],
+    error: site.error || null,
+  };
+}
+
+async function persistStockSnapshots({ dashboard = null, source = "project-stock", actor = null, force = false } = {}) {
+  const stockDashboard = dashboard || await readStockDashboard({ force });
+  const dailyDoc = stockSnapshotDocument({ dashboard: stockDashboard, source, actor });
+  const siteDocs = (stockDashboard.sites || [])
+    .map((site) => stockSiteSnapshotDocument(site, { source, actor }))
+    .filter((site) => site.siteId && site.spreadsheetId);
+  const db = await connectAuthDb();
+  await db.collection("stockDailySnapshots").updateOne(
+    { date: dailyDoc.date },
+    { $set: dailyDoc, $setOnInsert: { createdAt: dailyDoc.updatedAt } },
+    { upsert: true },
+  );
+  if (siteDocs.length) {
+    await db.collection("stockSiteSnapshots").bulkWrite(siteDocs.map((site) => ({
+      updateOne: {
+        filter: { siteId: site.siteId, spreadsheetId: site.spreadsheetId },
+        update: { $set: site, $setOnInsert: { createdAt: site.updatedAt } },
+        upsert: true,
+      },
+    })), { ordered: false });
+  }
+  return { dailyDoc, siteDocs };
 }
 
 function getClientIp(req) {
@@ -15237,13 +15352,59 @@ app.get("/project-stock", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "project-stock")) return res.status(403).json({ error: "Stock module access required" });
     const dashboard = await readStockDashboard({ force: ["1", "true", "yes"].includes(String(req.query.force || "").toLowerCase()) });
+    const snapshot = await persistStockSnapshots({ dashboard, source: "project-stock-read", actor: req.authUser });
     res.json({
       ...dashboard,
       canManage: Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_stock")),
+      snapshot: { daily: Boolean(snapshot.dailyDoc), sites: snapshot.siteDocs.length },
     });
   } catch (error) {
     console.error("Stock dashboard error:", error);
     res.status(500).json({ error: `Could not load stock dashboard: ${error.message}` });
+  }
+});
+
+app.post("/project-stock/snapshot/backfill", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-stock")) return res.status(403).json({ error: "Stock module access required" });
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_project_stock")) return res.status(403).json({ error: "Stock management permission required" });
+    const dashboard = await readStockDashboard({ force: true });
+    const snapshot = await persistStockSnapshots({ dashboard, source: "project-stock-manual-backfill", actor: req.authUser });
+    res.json({
+      success: true,
+      snapshot: { daily: Boolean(snapshot.dailyDoc), sites: snapshot.siteDocs.length },
+      summary: dashboard.summary,
+      siteErrors: (dashboard.sites || [])
+        .filter((site) => site.error)
+        .map((site) => ({ id: site.id, name: site.name, spreadsheetId: site.spreadsheetId, error: site.error })),
+    });
+  } catch (error) {
+    console.error("Stock snapshot backfill error:", error);
+    res.status(500).json({ error: `Could not backfill stock snapshot: ${error.message}` });
+  }
+});
+
+app.post("/project-stock/sites/repair-defaults", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-stock")) return res.status(403).json({ error: "Stock module access required" });
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_project_stock")) return res.status(403).json({ error: "Stock management permission required" });
+    const settings = await getStockSettings();
+    const sites = await saveStockSites(settings.sites, req.authUser);
+    stockDashboardCache.clear();
+    const dashboard = await readStockDashboard({ force: true });
+    const snapshot = await persistStockSnapshots({ dashboard, source: "project-stock-repair-defaults", actor: req.authUser });
+    res.json({
+      success: true,
+      sites,
+      snapshot: { daily: Boolean(snapshot.dailyDoc), sites: snapshot.siteDocs.length },
+      summary: dashboard.summary,
+      siteErrors: (dashboard.sites || [])
+        .filter((site) => site.error)
+        .map((site) => ({ id: site.id, name: site.name, spreadsheetId: site.spreadsheetId, error: site.error })),
+    });
+  } catch (error) {
+    console.error("Stock default repair error:", error);
+    res.status(500).json({ error: `Could not repair stock links: ${error.message}` });
   }
 });
 
@@ -15263,6 +15424,7 @@ app.get("/project-dashboard/projects/:id/stock", async (req, res) => {
     if (!project) return res.status(404).json({ error: "Project not found" });
     if (!canViewProject(project, req)) return res.status(403).json({ error: "Project access required" });
     const dashboard = await readStockDashboard({ force: ["1", "true", "yes"].includes(String(req.query.force || "").toLowerCase()) });
+    await persistStockSnapshots({ dashboard, source: "project-stock-project-read", actor: req.authUser });
     const sites = (dashboard.sites || []).filter((site) => stockSiteMatchesProject(site, project));
     const totals = sites.reduce((result, site) => {
       result.sites += 1;
@@ -15308,6 +15470,8 @@ app.post("/project-stock/sites", async (req, res) => {
     });
     await buildStockSiteDashboard(site, { force: true });
     const sites = await saveStockSites([...settings.sites, site], req.authUser);
+    persistStockSnapshots({ source: "project-stock-site-linked", actor: req.authUser, force: true })
+      .catch((snapshotError) => console.warn("Stock snapshot persist skipped:", snapshotError.message));
     addActivityLog({ req, action: "Linked stock sheet", target: name, details: { spreadsheetId, siteId: site.id } });
     res.json({ success: true, site, sites });
   } catch (error) {
@@ -15342,6 +15506,8 @@ app.patch("/project-stock/sites/:id", async (req, res) => {
     await buildStockSiteDashboard(site, { force: true });
     settings.sites[index] = site;
     const sites = await saveStockSites(settings.sites, req.authUser);
+    persistStockSnapshots({ source: "project-stock-site-updated", actor: req.authUser, force: true })
+      .catch((snapshotError) => console.warn("Stock snapshot persist skipped:", snapshotError.message));
     addActivityLog({ req, action: "Updated stock site", target: name, details: { spreadsheetId, siteId: site.id } });
     res.json({ success: true, site, sites });
   } catch (error) {
@@ -15359,6 +15525,10 @@ app.delete("/project-stock/sites/:id", async (req, res) => {
     if (!site) return res.status(404).json({ error: "Stock site not found" });
     stockDashboardCache.delete(`${site.id}:${site.spreadsheetId}`);
     const sites = await saveStockSites(settings.sites.filter((item) => item.id !== req.params.id), req.authUser);
+    const db = await connectAuthDb();
+    await db.collection("stockSiteSnapshots").deleteOne({ siteId: site.id, spreadsheetId: site.spreadsheetId });
+    persistStockSnapshots({ source: "project-stock-site-unlinked", actor: req.authUser, force: true })
+      .catch((snapshotError) => console.warn("Stock snapshot persist skipped:", snapshotError.message));
     addActivityLog({ req, action: "Unlinked stock sheet", target: site.name, details: { spreadsheetId: site.spreadsheetId, siteId: site.id } });
     res.json({ success: true, sites });
   } catch (error) {
@@ -15373,7 +15543,15 @@ app.get("/project-stock/sites/:id", async (req, res) => {
     const settings = await getStockSettings();
     const site = settings.sites.find((item) => item.id === req.params.id);
     if (!site) return res.status(404).json({ error: "Stock site not found" });
-    res.json({ site: await buildStockSiteDashboard(site, { force: ["1", "true", "yes"].includes(String(req.query.force || "").toLowerCase()) }) });
+    const dashboard = await buildStockSiteDashboard(site, { force: ["1", "true", "yes"].includes(String(req.query.force || "").toLowerCase()) });
+    const siteDoc = stockSiteSnapshotDocument(dashboard, { source: "project-stock-site-read", actor: req.authUser });
+    const db = await connectAuthDb();
+    await db.collection("stockSiteSnapshots").updateOne(
+      { siteId: siteDoc.siteId, spreadsheetId: siteDoc.spreadsheetId },
+      { $set: siteDoc, $setOnInsert: { createdAt: siteDoc.updatedAt } },
+      { upsert: true },
+    );
+    res.json({ site: dashboard });
   } catch (error) {
     console.error("Stock site detail error:", error);
     res.status(500).json({ error: `Could not load stock site: ${error.message}` });

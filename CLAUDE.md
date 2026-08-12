@@ -17,6 +17,7 @@ Each module owns its own collection. Read this table before writing any query �
 | **Projects**, project tasks, phases, milestones, deadlines, project health/status, "Project Control" | `projectDashboard` | ✗ not `employeeDailyReports` |
 | **Employee reports**, "what did X do on date Y", employee site work logs | `employeeDailyReports` or `employeeReportSubmissions` | |
 | **Project DMR**, manpower, DMR equipment/materials/notes/staff attendance | `dmrDailySnapshots` | ✗ not `employeeDailyReports` |
+| **Stock**, inventory, materials balance, low-stock alerts | `stockDailySnapshots`, `stockSiteSnapshots` | |
 | **Attendance**, clock-in/out, present/absent, NCO | `hrAttendanceRecords` | |
 | **Leave**, paid leave, PL, leave balance | `hrLeaveRequests` | |
 | **Personal to-dos** | `personalTodos` | |
@@ -45,6 +46,7 @@ A site name appearing in both systems does **not** mean they're linked. `project
 - **`projectDashboard` is a single document.** One doc, `_id: "default"`, holding the entire Project Control config under `config.projects[]`. Never `find()` it expecting one doc per project — `$unwind` `config.projects` first.
 - **`employeeDailyReports` is a cache** of per-employee Google Sheets, upserted on `{ userId, reportDate }`. `employeeReportSubmissions` mirrors the same documents under a clearer collection name for MCP/Claude discovery.
 - **`dmrDailySnapshots` is the Mongo mirror of Project DMR Google Sheets.** It is upserted after successful DMR sheet writes on `{ spreadsheetId, date }` and stores `records`, `equipment`, `materials`, `notes`, `staffAttendance`, `totals`, `siteBreakdown`, and `agencyBreakdown`.
+- **`stockDailySnapshots` / `stockSiteSnapshots` are Mongo mirrors of linked Stock Google Sheets.** They are upserted when Stock pages are opened/read or stock sheets are linked/updated. `stockDailySnapshots` has one daily aggregate with `sites`, flattened `items`, `summary`, and `lowStockItems`; `stockSiteSnapshots` has one latest snapshot per linked stock site.
 - Exclude the `Super Admin` account from people-facing rollups (1 report); `sanitizeEmployeeReport` callers filter it by name.
 
 ### `projectDashboard` — Project Control (the projects module)

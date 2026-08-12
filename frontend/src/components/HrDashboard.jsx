@@ -740,6 +740,20 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       doc.text("= Leave", legendX + 9, legendY + 6);
       
       legendX += 21;
+
+      // HF
+      doc.setFillColor(221, 214, 254);
+      doc.rect(legendX, legendY + 2.5, 9, 5, "F");
+      doc.setTextColor(91, 33, 182);
+      doc.setFontSize(6);
+      doc.setFont("Geist", "bold");
+      doc.text("HF", legendX + 4.5, legendY + 6, { align: "center" });
+      doc.setFont("Geist", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.text("= Half Day", legendX + 10, legendY + 6);
+      
+      legendX += 28;
       
       // -
       doc.setFillColor(254, 226, 226);
@@ -790,10 +804,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
       filteredAttendanceRecords.forEach(record => {
         if (monthDates.includes(record.date) && employeeMap[record.userId]) {
-          let val = "-";
-          if (record.clockInAt && !record.clockOutAt) {
+          let val = record.status === "leave" ? "L" : record.status === "half-day" ? "HF" : "-";
+          if (val === "-" && record.clockInAt && !record.clockOutAt) {
             val = "NCO";
-          } else if (record.workMinutes != null) {
+          } else if (val === "-" && record.workMinutes != null) {
             val = (record.workMinutes / 60).toFixed(1);
           }
           employeeMap[record.userId].days[record.date] = val;
@@ -836,7 +850,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             const val = emp.days[date] || "-";
             row.push(val);
             if (val === "-") absentDays += 1;
-            else if (val !== "PL" && val !== "L") presentDays += 1;
+            else if (val !== "PL" && val !== "L" && val !== "HF") presentDays += 1;
           }
         });
         row.push((emp.totalMinutes / 60).toFixed(1));
@@ -866,7 +880,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
           if (!isSunday) {
             const val = emp.days[date] || "-";
             if (val === "-") totalAbsents += 1;
-            else if (val !== "PL" && val !== "L") totalPresents += 1;
+            else if (val !== "PL" && val !== "L" && val !== "HF") totalPresents += 1;
           }
         });
       });
@@ -908,6 +922,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               data.cell.styles.fillColor = [153, 27, 27];   // dark red background
               data.cell.styles.textColor = [255, 255, 255]; // white text
               data.cell.styles.fontStyle = "bold";
+            } else if (data.cell.raw === "HF") {
+              data.cell.styles.fillColor = [221, 214, 254]; // lavender
+              data.cell.styles.textColor = [91, 33, 182];   // violet text
+              data.cell.styles.fontStyle = "bold";
             }
           }
         }
@@ -946,6 +964,9 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const selectedEmployeeCurrentMonthPaidLeaves = selectedEmployeeCurrentMonthLeaves.reduce((sum, request) => sum + Math.min(leaveDaysInMonth(request, currentLeaveMonth), Number(request.paidLeaveDays || 0)), 0);
   const selectedEmployeePaidLeavesRemaining = Math.max(0, selectedEmployeeMonthlyAllowance - selectedEmployeeCurrentMonthPaidLeaves);
   const selectedEmployeeTotalLeavesTaken = selectedEmployeeApprovedLeaves.reduce((sum, request) => sum + (Number(request.days) || leaveDayCount(request.startDate, request.endDate)), 0);
+  const selectedEmployeeTodayAttendance = selectedEmployee ? attendanceRecords.find((record) => record.userId === selectedEmployee.id && record.date === todayInput()) : null;
+  const selectedEmployeeOnLeaveToday = selectedEmployeeTodayAttendance?.status === "leave";
+  const selectedEmployeeHalfDayToday = selectedEmployeeTodayAttendance?.status === "half-day";
   const filteredEmployees = activeEmployees.filter((employee) => {
     const search = query.trim().toLowerCase();
     if (!search) return true;
@@ -1213,6 +1234,40 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       hrToast.success(remoteWorkEnabled ? "Remote work enabled" : "Remote work disabled");
     } catch (error) {
       hrToast.error(error.message || "Could not update remote work");
+    } finally {
+      setEmployeeRemoteSavingId("");
+    }
+  }
+
+  function mergeAttendanceRecord(record) {
+    setData((current) => {
+      const records = current?.attendanceRecords || [];
+      if (!record) {
+        return { ...(current || {}), attendanceRecords: records.filter((item) => !(item.userId === selectedEmployee?.id && item.date === todayInput() && item.manualStatus)) };
+      }
+      const exists = records.some((item) => item.id === record.id || (item.userId === record.userId && item.date === record.date));
+      const nextRecords = exists
+        ? records.map((item) => (item.id === record.id || (item.userId === record.userId && item.date === record.date)) ? record : item)
+        : [record, ...records];
+      return { ...(current || {}), attendanceRecords: nextRecords };
+    });
+  }
+
+  async function saveEmployeeManualAttendance(status) {
+    if (!selectedEmployee?.id || employeeRemoteSavingId) return;
+    try {
+      setEmployeeRemoteSavingId(selectedEmployee.id);
+      const response = await fetch(`${API_URL}/hr/attendance/manual`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedEmployee.id, date: todayInput(), status }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not update attendance");
+      mergeAttendanceRecord(result.record || null);
+      hrToast.success(status === "half-day" ? "Half day marked" : status === "leave" ? "Leave marked" : "Attendance mark cleared");
+    } catch (error) {
+      hrToast.error(error.message || "Could not update attendance");
     } finally {
       setEmployeeRemoteSavingId("");
     }
@@ -2646,6 +2701,36 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                           <span className={`mt-1 block text-xs leading-5 ${muted}`}>When this is checked, this employee attendance is marked as remote and skips the office geofence.</span>
                         </span>
                       </label>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className={`flex items-start gap-3 rounded-2xl border p-4 ${darkMode ? "border-rose-300/15 bg-rose-300/8" : "border-rose-100 bg-rose-50"}`}>
+                          <button
+                            type="button"
+                            disabled={Boolean(employeeRemoteSavingId)}
+                            onClick={() => saveEmployeeManualAttendance(selectedEmployeeOnLeaveToday ? "clear" : "leave")}
+                            className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-60 ${selectedEmployeeOnLeaveToday ? "border-rose-700 bg-rose-700 text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white hover:border-rose-300"}`}
+                          >
+                            {employeeRemoteSavingId === selectedEmployee?.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : selectedEmployeeOnLeaveToday && <Check className="h-4 w-4" />}
+                          </button>
+                          <span>
+                            <span className="block text-sm font-black">On Leave</span>
+                            <span className={`mt-1 block text-xs leading-5 ${muted}`}>Marks today as leave in attendance when the employee did not apply from the leave module.</span>
+                          </span>
+                        </label>
+                        <label className={`flex items-start gap-3 rounded-2xl border p-4 ${darkMode ? "border-violet-300/20 bg-violet-300/10" : "border-violet-100 bg-violet-50"}`}>
+                          <button
+                            type="button"
+                            disabled={Boolean(employeeRemoteSavingId)}
+                            onClick={() => saveEmployeeManualAttendance(selectedEmployeeHalfDayToday ? "clear" : "half-day")}
+                            className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-60 ${selectedEmployeeHalfDayToday ? "border-violet-600 bg-violet-200 text-violet-800" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white hover:border-violet-300"}`}
+                          >
+                            {employeeRemoteSavingId === selectedEmployee?.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : selectedEmployeeHalfDayToday && <Check className="h-4 w-4" />}
+                          </button>
+                          <span>
+                            <span className="block text-sm font-black">Half Day</span>
+                            <span className={`mt-1 block text-xs leading-5 ${muted}`}>Marks today as HF in attendance exports with a lavender cell.</span>
+                          </span>
+                        </label>
+                      </div>
                       <p className={`mt-3 text-xs leading-5 ${muted}`}>Permanent employees get 1 paid leave per month. Probation employees have no paid leave.</p>
                     </form>
                   )}

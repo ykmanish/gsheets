@@ -4893,9 +4893,18 @@ function serializeAttendanceRecord(item = {}, user = null) {
     clockOutDistanceMeters: item.clockOutDistanceMeters ?? null,
     workMode: item.workMode || "office",
     workMinutes: item.workMinutes || 0,
+    manualStatus: Boolean(item.manualStatus),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
+}
+
+function attendancePivotValue(record = {}) {
+  if (record.status === "leave") return "L";
+  if (record.status === "half-day") return "HF";
+  if (record.clockInAt && !record.clockOutAt) return "NCO";
+  if (record.workMinutes != null) return (record.workMinutes / 60).toFixed(1);
+  return "-";
 }
 
 async function loadHrAttendanceRecords(req, db, canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"))) {
@@ -5034,12 +5043,7 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
 
   records.forEach(record => {
     if (monthDates.includes(record.date) && employeeMap[record.userId]) {
-      let val = "-";
-      if (record.clockInAt && !record.clockOutAt) {
-        val = "NCO";
-      } else if (record.workMinutes != null) {
-        val = (record.workMinutes / 60).toFixed(1);
-      }
+      const val = attendancePivotValue(record);
       employeeMap[record.userId].days[record.date] = val;
       employeeMap[record.userId].totalMinutes += (record.workMinutes || 0);
     }
@@ -5084,7 +5088,7 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
         const val = emp.days[date] || "-";
         row.push(val);
         if (val === "-") absentDays += 1;
-        else if (val !== "PL" && val !== "L") presentDays += 1;
+        else if (val !== "PL" && val !== "L" && val !== "HF") presentDays += 1;
       }
     });
     row.push((emp.totalMinutes / 60).toFixed(1));
@@ -5114,7 +5118,7 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
       if (!isSunday) {
         const val = emp.days[date] || "-";
         if (val === "-") totalAbsents += 1;
-        else if (val !== "PL" && val !== "L") totalPresents += 1;
+        else if (val !== "PL" && val !== "L" && val !== "HF") totalPresents += 1;
       }
     });
   });
@@ -5237,6 +5241,8 @@ async function pushAttendanceToGoogleSheet(db, targetDate, manualSheetLink = nul
           format = { backgroundColor: { red: 37/255, green: 99/255, blue: 235/255 }, textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true } };
         } else if (val === "L") {
           format = { backgroundColor: { red: 153/255, green: 27/255, blue: 27/255 }, textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true } };
+        } else if (val === "HF") {
+          format = { backgroundColor: { red: 221/255, green: 214/255, blue: 254/255 }, textFormat: { foregroundColor: { red: 91/255, green: 33/255, blue: 182/255 }, bold: true } };
         }
         
         if (format) {
@@ -5332,6 +5338,9 @@ app.get("/hr/attendance/export/excel", async (req, res) => {
         } else if (val === "L") {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF991B1B' } };
           cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+        } else if (val === "HF") {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDD6FE' } };
+          cell.font = { color: { argb: 'FF5B21B6' }, bold: true };
         }
       });
     });
@@ -5420,6 +5429,68 @@ app.post("/hr/attendance/clock-out", async (req, res) => {
   } catch (error) {
     console.error("Attendance clock-out error:", error);
     res.status(error.statusCode || 500).json({ error: error.message || "Could not clock out", distanceMeters: error.distanceMeters });
+  }
+});
+
+app.patch("/hr/attendance/manual", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) {
+      return res.status(403).json({ error: "HR manage access required" });
+    }
+    const db = await connectAuthDb();
+    if (!ObjectId.isValid(String(req.body?.userId || ""))) return res.status(400).json({ error: "Employee is required" });
+    const userId = new ObjectId(String(req.body.userId));
+    const targetUser = await db.collection("users").findOne({ _id: userId });
+    if (!targetUser) return res.status(404).json({ error: "Employee not found" });
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || "")) ? String(req.body.date) : attendanceDateKey();
+    const status = String(req.body?.status || "").trim().toLowerCase();
+    if (!["leave", "half-day", "clear"].includes(status)) return res.status(400).json({ error: "Choose leave, half-day, or clear" });
+
+    const existing = await db.collection("hrAttendanceRecords").findOne({ userId, date });
+    if (status === "clear") {
+      if (existing?.manualStatus) {
+        await db.collection("hrAttendanceRecords").deleteOne({ _id: existing._id });
+        addActivityLog({ req, action: "Cleared manual attendance", target: `${targetUser.displayName || targetUser.username || "Employee"} · ${date}` });
+        return res.json({ success: true, record: null });
+      }
+      if (!existing) return res.json({ success: true, record: null });
+      const update = { status: existing.clockOutAt ? "completed" : existing.clockInAt ? "checked-in" : "checked-in", manualStatus: false, updatedAt: new Date() };
+      await db.collection("hrAttendanceRecords").updateOne({ _id: existing._id }, { $set: update, $unset: { manualMarkedBy: "", manualMarkedAt: "" } });
+      return res.json({ success: true, record: serializeAttendanceRecord({ ...existing, ...update }, targetUser) });
+    }
+
+    const now = new Date();
+    const update = {
+      userId,
+      employeeName: targetUser.displayName || targetUser.username || "Employee",
+      designation: targetUser.designation || targetUser.jobTitle || "",
+      department: targetUser.department || "",
+      date,
+      status,
+      workMode: status === "half-day" ? "office" : "leave",
+      clockInAt: null,
+      clockOutAt: null,
+      clockInLocation: null,
+      clockOutLocation: null,
+      clockInDistanceMeters: null,
+      clockOutDistanceMeters: null,
+      workMinutes: 0,
+      manualStatus: true,
+      manualMarkedBy: req.authUser.id,
+      manualMarkedAt: now,
+      updatedAt: now,
+    };
+    await db.collection("hrAttendanceRecords").updateOne(
+      { userId, date },
+      { $set: update, $setOnInsert: { createdAt: now } },
+      { upsert: true }
+    );
+    const saved = await db.collection("hrAttendanceRecords").findOne({ userId, date });
+    addActivityLog({ req, action: status === "half-day" ? "Marked half day" : "Marked leave", target: `${update.employeeName} · ${date}` });
+    res.json({ success: true, record: serializeAttendanceRecord(saved, targetUser) });
+  } catch (error) {
+    console.error("Manual attendance error:", error);
+    res.status(500).json({ error: error.message || "Could not update attendance" });
   }
 });
 

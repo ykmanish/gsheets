@@ -705,93 +705,40 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       
       doc.setFont("Geist", "normal");
       
-      let legendX = doc.internal.pageSize.getWidth() - 165;
-      const legendY = currentY;
-      
-      doc.setFontSize(8);
-      doc.setTextColor(40, 40, 40);
-      doc.text("Legend:", legendX, legendY + 6);
-      legendX += 13;
-      
-      // PL
-      doc.setFillColor(37, 99, 235);
-      doc.rect(legendX, legendY + 2.5, 8, 5, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(6);
-      doc.setFont("Geist", "bold");
-      doc.text("PL", legendX + 4, legendY + 6, { align: "center" });
+      const legendItems = [
+        { code: "PL", label: "Paid Leave", fill: [37, 99, 235], text: [255, 255, 255] },
+        { code: "L", label: "Leave", fill: [153, 27, 27], text: [255, 255, 255] },
+        { code: "HF", label: "Half Day", fill: [221, 214, 254], text: [91, 33, 182] },
+        { code: "-", label: "Absent", fill: [254, 226, 226], text: [220, 38, 38] },
+        { code: "NCO", label: "No Clock Out", fill: [255, 237, 213], text: [234, 88, 12] },
+        { code: "SUN", label: "Sunday", fill: [240, 240, 240], text: [40, 40, 40] },
+      ];
+      const pageRight = doc.internal.pageSize.getWidth() - 14;
+      const legendStartX = Math.max(104, doc.internal.pageSize.getWidth() - 190);
+      let legendX = legendStartX;
+      let legendY = currentY - 1;
       doc.setFont("Geist", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(40, 40, 40);
-      doc.text("= Paid Leave", legendX + 9, legendY + 6);
-      
-      legendX += 27;
-      
-      // L
-      doc.setFillColor(153, 27, 27);
-      doc.rect(legendX, legendY + 2.5, 8, 5, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(6);
-      doc.setFont("Geist", "bold");
-      doc.text("L", legendX + 4, legendY + 6, { align: "center" });
-      doc.setFont("Geist", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(40, 40, 40);
-      doc.text("= Leave", legendX + 9, legendY + 6);
-      
-      legendX += 21;
-
-      // HF
-      doc.setFillColor(221, 214, 254);
-      doc.rect(legendX, legendY + 2.5, 9, 5, "F");
-      doc.setTextColor(91, 33, 182);
-      doc.setFontSize(6);
-      doc.setFont("Geist", "bold");
-      doc.text("HF", legendX + 4.5, legendY + 6, { align: "center" });
-      doc.setFont("Geist", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(40, 40, 40);
-      doc.text("= Half Day", legendX + 10, legendY + 6);
-      
-      legendX += 28;
-      
-      // -
-      doc.setFillColor(254, 226, 226);
-      doc.rect(legendX, legendY + 2.5, 8, 5, "F");
-      doc.setTextColor(220, 38, 38);
-      doc.setFontSize(6);
-      doc.setFont("Geist", "bold");
-      doc.text("-", legendX + 4, legendY + 6, { align: "center" });
-      doc.setFont("Geist", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(40, 40, 40);
-      doc.text("= Absent", legendX + 9, legendY + 6);
-      
-      legendX += 23;
-      
-      // NCO
-      doc.setFillColor(255, 237, 213);
-      doc.rect(legendX, legendY + 2.5, 10, 5, "F");
-      doc.setTextColor(234, 88, 12);
-      doc.setFontSize(6);
-      doc.setFont("Geist", "bold");
-      doc.text("NCO", legendX + 5, legendY + 6, { align: "center" });
-      doc.setFont("Geist", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(40, 40, 40);
-      doc.text("= No Clock Out", legendX + 11, legendY + 6);
-      
-      legendX += 32;
-      
-      // SUN
-      doc.setFillColor(240, 240, 240);
-      doc.rect(legendX, legendY + 2.5, 10, 5, "F");
-      doc.setTextColor(40, 40, 40);
-      doc.setFontSize(6);
-      doc.setFont("Geist", "normal");
-      doc.text("SUN", legendX + 5, legendY + 6, { align: "center" });
-      doc.setFontSize(8);
-      doc.text("= Sunday", legendX + 11, legendY + 6);
+      doc.setFontSize(7);
+      legendItems.forEach((item) => {
+        const boxWidth = item.code.length > 1 ? 9 : 7;
+        const itemWidth = boxWidth + 2 + doc.getTextWidth(item.label) + 4;
+        if (legendX + itemWidth > pageRight) {
+          legendX = legendStartX;
+          legendY += 7;
+        }
+        doc.setFillColor(...item.fill);
+        doc.rect(legendX, legendY + 1.3, boxWidth, 5, "F");
+        doc.setTextColor(...item.text);
+        doc.setFontSize(5.5);
+        doc.setFont(item.code === "SUN" ? "Geist" : "Geist", item.code === "SUN" ? "normal" : "bold");
+        doc.text(item.code, legendX + boxWidth / 2, legendY + 4.8, { align: "center" });
+        doc.setFont("Geist", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(40, 40, 40);
+        doc.text(item.label, legendX + boxWidth + 2, legendY + 4.8);
+        legendX += itemWidth;
+      });
+      const tableStartY = Math.max(currentY + 11, legendY + 9);
       
       doc.setFontSize(10);
 
@@ -890,7 +837,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       footRow.push(totalAbsents);
 
       autoTable(doc, {
-        startY: currentY + 11,
+        startY: tableStartY,
         margin: { top: 8, bottom: 5, left: 5, right: 5 },
         showFoot: "lastPage",
         head: head,

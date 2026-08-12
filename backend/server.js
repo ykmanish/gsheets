@@ -16,6 +16,9 @@ const PDFDocument = require("pdfkit");
 const { pipeline } = require("@xenova/transformers");
 const crypto = require("crypto");
 const { MongoClient, ObjectId } = require("mongodb");
+const { z } = require("zod");
+const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
+const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
 
 const { processDocument, processSheetText } = require("./lib/processDocument");
 const { createWhatsAppService, normalizePhone } = require("./lib/whatsappService");
@@ -186,6 +189,175 @@ async function connectAuthDb() {
   await seedSuperAdmin();
   return authDb;
 }
+
+const MCP_MAX_LIMIT = Number(process.env.MCP_MAX_LIMIT || 200);
+const MCP_ALLOWED_COLLECTIONS = new Set(
+  (process.env.MCP_ALLOWED_COLLECTIONS || [
+    "employeeDailyReports",
+    "employeeReportSubmissions",
+    "dmrDailySnapshots",
+    "stockDailySnapshots",
+    "stockSiteSnapshots",
+    "projectDashboard",
+  ].join(","))
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean)
+);
+
+function mcpRequireAuth(req, res, next) {
+  const apiKey = process.env.RAGA_MCP_API_KEY || process.env.MCP_API_KEY;
+  if (!apiKey) return next();
+  const header = req.headers.authorization || "";
+  const bearer = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const queryKey = req.query?.key || "";
+  if (bearer === apiKey || req.headers["x-api-key"] === apiKey || queryKey === apiKey) return next();
+  return res.status(401).json({ error: "Authentication required" });
+}
+
+function mcpLimit(limit) {
+  const value = Number(limit || 50);
+  if (!Number.isFinite(value) || value < 1) return 50;
+  return Math.min(Math.floor(value), MCP_MAX_LIMIT);
+}
+
+function assertMcpCollection(collection) {
+  if (!MCP_ALLOWED_COLLECTIONS.has(collection)) {
+    throw new Error(`Collection not allowed: ${collection}`);
+  }
+}
+
+function mcpTextResult(data) {
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(data, (_key, value) => {
+          if (value && typeof value === "object" && value._bsontype === "ObjectId") return String(value);
+          return value;
+        }, 2),
+      },
+    ],
+  };
+}
+
+function createRagaMcpServer() {
+  const mcp = new McpServer({ name: "raga-mongo", version: "1.0.0" });
+
+  mcp.registerTool("list_collections", {
+    title: "List allowed MongoDB collections",
+    description: "Lists the MongoDB collections this read-only connector can query.",
+    inputSchema: {},
+  }, async () => mcpTextResult({ database: "sheets", collections: [...MCP_ALLOWED_COLLECTIONS].sort() }));
+
+  mcp.registerTool("count_documents", {
+    title: "Count MongoDB documents",
+    description: "Counts documents in an allowed collection using an optional MongoDB filter.",
+    inputSchema: {
+      collection: z.string(),
+      filter: z.record(z.any()).optional().default({}),
+    },
+  }, async ({ collection, filter }) => {
+    assertMcpCollection(collection);
+    const db = await connectAuthDb();
+    const count = await db.collection(collection).countDocuments(filter || {});
+    return mcpTextResult({ collection, count });
+  });
+
+  mcp.registerTool("find_documents", {
+    title: "Find MongoDB documents",
+    description: "Reads documents from an allowed collection. This connector never writes data.",
+    inputSchema: {
+      collection: z.string(),
+      filter: z.record(z.any()).optional().default({}),
+      projection: z.record(z.any()).optional(),
+      sort: z.record(z.any()).optional(),
+      limit: z.number().int().min(1).max(MCP_MAX_LIMIT).optional().default(50),
+    },
+  }, async ({ collection, filter, projection, sort, limit }) => {
+    assertMcpCollection(collection);
+    const db = await connectAuthDb();
+    let cursor = db.collection(collection).find(filter || {}, { projection }).limit(mcpLimit(limit));
+    if (sort) cursor = cursor.sort(sort);
+    const documents = await cursor.toArray();
+    return mcpTextResult({ collection, documents });
+  });
+
+  mcp.registerTool("latest_employee_reports", {
+    title: "Latest employee daily reports",
+    description: "Gets latest employee daily reports mirrored from Google Sheets.",
+    inputSchema: {
+      employeeName: z.string().optional(),
+      limit: z.number().int().min(1).max(MCP_MAX_LIMIT).optional().default(25),
+    },
+  }, async ({ employeeName, limit }) => {
+    const filter = employeeName ? { employeeName: new RegExp(employeeName, "i") } : {};
+    const db = await connectAuthDb();
+    const documents = await db.collection("employeeDailyReports")
+      .find(filter)
+      .sort({ reportDate: -1, submittedAt: -1, updatedAt: -1 })
+      .limit(mcpLimit(limit))
+      .toArray();
+    return mcpTextResult({ collection: "employeeDailyReports", documents });
+  });
+
+  mcp.registerTool("latest_dmr_snapshots", {
+    title: "Latest DMR snapshots",
+    description: "Gets latest DMR daily snapshots for projects and dates.",
+    inputSchema: {
+      projectName: z.string().optional(),
+      date: z.string().optional(),
+      limit: z.number().int().min(1).max(MCP_MAX_LIMIT).optional().default(25),
+    },
+  }, async ({ projectName, date, limit }) => {
+    const filter = {};
+    if (projectName) filter.projectName = new RegExp(projectName, "i");
+    if (date) filter.date = date;
+    const db = await connectAuthDb();
+    const documents = await db.collection("dmrDailySnapshots")
+      .find(filter)
+      .sort({ date: -1, snapshotAt: -1, updatedAt: -1 })
+      .limit(mcpLimit(limit))
+      .toArray();
+    return mcpTextResult({ collection: "dmrDailySnapshots", documents });
+  });
+
+  mcp.registerTool("latest_stock_snapshots", {
+    title: "Latest stock snapshots",
+    description: "Gets latest stock snapshots across configured stock sheets/sites.",
+    inputSchema: {
+      siteName: z.string().optional(),
+      limit: z.number().int().min(1).max(MCP_MAX_LIMIT).optional().default(25),
+    },
+  }, async ({ siteName, limit }) => {
+    const filter = siteName ? { siteName: new RegExp(siteName, "i") } : {};
+    const db = await connectAuthDb();
+    const documents = await db.collection("stockSiteSnapshots")
+      .find(filter)
+      .sort({ snapshotAt: -1, updatedAt: -1 })
+      .limit(mcpLimit(limit))
+      .toArray();
+    return mcpTextResult({ collection: "stockSiteSnapshots", documents });
+  });
+
+  return mcp;
+}
+
+app.all("/mcp", mcpRequireAuth, async (req, res) => {
+  try {
+    const mcp = createRagaMcpServer();
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    res.on("close", () => {
+      transport.close().catch(() => {});
+      mcp.close().catch(() => {});
+    });
+    await mcp.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (error) {
+    console.error("MCP request failed:", error);
+    if (!res.headersSent) res.status(500).json({ error: "MCP request failed" });
+  }
+});
 
 async function getDisabledModules({ fresh = false } = {}) {
   if (!fresh && moduleControlCache.expiresAt > Date.now()) return [...moduleControlCache.disabledModules];

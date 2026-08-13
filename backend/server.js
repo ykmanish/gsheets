@@ -5531,6 +5531,7 @@ app.patch("/hr/attendance/adjust-time", async (req, res) => {
     const clockInAt = attendanceIstDateTime(date, req.body?.clockInTime, "clock in time");
     const isToday = date === attendanceDateKey();
     const hasClockOut = !isToday && String(req.body?.clockOutTime || "").trim();
+    if (!isToday && !hasClockOut) return res.status(400).json({ error: "Clock out time is required for past dates" });
     const clockOutAt = hasClockOut ? attendanceIstDateTime(date, req.body?.clockOutTime, "clock out time") : null;
     if (clockOutAt && clockOutAt <= clockInAt) return res.status(400).json({ error: "Clock out must be after clock in" });
 

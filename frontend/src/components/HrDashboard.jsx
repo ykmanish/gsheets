@@ -389,13 +389,11 @@ function DrawerDatePicker({ darkMode, label, value, placeholder, onChange, minDa
   );
 }
 
-const ATTENDANCE_TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
-  const hour = Math.floor(index / 4);
-  const minute = (index % 4) * 15;
-  const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  const label = new Date(2000, 0, 1, hour, minute).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
-  return { value, label };
-});
+const ATTENDANCE_HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
+  value: String(hour).padStart(2, "0"),
+  label: new Date(2000, 0, 1, hour, 0).toLocaleTimeString("en-IN", { hour: "numeric" }),
+}));
+const ATTENDANCE_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, minute) => String(minute).padStart(2, "0"));
 
 function displayTimeInput(value = "") {
   const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
@@ -403,11 +401,17 @@ function displayTimeInput(value = "") {
   return new Date(2000, 0, 1, Number(match[1]), Number(match[2])).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
 }
 
-function AttendanceTimePicker({ darkMode, label, value, onChange }) {
+function currentTimeInput() {
+  const date = new Date();
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function AttendanceTimePicker({ darkMode, label, value, onChange, emptyLabel = "No record" }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
-  const quickTimes = ["10:30", "11:00", "19:00", "19:30", "20:00"];
+  const [draftTime, setDraftTime] = useState(value || currentTimeInput());
   const muted = darkMode ? "text-white/45" : "text-black/45";
+  const [selectedHour = "10", selectedMinute = "30"] = String(draftTime || currentTimeInput()).split(":");
 
   useEffect(() => {
     if (!open) return undefined;
@@ -417,14 +421,23 @@ function AttendanceTimePicker({ darkMode, label, value, onChange }) {
     }
     document.addEventListener("mousedown", closeOnOutside);
     return () => document.removeEventListener("mousedown", closeOnOutside);
-  }, [open]);
+  }, [open, value]);
+
+  function commitTime(nextHour = selectedHour, nextMinute = selectedMinute) {
+    const next = `${nextHour}:${nextMinute}`;
+    setDraftTime(next);
+    onChange(next);
+  }
 
   return (
     <div ref={ref} className="relative">
       <p className="text-xs font-medium text-black/65 dark:text-white/60">{label} *</p>
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setDraftTime(value || currentTimeInput());
+          setOpen((current) => !current);
+        }}
         className={`mt-2 flex h-11 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-semibold outline-none transition ${
           darkMode
             ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]"
@@ -433,58 +446,69 @@ function AttendanceTimePicker({ darkMode, label, value, onChange }) {
       >
         <span className="flex items-center gap-2">
           <Clock3 className={`h-4 w-4 ${darkMode ? "text-emerald-200" : "text-[#08764f]"}`} />
-          {displayTimeInput(value)}
+          {value ? displayTimeInput(value) : emptyLabel}
         </span>
         <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""} ${muted}`} />
       </button>
       {open && (
         <div className={`absolute left-0 right-0 top-[calc(100%+8px)] z-[120] overflow-hidden rounded-2xl border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {quickTimes.map((time) => (
-              <button
-                key={time}
-                type="button"
-                onClick={() => {
-                  onChange(time);
-                  setOpen(false);
-                }}
-                className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition ${
-                  value === time
-                    ? "bg-[#6ee72f] text-[#10210c]"
-                    : darkMode
-                    ? "bg-white/[0.06] text-white/65 hover:bg-white/10"
-                    : "bg-[#f3f5ef] text-black/55 hover:bg-[#e7f6ed]"
-                }`}
-              >
-                {displayTimeInput(time)}
-              </button>
-            ))}
+          <div className={`mb-2 rounded-2xl p-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f6faf2]"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Selected time</p>
+            <p className="mt-1 text-lg font-black">{displayTimeInput(draftTime)}</p>
           </div>
-          <div className="max-h-64 overflow-y-auto pr-1">
-            {ATTENDANCE_TIME_OPTIONS.map((option) => {
-              const active = option.value === value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                  }}
-                  className={`mb-1 flex h-9 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${
-                    active
-                      ? "bg-[#6ee72f] text-[#10210c]"
-                      : darkMode
-                      ? "text-white/70 hover:bg-white/[0.07]"
-                      : "text-black/65 hover:bg-[#f6faf2]"
-                  }`}
-                >
-                  <span>{option.label}</span>
-                  {active && <Check className="h-4 w-4" />}
-                </button>
-              );
-            })}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className={`mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}>Hour</p>
+              <div className="max-h-56 overflow-y-auto pr-1">
+                {ATTENDANCE_HOUR_OPTIONS.map((option) => {
+                  const active = option.value === selectedHour;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => commitTime(option.value, selectedMinute)}
+                      className={`mb-1 flex h-9 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${
+                        active
+                          ? "bg-[#6ee72f] text-[#10210c]"
+                          : darkMode
+                          ? "text-white/70 hover:bg-white/[0.07]"
+                          : "text-black/65 hover:bg-[#f6faf2]"
+                      }`}
+                    >
+                      <span>{option.label}</span>
+                      {active && <Check className="h-4 w-4" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <p className={`mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}>Minute</p>
+              <div className="max-h-56 overflow-y-auto pr-1">
+                {ATTENDANCE_MINUTE_OPTIONS.map((minute) => {
+                  const active = minute === selectedMinute;
+                  return (
+                    <button
+                      key={minute}
+                      type="button"
+                      onClick={() => commitTime(selectedHour, minute)}
+                      className={`mb-1 flex h-9 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${
+                        active
+                          ? "bg-[#6ee72f] text-[#10210c]"
+                          : darkMode
+                          ? "text-white/70 hover:bg-white/[0.07]"
+                          : "text-black/65 hover:bg-[#f6faf2]"
+                      }`}
+                    >
+                      <span>{minute}</span>
+                      {active && <Check className="h-4 w-4" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
+          <button type="button" onClick={() => setOpen(false)} className={`mt-2 h-10 w-full rounded-xl text-sm font-black transition ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#171714] text-white hover:bg-black/80"}`}>Done</button>
         </div>
       )}
     </div>
@@ -710,6 +734,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const selectedAttendanceAdjustEmployee = activeEmployees.find((employee) => employee.id === attendanceAdjustForm.userId);
   const selectedAttendanceAdjustEmployeeText = selectedAttendanceAdjustEmployee ? `${selectedAttendanceAdjustEmployee.displayName || selectedAttendanceAdjustEmployee.username} · ${selectedAttendanceAdjustEmployee.designation || selectedAttendanceAdjustEmployee.department || selectedAttendanceAdjustEmployee.roleName || "Employee"}` : "";
   const attendanceAdjustmentIsToday = attendanceAdjustForm.date === todayInput();
+  const selectedAttendanceAdjustRecord = attendanceRecords.find((record) => String(record.userId || "") === String(attendanceAdjustForm.userId || "") && record.date === attendanceAdjustForm.date);
 
   const attendanceDateRangeLabel = attendanceDateFilter.startDate && attendanceDateFilter.endDate && attendanceDateFilter.startDate !== attendanceDateFilter.endDate 
     ? `${formatDateLabel(attendanceDateFilter.startDate)} - ${formatDateLabel(attendanceDateFilter.endDate)}` 
@@ -1352,6 +1377,15 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       reason: "",
     });
     setAttendanceAdjustOpen(true);
+  }
+
+  function attendanceAdjustmentPatch(userId, date) {
+    const record = attendanceRecords.find((item) => String(item.userId || "") === String(userId || "") && item.date === date);
+    return {
+      clockInTime: timeInputFromDate(record?.clockInAt, ""),
+      clockOutTime: timeInputFromDate(record?.clockOutAt, ""),
+      workMode: record?.workMode || "office",
+    };
   }
 
   async function saveAttendanceAdjustment(event) {
@@ -2366,7 +2400,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                   </div>
                   <div>
                     <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Time</p>
-                    <p className="mt-1 text-sm font-black">{attendanceAdjustmentIsToday ? displayTimeInput(attendanceAdjustForm.clockInTime) : `${displayTimeInput(attendanceAdjustForm.clockInTime)} - ${displayTimeInput(attendanceAdjustForm.clockOutTime)}`}</p>
+                    <p className="mt-1 text-sm font-black">{attendanceAdjustmentIsToday ? (attendanceAdjustForm.clockInTime ? displayTimeInput(attendanceAdjustForm.clockInTime) : "No record") : `${attendanceAdjustForm.clockInTime ? displayTimeInput(attendanceAdjustForm.clockInTime) : "No record"} - ${attendanceAdjustForm.clockOutTime ? displayTimeInput(attendanceAdjustForm.clockOutTime) : "No record"}`}</p>
                   </div>
                 </div>
                 <div className="grid gap-4">
@@ -2381,7 +2415,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     options={attendanceAdjustEmployeeOptions}
                     onChange={(employeeText) => {
                       const employee = activeEmployees.find((item) => `${item.displayName || item.username} · ${item.designation || item.department || item.roleName || "Employee"}` === employeeText);
-                      setAttendanceAdjustForm((current) => ({ ...current, userId: employee?.id || "" }));
+                      setAttendanceAdjustForm((current) => {
+                        const userId = employee?.id || "";
+                        return { ...current, userId, ...attendanceAdjustmentPatch(userId, current.date) };
+                      });
                     }}
                   />
                   <DrawerDatePicker
@@ -2389,7 +2426,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     label="Date"
                     value={attendanceAdjustForm.date}
                     placeholder="Select attendance date"
-                    onChange={(date) => setAttendanceAdjustForm((current) => ({ ...current, date }))}
+                    onChange={(date) => setAttendanceAdjustForm((current) => ({ ...current, date, ...attendanceAdjustmentPatch(current.userId, date) }))}
                   />
                   <div className={`grid gap-3 ${attendanceAdjustmentIsToday ? "" : "sm:grid-cols-2"}`}>
                     <AttendanceTimePicker darkMode={darkMode} label="Clock in" value={attendanceAdjustForm.clockInTime} onChange={(clockInTime) => setAttendanceAdjustForm((current) => ({ ...current, clockInTime }))} />
@@ -2397,6 +2434,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       <AttendanceTimePicker darkMode={darkMode} label="Clock out" value={attendanceAdjustForm.clockOutTime} onChange={(clockOutTime) => setAttendanceAdjustForm((current) => ({ ...current, clockOutTime }))} />
                     )}
                   </div>
+                  {selectedAttendanceAdjustRecord ? (
+                    <p className={`rounded-2xl px-4 py-3 text-xs font-semibold ${darkMode ? "bg-emerald-300/10 text-emerald-100" : "bg-[#e7f6ed] text-[#08764f]"}`}>Existing record found. Pick exact hour and minute only if you need to correct it.</p>
+                  ) : (
+                    <p className={`rounded-2xl px-4 py-3 text-xs font-semibold ${darkMode ? "bg-amber-300/10 text-amber-100" : "bg-amber-50 text-amber-700"}`}>No record found for this employee/date. Choose the time manually to create one.</p>
+                  )}
                   <DrawerSelect
                     darkMode={darkMode}
                     label="Work mode"

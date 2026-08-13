@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { BadgeCheck, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, Eye, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, LogIn, LogOut, Mail, MapPin, Maximize2, MessageCircle, MessageSquare, Minimize2, Navigation, Pencil, Phone, Plus, ReceiptText, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserRound, Users, WalletCards, X } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, ExternalLink, Eye, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, LogIn, LogOut, Mail, MapPin, Maximize2, MessageCircle, MessageSquare, Minimize2, Navigation, Pencil, Phone, Plus, ReceiptText, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserRound, Users, WalletCards, X } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
@@ -148,6 +148,18 @@ function leaveDayCount(startDate, endDate) {
 function todayInput() {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function timeInputFromDate(value, fallback = "") {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Kolkata",
+  });
 }
 
 function currentMonthInput() {
@@ -377,6 +389,108 @@ function DrawerDatePicker({ darkMode, label, value, placeholder, onChange, minDa
   );
 }
 
+const ATTENDANCE_TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
+  const hour = Math.floor(index / 4);
+  const minute = (index % 4) * 15;
+  const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  const label = new Date(2000, 0, 1, hour, minute).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  return { value, label };
+});
+
+function displayTimeInput(value = "") {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
+  if (!match) return "Select time";
+  return new Date(2000, 0, 1, Number(match[1]), Number(match[2])).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+}
+
+function AttendanceTimePicker({ darkMode, label, value, onChange }) {
+  const ref = useRef(null);
+  const [open, setOpen] = useState(false);
+  const quickTimes = ["10:30", "11:00", "19:00", "19:30", "20:00"];
+  const muted = darkMode ? "text-white/45" : "text-black/45";
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function closeOnOutside(event) {
+      if (ref.current?.contains(event.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", closeOnOutside);
+    return () => document.removeEventListener("mousedown", closeOnOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <p className="text-xs font-medium text-black/65 dark:text-white/60">{label} *</p>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={`mt-2 flex h-11 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-semibold outline-none transition ${
+          darkMode
+            ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]"
+            : "border-black/10 bg-white text-[#171714] hover:bg-[#fafbf8]"
+        } ${open ? (darkMode ? "ring-2 ring-emerald-300/20" : "ring-2 ring-[#6ee72f]/25") : ""}`}
+      >
+        <span className="flex items-center gap-2">
+          <Clock3 className={`h-4 w-4 ${darkMode ? "text-emerald-200" : "text-[#08764f]"}`} />
+          {displayTimeInput(value)}
+        </span>
+        <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""} ${muted}`} />
+      </button>
+      {open && (
+        <div className={`absolute left-0 right-0 top-[calc(100%+8px)] z-[120] overflow-hidden rounded-2xl border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {quickTimes.map((time) => (
+              <button
+                key={time}
+                type="button"
+                onClick={() => {
+                  onChange(time);
+                  setOpen(false);
+                }}
+                className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition ${
+                  value === time
+                    ? "bg-[#6ee72f] text-[#10210c]"
+                    : darkMode
+                    ? "bg-white/[0.06] text-white/65 hover:bg-white/10"
+                    : "bg-[#f3f5ef] text-black/55 hover:bg-[#e7f6ed]"
+                }`}
+              >
+                {displayTimeInput(time)}
+              </button>
+            ))}
+          </div>
+          <div className="max-h-64 overflow-y-auto pr-1">
+            {ATTENDANCE_TIME_OPTIONS.map((option) => {
+              const active = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  className={`mb-1 flex h-9 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${
+                    active
+                      ? "bg-[#6ee72f] text-[#10210c]"
+                      : darkMode
+                      ? "text-white/70 hover:bg-white/[0.07]"
+                      : "text-black/65 hover:bg-[#f6faf2]"
+                  }`}
+                >
+                  <span>{option.label}</span>
+                  {active && <Check className="h-4 w-4" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const { user } = useAuth();
   const router = useRouter();
@@ -409,6 +523,9 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceLocating, setAttendanceLocating] = useState(false);
   const [attendanceSettingsOpen, setAttendanceSettingsOpen] = useState(false);
   const [attendanceSettingsExpanded, setAttendanceSettingsExpanded] = useState(false);
+  const [attendanceAdjustOpen, setAttendanceAdjustOpen] = useState(false);
+  const [attendanceAdjustSaving, setAttendanceAdjustSaving] = useState(false);
+  const [attendanceAdjustForm, setAttendanceAdjustForm] = useState({ userId: "", date: todayInput(), clockInTime: "10:30", clockOutTime: "19:30", workMode: "office", reason: "" });
   const [attendanceSearchResults, setAttendanceSearchResults] = useState([]);
   const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100, googleSheetLink: "" });
   const [attendanceDateFilter, setAttendanceDateFilter] = useState({ startDate: todayInput(), endDate: todayInput() });
@@ -589,6 +706,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const attendanceReportSubject = attendanceSearch
     ? (attendanceReportEmployees.length === 1 ? (attendanceReportEmployees[0].displayName || attendanceReportEmployees[0].username || "Employee") : `Search: ${attendanceQuery.trim()}`)
     : "";
+  const attendanceAdjustEmployeeOptions = activeEmployees.map((employee) => `${employee.displayName || employee.username} · ${employee.designation || employee.department || employee.roleName || "Employee"}`);
+  const selectedAttendanceAdjustEmployee = activeEmployees.find((employee) => employee.id === attendanceAdjustForm.userId);
+  const selectedAttendanceAdjustEmployeeText = selectedAttendanceAdjustEmployee ? `${selectedAttendanceAdjustEmployee.displayName || selectedAttendanceAdjustEmployee.username} · ${selectedAttendanceAdjustEmployee.designation || selectedAttendanceAdjustEmployee.department || selectedAttendanceAdjustEmployee.roleName || "Employee"}` : "";
+  const attendanceAdjustmentIsToday = attendanceAdjustForm.date === todayInput();
 
   const attendanceDateRangeLabel = attendanceDateFilter.startDate && attendanceDateFilter.endDate && attendanceDateFilter.startDate !== attendanceDateFilter.endDate 
     ? `${formatDateLabel(attendanceDateFilter.startDate)} - ${formatDateLabel(attendanceDateFilter.endDate)}` 
@@ -1217,6 +1338,48 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       hrToast.error(error.message || "Could not update attendance");
     } finally {
       setEmployeeRemoteSavingId("");
+    }
+  }
+
+  function openAttendanceAdjustment(record = null) {
+    const fallbackEmployee = activeEmployees[0];
+    setAttendanceAdjustForm({
+      userId: record?.userId || fallbackEmployee?.id || "",
+      date: record?.date || attendanceDateFilter.startDate || todayInput(),
+      clockInTime: timeInputFromDate(record?.clockInAt, "10:30"),
+      clockOutTime: timeInputFromDate(record?.clockOutAt, "19:30"),
+      workMode: record?.workMode || "office",
+      reason: "",
+    });
+    setAttendanceAdjustOpen(true);
+  }
+
+  async function saveAttendanceAdjustment(event) {
+    event.preventDefault();
+    if (!attendanceAdjustForm.userId) {
+      hrToast.error("Choose an employee");
+      return;
+    }
+    try {
+      setAttendanceAdjustSaving(true);
+      const response = await fetch(`${API_URL}/hr/attendance/adjust-time`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(attendanceAdjustForm),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not adjust attendance");
+      mergeAttendanceRecord(result.record);
+      setAttendanceDateFilter((current) => ({
+        startDate: !current.startDate || result.record.date < current.startDate ? result.record.date : current.startDate,
+        endDate: !current.endDate || result.record.date > current.endDate ? result.record.date : current.endDate,
+      }));
+      setAttendanceAdjustOpen(false);
+      hrToast.success("Attendance time adjusted");
+    } catch (error) {
+      hrToast.error(error.message || "Could not adjust attendance");
+    } finally {
+      setAttendanceAdjustSaving(false);
     }
   }
 
@@ -1999,9 +2162,14 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
               </button>
               {data?.canManageHr && (
-                <button type="button" onClick={() => { setAttendanceSettingsExpanded(false); setAttendanceSettingsOpen(true); }} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f]">
-                  <SlidersHorizontal className="h-4 w-4" /> Settings
-                </button>
+                <>
+                  <button type="button" onClick={() => openAttendanceAdjustment()} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#171714] px-5 text-sm font-bold text-white">
+                    <Clock3 className="h-4 w-4" /> Adjust time
+                  </button>
+                  <button type="button" onClick={() => { setAttendanceSettingsExpanded(false); setAttendanceSettingsOpen(true); }} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f]">
+                    <SlidersHorizontal className="h-4 w-4" /> Settings
+                  </button>
+                </>
               )}
               <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{filteredAttendanceRecords.length} record{filteredAttendanceRecords.length === 1 ? "" : "s"}</span>
             </div>
@@ -2115,19 +2283,20 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
+                  <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
-                      <col className="w-[22%]" />
+                      <col className="w-[21%]" />
                       <col className="w-[13%]" />
                       <col className="w-[15%]" />
                       <col className="w-[15%]" />
                       <col className="w-[11%]" />
                       <col className="w-[11%]" />
-                      <col className="w-[13%]" />
+                      <col className="w-[12%]" />
+                      {data?.canManageHr && <col className="w-[8%]" />}
                     </colgroup>
                     <thead className={muted}>
                       <tr className={`border-b ${darkMode ? "border-white/[0.06] bg-[#0b1016]" : "border-[#edf0ea] bg-[#fbfcf9]"}`}>
-                        {["Employee", "Date", "Clock in", "Clock out", "Mode", "Hours", "Status"].map((heading) => (
+                        {["Employee", "Date", "Clock in", "Clock out", "Mode", "Hours", "Status", ...(data?.canManageHr ? ["Action"] : [])].map((heading) => (
                           <th key={heading} className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">{heading}</th>
                         ))}
                       </tr>
@@ -2152,11 +2321,18 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                             <td className="px-5 py-5"><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${record.workMode === "remote" ? "bg-sky-100 text-sky-700" : "bg-emerald-100 text-emerald-700"}`}>{record.workMode || "office"}</span></td>
                             <td className="px-5 py-5 font-black">{record.workMinutes ? `${Math.floor(record.workMinutes / 60)}h ${record.workMinutes % 60}m` : "-"}</td>
                             <td className="px-5 py-5"><span className={`inline-flex h-9 items-center rounded-full px-4 text-xs font-black capitalize ${record.status === "completed" ? salaryBadge : statusClass("pending")}`}>{record.status}</span></td>
+                            {data?.canManageHr && (
+                              <td className="px-5 py-5">
+                                <button type="button" onClick={() => openAttendanceAdjustment(record)} className={`grid h-9 w-9 place-items-center rounded-xl transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f0f3ec] text-black/60 hover:bg-[#e7f6ed] hover:text-[#08764f]"}`} aria-label={`Adjust attendance for ${record.employeeName}`}>
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
                       {!filteredAttendanceRecords.length && (
-                        <tr><td colSpan={7} className={`px-5 py-12 text-center ${muted}`}>No attendance records found for {attendanceDateRangeLabel}.</td></tr>
+                        <tr><td colSpan={data?.canManageHr ? 8 : 7} className={`px-5 py-12 text-center ${muted}`}>No attendance records found for {attendanceDateRangeLabel}.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -2165,6 +2341,83 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             </div>
           </div>
         </section>
+      )}
+
+      {attendanceAdjustOpen && (
+        <div onMouseDown={() => setAttendanceAdjustOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
+          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={saveAttendanceAdjustment} className={`employee-report-drawer relative flex h-full w-full max-w-xl flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.32)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex items-start justify-between border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <div>
+                <h2 className="text-xl font-black">Adjust attendance time</h2>
+                <p className={`mt-1 text-xs ${muted}`}>Set clock in and clock out in IST for the selected employee/date.</p>
+              </div>
+              <button type="button" onClick={() => setAttendanceAdjustOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
+            </div>
+            <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
+              <section className={`rounded-[26px] border p-4 sm:p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
+                <div className={`mb-5 grid gap-3 rounded-[22px] p-4 sm:grid-cols-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f6faf2]"}`}>
+                  <div>
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Employee</p>
+                    <p className="mt-1 truncate text-sm font-black">{selectedAttendanceAdjustEmployee?.displayName || selectedAttendanceAdjustEmployee?.username || "Select employee"}</p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Date</p>
+                    <p className="mt-1 text-sm font-black">{formatDateLabel(attendanceAdjustForm.date)}</p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Time</p>
+                    <p className="mt-1 text-sm font-black">{attendanceAdjustmentIsToday ? displayTimeInput(attendanceAdjustForm.clockInTime) : `${displayTimeInput(attendanceAdjustForm.clockInTime)} - ${displayTimeInput(attendanceAdjustForm.clockOutTime)}`}</p>
+                  </div>
+                </div>
+                <div className="grid gap-4">
+                  <DrawerSelect
+                    darkMode={darkMode}
+                    label="Employee"
+                    required
+                    searchable
+                    searchPlaceholder="Search employee..."
+                    value={selectedAttendanceAdjustEmployeeText}
+                    placeholder="Select employee"
+                    options={attendanceAdjustEmployeeOptions}
+                    onChange={(employeeText) => {
+                      const employee = activeEmployees.find((item) => `${item.displayName || item.username} · ${item.designation || item.department || item.roleName || "Employee"}` === employeeText);
+                      setAttendanceAdjustForm((current) => ({ ...current, userId: employee?.id || "" }));
+                    }}
+                  />
+                  <DrawerDatePicker
+                    darkMode={darkMode}
+                    label="Date"
+                    value={attendanceAdjustForm.date}
+                    placeholder="Select attendance date"
+                    onChange={(date) => setAttendanceAdjustForm((current) => ({ ...current, date }))}
+                  />
+                  <div className={`grid gap-3 ${attendanceAdjustmentIsToday ? "" : "sm:grid-cols-2"}`}>
+                    <AttendanceTimePicker darkMode={darkMode} label="Clock in" value={attendanceAdjustForm.clockInTime} onChange={(clockInTime) => setAttendanceAdjustForm((current) => ({ ...current, clockInTime }))} />
+                    {!attendanceAdjustmentIsToday && (
+                      <AttendanceTimePicker darkMode={darkMode} label="Clock out" value={attendanceAdjustForm.clockOutTime} onChange={(clockOutTime) => setAttendanceAdjustForm((current) => ({ ...current, clockOutTime }))} />
+                    )}
+                  </div>
+                  <DrawerSelect
+                    darkMode={darkMode}
+                    label="Work mode"
+                    value={attendanceAdjustForm.workMode === "remote" ? "Remote" : "Office"}
+                    placeholder="Select work mode"
+                    options={["Office", "Remote"]}
+                    onChange={(workMode) => setAttendanceAdjustForm((current) => ({ ...current, workMode: workMode.toLowerCase() }))}
+                  />
+                  <label className="text-xs font-medium text-black/65 dark:text-white/60">Reason / note
+                    <textarea value={attendanceAdjustForm.reason} onChange={(event) => setAttendanceAdjustForm((current) => ({ ...current, reason: event.target.value }))} rows={5} placeholder="Example: Forgot to clock in, corrected from HR approval." className={`mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-sm font-semibold leading-6 outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:ring-2 focus:ring-emerald-300/20" : "border-black/10 bg-white text-[#171714] placeholder:text-black/35 focus:ring-2 focus:ring-[#6ee72f]/20"}`} />
+                    <span className={`mt-2 block text-[11px] leading-5 ${muted}`}>This note is saved in the activity log with the adjustment.</span>
+                  </label>
+                </div>
+              </section>
+            </div>
+            <div className={`flex shrink-0 items-center justify-between gap-4 border-t px-6 py-5 ${darkMode ? "border-white/[0.07] bg-[#080c11]" : "border-black/10 bg-white"}`}>
+              <button type="button" onClick={() => setAttendanceAdjustOpen(false)} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
+              <button disabled={attendanceAdjustSaving || !attendanceAdjustForm.userId || !attendanceAdjustForm.date || !attendanceAdjustForm.clockInTime || (!attendanceAdjustmentIsToday && !attendanceAdjustForm.clockOutTime)} className="h-11 min-w-[180px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">{attendanceAdjustSaving ? "Saving..." : "Save adjustment"}</button>
+            </div>
+          </form>
+        </div>
       )}
 
       {attendanceSettingsOpen && (

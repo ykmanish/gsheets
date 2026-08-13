@@ -4894,9 +4894,32 @@ function serializeAttendanceRecord(item = {}, user = null) {
     workMode: item.workMode || "office",
     workMinutes: item.workMinutes || 0,
     manualStatus: Boolean(item.manualStatus),
+    manualAdjustment: Boolean(item.manualAdjustment),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
+}
+
+function attendanceIstDateTime(dateValue, timeValue, fieldLabel = "time") {
+  const date = String(dateValue || "").trim();
+  const time = String(timeValue || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const error = new Error("Valid attendance date is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    const error = new Error(`Valid ${fieldLabel} is required`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const value = new Date(`${date}T${time}:00.000+05:30`);
+  if (Number.isNaN(value.getTime())) {
+    const error = new Error(`Valid ${fieldLabel} is required`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return value;
 }
 
 function attendancePivotValue(record = {}) {
@@ -5491,6 +5514,76 @@ app.patch("/hr/attendance/manual", async (req, res) => {
   } catch (error) {
     console.error("Manual attendance error:", error);
     res.status(500).json({ error: error.message || "Could not update attendance" });
+  }
+});
+
+app.patch("/hr/attendance/adjust-time", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) {
+      return res.status(403).json({ error: "HR manage access required" });
+    }
+    const db = await connectAuthDb();
+    if (!ObjectId.isValid(String(req.body?.userId || ""))) return res.status(400).json({ error: "Employee is required" });
+    const userId = new ObjectId(String(req.body.userId));
+    const targetUser = await db.collection("users").findOne({ _id: userId });
+    if (!targetUser) return res.status(404).json({ error: "Employee not found" });
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || "")) ? String(req.body.date) : attendanceDateKey();
+    const clockInAt = attendanceIstDateTime(date, req.body?.clockInTime, "clock in time");
+    const isToday = date === attendanceDateKey();
+    const hasClockOut = !isToday && String(req.body?.clockOutTime || "").trim();
+    const clockOutAt = hasClockOut ? attendanceIstDateTime(date, req.body?.clockOutTime, "clock out time") : null;
+    if (clockOutAt && clockOutAt <= clockInAt) return res.status(400).json({ error: "Clock out must be after clock in" });
+
+    const now = new Date();
+    const workMinutes = clockOutAt ? Math.max(0, Math.round((clockOutAt.getTime() - clockInAt.getTime()) / 60000)) : 0;
+    const existing = await db.collection("hrAttendanceRecords").findOne({ userId, date });
+    const update = {
+      userId,
+      employeeName: targetUser.displayName || targetUser.username || "Employee",
+      designation: targetUser.designation || targetUser.jobTitle || "",
+      department: targetUser.department || "",
+      date,
+      status: clockOutAt ? "completed" : "checked-in",
+      workMode: String(req.body?.workMode || existing?.workMode || "office").trim().toLowerCase() === "remote" ? "remote" : "office",
+      clockInAt,
+      clockOutAt,
+      clockInLocation: existing?.clockInLocation || null,
+      clockOutLocation: existing?.clockOutLocation || null,
+      clockInDistanceMeters: existing?.clockInDistanceMeters ?? null,
+      clockOutDistanceMeters: existing?.clockOutDistanceMeters ?? null,
+      workMinutes,
+      manualStatus: false,
+      manualAdjustment: true,
+      manualAdjustedBy: req.authUser.id,
+      manualAdjustedAt: now,
+      manualAdjustmentReason: projectText(req.body?.reason, 240),
+      updatedAt: now,
+    };
+    await db.collection("hrAttendanceRecords").updateOne(
+      { userId, date },
+      {
+        $set: update,
+        $setOnInsert: { createdAt: now },
+        $unset: { manualMarkedBy: "", manualMarkedAt: "" },
+      },
+      { upsert: true }
+    );
+    const saved = await db.collection("hrAttendanceRecords").findOne({ userId, date });
+    addActivityLog({
+      req,
+      action: "Adjusted attendance time",
+      target: `${update.employeeName} · ${date}`,
+      details: {
+        clockInTime: String(req.body?.clockInTime || ""),
+        clockOutTime: clockOutAt ? String(req.body?.clockOutTime || "") : "",
+        workMinutes,
+        reason: update.manualAdjustmentReason,
+      },
+    });
+    res.json({ success: true, record: serializeAttendanceRecord(saved, targetUser) });
+  } catch (error) {
+    console.error("Attendance time adjustment error:", error);
+    res.status(error.statusCode || 500).json({ error: error.message || "Could not adjust attendance time" });
   }
 });
 

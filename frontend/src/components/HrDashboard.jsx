@@ -595,7 +595,12 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   async function loadHr() {
     try {
       setLoading(true);
-      const overview = await api("/hr/overview");
+      const params = new URLSearchParams();
+      if (section === "attendance") {
+        if (attendanceDateFilter.startDate) params.set("attendanceStartDate", attendanceDateFilter.startDate);
+        if (attendanceDateFilter.endDate) params.set("attendanceEndDate", attendanceDateFilter.endDate);
+      }
+      const overview = await api(`/hr/overview${params.toString() ? `?${params.toString()}` : ""}`);
       setData(overview);
       if (overview?.attendanceSettings) {
         setAttendanceForm({
@@ -641,6 +646,29 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       window.removeEventListener("focus", refreshReportStatus);
     };
   }, [section]);
+
+  useEffect(() => {
+    if (section !== "attendance") return undefined;
+    const timer = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (attendanceDateFilter.startDate) params.set("startDate", attendanceDateFilter.startDate);
+        if (attendanceDateFilter.endDate) params.set("endDate", attendanceDateFilter.endDate);
+        const result = await api(`/hr/attendance?${params.toString()}`);
+        setData((current) => ({
+          ...(current || {}),
+          canManageHr: result.canManageHr ?? current?.canManageHr,
+          attendanceSettings: result.settings || current?.attendanceSettings,
+          attendanceRecords: result.records || [],
+          remoteWorkEnabled: result.remoteWorkEnabled ?? current?.remoteWorkEnabled,
+          reportExempt: result.reportExempt ?? current?.reportExempt,
+        }));
+      } catch (error) {
+        hrToast.error(error.message || "Could not load attendance records");
+      }
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [section, attendanceDateFilter.startDate, attendanceDateFilter.endDate]);
 
   useEffect(() => {
     if (!attendanceExportOpen) return undefined;

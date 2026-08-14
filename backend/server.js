@@ -4344,7 +4344,10 @@ app.get("/hr/overview", async (req, res) => {
         salarySlips: [],
         leaveRequests: await loadHrLeaveRequests(req, db, canManageHr),
         attendanceSettings: await getAttendanceSettings(db),
-        attendanceRecords: await loadHrAttendanceRecords(req, db, canManageHr),
+        attendanceRecords: await loadHrAttendanceRecords(req, db, canManageHr, {
+          startDate: req.query?.attendanceStartDate || req.query?.startDate,
+          endDate: req.query?.attendanceEndDate || req.query?.endDate,
+        }),
       });
     }
     const query = canManageHr ? {} : { _id: new ObjectId(req.authUser.id) };
@@ -4366,7 +4369,10 @@ app.get("/hr/overview", async (req, res) => {
       salarySlips: await loadHrSalarySlips(req, db, canManageHr),
       leaveRequests: await loadHrLeaveRequests(req, db, canManageHr),
       attendanceSettings: await getAttendanceSettings(db),
-      attendanceRecords: await loadHrAttendanceRecords(req, db, canManageHr),
+      attendanceRecords: await loadHrAttendanceRecords(req, db, canManageHr, {
+        startDate: req.query?.attendanceStartDate || req.query?.startDate,
+        endDate: req.query?.attendanceEndDate || req.query?.endDate,
+      }),
     });
   } catch (error) {
     console.error("HR overview error:", error);
@@ -4930,9 +4936,30 @@ function attendancePivotValue(record = {}) {
   return "-";
 }
 
-async function loadHrAttendanceRecords(req, db, canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr"))) {
+function attendanceQueryDate(value) {
+  const text = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
+async function loadHrAttendanceRecords(req, db, canManageHr = Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_hr")), range = {}) {
   const query = canManageHr ? {} : { userId: new ObjectId(req.authUser.id) };
-  const records = await db.collection("hrAttendanceRecords").find(query).sort({ date: -1, clockInAt: -1 }).limit(200).toArray();
+  const startDate = attendanceQueryDate(range.startDate);
+  const endDate = attendanceQueryDate(range.endDate);
+  if (startDate || endDate) {
+    query.date = {};
+    if (startDate) query.date.$gte = startDate;
+    if (endDate) query.date.$lte = endDate;
+  }
+  const limit = canManageHr ? 2000 : 200;
+  const records = await db.collection("hrAttendanceRecords").find(query).sort({ date: -1, clockInAt: -1 }).limit(limit).toArray();
+  return records.map((record) => serializeAttendanceRecord(record));
+}
+
+async function loadMonthlyHrAttendanceRecords(db, month) {
+  const records = await db.collection("hrAttendanceRecords")
+    .find({ date: { $gte: `${month}-01`, $lte: `${month}-31` } })
+    .sort({ date: 1, clockInAt: 1 })
+    .toArray();
   return records.map((record) => serializeAttendanceRecord(record));
 }
 
@@ -4995,7 +5022,10 @@ app.get("/hr/attendance", async (req, res) => {
       remoteWorkEnabled: await remoteWorkEnabledForUser(db, req.authUser.id),
       reportExempt: isEmployeeDailyReportExempt(req.user || req.authUser || {}),
       settings: await getAttendanceSettings(db),
-      records: await loadHrAttendanceRecords(req, db, canManageHr),
+      records: await loadHrAttendanceRecords(req, db, canManageHr, {
+        startDate: req.query?.startDate,
+        endDate: req.query?.endDate,
+      }),
     });
   } catch (error) {
     console.error("Attendance load error:", error);
@@ -5042,7 +5072,7 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
   }
 
   const reqMock = { authUser: { isSuperAdmin: true } };
-  const records = await loadHrAttendanceRecords(reqMock, db, true);
+  const records = await loadMonthlyHrAttendanceRecords(db, month);
   const allLeaves = await loadHrLeaveRequests(reqMock, db, true);
   const approvedLeaves = allLeaves.filter(r => r.status === "approved");
 

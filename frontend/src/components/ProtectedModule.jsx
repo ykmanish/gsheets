@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Toaster } from "react-hot-toast";
-import { BellRing, MessageCircleMore, Minimize, X } from "lucide-react";
+import { BellRing, Clock3, LogOut, MessageCircleMore, Minimize, ShieldCheck, Sparkles, Wrench, X } from "lucide-react";
 import { API_URL, AuthProvider, getStoredAuth, useAuth } from "./AuthProvider";
 import {
   MessagePopupStack,
@@ -100,9 +100,85 @@ function NotificationStrip({ notification, darkMode, onClose, onView }) {
   );
 }
 
+function maintenanceCountdown(estimatedEndAt) {
+  if (!estimatedEndAt) return { label: "We will be back soon", expired: false };
+  const target = new Date(estimatedEndAt).getTime();
+  if (!Number.isFinite(target)) return { label: "We will be back soon", expired: false };
+  const remaining = target - Date.now();
+  if (remaining <= 0) return { label: "Final checks are running", expired: true };
+  const totalMinutes = Math.ceil(remaining / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+  if (days) parts.push(`${days}d`);
+  if (hours || days) parts.push(`${hours}h`);
+  parts.push(`${minutes}m`);
+  return { label: parts.join(" "), expired: false };
+}
+
+function MaintenanceScreen({ darkMode, maintenance, user, onLogout }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setTick((value) => value + 1), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const countdown = maintenanceCountdown(maintenance?.estimatedEndAt, tick);
+  const endLabel = maintenance?.estimatedEndAt
+    ? new Date(maintenance.estimatedEndAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+    : "Not announced yet";
+
+  return (
+    <main className={`grid min-h-dvh place-items-center overflow-hidden px-5 py-8 ${darkMode ? "bg-[#090d12] text-white" : "bg-[#eef3f2] text-[#171714]"}`}>
+      <section className={`relative w-full max-w-5xl overflow-hidden rounded-[34px] border p-6 sm:p-8 lg:p-10 ${darkMode ? "border-white/10 bg-[#111820]" : "border-white bg-white"}`}>
+        <div className="pointer-events-none absolute inset-0 opacity-70">
+          <div className={`absolute inset-x-0 top-0 h-32 ${darkMode ? "bg-[radial-gradient(circle_at_50%_0%,rgba(110,231,47,0.18),transparent_55%)]" : "bg-[radial-gradient(circle_at_50%_0%,rgba(110,231,47,0.28),transparent_55%)]"}`} />
+          <div className={`absolute inset-0 ${darkMode ? "bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)]" : "bg-[linear-gradient(rgba(15,23,42,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.04)_1px,transparent_1px)]"} bg-[size:68px_68px]`} />
+        </div>
+        <div className="relative z-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
+          <div>
+            <span className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black uppercase tracking-[0.16em] ${darkMode ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100" : "border-emerald-100 bg-[#e7f6ed] text-[#08764f]"}`}>
+              <Wrench className="h-4 w-4" /> Maintenance mode
+            </span>
+            <h1 className="small mt-6 max-w-3xl text-4xl font-black leading-[0.96] sm:text-5xl lg:text-6xl">Site under maintenance</h1>
+            <p className={`mt-5 max-w-2xl text-base leading-7 sm:text-lg ${darkMode ? "text-white/62" : "text-black/58"}`}>
+              {maintenance?.message || "We are improving the workspace. Please check back soon."}
+            </p>
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              <span className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black ${darkMode ? "bg-white/10 text-white" : "bg-[#171714] text-white"}`}>
+                <Clock3 className="h-4 w-4" /> {countdown.label}
+              </span>
+              <span className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${darkMode ? "bg-white/[0.06] text-white/65" : "bg-[#f3f5ef] text-black/55"}`}>
+                Estimated: {endLabel}
+              </span>
+            </div>
+          </div>
+          <aside className={`rounded-[28px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.045]" : "border-black/5 bg-[#f8fbf9]"}`}>
+            <div className={`grid h-16 w-16 place-items-center rounded-3xl ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#6ee72f] text-[#10210c]"}`}>
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <h2 className="small mt-5 text-2xl font-black">Access is paused</h2>
+            <p className={`mt-3 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>Hi {user?.displayName || user?.username || "there"}, Super Admin has temporarily locked all user routes while updates are being completed.</p>
+            <div className={`mt-5 rounded-2xl p-4 ${darkMode ? "bg-black/20" : "bg-white"}`}>
+              <div className="flex items-center gap-3">
+                <ShieldCheck className={`h-5 w-5 ${darkMode ? "text-emerald-200" : "text-[#08764f]"}`} />
+                <span className="text-sm font-black">Your data is safe</span>
+              </div>
+              <p className={`mt-2 text-xs leading-5 ${darkMode ? "text-white/45" : "text-black/45"}`}>Please wait for maintenance to finish, then refresh or sign in again.</p>
+            </div>
+            <button type="button" onClick={onLogout} className={`mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-full text-sm font-black transition ${darkMode ? "bg-white text-black hover:bg-white/90" : "bg-[#171714] text-white hover:bg-black/85"}`}>
+              <LogOut className="h-4 w-4" /> Logout
+            </button>
+          </aside>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function ProtectedModuleContent({ moduleId, projectId }) {
   const router = useRouter();
-  const { user, menus, disabledModules, loading, logout } = useAuth();
+  const { user, menus, disabledModules, maintenance, loading, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === "undefined") return false;
     const storedUser = getStoredAuth().user;
@@ -438,6 +514,10 @@ function ProtectedModuleContent({ moduleId, projectId }) {
     return (
       <div className={`min-h-dvh ${darkMode ? "bg-[#0f1115]" : "bg-[#eef3f2]"}`} />
     );
+  }
+
+  if (maintenance?.enabled && !user?.isSuperAdmin) {
+    return <MaintenanceScreen darkMode={darkMode} maintenance={maintenance} user={user} onLogout={logout} />;
   }
 
   const navigateToMenu = (menu) => {

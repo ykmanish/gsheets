@@ -117,7 +117,7 @@ const PRIVILEGE_ITEMS = [
 let mongoClient;
 let authDb;
 let mongoConnectPromise;
-let moduleControlCache = { disabledModules: [], expiresAt: 0 };
+let moduleControlCache = { disabledModules: [], maintenance: { enabled: false, estimatedEndAt: "", message: "" }, expiresAt: 0 };
 const employeeDailyQuoteBuilds = new Map();
 
 async function connectAuthDb() {
@@ -379,8 +379,23 @@ async function getDisabledModules({ fresh = false } = {}) {
   const db = await connectAuthDb();
   const setting = await db.collection("platformSettings").findOne({ _id: "module-control" });
   const disabledModules = (setting?.disabledModules || []).filter((id) => MENU_ITEM_IDS.has(id) && !PROTECTED_GLOBAL_MODULES.has(id));
-  moduleControlCache = { disabledModules, expiresAt: Date.now() + 5000 };
+  moduleControlCache = { disabledModules, maintenance: moduleControlCache.maintenance, expiresAt: Date.now() + 5000 };
   return [...disabledModules];
+}
+
+async function getMaintenanceSettings({ fresh = false } = {}) {
+  if (!fresh && moduleControlCache.expiresAt > Date.now()) return { ...(moduleControlCache.maintenance || {}) };
+  const db = await connectAuthDb();
+  const setting = await db.collection("platformSettings").findOne({ _id: "maintenance-mode" });
+  const maintenance = {
+    enabled: Boolean(setting?.enabled),
+    estimatedEndAt: String(setting?.estimatedEndAt || ""),
+    message: projectText(setting?.message || "We are improving the workspace. Please check back soon.", 240),
+    updatedAt: setting?.updatedAt || null,
+    updatedBy: setting?.updatedBy || "",
+  };
+  moduleControlCache = { disabledModules: moduleControlCache.disabledModules, maintenance, expiresAt: Date.now() + 5000 };
+  return { ...maintenance };
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -672,7 +687,7 @@ app.post("/auth/login", async (req, res) => {
       status: "success",
       actor: sanitizeUser(user, role),
     });
-    res.json({ token, user: sanitizeUser(user, role), menus: roleMenusForUser(user, role), disabledModules: await getDisabledModules() });
+    res.json({ token, user: sanitizeUser(user, role), menus: roleMenusForUser(user, role), disabledModules: await getDisabledModules(), maintenance: await getMaintenanceSettings({ fresh: true }) });
   } catch (error) {
     console.error("Login error:", error);
     addActivityLog({
@@ -687,7 +702,7 @@ app.post("/auth/login", async (req, res) => {
 });
 
 app.get("/auth/me", requireAuth, async (req, res) => {
-  res.json({ user: req.authUser, menus: roleMenusForUser(req.user, req.role), disabledModules: await getDisabledModules() });
+  res.json({ user: req.authUser, menus: roleMenusForUser(req.user, req.role), disabledModules: await getDisabledModules(), maintenance: await getMaintenanceSettings({ fresh: true }) });
 });
 
 app.get("/profile", requireAuth, async (req, res) => {
@@ -4175,6 +4190,7 @@ app.get("/admin/menu-items", requireSuperAdmin, (req, res) => {
 app.get("/admin/module-control", requireSuperAdmin, async (req, res) => {
   try {
     const disabledModules = await getDisabledModules();
+    const maintenance = await getMaintenanceSettings({ fresh: true });
     res.json({
       modules: ALL_MENU_ITEMS.map((item) => ({
         ...item,
@@ -4182,6 +4198,7 @@ app.get("/admin/module-control", requireSuperAdmin, async (req, res) => {
         locked: PROTECTED_GLOBAL_MODULES.has(item.id),
       })),
       disabledModules,
+      maintenance,
     });
   } catch (error) {
     console.error("Module control load error:", error);
@@ -4193,15 +4210,28 @@ app.put("/admin/module-control", requireSuperAdmin, async (req, res) => {
   try {
     const requested = Array.isArray(req.body?.disabledModules) ? req.body.disabledModules.map(String) : [];
     const disabledModules = [...new Set(requested)].filter((id) => MENU_ITEM_IDS.has(id) && !PROTECTED_GLOBAL_MODULES.has(id));
+    const maintenanceBody = req.body?.maintenance || {};
+    const maintenance = {
+      enabled: Boolean(maintenanceBody.enabled),
+      estimatedEndAt: String(maintenanceBody.estimatedEndAt || "").trim(),
+      message: projectText(maintenanceBody.message || "We are improving the workspace. Please check back soon.", 240),
+      updatedAt: new Date(),
+      updatedBy: String(req.authUser?.id || ""),
+    };
     const db = await connectAuthDb();
     await db.collection("platformSettings").updateOne(
       { _id: "module-control" },
       { $set: { disabledModules, updatedAt: new Date(), updatedBy: String(req.authUser?.id || "") } },
       { upsert: true },
     );
-    moduleControlCache = { disabledModules, expiresAt: Date.now() + 5000 };
-    addActivityLog({ req, action: "Updated module control", target: "Platform modules", status: "success", details: { disabledModules } });
-    res.json({ success: true, disabledModules });
+    await db.collection("platformSettings").updateOne(
+      { _id: "maintenance-mode" },
+      { $set: maintenance },
+      { upsert: true },
+    );
+    moduleControlCache = { disabledModules, maintenance, expiresAt: Date.now() + 5000 };
+    addActivityLog({ req, action: "Updated module control", target: "Platform modules", status: "success", details: { disabledModules, maintenance } });
+    res.json({ success: true, disabledModules, maintenance });
   } catch (error) {
     console.error("Module control update error:", error);
     res.status(500).json({ error: "Could not update module controls" });

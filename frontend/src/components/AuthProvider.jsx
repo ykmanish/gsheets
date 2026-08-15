@@ -11,6 +11,7 @@ const AUTH_TOKEN_KEY = "vectordocs_auth_token";
 const AUTH_USER_KEY = "vectordocs_auth_user";
 const AUTH_MENUS_KEY = "vectordocs_auth_menus";
 const AUTH_DISABLED_MODULES_KEY = "vectordocs_disabled_modules";
+const AUTH_MAINTENANCE_KEY = "vectordocs_maintenance";
 
 if (typeof window !== "undefined" && !window.__vectordocsFetchPatched) {
   const originalFetch = window.fetch.bind(window);
@@ -31,19 +32,21 @@ if (typeof window !== "undefined" && !window.__vectordocsFetchPatched) {
 const AuthContext = createContext(null);
 
 export function getStoredAuth() {
-  if (typeof window === "undefined") return { token: null, user: null, menus: [], disabledModules: [] };
+  if (typeof window === "undefined") return { token: null, user: null, menus: [], disabledModules: [], maintenance: { enabled: false } };
   const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
   const user = JSON.parse(window.localStorage.getItem(AUTH_USER_KEY) || "null");
   const menus = JSON.parse(window.localStorage.getItem(AUTH_MENUS_KEY) || "[]");
   const disabledModules = JSON.parse(window.localStorage.getItem(AUTH_DISABLED_MODULES_KEY) || "[]");
-  return { token, user, menus, disabledModules };
+  const maintenance = JSON.parse(window.localStorage.getItem(AUTH_MAINTENANCE_KEY) || "{\"enabled\":false}");
+  return { token, user, menus, disabledModules, maintenance };
 }
 
-function saveAuth(token, user, menus, disabledModules = []) {
+function saveAuth(token, user, menus, disabledModules = [], maintenance = { enabled: false }) {
   window.localStorage.setItem(AUTH_TOKEN_KEY, token);
   window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   window.localStorage.setItem(AUTH_MENUS_KEY, JSON.stringify(menus || []));
   window.localStorage.setItem(AUTH_DISABLED_MODULES_KEY, JSON.stringify(disabledModules || []));
+  window.localStorage.setItem(AUTH_MAINTENANCE_KEY, JSON.stringify(maintenance || { enabled: false }));
 }
 
 function clearAuth() {
@@ -51,6 +54,7 @@ function clearAuth() {
   window.localStorage.removeItem(AUTH_USER_KEY);
   window.localStorage.removeItem(AUTH_MENUS_KEY);
   window.localStorage.removeItem(AUTH_DISABLED_MODULES_KEY);
+  window.localStorage.removeItem(AUTH_MAINTENANCE_KEY);
 }
 
 function isAuthFailure(status) {
@@ -63,6 +67,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(stored.user);
   const [menus, setMenus] = useState(stored.menus);
   const [disabledModules, setDisabledModules] = useState(stored.disabledModules);
+  const [maintenance, setMaintenance] = useState(stored.maintenance || { enabled: false });
   const [loading, setLoading] = useState(Boolean(stored.token));
 
   useEffect(() => {
@@ -82,10 +87,11 @@ export function AuthProvider({ children }) {
         }
         const data = await response.json();
         if (ignore) return;
-        saveAuth(token, data.user, data.menus, data.disabledModules);
+        saveAuth(token, data.user, data.menus, data.disabledModules, data.maintenance);
         setUser(data.user);
         setMenus(data.menus || []);
         setDisabledModules(data.disabledModules || []);
+        setMaintenance(data.maintenance || { enabled: false });
       } catch (error) {
         if (ignore) return;
         if (!(error instanceof TypeError) && error.message !== "Session expired") return;
@@ -94,6 +100,7 @@ export function AuthProvider({ children }) {
         setUser(null);
         setMenus([]);
         setDisabledModules([]);
+        setMaintenance({ enabled: false });
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -117,11 +124,12 @@ export function AuthProvider({ children }) {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Login failed");
-    saveAuth(data.token, data.user, data.menus, data.disabledModules);
+    saveAuth(data.token, data.user, data.menus, data.disabledModules, data.maintenance);
     setToken(data.token);
     setUser(data.user);
     setMenus(data.menus || []);
     setDisabledModules(data.disabledModules || []);
+    setMaintenance(data.maintenance || { enabled: false });
     return data;
   }
 
@@ -136,6 +144,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setMenus([]);
     setDisabledModules([]);
+    setMaintenance({ enabled: false });
     window.location.href = "/login";
   }
 
@@ -144,15 +153,16 @@ export function AuthProvider({ children }) {
     const response = await fetch(`${API_URL}/auth/me`);
     if (!response.ok) throw new Error("Could not refresh session");
     const data = await response.json();
-    saveAuth(token, data.user, data.menus, data.disabledModules);
+    saveAuth(token, data.user, data.menus, data.disabledModules, data.maintenance);
     setUser(data.user);
     setMenus(data.menus || []);
     setDisabledModules(data.disabledModules || []);
+    setMaintenance(data.maintenance || { enabled: false });
   }, [token]);
 
   const value = useMemo(
-    () => ({ token, user, menus, disabledModules, loading, login, logout, refreshUser }),
-    [token, user, menus, disabledModules, loading, refreshUser]
+    () => ({ token, user, menus, disabledModules, maintenance, loading, login, logout, refreshUser }),
+    [token, user, menus, disabledModules, maintenance, loading, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

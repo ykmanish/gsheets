@@ -82,6 +82,7 @@ const MENU_ITEMS = [
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
+  { id: "accounts", label: "Accounts" },
   { id: "employee-daily-report", label: "Employee Daily Report" },
   { id: "activity-log", label: "Activity Log" },
   { id: "access-management", label: "Access Control" },
@@ -112,6 +113,7 @@ const PRIVILEGE_ITEMS = [
   { id: "edit_project_mrn", label: "Add MRN records" },
   { id: "manage_project_stock", label: "Manage project stock sheets" },
   { id: "manage_hr", label: "Manage HR employees, documents, salary slips, and leave" },
+  { id: "manage_accounts", label: "Manage accounts and CRBR sync" },
 ];
 
 let mongoClient;
@@ -2996,6 +2998,114 @@ app.put("/employee-daily-report/sheet", async (req, res) => {
   } catch (error) {
     console.error("Employee daily sheet link error:", employeeSheetErrorMessage(error));
     res.status(isGoogleSheetsQuotaError(error) ? 429 : 400).json({ error: employeeSheetErrorMessage(error, `Could not link sheet: ${error.message}`) });
+  }
+});
+
+app.get("/accounts/crbr/preview", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    res.json(await buildCrbrPreview());
+  } catch (error) {
+    console.error("CRBR preview error:", error);
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: error.message || "Could not preview CRBR sync" });
+  }
+});
+
+app.get("/accounts/crbr/settings", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    res.json({ settings: await getCrbrSettings() });
+  } catch (error) {
+    console.error("CRBR settings load error:", error);
+    res.status(500).json({ error: error.message || "Could not load CRBR settings" });
+  }
+});
+
+app.put("/accounts/crbr/settings", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "accounts") || !accountsCanManage(req)) return res.status(403).json({ error: "Accounts manage access required" });
+    const settings = sanitizeCrbrSettingsInput(req.body || {});
+    const db = await connectAuthDb();
+    const payload = {
+      ...settings,
+      updatedAt: new Date(),
+      updatedBy: { id: req.authUser.id, name: req.authUser.displayName || req.authUser.username || "User" },
+    };
+    await db.collection("platformSettings").updateOne(
+      { _id: ACCOUNTS_CRBR_SETTINGS_ID },
+      { $set: payload, $setOnInsert: { createdAt: new Date() } },
+      { upsert: true },
+    );
+    addActivityLog({ req, action: "Updated CRBR sync settings", target: "Accounts", status: "success", details: publicCrbrSettings(payload) });
+    res.json({ success: true, settings: publicCrbrSettings(payload) });
+  } catch (error) {
+    console.error("CRBR settings save error:", error);
+    res.status(400).json({ error: error.message || "Could not save CRBR settings" });
+  }
+});
+
+app.post("/accounts/crbr/sync", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "accounts") || !accountsCanManage(req)) return res.status(403).json({ error: "Accounts manage access required" });
+    const preview = await buildCrbrPreview();
+    if (!preview.canSync) {
+      return res.status(409).json({
+        error: preview.syncBlocked?.message || "CRBR sync stopped because conflicts, duplicates, or tally issues need review.",
+        ...preview,
+      });
+    }
+    const sheets = await getSheetsClient();
+    const settings = await getCrbrSettings();
+    let target = await crbrReadTab(sheets, settings.targetSpreadsheetId, settings.targetTab, false, { columnMap: CRBR_TARGET_COLUMN_MAP });
+    const misplacedRows = crbrMisplacedShiftedRows(target.values, preview.pending);
+    if (misplacedRows.length) {
+      await sheets.spreadsheets.values.batchClear({
+        spreadsheetId: settings.targetSpreadsheetId,
+        requestBody: { ranges: misplacedRows.map((rowNumber) => `${escapeSheetName(target.tabName)}!L${rowNumber}:R${rowNumber}`) },
+      });
+      target = await crbrReadTab(sheets, settings.targetSpreadsheetId, settings.targetTab, false, { columnMap: CRBR_TARGET_COLUMN_MAP });
+    }
+    const rows = preview.pending.map((record) => crbrTargetRowForHeaders(record, target.headers, CRBR_TARGET_COLUMN_MAP));
+    const startRow = crbrFindNextWriteRow(target.values, target.headerRow, target.map);
+    const endRow = startRow + rows.length - 1;
+    const endColumn = columnName(Math.max(target.headers.length, 13));
+    const blockedRows = crbrProtectedRows(target.tab, startRow, endRow);
+    if (blockedRows.length) return res.status(409).json({ error: `Target rows ${startRow}-${endRow} are protected in "${target.tabName}". Please unprotect those rows or allow the Google service account to edit protected ranges, then sync again.`, ...preview });
+    const gridUpdate = await crbrEnsureGridRows(sheets, settings.targetSpreadsheetId, target.tab, endRow);
+    await crbrFormatWrittenRows(sheets, settings.targetSpreadsheetId, target.tab, target.headerRow, startRow, endRow);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: settings.targetSpreadsheetId,
+      range: `${escapeSheetName(target.tabName)}!A${startRow}:${endColumn}${endRow}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: rows },
+    });
+    await crbrFormatWrittenRows(sheets, settings.targetSpreadsheetId, target.tab, target.headerRow, startRow, endRow);
+    const verifiedTarget = await crbrReadTab(sheets, settings.targetSpreadsheetId, settings.targetTab, false, { columnMap: CRBR_TARGET_COLUMN_MAP });
+    const verifiedIds = new Set(verifiedTarget.records.map((record) => record.id));
+    const missingAfterWrite = preview.pending.filter((record) => !verifiedIds.has(record.id));
+    if (missingAfterWrite.length) {
+      throw new Error(`Sync write could not be verified for ${missingAfterWrite.length} row(s). Please check target headers and sheet permissions.`);
+    }
+    const db = await connectAuthDb();
+    const run = {
+      source: preview.source,
+      target: preview.target,
+      syncedRows: rows.length,
+      totals: preview.totals,
+      syncedAt: new Date(),
+      targetStartRow: startRow,
+      targetEndRow: endRow,
+      insertedRows: gridUpdate.insertedRows,
+      repairedMisplacedRows: misplacedRows.length,
+      syncedBy: { id: req.authUser.id, name: req.authUser.displayName || req.authUser.username || "User" },
+      rowIds: preview.pending.map((record) => record.id),
+    };
+    await db.collection("accountsCrbrSyncRuns").insertOne(run);
+    addActivityLog({ req, action: "Synced CRBR entries", target: `${rows.length} row(s)`, status: "success", details: { totals: preview.totals, source: preview.source, target: preview.target } });
+    res.json({ success: true, syncedRows: rows.length, totals: preview.totals, syncedAt: run.syncedAt.toISOString(), targetStartRow: run.targetStartRow, targetEndRow: run.targetEndRow });
+  } catch (error) {
+    console.error("CRBR sync error:", error);
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: error.message || "Could not sync CRBR entries" });
   }
 });
 
@@ -8141,6 +8251,474 @@ function columnName(number) {
     value = Math.floor((value - 1) / 26);
   }
   return result || "A";
+}
+
+const CRBR_SOURCE_SPREADSHEET_ID = process.env.CRBR_SOURCE_SPREADSHEET_ID || "1q5txh_ReUL_RKMwiLJ54ikdfD_gdLOl6";
+const CRBR_SOURCE_TAB = process.env.CRBR_SOURCE_TAB || "Sheet19";
+const CRBR_TARGET_SPREADSHEET_ID = process.env.CRBR_TARGET_SPREADSHEET_ID || "1SDXeja0xJJ4dev7H7pEtQPuNdHFKkS0unQIAVlLWq3U";
+const CRBR_TARGET_TAB = process.env.CRBR_TARGET_TAB || "Feb 2024 onwards";
+const ACCOUNTS_CRBR_SETTINGS_ID = "accounts-crbr-settings";
+const CRBR_HEADER_ALIASES = {
+  date: [/^date$/i],
+  mainHead: [/main.*head/i, /new.*main.*hear/i],
+  subHead: [/sub.*head/i],
+  transactionType: [/transaction.*type/i],
+  particulars: [/^particulars$/i, /vendor/i],
+  projectName: [/project.*name/i, /site.*name/i],
+  voucherNumber: [/voucher/i],
+  paidParticulars: [/paid.*particular/i, /^particulars.*2$/i],
+  cash: [/^cash$/i],
+  bankAll: [/bank/i],
+  others: [/other/i],
+  total: [/^total$/i, /total.*amount/i],
+  billDescription: [/bill.*description/i, /description/i],
+};
+const CRBR_SYNC_RANGE_END_COLUMN = "AP";
+const CRBR_TARGET_COLUMN_MAP = {
+  date: 0,
+  mainHead: 1,
+  subHead: 2,
+  transactionType: 3,
+  particulars: 4,
+  projectName: 5,
+  voucherNumber: 6,
+  paidParticulars: 7,
+  cash: 8,
+  bankAll: 9,
+  others: 10,
+  total: 11,
+  billDescription: 12,
+};
+
+function accountsCanManage(req) {
+  return Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_accounts"));
+}
+
+function defaultCrbrSettings() {
+  return {
+    sourceSpreadsheetId: CRBR_SOURCE_SPREADSHEET_ID,
+    sourceSheetUrl: CRBR_SOURCE_SPREADSHEET_ID ? `https://docs.google.com/spreadsheets/d/${CRBR_SOURCE_SPREADSHEET_ID}/edit` : "",
+    sourceTab: CRBR_SOURCE_TAB,
+    targetSpreadsheetId: CRBR_TARGET_SPREADSHEET_ID,
+    targetSheetUrl: CRBR_TARGET_SPREADSHEET_ID ? `https://docs.google.com/spreadsheets/d/${CRBR_TARGET_SPREADSHEET_ID}/edit` : "",
+    targetTab: CRBR_TARGET_TAB,
+  };
+}
+
+function publicCrbrSettings(settings = defaultCrbrSettings()) {
+  return {
+    sourceSpreadsheetId: settings.sourceSpreadsheetId || "",
+    sourceSheetUrl: settings.sourceSheetUrl || (settings.sourceSpreadsheetId ? `https://docs.google.com/spreadsheets/d/${settings.sourceSpreadsheetId}/edit` : ""),
+    sourceTab: settings.sourceTab || "",
+    targetSpreadsheetId: settings.targetSpreadsheetId || "",
+    targetSheetUrl: settings.targetSheetUrl || (settings.targetSpreadsheetId ? `https://docs.google.com/spreadsheets/d/${settings.targetSpreadsheetId}/edit` : ""),
+    targetTab: settings.targetTab || "",
+    updatedAt: settings.updatedAt || null,
+    updatedBy: settings.updatedBy || null,
+  };
+}
+
+async function getCrbrSettings() {
+  const db = await connectAuthDb();
+  const saved = await db.collection("platformSettings").findOne({ _id: ACCOUNTS_CRBR_SETTINGS_ID });
+  return publicCrbrSettings({ ...defaultCrbrSettings(), ...(saved || {}) });
+}
+
+function sanitizeCrbrSettingsInput(input = {}) {
+  const sourceSpreadsheetId = normalizeSpreadsheetId(input.sourceSheetUrl || input.sourceSpreadsheetId);
+  const targetSpreadsheetId = normalizeSpreadsheetId(input.targetSheetUrl || input.targetSpreadsheetId);
+  if (!sourceSpreadsheetId) throw new Error("Mam CRBR sheet link is required");
+  if (!targetSpreadsheetId) throw new Error("All ongoing project sheet link is required");
+  const sourceTab = projectText(input.sourceTab);
+  const targetTab = projectText(input.targetTab);
+  if (!sourceTab) throw new Error("Mam CRBR tab name is required");
+  if (!targetTab) throw new Error("All ongoing project tab name is required");
+  return {
+    sourceSpreadsheetId,
+    sourceSheetUrl: projectText(input.sourceSheetUrl) || `https://docs.google.com/spreadsheets/d/${sourceSpreadsheetId}/edit`,
+    sourceTab,
+    targetSpreadsheetId,
+    targetSheetUrl: projectText(input.targetSheetUrl) || `https://docs.google.com/spreadsheets/d/${targetSpreadsheetId}/edit`,
+    targetTab,
+  };
+}
+
+function crbrCleanHeader(value = "") {
+  return projectText(value).replace(/\s+/g, " ").trim();
+}
+
+function crbrHeaderKey(value = "") {
+  return crbrCleanHeader(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function crbrNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const text = projectText(value).replace(/,/g, "").replace(/[^\d.-]/g, "");
+  if (!text || text === "-" || text === ".") return 0;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function crbrDateKey(value) {
+  const raw = projectText(value);
+  if (!raw) return "";
+  if (typeof value === "number") {
+    const date = XLSX.SSF.parse_date_code(value);
+    if (date) return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
+  }
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  const match = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (match) {
+    const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
+    return `${year}-${String(match[2]).padStart(2, "0")}-${String(match[1]).padStart(2, "0")}`;
+  }
+  return raw;
+}
+
+function crbrFindHeaderRow(values = []) {
+  let best = { index: -1, score: 0 };
+  values.slice(0, 12).forEach((row, index) => {
+    const keys = row.map(crbrHeaderKey);
+    const score = ["date", "projectname", "voucher", "cash", "total"].reduce((sum, key) => sum + (keys.some((header) => header.includes(key)) ? 1 : 0), 0);
+    if (score > best.score) best = { index, score };
+  });
+  return best.score >= 2 ? best.index : 0;
+}
+
+function crbrColumnMap(headers = []) {
+  const cleaned = headers.map(crbrCleanHeader);
+  const used = new Set();
+  const map = {};
+  for (const [field, patterns] of Object.entries(CRBR_HEADER_ALIASES)) {
+    const foundIndex = cleaned.findIndex((header, index) => !used.has(index) && patterns.some((pattern) => pattern.test(header)));
+    if (foundIndex >= 0) {
+      map[field] = foundIndex;
+      used.add(foundIndex);
+    }
+  }
+  return map;
+}
+
+function crbrCell(row, map, field) {
+  const index = map[field];
+  return Number.isInteger(index) ? projectText(row[index]) : "";
+}
+
+function crbrRowKey(record = {}) {
+  return [
+    record.dateKey,
+    record.projectName,
+    record.voucherNumber,
+    record.particulars,
+    record.paidParticulars,
+    record.total.toFixed(2),
+  ].map((value) => projectText(value).toLowerCase()).join("|");
+}
+
+function crbrMapRow(row = [], map = {}, rowNumber = 0, tabName = "") {
+  const record = {
+    id: "",
+    rowNumber,
+    tabName,
+    date: crbrCell(row, map, "date"),
+    dateKey: crbrDateKey(row[map.date]),
+    mainHead: crbrCell(row, map, "mainHead"),
+    subHead: crbrCell(row, map, "subHead"),
+    transactionType: crbrCell(row, map, "transactionType"),
+    particulars: crbrCell(row, map, "particulars"),
+    projectName: crbrCell(row, map, "projectName"),
+    voucherNumber: crbrCell(row, map, "voucherNumber"),
+    paidParticulars: crbrCell(row, map, "paidParticulars"),
+    cash: crbrNumber(row[map.cash]),
+    bankAll: crbrNumber(row[map.bankAll]),
+    others: crbrNumber(row[map.others]),
+    total: crbrNumber(row[map.total]),
+    billDescription: crbrCell(row, map, "billDescription"),
+    raw: row,
+  };
+  record.id = crbrRowKey(record);
+  record.tallyAmount = Number((record.cash + record.bankAll + record.others).toFixed(2));
+  record.tallyOk = Math.abs(record.tallyAmount - record.total) < 0.01;
+  return record;
+}
+
+function crbrRecordHasData(record = {}) {
+  return Boolean(record.dateKey || record.projectName || record.particulars || record.voucherNumber || record.total || record.cash || record.bankAll || record.others);
+}
+
+async function getSheetsClient() {
+  const auth = await getGoogleAuth();
+  return google.sheets({ version: "v4", auth });
+}
+
+async function crbrWorkbookTabs(sheets, spreadsheetId) {
+  const response = await sheets.spreadsheets.get({ spreadsheetId, fields: "properties.title,sheets(properties(sheetId,title,sheetType,hidden,gridProperties(rowCount,columnCount)),protectedRanges(protectedRangeId,description,warningOnly,range))" });
+  return {
+    title: response.data.properties?.title || "",
+    tabs: (response.data.sheets || [])
+      .map((sheet) => ({ ...(sheet.properties || {}), protectedRanges: sheet.protectedRanges || [] }))
+      .filter((tab) => tab?.sheetType === "GRID" && !tab.hidden),
+  };
+}
+
+function crbrProtectedRows(tab, startRow, endRow) {
+  return (tab?.protectedRanges || [])
+    .filter((range) => !range.warningOnly)
+    .filter((protectedRange) => {
+      const start = Number(protectedRange.range?.startRowIndex || 0) + 1;
+      const end = Number(protectedRange.range?.endRowIndex || tab?.gridProperties?.rowCount || 0);
+      return startRow <= end && endRow >= start;
+    })
+    .map((protectedRange) => ({
+      id: protectedRange.protectedRangeId,
+      startRow: Number(protectedRange.range?.startRowIndex || 0) + 1,
+      endRow: Number(protectedRange.range?.endRowIndex || tab?.gridProperties?.rowCount || 0),
+      description: protectedRange.description || "",
+    }));
+}
+
+async function crbrEnsureGridRows(sheets, spreadsheetId, tab, requiredRows) {
+  const currentRows = Number(tab?.gridProperties?.rowCount || 0);
+  if (!Number.isInteger(tab?.sheetId) || requiredRows <= currentRows) return { insertedRows: 0, rowCount: currentRows };
+  const rowsToAdd = requiredRows - currentRows;
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        appendDimension: {
+          sheetId: tab.sheetId,
+          dimension: "ROWS",
+          length: rowsToAdd,
+        },
+      }],
+    },
+  });
+  return { insertedRows: rowsToAdd, rowCount: requiredRows };
+}
+
+async function crbrFormatWrittenRows(sheets, spreadsheetId, tab, headerRow, startRow, endRow) {
+  if (!Number.isInteger(tab?.sheetId) || !startRow || !endRow || endRow < startRow) return;
+  const templateRow = Math.max(headerRow + 1, 3);
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          copyPaste: {
+            source: {
+              sheetId: tab.sheetId,
+              startRowIndex: templateRow - 1,
+              endRowIndex: templateRow,
+              startColumnIndex: 0,
+              endColumnIndex: 13,
+            },
+            destination: {
+              sheetId: tab.sheetId,
+              startRowIndex: startRow - 1,
+              endRowIndex: endRow,
+              startColumnIndex: 0,
+              endColumnIndex: 13,
+            },
+            pasteType: "PASTE_FORMAT",
+            pasteOrientation: "NORMAL",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: tab.sheetId,
+              startRowIndex: startRow - 1,
+              endRowIndex: endRow,
+              startColumnIndex: 0,
+              endColumnIndex: 1,
+            },
+            cell: { userEnteredFormat: { numberFormat: { type: "DATE", pattern: "dd/mm/yyyy" } } },
+            fields: "userEnteredFormat.numberFormat",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: tab.sheetId,
+              startRowIndex: startRow - 1,
+              endRowIndex: endRow,
+              startColumnIndex: 8,
+              endColumnIndex: 12,
+            },
+            cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: "#,##0" } } },
+            fields: "userEnteredFormat.numberFormat",
+          },
+        },
+      ],
+    },
+  });
+}
+
+async function crbrReadTab(sheets, spreadsheetId, preferredTab, fallbackFirst = false, options = {}) {
+  const workbook = await crbrWorkbookTabs(sheets, spreadsheetId);
+  const tab = workbook.tabs.find((item) => item.title === preferredTab) || (fallbackFirst ? workbook.tabs[0] : null);
+  if (!tab) throw new Error(`Sheet tab "${preferredTab}" was not found in ${workbook.title || spreadsheetId}`);
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(tab.title)}!A1:${CRBR_SYNC_RANGE_END_COLUMN}20000`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const values = response.data.values || [];
+  const headerRowIndex = crbrFindHeaderRow(values);
+  const headers = values[headerRowIndex] || [];
+  const map = options.columnMap || crbrColumnMap(headers);
+  const records = values.slice(headerRowIndex + 1)
+    .map((row, index) => crbrMapRow(row, map, headerRowIndex + index + 2, tab.title))
+    .filter(crbrRecordHasData);
+  return { workbookTitle: workbook.title, tab, tabName: tab.title, headers, headerRow: headerRowIndex + 1, map, values, records };
+}
+
+function crbrMisplacedShiftedRows(values = [], pending = []) {
+  const pendingVoucherKeys = new Set(pending.map((record) => `${record.dateKey}|${projectText(record.voucherNumber).toLowerCase()}`));
+  const ranges = [];
+  values.forEach((row, index) => {
+    const leftHasData = row.slice(0, 11).some((value) => projectText(value));
+    const shiftedDate = crbrDateKey(row[11]);
+    const shiftedVoucher = projectText(row[17]);
+    const key = `${shiftedDate}|${shiftedVoucher.toLowerCase()}`;
+    if (!leftHasData && shiftedDate && shiftedVoucher && pendingVoucherKeys.has(key)) {
+      ranges.push(index + 1);
+    }
+  });
+  return ranges;
+}
+
+function crbrFindNextWriteRow(values = [], headerRow = 1, map = {}) {
+  const identityColumns = ["date", "mainHead", "subHead", "transactionType", "particulars", "projectName", "voucherNumber"]
+    .map((field) => map[field])
+    .filter((index) => Number.isInteger(index));
+  const rowHasEntry = (row = []) => identityColumns.some((index) => projectText(row[index]) !== "");
+  const searchStartIndex = headerRow;
+  const maxRows = Math.max(values.length + 500, searchStartIndex + 500);
+  for (let index = searchStartIndex; index < maxRows; index += 1) {
+    if (!rowHasEntry(values[index] || [])) return index + 1;
+  }
+  return maxRows + 1;
+}
+
+function crbrTargetRowForHeaders(record, headers, map) {
+  const sourceByField = {
+    date: record.date,
+    mainHead: record.mainHead,
+    subHead: record.subHead,
+    transactionType: record.transactionType,
+    particulars: record.particulars,
+    projectName: record.projectName,
+    voucherNumber: record.voucherNumber,
+    paidParticulars: record.paidParticulars,
+    cash: record.cash || "",
+    bankAll: record.bankAll || "",
+    others: record.others || "",
+    total: record.total || "",
+    billDescription: record.billDescription,
+  };
+  const output = Array.from({ length: headers.length }, () => "");
+  Object.entries(map).forEach(([field, index]) => {
+    if (index < output.length) output[index] = sourceByField[field] ?? "";
+  });
+  return output;
+}
+
+async function buildCrbrPreview() {
+  const sheets = await getSheetsClient();
+  const settings = await getCrbrSettings();
+  const [source, target] = await Promise.all([
+    crbrReadTab(sheets, settings.sourceSpreadsheetId, settings.sourceTab, true),
+    crbrReadTab(sheets, settings.targetSpreadsheetId, settings.targetTab, false, { columnMap: CRBR_TARGET_COLUMN_MAP }),
+  ]);
+  const targetById = new Map(target.records.map((record) => [record.id, record]));
+  const sourceUnique = [];
+  const sourceSeen = new Map();
+  const sourceDuplicates = [];
+  source.records.forEach((record) => {
+    if (sourceSeen.has(record.id)) sourceDuplicates.push({ record, firstRow: sourceSeen.get(record.id).rowNumber });
+    else {
+      sourceSeen.set(record.id, record);
+      sourceUnique.push(record);
+    }
+  });
+  const voucherSeen = new Map();
+  source.records.forEach((record) => {
+    const voucherKey = projectText(record.voucherNumber).trim().toLowerCase();
+    if (!voucherKey) return;
+    const current = voucherSeen.get(voucherKey) || {
+      voucherNumber: record.voucherNumber,
+      rows: [],
+      records: [],
+    };
+    current.rows.push(record.rowNumber);
+    current.records.push(record);
+    voucherSeen.set(voucherKey, current);
+  });
+  const voucherDuplicates = Array.from(voucherSeen.values())
+    .filter((item) => item.records.length > 1)
+    .map((item) => ({
+      voucherNumber: item.voucherNumber,
+      rows: item.rows,
+      count: item.records.length,
+      records: item.records.map((record) => ({
+        id: record.id,
+        rowNumber: record.rowNumber,
+        dateKey: record.dateKey,
+        projectName: record.projectName,
+        particulars: record.particulars,
+        total: record.total,
+      })),
+    }));
+  const pending = sourceUnique.filter((record) => !targetById.has(record.id));
+  const conflicts = [];
+  sourceUnique.forEach((record) => {
+    const targetRecord = targetById.get(record.id);
+    if (!targetRecord) return;
+    const fields = ["cash", "bankAll", "others", "total"];
+    const amountMismatch = fields.some((field) => Math.abs(Number(record[field] || 0) - Number(targetRecord[field] || 0)) > 0.01);
+    if (amountMismatch) conflicts.push({ source: record, target: targetRecord, reason: "Matching row exists with different amount values" });
+  });
+  const tallyIssues = pending.filter((record) => !record.tallyOk).map((record) => ({
+    record,
+    expected: record.tallyAmount,
+    actual: record.total,
+    difference: Number((record.tallyAmount - record.total).toFixed(2)),
+  }));
+  const totals = pending.reduce((sum, record) => ({
+    cash: sum.cash + record.cash,
+    bankAll: sum.bankAll + record.bankAll,
+    others: sum.others + record.others,
+    total: sum.total + record.total,
+  }), { cash: 0, bankAll: 0, others: 0, total: 0 });
+  Object.keys(totals).forEach((key) => { totals[key] = Number(totals[key].toFixed(2)); });
+  const nextWriteRow = pending.length ? crbrFindNextWriteRow(target.values, target.headerRow, target.map) : null;
+  const nextWriteEndRow = pending.length ? nextWriteRow + pending.length - 1 : null;
+  const protectedTargetRows = pending.length ? crbrProtectedRows(target.tab, nextWriteRow, nextWriteEndRow) : [];
+  const syncBlocked = protectedTargetRows.length ? {
+    type: "protected-range",
+    message: `Target rows ${nextWriteRow}-${nextWriteEndRow} are protected in "${target.tabName}". Please unprotect those rows or allow the Google service account to edit protected ranges, then sync again.`,
+    startRow: nextWriteRow,
+    endRow: nextWriteEndRow,
+    protectedRanges: protectedTargetRows,
+  } : null;
+  const canSync = pending.length > 0 && conflicts.length === 0 && tallyIssues.length === 0 && sourceDuplicates.length === 0 && voucherDuplicates.length === 0 && !syncBlocked;
+  return {
+    settings,
+    source: { spreadsheetId: settings.sourceSpreadsheetId, workbookTitle: source.workbookTitle, tabName: source.tabName, rows: source.records.length },
+    target: { spreadsheetId: settings.targetSpreadsheetId, workbookTitle: target.workbookTitle, tabName: target.tabName, rows: target.records.length },
+    pending,
+    conflicts,
+    tallyIssues,
+    sourceDuplicates,
+    voucherDuplicates,
+    syncBlocked,
+    totals,
+    canSync,
+    checkedAt: new Date().toISOString(),
+  };
 }
 
 function projectFindColumn(headers, explicit, patterns) {
@@ -14407,7 +14985,7 @@ const MRN_HEADERS = [
 const MRN_FIELD_HEADERS = {
   mrnNo: ["MRN No"],
   timestamp: ["Timestamp"],
-  projectSite: ["Name of Project & Site Address"],
+  projectSite: ["Name of Project & Site Address", "PROJECT NAME", "Project Name", "Project / Site", "Project Site"],
   materialRequestDate: ["Material Request Date"],
   requiredDate: ["By when Material is Required"],
   materialRequirement: ["Material Requirement"],
@@ -14558,7 +15136,10 @@ function parseMrnDate(value) {
   if (dayFirst) {
     const day = Number(dayFirst[1]);
     const month = Number(dayFirst[2]);
-    const year = dayFirst[3].length === 2 ? Number(`20${dayFirst[3]}`) : Number(dayFirst[3]);
+    const rawYear = Number(dayFirst[3]);
+    const year = dayFirst[3].length === 2 || (dayFirst[3].length === 4 && rawYear < 100)
+      ? Number(`20${String(rawYear).padStart(2, "0")}`)
+      : rawYear;
     if (year && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
       // Year is padded to 4 digits so the key stays lexicographically comparable:
       // the MRN range filter compares these as strings, and a typo'd cell like
@@ -14568,6 +15149,14 @@ function parseMrnDate(value) {
   }
   const parsed = new Date(text);
   return Number.isNaN(parsed.getTime()) ? "" : istDateKey(parsed);
+}
+
+function displayMrnDate(value) {
+  const text = projectText(value);
+  const key = parseMrnDate(text);
+  if (!key) return text;
+  const [, year, month, day] = key.match(/^(\d{4})-(\d{2})-(\d{2})$/) || [];
+  return year && month && day ? `${day}/${month}/${year}` : text;
 }
 
 function formatMrnTimestamp(date = new Date()) {
@@ -14616,7 +15205,7 @@ function mapMrnRows(values = []) {
     const row = normalizeMrnRow(values[rowIndex] || [], headers);
     const sheetMrnNo = valueAt(row, ["MRN No"]);
     const timestamp = valueAt(row, ["Timestamp"]);
-    const project = valueAt(row, ["Name of Project & Site Address"]);
+    const project = valueAt(row, ["Name of Project & Site Address", "PROJECT NAME", "Project Name", "Project / Site", "Project Site"]);
     const material = valueAt(row, ["Material Requirement"]);
     if (!sheetMrnNo && !timestamp && !project && !material) continue;
     const mrnNo = sheetMrnNo || `MRN${String(rowIndex).padStart(2, "0")}`;
@@ -14655,8 +15244,8 @@ function mapMrnRows(values = []) {
       lastEdited: timestamp,
       date: parseMrnDate(timestamp || requestDate),
       project,
-      materialRequestDate: requestDate,
-      requiredDate,
+      materialRequestDate: displayMrnDate(requestDate),
+      requiredDate: displayMrnDate(requiredDate),
       materialRequirement: material,
       issuedBy: valueAt(row, ["Issued by", "Issued by "]),
       leadTime: valueAt(row, ["Lead Time (Usual time to get Material )", "Lead Time"]),

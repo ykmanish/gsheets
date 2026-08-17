@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - main
-  # Manual trigger, so a deploy can be re-run from the Actions tab without
-  # having to push another commit.
+
   workflow_dispatch:
 
 jobs:
@@ -17,8 +16,9 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.AWS_HOST }}
-          username: ubuntu
+          username: ec2-user
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            cd ~/apps/gsheets
+            cd /var/www/app
+            chmod +x deploy.sh
             ./deploy.sh

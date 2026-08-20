@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, BriefcaseBusiness, PackageSearch, CalendarDays, MapPin, ListTodo, MessagesSquare } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, BriefcaseBusiness, PackageSearch, CalendarDays, MapPin, ListTodo, MessagesSquare, CircleDollarSign, UserRoundSearch } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
@@ -21,11 +21,13 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "hr-employees", label: "Employees", icon: Users, parent: "hr" },
     { id: "hr-leave", label: "Leave", icon: CalendarDays, parent: "hr" },
     { id: "hr-attendance", label: "Attendance", icon: MapPin, parent: "hr" },
+    { id: "hr-recruitment", label: "Recruitment", icon: UserRoundSearch, parent: "hr" },
     { id: "todos", label: "Todos", icon: ListTodo },
     // { id: "forum", label: "Loop", icon: MessagesSquare },
     { id: "sheet-dashboard", label: "Sheet Dashboard", icon: Sheet },
     { id: "automations", label: "Automation", icon: Workflow },
     { id: "reports", label: "Reports", icon: ChartNoAxesCombined },
+    { id: "accounts", label: "Accounts", icon: CircleDollarSign },
     { id: "employee-daily-report", label: "Employee Daily Report", icon: CalendarCheck },
     { id: "activity-log", label: "Activity Log", icon: Activity },
     { id: "whatsapp", label: "WhatsApp", icon: MessageCircleMore },
@@ -35,7 +37,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "module-control", label: "Module Control", icon: SlidersHorizontal, parent: "access-management" },
   ];
   const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn", "project-stock", "site-images"].includes(item.id) && allowedMenus.includes(item.id));
-  const hrSubMenu = menuItems.filter((item) => ["hr-dashboard", "hr-employees", "hr-leave", "hr-attendance"].includes(item.id) && allowedMenus.includes(item.id));
+  const hrSubMenu = menuItems.filter((item) => ["hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment"].includes(item.id) && allowedMenus.includes(item.id));
   const accessSubMenu = menuItems.filter((item) => item.parent === "access-management" && allowedMenus.includes(item.id));
   const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id) || (item.id === "hr-dashboard" && hrSubMenu.length) || (item.id === "projects" && projectSubMenu.length) || (item.id === "access-management" && accessSubMenu.length));
   const [openGroups, setOpenGroups] = useState(() => ({

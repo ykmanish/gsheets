@@ -5,3 +5,5 @@ remote-mcp/node_modules/
 dist/
 build/
 .next/
+
+backend/vertex-sa.json

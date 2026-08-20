@@ -1,0 +1,408 @@
+{
+  "reportDate": "2026-08-17",
+  "reportDateLabel": "Monday 17 August 2026",
+  "generatedAt": "2026-08-17 12:45 IST",
+  "kpi": {
+    "startingToday": 0,
+    "startingTodayFoot": "no tasks or subtasks scheduled to start today",
+    "delayed": 18,
+    "delayedFoot": "worst is 28 days late",
+    "pastTarget": 2,
+    "pastTargetFoot": "Kalhar, Devsharanam"
+  },
+  "totals": {
+    "items": 149,
+    "done": 14,
+    "tasks": 34,
+    "tasksDone": 2,
+    "subtasks": 115,
+    "subtasksDone": 12
+  },
+  "projects": [
+    {
+      "name": "Kalhar",
+      "code": "KAL-01",
+      "manager": "Iqbal Patel",
+      "health": "yellow",
+      "target": "2026-07-31",
+      "pastTarget": true,
+      "phases": 5,
+      "tasks": {
+        "total": 8,
+        "done": 1
+      },
+      "subtasks": {
+        "total": 6,
+        "done": 1
+      },
+      "delayed": 7
+    },
+    {
+      "name": "Devsharanam",
+      "code": "",
+      "manager": "Jay Panchal",
+      "health": "green",
+      "target": "2026-07-31",
+      "pastTarget": true,
+      "phases": 1,
+      "tasks": {
+        "total": 9,
+        "done": 0
+      },
+      "subtasks": {
+        "total": 0,
+        "done": 0
+      },
+      "delayed": 8
+    },
+    {
+      "name": "Paramdham",
+      "code": "PD_01",
+      "manager": "Iqbal Patel",
+      "health": "green",
+      "target": "",
+      "pastTarget": false,
+      "phases": 3,
+      "tasks": {
+        "total": 16,
+        "done": 1
+      },
+      "subtasks": {
+        "total": 72,
+        "done": 0
+      },
+      "delayed": 2
+    },
+    {
+      "name": "Silver White Factory",
+      "code": "SWF -01",
+      "manager": "Iqbal Patel",
+      "health": "green",
+      "target": "",
+      "pastTarget": false,
+      "phases": 1,
+      "tasks": {
+        "total": 1,
+        "done": 0
+      },
+      "subtasks": {
+        "total": 37,
+        "done": 11
+      },
+      "delayed": 1
+    }
+  ],
+  "startingToday": [],
+  "delayed": [
+    {
+      "key": "k1",
+      "project": "Kalhar",
+      "phase": "Site Analysis",
+      "parent": "",
+      "title": "Flooring",
+      "due": "2026-07-20",
+      "daysLate": 28,
+      "assignee": "Iqbal Patel",
+      "status": "in_progress",
+      "priority": "medium",
+      "note": ""
+    },
+    {
+      "key": "k2",
+      "project": "Kalhar",
+      "phase": "DG Shade",
+      "parent": "",
+      "title": "Design",
+      "due": "2026-07-20",
+      "daysLate": 28,
+      "assignee": "Namrata Pathak",
+      "status": "in_progress",
+      "priority": "high",
+      "note": ""
+    },
+    {
+      "key": "k3",
+      "project": "Kalhar",
+      "phase": "Site Analysis",
+      "parent": "Flooring",
+      "title": "M Bed room Bath",
+      "due": "2026-07-21",
+      "daysLate": 27,
+      "assignee": "Krupali Lathia",
+      "status": "subtask, not done",
+      "priority": "",
+      "note": "Balance wall dedo's materials need to finalized"
+    },
+    {
+      "key": "k4",
+      "project": "Kalhar",
+      "phase": "DG Shade",
+      "parent": "",
+      "title": "Procurement",
+      "due": "2026-07-21",
+      "daysLate": 27,
+      "assignee": "Iqbal Patel",
+      "status": "todo",
+      "priority": "high",
+      "note": ""
+    },
+    {
+      "key": "k5",
+      "project": "Kalhar",
+      "phase": "Discovery & Briefing",
+      "parent": "",
+      "title": "Fabrication for DG shed",
+      "due": "2026-07-22",
+      "daysLate": 26,
+      "assignee": "Namrata Pathak",
+      "status": "todo",
+      "priority": "medium",
+      "note": "poly carbonate shed  with terracotta tiles, Aluminium door and windows"
+    },
+    {
+      "key": "k6",
+      "project": "Kalhar",
+      "phase": "Space Planning & Design",
+      "parent": "",
+      "title": "Pannelling",
+      "due": "2026-07-23",
+      "daysLate": 25,
+      "assignee": "Krupali Lathia",
+      "status": "todo",
+      "priority": "medium",
+      "note": "Along Jacuzzi"
+    },
+    {
+      "key": "k7",
+      "project": "Kalhar",
+      "phase": "Discovery & Briefing",
+      "parent": "",
+      "title": "W PC Cabinet",
+      "due": "2026-07-25",
+      "daysLate": 23,
+      "assignee": "Krupali Lathia",
+      "status": "todo",
+      "priority": "medium",
+      "note": "WPC cabinet at Parking area."
+    },
+    {
+      "key": "d1",
+      "project": "Devsharanam",
+      "phase": "Planning",
+      "parent": "",
+      "title": "Temple Door",
+      "due": "2026-07-25",
+      "daysLate": 23,
+      "assignee": "Nishi Mehta",
+      "status": "todo",
+      "priority": "medium",
+      "note": "Fabrication and installation of Temple door"
+    },
+    {
+      "key": "d2",
+      "project": "Devsharanam",
+      "phase": "Planning",
+      "parent": "",
+      "title": "Flooring",
+      "due": "2026-07-27",
+      "daysLate": 21,
+      "assignee": "Nishi Mehta",
+      "status": "todo",
+      "priority": "medium",
+      "note": "Gazebo Flooring On Hold"
+    },
+    {
+      "key": "d3",
+      "project": "Devsharanam",
+      "phase": "Planning",
+      "parent": "",
+      "title": "RO",
+      "due": "2026-07-28",
+      "daysLate": 20,
+      "assignee": "Jay Panchal",
+      "status": "todo",
+      "priority": "medium",
+      "note": ""
+    },
+    {
+      "key": "d4",
+      "project": "Devsharanam",
+      "phase": "Planning",
+      "parent": "",
+      "title": "Fabric ceiling",
+      "due": "2026-07-29",
+      "daysLate": 19,
+      "assignee": "Milind Chaurasiya",
+      "status": "todo",
+      "priority": "medium",
+      "note": "Fabric celling at dinning area."
+    },
+    {
+      "key": "d5",
+      "project": "Devsharanam",
+      "phase": "Planning",
+      "parent": "",
+      "title": "PVC Cabinet",
+      "due": "2026-07-29",
+      "daysLate": 19,
+      "assignee": "Milind Chaurasiya",
+      "status": "todo",
+      "priority": "medium",
+      "note": ""
+    },
+    {
+      "key": "d6",
+      "project": "Devsharanam",
+      "phase": "Planning",
+      "parent": "",
+      "title": "Kids Bed With Side Table",
+      "due": "2026-07-29",
+      "daysLate": 19,
+      "assignee": "Krupali Lathia",
+      "status": "todo",
+      "priority": "medium",
+      "note": ""
+    },
+    {
+      "key": "d7",
+      "project": "Devsharanam",
+      "phase": "Planning",
+      "parent": "",
+      "title": "Mirror",
+      "due": "2026-07-29",
+      "daysLate": 19,
+      "assignee": "Nishi Mehta",
+      "status": "todo",
+      "priority": "medium",
+      "note": "Master, Kids, Entertainment, Parents bedroom - 4 Dressing Mirror"
+    },
+    {
+      "key": "d8",
+      "project": "Devsharanam",
+      "phase": "Planning",
+      "parent": "",
+      "title": "Master Side Table",
+      "due": "2026-07-29",
+      "daysLate": 19,
+      "assignee": "Krupali Lathia",
+      "status": "todo",
+      "priority": "medium",
+      "note": ""
+    },
+    {
+      "key": "p1",
+      "project": "Paramdham",
+      "phase": "Execution & Installation",
+      "parent": "Flooring/Tiling Work",
+      "title": "Marble Laying & Polishing of Master bedroom",
+      "due": "2026-07-30",
+      "daysLate": 18,
+      "assignee": "Chirag Gajjar",
+      "status": "subtask, not done",
+      "priority": "",
+      "note": "To be Finalise Flooring Drawing"
+    },
+    {
+      "key": "p2",
+      "project": "Paramdham",
+      "phase": "Execution & Installation",
+      "parent": "Flooring/Tiling Work",
+      "title": "Marble Laying & Polishing of All Bathrooms Flooring + Wall cladding",
+      "due": "2026-07-30",
+      "daysLate": 18,
+      "assignee": "Chirag Gajjar",
+      "status": "subtask, not done",
+      "priority": "",
+      "note": "To be Finalize Drawing"
+    },
+    {
+      "key": "s1",
+      "project": "Silver White Factory",
+      "phase": "Execution & Installation",
+      "parent": "Civil Work",
+      "title": "RCC for  Pardi 1st Lift ,",
+      "due": "2026-08-12",
+      "daysLate": 5,
+      "assignee": "Jay Suthar",
+      "status": "subtask, not done",
+      "priority": "",
+      "note": "Rebars cutting ,bending and fixing including Form works ."
+    }
+  ],
+  "assigneeLoad": [
+    {
+      "name": "Krupali Lathia",
+      "count": 5,
+      "maxDays": 27,
+      "projects": [
+        "Kalhar",
+        "Devsharanam"
+      ]
+    },
+    {
+      "name": "Nishi Mehta",
+      "count": 3,
+      "maxDays": 23,
+      "projects": [
+        "Devsharanam"
+      ]
+    },
+    {
+      "name": "Namrata Pathak",
+      "count": 2,
+      "maxDays": 28,
+      "projects": [
+        "Kalhar"
+      ]
+    },
+    {
+      "name": "Iqbal Patel",
+      "count": 2,
+      "maxDays": 28,
+      "projects": [
+        "Kalhar"
+      ]
+    },
+    {
+      "name": "Milind Chaurasiya",
+      "count": 2,
+      "maxDays": 19,
+      "projects": [
+        "Devsharanam"
+      ]
+    },
+    {
+      "name": "Chirag Gajjar",
+      "count": 2,
+      "maxDays": 18,
+      "projects": [
+        "Paramdham"
+      ]
+    },
+    {
+      "name": "Jay Panchal",
+      "count": 1,
+      "maxDays": 20,
+      "projects": [
+        "Devsharanam"
+      ]
+    },
+    {
+      "name": "Jay Suthar",
+      "count": 1,
+      "maxDays": 5,
+      "projects": [
+        "Silver White Factory"
+      ]
+    }
+  ],
+  "notes": [
+    "<b>No tasks or subtasks are scheduled to start today</b> across any of the 4 projects — the new-work pipeline is empty.",
+    "<b>Krupali Lathia carries 5 of the 18</b> delayed items, spread across Kalhar, Devsharanam — the heaviest overdue load of anyone.",
+    "<b>Kalhar's oldest delay — Site Analysis › Flooring</b>, is now <b>28 days</b> late and marked <code>in_progress</code>.",
+    "<b>Devsharanam is flagged health <code>green</code></b> while 8 of its 9 dated/total items are delayed. The colour is set by hand and looks stale.",
+    "<b>Kalhar and Devsharanam</b> are past their target date while still <code>active</code>: Kalhar (17d), Devsharanam (17d).",
+    "<b>16 of Paramdham's 16 tasks have an empty due date</b>, so they can never be reported as delayed — progress on that project is effectively untracked.",
+    "<b>2 item(s) are marked <code>in_progress</code> yet 28+ days late</b> — worth checking whether they're actually moving."
+  ]
+}

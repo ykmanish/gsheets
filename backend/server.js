@@ -24,6 +24,7 @@ const { processDocument, processSheetText } = require("./lib/processDocument");
 const { createWhatsAppService, normalizePhone } = require("./lib/whatsappService");
 const { callClaude, retrieveRelevantChunks, routeClaudeModel, modelIdForTier } = require("./lib/claudeRag");
 const { registerFormsModule } = require("./lib/formsModule");
+const { registerRecruitmentModule } = require("./lib/recruitmentModule");
 const adminMiscExpensesArchitecture = require("./sheetArchitectures/adminMiscExpenses");
 const assetPurchaseRequestsArchitecture = require("./sheetArchitectures/assetPurchaseRequests");
 const directorPaymentRequestsArchitecture = require("./sheetArchitectures/directorPaymentRequests");
@@ -77,6 +78,7 @@ const MENU_ITEMS = [
   { id: "hr-employees", label: "Employees", parent: "hr-dashboard", group: "hr" },
   { id: "hr-leave", label: "Leave", parent: "hr-dashboard", group: "hr" },
   { id: "hr-attendance", label: "Attendance", parent: "hr-dashboard", group: "hr" },
+  { id: "hr-recruitment", label: "Recruitment", parent: "hr-dashboard", group: "hr" },
   { id: "todos", label: "Todos" },
   { id: "forum", label: "Loop" },
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
@@ -157,6 +159,8 @@ async function connectAuthDb() {
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ userId: 1, reportDate: 1 }, { unique: true });
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
   await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
+  await authDb.collection("accountsCrbrRemarks").createIndex({ rowId: 1 }, { unique: true });
+  await authDb.collection("accountsCrbrIntakeRuns").createIndex({ importedAt: -1 });
   await authDb.collection("personalTodos").createIndex({ userId: 1, createdAt: -1 });
   await authDb.collection("projectDashboard").createIndex({ updatedAt: -1 });
   await authDb.collection("forumConversations").createIndex({ type: 1, updatedAt: -1 });
@@ -840,6 +844,14 @@ registerFormsModule(app, {
   google,
   getGoogleAuth,
   requireSuperAdmin,
+});
+
+registerRecruitmentModule(app, {
+  connectDb: connectAuthDb,
+  getGoogleAuth,
+  hasMenuAccess,
+  hasPrivilege,
+  addActivityLog,
 });
 
 const EMPLOYEE_REPORT_OPTIONS = {
@@ -3036,6 +3048,7 @@ app.put("/accounts/crbr/settings", async (req, res) => {
       { $set: payload, $setOnInsert: { createdAt: new Date() } },
       { upsert: true },
     );
+    crbrClearReadCache();   // different sheets or tabs, so drop anything cached
     addActivityLog({ req, action: "Updated CRBR sync settings", target: "Accounts", status: "success", details: publicCrbrSettings(payload) });
     res.json({ success: true, settings: publicCrbrSettings(payload) });
   } catch (error) {
@@ -3050,62 +3063,138 @@ app.post("/accounts/crbr/sync", async (req, res) => {
     const preview = await buildCrbrPreview();
     if (!preview.canSync) {
       return res.status(409).json({
-        error: preview.syncBlocked?.message || "CRBR sync stopped because conflicts, duplicates, or tally issues need review.",
+        error: preview.missingTab?.[0] || preview.syncBlocked?.message || "CRBR sync stopped because conflicts, duplicates, or tally issues need review.",
         ...preview,
       });
     }
     const sheets = await getSheetsClient();
     const settings = await getCrbrSettings();
-    let target = await crbrReadTab(sheets, settings.targetSpreadsheetId, settings.targetTab, false, { columnMap: CRBR_TARGET_COLUMN_MAP });
-    const misplacedRows = crbrMisplacedShiftedRows(target.values, preview.pending);
-    if (misplacedRows.length) {
-      await sheets.spreadsheets.values.batchClear({
+    const written = [];
+
+    // Each Main_Head decides which tab a row belongs in, so the two groups are written
+    // separately — a receipt never lands in the expense tab and vice versa.
+    for (const route of [
+      { key: "receipt", label: "Client receipt", tab: settings.targetReceiptTab },
+      { key: "expense", label: "Project expense", tab: settings.targetExpenseTab },
+    ]) {
+      const group = preview.pending.filter((record) => record.route === route.key);
+      if (!group.length) continue;
+
+      let target = await crbrReadTab(sheets, settings.targetSpreadsheetId, route.tab, false, { columnMap: CRBR_TARGET_COLUMN_MAP, fresh: true });
+      const misplacedRows = crbrMisplacedShiftedRows(target.values, group);
+      if (misplacedRows.length) {
+        await sheets.spreadsheets.values.batchClear({
+          spreadsheetId: settings.targetSpreadsheetId,
+          requestBody: { ranges: misplacedRows.map((rowNumber) => `${escapeSheetName(target.tabName)}!L${rowNumber}:R${rowNumber}`) },
+        });
+        target = await crbrReadTab(sheets, settings.targetSpreadsheetId, route.tab, false, { columnMap: CRBR_TARGET_COLUMN_MAP, fresh: true });
+      }
+
+      const rows = group.map((record) => crbrTargetRowForHeaders(record, target.headers, CRBR_TARGET_COLUMN_MAP));
+      const startRow = crbrFindNextWriteRow(target.values, target.headerRow, target.map);
+      const endRow = startRow + rows.length - 1;
+      const endColumn = columnName(Math.max(target.headers.length, 13));
+      const blockedRows = crbrProtectedRows(target.tab, startRow, endRow);
+      if (blockedRows.length) return res.status(409).json({ error: `Rows ${startRow}-${endRow} are protected in "${target.tabName}". Unprotect them or allow the Google service account to edit protected ranges, then sync again.`, ...preview });
+
+      const gridUpdate = await crbrEnsureGridRows(sheets, settings.targetSpreadsheetId, target.tab, endRow);
+      await crbrFormatWrittenRows(sheets, settings.targetSpreadsheetId, target.tab, target.headerRow, startRow, endRow);
+      await sheets.spreadsheets.values.update({
         spreadsheetId: settings.targetSpreadsheetId,
-        requestBody: { ranges: misplacedRows.map((rowNumber) => `${escapeSheetName(target.tabName)}!L${rowNumber}:R${rowNumber}`) },
+        range: `${escapeSheetName(target.tabName)}!A${startRow}:${endColumn}${endRow}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: rows },
       });
-      target = await crbrReadTab(sheets, settings.targetSpreadsheetId, settings.targetTab, false, { columnMap: CRBR_TARGET_COLUMN_MAP });
+      await crbrFormatWrittenRows(sheets, settings.targetSpreadsheetId, target.tab, target.headerRow, startRow, endRow);
+
+      const verified = await crbrReadTab(sheets, settings.targetSpreadsheetId, route.tab, false, { columnMap: CRBR_TARGET_COLUMN_MAP, fresh: true });
+      const verifiedIds = new Set(verified.records.map((record) => record.id));
+      const missingAfterWrite = group.filter((record) => !verifiedIds.has(record.id));
+      if (missingAfterWrite.length) throw new Error(`Sync write into "${target.tabName}" could not be verified for ${missingAfterWrite.length} row(s). Please check the tab headers and sheet permissions.`);
+
+      written.push({
+        route: route.key,
+        label: route.label,
+        tabName: target.tabName,
+        rows: rows.length,
+        totals: crbrSumTotals(group),
+        startRow,
+        endRow,
+        insertedRows: gridUpdate.insertedRows,
+        repairedMisplacedRows: misplacedRows.length,
+        rowIds: group.map((record) => record.id),
+      });
     }
-    const rows = preview.pending.map((record) => crbrTargetRowForHeaders(record, target.headers, CRBR_TARGET_COLUMN_MAP));
-    const startRow = crbrFindNextWriteRow(target.values, target.headerRow, target.map);
-    const endRow = startRow + rows.length - 1;
-    const endColumn = columnName(Math.max(target.headers.length, 13));
-    const blockedRows = crbrProtectedRows(target.tab, startRow, endRow);
-    if (blockedRows.length) return res.status(409).json({ error: `Target rows ${startRow}-${endRow} are protected in "${target.tabName}". Please unprotect those rows or allow the Google service account to edit protected ranges, then sync again.`, ...preview });
-    const gridUpdate = await crbrEnsureGridRows(sheets, settings.targetSpreadsheetId, target.tab, endRow);
-    await crbrFormatWrittenRows(sheets, settings.targetSpreadsheetId, target.tab, target.headerRow, startRow, endRow);
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: settings.targetSpreadsheetId,
-      range: `${escapeSheetName(target.tabName)}!A${startRow}:${endColumn}${endRow}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: rows },
-    });
-    await crbrFormatWrittenRows(sheets, settings.targetSpreadsheetId, target.tab, target.headerRow, startRow, endRow);
-    const verifiedTarget = await crbrReadTab(sheets, settings.targetSpreadsheetId, settings.targetTab, false, { columnMap: CRBR_TARGET_COLUMN_MAP });
-    const verifiedIds = new Set(verifiedTarget.records.map((record) => record.id));
-    const missingAfterWrite = preview.pending.filter((record) => !verifiedIds.has(record.id));
-    if (missingAfterWrite.length) {
-      throw new Error(`Sync write could not be verified for ${missingAfterWrite.length} row(s). Please check target headers and sheet permissions.`);
-    }
+
+    crbrClearReadCache();   // the sheets changed, so the next dashboard load must re-read
+    const syncedRows = written.reduce((sum, item) => sum + item.rows, 0);
     const db = await connectAuthDb();
     const run = {
       source: preview.source,
       target: preview.target,
-      syncedRows: rows.length,
+      written,
+      syncedRows,
       totals: preview.totals,
       syncedAt: new Date(),
-      targetStartRow: startRow,
-      targetEndRow: endRow,
-      insertedRows: gridUpdate.insertedRows,
-      repairedMisplacedRows: misplacedRows.length,
       syncedBy: { id: req.authUser.id, name: req.authUser.displayName || req.authUser.username || "User" },
-      rowIds: preview.pending.map((record) => record.id),
+      rowIds: written.flatMap((item) => item.rowIds),
     };
     await db.collection("accountsCrbrSyncRuns").insertOne(run);
-    addActivityLog({ req, action: "Synced CRBR entries", target: `${rows.length} row(s)`, status: "success", details: { totals: preview.totals, source: preview.source, target: preview.target } });
-    res.json({ success: true, syncedRows: rows.length, totals: preview.totals, syncedAt: run.syncedAt.toISOString(), targetStartRow: run.targetStartRow, targetEndRow: run.targetEndRow });
+    addActivityLog({ req, action: "Synced CRBR entries", target: written.map((item) => `${item.rows} → ${item.tabName}`).join(", "), status: "success", details: { totals: preview.totals, written } });
+    res.json({ success: true, syncedRows, written, totals: preview.totals, syncedAt: run.syncedAt.toISOString() });
   } catch (error) {
     console.error("CRBR sync error:", error);
     res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: error.message || "Could not sync CRBR entries" });
+  }
+});
+
+app.get("/accounts/crbr/intake", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    res.json(await buildCrbrIntake());
+  } catch (error) {
+    console.error("CRBR intake error:", error);
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: error.message || "Could not read the raw CRBR sheet" });
+  }
+});
+
+app.post("/accounts/crbr/intake/import", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "accounts") || !accountsCanManage(req)) return res.status(403).json({ error: "Accounts manage access required" });
+    const rowIds = Array.isArray(req.body?.rowIds) ? req.body.rowIds : [];
+    if (!rowIds.length) return res.status(400).json({ error: "Select at least one row to import" });
+    const actor = { id: req.authUser.id, name: req.authUser.displayName || req.authUser.username || "User" };
+    const result = await importCrbrIntoMamSheet(rowIds, actor);
+    addActivityLog({ req, action: "Imported raw CRBR rows into Mam sheet", target: `${result.importedRows} row(s)`, status: "success", details: result });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("CRBR intake import error:", error);
+    res.status(isGoogleSheetsQuotaError(error) ? 429 : 400).json({ error: error.message || "Could not import raw CRBR rows" });
+  }
+});
+
+app.put("/accounts/crbr/remark", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    const rowId = projectText(req.body?.rowId);
+    if (!rowId) return res.status(400).json({ error: "rowId is required" });
+    const text = projectText(req.body?.text).slice(0, 1000);
+    const db = await connectAuthDb();
+    if (!text) {
+      await db.collection(CRBR_REMARKS_COLLECTION).deleteOne({ rowId });
+      return res.json({ success: true, rowId, remark: null });
+    }
+    const updatedBy = { id: req.authUser.id, name: req.authUser.displayName || req.authUser.username || "User" };
+    const updatedAt = new Date();
+    await db.collection(CRBR_REMARKS_COLLECTION).updateOne(
+      { rowId },
+      { $set: { rowId, text, updatedAt, updatedBy }, $setOnInsert: { createdAt: updatedAt } },
+      { upsert: true },
+    );
+    res.json({ success: true, rowId, remark: { text, updatedAt, updatedBy } });
+  } catch (error) {
+    console.error("CRBR remark save error:", error);
+    res.status(400).json({ error: error.message || "Could not save remark" });
   }
 });
 
@@ -7352,7 +7441,7 @@ function cosineSimilarity(a, b) {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-async function getGoogleAuth() {
+async function getGoogleAuth(scopes) {
   if (!process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
     throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is not set");
   }
@@ -7366,7 +7455,9 @@ async function getGoogleAuth() {
 
   return new google.auth.GoogleAuth({
     credentials,
-    scopes: [
+    // Callers that need a different API (Vertex AI Search needs cloud-platform)
+    // pass their own scopes; everything else keeps the Sheets/Drive pair.
+    scopes: Array.isArray(scopes) && scopes.length ? scopes : [
       "https://www.googleapis.com/auth/spreadsheets",
       "https://www.googleapis.com/auth/drive",
     ],
@@ -8253,6 +8344,8 @@ function columnName(number) {
   return result || "A";
 }
 
+const CRBR_RAW_SPREADSHEET_ID = process.env.CRBR_RAW_SPREADSHEET_ID || "";
+const CRBR_RAW_TAB = process.env.CRBR_RAW_TAB || "";
 const CRBR_SOURCE_SPREADSHEET_ID = process.env.CRBR_SOURCE_SPREADSHEET_ID || "1q5txh_ReUL_RKMwiLJ54ikdfD_gdLOl6";
 const CRBR_SOURCE_TAB = process.env.CRBR_SOURCE_TAB || "Sheet19";
 const CRBR_TARGET_SPREADSHEET_ID = process.env.CRBR_TARGET_SPREADSHEET_ID || "1SDXeja0xJJ4dev7H7pEtQPuNdHFKkS0unQIAVlLWq3U";
@@ -8296,23 +8389,38 @@ function accountsCanManage(req) {
 
 function defaultCrbrSettings() {
   return {
+    rawSpreadsheetId: CRBR_RAW_SPREADSHEET_ID,
+    rawSheetUrl: CRBR_RAW_SPREADSHEET_ID ? `https://docs.google.com/spreadsheets/d/${CRBR_RAW_SPREADSHEET_ID}/edit` : "",
+    rawTab: CRBR_RAW_TAB,
     sourceSpreadsheetId: CRBR_SOURCE_SPREADSHEET_ID,
     sourceSheetUrl: CRBR_SOURCE_SPREADSHEET_ID ? `https://docs.google.com/spreadsheets/d/${CRBR_SOURCE_SPREADSHEET_ID}/edit` : "",
     sourceTab: CRBR_SOURCE_TAB,
     targetSpreadsheetId: CRBR_TARGET_SPREADSHEET_ID,
     targetSheetUrl: CRBR_TARGET_SPREADSHEET_ID ? `https://docs.google.com/spreadsheets/d/${CRBR_TARGET_SPREADSHEET_ID}/edit` : "",
     targetTab: CRBR_TARGET_TAB,
+    targetReceiptTab: "",
+    targetExpenseTab: "",
+    receiptMainHeads: [],
+    expenseMainHeads: [],
   };
 }
 
 function publicCrbrSettings(settings = defaultCrbrSettings()) {
   return {
+    rawSpreadsheetId: settings.rawSpreadsheetId || "",
+    rawSheetUrl: settings.rawSheetUrl || (settings.rawSpreadsheetId ? `https://docs.google.com/spreadsheets/d/${settings.rawSpreadsheetId}/edit` : ""),
+    rawTab: settings.rawTab || "",
     sourceSpreadsheetId: settings.sourceSpreadsheetId || "",
     sourceSheetUrl: settings.sourceSheetUrl || (settings.sourceSpreadsheetId ? `https://docs.google.com/spreadsheets/d/${settings.sourceSpreadsheetId}/edit` : ""),
     sourceTab: settings.sourceTab || "",
     targetSpreadsheetId: settings.targetSpreadsheetId || "",
     targetSheetUrl: settings.targetSheetUrl || (settings.targetSpreadsheetId ? `https://docs.google.com/spreadsheets/d/${settings.targetSpreadsheetId}/edit` : ""),
     targetTab: settings.targetTab || "",
+    // older setups only had one target tab; treat it as the expense tab so nothing breaks
+    targetReceiptTab: settings.targetReceiptTab || "",
+    targetExpenseTab: settings.targetExpenseTab || settings.targetTab || "",
+    receiptMainHeads: Array.isArray(settings.receiptMainHeads) && settings.receiptMainHeads.length ? settings.receiptMainHeads : CRBR_DEFAULT_RECEIPT_HEADS,
+    expenseMainHeads: Array.isArray(settings.expenseMainHeads) && settings.expenseMainHeads.length ? settings.expenseMainHeads : CRBR_DEFAULT_EXPENSE_HEADS,
     updatedAt: settings.updatedAt || null,
     updatedBy: settings.updatedBy || null,
   };
@@ -8330,16 +8438,36 @@ function sanitizeCrbrSettingsInput(input = {}) {
   if (!sourceSpreadsheetId) throw new Error("Mam CRBR sheet link is required");
   if (!targetSpreadsheetId) throw new Error("All ongoing project sheet link is required");
   const sourceTab = projectText(input.sourceTab);
-  const targetTab = projectText(input.targetTab);
+  const targetReceiptTab = projectText(input.targetReceiptTab);
+  const targetExpenseTab = projectText(input.targetExpenseTab);
+  const targetTab = projectText(input.targetTab) || targetExpenseTab;
   if (!sourceTab) throw new Error("Mam CRBR tab name is required");
-  if (!targetTab) throw new Error("All ongoing project tab name is required");
+  if (!targetReceiptTab) throw new Error("Client receipt tab name is required");
+  if (!targetExpenseTab) throw new Error("Project expense tab name is required");
+  if (crbrHeadKey(targetReceiptTab) === crbrHeadKey(targetExpenseTab)) throw new Error("Client receipt and project expense must be different tabs");
+  const receiptMainHeads = Array.isArray(input.receiptMainHeads)
+    ? [...new Set(input.receiptMainHeads.map((head) => projectText(head)).filter(Boolean))]
+    : undefined;
+  const expenseMainHeads = Array.isArray(input.expenseMainHeads)
+    ? [...new Set(input.expenseMainHeads.map((head) => projectText(head)).filter(Boolean))]
+    : undefined;
+  const rawSpreadsheetId = normalizeSpreadsheetId(input.rawSheetUrl || input.rawSpreadsheetId);
+  const rawTab = projectText(input.rawTab);
+  if (rawSpreadsheetId && !rawTab) throw new Error("Raw CRBR tab name is required when a raw sheet link is set");
   return {
+    rawSpreadsheetId,
+    rawSheetUrl: rawSpreadsheetId ? (projectText(input.rawSheetUrl) || `https://docs.google.com/spreadsheets/d/${rawSpreadsheetId}/edit`) : "",
+    rawTab: rawSpreadsheetId ? rawTab : "",
     sourceSpreadsheetId,
     sourceSheetUrl: projectText(input.sourceSheetUrl) || `https://docs.google.com/spreadsheets/d/${sourceSpreadsheetId}/edit`,
     sourceTab,
     targetSpreadsheetId,
     targetSheetUrl: projectText(input.targetSheetUrl) || `https://docs.google.com/spreadsheets/d/${targetSpreadsheetId}/edit`,
     targetTab,
+    targetReceiptTab,
+    targetExpenseTab,
+    ...(receiptMainHeads?.length ? { receiptMainHeads } : {}),
+    ...(expenseMainHeads?.length ? { expenseMainHeads } : {}),
   };
 }
 
@@ -8443,8 +8571,21 @@ function crbrMapRow(row = [], map = {}, rowNumber = 0, tabName = "") {
   return record;
 }
 
+// Amounts on their own are not an entry. A sum row at the foot of a sheet carries a figure
+// in the cash or bank column and nothing else — counting it as a transaction gives a row
+// with no date and no Main_Head, which then has nowhere to be filed. A real entry always
+// carries at least one identity field.
 function crbrRecordHasData(record = {}) {
-  return Boolean(record.dateKey || record.projectName || record.particulars || record.voucherNumber || record.total || record.cash || record.bankAll || record.others);
+  return Boolean(
+    record.dateKey
+    || record.mainHead
+    || record.subHead
+    || record.transactionType
+    || record.projectName
+    || record.particulars
+    || record.paidParticulars
+    || record.voucherNumber,
+  );
 }
 
 async function getSheetsClient() {
@@ -8452,12 +8593,41 @@ async function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-async function crbrWorkbookTabs(sheets, spreadsheetId) {
-  const response = await sheets.spreadsheets.get({ spreadsheetId, fields: "properties.title,sheets(properties(sheetId,title,sheetType,hidden,gridProperties(rowCount,columnCount)),protectedRanges(protectedRangeId,description,warningOnly,range))" });
+/* ── Sheets read cache ───────────────────────────────────────────────────────────────
+   Google allows 60 read requests per minute per user. A dashboard refresh reads the raw
+   tab, Mam's tab and both destination tabs, from two endpoints that fire together — which
+   is well over the limit once the page polls. Reads are cached briefly and, crucially,
+   coalesced: concurrent callers asking for the same tab share one in-flight request
+   instead of each issuing their own. Any write clears the cache so nothing is stale.  */
+const CRBR_CACHE_TTL_MS = 30000;
+const crbrReadCache = new Map();
+
+function crbrCached(key, loader, { fresh = false } = {}) {
+  if (fresh) crbrReadCache.delete(key);
+  const hit = crbrReadCache.get(key);
+  if (hit && Date.now() - hit.at < CRBR_CACHE_TTL_MS) return hit.promise;
+  const promise = loader().catch((error) => {
+    crbrReadCache.delete(key);   // never cache a failure
+    throw error;
+  });
+  crbrReadCache.set(key, { at: Date.now(), promise });
+  return promise;
+}
+
+function crbrClearReadCache() {
+  crbrReadCache.clear();
+}
+
+async function crbrWorkbookTabs(sheets, spreadsheetId, options = {}) {
+  return crbrCached(`meta::${spreadsheetId}`, () => crbrLoadWorkbookTabs(sheets, spreadsheetId), options);
+}
+
+async function crbrLoadWorkbookTabs(sheets, spreadsheetId) {
+  const response = await sheets.spreadsheets.get({ spreadsheetId, fields: "properties.title,sheets(properties(sheetId,title,sheetType,hidden,gridProperties(rowCount,columnCount)),protectedRanges(protectedRangeId,description,warningOnly,range),basicFilter)" });
   return {
     title: response.data.properties?.title || "",
     tabs: (response.data.sheets || [])
-      .map((sheet) => ({ ...(sheet.properties || {}), protectedRanges: sheet.protectedRanges || [] }))
+      .map((sheet) => ({ ...(sheet.properties || {}), protectedRanges: sheet.protectedRanges || [], basicFilter: sheet.basicFilter || null }))
       .filter((tab) => tab?.sheetType === "GRID" && !tab.hidden),
   };
 }
@@ -8497,66 +8667,96 @@ async function crbrEnsureGridRows(sheets, spreadsheetId, tab, requiredRows) {
   return { insertedRows: rowsToAdd, rowCount: requiredRows };
 }
 
-async function crbrFormatWrittenRows(sheets, spreadsheetId, tab, headerRow, startRow, endRow) {
-  if (!Number.isInteger(tab?.sheetId) || !startRow || !endRow || endRow < startRow) return;
-  const templateRow = Math.max(headerRow + 1, 3);
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      requests: [
-        {
-          copyPaste: {
-            source: {
-              sheetId: tab.sheetId,
-              startRowIndex: templateRow - 1,
-              endRowIndex: templateRow,
-              startColumnIndex: 0,
-              endColumnIndex: 13,
-            },
-            destination: {
-              sheetId: tab.sheetId,
-              startRowIndex: startRow - 1,
-              endRowIndex: endRow,
-              startColumnIndex: 0,
-              endColumnIndex: 13,
-            },
-            pasteType: "PASTE_FORMAT",
-            pasteOrientation: "NORMAL",
-          },
-        },
-        {
-          repeatCell: {
-            range: {
-              sheetId: tab.sheetId,
-              startRowIndex: startRow - 1,
-              endRowIndex: endRow,
-              startColumnIndex: 0,
-              endColumnIndex: 1,
-            },
-            cell: { userEnteredFormat: { numberFormat: { type: "DATE", pattern: "dd/mm/yyyy" } } },
-            fields: "userEnteredFormat.numberFormat",
-          },
-        },
-        {
-          repeatCell: {
-            range: {
-              sheetId: tab.sheetId,
-              startRowIndex: startRow - 1,
-              endRowIndex: endRow,
-              startColumnIndex: 8,
-              endColumnIndex: 12,
-            },
-            cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: "#,##0" } } },
-            fields: "userEnteredFormat.numberFormat",
-          },
-        },
-      ],
-    },
+// Reads the dropdown (data validation) rules sitting on a template row, so newly written
+// rows can be given the same ones. Copied via setDataValidation rather than copyPaste:
+// copyPaste refuses to run when the tab has an active filter hiding rows in the range.
+async function crbrTemplateValidationRules(sheets, spreadsheetId, tabName, templateRow, endColumnIndex) {
+  return crbrCached(`validation::${spreadsheetId}::${tabName}::${templateRow}::${endColumnIndex}`, async () => {
+    try {
+      const response = await sheets.spreadsheets.get({
+        spreadsheetId,
+        ranges: [`${escapeSheetName(tabName)}!A${templateRow}:${columnName(endColumnIndex)}${templateRow}`],
+        includeGridData: true,
+        fields: "sheets(data(rowData(values(dataValidation))))",
+      });
+      const cells = response.data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values || [];
+      return cells
+        .map((cell, columnIndex) => (cell?.dataValidation ? { columnIndex, rule: cell.dataValidation } : null))
+        .filter(Boolean);
+    } catch (error) {
+      console.warn("Could not read template validation rules:", error.message);
+      return [];
+    }
   });
 }
 
+
+async function crbrFormatWrittenRows(sheets, spreadsheetId, tab, headerRow, startRow, endRow) {
+  if (!Number.isInteger(tab?.sheetId) || !startRow || !endRow || endRow < startRow) return;
+  const templateRow = Math.max(headerRow + 1, 3);
+  // Dropdowns can sit outside the 13 columns we write — the all-projects sheet keeps its
+  // site list in N and a review status in R — so validation is copied across a wider span.
+  const validationEndColumn = Math.min(Math.max(Number(tab?.gridProperties?.columnCount) || 13, 13), 30);
+  const validationRules = await crbrTemplateValidationRules(sheets, spreadsheetId, tab.title, templateRow, validationEndColumn);
+
+  // A basic filter on the tab makes Sheets skip every hidden row in a range write —
+  // copyPaste errors outright, repeatCell silently does nothing. So the filter is dropped
+  // and restored inside the same batch, which is atomic: if anything fails, nothing is
+  // applied and the user's filter is left exactly as it was.
+  const basicFilter = tab.basicFilter && Object.keys(tab.basicFilter).length ? tab.basicFilter : null;
+  const range = (startColumnIndex, endColumnIndex) => ({
+    sheetId: tab.sheetId,
+    startRowIndex: startRow - 1,
+    endRowIndex: endRow,
+    startColumnIndex,
+    endColumnIndex,
+  });
+
+  const requests = [];
+  if (basicFilter) requests.push({ clearBasicFilter: { sheetId: tab.sheetId } });
+  requests.push({
+    copyPaste: {
+      source: { sheetId: tab.sheetId, startRowIndex: templateRow - 1, endRowIndex: templateRow, startColumnIndex: 0, endColumnIndex: 13 },
+      destination: range(0, 13),
+      pasteType: "PASTE_FORMAT",
+      pasteOrientation: "NORMAL",
+    },
+  });
+  requests.push({
+    repeatCell: {
+      range: range(0, 1),
+      cell: { userEnteredFormat: { numberFormat: { type: "DATE", pattern: "dd/mm/yyyy" } } },
+      fields: "userEnteredFormat.numberFormat",
+    },
+  });
+  requests.push({
+    repeatCell: {
+      range: range(8, 12),
+      cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: "#,##0" } } },
+      fields: "userEnteredFormat.numberFormat",
+    },
+  });
+  validationRules.forEach(({ columnIndex, rule }) => {
+    requests.push({
+      repeatCell: {
+        range: range(columnIndex, columnIndex + 1),
+        cell: { dataValidation: rule },
+        fields: "dataValidation",
+      },
+    });
+  });
+  if (basicFilter) requests.push({ setBasicFilter: { filter: basicFilter } });
+
+  await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
+}
+
 async function crbrReadTab(sheets, spreadsheetId, preferredTab, fallbackFirst = false, options = {}) {
-  const workbook = await crbrWorkbookTabs(sheets, spreadsheetId);
+  const key = `tab::${spreadsheetId}::${preferredTab}::${fallbackFirst}::${options.columnMap ? "target" : "auto"}`;
+  return crbrCached(key, () => crbrLoadTab(sheets, spreadsheetId, preferredTab, fallbackFirst, options), options);
+}
+
+async function crbrLoadTab(sheets, spreadsheetId, preferredTab, fallbackFirst = false, options = {}) {
+  const workbook = await crbrWorkbookTabs(sheets, spreadsheetId, options);
   const tab = workbook.tabs.find((item) => item.title === preferredTab) || (fallbackFirst ? workbook.tabs[0] : null);
   if (!tab) throw new Error(`Sheet tab "${preferredTab}" was not found in ${workbook.title || spreadsheetId}`);
   const response = await sheets.spreadsheets.values.get({
@@ -8594,7 +8794,11 @@ function crbrFindNextWriteRow(values = [], headerRow = 1, map = {}) {
   const identityColumns = ["date", "mainHead", "subHead", "transactionType", "particulars", "projectName", "voucherNumber"]
     .map((field) => map[field])
     .filter((index) => Number.isInteger(index));
-  const rowHasEntry = (row = []) => identityColumns.some((index) => projectText(row[index]) !== "");
+  // A sum row at the foot of a sheet has figures but no identity fields. Landing on it
+  // would overwrite the total, so any row holding a value at all is stepped over and the
+  // new rows go underneath it.
+  const rowHasEntry = (row = []) => identityColumns.some((index) => projectText(row[index]) !== "")
+    || (row || []).some((cell) => projectText(cell) !== "");
   const searchStartIndex = headerRow;
   const maxRows = Math.max(values.length + 500, searchStartIndex + 500);
   for (let index = searchStartIndex; index < maxRows; index += 1) {
@@ -8626,14 +8830,103 @@ function crbrTargetRowForHeaders(record, headers, map) {
   return output;
 }
 
+/* ────────── routing rows to the right all-projects tab by Main_Head ────────── */
+
+// Money-in heads. Everything else is treated as an expense. Kept as a setting so the
+// desk can move a head across without a code change.
+// Only these two Main_Head values belong in the all-projects sheet. Every other head —
+// Admin_Exp, Salary_Exp, Loan_Repayment and the rest — is company-level, not project-level,
+// so it stays in Mam's sheet and is never synced. Both lists are settings, so a head can be
+// moved without a code change.
+const CRBR_DEFAULT_RECEIPT_HEADS = ["Client Receipt"];
+const CRBR_DEFAULT_EXPENSE_HEADS = ["Project_Exp"];
+
+function crbrHeadKey(value = "") {
+  return projectText(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function crbrRouteForHead(mainHead, receiptHeads = CRBR_DEFAULT_RECEIPT_HEADS, expenseHeads = CRBR_DEFAULT_EXPENSE_HEADS) {
+  const key = crbrHeadKey(mainHead);
+  if (!key) return "skip";
+  if (receiptHeads.some((head) => crbrHeadKey(head) === key)) return "receipt";
+  if (expenseHeads.some((head) => crbrHeadKey(head) === key)) return "expense";
+  return "skip";
+}
+
+// Google's quota text is unreadable on a dashboard card. Say what it means instead.
+function crbrFriendlyError(message = "") {
+  const text = projectText(message);
+  if (/quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(text)) {
+    return "Google Sheets is rate limiting us right now. This clears itself within a minute — press Refresh then.";
+  }
+  return text;
+}
+
+function crbrEmptyTotals() {
+  return { cash: 0, bankAll: 0, others: 0, total: 0 };
+}
+
+function crbrSumTotals(records = []) {
+  const totals = records.reduce((sum, record) => ({
+    cash: sum.cash + record.cash,
+    bankAll: sum.bankAll + record.bankAll,
+    others: sum.others + record.others,
+    total: sum.total + record.total,
+  }), crbrEmptyTotals());
+  Object.keys(totals).forEach((key) => { totals[key] = Number(totals[key].toFixed(2)); });
+  return totals;
+}
+
+// One line per Main_Head so the destination of every rupee is visible before syncing.
+function crbrHeadBreakdown(records = [], receiptHeads, expenseHeads) {
+  const byHead = new Map();
+  records.forEach((record) => {
+    const head = projectText(record.mainHead) || "(blank)";
+    const entry = byHead.get(head) || { head, route: crbrRouteForHead(record.mainHead, receiptHeads, expenseHeads), count: 0, total: 0 };
+    entry.count += 1;
+    entry.total = Number((entry.total + record.total).toFixed(2));
+    byHead.set(head, entry);
+  });
+  return [...byHead.values()].sort((a, b) => b.total - a.total);
+}
+
 async function buildCrbrPreview() {
   const sheets = await getSheetsClient();
   const settings = await getCrbrSettings();
-  const [source, target] = await Promise.all([
+  const receiptHeads = settings.receiptMainHeads?.length ? settings.receiptMainHeads : CRBR_DEFAULT_RECEIPT_HEADS;
+  const expenseHeads = settings.expenseMainHeads?.length ? settings.expenseMainHeads : CRBR_DEFAULT_EXPENSE_HEADS;
+
+  const routes = [
+    { key: "receipt", label: "Client receipt", tab: settings.targetReceiptTab },
+    { key: "expense", label: "Project expense", tab: settings.targetExpenseTab },
+  ];
+
+  const [source, ...targetReads] = await Promise.all([
     crbrReadTab(sheets, settings.sourceSpreadsheetId, settings.sourceTab, true),
-    crbrReadTab(sheets, settings.targetSpreadsheetId, settings.targetTab, false, { columnMap: CRBR_TARGET_COLUMN_MAP }),
+    ...routes.map((route) => (route.tab
+      ? crbrReadTab(sheets, settings.targetSpreadsheetId, route.tab, false, { columnMap: CRBR_TARGET_COLUMN_MAP })
+        .then((read) => ({ ok: true, read }))
+        .catch((error) => ({ ok: false, error: crbrFriendlyError(error.message) }))
+      : Promise.resolve({ ok: false, error: `No tab configured for ${route.label.toLowerCase()} rows` }))),
   ]);
-  const targetById = new Map(target.records.map((record) => [record.id, record]));
+
+  const targets = {};
+  const targetById = new Map();
+  routes.forEach((route, index) => {
+    const result = targetReads[index];
+    targets[route.key] = {
+      key: route.key,
+      label: route.label,
+      tabName: route.tab || "",
+      ok: result.ok,
+      error: result.ok ? null : result.error,
+      workbookTitle: result.ok ? result.read.workbookTitle : "",
+      rows: result.ok ? result.read.records.length : 0,
+      read: result.ok ? result.read : null,
+    };
+    if (result.ok) result.read.records.forEach((record) => { if (!targetById.has(record.id)) targetById.set(record.id, { record, route: route.key }); });
+  });
+
   const sourceUnique = [];
   const sourceSeen = new Map();
   const sourceDuplicates = [];
@@ -8644,15 +8937,12 @@ async function buildCrbrPreview() {
       sourceUnique.push(record);
     }
   });
+
   const voucherSeen = new Map();
   source.records.forEach((record) => {
     const voucherKey = projectText(record.voucherNumber).trim().toLowerCase();
     if (!voucherKey) return;
-    const current = voucherSeen.get(voucherKey) || {
-      voucherNumber: record.voucherNumber,
-      rows: [],
-      records: [],
-    };
+    const current = voucherSeen.get(voucherKey) || { voucherNumber: record.voucherNumber, rows: [], records: [] };
     current.rows.push(record.rowNumber);
     current.records.push(record);
     voucherSeen.set(voucherKey, current);
@@ -8663,62 +8953,402 @@ async function buildCrbrPreview() {
       voucherNumber: item.voucherNumber,
       rows: item.rows,
       count: item.records.length,
-      records: item.records.map((record) => ({
-        id: record.id,
-        rowNumber: record.rowNumber,
-        dateKey: record.dateKey,
-        projectName: record.projectName,
-        particulars: record.particulars,
-        total: record.total,
-      })),
+      records: item.records.map((record) => ({ id: record.id, rowNumber: record.rowNumber, dateKey: record.dateKey, projectName: record.projectName, particulars: record.particulars, total: record.total })),
     }));
-  const pending = sourceUnique.filter((record) => !targetById.has(record.id));
+
+  const pending = [];
+  const skipped = [];
   const conflicts = [];
   sourceUnique.forEach((record) => {
-    const targetRecord = targetById.get(record.id);
-    if (!targetRecord) return;
-    const fields = ["cash", "bankAll", "others", "total"];
-    const amountMismatch = fields.some((field) => Math.abs(Number(record[field] || 0) - Number(targetRecord[field] || 0)) > 0.01);
-    if (amountMismatch) conflicts.push({ source: record, target: targetRecord, reason: "Matching row exists with different amount values" });
+    const existing = targetById.get(record.id);
+    if (existing) {
+      const fields = ["cash", "bankAll", "others", "total"];
+      const amountMismatch = fields.some((field) => Math.abs(Number(record[field] || 0) - Number(existing.record[field] || 0)) > 0.01);
+      if (amountMismatch) conflicts.push({ source: record, target: existing.record, reason: `Matching row exists in the ${existing.route === "receipt" ? "client receipt" : "project expense"} tab with different amount values` });
+      return;
+    }
+    const route = crbrRouteForHead(record.mainHead, receiptHeads, expenseHeads);
+    // Anything outside the two project heads belongs to the company, not a project. It is
+    // not pending and never will be — it simply stays in Mam's sheet.
+    if (route === "skip") skipped.push({ ...record, route });
+    else pending.push({ ...record, route });
   });
+
   const tallyIssues = pending.filter((record) => !record.tallyOk).map((record) => ({
     record,
     expected: record.tallyAmount,
     actual: record.total,
     difference: Number((record.tallyAmount - record.total).toFixed(2)),
   }));
-  const totals = pending.reduce((sum, record) => ({
+
+  routes.forEach((route) => {
+    const target = targets[route.key];
+    const rows = pending.filter((record) => record.route === route.key);
+    target.pending = rows;
+    target.totals = crbrSumTotals(rows);
+    if (rows.length && target.read) {
+      target.nextWriteRow = crbrFindNextWriteRow(target.read.values, target.read.headerRow, target.read.map);
+      target.nextWriteEndRow = target.nextWriteRow + rows.length - 1;
+      const protectedRows = crbrProtectedRows(target.read.tab, target.nextWriteRow, target.nextWriteEndRow);
+      target.syncBlocked = protectedRows.length ? {
+        type: "protected-range",
+        message: `Rows ${target.nextWriteRow}-${target.nextWriteEndRow} are protected in "${target.tabName}". Unprotect them or allow the Google service account to edit protected ranges, then sync again.`,
+        startRow: target.nextWriteRow,
+        endRow: target.nextWriteEndRow,
+        protectedRanges: protectedRows,
+      } : null;
+    } else {
+      target.nextWriteRow = null;
+      target.nextWriteEndRow = null;
+      target.syncBlocked = null;
+    }
+    delete target.read;
+  });
+
+  const missingTab = routes
+    .filter((route) => targets[route.key].pending.length && !targets[route.key].ok)
+    .map((route) => `${targets[route.key].pending.length} ${route.label.toLowerCase()} row(s) have nowhere to go — ${targets[route.key].error}`);
+
+  const remarkMap = await crbrLoadRemarks(pending.map((record) => record.id));
+  const pendingWithRemarks = crbrAttachRemarks(pending, remarkMap);
+  const syncBlocked = targets.receipt.syncBlocked || targets.expense.syncBlocked || null;
+  const totals = crbrSumTotals(pending);
+  const canSync = pending.length > 0
+    && conflicts.length === 0
+    && tallyIssues.length === 0
+    && sourceDuplicates.length === 0
+    && voucherDuplicates.length === 0
+    && missingTab.length === 0
+    && !syncBlocked;
+
+  return {
+    settings,
+    source: { spreadsheetId: settings.sourceSpreadsheetId, workbookTitle: source.workbookTitle, tabName: source.tabName, rows: source.records.length },
+    target: { spreadsheetId: settings.targetSpreadsheetId, workbookTitle: targets.expense.workbookTitle || targets.receipt.workbookTitle, tabName: [targets.receipt.tabName, targets.expense.tabName].filter(Boolean).join(" + ") },
+    targets,
+    routing: {
+      receiptHeads,
+      expenseHeads,
+      byHead: crbrHeadBreakdown([...pending, ...skipped], receiptHeads, expenseHeads),
+      skippedCount: skipped.length,
+      skippedTotals: crbrSumTotals(skipped),
+    },
+    pending: pendingWithRemarks,
+    conflicts,
+    tallyIssues,
+    sourceDuplicates,
+    voucherDuplicates,
+    skipped,
+    missingTab,
+    syncBlocked,
+    totals,
+    canSync,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+/* ────────────────────────── CRBR intake: raw sheet → Mam's sheet ────────────────────────── */
+
+const CRBR_REMARKS_COLLECTION = "accountsCrbrRemarks";
+const CRBR_NAME_NEAR_MATCH_SCORE = 0.82;
+const CRBR_NAME_MAX_CANDIDATES = 4000;
+
+function crbrNormalizeName(value = "") {
+  return projectText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function crbrLevenshtein(a = "", b = "") {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + cost);
+    }
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+function crbrNameSimilarity(a = "", b = "") {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const longest = Math.max(a.length, b.length);
+  if (!longest) return 0;
+  if (Math.abs(a.length - b.length) / longest > 0.5) return 0;
+  return 1 - crbrLevenshtein(a, b) / longest;
+}
+
+// Builds the "names we already know" index from the refined sheets, so anything typed
+// in the raw sheet can be checked against the spellings accounts already uses.
+function crbrBuildKnownNames(recordSets = []) {
+  const index = { projectName: new Map(), particulars: new Map() };
+  recordSets.forEach((records) => {
+    (records || []).forEach((record) => {
+      ["projectName", "particulars"].forEach((field) => {
+        const display = projectText(record[field]);
+        const key = crbrNormalizeName(display);
+        if (!key) return;
+        const bucket = index[field];
+        const existing = bucket.get(key);
+        if (existing) {
+          existing.count += 1;
+          const variantCount = (existing.variants.get(display) || 0) + 1;
+          existing.variants.set(display, variantCount);
+          // the spelling used most often becomes the canonical one we suggest
+          if (variantCount > (existing.variants.get(existing.display) || 0)) existing.display = display;
+        } else {
+          bucket.set(key, { display, count: 1, variants: new Map([[display, 1]]) });
+        }
+      });
+    });
+  });
+  return index;
+}
+
+function crbrCheckOneName(field, value, bucket) {
+  const display = projectText(value);
+  if (!display) return null;
+  const key = crbrNormalizeName(display);
+  if (!key) return null;
+  const exact = bucket.get(key);
+  if (exact) {
+    if (exact.display === display) return null;
+    return { field, value: display, type: "spelling", suggestion: exact.display, score: 1, seen: exact.count };
+  }
+  let best = null;
+  let checked = 0;
+  for (const [candidateKey, entry] of bucket) {
+    if (checked > CRBR_NAME_MAX_CANDIDATES) break;
+    checked += 1;
+    const score = crbrNameSimilarity(key, candidateKey);
+    if (!best || score > best.score) best = { score, entry };
+  }
+  if (best && best.score >= CRBR_NAME_NEAR_MATCH_SCORE) {
+    return { field, value: display, type: "near-match", suggestion: best.entry.display, score: Number(best.score.toFixed(3)), seen: best.entry.count };
+  }
+  return { field, value: display, type: "new", suggestion: "", score: best ? Number(best.score.toFixed(3)) : 0, seen: 0 };
+}
+
+function crbrCheckNames(record = {}, known) {
+  const issues = [];
+  const project = crbrCheckOneName("projectName", record.projectName, known.projectName);
+  if (project) issues.push({ ...project, label: "Site / project" });
+  const vendor = crbrCheckOneName("particulars", record.particulars, known.particulars);
+  if (vendor) issues.push({ ...vendor, label: "Vendor / particulars" });
+  return issues;
+}
+
+async function crbrImportedRowIds() {
+  const db = await connectAuthDb();
+  const runs = await db.collection("accountsCrbrIntakeRuns").find({}, { projection: { rowIds: 1 } }).toArray();
+  const ids = new Set();
+  runs.forEach((run) => (run.rowIds || []).forEach((id) => ids.add(id)));
+  return ids;
+}
+
+async function crbrLoadRemarks(rowIds = []) {
+  const unique = [...new Set(rowIds.filter(Boolean))];
+  if (!unique.length) return new Map();
+  const db = await connectAuthDb();
+  const docs = await db.collection(CRBR_REMARKS_COLLECTION).find({ rowId: { $in: unique } }).toArray();
+  return new Map(docs.map((doc) => [doc.rowId, {
+    text: doc.text || "",
+    updatedAt: doc.updatedAt || doc.createdAt || null,
+    updatedBy: doc.updatedBy || null,
+  }]));
+}
+
+function crbrAttachRemarks(records = [], remarkMap = new Map()) {
+  return records.map((record) => ({ ...record, remark: remarkMap.get(record.id) || null }));
+}
+
+function crbrSummariseNameIssues(rows = []) {
+  const summary = { spelling: 0, nearMatch: 0, newName: 0 };
+  rows.forEach((row) => {
+    (row.nameIssues || []).forEach((issue) => {
+      if (issue.type === "spelling") summary.spelling += 1;
+      else if (issue.type === "near-match") summary.nearMatch += 1;
+      else summary.newName += 1;
+    });
+  });
+  return summary;
+}
+
+function emptyCrbrIntake(settings) {
+  return {
+    enabled: false,
+    settings,
+    raw: null,
+    mam: null,
+    newRows: [],
+    conflicts: [],
+    tallyIssues: [],
+    rawDuplicates: [],
+    alreadyInMam: 0,
+    nameSummary: { spelling: 0, nearMatch: 0, newName: 0 },
+    totals: { cash: 0, bankAll: 0, others: 0, total: 0 },
+    canImport: false,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+async function buildCrbrIntake() {
+  const settings = await getCrbrSettings();
+  if (!settings.rawSpreadsheetId || !settings.rawTab) return emptyCrbrIntake(settings);
+
+  const sheets = await getSheetsClient();
+  // Known site and vendor spellings come from every refined sheet, so both destination
+  // tabs are read — not just the legacy single one.
+  const targetTabs = [...new Set([settings.targetReceiptTab, settings.targetExpenseTab, settings.targetTab].filter(Boolean))];
+  const [raw, mam, ...targetReads] = await Promise.all([
+    crbrReadTab(sheets, settings.rawSpreadsheetId, settings.rawTab, true),
+    crbrReadTab(sheets, settings.sourceSpreadsheetId, settings.sourceTab, true),
+    ...targetTabs.map((tabName) => crbrReadTab(sheets, settings.targetSpreadsheetId, tabName, false, { columnMap: CRBR_TARGET_COLUMN_MAP }).catch(() => ({ records: [] }))),
+  ]);
+
+  const mamById = new Map(mam.records.map((record) => [record.id, record]));
+  const importedIds = await crbrImportedRowIds();
+  const known = crbrBuildKnownNames([mam.records, ...targetReads.map((read) => read.records)]);
+
+  const seen = new Map();
+  const rawDuplicates = [];
+  const rawUnique = [];
+  raw.records.forEach((record) => {
+    if (seen.has(record.id)) rawDuplicates.push({ record, firstRow: seen.get(record.id).rowNumber });
+    else {
+      seen.set(record.id, record);
+      rawUnique.push(record);
+    }
+  });
+
+  const conflicts = [];
+  const newRows = [];
+  let previouslyImported = 0;
+  let alreadyInMam = 0;
+  rawUnique.forEach((record) => {
+    const mamRecord = mamById.get(record.id);
+    if (mamRecord) {
+      const fields = ["cash", "bankAll", "others", "total"];
+      const mismatch = fields.some((field) => Math.abs(Number(record[field] || 0) - Number(mamRecord[field] || 0)) > 0.01);
+      if (mismatch) conflicts.push({ raw: record, mam: mamRecord, reason: "Already in Mam's sheet with different amounts" });
+      else alreadyInMam += 1;
+      return;
+    }
+    // Mam's sheet is the truth. A row that was imported before but is no longer there was
+    // either edited (which changes its id) or deliberately removed — so it is offered
+    // again, flagged, rather than hidden. Hiding it made a cleared sheet impossible to refill.
+    const seenBefore = importedIds.has(record.id);
+    if (seenBefore) previouslyImported += 1;
+    newRows.push({ ...record, nameIssues: crbrCheckNames(record, known), reimport: seenBefore });
+  });
+
+  const tallyIssues = newRows.filter((record) => !record.tallyOk).map((record) => ({
+    record,
+    expected: record.tallyAmount,
+    actual: record.total,
+    difference: Number((record.tallyAmount - record.total).toFixed(2)),
+  }));
+
+  const remarkMap = await crbrLoadRemarks([
+    ...newRows.map((record) => record.id),
+    ...conflicts.map((item) => item.raw.id),
+  ]);
+  const newRowsWithRemarks = crbrAttachRemarks(newRows, remarkMap);
+
+  const totals = newRows.reduce((sum, record) => ({
     cash: sum.cash + record.cash,
     bankAll: sum.bankAll + record.bankAll,
     others: sum.others + record.others,
     total: sum.total + record.total,
   }), { cash: 0, bankAll: 0, others: 0, total: 0 });
   Object.keys(totals).forEach((key) => { totals[key] = Number(totals[key].toFixed(2)); });
-  const nextWriteRow = pending.length ? crbrFindNextWriteRow(target.values, target.headerRow, target.map) : null;
-  const nextWriteEndRow = pending.length ? nextWriteRow + pending.length - 1 : null;
-  const protectedTargetRows = pending.length ? crbrProtectedRows(target.tab, nextWriteRow, nextWriteEndRow) : [];
-  const syncBlocked = protectedTargetRows.length ? {
-    type: "protected-range",
-    message: `Target rows ${nextWriteRow}-${nextWriteEndRow} are protected in "${target.tabName}". Please unprotect those rows or allow the Google service account to edit protected ranges, then sync again.`,
-    startRow: nextWriteRow,
-    endRow: nextWriteEndRow,
-    protectedRanges: protectedTargetRows,
-  } : null;
-  const canSync = pending.length > 0 && conflicts.length === 0 && tallyIssues.length === 0 && sourceDuplicates.length === 0 && voucherDuplicates.length === 0 && !syncBlocked;
+
   return {
+    enabled: true,
     settings,
-    source: { spreadsheetId: settings.sourceSpreadsheetId, workbookTitle: source.workbookTitle, tabName: source.tabName, rows: source.records.length },
-    target: { spreadsheetId: settings.targetSpreadsheetId, workbookTitle: target.workbookTitle, tabName: target.tabName, rows: target.records.length },
-    pending,
-    conflicts,
+    raw: { spreadsheetId: settings.rawSpreadsheetId, workbookTitle: raw.workbookTitle, tabName: raw.tabName, rows: raw.records.length },
+    mam: { spreadsheetId: settings.sourceSpreadsheetId, workbookTitle: mam.workbookTitle, tabName: mam.tabName, rows: mam.records.length },
+    newRows: newRowsWithRemarks,
+    conflicts: conflicts.map((item) => ({ ...item, remark: remarkMap.get(item.raw.id) || null })),
     tallyIssues,
-    sourceDuplicates,
-    voucherDuplicates,
-    syncBlocked,
+    rawDuplicates,
+    alreadyInMam,
+    previouslyImported,
+    nameSummary: crbrSummariseNameIssues(newRowsWithRemarks),
     totals,
-    canSync,
+    canImport: newRows.length > 0,
     checkedAt: new Date().toISOString(),
   };
+}
+
+// Writes chosen raw rows into Mam's sheet. Rows already there are skipped, so a repeated
+// import or a double click can never duplicate anything.
+async function importCrbrIntoMamSheet(rowIds = [], actor = null) {
+  const settings = await getCrbrSettings();
+  if (!settings.rawSpreadsheetId || !settings.rawTab) throw new Error("Raw CRBR sheet is not configured");
+  const sheets = await getSheetsClient();
+  const [raw, mam] = await Promise.all([
+    crbrReadTab(sheets, settings.rawSpreadsheetId, settings.rawTab, true, { fresh: true }),
+    crbrReadTab(sheets, settings.sourceSpreadsheetId, settings.sourceTab, true, { fresh: true }),
+  ]);
+  const mamIds = new Set(mam.records.map((record) => record.id));
+  const wanted = new Set(rowIds.map((id) => projectText(id)).filter(Boolean));
+  const picked = new Set();
+  const selected = raw.records.filter((record) => {
+    if (wanted.size && !wanted.has(record.id)) return false;
+    // still guarded against the real duplicate: a row already sitting in Mam's sheet
+    if (mamIds.has(record.id) || picked.has(record.id)) return false;
+    picked.add(record.id);
+    return true;
+  });
+  if (!selected.length) return { importedRows: 0, skipped: wanted.size, startRow: null, endRow: null };
+
+  const unbalanced = selected.filter((record) => !record.tallyOk);
+  if (unbalanced.length) throw new Error(`${unbalanced.length} selected row(s) do not tally — cash + bank + others must equal total. Fix them in the raw sheet first.`);
+
+  const startRow = crbrFindNextWriteRow(mam.values, mam.headerRow, mam.map);
+  const endRow = startRow + selected.length - 1;
+  const blockedRows = crbrProtectedRows(mam.tab, startRow, endRow);
+  if (blockedRows.length) throw new Error(`Rows ${startRow}-${endRow} are protected in "${mam.tabName}". Unprotect them or allow the Google service account to edit protected ranges, then import again.`);
+
+  await crbrEnsureGridRows(sheets, settings.sourceSpreadsheetId, mam.tab, endRow);
+  await crbrFormatWrittenRows(sheets, settings.sourceSpreadsheetId, mam.tab, mam.headerRow, startRow, endRow);
+  const rows = selected.map((record) => crbrTargetRowForHeaders(record, mam.headers, mam.map));
+  const endColumn = columnName(Math.max(mam.headers.length, 13));
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: settings.sourceSpreadsheetId,
+    range: `${escapeSheetName(mam.tabName)}!A${startRow}:${endColumn}${endRow}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: rows },
+  });
+  await crbrFormatWrittenRows(sheets, settings.sourceSpreadsheetId, mam.tab, mam.headerRow, startRow, endRow);
+
+  const verified = await crbrReadTab(sheets, settings.sourceSpreadsheetId, settings.sourceTab, true, { fresh: true });
+  const verifiedIds = new Set(verified.records.map((record) => record.id));
+  const missing = selected.filter((record) => !verifiedIds.has(record.id));
+  if (missing.length) throw new Error(`Import could not be verified for ${missing.length} row(s). Please check the Mam sheet headers and permissions.`);
+
+  crbrClearReadCache();   // Mam's sheet has new rows now
+  const db = await connectAuthDb();
+  await db.collection("accountsCrbrIntakeRuns").insertOne({
+    raw: { spreadsheetId: settings.rawSpreadsheetId, tabName: raw.tabName },
+    mam: { spreadsheetId: settings.sourceSpreadsheetId, tabName: mam.tabName },
+    importedRows: selected.length,
+    rowIds: selected.map((record) => record.id),
+    startRow,
+    endRow,
+    importedAt: new Date(),
+    importedBy: actor,
+  });
+  return { importedRows: selected.length, startRow, endRow, skipped: wanted.size ? wanted.size - selected.length : 0 };
 }
 
 function projectFindColumn(headers, explicit, patterns) {

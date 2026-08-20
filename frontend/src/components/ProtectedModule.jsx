@@ -19,6 +19,7 @@ import Dashboard from "./Dashboard";
 import Documents from "./Documents";
 import Automations from "./Automations";
 import Reports from "./Reports";
+import AccountsDashboard from "./AccountsDashboard";
 import NotificationDrawer from "./NotificationDrawer";
 import SheetDashboard from "./SheetDashboard";
 import ManageRoles from "./ManageRoles";
@@ -35,6 +36,7 @@ import Todos from "./Todos";
 import Forum from "./Forum";
 import ModuleControl from "./ModuleControl";
 import HrDashboard from "./HrDashboard";
+import RecruitmentDashboard from "./RecruitmentDashboard";
 import ProfilePage from "./ProfilePage";
 import CommandPalette from "./CommandPalette";
 
@@ -51,11 +53,13 @@ const menuPaths = {
   "hr-employees": "/hr/employees",
   "hr-leave": "/hr/leave",
   "hr-attendance": "/hr/attendance",
+  "hr-recruitment": "/hr/recruitment",
   todos: "/todos",
   forum: "/loop",
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
+  accounts: "/accounts",
   "employee-daily-report": "/employee-daily-report",
   "activity-log": "/activity-log",
   whatsapp: "/whatsapp",
@@ -208,7 +212,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const forumUnreadConversationIdsRef = useRef(new Set());
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "todos", "forum", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment", "todos", "forum", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
       "projects",
       "profile",
     ];
@@ -609,11 +613,13 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "hr-employees" && <HrDashboard darkMode={darkMode} section="employees" />}
         {moduleId === "hr-leave" && <HrDashboard darkMode={darkMode} section="leave" />}
         {moduleId === "hr-attendance" && <HrDashboard darkMode={darkMode} section="attendance" />}
+        {moduleId === "hr-recruitment" && <RecruitmentDashboard darkMode={darkMode} />}
         {moduleId === "todos" && <Todos darkMode={darkMode} />}
         {moduleId === "forum" && <Forum darkMode={darkMode} onMobileChatOpenChange={setForumMobileChatOpen} />}
         {moduleId === "automations" && <Automations darkMode={darkMode} />}
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}
+        {moduleId === "accounts" && <AccountsDashboard darkMode={darkMode} />}
         {moduleId === "employee-daily-report" && <EmployeeDailyReport darkMode={darkMode} />}
         {moduleId === "activity-log" && <ActivityLog darkMode={darkMode} />}
         {moduleId === "whatsapp" && user?.isSuperAdmin && <WhatsApp darkMode={darkMode} />}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowDownLeft, CheckCircle2, LogOut, ShieldCheck, ArrowDownToLine, ArrowRightLeft, ArrowUpRight, History, CircleDollarSign, FileSpreadsheet, Loader2, MessageSquarePlus, MessageSquareText, RefreshCw, Save, Settings2, ShieldAlert, Sparkles, SpellCheck2, X } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, Lock, LogOut, ArrowDownToLine, ArrowRightLeft, ArrowUpRight, History, CircleDollarSign, FileSpreadsheet, Loader2, MessageSquarePlus, MessageSquareText, RefreshCw, Save, Settings2, ShieldAlert, Sparkles, SpellCheck2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 
@@ -168,82 +168,66 @@ function RemarkButton({ record, darkMode, onOpen }) {
   );
 }
 
-// Accounts is gated on Google, not on a role. The person must prove with Google that
-// they are the email on their raga profile, and that Google itself lets them open the
-// CRBR sheets. Asked once per login — the grant lives on the session.
+// Accounts is gated on Google, not on a role: the Google account must be the email on the
+// raga profile, and Google itself must grant it access to the CRBR sheets. Once per login.
 function GoogleGate({ status, darkMode, onVerify, busy, notice }) {
   const muted = muteFor(darkMode);
   const panel = darkMode ? "border-transparent bg-[#15171c]" : "border-black/[0.06] bg-white";
-  const soft = darkMode ? "bg-white/[0.04]" : "bg-[#fbfbfd]";
   const unconfigured = status && status.configured === false;
+  const hasEmail = Boolean(status?.profileEmail);
+  const problem = unconfigured
+    ? { tone: "error", title: "Google sign-in is not set up on the server yet", detail: "An OAuth client ID and secret need adding to the backend environment." }
+    : !hasEmail
+      ? { tone: "error", title: "Your raga profile has no email address", detail: "There is nothing to match a Google account against. Ask an admin to add it." }
+      : notice;
 
   return (
     <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f4f5f8] text-[#171714]"}`}>
-      <section className={`mx-auto mt-6 max-w-2xl rounded-[30px] border p-7 sm:p-9 ${panel}`}>
-        <span className={`grid h-14 w-14 place-items-center rounded-3xl ${darkMode ? "bg-white/10" : "bg-[#f3f5ef]"}`}>
-          <ShieldCheck className="h-7 w-7" />
-        </span>
-        <h1 className="small mt-5 text-3xl font-black leading-tight">Accounts is locked</h1>
-        <p className={`mt-3 text-sm leading-6 ${muted}`}>
-          The CRBR sheets decide who gets in here — not your role. Sign in with the Google account
-          that has access to those sheets. It has to be the same address as your raga profile.
-        </p>
-
-        {status?.profileEmail ? (
-          <div className={`mt-5 rounded-2xl p-4 ${soft}`}>
-            <p className={`text-xs font-black uppercase tracking-wide ${muted}`}>Your profile email</p>
-            <p className="mt-1 text-sm font-bold">{status.profileEmail}</p>
-          </div>
-        ) : (
-          <div className={`mt-5 rounded-2xl p-4 ${darkMode ? "bg-rose-300/10" : "bg-rose-50"}`}>
-            <p className="text-sm font-bold text-rose-500">Your raga profile has no email address</p>
-            <p className={`mt-1 text-sm ${muted}`}>There is nothing to match a Google account against. Ask an admin to add your email to your profile first.</p>
-          </div>
-        )}
-
-        {notice ? (
-          <div className={`mt-4 rounded-2xl p-4 ${notice.tone === "error" ? darkMode ? "bg-rose-300/10" : "bg-rose-50" : darkMode ? "bg-amber-300/10" : "bg-amber-50"}`}>
-            <p className={`text-sm font-bold ${notice.tone === "error" ? "text-rose-500" : "text-amber-600"}`}>{notice.title}</p>
-            {notice.detail ? <p className={`mt-1 text-sm ${muted}`}>{notice.detail}</p> : null}
-          </div>
-        ) : null}
-
-        {unconfigured ? (
-          <div className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-amber-300/10" : "bg-amber-50"}`}>
-            <p className="text-sm font-bold text-amber-600">Google sign-in is not set up on the server yet</p>
-            <p className={`mt-1 text-sm ${muted}`}>
-              An OAuth client ID and secret need adding to the backend environment before this module can be opened.
+      <section className={`overflow-hidden rounded-[30px] border p-6 sm:p-8 ${panel}`}>
+        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill tone="blue" darkMode={darkMode}><FileSpreadsheet className="mr-2 h-4 w-4" /> Accounts</StatusPill>
+              <StatusPill tone="amber" darkMode={darkMode}><Lock className="mr-1.5 h-3.5 w-3.5" /> Locked</StatusPill>
+            </div>
+            <h1 className="small mt-5 text-4xl font-black leading-none sm:text-5xl">Accounts is locked</h1>
+            <p className={`mt-4 max-w-xl text-sm leading-6 ${muted}`}>
+              Sign in with the Google account that has access to the CRBR sheets. It has to be the same address as your
+              raga profile.
             </p>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={onVerify}
-            disabled={busy || !status?.profileEmail}
-            className="mt-6 flex h-12 items-center justify-center gap-3 rounded-2xl bg-[#6ee72f] px-6 text-sm font-black text-[#10210c] transition hover:bg-[#5edb22] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
-          >
-            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <GoogleMark />}
-            Continue with Google
-          </button>
-        )}
 
-        <div className={`mt-7 border-t pt-5 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}>
-          <p className={`text-xs font-black uppercase tracking-wide ${muted}`}>What this checks</p>
-          <ul className="mt-3 space-y-2">
-            {[
-              "The Google account you pick is the same email as your raga profile",
-              "Google itself grants that account access to the CRBR sheets",
-              "Edit access on Mam's sheet and the all-projects sheet before anything can be written",
-            ].map((line) => (
-              <li key={line} className={`flex items-start gap-2 text-sm ${muted}`}>
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-          <p className={`mt-4 text-xs ${muted}`}>
-            Asked once per login. Signing out of raga clears it. We only read whether you can open the sheets — never your other Drive files.
-          </p>
+            {hasEmail && (
+              <div className={`mt-5 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl px-4 py-3 ${darkMode ? "bg-white/[0.05]" : "bg-[#f8f9fc]"}`}>
+                <span className={`text-[11px] font-black uppercase tracking-wide ${muted}`}>Your profile email</span>
+                <span className="break-all text-sm font-black">{status.profileEmail}</span>
+              </div>
+            )}
+
+            {problem && (
+              <div className={`mt-4 flex max-w-xl items-start gap-3 rounded-2xl p-4 ${problem.tone === "error" ? darkMode ? "bg-rose-300/10" : "bg-rose-50" : darkMode ? "bg-amber-300/10" : "bg-amber-50"}`}>
+                <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${problem.tone === "error" ? "text-rose-500" : "text-amber-600"}`} />
+                <div>
+                  <p className={`text-sm font-black ${problem.tone === "error" ? "text-rose-500" : "text-amber-600"}`}>{problem.title}</p>
+                  {problem.detail ? <p className={`mt-1 text-sm ${muted}`}>{problem.detail}</p> : null}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {!unconfigured && (
+            <div className="grid w-full gap-2 xl:w-auto xl:justify-end">
+              <button
+                type="button"
+                onClick={onVerify}
+                disabled={busy || !hasEmail}
+                className="flex h-14 items-center justify-center gap-3 rounded-2xl bg-[#6ee72f] px-7 text-[15px] font-black text-[#10210c] transition hover:bg-[#5edb22] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <GoogleMark />}
+                Continue with Google
+              </button>
+              <p className={`text-center text-xs xl:text-right ${muted}`}>Asked once per login</p>
+            </div>
+          )}
         </div>
       </section>
     </main>

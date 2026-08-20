@@ -160,6 +160,8 @@ async function connectAuthDb() {
   await authDb.collection("employeeExecutiveReportAnswers").createIndex({ reportDate: -1, employeeName: 1 });
   await authDb.collection("employeeExecutiveReportAnalyses").createIndex({ cacheKey: 1 }, { unique: true });
   await authDb.collection("accountsCrbrRemarks").createIndex({ rowId: 1 }, { unique: true });
+  await authDb.collection("accountsGoogleAuthStates").createIndex({ createdAt: 1 }, { expireAfterSeconds: 900 });
+  await authDb.collection("accountsGoogleAuthStates").createIndex({ state: 1 }, { unique: true });
   await authDb.collection("accountsCrbrIntakeRuns").createIndex({ importedAt: -1 });
   await authDb.collection("personalTodos").createIndex({ userId: 1, createdAt: -1 });
   await authDb.collection("projectDashboard").createIndex({ updatedAt: -1 });
@@ -834,6 +836,9 @@ app.use("/uploads", express.static(process.env.UPLOADS_DIR || path.join(__dirnam
 
 app.use(async (req, res, next) => {
   if (req.path.startsWith("/auth/")) return next();
+  // Google redirects the browser straight here, with no Authorization header — the
+  // session is recovered from the one-shot state nonce inside the handler instead.
+  if (req.path === "/accounts/google/callback") return next();
   return requireAuth(req, res, next);
 });
 
@@ -3013,9 +3018,132 @@ app.put("/employee-daily-report/sheet", async (req, res) => {
   }
 });
 
+app.get("/accounts/google/status", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    const grant = await accountsGoogleGrant(req);
+    const profileEmail = projectText(req.authUser?.email);
+    const matches = grant ? profileEmail.toLowerCase() === projectText(grant.email).toLowerCase() : false;
+    res.json({
+      configured: accountsGoogleConfigured(),
+      profileEmail,
+      ...accountsGrantSummary(matches ? grant : null),
+      mismatch: Boolean(grant && !matches),
+    });
+  } catch (error) {
+    console.error("Accounts Google status error:", error);
+    res.status(500).json({ error: error.message || "Could not read Google verification status" });
+  }
+});
+
+app.post("/accounts/google/start", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    if (!accountsGoogleConfigured()) return res.status(503).json({ error: "Google sign-in for Accounts is not configured on the server" });
+    if (!projectText(req.authUser?.email)) return res.status(400).json({ error: "Your raga profile has no email address, so it cannot be matched to a Google account" });
+    const token = sessionTokenFromRequest(req);
+    if (!token) return res.status(401).json({ error: "Authentication required" });
+
+    // The callback arrives as a plain browser redirect with no auth header, so the
+    // session it belongs to is carried by a one-shot state nonce instead.
+    const state = crypto.randomBytes(24).toString("hex");
+    const db = await connectAuthDb();
+    await db.collection(ACCOUNTS_GOOGLE_STATES).insertOne({
+      state,
+      tokenHash: hashToken(token),
+      userId: req.user._id,
+      createdAt: new Date(),
+    });
+
+    const url = accountsGoogleClient().generateAuthUrl({
+      access_type: "online",
+      prompt: "select_account consent",
+      scope: ACCOUNTS_GOOGLE_SCOPES,
+      state,
+      login_hint: projectText(req.authUser.email),
+      include_granted_scopes: false,
+    });
+    res.json({ url });
+  } catch (error) {
+    console.error("Accounts Google start error:", error);
+    res.status(500).json({ error: error.message || "Could not start Google verification" });
+  }
+});
+
+// Exempt from requireAuth — Google redirects the browser here with no header.
+app.get("/accounts/google/callback", async (req, res) => {
+  const back = (params) => res.redirect(`${APP_PUBLIC_URL}/accounts?${new URLSearchParams(params).toString()}`);
+  try {
+    const state = projectText(req.query.state);
+    const code = projectText(req.query.code);
+    if (projectText(req.query.error)) return back({ google: "error", reason: projectText(req.query.error) });
+    if (!state || !code) return back({ google: "error", reason: "Google did not return a sign-in code" });
+
+    const db = await connectAuthDb();
+    const pending = await db.collection(ACCOUNTS_GOOGLE_STATES).findOneAndDelete({ state });
+    const record = pending?.value || pending;
+    if (!record?.tokenHash) return back({ google: "error", reason: "This sign-in link has already been used" });
+    if (Date.now() - new Date(record.createdAt).getTime() > 10 * 60 * 1000) return back({ google: "error", reason: "The sign-in took too long, please try again" });
+
+    const session = await db.collection("sessions").findOne({ tokenHash: record.tokenHash, expiresAt: { $gt: new Date() } });
+    if (!session) return back({ google: "error", reason: "Your raga session expired, please sign in again" });
+    const user = await db.collection("users").findOne({ _id: session.userId });
+    if (!user) return back({ google: "error", reason: "User not found" });
+
+    const client = accountsGoogleClient();
+    const { tokens } = await client.getToken(code);
+    client.setCredentials(tokens);
+    const ticket = await client.verifyIdToken({ idToken: tokens.id_token, audience: GOOGLE_OAUTH_CLIENT_ID });
+    const payload = ticket.getPayload() || {};
+    const googleEmail = projectText(payload.email).toLowerCase();
+    if (!googleEmail || payload.email_verified === false) return back({ google: "error", reason: "That Google account has no verified email address" });
+
+    const profileEmail = projectText(user.email).toLowerCase();
+    if (!profileEmail) return back({ google: "error", reason: "Your raga profile has no email address to match against" });
+    if (profileEmail !== googleEmail) {
+      addActivityLog({ req, actor: accountsActor(user), action: "Accounts Google verification refused", target: `${googleEmail} does not match profile`, status: "error" });
+      return back({ google: "mismatch", reason: `Signed in as ${googleEmail}, but your raga profile is ${profileEmail}` });
+    }
+
+    const settings = await getCrbrSettings();
+    const sheets = await accountsCheckSheetAccess(client, settings);
+    const readable = Object.values(sheets).filter((item) => item.canView);
+    if (!readable.length) {
+      addActivityLog({ req, actor: accountsActor(user), action: "Accounts Google verification refused", target: `${googleEmail} has no access to the CRBR sheets`, status: "error" });
+      return back({ google: "denied", reason: "This Google account cannot open any of the CRBR sheets" });
+    }
+    const canManage = Boolean(sheets.source?.canEdit && sheets.target?.canEdit);
+
+    await db.collection("sessions").updateOne(
+      { tokenHash: record.tokenHash },
+      { $set: { accountsGoogle: { email: googleEmail, name: projectText(payload.name), verifiedAt: new Date(), sheets, canManage } } },
+    );
+    addActivityLog({ req, actor: accountsActor(user), action: "Verified Accounts access with Google", target: googleEmail, status: "success", details: { canManage, sheets } });
+    return back({ google: "ok" });
+  } catch (error) {
+    console.error("Accounts Google callback error:", error);
+    return back({ google: "error", reason: error.message || "Google verification failed" });
+  }
+});
+
+app.post("/accounts/google/revoke", async (req, res) => {
+  try {
+    const token = sessionTokenFromRequest(req);
+    if (!token) return res.status(401).json({ error: "Authentication required" });
+    const db = await connectAuthDb();
+    await db.collection("sessions").updateOne({ tokenHash: hashToken(token) }, { $unset: { accountsGoogle: "" } });
+    addActivityLog({ req, action: "Signed out of Accounts Google verification", target: req.authUser?.username || "User", status: "success" });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Accounts Google revoke error:", error);
+    res.status(500).json({ error: error.message || "Could not sign out" });
+  }
+});
+
 app.get("/accounts/crbr/preview", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    if (!await requireAccountsGoogle(req, res)) return;
     res.json(await buildCrbrPreview());
   } catch (error) {
     console.error("CRBR preview error:", error);
@@ -3026,6 +3154,7 @@ app.get("/accounts/crbr/preview", async (req, res) => {
 app.get("/accounts/crbr/settings", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    if (!await requireAccountsGoogle(req, res)) return;
     res.json({ settings: await getCrbrSettings() });
   } catch (error) {
     console.error("CRBR settings load error:", error);
@@ -3036,6 +3165,9 @@ app.get("/accounts/crbr/settings", async (req, res) => {
 app.put("/accounts/crbr/settings", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "accounts") || !accountsCanManage(req)) return res.status(403).json({ error: "Accounts manage access required" });
+    const googleGrant = await requireAccountsGoogle(req, res);
+    if (!googleGrant) return;
+    if (!googleGrant.canManage) return res.status(403).json({ error: "Your Google account has view access to the sheets but not edit access", googleGate: "readonly" });
     const settings = sanitizeCrbrSettingsInput(req.body || {});
     const db = await connectAuthDb();
     const payload = {
@@ -3060,6 +3192,9 @@ app.put("/accounts/crbr/settings", async (req, res) => {
 app.post("/accounts/crbr/sync", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "accounts") || !accountsCanManage(req)) return res.status(403).json({ error: "Accounts manage access required" });
+    const googleGrant = await requireAccountsGoogle(req, res);
+    if (!googleGrant) return;
+    if (!googleGrant.canManage) return res.status(403).json({ error: "Your Google account has view access to the sheets but not edit access", googleGate: "readonly" });
     const preview = await buildCrbrPreview();
     if (!preview.canSync) {
       return res.status(409).json({
@@ -3151,6 +3286,7 @@ app.post("/accounts/crbr/sync", async (req, res) => {
 app.get("/accounts/crbr/intake", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    if (!await requireAccountsGoogle(req, res)) return;
     res.json(await buildCrbrIntake());
   } catch (error) {
     console.error("CRBR intake error:", error);
@@ -3161,6 +3297,9 @@ app.get("/accounts/crbr/intake", async (req, res) => {
 app.post("/accounts/crbr/intake/import", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "accounts") || !accountsCanManage(req)) return res.status(403).json({ error: "Accounts manage access required" });
+    const googleGrant = await requireAccountsGoogle(req, res);
+    if (!googleGrant) return;
+    if (!googleGrant.canManage) return res.status(403).json({ error: "Your Google account has view access to the sheets but not edit access", googleGate: "readonly" });
     const rowIds = Array.isArray(req.body?.rowIds) ? req.body.rowIds : [];
     if (!rowIds.length) return res.status(400).json({ error: "Select at least one row to import" });
     const actor = { id: req.authUser.id, name: req.authUser.displayName || req.authUser.username || "User" };
@@ -3176,6 +3315,7 @@ app.post("/accounts/crbr/intake/import", async (req, res) => {
 app.put("/accounts/crbr/remark", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "accounts")) return res.status(403).json({ error: "Accounts access required" });
+    if (!await requireAccountsGoogle(req, res)) return;
     const rowId = projectText(req.body?.rowId);
     if (!rowId) return res.status(400).json({ error: "rowId is required" });
     const text = projectText(req.body?.text).slice(0, 1000);
@@ -8382,6 +8522,132 @@ const CRBR_TARGET_COLUMN_MAP = {
   total: 11,
   billDescription: 12,
 };
+
+/* ────────────────────── Accounts: Google identity gate ──────────────────────
+   Opening the Accounts module asks the person to prove, with Google, that they are
+   who their raga profile says they are AND that Google itself grants them access to
+   the CRBR sheets. The sheet's own sharing list becomes the access list — which is
+   why a super admin who is not on the sheet cannot get in either.
+
+   The grant is written onto the session document, so logging out drops it and there
+   is nothing to expire or clean up. It is asked for once per login, not per visit. */
+
+const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
+const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
+const APP_PUBLIC_URL = (process.env.APP_PUBLIC_URL || "http://localhost:3000").replace(/\/+$/, "");
+const API_PUBLIC_URL = (process.env.API_PUBLIC_URL || "http://localhost:5000").replace(/\/+$/, "");
+const GOOGLE_OAUTH_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || `${API_PUBLIC_URL}/accounts/google/callback`;
+const ACCOUNTS_GOOGLE_STATES = "accountsGoogleAuthStates";
+const ACCOUNTS_GOOGLE_SCOPES = [
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
+  // metadata only — enough to ask "can this person open this sheet, and can they edit it?"
+  // without granting us the right to read anyone's file contents
+  "https://www.googleapis.com/auth/drive.metadata.readonly",
+];
+
+function accountsGoogleConfigured() {
+  return Boolean(GOOGLE_OAUTH_CLIENT_ID && GOOGLE_OAUTH_CLIENT_SECRET);
+}
+
+function accountsGoogleClient() {
+  if (!accountsGoogleConfigured()) throw new Error("Google sign-in is not configured on the server");
+  return new google.auth.OAuth2(GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI);
+}
+
+// The callback has no req.authUser, so the actor is built from the session's user doc.
+function accountsActor(user) {
+  if (!user) return null;
+  return {
+    id: String(user._id),
+    username: user.username,
+    displayName: user.displayName || user.username,
+    roleName: user.roleName || null,
+  };
+}
+
+function sessionTokenFromRequest(req) {
+  const header = req.headers.authorization || "";
+  return header.startsWith("Bearer ") ? header.slice(7) : "";
+}
+
+// Asks Drive, as the signed-in person, what they may do with each configured sheet.
+async function accountsCheckSheetAccess(authClient, settings) {
+  const drive = google.drive({ version: "v3", auth: authClient });
+  const wanted = [
+    { key: "raw", label: "Raw CRBR sheet", id: settings.rawSpreadsheetId },
+    { key: "source", label: "Mam CRBR sheet", id: settings.sourceSpreadsheetId },
+    { key: "target", label: "All ongoing project sheet", id: settings.targetSpreadsheetId },
+  ].filter((item) => item.id);
+
+  const results = {};
+  for (const item of wanted) {
+    try {
+      const response = await drive.files.get({
+        fileId: item.id,
+        fields: "id,name,capabilities(canEdit)",
+        supportsAllDrives: true,
+      });
+      results[item.key] = {
+        label: item.label,
+        name: response.data.name || "",
+        canView: true,
+        canEdit: Boolean(response.data.capabilities?.canEdit),
+      };
+    } catch (error) {
+      const denied = error?.code === 404 || error?.code === 403;
+      results[item.key] = {
+        label: item.label,
+        name: "",
+        canView: false,
+        canEdit: false,
+        error: denied ? "This Google account cannot open the sheet" : (error.message || "Could not check access"),
+      };
+    }
+  }
+  return results;
+}
+
+function accountsGrantSummary(grant) {
+  if (!grant) return { verified: false };
+  const sheets = grant.sheets || {};
+  return {
+    verified: true,
+    email: grant.email || "",
+    name: grant.name || "",
+    verifiedAt: grant.verifiedAt || null,
+    canManage: Boolean(grant.canManage),
+    sheets: Object.entries(sheets).map(([key, value]) => ({ key, ...value })),
+  };
+}
+
+async function accountsGoogleGrant(req) {
+  const token = sessionTokenFromRequest(req);
+  if (!token) return null;
+  const db = await connectAuthDb();
+  const session = await db.collection("sessions").findOne({ tokenHash: hashToken(token) }, { projection: { accountsGoogle: 1 } });
+  return session?.accountsGoogle || null;
+}
+
+// Every accounts data route goes through this. There is deliberately no super-admin
+// shortcut — the whole point is that the sheet decides, not the role.
+async function requireAccountsGoogle(req, res) {
+  if (!accountsGoogleConfigured()) {
+    res.status(503).json({ error: "Google sign-in for Accounts is not configured on the server", googleGate: "unconfigured" });
+    return null;
+  }
+  const grant = await accountsGoogleGrant(req);
+  if (!grant) {
+    res.status(401).json({ error: "Verify with Google to open Accounts", googleGate: "required" });
+    return null;
+  }
+  const profileEmail = projectText(req.authUser?.email).toLowerCase();
+  if (!profileEmail || profileEmail !== projectText(grant.email).toLowerCase()) {
+    res.status(403).json({ error: "Your Google account no longer matches your profile email", googleGate: "mismatch" });
+    return null;
+  }
+  return grant;
+}
 
 function accountsCanManage(req) {
   return Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_accounts"));

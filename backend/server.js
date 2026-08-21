@@ -16956,7 +16956,7 @@ function mrnWhatsappParams(row = {}, actorName = "User", comment = "") {
     actionRequest: [
       clean(row.mrnNo),
       clean(row.project),
-      clean(actorName || row.issuedBy, "Submitted"),
+      clean(row.issuedBy || actorName),
       materials,
       formatDateForMessage(row.requiredDate || row.materialRequestDate),
       attachment,
@@ -16964,20 +16964,20 @@ function mrnWhatsappParams(row = {}, actorName = "User", comment = "") {
     approved: [
       clean(row.mrnNo),
       clean(row.project),
-      clean(actorName, "Approved"),
+      clean(actorName || row.issuedBy, "Approved"),
       materials,
       formatDateForMessage(row.requiredDate || row.materialRequestDate),
     ],
     declined: [
       clean(row.mrnNo),
       clean(row.project),
-      clean(actorName, "Declined"),
+      clean(actorName || row.issuedBy, "Declined"),
       clean(comment || row.remark),
     ],
     comment: [
       clean(row.mrnNo),
       clean(row.project),
-      clean(actorName, "Commented"),
+      clean(actorName || row.issuedBy, "Commented"),
       clean(comment || row.remark),
     ],
   };
@@ -17016,9 +17016,17 @@ function mrnDetailsFollowupText(row = {}) {
 }
 
 function formatDateForMessage(value) {
-  const key = dmrDateKey(value);
-  if (!key) return projectText(value || "-");
-  return new Date(`${key}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const text = projectText(value);
+  if (!text) return "-";
+  // MRN dates arrive as the sheet writes them — "25/08/2026" — which Date() reads as an
+  // American month/day and rejects. parseMrnDate understands day-first; dmrDateKey does not,
+  // and worse, silently returns today when it fails. Anything unparseable is passed through
+  // as written rather than printed to the recipient as "Invalid Date".
+  const key = parseMrnDate(text);
+  if (!key) return text;
+  const date = new Date(`${key}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
 async function sendMrnWhatsappAutomation({ event = "actionRequest", row = {}, actor = null, comment = "" } = {}) {
@@ -17040,7 +17048,7 @@ async function sendMrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
     const lastRun = await recordMrnWhatsappLastRun({ event: eventName, status: "skipped", recipients: contacts.length, templateName, mrnNo: row.mrnNo, reason });
     return { status: "skipped", sent: 0, failed: 0, results: [], lastRun };
   }
-  const actorName = actor?.displayName || actor?.username || row.issuedBy || "User";
+  const actorName = actor?.system ? "" : (actor?.displayName || actor?.username || "");
   const params = mrnWhatsappParams(row, actorName, comment)[event] || [];
   const language = settings.languages?.[event] || MRN_WHATSAPP_DEFAULTS.languages[event] || "en";
   const results = [];
@@ -17119,7 +17127,9 @@ async function checkMrnWhatsappAutomationQueue({ source = "watcher" } = {}) {
       const result = await sendMrnWhatsappAutomation({
         event: "actionRequest",
         row,
-        actor: { id: "system", displayName: "MRN WhatsApp watcher", username: source },
+        // The watcher is what noticed the row, not who raised the MRN — flagged so its name
+        // never ends up in the message as the person who submitted it.
+        actor: { id: "system", system: true, displayName: "MRN WhatsApp watcher", username: source },
       });
       console.log(`MRN WhatsApp watcher send ${row.mrnNo || `row ${row.rowNumber}`}: ${result.status}${result.lastRun?.reason ? ` (${result.lastRun.reason})` : ""}`);
       if (result.sent) await markMrnWhatsappActionRequestProcessed(row.mrnNo, row.rowNumber, activeSpreadsheetId);

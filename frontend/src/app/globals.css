@@ -640,3 +640,94 @@ body * {
 .forum-composer-refining {
   box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.34), 0 0 22px rgba(16, 185, 129, 0.12);
 }
+
+/* ─── Finance drawers and modals ───────────────────────────────────────────
+   The iOS sheet curve: almost all of the travel happens in the first third,
+   then it eases to a stop. Closing is quicker than opening, which is what
+   makes a panel feel light rather than sluggish.                            */
+
+.finance-scrim {
+  /* No backdrop-filter here on purpose: re-blurring a full-screen layer on every frame
+     is what makes a large panel stutter as it slides. A plain dim costs nothing. */
+  animation: finance-scrim-in 240ms ease-out both;
+  will-change: opacity;
+}
+
+.finance-scrim.is-closing {
+  animation: finance-scrim-out 220ms ease-in both;
+  pointer-events: none;
+}
+
+.finance-panel {
+  /* 59% / 93% / 99% of the travel at a quarter, half and three quarters — a gradual
+     start and a clear settle, rather than snapping most of the way in the first frames. */
+  animation: finance-panel-in 400ms cubic-bezier(0.4, 0.8, 0.2, 1) both;
+  will-change: transform;
+  backface-visibility: hidden;
+  contain: paint;
+}
+
+.finance-panel.is-closing {
+  animation: finance-panel-out 260ms cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+
+.finance-modal {
+  animation: finance-modal-in 300ms cubic-bezier(0.4, 0.8, 0.2, 1) both;
+  will-change: transform, opacity;
+}
+
+.finance-modal.is-closing {
+  animation: finance-modal-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes finance-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes finance-scrim-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes finance-panel-in {
+  from { transform: translate3d(102%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes finance-panel-out {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(102%, 0, 0); }
+}
+
+@keyframes finance-modal-in {
+  from { opacity: 0; transform: scale(0.94) translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+}
+
+@keyframes finance-modal-out {
+  from { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+  to { opacity: 0; transform: scale(0.97) translate3d(0, 4px, 0); }
+}
+
+/* A card that has picked up a response since it was last opened. */
+@keyframes finance-ping {
+  0% { transform: scale(1); opacity: 0.75; }
+  70%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+.finance-ping::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: finance-ping 1800ms cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finance-scrim,
+  .finance-panel,
+  .finance-modal { animation-duration: 1ms !important; }
+  .finance-ping::after { animation: none; }
+}

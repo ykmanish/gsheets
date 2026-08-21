@@ -285,16 +285,23 @@ function registerAccountsFormsModule(app, deps) {
       if (!await gate(req, res)) return;
       const db = await connectDb();
       const forms = await db.collection(FORMS).find({}).sort({ createdAt: -1 }).toArray();
-      // One grouped pass rather than a query per form, so the list stays cheap as forms grow.
+      // One grouped pass each rather than a query per form, so the list stays cheap as forms grow.
       const tallies = new Map();
       for (const row of await db.collection(LINKS).aggregate([
         { $group: { _id: "$formId", total: { $sum: 1 }, used: { $sum: { $cond: [{ $ifNull: ["$usedAt", false] }, 1, 0] } } } },
       ]).toArray()) tallies.set(String(row._id), { total: row.total, used: row.used });
 
+      // Drives the "new response" marker on each card.
+      const latest = new Map();
+      for (const row of await db.collection(SUBMISSIONS).aggregate([
+        { $group: { _id: "$formId", at: { $max: "$submittedAt" } } },
+      ]).toArray()) latest.set(String(row._id), row.at);
+
       res.json({
         forms: forms.map((form) => ({
           ...serializeForm(form, { includeSecrets: true }),
           links: tallies.get(String(form._id)) || { total: 0, used: 0 },
+          lastSubmissionAt: latest.get(String(form._id)) || null,
         })),
         // shown in the editor so the right address can be given access to a sheet
         serviceAccountEmail: sheetAccountEmail(),
@@ -319,8 +326,15 @@ function registerAccountsFormsModule(app, deps) {
       const driveProblem = await validateDriveFolder(driveFolderId);
       if (driveProblem) return res.status(400).json({ error: driveProblem });
 
-      let slug = slugify(req.body?.slug || name) || crypto.randomBytes(4).toString("hex");
-      if (await db.collection(FORMS).findOne({ slug })) slug = `${slug}-${crypto.randomBytes(2).toString("hex")}`;
+      // Duplicating a form means two forms often start from the same name, so keep trying
+      // suffixes rather than assuming one is enough — a repeated slug would make the public
+      // route serve whichever document Mongo happened to return first.
+      const base = slugify(req.body?.slug || name) || crypto.randomBytes(4).toString("hex");
+      let slug = base;
+      for (let attempt = 0; attempt < 6 && await db.collection(FORMS).findOne({ slug }); attempt += 1) {
+        slug = `${base}-${crypto.randomBytes(3).toString("hex")}`;
+      }
+      if (await db.collection(FORMS).findOne({ slug })) return res.status(409).json({ error: "Could not find a free link for that name. Try a different name." });
 
       const doc = {
         slug,
@@ -467,6 +481,117 @@ function registerAccountsFormsModule(app, deps) {
     } catch (error) {
       console.error("Accounts form link delete error:", error);
       res.status(400).json({ error: error.message || "Could not remove the link" });
+    }
+  });
+
+  // Responses are read back from the spreadsheet rather than from Mongo, because the sheet
+  // is what accounts actually works in — a row edited or deleted there is the truth. Any
+  // submission that never reached the sheet is returned alongside it so it is not invisible.
+  const MAX_RESPONSE_ROWS = 500;
+
+  app.get("/accounts/forms/:id/responses", async (req, res) => {
+    try {
+      if (!await gate(req, res)) return;
+      const db = await connectDb();
+      const form = await formById(db, req.params.id);
+      if (!form) return res.status(404).json({ error: "Form not found" });
+
+      const settings = await getCrbrSettings();
+      const spreadsheetId = form.spreadsheetId || settings.targetSpreadsheetId;
+      const payload = {
+        tabName: form.tabName,
+        spreadsheetId: spreadsheetId || "",
+        sheetUrl: "",
+        headers: [],
+        rows: [],
+        totalRows: 0,
+        truncated: false,
+        problem: null,
+      };
+
+      // Submissions Mongo kept but the sheet never received — surfaced whatever happens below.
+      payload.unsynced = (await db.collection(SUBMISSIONS)
+        .find({ formId: form._id, syncStatus: { $ne: "synced" }, dismissedAt: null })
+        .sort({ submittedAt: -1 }).limit(50).toArray())
+        .map((item) => ({
+          id: String(item._id),
+          submittedAt: item.submittedAt,
+          submittedBy: item.submittedBy?.name || item.linkLabel || "Link",
+          answers: item.answers || {},
+          syncError: item.syncError || "",
+        }));
+
+      if (!spreadsheetId) {
+        payload.problem = "No spreadsheet is set for this form, so there is nothing to read.";
+        return res.json(payload);
+      }
+
+      try {
+        const sheets = await sheetsClient();
+        const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties(title,sheetId)" });
+        const tab = (meta.data.sheets || []).find((sheet) => sheet.properties.title === form.tabName);
+        payload.sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
+          + (tab ? `#gid=${tab.properties.sheetId}` : "");
+
+        if (!tab) {
+          payload.problem = `The "${form.tabName}" tab does not exist yet — it is created with the first response.`;
+          return res.json(payload);
+        }
+
+        const values = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: escapeSheetName(form.tabName),
+          valueRenderOption: "FORMATTED_VALUE",
+        });
+        const grid = values.data.values || [];
+        if (grid.length) {
+          payload.headers = grid[0].map((cell) => text(cell));
+          const body = grid.slice(1).filter((row) => (row || []).some((cell) => text(cell) !== ""));
+          payload.totalRows = body.length;
+          payload.truncated = body.length > MAX_RESPONSE_ROWS;
+          // newest first — rows are appended, so the sheet order is oldest first
+          payload.rows = body.reverse().slice(0, MAX_RESPONSE_ROWS)
+            .map((row) => payload.headers.map((_, i) => text(row[i])));
+        }
+      } catch (error) {
+        console.error("Accounts form responses read failed:", error);
+        payload.problem = error?.code === 403 || /permission/i.test(error.message || "")
+          ? `${sheetAccountEmail() || "The service account"} cannot open that spreadsheet. Share it with that address to read responses here.`
+          : `Could not read the sheet: ${error.message}`;
+        if (spreadsheetId) payload.sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+      }
+
+      res.json(payload);
+    } catch (error) {
+      console.error("Accounts form responses error:", error);
+      res.status(500).json({ error: error.message || "Could not load responses" });
+    }
+  });
+
+  // Dismissing only hides a failed response from the drawer. The submission stays in the
+  // database — it is the only copy of an answer the sheet never received, so it is not ours
+  // to throw away just because someone wants the red panel to stop shouting.
+  app.post("/accounts/forms/:id/unsynced/dismiss", async (req, res) => {
+    try {
+      if (!await gate(req, res, { needManage: true })) return;
+      const db = await connectDb();
+      const form = await formById(db, req.params.id);
+      if (!form) return res.status(404).json({ error: "Form not found" });
+
+      const filter = { formId: form._id, syncStatus: { $ne: "synced" }, dismissedAt: null };
+      if (!req.body?.all) {
+        let submissionId;
+        try { submissionId = new ObjectId(req.body?.id); } catch { return res.status(400).json({ error: "Bad response id" }); }
+        filter._id = submissionId;
+      }
+
+      const result = await db.collection(SUBMISSIONS).updateMany(filter, {
+        $set: { dismissedAt: new Date(), dismissedBy: req.authUser.displayName || req.authUser.username },
+      });
+      res.json({ success: true, dismissed: result.modifiedCount });
+    } catch (error) {
+      console.error("Accounts form dismiss error:", error);
+      res.status(400).json({ error: error.message || "Could not dismiss" });
     }
   });
 

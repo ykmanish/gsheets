@@ -27,7 +27,9 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "sheet-dashboard", label: "Sheet Dashboard", icon: Sheet },
     { id: "automations", label: "Automation", icon: Workflow },
     { id: "reports", label: "Reports", icon: ChartNoAxesCombined },
-    { id: "accounts", label: "Accounts", icon: CircleDollarSign },
+    { id: "finance", label: "Finance", icon: CircleDollarSign },
+    { id: "accounts", label: "Accounts", icon: FileSpreadsheet, parent: "finance" },
+    { id: "accounts-forms", label: "Forms", icon: ClipboardList, parent: "finance" },
     { id: "employee-daily-report", label: "Employee Daily Report", icon: CalendarCheck },
     { id: "activity-log", label: "Activity Log", icon: Activity },
     { id: "whatsapp", label: "WhatsApp", icon: MessageCircleMore },
@@ -38,12 +40,14 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
   ];
   const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn", "project-stock", "site-images"].includes(item.id) && allowedMenus.includes(item.id));
   const hrSubMenu = menuItems.filter((item) => ["hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment"].includes(item.id) && allowedMenus.includes(item.id));
+  const financeSubMenu = menuItems.filter((item) => item.parent === "finance" && allowedMenus.includes(item.id));
   const accessSubMenu = menuItems.filter((item) => item.parent === "access-management" && allowedMenus.includes(item.id));
-  const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id) || (item.id === "hr-dashboard" && hrSubMenu.length) || (item.id === "projects" && projectSubMenu.length) || (item.id === "access-management" && accessSubMenu.length));
+  const visibleMenuItems = menuItems.filter((item) => allowedMenus.includes(item.id) || (item.id === "hr-dashboard" && hrSubMenu.length) || (item.id === "projects" && projectSubMenu.length) || (item.id === "access-management" && accessSubMenu.length) || (item.id === "finance" && financeSubMenu.length));
   const [openGroups, setOpenGroups] = useState(() => ({
     projects: projectSubMenu.some((item) => item.id === activeMenu),
     hr: hrSubMenu.some((item) => item.id === activeMenu),
     access: accessSubMenu.some((item) => item.id === activeMenu),
+    finance: financeSubMenu.some((item) => item.id === activeMenu),
   }));
   const [menuSearch, setMenuSearch] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
@@ -56,12 +60,14 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
   const filteredProjectSubMenu = projectSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
   const filteredHrSubMenu = hrSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
   const filteredAccessSubMenu = accessSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
+  const filteredFinanceSubMenu = financeSubMenu.filter((item) => !searchTerm || item.label.toLowerCase().includes(searchTerm));
   const filteredMenuItems = visibleMenuItems.filter((item) => {
     if (!searchTerm) return true;
     if (item.label.toLowerCase().includes(searchTerm)) return true;
     if (item.id === "projects") return filteredProjectSubMenu.length > 0;
     if (item.id === "hr-dashboard") return filteredHrSubMenu.length > 0;
     if (item.id === "access-management") return filteredAccessSubMenu.length > 0;
+    if (item.id === "finance") return filteredFinanceSubMenu.length > 0;
     return false;
   });
 
@@ -205,7 +211,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
             if (collapsed) return;
             // Accordion behavior: opening one group closes any other open group instead of
             // stacking them all expanded at once.
-            setOpenGroups((current) => (current[groupKey] ? { ...current, [groupKey]: false } : { projects: false, hr: false, access: false, [groupKey]: true }));
+            setOpenGroups((current) => (current[groupKey] ? { ...current, [groupKey]: false } : { projects: false, hr: false, access: false, finance: false, [groupKey]: true }));
           }}
           onMouseEnter={(event) => openFlyout(groupKey, event.currentTarget, label, GroupIcon, list)}
           onMouseLeave={scheduleCloseFlyout}
@@ -320,12 +326,16 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
             if (item.parent === "projects") return null;
             if (item.parent === "hr") return null;
             if (item.parent === "access-management") return null;
+            if (item.parent === "finance") return null;
 
             if (item.id === "projects" && projectSubMenu.length) {
               return renderGroup({ groupKey: "projects", label: "Projects", GroupIcon: Building2, allChildren: projectSubMenu, filtered: filteredProjectSubMenu });
             }
             if (item.id === "hr-dashboard" && hrSubMenu.length) {
               return renderGroup({ groupKey: "hr", label: "HR", GroupIcon: BriefcaseBusiness, allChildren: hrSubMenu, filtered: filteredHrSubMenu });
+            }
+            if (item.id === "finance" && financeSubMenu.length) {
+              return renderGroup({ groupKey: "finance", label: "Finance", GroupIcon: CircleDollarSign, allChildren: financeSubMenu, filtered: filteredFinanceSubMenu });
             }
             if (item.id === "access-management" && accessSubMenu.length) {
               return renderGroup({ groupKey: "access", label: "Access Control", GroupIcon: ShieldCheck, allChildren: accessSubMenu, filtered: filteredAccessSubMenu });

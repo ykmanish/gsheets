@@ -25,6 +25,7 @@ const { createWhatsAppService, normalizePhone } = require("./lib/whatsappService
 const { callClaude, retrieveRelevantChunks, routeClaudeModel, modelIdForTier } = require("./lib/claudeRag");
 const { registerFormsModule } = require("./lib/formsModule");
 const { registerRecruitmentModule } = require("./lib/recruitmentModule");
+const { registerAccountsFormsModule, MAX_UPLOAD_BYTES: ACCOUNTS_FORM_MAX_UPLOAD } = require("./lib/accountsFormsModule");
 const adminMiscExpensesArchitecture = require("./sheetArchitectures/adminMiscExpenses");
 const assetPurchaseRequestsArchitecture = require("./sheetArchitectures/assetPurchaseRequests");
 const directorPaymentRequestsArchitecture = require("./sheetArchitectures/directorPaymentRequests");
@@ -84,7 +85,9 @@ const MENU_ITEMS = [
   { id: "sheet-dashboard", label: "Sheet Dashboard" },
   { id: "automations", label: "Automation" },
   { id: "reports", label: "Reports" },
-  { id: "accounts", label: "Accounts" },
+  { id: "finance", label: "Finance", group: "finance" },
+  { id: "accounts", label: "Accounts", parent: "finance", group: "finance" },
+  { id: "accounts-forms", label: "Forms", parent: "finance", group: "finance" },
   { id: "employee-daily-report", label: "Employee Daily Report" },
   { id: "activity-log", label: "Activity Log" },
   { id: "access-management", label: "Access Control" },
@@ -162,6 +165,8 @@ async function connectAuthDb() {
   await authDb.collection("accountsCrbrRemarks").createIndex({ rowId: 1 }, { unique: true });
   await authDb.collection("accountsGoogleAuthStates").createIndex({ createdAt: 1 }, { expireAfterSeconds: 900 });
   await authDb.collection("accountsGoogleAuthStates").createIndex({ state: 1 }, { unique: true });
+  await authDb.collection("accountsForms").createIndex({ slug: 1 }, { unique: true });
+  await authDb.collection("accountsFormSubmissions").createIndex({ formId: 1, submittedAt: -1 });
   await authDb.collection("accountsCrbrIntakeRuns").createIndex({ importedAt: -1 });
   await authDb.collection("personalTodos").createIndex({ userId: 1, createdAt: -1 });
   await authDb.collection("projectDashboard").createIndex({ updatedAt: -1 });
@@ -839,6 +844,9 @@ app.use(async (req, res, next) => {
   // Google redirects the browser straight here, with no Authorization header — the
   // session is recovered from the one-shot state nonce inside the handler instead.
   if (req.path === "/accounts/google/callback") return next();
+  // Shareable request forms are open by design; each route checks the form's own
+  // visibility, and a dashboard-only form still demands a valid session inside.
+  if (req.path.startsWith("/public/")) return next();
   return requireAuth(req, res, next);
 });
 
@@ -849,6 +857,81 @@ registerFormsModule(app, {
   google,
   getGoogleAuth,
   requireSuperAdmin,
+});
+
+// Accounts request forms authenticate as their own service account, so the sheets and
+// folders they touch can be shared with just that address and nothing else. Falls back
+// to the main service account when the key file is absent.
+const SHEET_ACCOUNT_KEY_FILE = process.env.SHEET_ACCOUNT_KEY_FILE || "sheet_account.json";
+let sheetAccountCredentials;
+function loadSheetAccountCredentials() {
+  if (sheetAccountCredentials !== undefined) return sheetAccountCredentials;
+  const keyPath = path.isAbsolute(SHEET_ACCOUNT_KEY_FILE) ? SHEET_ACCOUNT_KEY_FILE : path.join(__dirname, SHEET_ACCOUNT_KEY_FILE);
+  try {
+    sheetAccountCredentials = JSON.parse(fs.readFileSync(keyPath, "utf8"));
+  } catch {
+    sheetAccountCredentials = null;
+  }
+  return sheetAccountCredentials;
+}
+
+async function getSheetAccountAuth(scopes) {
+  const credentials = loadSheetAccountCredentials();
+  if (!credentials) return getGoogleAuth(scopes);
+  return new google.auth.GoogleAuth({
+    credentials,
+    scopes: Array.isArray(scopes) && scopes.length ? scopes : [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive",
+    ],
+  });
+}
+
+function sheetAccountEmail() {
+  return loadSheetAccountCredentials()?.client_email || "";
+}
+
+// Public URLs and Google OAuth credentials, read early because the module
+// registrations below consume them.
+const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
+const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
+const APP_PUBLIC_URL = (process.env.APP_PUBLIC_URL || "http://localhost:3000").replace(/\/+$/, "");
+const API_PUBLIC_URL = (process.env.API_PUBLIC_URL || "http://localhost:5000").replace(/\/+$/, "");
+const GOOGLE_OAUTH_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || `${API_PUBLIC_URL}/accounts/google/callback`;
+
+// Public form uploads get their own multer instance with a size cap — anonymous
+// callers must not be able to post arbitrarily large files. Declared here rather than
+// beside the shared `upload`, which is created much further down the file.
+const accountsFormUploadsDir = path.join(__dirname, "uploads");
+fs.mkdirSync(accountsFormUploadsDir, { recursive: true });
+const accountsFormUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, accountsFormUploadsDir),
+    // keep the extension so the stored file opens correctly from its link
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname || "").slice(0, 10).replace(/[^.\w]/g, "");
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+    },
+  }),
+  limits: { fileSize: ACCOUNTS_FORM_MAX_UPLOAD, files: 10 },
+});
+
+registerAccountsFormsModule(app, {
+  connectDb: connectAuthDb,
+  google,
+  getGoogleAuth: getSheetAccountAuth,
+  sheetAccountEmail,
+  upload: accountsFormUpload,
+  hasMenuAccess,
+  requireAccountsGoogle,
+  addActivityLog,
+  projectText,
+  escapeSheetName,
+  getCrbrSettings,
+  hashToken,
+  extractDriveFileId,
+  normalizeSpreadsheetId,
+  publicApiUrl: API_PUBLIC_URL,
 });
 
 registerRecruitmentModule(app, {
@@ -8532,11 +8615,6 @@ const CRBR_TARGET_COLUMN_MAP = {
    The grant is written onto the session document, so logging out drops it and there
    is nothing to expire or clean up. It is asked for once per login, not per visit. */
 
-const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
-const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
-const APP_PUBLIC_URL = (process.env.APP_PUBLIC_URL || "http://localhost:3000").replace(/\/+$/, "");
-const API_PUBLIC_URL = (process.env.API_PUBLIC_URL || "http://localhost:5000").replace(/\/+$/, "");
-const GOOGLE_OAUTH_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || `${API_PUBLIC_URL}/accounts/google/callback`;
 const ACCOUNTS_GOOGLE_STATES = "accountsGoogleAuthStates";
 const ACCOUNTS_GOOGLE_SCOPES = [
   "openid",

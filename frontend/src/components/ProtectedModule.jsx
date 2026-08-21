@@ -20,6 +20,7 @@ import Documents from "./Documents";
 import Automations from "./Automations";
 import Reports from "./Reports";
 import AccountsDashboard from "./AccountsDashboard";
+import AccountsFormsModule from "./AccountsFormsModule";
 import NotificationDrawer from "./NotificationDrawer";
 import SheetDashboard from "./SheetDashboard";
 import ManageRoles from "./ManageRoles";
@@ -59,7 +60,9 @@ const menuPaths = {
   "sheet-dashboard": "/sheet-dashboard",
   automations: "/automations",
   reports: "/reports",
+  finance: "/accounts",
   accounts: "/accounts",
+  "accounts-forms": "/accounts/forms",
   "employee-daily-report": "/employee-daily-report",
   "activity-log": "/activity-log",
   whatsapp: "/whatsapp",
@@ -215,6 +218,10 @@ function ProtectedModuleContent({ moduleId, projectId }) {
       ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment", "todos", "forum", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
       "projects",
       "profile",
+      // Splitting Finance into Accounts + Forms must not revoke anyone: whoever already had
+      // Accounts keeps Forms. Forms can still be granted on its own.
+      ...(menus.includes("accounts") ? ["finance", "accounts-forms"] : []),
+      ...(menus.includes("accounts-forms") ? ["finance"] : []),
     ];
     const globallyDisabled = new Set(disabledModules || []);
     return Array.from(new Set(assigned)).filter((menu) => !["notifications", "settings"].includes(menu) && (!globallyDisabled.has(menu) || ["dashboard", "module-control"].includes(menu)));
@@ -620,6 +627,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "sheet-dashboard" && <SheetDashboard darkMode={darkMode} />}
         {moduleId === "reports" && <Reports darkMode={darkMode} />}
         {moduleId === "accounts" && <AccountsDashboard darkMode={darkMode} />}
+        {moduleId === "accounts-forms" && <AccountsFormsModule darkMode={darkMode} />}
         {moduleId === "employee-daily-report" && <EmployeeDailyReport darkMode={darkMode} />}
         {moduleId === "activity-log" && <ActivityLog darkMode={darkMode} />}
         {moduleId === "whatsapp" && user?.isSuperAdmin && <WhatsApp darkMode={darkMode} />}

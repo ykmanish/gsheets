@@ -153,6 +153,52 @@ function RouteRows({ target, rows, darkMode, tone, muted, onOpenRemark }) {
   );
 }
 
+// One cell of the raw sheet, rendered by what its column actually is. Money
+// columns are right-aligned and blank when zero, so a row of twenty bank
+// accounts stays readable instead of becoming a wall of noughts.
+function CrbrCell({ column, record, darkMode, muted, issue }) {
+  const value = record.cells?.[column.key];
+  const isMoney = column.key === "cash" || column.key === "total" || typeof value === "number";
+
+  if (column.key === "date") {
+    return (
+      <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold">
+        {sheetDate(record.dateKey) || record.date}
+        {record.reimport ? (
+          <span className={`mt-1 flex items-center gap-1 text-[11px] font-bold ${darkMode ? "text-amber-200" : "text-amber-600"}`} title="This row was imported before and is not in Mam's sheet now">
+            <History className="h-3 w-3 shrink-0" /> Imported before
+          </span>
+        ) : null}
+      </td>
+    );
+  }
+
+  if (column.key === "total") {
+    return (
+      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-black tabular-nums">
+        {money(record.total)}
+        {!record.tallyOk && <span className="mt-1 block text-[11px] font-bold text-rose-500">Tally {money(record.tallyAmount)}</span>}
+      </td>
+    );
+  }
+
+  if (isMoney) {
+    const amount = Number(value) || 0;
+    return (
+      <td className={`whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums ${amount ? "" : muted}`}>
+        {amount ? money(amount) : "-"}
+      </td>
+    );
+  }
+
+  return (
+    <td className="max-w-[200px] px-4 py-3 text-sm">
+      <p className="truncate" title={String(value ?? "")}>{String(value ?? "") || "-"}</p>
+      <NameFlag issue={issue} darkMode={darkMode} />
+    </td>
+  );
+}
+
 function RemarkButton({ record, darkMode, onOpen }) {
   const has = Boolean(record.remark?.text);
   return (
@@ -316,6 +362,9 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
   // sheet was holding back every good row behind it.
   const importableIds = useMemo(() => newRows.map((record) => record.id), [newRows]);
   const untalliedCount = useMemo(() => newRows.filter((record) => !record.tallyOk).length, [newRows]);
+  // The raw sheet's own headers, up to and including Total. The backend stops
+  // the list there, so Remarks never appears and never travels to Mam's sheet.
+  const sheetColumns = useMemo(() => intake?.raw?.columns || [], [intake]);
   const allSelected = importableIds.length > 0 && importableIds.every((id) => selected.has(id));
   const nameSummary = intake?.nameSummary || { spelling: 0, nearMatch: 0, newName: 0 };
   const nameFlagCount = nameSummary.spelling + nameSummary.nearMatch + nameSummary.newName;
@@ -444,15 +493,17 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1040px] border-separate border-spacing-y-2 text-left">
+                <table className="w-full min-w-[2200px] border-separate border-spacing-y-2 text-left">
                   <thead>
                     <tr>
                       <th className="px-3 py-3">
                         <input type="checkbox" checked={allSelected} onChange={toggleAll} disabled={!importableIds.length} className="h-4 w-4 cursor-pointer accent-[#6ee72f]" aria-label="Select all importable rows" />
                       </th>
-                      {["Row", "Date", "Site / project", "Vendor / particulars", "Voucher", "Total", "Note"].map((heading) => (
-                        <th key={heading} className={`px-4 py-3 text-[11px] font-black uppercase tracking-wide ${muted}`}>{heading}</th>
+                      <th className={`px-4 py-3 text-[11px] font-black uppercase tracking-wide ${muted}`}>Row</th>
+                      {sheetColumns.map((column) => (
+                        <th key={column.key} className={`whitespace-nowrap px-4 py-3 text-[11px] font-black uppercase tracking-wide ${muted}`}>{column.label}</th>
                       ))}
+                      <th className={`px-4 py-3 text-[11px] font-black uppercase tracking-wide ${muted}`}>Note</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -465,27 +516,16 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                             <input type="checkbox" checked={selected.has(record.id)} onChange={() => toggleOne(record.id)} title={record.tallyOk ? "" : "Amounts do not tally in the raw sheet — it will still be copied across as it stands"} className="h-4 w-4 cursor-pointer accent-[#6ee72f]" />
                           </td>
                           <td className={`px-4 py-3 text-sm tabular-nums ${muted}`} title="Row number in the raw sheet">{record.rowNumber || "-"}</td>
-                          <td className="px-4 py-3 text-sm font-semibold">
-                            {sheetDate(record.dateKey) || record.date}
-                            {record.reimport ? (
-                              <span className={`mt-1 flex items-center gap-1 text-[11px] font-bold ${darkMode ? "text-amber-200" : "text-amber-600"}`} title="This row was imported before and is not in Mam's sheet now">
-                                <History className="h-3 w-3 shrink-0" /> Imported before
-                              </span>
-                            ) : null}
-                          </td>
-                          <td className="max-w-[210px] px-4 py-3 text-sm">
-                            <p className="truncate font-semibold">{record.projectName || "-"}</p>
-                            <NameFlag issue={projectIssue} darkMode={darkMode} />
-                          </td>
-                          <td className="max-w-[240px] px-4 py-3 text-sm">
-                            <p className="truncate">{record.particulars || record.paidParticulars || "-"}</p>
-                            <NameFlag issue={vendorIssue} darkMode={darkMode} />
-                          </td>
-                          <td className={`px-4 py-3 text-sm ${muted}`}>{record.voucherNumber || "-"}</td>
-                          <td className="px-4 py-3 text-sm font-black">
-                            {money(record.total)}
-                            {!record.tallyOk && <span className="mt-1 block text-[11px] font-bold text-rose-500">Tally {money(record.tallyAmount)}</span>}
-                          </td>
+                          {sheetColumns.map((column) => (
+                            <CrbrCell
+                              key={column.key}
+                              column={column}
+                              record={record}
+                              darkMode={darkMode}
+                              muted={muted}
+                              issue={column.key === "projectname" ? projectIssue : column.key === "particulars" ? vendorIssue : null}
+                            />
+                          ))}
                           <td className="rounded-r-2xl px-4 py-3"><RemarkButton record={record} darkMode={darkMode} onOpen={openRemark} /></td>
                         </tr>
                       );
@@ -538,6 +578,13 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                 <p className={`mt-1 text-sm ${muted}`}>
                   {data?.source?.workbookTitle || "Mam sheet"} · {data?.source?.tabName} to {data?.target?.tabName}
                 </p>
+                {data?.skippedByStartDate?.startDate ? (
+                  <p className={`mt-1 text-sm ${muted}`}>
+                    Reading from <b>{sheetDate(data.skippedByStartDate.startDate)}</b> onward
+                    {data.skippedByStartDate.before ? ` · ${data.skippedByStartDate.before} earlier ${data.skippedByStartDate.before === 1 ? "entry" : "entries"} skipped` : ""}
+                    {data.skippedByStartDate.undated ? ` · ${data.skippedByStartDate.undated} skipped with no date` : ""}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill tone={pendingCount ? "amber" : "slate"} darkMode={darkMode}>{money(data?.totals?.total)} total</StatusPill>
@@ -647,7 +694,7 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                   <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Read raw entries from</span>
                   <input type="date" value={settingsForm.rawStartDate} onChange={(event) => updateSettingsField("rawStartDate", event.target.value)} className={inputClass} />
                   <span className={`mt-2 block text-xs ${muted}`}>
-                    Only raw entries dated on or after this day are checked and offered for Mam&apos;s sheet. Anything earlier is left alone, and nothing already in Mam&apos;s sheet is changed or removed. Leave blank to read the whole raw sheet.
+                    Applies to both steps: only entries dated on or after this day are read from the raw sheet into Mam&apos;s sheet, and on from there into the all-projects sheet. Anything earlier is left alone, and nothing already in either sheet is changed or removed. Leave blank to read everything.
                   </span>
                   {settingsForm.rawStartDate ? (
                     <button

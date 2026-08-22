@@ -8920,6 +8920,63 @@ function crbrFindHeaderRow(values = []) {
   return best.score >= 2 ? best.index : 0;
 }
 
+// The CRBR sheets carry far more than the handful of named fields this module
+// used to map. Between Cash and Total sit nineteen individual bank-account
+// columns — "UIPL AMD 3901", "ICICI UGP 1027" and so on — none of which contain
+// the word "bank", so the bankAll alias matched nothing and every rupee in them
+// was dropped. That is also why almost every row failed its tally: cash alone
+// was being compared against a Total that sums all twenty-odd money columns.
+//
+// So rather than a fixed schema, the sheet's own headers decide what travels.
+// Everything from the first column through Total is part of the entry; anything
+// after Total — the Remarks column — is Mam's working note and stays put.
+function crbrSyncBounds(headers = []) {
+  const keys = headers.map(crbrHeaderKey);
+  const totalIndex = keys.findIndex((key) => key === "total");
+  const cashIndex = keys.findIndex((key) => key === "cash");
+  return {
+    totalIndex,
+    cashIndex,
+    // Without a Total column, fall back to every column present.
+    lastIndex: totalIndex >= 0 ? totalIndex : headers.length - 1,
+  };
+}
+
+// Every money column between Cash and Total, so a row tallies against what the
+// sheet actually holds instead of against three hard-coded fields.
+function crbrAmountColumns(headers = []) {
+  const { cashIndex, totalIndex } = crbrSyncBounds(headers);
+  if (cashIndex < 0 || totalIndex < 0 || totalIndex <= cashIndex) return [];
+  return Array.from({ length: totalIndex - cashIndex }, (_, offset) => cashIndex + offset);
+}
+
+// The row keyed by its own header names, so it can be written into a sheet whose
+// columns sit in a different order without silently landing in the wrong ones.
+function crbrCellsByHeader(row = [], headers = [], lastIndex = -1) {
+  const cells = {};
+  const limit = lastIndex >= 0 ? Math.min(lastIndex, headers.length - 1) : headers.length - 1;
+  for (let index = 0; index <= limit; index += 1) {
+    const key = crbrHeaderKey(headers[index]);
+    if (!key || key in cells) continue;
+    cells[key] = row[index] ?? "";
+  }
+  return cells;
+}
+
+// Lays a record out against a destination sheet's headers by name. A column the
+// destination has but the source does not is left empty rather than shifting
+// everything along, and anything past Total is never touched.
+function crbrRowByHeaderName(record = {}, destHeaders = []) {
+  const { lastIndex } = crbrSyncBounds(destHeaders);
+  const cells = record.cells || {};
+  const output = Array.from({ length: lastIndex + 1 }, () => "");
+  for (let index = 0; index <= lastIndex && index < destHeaders.length; index += 1) {
+    const key = crbrHeaderKey(destHeaders[index]);
+    if (key && key in cells) output[index] = cells[key] ?? "";
+  }
+  return output;
+}
+
 function crbrColumnMap(headers = []) {
   const cleaned = headers.map(crbrCleanHeader);
   const used = new Set();
@@ -8950,7 +9007,7 @@ function crbrRowKey(record = {}) {
   ].map((value) => projectText(value).toLowerCase()).join("|");
 }
 
-function crbrMapRow(row = [], map = {}, rowNumber = 0, tabName = "") {
+function crbrMapRow(row = [], map = {}, rowNumber = 0, tabName = "", headers = null) {
   const record = {
     id: "",
     rowNumber,
@@ -8972,7 +9029,19 @@ function crbrMapRow(row = [], map = {}, rowNumber = 0, tabName = "") {
     raw: row,
   };
   record.id = crbrRowKey(record);
-  record.tallyAmount = Number((record.cash + record.bankAll + record.others).toFixed(2));
+
+  if (Array.isArray(headers) && headers.length) {
+    const { lastIndex } = crbrSyncBounds(headers);
+    record.cells = crbrCellsByHeader(row, headers, lastIndex);
+    const amountColumns = crbrAmountColumns(headers);
+    // Sum what the sheet really holds — all the bank columns included.
+    record.tallyAmount = amountColumns.length
+      ? Number(amountColumns.reduce((sum, index) => sum + crbrNumber(row[index]), 0).toFixed(2))
+      : Number((record.cash + record.bankAll + record.others).toFixed(2));
+  } else {
+    record.tallyAmount = Number((record.cash + record.bankAll + record.others).toFixed(2));
+  }
+
   record.tallyOk = Math.abs(record.tallyAmount - record.total) < 0.01;
   return record;
 }
@@ -9176,7 +9245,7 @@ async function crbrLoadTab(sheets, spreadsheetId, preferredTab, fallbackFirst = 
   const headers = values[headerRowIndex] || [];
   const map = options.columnMap || crbrColumnMap(headers);
   const records = values.slice(headerRowIndex + 1)
-    .map((row, index) => crbrMapRow(row, map, headerRowIndex + index + 2, tab.title))
+    .map((row, index) => crbrMapRow(row, map, headerRowIndex + index + 2, tab.title, headers))
     .filter(crbrRecordHasData);
   return { workbookTitle: workbook.title, tab, tabName: tab.title, headers, headerRow: headerRowIndex + 1, map, values, records };
 }
@@ -9333,10 +9402,16 @@ async function buildCrbrPreview() {
     if (result.ok) result.read.records.forEach((record) => { if (!targetById.has(record.id)) targetById.set(record.id, { record, route: route.key }); });
   });
 
+  // The same cutoff governs this leg. Mam's sheet holds years of history, and
+  // without this every old row is offered to the all-projects sheet forever.
+  // Applied before duplicate and voucher checks so an out-of-window row is not
+  // raised as a problem either — it is simply not in scope.
+  const sourceWindow = crbrApplyStartDate(source.records, settings.rawStartDate);
+
   const sourceUnique = [];
   const sourceSeen = new Map();
   const sourceDuplicates = [];
-  source.records.forEach((record) => {
+  sourceWindow.kept.forEach((record) => {
     if (sourceSeen.has(record.id)) sourceDuplicates.push({ record, firstRow: sourceSeen.get(record.id).rowNumber });
     else {
       sourceSeen.set(record.id, record);
@@ -9345,7 +9420,7 @@ async function buildCrbrPreview() {
   });
 
   const voucherSeen = new Map();
-  source.records.forEach((record) => {
+  sourceWindow.kept.forEach((record) => {
     const voucherKey = projectText(record.voucherNumber).trim().toLowerCase();
     if (!voucherKey) return;
     const current = voucherSeen.get(voucherKey) || { voucherNumber: record.voucherNumber, rows: [], records: [] };
@@ -9429,7 +9504,20 @@ async function buildCrbrPreview() {
 
   return {
     settings,
-    source: { spreadsheetId: settings.sourceSpreadsheetId, workbookTitle: source.workbookTitle, tabName: source.tabName, rows: source.records.length },
+    source: {
+      spreadsheetId: settings.sourceSpreadsheetId,
+      workbookTitle: source.workbookTitle,
+      tabName: source.tabName,
+      rows: source.records.length,
+      // How many of Mam's rows the cutoff put out of scope, so a shrunken list
+      // is explained rather than just looking empty.
+      inWindow: sourceWindow.kept.length,
+    },
+    skippedByStartDate: {
+      before: sourceWindow.skippedBefore,
+      undated: sourceWindow.skippedUndated,
+      startDate: sourceWindow.startDate,
+    },
     target: { spreadsheetId: settings.targetSpreadsheetId, workbookTitle: targets.expense.workbookTitle || targets.receipt.workbookTitle, tabName: [targets.receipt.tabName, targets.expense.tabName].filter(Boolean).join(" + ") },
     targets,
     routing: {
@@ -9572,8 +9660,12 @@ async function crbrLoadRemarks(rowIds = []) {
   }]));
 }
 
+// `raw` is the entire spreadsheet row as an array, kept on the record while the
+// backend works with it. Now that `cells` carries the same values keyed by
+// header — and nothing downstream reads `raw` — it is dropped on the way out
+// rather than doubling the size of a response that can run to thousands of rows.
 function crbrAttachRemarks(records = [], remarkMap = new Map()) {
-  return records.map((record) => ({ ...record, remark: remarkMap.get(record.id) || null }));
+  return records.map(({ raw, ...record }) => ({ ...record, remark: remarkMap.get(record.id) || null }));
 }
 
 function crbrSummariseNameIssues(rows = []) {
@@ -9685,7 +9777,20 @@ async function buildCrbrIntake() {
   return {
     enabled: true,
     settings,
-    raw: { spreadsheetId: settings.rawSpreadsheetId, workbookTitle: raw.workbookTitle, tabName: raw.tabName, rows: raw.records.length },
+    raw: {
+      spreadsheetId: settings.rawSpreadsheetId,
+      workbookTitle: raw.workbookTitle,
+      tabName: raw.tabName,
+      rows: raw.records.length,
+      // Header names and their keys, up to and including Total. Remarks and
+      // anything past it are deliberately absent — they never sync.
+      columns: (() => {
+        const { lastIndex } = crbrSyncBounds(raw.headers);
+        return raw.headers.slice(0, lastIndex + 1)
+          .map((header) => ({ label: crbrCleanHeader(header), key: crbrHeaderKey(header) }))
+          .filter((column) => column.key);
+      })(),
+    },
     mam: { spreadsheetId: settings.sourceSpreadsheetId, workbookTitle: mam.workbookTitle, tabName: mam.tabName, rows: mam.records.length },
     skippedByStartDate: { before: windowed.skippedBefore, undated: windowed.skippedUndated, startDate: windowed.startDate },
     newRows: newRowsWithRemarks,
@@ -9740,8 +9845,13 @@ async function importCrbrIntoMamSheet(rowIds = [], actor = null) {
 
   await crbrEnsureGridRows(sheets, settings.sourceSpreadsheetId, mam.tab, endRow);
   await crbrFormatWrittenRows(sheets, settings.sourceSpreadsheetId, mam.tab, mam.headerRow, startRow, endRow);
-  const rows = selected.map((record) => crbrTargetRowForHeaders(record, mam.headers, mam.map));
-  const endColumn = columnName(Math.max(mam.headers.length, 13));
+  // Copied across by header name, so every column the two sheets share travels —
+  // Cash, all nineteen bank accounts, Total — rather than the handful of fields
+  // the old fixed map knew about. The write stops at Total, which leaves Mam's
+  // Remarks column beyond it untouched.
+  const rows = selected.map((record) => crbrRowByHeaderName(record, mam.headers));
+  const { lastIndex: mamLastIndex } = crbrSyncBounds(mam.headers);
+  const endColumn = columnName(mamLastIndex + 1);
   await sheets.spreadsheets.values.update({
     spreadsheetId: settings.sourceSpreadsheetId,
     range: `${escapeSheetName(mam.tabName)}!A${startRow}:${endColumn}${endRow}`,

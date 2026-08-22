@@ -1417,16 +1417,22 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const noWorkingDaySet = useMemo(() => new Set((noWorkingDays || []).map((day) => day.date)), [noWorkingDays]);
 
   async function saveNoWorkingDay() {
-    if (!nwdForm.date) { toast.error("Pick a date first"); return; }
+    if (!nwdForm.date) { hrToast.error("Pick a date first"); return; }
     try {
       setNwdSaving(true);
-      const result = await api("/hr/attendance/no-working-days", { method: "POST", body: JSON.stringify(nwdForm) });
+      const response = await fetch(`${API_URL}/hr/attendance/no-working-days`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nwdForm),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not mark the day");
       setNoWorkingDays(result.days || []);
+      hrToast.success(`${formatDateLabel(nwdForm.date)} marked as a no working day`);
       setNwdForm({ date: todayInput(), label: "" });
-      toast.success(`${formatDateLabel(nwdForm.date)} marked as a no working day`);
-      await loadHr({ quiet: true });
+      await loadHr();
     } catch (error) {
-      toast.error(error.message || "Could not mark the day");
+      hrToast.error(error.message || "Could not mark the day");
     } finally {
       setNwdSaving(false);
     }
@@ -1435,12 +1441,14 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   async function removeNoWorkingDay(date) {
     try {
       setNwdSaving(true);
-      const result = await api(`/hr/attendance/no-working-days/${date}`, { method: "DELETE" });
+      const response = await fetch(`${API_URL}/hr/attendance/no-working-days/${date}`, { method: "DELETE" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not remove the day");
       setNoWorkingDays(result.days || []);
-      toast.success(`${formatDateLabel(date)} is a working day again`);
-      await loadHr({ quiet: true });
+      hrToast.success(`${formatDateLabel(date)} is a working day again`);
+      await loadHr();
     } catch (error) {
-      toast.error(error.message || "Could not remove the day");
+      hrToast.error(error.message || "Could not remove the day");
     } finally {
       setNwdSaving(false);
     }

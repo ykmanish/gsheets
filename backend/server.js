@@ -5543,7 +5543,9 @@ app.get("/hr/attendance/no-working-days", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "hr-attendance")) return res.status(403).json({ error: "HR attendance access required" });
     const db = await connectAuthDb();
-    res.json({ days: await loadNoWorkingDays(db, attendanceQueryDate(`${req.query?.month || ""}-01`).slice(0, 7)) });
+    // ?month=YYYY-MM narrows it; anything else returns every marked day.
+    const month = /^\d{4}-\d{2}$/.test(String(req.query?.month || "")) ? String(req.query.month) : "";
+    res.json({ days: await loadNoWorkingDays(db, month) });
   } catch (error) {
     console.error("No-working-day load error:", error);
     res.status(500).json({ error: "Could not load no-working days" });

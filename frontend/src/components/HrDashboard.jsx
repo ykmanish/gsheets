@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { BadgeCheck, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, ExternalLink, Eye, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, LogIn, LogOut, Mail, MapPin, Maximize2, MessageCircle, MessageSquare, Minimize2, Navigation, Pencil, Phone, Plus, ReceiptText, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserRound, Users, WalletCards, X } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, CalendarOff, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, ExternalLink, Eye, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, Loader2, LogIn, LogOut, Mail, MapPin, Maximize2, MessageCircle, MessageSquare, Minimize2, Navigation, Pencil, Phone, Plus, ReceiptText, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserRound, Users, WalletCards, X } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
@@ -550,6 +550,12 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceAdjustOpen, setAttendanceAdjustOpen] = useState(false);
   const [attendanceAdjustSaving, setAttendanceAdjustSaving] = useState(false);
   const [attendanceAdjustForm, setAttendanceAdjustForm] = useState({ userId: "", date: todayInput(), clockInTime: "10:30", clockOutTime: "19:30", workMode: "office", reason: "" });
+  // The Adjustments drawer holds two unrelated jobs, so it carries a tab rather
+  // than a second drawer. "nwd" is the company-holiday list.
+  const [adjustTab, setAdjustTab] = useState("time");
+  const [noWorkingDays, setNoWorkingDays] = useState([]);
+  const [nwdForm, setNwdForm] = useState({ date: todayInput(), label: "" });
+  const [nwdSaving, setNwdSaving] = useState(false);
   const [attendanceSearchResults, setAttendanceSearchResults] = useState([]);
   const [attendanceForm, setAttendanceForm] = useState({ address: "", latitude: "", longitude: "", radiusMeters: 100, googleSheetLink: "" });
   const [attendanceDateFilter, setAttendanceDateFilter] = useState({ startDate: todayInput(), endDate: todayInput() });
@@ -602,6 +608,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       }
       const overview = await api(`/hr/overview${params.toString() ? `?${params.toString()}` : ""}`);
       setData(overview);
+      setNoWorkingDays(overview?.noWorkingDays || []);
       if (overview?.attendanceSettings) {
         setAttendanceForm({
           address: overview.attendanceSettings.address || "",
@@ -885,6 +892,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         { code: "HF", label: "Half Day", fill: [221, 214, 254], text: [91, 33, 182] },
         { code: "-", label: "Absent", fill: [254, 226, 226], text: [220, 38, 38] },
         { code: "NCO", label: "No Clock Out", fill: [255, 237, 213], text: [234, 88, 12] },
+        { code: "NWD", label: "No Working Day", fill: [204, 251, 241], text: [15, 118, 110] },
         { code: "SUN", label: "Sunday", fill: [240, 240, 240], text: [40, 40, 40] },
       ];
       const pageRight = doc.internal.pageSize.getWidth() - 14;
@@ -967,6 +975,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
           const isSunday = new Date(date).getDay() === 0;
           if (isSunday) {
             row.push("SUN");
+          } else if (noWorkingDaySet.has(date)) {
+            // A declared holiday: the column reads NWD for everyone and counts
+            // towards present, so nobody is marked absent for a day off.
+            row.push("NWD");
+            presentDays += 1;
           } else {
             const val = emp.days[date] || "-";
             row.push(val);
@@ -989,6 +1002,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         const dayTotalMins = filteredAttendanceRecords.filter(r => r.date === date).reduce((acc, r) => acc + (r.workMinutes || 0), 0);
         if (isSunday) {
           footRow.push("SUN");
+        } else if (noWorkingDaySet.has(date)) {
+          footRow.push("NWD");
         } else {
           footRow.push(dayTotalMins ? (dayTotalMins / 60).toFixed(1) : "-");
         }
@@ -998,11 +1013,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       Object.values(employeeMap).forEach(emp => {
         monthDates.forEach(date => {
           const isSunday = new Date(date).getDay() === 0;
-          if (!isSunday) {
-            const val = emp.days[date] || "-";
-            if (val === "-") totalAbsents += 1;
-            else if (val !== "PL" && val !== "L" && val !== "HF") totalPresents += 1;
-          }
+          if (isSunday) return;
+          if (noWorkingDaySet.has(date)) { totalPresents += 1; return; }
+          const val = emp.days[date] || "-";
+          if (val === "-") totalAbsents += 1;
+          else if (val !== "PL" && val !== "L" && val !== "HF") totalPresents += 1;
         });
       });
 
@@ -1031,6 +1046,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             if (data.cell.raw === "-") {
               data.cell.styles.fillColor = [254, 226, 226]; // light red
               data.cell.styles.textColor = [220, 38, 38];   // red text
+            } else if (data.cell.raw === "NWD") {
+              data.cell.styles.fillColor = [204, 251, 241]; // pale teal
+              data.cell.styles.textColor = [15, 118, 110];  // deep teal
+              data.cell.styles.fontStyle = "bold";
             } else if (data.cell.raw === "NCO") {
               data.cell.styles.fillColor = [255, 237, 213]; // light orange
               data.cell.styles.textColor = [234, 88, 12];   // dark orange
@@ -1391,6 +1410,39 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       hrToast.error(error.message || "Could not update attendance");
     } finally {
       setEmployeeRemoteSavingId("");
+    }
+  }
+
+  // A Set of the marked dates, used by the grid and the PDF alike.
+  const noWorkingDaySet = useMemo(() => new Set((noWorkingDays || []).map((day) => day.date)), [noWorkingDays]);
+
+  async function saveNoWorkingDay() {
+    if (!nwdForm.date) { toast.error("Pick a date first"); return; }
+    try {
+      setNwdSaving(true);
+      const result = await api("/hr/attendance/no-working-days", { method: "POST", body: JSON.stringify(nwdForm) });
+      setNoWorkingDays(result.days || []);
+      setNwdForm({ date: todayInput(), label: "" });
+      toast.success(`${formatDateLabel(nwdForm.date)} marked as a no working day`);
+      await loadHr({ quiet: true });
+    } catch (error) {
+      toast.error(error.message || "Could not mark the day");
+    } finally {
+      setNwdSaving(false);
+    }
+  }
+
+  async function removeNoWorkingDay(date) {
+    try {
+      setNwdSaving(true);
+      const result = await api(`/hr/attendance/no-working-days/${date}`, { method: "DELETE" });
+      setNoWorkingDays(result.days || []);
+      toast.success(`${formatDateLabel(date)} is a working day again`);
+      await loadHr({ quiet: true });
+    } catch (error) {
+      toast.error(error.message || "Could not remove the day");
+    } finally {
+      setNwdSaving(false);
     }
   }
 
@@ -2225,8 +2277,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </button>
               {data?.canManageHr && (
                 <>
-                  <button type="button" onClick={() => openAttendanceAdjustment()} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#171714] px-5 text-sm font-bold text-white">
-                    <Clock3 className="h-4 w-4" /> Adjust time
+                  <button type="button" onClick={() => { setAdjustTab("time"); openAttendanceAdjustment(); }} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#171714] px-5 text-sm font-bold text-white">
+                    <Clock3 className="h-4 w-4" /> Adjustments
                   </button>
                   <button type="button" onClick={() => { setAttendanceSettingsExpanded(false); setAttendanceSettingsOpen(true); }} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f]">
                     <SlidersHorizontal className="h-4 w-4" /> Settings
@@ -2410,12 +2462,99 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
           <form onMouseDown={(event) => event.stopPropagation()} onSubmit={saveAttendanceAdjustment} className={`employee-report-drawer relative flex h-full w-full max-w-xl flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.32)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`}>
             <div className={`flex items-start justify-between border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
               <div>
-                <h2 className="text-xl font-black">Adjust attendance time</h2>
-                <p className={`mt-1 text-xs ${muted}`}>Set clock in and clock out in IST for the selected employee/date.</p>
+                <h2 className="text-xl font-black">Adjustments</h2>
+                <p className={`mt-1 text-xs ${muted}`}>
+                  {adjustTab === "time"
+                    ? "Set clock in and clock out in IST for the selected employee/date."
+                    : "Mark a holiday or shutdown day. Everyone counts as present and the column reads NWD."}
+                </p>
+                <div className={`mt-3 inline-flex rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f2f4f0]"}`}>
+                  {[{ id: "time", label: "Time" }, { id: "nwd", label: "No working day" }].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setAdjustTab(tab.id)}
+                      className={`h-8 rounded-full px-4 text-xs font-bold transition ${adjustTab === tab.id ? "bg-[#171714] text-white" : darkMode ? "text-white/60" : "text-slate-600"}`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <button type="button" onClick={() => setAttendanceAdjustOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
             </div>
             <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
+              {adjustTab === "nwd" ? (
+                <section className={`rounded-[26px] border p-4 sm:p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
+                  <div className={`rounded-[22px] p-4 ${darkMode ? "bg-teal-300/[0.08]" : "bg-[#ecfdf7]"}`}>
+                    <p className={`text-sm font-black ${darkMode ? "text-teal-200" : "text-[#0f766e]"}`}>What a no working day does</p>
+                    <p className={`mt-1.5 text-xs leading-5 ${muted}`}>
+                      The whole column reads <b>NWD</b> for every employee and the day counts towards present days, so a company holiday or shutdown never shows up as absence. Hours anyone did work that day still count towards their total. Sundays are already non-working, so marking one changes nothing.
+                    </p>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,180px)_1fr_auto] sm:items-end">
+                    <label className="block">
+                      <span className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Date</span>
+                      <input
+                        type="date"
+                        value={nwdForm.date}
+                        onChange={(event) => setNwdForm((current) => ({ ...current, date: event.target.value }))}
+                        className={`mt-1.5 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-[#0b1016] text-white/85" : "border-black/10 bg-white text-black/75"}`}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Reason (optional)</span>
+                      <input
+                        value={nwdForm.label}
+                        onChange={(event) => setNwdForm((current) => ({ ...current, label: event.target.value }))}
+                        placeholder="Diwali, Independence Day, office shutdown..."
+                        className={`mt-1.5 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-[#0b1016] text-white/85 placeholder:text-white/25" : "border-black/10 bg-white text-black/75 placeholder:text-black/30"}`}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={saveNoWorkingDay}
+                      disabled={nwdSaving || !nwdForm.date}
+                      className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0f766e] px-5 text-sm font-black text-white transition hover:bg-[#115e59] disabled:opacity-50"
+                    >
+                      {nwdSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarOff className="h-4 w-4" />} Mark day
+                    </button>
+                  </div>
+
+                  <div className="mt-6">
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Marked days</p>
+                    {noWorkingDays.length ? (
+                      <div className="mt-2 grid gap-2">
+                        {noWorkingDays.map((day) => (
+                          <div key={day.date} className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f6faf2]"}`}>
+                            <div className="min-w-0">
+                              <p className="text-sm font-black">{formatDateLabel(day.date)}</p>
+                              <p className={`truncate text-xs ${muted}`}>
+                                {day.label || "No reason noted"}
+                                {day.markedByName ? ` · marked by ${day.markedByName}` : ""}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeNoWorkingDay(day.date)}
+                              disabled={nwdSaving}
+                              className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition disabled:opacity-50 ${darkMode ? "bg-rose-400/10 text-rose-200 hover:bg-rose-400/20" : "bg-rose-50 text-rose-600 hover:bg-rose-100"}`}
+                              title="Make this a working day again"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={`mt-2 rounded-2xl px-4 py-6 text-center text-sm ${darkMode ? "bg-white/[0.03] text-white/45" : "bg-[#f6faf2] text-black/45"}`}>
+                        No days marked yet. Pick a date above to add one.
+                      </p>
+                    )}
+                  </div>
+                </section>
+              ) : (
               <section className={`rounded-[26px] border p-4 sm:p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
                 <div className={`mb-5 grid gap-3 rounded-[22px] p-4 sm:grid-cols-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f6faf2]"}`}>
                   <div>
@@ -2481,10 +2620,13 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                   </label>
                 </div>
               </section>
+              )}
             </div>
             <div className={`flex shrink-0 items-center justify-between gap-4 border-t px-6 py-5 ${darkMode ? "border-white/[0.07] bg-[#080c11]" : "border-black/10 bg-white"}`}>
               <button type="button" onClick={() => setAttendanceAdjustOpen(false)} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
+              {adjustTab === "time" ? (
               <button disabled={attendanceAdjustSaving || !attendanceAdjustForm.userId || !attendanceAdjustForm.date || !attendanceAdjustForm.clockInTime || (!attendanceAdjustmentIsToday && !attendanceAdjustForm.clockOutTime)} className="h-11 min-w-[180px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">{attendanceAdjustSaving ? "Saving..." : "Save adjustment"}</button>
+              ) : null}
             </div>
           </form>
         </div>

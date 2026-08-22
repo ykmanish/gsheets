@@ -66,6 +66,7 @@ const SUPER_ADMIN_PASSWORD = "Admin@9579";
 const DEFAULT_DMR_SPREADSHEET_ID = process.env.DMR_SPREADSHEET_ID || "";
 const DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID = process.env.DMR_TOMORROW_PLAN_SPREADSHEET_ID || "1592O80hnVL7scepUdvi1hX72MyWIfiP61vh-94TmTaw";
 const DEFAULT_MRN_SPREADSHEET_ID = process.env.MRN_SPREADSHEET_ID || "1Vfjgihl1Cf4Xe9SdBDoJWQHxaEGkn8c2KhH6qN92BJw";
+const DEFAULT_PRN_SPREADSHEET_ID = process.env.PRN_SPREADSHEET_ID || "1ueqDLa6WUN_1Fae44eo_QgrS4Rx-2AhdrbmYVXhcv1M";
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "documents", label: "Documents" },
@@ -73,6 +74,7 @@ const MENU_ITEMS = [
   { id: "projects", label: "Project Control", group: "projects" },
   { id: "project-dmr", label: "DMR", parent: "projects", group: "projects" },
   { id: "project-mrn", label: "MRN", parent: "projects", group: "projects" },
+  { id: "project-prn", label: "PRN", parent: "projects", group: "projects" },
   { id: "project-stock", label: "Stock", parent: "projects", group: "projects" },
   { id: "site-images", label: "Site Images", parent: "projects", group: "projects" },
   { id: "hr-dashboard", label: "HR Dashboard", group: "hr" },
@@ -116,6 +118,7 @@ const PRIVILEGE_ITEMS = [
   { id: "manage_project_control", label: "Edit Project Control tasks, phases, files, and projects" },
   { id: "edit_project_dmr", label: "Fill project DMR records" },
   { id: "edit_project_mrn", label: "Add MRN records" },
+  { id: "manage_project_prn", label: "Manage PRN sheet and WhatsApp automation" },
   { id: "manage_project_stock", label: "Manage project stock sheets" },
   { id: "manage_hr", label: "Manage HR employees, documents, salary slips, and leave" },
   { id: "manage_accounts", label: "Manage accounts and CRBR sync" },
@@ -221,6 +224,7 @@ const MCP_ALLOWED_COLLECTIONS = new Set(
     "forumSettings",
     "hrAttendanceRecords",
     "hrLeaveRequests",
+    "hrNoWorkingDays",
     "hrSettings",
     "personalTodos",
     "platformSettings",
@@ -819,7 +823,7 @@ function receiveWhatsAppWebhook(req, res) {
       });
     }
     for (const message of result?.received || []) {
-      void handleMrnWhatsappReply(message).catch((error) => console.error("MRN WhatsApp reply error:", error.message));
+      void handleApprovalWhatsappReply(message).catch((error) => console.error("Approval WhatsApp reply error:", error.message));
     }
     res.sendStatus(200);
   } catch (error) {
@@ -4800,6 +4804,7 @@ app.get("/hr/overview", async (req, res) => {
           startDate: req.query?.attendanceStartDate || req.query?.startDate,
           endDate: req.query?.attendanceEndDate || req.query?.endDate,
         }),
+        noWorkingDays: await loadNoWorkingDays(db),
       });
     }
     const query = canManageHr ? {} : { _id: new ObjectId(req.authUser.id) };
@@ -4825,6 +4830,7 @@ app.get("/hr/overview", async (req, res) => {
         startDate: req.query?.attendanceStartDate || req.query?.startDate,
         endDate: req.query?.attendanceEndDate || req.query?.endDate,
       }),
+      noWorkingDays: await loadNoWorkingDays(db),
     });
   } catch (error) {
     console.error("HR overview error:", error);
@@ -5380,6 +5386,28 @@ function attendanceIstDateTime(dateValue, timeValue, fieldLabel = "time") {
   return value;
 }
 
+// A company holiday. Nobody is expected in, so the whole column reads NWD and
+// everyone counts as present for the day — it must never register as absent
+// against someone who was simply told not to come.
+const NWD_MARK = "NWD";
+
+async function loadNoWorkingDays(db, month = "") {
+  const query = month ? { date: { $gte: `${month}-01`, $lte: `${month}-31` } } : {};
+  const rows = await db.collection("hrNoWorkingDays").find(query).sort({ date: 1 }).toArray();
+  return rows.map((row) => ({
+    date: row.date,
+    label: row.label || "",
+    markedByName: row.markedByName || "",
+    markedAt: row.markedAt || null,
+  }));
+}
+
+// Sunday already stands outside the working week, so marking one adds nothing
+// and SUN keeps precedence in the grid.
+function noWorkingDaySet(days = []) {
+  return new Set(days.map((day) => (typeof day === "string" ? day : day.date)).filter(Boolean));
+}
+
 function attendancePivotValue(record = {}) {
   if (record.status === "leave") return "L";
   if (record.status === "half-day") return "HF";
@@ -5478,6 +5506,7 @@ app.get("/hr/attendance", async (req, res) => {
         startDate: req.query?.startDate,
         endDate: req.query?.endDate,
       }),
+      noWorkingDays: await loadNoWorkingDays(db),
     });
   } catch (error) {
     console.error("Attendance load error:", error);
@@ -5510,6 +5539,56 @@ app.put("/hr/attendance/settings", async (req, res) => {
   }
 });
 
+app.get("/hr/attendance/no-working-days", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "hr-attendance")) return res.status(403).json({ error: "HR attendance access required" });
+    const db = await connectAuthDb();
+    res.json({ days: await loadNoWorkingDays(db, attendanceQueryDate(`${req.query?.month || ""}-01`).slice(0, 7)) });
+  } catch (error) {
+    console.error("No-working-day load error:", error);
+    res.status(500).json({ error: "Could not load no-working days" });
+  }
+});
+
+app.post("/hr/attendance/no-working-days", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
+    const date = attendanceQueryDate(req.body?.date);
+    if (!date) return res.status(400).json({ error: "A valid date is required" });
+    const db = await connectAuthDb();
+    const doc = {
+      date,
+      label: projectText(req.body?.label, 120),
+      markedAt: new Date(),
+      markedById: String(req.authUser.id || ""),
+      markedByName: req.authUser.displayName || req.authUser.username || "User",
+    };
+    // Upsert on the date, so marking the same day twice edits the note rather
+    // than leaving two rows that would each claim the column.
+    await db.collection("hrNoWorkingDays").updateOne({ date }, { $set: doc }, { upsert: true });
+    addActivityLog({ req, action: "Marked a no-working day", target: date, details: { label: doc.label } });
+    res.json({ success: true, days: await loadNoWorkingDays(db) });
+  } catch (error) {
+    console.error("No-working-day save error:", error);
+    res.status(500).json({ error: "Could not mark the day" });
+  }
+});
+
+app.delete("/hr/attendance/no-working-days/:date", async (req, res) => {
+  try {
+    if (!req.authUser?.isSuperAdmin && !hasPrivilege(req, "manage_hr")) return res.status(403).json({ error: "HR access required" });
+    const date = attendanceQueryDate(req.params?.date);
+    if (!date) return res.status(400).json({ error: "A valid date is required" });
+    const db = await connectAuthDb();
+    await db.collection("hrNoWorkingDays").deleteOne({ date });
+    addActivityLog({ req, action: "Removed a no-working day", target: date });
+    res.json({ success: true, days: await loadNoWorkingDays(db) });
+  } catch (error) {
+    console.error("No-working-day delete error:", error);
+    res.status(500).json({ error: "Could not remove the day" });
+  }
+});
+
 async function buildMonthlyAttendancePivot(db, targetDate) {
   const month = targetDate.substring(0, 7);
   const [yearStr, monthStr] = month.split("-");
@@ -5525,6 +5604,7 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
 
   const reqMock = { authUser: { isSuperAdmin: true } };
   const records = await loadMonthlyHrAttendanceRecords(db, month);
+  const noWorkingDays = noWorkingDaySet(await loadNoWorkingDays(db, month));
   const allLeaves = await loadHrLeaveRequests(reqMock, db, true);
   const approvedLeaves = allLeaves.filter(r => r.status === "approved");
 
@@ -5589,6 +5669,11 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
       const isSunday = new Date(date).getDay() === 0;
       if (isSunday) {
         row.push("SUN");
+      } else if (noWorkingDays.has(date)) {
+        // A declared holiday outranks whatever the clock says: the column reads
+        // NWD for everyone and the day counts towards present, never absent.
+        row.push(NWD_MARK);
+        presentDays += 1;
       } else {
         const val = emp.days[date] || "-";
         row.push(val);
@@ -5611,20 +5696,23 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
     const dayTotalMins = records.filter(r => r.date === date).reduce((acc, r) => acc + (r.workMinutes || 0), 0);
     if (isSunday) {
       footRow.push("SUN");
+    } else if (noWorkingDays.has(date)) {
+      footRow.push(NWD_MARK);
     } else {
       footRow.push(dayTotalMins ? (dayTotalMins / 60).toFixed(1) : "-");
     }
+    // Hours genuinely worked on a holiday still count towards the month's total.
     grandTotalMinutes += dayTotalMins;
   });
   
   Object.values(employeeMap).forEach(emp => {
     monthDates.forEach(date => {
       const isSunday = new Date(date).getDay() === 0;
-      if (!isSunday) {
-        const val = emp.days[date] || "-";
-        if (val === "-") totalAbsents += 1;
-        else if (val !== "PL" && val !== "L" && val !== "HF") totalPresents += 1;
-      }
+      if (isSunday) return;
+      if (noWorkingDays.has(date)) { totalPresents += 1; return; }
+      const val = emp.days[date] || "-";
+      if (val === "-") totalAbsents += 1;
+      else if (val !== "PL" && val !== "L" && val !== "HF") totalPresents += 1;
     });
   });
 
@@ -5740,6 +5828,8 @@ async function pushAttendanceToGoogleSheet(db, targetDate, manualSheetLink = nul
           format = { backgroundColor: { red: 243/255, green: 244/255, blue: 246/255 }, textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 } } };
         } else if (val === "-") {
           format = { backgroundColor: { red: 254/255, green: 226/255, blue: 226/255 }, textFormat: { foregroundColor: { red: 220/255, green: 38/255, blue: 38/255 } } };
+        } else if (val === NWD_MARK) {
+          format = { backgroundColor: { red: 204/255, green: 251/255, blue: 241/255 }, textFormat: { foregroundColor: { red: 15/255, green: 118/255, blue: 110/255 }, bold: true } };
         } else if (val === "NCO") {
           format = { backgroundColor: { red: 255/255, green: 237/255, blue: 213/255 }, textFormat: { foregroundColor: { red: 234/255, green: 88/255, blue: 12/255 }, bold: true } };
         } else if (val === "PL") {
@@ -5834,6 +5924,9 @@ app.get("/hr/attendance/export/excel", async (req, res) => {
         } else if (val === "-") {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
           cell.font = { color: { argb: 'FFDC2626' } };
+        } else if (val === NWD_MARK) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCFBF1' } };
+          cell.font = { color: { argb: 'FF0F766E' }, bold: true };
         } else if (val === "NCO") {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
           cell.font = { color: { argb: 'FFEA580C' }, bold: true };
@@ -6696,6 +6789,7 @@ const dmrPdfRefreshes = new Map();
 const DMR_PDF_CACHE_TTL_MS = Math.max(30_000, Number(process.env.DMR_PDF_CACHE_TTL_MS) || 5 * 60_000);
 const DMR_PDF_RETRY_BACKOFF_MS = Math.max(30_000, Number(process.env.DMR_PDF_RETRY_BACKOFF_MS) || 2 * 60_000);
 const mrnSettingsPath = path.join(dataDir, "mrn-settings.json");
+const prnSettingsPath = path.join(dataDir, "prn-settings.json");
 if (!fs.existsSync(dmrPdfDir)) fs.mkdirSync(dmrPdfDir, { recursive: true });
 if (!fs.existsSync(dmrAiCacheDir)) fs.mkdirSync(dmrAiCacheDir, { recursive: true });
 if (!fs.existsSync(sheetSnapshotDir)) fs.mkdirSync(sheetSnapshotDir, { recursive: true });
@@ -6719,6 +6813,11 @@ let dmrSettings = {
 let mrnSettings = {
   spreadsheetId: normalizeSpreadsheetId(DEFAULT_MRN_SPREADSHEET_ID),
   driveFolderId: "",
+  linkedAt: null,
+  linkedBy: null,
+};
+let prnSettings = {
+  spreadsheetId: normalizeSpreadsheetId(DEFAULT_PRN_SPREADSHEET_ID),
   linkedAt: null,
   linkedBy: null,
 };
@@ -6825,6 +6924,19 @@ if (fs.existsSync(mrnSettingsPath)) {
     };
   } catch (error) {
     console.error("Error loading MRN settings:", error);
+  }
+}
+
+if (fs.existsSync(prnSettingsPath)) {
+  try {
+    const savedPrnSettings = JSON.parse(fs.readFileSync(prnSettingsPath, "utf8"));
+    prnSettings = {
+      ...prnSettings,
+      ...(savedPrnSettings || {}),
+      spreadsheetId: normalizeSpreadsheetId(savedPrnSettings?.spreadsheetId) || normalizeSpreadsheetId(DEFAULT_PRN_SPREADSHEET_ID),
+    };
+  } catch (error) {
+    console.error("Error loading PRN settings:", error);
   }
 }
 
@@ -7030,6 +7142,14 @@ function saveMrnSettings() {
   }
 }
 
+function savePrnSettings() {
+  try {
+    fs.writeFileSync(prnSettingsPath, JSON.stringify(prnSettings, null, 2));
+  } catch (error) {
+    console.error("Error saving PRN settings:", error);
+  }
+}
+
 function publicDmrSettings() {
   const spreadsheetId = normalizeSpreadsheetId(dmrSettings.spreadsheetId);
   return {
@@ -7064,6 +7184,22 @@ function publicMrnSettings() {
 function getActiveMrnSpreadsheetId() {
   const spreadsheetId = normalizeSpreadsheetId(mrnSettings.spreadsheetId);
   if (!spreadsheetId) throw new Error("No MRN sheet is linked yet.");
+  return spreadsheetId;
+}
+
+function publicPrnSettings() {
+  const spreadsheetId = normalizeSpreadsheetId(prnSettings.spreadsheetId);
+  return {
+    linked: Boolean(spreadsheetId),
+    spreadsheetId,
+    linkedAt: prnSettings.linkedAt || null,
+    linkedBy: prnSettings.linkedBy || null,
+  };
+}
+
+function getActivePrnSpreadsheetId() {
+  const spreadsheetId = normalizeSpreadsheetId(prnSettings.spreadsheetId);
+  if (!spreadsheetId) throw new Error("No PRN sheet is linked yet.");
   return spreadsheetId;
 }
 
@@ -16506,6 +16642,132 @@ async function readMrnDashboard({ startDate, endDate, all = false } = {}) {
   };
 }
 
+const PRN_SHEET_NAME = "Form Responses 1";
+const PRN_SHEET_NAME_ALIASES = ["Form Responses 1", "Form_Responses1", "Form_Responses 1", "Form Responses1"];
+const PRN_FIELD_HEADERS = {
+  prnNo: ["PRN No", "Column 13", "Colum n 13", "Column13"],
+  timestamp: ["Timestamp"],
+  name: ["Name"],
+  vendorName: ["Vendor Name"],
+  project: ["Project/Site Name", "Project / Site Name", "Project Site Name", "Project Name"],
+  typeOfPayment: ["Type of Payment"],
+  amount: ["Amount"],
+  remark: ["Remark"],
+};
+
+function prnFieldForHeader(header = "") {
+  const key = normalizeHeaderKey(header);
+  for (const [field, aliases] of Object.entries(PRN_FIELD_HEADERS)) {
+    if (aliases.some((alias) => normalizeHeaderKey(alias) === key)) return field;
+  }
+  return "";
+}
+
+function normalizedPrnNumber(value = "") {
+  const match = projectText(value).match(/^prn\s*[- ]?\s*0*(\d+)$/i);
+  return match ? `prn${Number(match[1])}` : "";
+}
+
+function mapPrnRows(values = []) {
+  const headers = values[0] || [];
+  const headerMap = headers.reduce((map, header, index) => {
+    const key = normalizeHeaderKey(header);
+    if (!key) return map;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(index);
+    return map;
+  }, new Map());
+  const valueAt = (row, names = []) => {
+    for (const name of names) {
+      const indices = headerMap.get(normalizeHeaderKey(name)) || [];
+      for (const index of indices) {
+        const value = projectText(row[index]);
+        if (value) return value;
+      }
+    }
+    return "";
+  };
+  const records = [];
+  for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    const row = values[rowIndex] || [];
+    const prnNo = valueAt(row, PRN_FIELD_HEADERS.prnNo) || `PRN-${rowIndex}`;
+    const timestamp = valueAt(row, PRN_FIELD_HEADERS.timestamp);
+    const name = valueAt(row, PRN_FIELD_HEADERS.name);
+    const vendorName = valueAt(row, PRN_FIELD_HEADERS.vendorName);
+    const project = valueAt(row, PRN_FIELD_HEADERS.project);
+    const typeOfPayment = valueAt(row, PRN_FIELD_HEADERS.typeOfPayment);
+    const amount = valueAt(row, PRN_FIELD_HEADERS.amount);
+    const remark = valueAt(row, PRN_FIELD_HEADERS.remark);
+    if (![prnNo, timestamp, name, vendorName, project, typeOfPayment, amount, remark].some(projectText)) continue;
+    records.push({
+      id: `${prnNo}:${rowIndex + 1}`,
+      rowNumber: rowIndex + 1,
+      prnNo,
+      timestamp,
+      date: parseMrnDate(timestamp),
+      name,
+      vendorName,
+      project,
+      typeOfPayment,
+      amount,
+      remark,
+    });
+  }
+  return { headers, records };
+}
+
+function prnAmountNumber(value = "") {
+  const match = projectText(value).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) || 0 : 0;
+}
+
+async function readPrnDashboard({ startDate, endDate, all = false } = {}) {
+  const spreadsheetId = getActivePrnSpreadsheetId();
+  await assertNativeGoogleSpreadsheet(spreadsheetId, "PRN sheet");
+  const sheets = await getDmrSpreadsheet(spreadsheetId);
+  const workbook = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets(properties(title))",
+  });
+  const sheetTitles = (workbook.data.sheets || []).map((sheet) => projectText(sheet.properties?.title)).filter(Boolean);
+  const titleByKey = new Map(sheetTitles.map((title) => [normalizeHeaderKey(title), title]));
+  const sheetName = PRN_SHEET_NAME_ALIASES.map((alias) => titleByKey.get(normalizeHeaderKey(alias))).find(Boolean)
+    || sheetTitles.find((title) => /form\s*_?\s*responses?\s*_?\s*1/i.test(title))
+    || sheetTitles[0]
+    || PRN_SHEET_NAME;
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${escapeSheetName(sheetName)}!A1:Z10000`,
+  });
+  const { records } = mapPrnRows(response.data.values || []);
+  const today = istDateKey(new Date());
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(String(startDate || "")) ? String(startDate) : addDaysToDateKey(today, -6);
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(String(endDate || "")) ? String(endDate) : today;
+  const filtered = records
+    .filter((record) => all || !record.date || (record.date >= start && record.date <= end))
+    .sort((a, b) => b.rowNumber - a.rowNumber || (b.date || "").localeCompare(a.date || ""));
+  const summarize = (items = []) => ({
+    total: items.length,
+    amount: items.reduce((sum, record) => sum + prnAmountNumber(record.amount), 0),
+    byPaymentType: items.reduce((result, record) => {
+      const type = projectText(record.typeOfPayment) || "Other";
+      result[type] = (result[type] || 0) + 1;
+      return result;
+    }, {}),
+  });
+  const sortedAllRecords = [...records].sort((a, b) => b.rowNumber - a.rowNumber || (b.date || "").localeCompare(a.date || ""));
+  return {
+    spreadsheetId,
+    sheetName,
+    startDate: start,
+    endDate: end,
+    all,
+    records: filtered,
+    summary: summarize(filtered),
+    allSummary: summarize(sortedAllRecords),
+  };
+}
+
 const MRN_HISTORY_FIELDS = [
   ["project", "Project / site"],
   ["materialRequestDate", "Request date"],
@@ -16917,6 +17179,36 @@ const MRN_WHATSAPP_DEFAULTS = {
     comment: "en",
   },
 };
+const PRN_WHATSAPP_SETTINGS_ID = "prn-whatsapp-automation-settings";
+const PRN_WHATSAPP_WATCH_INTERVAL_MS = Math.max(30_000, Number(process.env.PRN_WHATSAPP_WATCH_INTERVAL_MS) || 60_000);
+const PRN_WHATSAPP_WATCH_MAX_SENDS = Math.max(1, Number(process.env.PRN_WHATSAPP_WATCH_MAX_SENDS) || 1);
+const PRN_WHATSAPP_WATCHER_BASELINE_VERSION = "2026-08-22T00:00:00+05:30";
+let prnWhatsappWatcherTimer = null;
+let prnWhatsappWatcherRunning = false;
+const prnWhatsappRuntimeProcessedKeys = new Set();
+const pendingWhatsappComments = new Map();
+const PENDING_WHATSAPP_COMMENT_TTL_MS = 1000 * 60 * 30;
+const PRN_WHATSAPP_DEFAULTS = {
+  enabled: true,
+  approvalContactIds: [],
+  concernContactIds: [],
+  processedActionRequestPrns: [],
+  watcherBaselineRowNumber: 0,
+  watcherBaselineVersion: "",
+  watcherSpreadsheetId: "",
+  templates: {
+    actionRequest: "prn_action_request",
+    approved: "prn_approved_notification",
+    declined: "prn_declined_notification",
+    comment: "prn_comment_notification",
+  },
+  languages: {
+    actionRequest: "en",
+    approved: "en",
+    declined: "en",
+    comment: "en",
+  },
+};
 
 function serializeWhatsappContact(contact = {}) {
   return {
@@ -17253,6 +17545,13 @@ async function sendMrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
         templateName,
         language,
         templateParams: params,
+        templateButtons: eventName === "actionRequest"
+          ? [
+              { index: 0, payload: `MRN_APPROVE:${projectText(row.mrnNo)}` },
+              { index: 1, payload: `MRN_DECLINE:${projectText(row.mrnNo)}` },
+              { index: 2, payload: `MRN_COMMENT:${projectText(row.mrnNo)}` },
+            ]
+          : [],
       }, actor || { id: "system", displayName: "MRN WhatsApp automation" });
       const followupText = ["actionRequest", "approved"].includes(eventName) ? mrnDetailsFollowupText(row) : "";
       let followupMessage = null;
@@ -17365,7 +17664,8 @@ function parseMrnWhatsappAction(message = {}) {
     return {
       event: action === "approve" ? "approved" : action === "decline" ? "declined" : "comment",
       mrnNo: projectText(match[2]),
-      comment: action === "comment" ? "Comment requested from WhatsApp action" : "",
+      comment: "",
+      needsTypedComment: action === "comment",
     };
   }
   const text = raw.toLowerCase();
@@ -17375,6 +17675,22 @@ function parseMrnWhatsappAction(message = {}) {
   if (/decline|reject/.test(text)) return { event: "declined", mrnNo, comment: raw };
   if (/comment/.test(text)) return { event: "comment", mrnNo, comment: raw };
   return null;
+}
+
+async function promptForApprovalComment({ module = "MRN", from = "", recordNo = "", row = {}, actor = null } = {}) {
+  const phone = normalizePhone(from);
+  if (!phone || !recordNo) return false;
+  pendingWhatsappComments.set(phone, {
+    module,
+    recordNo,
+    rowNumber: row.rowNumber || null,
+    createdAt: Date.now(),
+  });
+  await whatsappService.sendMessage({
+    to: phone,
+    text: `Please type your comment for ${module} ${recordNo}. It will be forwarded to the concerned department.`,
+  }, actor || { id: "system", displayName: `${module} WhatsApp automation` });
+  return true;
 }
 
 async function handleMrnWhatsappReply(message = {}) {
@@ -17404,6 +17720,11 @@ async function handleMrnWhatsappReply(message = {}) {
     displayName: contact?.name || contact?.profileName || normalizePhone(message.from) || "WhatsApp",
     username: contact?.phone || normalizePhone(message.from),
   };
+  if (action.needsTypedComment) {
+    await promptForApprovalComment({ module: "MRN", from: message.from, recordNo: row.mrnNo || action.mrnNo, row, actor });
+    await recordMrnWhatsappLastRun({ event: "comment", status: "waiting_for_comment", mrnNo: row.mrnNo || action.mrnNo, recipients: 1, reason: "Waiting for typed WhatsApp comment" });
+    return { status: "waiting_for_comment" };
+  }
   const result = await sendMrnWhatsappAutomation({
     event: action.event,
     row,
@@ -17418,6 +17739,451 @@ async function handleMrnWhatsappReply(message = {}) {
   });
   return result;
 }
+
+async function getPrnWhatsappSettings() {
+  const db = await connectAuthDb();
+  const saved = await db.collection("platformSettings").findOne({ _id: PRN_WHATSAPP_SETTINGS_ID });
+  return {
+    ...PRN_WHATSAPP_DEFAULTS,
+    ...(saved?.settings || {}),
+    templates: { ...PRN_WHATSAPP_DEFAULTS.templates, ...(saved?.settings?.templates || {}) },
+    languages: { ...PRN_WHATSAPP_DEFAULTS.languages, ...(saved?.settings?.languages || {}) },
+    processedActionRequestPrns: Array.isArray(saved?.settings?.processedActionRequestPrns)
+      ? saved.settings.processedActionRequestPrns.map((item) => projectText(item)).filter(Boolean).slice(-1000)
+      : [],
+    watcherBaselineRowNumber: Number(saved?.settings?.watcherBaselineRowNumber) || 0,
+    watcherBaselineVersion: saved?.settings?.watcherBaselineVersion || "",
+    watcherSpreadsheetId: normalizeSpreadsheetId(saved?.settings?.watcherSpreadsheetId || ""),
+  };
+}
+
+async function savePrnWhatsappSettings(input = {}) {
+  const current = await getPrnWhatsappSettings();
+  const contactIds = new Set(whatsappService.listContacts().map((contact) => String(contact.id)));
+  const cleanIds = (value) => Array.isArray(value) ? value.map((id) => projectText(id)).filter((id) => id && contactIds.has(id)) : [];
+  const settings = {
+    enabled: input.enabled !== false,
+    approvalContactIds: cleanIds(input.approvalContactIds),
+    concernContactIds: cleanIds(input.concernContactIds),
+    templates: {
+      actionRequest: projectText(input.templates?.actionRequest) || PRN_WHATSAPP_DEFAULTS.templates.actionRequest,
+      approved: projectText(input.templates?.approved) || PRN_WHATSAPP_DEFAULTS.templates.approved,
+      declined: projectText(input.templates?.declined) || PRN_WHATSAPP_DEFAULTS.templates.declined,
+      comment: projectText(input.templates?.comment) || PRN_WHATSAPP_DEFAULTS.templates.comment,
+    },
+    languages: {
+      actionRequest: projectText(input.languages?.actionRequest) || PRN_WHATSAPP_DEFAULTS.languages.actionRequest,
+      approved: projectText(input.languages?.approved) || PRN_WHATSAPP_DEFAULTS.languages.approved,
+      declined: projectText(input.languages?.declined) || PRN_WHATSAPP_DEFAULTS.languages.declined,
+      comment: projectText(input.languages?.comment) || PRN_WHATSAPP_DEFAULTS.languages.comment,
+    },
+    processedActionRequestPrns: Array.isArray(current.processedActionRequestPrns) ? current.processedActionRequestPrns : [],
+    watcherBaselineRowNumber: Number(current.watcherBaselineRowNumber) || 0,
+    watcherBaselineVersion: current.watcherBaselineVersion || "",
+    watcherSpreadsheetId: normalizeSpreadsheetId(current.watcherSpreadsheetId || ""),
+    lastRun: current.lastRun || null,
+    updatedAt: new Date().toISOString(),
+  };
+  const db = await connectAuthDb();
+  await db.collection("platformSettings").updateOne(
+    { _id: PRN_WHATSAPP_SETTINGS_ID },
+    { $set: { _id: PRN_WHATSAPP_SETTINGS_ID, settings } },
+    { upsert: true },
+  );
+  return settings;
+}
+
+async function recordPrnWhatsappLastRun(run = {}) {
+  const db = await connectAuthDb();
+  const lastRun = {
+    at: new Date().toISOString(),
+    event: run.event || "actionRequest",
+    status: run.status || "unknown",
+    sent: Number(run.sent) || 0,
+    failed: Number(run.failed) || 0,
+    recipients: Number(run.recipients) || 0,
+    templateName: run.templateName || "",
+    language: run.language || "",
+    prnNo: run.prnNo || "",
+    reason: run.reason || run.results?.find((item) => item.reason)?.reason || "",
+    results: Array.isArray(run.results) ? run.results.slice(0, 20) : [],
+  };
+  await db.collection("platformSettings").updateOne(
+    { _id: PRN_WHATSAPP_SETTINGS_ID },
+    { $set: { "settings.lastRun": lastRun } },
+    { upsert: true },
+  );
+  return lastRun;
+}
+
+function prnWhatsappKey(value) {
+  return normalizedPrnNumber(value) || projectText(value).toLowerCase();
+}
+
+function prnWhatsappRecordKey(row = {}, spreadsheetId = "") {
+  return [normalizeSpreadsheetId(spreadsheetId), Number(row.rowNumber) || "", prnWhatsappKey(row.prnNo)].filter(Boolean).join(":");
+}
+
+async function markPrnWhatsappActionRequestProcessed(prnNo, rowNumber = 0, spreadsheetId = "") {
+  const key = prnWhatsappRecordKey({ prnNo, rowNumber }, spreadsheetId) || prnWhatsappKey(prnNo);
+  if (!key) return;
+  prnWhatsappRuntimeProcessedKeys.add(key);
+  const settings = await getPrnWhatsappSettings();
+  const next = [...new Set([...(settings.processedActionRequestPrns || []), key])].slice(-1000);
+  const db = await connectAuthDb();
+  await db.collection("platformSettings").updateOne(
+    { _id: PRN_WHATSAPP_SETTINGS_ID },
+    { $set: { "settings.processedActionRequestPrns": next } },
+    { upsert: true },
+  );
+}
+
+async function initializePrnWhatsappWatcherFromSheet(records = [], spreadsheetId = "") {
+  const maxRowNumber = records.reduce((max, row) => Math.max(max, Number(row.rowNumber) || 0), 0);
+  const baselineRowNumber = maxRowNumber;
+  const baselineRecords = records.filter((row) => (Number(row.rowNumber) || 0) <= baselineRowNumber);
+  const keys = baselineRecords.map((row) => prnWhatsappRecordKey(row, spreadsheetId)).filter(Boolean);
+  const db = await connectAuthDb();
+  await db.collection("platformSettings").updateOne(
+    { _id: PRN_WHATSAPP_SETTINGS_ID },
+    {
+      $set: {
+        "settings.processedActionRequestPrns": keys.slice(-1000),
+        "settings.watcherBaselineRowNumber": baselineRowNumber,
+        "settings.watcherBaselineVersion": PRN_WHATSAPP_WATCHER_BASELINE_VERSION,
+        "settings.watcherSpreadsheetId": normalizeSpreadsheetId(spreadsheetId),
+      },
+    },
+    { upsert: true },
+  );
+  return baselineRowNumber;
+}
+
+function prnWhatsappParams(row = {}, actorName = "User", comment = "") {
+  const clean = (value, fallback = "-") => {
+    const text = projectText(value, 900).replace(/\s+/g, " ").trim();
+    return text || fallback;
+  };
+  return {
+    actionRequest: [
+      clean(row.prnNo),
+      clean(row.project),
+      clean(row.name || actorName),
+      clean(row.vendorName),
+      clean(row.typeOfPayment),
+      clean(row.amount),
+      clean(row.remark),
+    ],
+    approved: [clean(row.prnNo), clean(row.project), clean(actorName, "Approved"), clean(row.vendorName), clean(row.amount)],
+    declined: [clean(row.prnNo), clean(row.project), clean(actorName, "Declined"), clean(comment || row.remark)],
+    comment: [clean(row.prnNo), clean(row.project), clean(actorName, "Commented"), clean(comment || row.remark)],
+  };
+}
+
+function prnDetailsFollowupText(row = {}) {
+  const clean = (value) => projectText(value, 1200).replace(/\s+/g, " ").trim();
+  const detailRows = [
+    ["PRN", row.prnNo],
+    ["Timestamp", row.timestamp],
+    ["Requested By", row.name],
+    ["Vendor", row.vendorName],
+    ["Project / Site", row.project],
+    ["Type of Payment", row.typeOfPayment],
+    ["Amount", row.amount],
+    ["Remark", row.remark],
+  ].map(([label, value]) => [label, clean(value)]).filter(([, value]) => value);
+  return detailRows.length ? [`PRN Details${clean(row.prnNo) ? ` - ${clean(row.prnNo)}` : ""}`, ...detailRows.map(([label, value]) => `${label}: ${value}`)].join("\n") : "";
+}
+
+async function sendPrnWhatsappAutomation({ event = "actionRequest", row = {}, actor = null, comment = "" } = {}) {
+  const settings = await getPrnWhatsappSettings();
+  const eventName = event || "actionRequest";
+  if (!settings.enabled) {
+    const lastRun = await recordPrnWhatsappLastRun({ event: eventName, status: "disabled", prnNo: row.prnNo, reason: "Automation is disabled" });
+    return { status: "disabled", sent: 0, failed: 0, results: [], lastRun };
+  }
+  const contactIds = eventName === "actionRequest" ? settings.approvalContactIds : settings.concernContactIds;
+  const allContacts = whatsappService.listContacts();
+  let contacts = allContacts.filter((contact) => contactIds.includes(contact.id) && normalizePhone(contact.phone));
+  if (eventName === "actionRequest" && !contacts.length) contacts = allContacts.filter((contact) => contact.source === "manual" && normalizePhone(contact.phone));
+  const templateName = settings.templates?.[eventName] || PRN_WHATSAPP_DEFAULTS.templates[eventName];
+  if (!templateName || !contacts.length) {
+    const reason = !templateName ? "Template name is missing" : "No selected WhatsApp contacts";
+    const lastRun = await recordPrnWhatsappLastRun({ event: eventName, status: "skipped", recipients: contacts.length, templateName, prnNo: row.prnNo, reason });
+    return { status: "skipped", sent: 0, failed: 0, results: [], lastRun };
+  }
+  const actorName = actor?.system ? "" : (actor?.displayName || actor?.username || "");
+  const params = prnWhatsappParams(row, actorName, comment)[eventName] || [];
+  const language = settings.languages?.[eventName] || PRN_WHATSAPP_DEFAULTS.languages[eventName] || "en";
+  const results = [];
+  for (const contact of contacts) {
+    try {
+      const message = await whatsappService.sendMessage({
+        to: contact.phone,
+        templateName,
+        language,
+        templateParams: params,
+        templateButtons: eventName === "actionRequest"
+          ? [
+              { index: 0, payload: `PRN_APPROVE:${projectText(row.prnNo)}` },
+              { index: 1, payload: `PRN_DECLINE:${projectText(row.prnNo)}` },
+              { index: 2, payload: `PRN_COMMENT:${projectText(row.prnNo)}` },
+            ]
+          : [],
+      }, actor || { id: "system", displayName: "PRN WhatsApp automation" });
+      const followupText = ["actionRequest", "approved"].includes(eventName) ? prnDetailsFollowupText(row) : "";
+      let followupMessage = null;
+      if (followupText) {
+        try {
+          followupMessage = await whatsappService.sendMessage({ to: contact.phone, text: followupText }, actor || { id: "system", displayName: "PRN WhatsApp automation" });
+        } catch (followupError) {
+          console.error("PRN WhatsApp details follow-up failed:", followupError.message);
+        }
+      }
+      results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "sent", messageId: message.id, followupMessageId: followupMessage?.id || null });
+    } catch (error) {
+      results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "failed", reason: error.message });
+    }
+  }
+  const sent = results.filter((item) => item.status === "sent").length;
+  const failed = results.length - sent;
+  const status = sent ? "sent" : "failed";
+  const lastRun = await recordPrnWhatsappLastRun({ event: eventName, status, sent, failed, recipients: contacts.length, templateName, language, prnNo: row.prnNo, results });
+  return { status, sent, failed, results, lastRun };
+}
+
+function parsePrnWhatsappAction(message = {}) {
+  const raw = projectText(message.replyId || message.text || "").trim();
+  const match = raw.match(/^PRN_(APPROVE|DECLINE|COMMENT):(.+)$/i);
+  if (match) {
+    const action = match[1].toLowerCase();
+    return { event: action === "approve" ? "approved" : action === "decline" ? "declined" : "comment", prnNo: projectText(match[2]), comment: "", needsTypedComment: action === "comment" };
+  }
+  const text = raw.toLowerCase();
+  const labelMatch = text.match(/\b(prn[- ]?\d+)\b/i);
+  const prnNo = labelMatch?.[1] || "";
+  if (/approve/.test(text) && prnNo) return { event: "approved", prnNo, comment: "" };
+  if (/(decline|reject)/.test(text) && prnNo) return { event: "declined", prnNo, comment: raw };
+  if (/comment/.test(text) && prnNo) return { event: "comment", prnNo, comment: raw };
+  return null;
+}
+
+async function handlePrnWhatsappReply(message = {}) {
+  const action = parsePrnWhatsappAction(message);
+  if (!action) return null;
+  const dashboard = await readPrnDashboard({ all: true });
+  const row = action.prnNo
+    ? (dashboard.records || []).find((record) => projectText(record.prnNo).toLowerCase() === action.prnNo.toLowerCase())
+    : (dashboard.records || [])[0];
+  if (!row) {
+    await recordPrnWhatsappLastRun({ event: action.event, status: "failed", failed: 1, reason: `Could not find PRN ${action.prnNo || "record"} from WhatsApp reply` });
+    return null;
+  }
+  const contact = whatsappService.listContacts().find((item) => normalizePhone(item.phone) === normalizePhone(message.from));
+  const actor = {
+    id: `whatsapp:${normalizePhone(message.from)}`,
+    displayName: contact?.name || contact?.profileName || normalizePhone(message.from) || "WhatsApp",
+    username: contact?.phone || normalizePhone(message.from),
+  };
+  addActivityLog({ action: "Received PRN WhatsApp action", target: row.prnNo || action.prnNo || "PRN", category: "whatsapp", details: { event: action.event, from: normalizePhone(message.from), text: message.text, replyId: message.replyId } });
+  if (action.needsTypedComment) {
+    await promptForApprovalComment({ module: "PRN", from: message.from, recordNo: row.prnNo || action.prnNo, row, actor });
+    await recordPrnWhatsappLastRun({ event: "comment", status: "waiting_for_comment", prnNo: row.prnNo || action.prnNo, recipients: 1, reason: "Waiting for typed WhatsApp comment" });
+    return { status: "waiting_for_comment" };
+  }
+  const result = await sendPrnWhatsappAutomation({ event: action.event, row, actor, comment: action.comment || projectText(message.text) });
+  addActivityLog({ action: "Sent PRN WhatsApp outcome", target: row.prnNo || action.prnNo || "PRN", category: "whatsapp", details: result.lastRun || result });
+  return result;
+}
+
+async function handlePendingApprovalComment(message = {}) {
+  const phone = normalizePhone(message.from);
+  const pending = pendingWhatsappComments.get(phone);
+  if (!pending) return null;
+  if (Date.now() - Number(pending.createdAt || 0) > PENDING_WHATSAPP_COMMENT_TTL_MS) {
+    pendingWhatsappComments.delete(phone);
+    return null;
+  }
+  const comment = projectText(message.text, 1500).trim();
+  if (!comment || /^(comment|approve|decline)$/i.test(comment)) return null;
+  pendingWhatsappComments.delete(phone);
+  if (pending.module === "PRN") {
+    const dashboard = await readPrnDashboard({ all: true });
+    const row = (dashboard.records || []).find((record) => projectText(record.prnNo).toLowerCase() === projectText(pending.recordNo).toLowerCase());
+    if (!row) return null;
+    return sendPrnWhatsappAutomation({ event: "comment", row, actor: { id: `whatsapp:${phone}`, displayName: phone, username: phone }, comment });
+  }
+  const dashboard = await readMrnDashboard({ all: true });
+  const row = (dashboard.records || []).find((record) => projectText(record.mrnNo).toLowerCase() === projectText(pending.recordNo).toLowerCase());
+  if (!row) return null;
+  return sendMrnWhatsappAutomation({ event: "comment", row, actor: { id: `whatsapp:${phone}`, displayName: phone, username: phone }, comment });
+}
+
+async function handleApprovalWhatsappReply(message = {}) {
+  return await handlePendingApprovalComment(message)
+    || await handlePrnWhatsappReply(message)
+    || await handleMrnWhatsappReply(message);
+}
+
+async function checkPrnWhatsappAutomationQueue({ source = "watcher" } = {}) {
+  if (prnWhatsappWatcherRunning) return { status: "busy", sent: 0, checked: 0 };
+  prnWhatsappWatcherRunning = true;
+  try {
+    const settings = await getPrnWhatsappSettings();
+    if (!settings.enabled) return { status: "disabled", sent: 0, checked: 0 };
+    if (!settings.approvalContactIds?.length) return { status: "skipped", sent: 0, checked: 0, reason: "No approval contacts selected" };
+    if (!publicPrnSettings().linked) return { status: "skipped", sent: 0, checked: 0, reason: "PRN sheet is not linked" };
+    const dashboard = await readPrnDashboard({ all: true });
+    const activeSpreadsheetId = normalizeSpreadsheetId(dashboard.spreadsheetId || publicPrnSettings().spreadsheetId);
+    const records = (dashboard.records || []).sort((a, b) => (Number(a.rowNumber) || 0) - (Number(b.rowNumber) || 0));
+    const processed = new Set([...(settings.processedActionRequestPrns || []), ...prnWhatsappRuntimeProcessedKeys]);
+    let baselineRowNumber = Number(settings.watcherBaselineRowNumber) || 0;
+    let initializedThisRun = false;
+    if (settings.watcherBaselineVersion !== PRN_WHATSAPP_WATCHER_BASELINE_VERSION || normalizeSpreadsheetId(settings.watcherSpreadsheetId) !== activeSpreadsheetId) {
+      baselineRowNumber = await initializePrnWhatsappWatcherFromSheet(records, activeSpreadsheetId);
+      initializedThisRun = true;
+    }
+    const pending = records
+      .filter((row) => (Number(row.rowNumber) || 0) > baselineRowNumber)
+      .filter((row) => initializedThisRun || !processed.has(prnWhatsappRecordKey(row, activeSpreadsheetId)) && !processed.has(prnWhatsappKey(row.prnNo)))
+      .slice(0, PRN_WHATSAPP_WATCH_MAX_SENDS);
+    let sent = 0;
+    let failed = 0;
+    for (const row of pending) {
+      const result = await sendPrnWhatsappAutomation({
+        event: "actionRequest",
+        row,
+        actor: { id: "system", system: true, displayName: "PRN WhatsApp watcher", username: source },
+      });
+      if (result.sent) await markPrnWhatsappActionRequestProcessed(row.prnNo, row.rowNumber, activeSpreadsheetId);
+      if (result.sent) sent += result.sent;
+      failed += result.failed || 0;
+      addActivityLog({ action: "Sent PRN WhatsApp action request", target: row.prnNo || "PRN", category: "whatsapp", details: { source, status: result.status, sent: result.sent, failed: result.failed } });
+    }
+    return { status: pending.length ? "processed" : initializedThisRun ? "initialized" : "idle", checked: records.length, pending: pending.length, sent, failed };
+  } finally {
+    prnWhatsappWatcherRunning = false;
+  }
+}
+
+function startPrnWhatsappWatcher() {
+  if (prnWhatsappWatcherTimer || process.env.PRN_WHATSAPP_WATCHER_ENABLED === "false") return;
+  const run = () => {
+    checkPrnWhatsappAutomationQueue({ source: "watcher" })
+      .then((result) => {
+        const reason = result.reason ? `, reason: ${result.reason}` : "";
+        console.log(`PRN WhatsApp watcher ${result.status}: ${result.pending || 0} pending, ${result.sent || 0} sent, ${result.failed || 0} failed, checked ${result.checked || 0}${reason}`);
+      })
+      .catch((error) => console.error("PRN WhatsApp watcher error:", error.message));
+  };
+  prnWhatsappWatcherTimer = setInterval(run, PRN_WHATSAPP_WATCH_INTERVAL_MS);
+  setTimeout(run, 4_000);
+  console.log(`PRN WhatsApp watcher scheduled every ${Math.round(PRN_WHATSAPP_WATCH_INTERVAL_MS / 1000)}s`);
+}
+
+app.get("/prn-dashboard/whatsapp/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    res.json({
+      settings: await getPrnWhatsappSettings(),
+      contacts: whatsappService.listContacts().map(serializeWhatsappContact).filter((contact) => contact.phone),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Could not load PRN WhatsApp settings" });
+  }
+});
+
+app.patch("/prn-dashboard/whatsapp/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const settings = await savePrnWhatsappSettings(req.body || {});
+    addActivityLog({ req, action: "Updated PRN WhatsApp automation", target: "PRN WhatsApp" });
+    res.json({ success: true, settings });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not save PRN WhatsApp settings" });
+  }
+});
+
+app.post("/prn-dashboard/whatsapp/send-test", requireSuperAdmin, async (req, res) => {
+  try {
+    if (req.body?.settings) await savePrnWhatsappSettings(req.body.settings);
+    const dashboard = await readPrnDashboard({ all: true });
+    const requestedPrn = projectText(req.body?.prnNo);
+    const row = requestedPrn
+      ? (dashboard.records || []).find((record) => projectText(record.prnNo).toLowerCase() === requestedPrn.toLowerCase())
+      : (dashboard.records || [])[0];
+    if (!row) return res.status(400).json({ error: "No PRN record found to send as test" });
+    const result = await sendPrnWhatsappAutomation({ event: req.body?.event || "actionRequest", row, actor: req.authUser, comment: req.body?.comment || "Manual test" });
+    if ((req.body?.event || "actionRequest") === "actionRequest") await markPrnWhatsappActionRequestProcessed(row.prnNo, row.rowNumber, dashboard.spreadsheetId);
+    addActivityLog({ req, action: "Sent PRN WhatsApp test", target: row.prnNo || "PRN WhatsApp", details: result.lastRun || result });
+    res.json({ success: true, result });
+  } catch (error) {
+    const lastRun = await recordPrnWhatsappLastRun({ event: req.body?.event || "actionRequest", status: "failed", failed: 1, reason: error.message });
+    res.status(400).json({ error: error.message || "Could not send PRN WhatsApp test", lastRun });
+  }
+});
+
+app.post("/prn-dashboard/whatsapp/check-now", requireSuperAdmin, async (req, res) => {
+  try {
+    const result = await checkPrnWhatsappAutomationQueue({ source: "manual" });
+    addActivityLog({ req, action: "Checked PRN WhatsApp queue", target: "PRN WhatsApp", details: result });
+    res.json({ success: true, result });
+  } catch (error) {
+    const lastRun = await recordPrnWhatsappLastRun({ event: "actionRequest", status: "failed", failed: 1, reason: error.message });
+    res.status(400).json({ error: error.message || "Could not check PRN WhatsApp queue", lastRun });
+  }
+});
+
+app.get("/prn-dashboard/settings", (req, res) => {
+  if (!hasMenuAccess(req, "project-prn")) return res.status(403).json({ error: "PRN module access required" });
+  res.json({ settings: publicPrnSettings(), canManage: Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_prn")) });
+});
+
+app.put("/prn-dashboard/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const spreadsheetId = normalizeSpreadsheetId(req.body?.spreadsheetId || req.body?.sheetUrl || req.body?.url || req.body?.link) || normalizeSpreadsheetId(prnSettings.spreadsheetId);
+    if (!spreadsheetId) return res.status(400).json({ error: "Paste a valid PRN Google Sheet link or spreadsheet ID" });
+    const file = await assertNativeGoogleSpreadsheet(spreadsheetId, "PRN sheet");
+    prnSettings = {
+      ...prnSettings,
+      spreadsheetId,
+      linkedAt: new Date().toISOString(),
+      linkedBy: req.authUser?.displayName || req.authUser?.username || "Super Admin",
+      linkedFileName: file.name || null,
+    };
+    savePrnSettings();
+    addActivityLog({ req, action: "Linked PRN sheet", target: file.name || spreadsheetId, details: { spreadsheetId } });
+    res.json({ success: true, settings: publicPrnSettings() });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not link PRN sheet" });
+  }
+});
+
+app.get("/prn-dashboard", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-prn")) return res.status(403).json({ error: "PRN module access required" });
+    if (!publicPrnSettings().linked) {
+      return res.json({
+        spreadsheetId: "",
+        sheetName: PRN_SHEET_NAME,
+        startDate: req.query.startDate || istDateKey(new Date()),
+        endDate: req.query.endDate || istDateKey(new Date()),
+        records: [],
+        summary: { total: 0, amount: 0, byPaymentType: {} },
+        allSummary: { total: 0, amount: 0, byPaymentType: {} },
+        canManagePrnSettings: Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_prn")),
+        prnSettings: publicPrnSettings(),
+      });
+    }
+    const dashboard = await readPrnDashboard({ startDate: req.query.startDate, endDate: req.query.endDate, all: req.query.all === "true" });
+    res.json({
+      ...dashboard,
+      canManagePrnSettings: Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "manage_project_prn")),
+      prnSettings: publicPrnSettings(),
+    });
+  } catch (error) {
+    console.error("PRN dashboard error:", error);
+    res.status(500).json({ error: `Could not load PRN dashboard: ${error.message}` });
+  }
+});
 
 app.get("/mrn-dashboard/whatsapp/settings", requireSuperAdmin, async (req, res) => {
   try {
@@ -21087,6 +21853,7 @@ if (require.main === module) {
     console.error("DMR WhatsApp reminder cron setup error:", error);
   });
   startMrnWhatsappWatcher();
+  startPrnWhatsappWatcher();
 
   cron.schedule("0 12 * * *", async () => {
     try {

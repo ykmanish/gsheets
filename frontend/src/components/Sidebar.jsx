@@ -15,6 +15,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "projects", label: "Project Control", icon: Building2 },
     { id: "project-dmr", label: "DMR", icon: FileSpreadsheet, parent: "projects" },
     { id: "project-mrn", label: "MRN", icon: ClipboardList, parent: "projects" },
+    { id: "project-prn", label: "PRN", icon: CircleDollarSign, parent: "projects" },
     { id: "project-stock", label: "Stock", icon: PackageSearch, parent: "projects" },
     { id: "site-images", label: "Site Images", icon: Images, parent: "projects" },
     { id: "hr-dashboard", label: "HR", icon: BriefcaseBusiness },
@@ -38,7 +39,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "manage-users", label: "Manage User", icon: Users, parent: "access-management" },
     { id: "module-control", label: "Module Control", icon: SlidersHorizontal, parent: "access-management" },
   ];
-  const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn", "project-stock", "site-images"].includes(item.id) && allowedMenus.includes(item.id));
+  const projectSubMenu = menuItems.filter((item) => ["projects", "project-dmr", "project-mrn", "project-prn", "project-stock", "site-images"].includes(item.id) && allowedMenus.includes(item.id));
   const hrSubMenu = menuItems.filter((item) => ["hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment"].includes(item.id) && allowedMenus.includes(item.id));
   const financeSubMenu = menuItems.filter((item) => item.parent === "finance" && allowedMenus.includes(item.id));
   const accessSubMenu = menuItems.filter((item) => item.parent === "access-management" && allowedMenus.includes(item.id));

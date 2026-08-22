@@ -30,6 +30,7 @@ import Forms from "./Forms";
 import ProjectDashboard from "./ProjectDashboard";
 import DmrDashboard from "./DmrDashboard";
 import MrnDashboard from "./MrnDashboard";
+import PrnDashboard from "./PrnDashboard";
 import StockDashboard from "./StockDashboard";
 import SiteImagesDashboard from "./SiteImagesDashboard";
 import EmployeeDailyReport from "./EmployeeDailyReport";
@@ -48,6 +49,7 @@ const menuPaths = {
   projects: "/projects",
   "project-dmr": "/projects/dmr",
   "project-mrn": "/projects/mrn",
+  "project-prn": "/projects/prn",
   "project-stock": "/projects/stock",
   "site-images": "/projects/site-images",
   "hr-dashboard": "/hr",
@@ -215,7 +217,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   const forumUnreadConversationIdsRef = useRef(new Set());
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment", "todos", "forum", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-prn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment", "todos", "forum", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
       "projects",
       "profile",
       // Splitting Finance into Accounts + Forms must not revoke anyone: whoever already had
@@ -614,6 +616,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "projects" && <ProjectDashboard darkMode={darkMode} projectId={projectId} />}
         {moduleId === "project-dmr" && <DmrDashboard darkMode={darkMode} />}
         {moduleId === "project-mrn" && <MrnDashboard darkMode={darkMode} />}
+        {moduleId === "project-prn" && <PrnDashboard darkMode={darkMode} />}
         {moduleId === "project-stock" && <StockDashboard darkMode={darkMode} />}
         {moduleId === "site-images" && <SiteImagesDashboard darkMode={darkMode} />}
         {moduleId === "hr-dashboard" && <HrDashboard darkMode={darkMode} section="dashboard" />}

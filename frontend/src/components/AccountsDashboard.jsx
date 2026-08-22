@@ -30,6 +30,15 @@ function shortDate(value) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
 
+// The cutoff is a plain YYYY-MM-DD day with no time, so shortDate's timestamp
+// formatting would append a misleading 12:00 am to it.
+function formatStartDate(value) {
+  if (!value) return "";
+  const [year, month, day] = String(value).split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return new Date(year, month - 1, day).toLocaleDateString("en-IN", { dateStyle: "medium" });
+}
+
 function rowTitle(record = {}) {
   return [record.projectName, record.particulars || record.paidParticulars].filter(Boolean).join(" · ") || "CRBR entry";
 }
@@ -177,7 +186,7 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
   const [remarkSaving, setRemarkSaving] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const [settingsForm, setSettingsForm] = useState({ rawSheetUrl: "", rawTab: "", sourceSheetUrl: "", sourceTab: "", targetSheetUrl: "", targetReceiptTab: "", targetExpenseTab: "" });
+  const [settingsForm, setSettingsForm] = useState({ rawSheetUrl: "", rawTab: "", rawStartDate: "", sourceSheetUrl: "", sourceTab: "", targetSheetUrl: "", targetReceiptTab: "", targetExpenseTab: "" });
   const muted = darkMode ? "text-white/50" : "text-black/50";
   const panel = darkMode ? "border-transparent bg-[#15171c]" : "border-black/[0.06] bg-white";
   const soft = darkMode ? "border-transparent bg-white/[0.04]" : "border-black/[0.06] bg-[#fbfbfd]";
@@ -187,6 +196,7 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
     setSettingsForm({
       rawSheetUrl: settings.rawSheetUrl || (settings.rawSpreadsheetId ? `https://docs.google.com/spreadsheets/d/${settings.rawSpreadsheetId}/edit` : ""),
       rawTab: settings.rawTab || "",
+      rawStartDate: settings.rawStartDate || "",
       sourceSheetUrl: settings.sourceSheetUrl || (settings.sourceSpreadsheetId ? `https://docs.google.com/spreadsheets/d/${settings.sourceSpreadsheetId}/edit` : ""),
       sourceTab: settings.sourceTab || "",
       targetSheetUrl: settings.targetSheetUrl || (settings.targetSpreadsheetId ? `https://docs.google.com/spreadsheets/d/${settings.targetSpreadsheetId}/edit` : ""),
@@ -403,6 +413,13 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                     {intake.alreadyInMam ? ` · ${intake.alreadyInMam} already in Mam's sheet` : ""}
                     {intake.previouslyImported ? ` · ${intake.previouslyImported} imported before but no longer there` : ""}
                   </p>
+                  {intake.skippedByStartDate?.startDate ? (
+                    <p className={`mt-1 text-sm ${muted}`}>
+                      Reading from <b>{formatStartDate(intake.skippedByStartDate.startDate)}</b> onward
+                      {intake.skippedByStartDate.before ? ` · ${intake.skippedByStartDate.before} earlier ${intake.skippedByStartDate.before === 1 ? "entry" : "entries"} skipped` : ""}
+                      {intake.skippedByStartDate.undated ? ` · ${intake.skippedByStartDate.undated} skipped with no date` : ""}
+                    </p>
+                  ) : null}
                   {!!nameFlagCount && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {!!nameSummary.spelling && <StatusPill tone="amber" darkMode={darkMode}>{nameSummary.spelling} spelling</StatusPill>}
@@ -616,6 +633,22 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                 <label className={`block rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
                   <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Raw CRBR tab name</span>
                   <input value={settingsForm.rawTab} onChange={(event) => updateSettingsField("rawTab", event.target.value)} placeholder="Sheet1" className={inputClass} />
+                </label>
+                <label className={`block rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
+                  <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Read raw entries from</span>
+                  <input type="date" value={settingsForm.rawStartDate} onChange={(event) => updateSettingsField("rawStartDate", event.target.value)} className={inputClass} />
+                  <span className={`mt-2 block text-xs ${muted}`}>
+                    Only raw entries dated on or after this day are checked and offered for Mam&apos;s sheet. Anything earlier is left alone, and nothing already in Mam&apos;s sheet is changed or removed. Leave blank to read the whole raw sheet.
+                  </span>
+                  {settingsForm.rawStartDate ? (
+                    <button
+                      type="button"
+                      onClick={() => updateSettingsField("rawStartDate", "")}
+                      className={`mt-2 text-xs font-bold ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
+                    >
+                      Clear the date
+                    </button>
+                  ) : null}
                 </label>
                 <label className={`block rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
                   <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Mam CRBR sheet link</span>

@@ -8746,6 +8746,9 @@ function defaultCrbrSettings() {
     targetExpenseTab: "",
     receiptMainHeads: [],
     expenseMainHeads: [],
+    // Blank means "read the whole raw sheet", which is how this behaved before
+    // the cutoff existed — so an existing setup is unaffected until a date is set.
+    rawStartDate: "",
   };
 }
 
@@ -8765,6 +8768,7 @@ function publicCrbrSettings(settings = defaultCrbrSettings()) {
     targetExpenseTab: settings.targetExpenseTab || settings.targetTab || "",
     receiptMainHeads: Array.isArray(settings.receiptMainHeads) && settings.receiptMainHeads.length ? settings.receiptMainHeads : CRBR_DEFAULT_RECEIPT_HEADS,
     expenseMainHeads: Array.isArray(settings.expenseMainHeads) && settings.expenseMainHeads.length ? settings.expenseMainHeads : CRBR_DEFAULT_EXPENSE_HEADS,
+    rawStartDate: crbrIsIsoDate(settings.rawStartDate) ? settings.rawStartDate : "",
     updatedAt: settings.updatedAt || null,
     updatedBy: settings.updatedBy || null,
   };
@@ -8798,7 +8802,10 @@ function sanitizeCrbrSettingsInput(input = {}) {
   const rawSpreadsheetId = normalizeSpreadsheetId(input.rawSheetUrl || input.rawSpreadsheetId);
   const rawTab = projectText(input.rawTab);
   if (rawSpreadsheetId && !rawTab) throw new Error("Raw CRBR tab name is required when a raw sheet link is set");
+  const rawStartDate = projectText(input.rawStartDate);
+  if (rawStartDate && !crbrIsIsoDate(rawStartDate)) throw new Error("Start date must be a valid date");
   return {
+    rawStartDate,
     rawSpreadsheetId,
     rawSheetUrl: rawSpreadsheetId ? (projectText(input.rawSheetUrl) || `https://docs.google.com/spreadsheets/d/${rawSpreadsheetId}/edit`) : "",
     rawTab: rawSpreadsheetId ? rawTab : "",
@@ -8846,6 +8853,33 @@ function crbrDateKey(value) {
     return `${year}-${String(match[2]).padStart(2, "0")}-${String(match[1]).padStart(2, "0")}`;
   }
   return raw;
+}
+
+// crbrDateKey hands back the original text when it cannot parse a date, so a
+// footer cell like "Total" arrives here as its own dateKey. Comparing that
+// against a cutoff lexically says "Total" > "2026-01-01" — letters sort above
+// digits — and the junk row would sail through the filter. Only a real ISO date
+// counts as dated.
+function crbrIsIsoDate(value = "") {
+  return /^\d{4}-\d{2}-\d{2}$/.test(projectText(value));
+}
+
+// Mam picks the date her sheet is current up to; everything earlier in the raw
+// sheet is history she has already dealt with and must stop being offered.
+// Only the RAW side is filtered — Mam's sheet is still read in full, so her
+// existing rows keep de-duplicating new imports and nothing of hers is touched.
+function crbrApplyStartDate(records = [], startDate = "") {
+  if (!crbrIsIsoDate(startDate)) {
+    return { kept: records, skippedBefore: 0, skippedUndated: 0, startDate: "" };
+  }
+  let skippedBefore = 0;
+  let skippedUndated = 0;
+  const kept = records.filter((record) => {
+    if (!crbrIsIsoDate(record.dateKey)) { skippedUndated += 1; return false; }
+    if (record.dateKey < startDate) { skippedBefore += 1; return false; }
+    return true;
+  });
+  return { kept, skippedBefore, skippedUndated, startDate };
 }
 
 function crbrFindHeaderRow(values = []) {
@@ -9537,6 +9571,7 @@ function emptyCrbrIntake(settings) {
     tallyIssues: [],
     rawDuplicates: [],
     alreadyInMam: 0,
+    skippedByStartDate: { before: 0, undated: 0, startDate: "" },
     nameSummary: { spelling: 0, nearMatch: 0, newName: 0 },
     totals: { cash: 0, bankAll: 0, others: 0, total: 0 },
     canImport: false,
@@ -9562,10 +9597,14 @@ async function buildCrbrIntake() {
   const importedIds = await crbrImportedRowIds();
   const known = crbrBuildKnownNames([mam.records, ...targetReads.map((read) => read.records)]);
 
+  // Applied before anything else looks at the raw rows, so a pre-cutoff row is
+  // never offered for import and never raised as a conflict against Mam's sheet.
+  const windowed = crbrApplyStartDate(raw.records, settings.rawStartDate);
+
   const seen = new Map();
   const rawDuplicates = [];
   const rawUnique = [];
-  raw.records.forEach((record) => {
+  windowed.kept.forEach((record) => {
     if (seen.has(record.id)) rawDuplicates.push({ record, firstRow: seen.get(record.id).rowNumber });
     else {
       seen.set(record.id, record);
@@ -9620,6 +9659,7 @@ async function buildCrbrIntake() {
     settings,
     raw: { spreadsheetId: settings.rawSpreadsheetId, workbookTitle: raw.workbookTitle, tabName: raw.tabName, rows: raw.records.length },
     mam: { spreadsheetId: settings.sourceSpreadsheetId, workbookTitle: mam.workbookTitle, tabName: mam.tabName, rows: mam.records.length },
+    skippedByStartDate: { before: windowed.skippedBefore, undated: windowed.skippedUndated, startDate: windowed.startDate },
     newRows: newRowsWithRemarks,
     conflicts: conflicts.map((item) => ({ ...item, remark: remarkMap.get(item.raw.id) || null })),
     tallyIssues,
@@ -9646,7 +9686,11 @@ async function importCrbrIntoMamSheet(rowIds = [], actor = null) {
   const mamIds = new Set(mam.records.map((record) => record.id));
   const wanted = new Set(rowIds.map((id) => projectText(id)).filter(Boolean));
   const picked = new Set();
-  const selected = raw.records.filter((record) => {
+  // Re-applied here rather than trusted from the request: a browser left open
+  // from before the cutoff was set would otherwise post ids for rows the intake
+  // no longer offers.
+  const windowed = crbrApplyStartDate(raw.records, settings.rawStartDate);
+  const selected = windowed.kept.filter((record) => {
     if (wanted.size && !wanted.has(record.id)) return false;
     // still guarded against the real duplicate: a row already sitting in Mam's sheet
     if (mamIds.has(record.id) || picked.has(record.id)) return false;

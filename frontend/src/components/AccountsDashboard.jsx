@@ -245,6 +245,11 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
       setImporting(true);
       const result = await api("/accounts/crbr/intake/import", { method: "POST", body: JSON.stringify({ rowIds }) });
       toast.success(`Imported ${result.importedRows} row${result.importedRows === 1 ? "" : "s"} into Mam's sheet`);
+      // Copied across as they stand, so say so rather than letting a tally
+      // problem travel into the sheet unannounced.
+      if (result.unbalancedRows) {
+        toast(`${result.unbalancedRows} of them do not tally in the raw sheet — worth a check`, { icon: "⚠️" });
+      }
       setSelected(new Set());
       await loadAll({ quiet: true });
     } catch (error) {
@@ -306,8 +311,13 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
   const receiptRows = useMemo(() => (data?.pending || []).filter((record) => record.route === "receipt"), [data]);
   const expenseRows = useMemo(() => (data?.pending || []).filter((record) => record.route === "expense"), [data]);
   const pendingCount = data?.pending?.length || 0;
-  const newRows = intake?.newRows || [];
-  const importableIds = useMemo(() => newRows.filter((record) => record.tallyOk).map((record) => record.id), [newRows]);
+  // A fresh [] on every render made every useMemo keyed on it re-run each time.
+  const newRows = useMemo(() => intake?.newRows || [], [intake]);
+  // Every new row can be imported. A tally mismatch is flagged on the row and in
+  // the header, but it no longer locks the checkbox — one odd row in the raw
+  // sheet was holding back every good row behind it.
+  const importableIds = useMemo(() => newRows.map((record) => record.id), [newRows]);
+  const untalliedCount = useMemo(() => newRows.filter((record) => !record.tallyOk).length, [newRows]);
   const allSelected = importableIds.length > 0 && importableIds.every((id) => selected.has(id));
   const nameSummary = intake?.nameSummary || { spelling: 0, nearMatch: 0, newName: 0 };
   const nameFlagCount = nameSummary.spelling + nameSummary.nearMatch + nameSummary.newName;
@@ -425,6 +435,7 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                       {!!nameSummary.spelling && <StatusPill tone="amber" darkMode={darkMode}>{nameSummary.spelling} spelling</StatusPill>}
                       {!!nameSummary.nearMatch && <StatusPill tone="amber" darkMode={darkMode}>{nameSummary.nearMatch} close match</StatusPill>}
                       {!!nameSummary.newName && <StatusPill tone="blue" darkMode={darkMode}>{nameSummary.newName} new name</StatusPill>}
+                      {!!untalliedCount && <StatusPill tone="red" darkMode={darkMode}>{untalliedCount} do not tally</StatusPill>}
                     </div>
                   )}
                 </div>
@@ -453,7 +464,7 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                       return (
                         <tr key={record.id} className={record.tallyOk ? darkMode ? "bg-white/[0.04]" : "bg-[#f8f9fc]" : darkMode ? "bg-rose-300/[0.07]" : "bg-rose-50"}>
                           <td className="rounded-l-2xl px-3 py-3">
-                            <input type="checkbox" checked={selected.has(record.id)} onChange={() => toggleOne(record.id)} disabled={!record.tallyOk} title={record.tallyOk ? "" : "Amounts do not tally, fix in the raw sheet first"} className="h-4 w-4 cursor-pointer accent-[#6ee72f] disabled:cursor-not-allowed disabled:opacity-40" />
+                            <input type="checkbox" checked={selected.has(record.id)} onChange={() => toggleOne(record.id)} title={record.tallyOk ? "" : "Amounts do not tally in the raw sheet — it will still be copied across as it stands"} className="h-4 w-4 cursor-pointer accent-[#6ee72f]" />
                           </td>
                           <td className={`px-4 py-3 text-sm tabular-nums ${muted}`} title="Row number in the raw sheet">{record.rowNumber || "-"}</td>
                           <td className="px-4 py-3 text-sm font-semibold">

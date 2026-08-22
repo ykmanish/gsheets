@@ -9697,10 +9697,13 @@ async function importCrbrIntoMamSheet(rowIds = [], actor = null) {
     picked.add(record.id);
     return true;
   });
-  if (!selected.length) return { importedRows: 0, skipped: wanted.size, startRow: null, endRow: null };
+  if (!selected.length) return { importedRows: 0, skipped: wanted.size, startRow: null, endRow: null, unbalancedRows: 0 };
 
+  // A tally mismatch used to abort the whole import, which meant one odd row in
+  // the raw sheet blocked every good row behind it. It is a data-quality signal
+  // about the raw sheet, not a reason the copy cannot happen — so the rows go
+  // across and the count comes back for the caller to report.
   const unbalanced = selected.filter((record) => !record.tallyOk);
-  if (unbalanced.length) throw new Error(`${unbalanced.length} selected row(s) do not tally — cash + bank + others must equal total. Fix them in the raw sheet first.`);
 
   const startRow = crbrFindNextWriteRow(mam.values, mam.headerRow, mam.map);
   const endRow = startRow + selected.length - 1;
@@ -9731,12 +9734,21 @@ async function importCrbrIntoMamSheet(rowIds = [], actor = null) {
     mam: { spreadsheetId: settings.sourceSpreadsheetId, tabName: mam.tabName },
     importedRows: selected.length,
     rowIds: selected.map((record) => record.id),
+    // Recorded on the run so a later query can find which imports carried rows
+    // whose cash + bank + others did not equal their stated total.
+    unbalancedRowIds: unbalanced.map((record) => record.id),
     startRow,
     endRow,
     importedAt: new Date(),
     importedBy: actor,
   });
-  return { importedRows: selected.length, startRow, endRow, skipped: wanted.size ? wanted.size - selected.length : 0 };
+  return {
+    importedRows: selected.length,
+    startRow,
+    endRow,
+    skipped: wanted.size ? wanted.size - selected.length : 0,
+    unbalancedRows: unbalanced.length,
+  };
 }
 
 function projectFindColumn(headers, explicit, patterns) {

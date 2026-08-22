@@ -30,13 +30,11 @@ function shortDate(value) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
 
-// The cutoff is a plain YYYY-MM-DD day with no time, so shortDate's timestamp
-// formatting would append a misleading 12:00 am to it.
-function formatStartDate(value) {
-  if (!value) return "";
-  const [year, month, day] = String(value).split("-").map(Number);
-  if (!year || !month || !day) return value;
-  return new Date(year, month - 1, day).toLocaleDateString("en-IN", { dateStyle: "medium" });
+// Both CRBR sheets are typed DD/MM/YYYY, so every date shown here uses that
+// form. The YYYY-MM-DD key is only ever an internal sort order.
+function sheetDate(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || "");
 }
 
 function rowTitle(record = {}) {
@@ -136,7 +134,7 @@ function RouteRows({ target, rows, darkMode, tone, muted, onOpenRemark }) {
             {rows.map((record) => (
               <tr key={record.id} className={darkMode ? "bg-white/[0.04]" : "bg-[#f8f9fc]"}>
                 <td className={`rounded-l-2xl px-4 py-3 text-sm tabular-nums ${muted}`} title="Row number in Mam's sheet">{record.rowNumber || "-"}</td>
-                <td className="px-4 py-3 text-sm font-semibold">{record.dateKey || record.date}</td>
+                <td className="px-4 py-3 text-sm font-semibold">{sheetDate(record.dateKey) || record.date}</td>
                 <td className="px-4 py-3 text-sm font-semibold">{record.mainHead || "-"}</td>
                 <td className="max-w-[200px] px-4 py-3 text-sm"><p className="truncate">{record.projectName || "-"}</p></td>
                 <td className="max-w-[220px] px-4 py-3 text-sm"><p className="truncate">{record.particulars || record.paidParticulars || "-"}</p></td>
@@ -425,7 +423,7 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                   </p>
                   {intake.skippedByStartDate?.startDate ? (
                     <p className={`mt-1 text-sm ${muted}`}>
-                      Reading from <b>{formatStartDate(intake.skippedByStartDate.startDate)}</b> onward
+                      Reading from <b>{sheetDate(intake.skippedByStartDate.startDate)}</b> onward
                       {intake.skippedByStartDate.before ? ` · ${intake.skippedByStartDate.before} earlier ${intake.skippedByStartDate.before === 1 ? "entry" : "entries"} skipped` : ""}
                       {intake.skippedByStartDate.undated ? ` · ${intake.skippedByStartDate.undated} skipped with no date` : ""}
                     </p>
@@ -468,7 +466,7 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                           </td>
                           <td className={`px-4 py-3 text-sm tabular-nums ${muted}`} title="Row number in the raw sheet">{record.rowNumber || "-"}</td>
                           <td className="px-4 py-3 text-sm font-semibold">
-                            {record.dateKey || record.date}
+                            {sheetDate(record.dateKey) || record.date}
                             {record.reimport ? (
                               <span className={`mt-1 flex items-center gap-1 text-[11px] font-bold ${darkMode ? "text-amber-200" : "text-amber-600"}`} title="This row was imported before and is not in Mam's sheet now">
                                 <History className="h-3 w-3 shrink-0" /> Imported before
@@ -591,7 +589,7 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
               <div className="min-w-0">
                 <p className={`text-xs font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Note for this row</p>
                 <h2 className="small mt-2 truncate text-xl font-black">{rowTitle(remarkTarget)}</h2>
-                <p className={`mt-1 text-sm ${muted}`}>{remarkTarget.dateKey || remarkTarget.date} · {money(remarkTarget.total)}</p>
+                <p className={`mt-1 text-sm ${muted}`}>{sheetDate(remarkTarget.dateKey) || remarkTarget.date} · {money(remarkTarget.total)}</p>
               </div>
               <button type="button" onClick={() => setRemarkTarget(null)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc]"}`} aria-label="Close note"><X className="h-5 w-5" /></button>
             </div>

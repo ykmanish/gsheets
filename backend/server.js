@@ -8838,22 +8838,50 @@ function crbrNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+// Both the raw sheet and Mam's sheet are typed DD/MM/YYYY.
+//
+// The order of the checks below is the whole point. `new Date("09/02/2026")`
+// succeeds and reads a slashed date as US MM/DD — turning 9 February into
+// 2 September — so testing it before the day-first pattern silently rewrote
+// every date whose day was 12 or lower. Days of 13 and above happened to be
+// safe, because new Date() rejects month 13 and fell through to the correct
+// branch, which is why this looked like it mostly worked.
 function crbrDateKey(value) {
   const raw = projectText(value);
   if (!raw) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+
   if (typeof value === "number") {
     const date = XLSX.SSF.parse_date_code(value);
-    if (date) return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
+    if (date) return `${date.y}-${pad(date.m)}-${pad(date.d)}`;
   }
+
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) return `${iso[1]}-${pad(iso[2])}-${pad(iso[3])}`;
+
+  // Day first, before any generic parsing gets a chance at it.
+  const dmy = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+  if (dmy) {
+    const day = Number(dmy[1]);
+    const month = Number(dmy[2]);
+    const year = Number(dmy[3].length === 2 ? `20${dmy[3]}` : dmy[3]);
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) return `${year}-${pad(month)}-${pad(day)}`;
+  }
+
+  // Anything else — "2 Feb 2026", a full timestamp — can go through the parser,
+  // which is unambiguous once the slashed form has already been handled.
   const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
-  const match = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
-  if (match) {
-    const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
-    return `${year}-${String(match[2]).padStart(2, "0")}-${String(match[1]).padStart(2, "0")}`;
-  }
+  if (!Number.isNaN(parsed.getTime())) return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
   return raw;
 }
+
+// The sheets are read and written in DD/MM/YYYY, so anything shown back to
+// accounts uses that form rather than the ISO key held internally.
+function crbrDisplayDate(dateKey = "") {
+  const match = String(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(dateKey || "");
+}
+
 
 // crbrDateKey hands back the original text when it cannot parse a date, so a
 // footer cell like "Total" arrives here as its own dateKey. Comparing that

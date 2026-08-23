@@ -5391,6 +5391,13 @@ function attendanceIstDateTime(dateValue, timeValue, fieldLabel = "time") {
 // against someone who was simply told not to come.
 const NWD_MARK = "NWD";
 
+// Someone who actually turned up outranks any blanket marker. A cell holding
+// hours or NCO means there is a real clock-in behind it; PL, L, HF and "-" do
+// not. Sunday and NWD only fill the cells of people with no record that day.
+function attendanceWorked(value = "") {
+  return Boolean(value) && value !== "-" && value !== "PL" && value !== "L" && value !== "HF";
+}
+
 async function loadNoWorkingDays(db, month = "") {
   const query = month ? { date: { $gte: `${month}-01`, $lte: `${month}-31` } } : {};
   const rows = await db.collection("hrNoWorkingDays").find(query).sort({ date: 1 }).toArray();
@@ -5669,18 +5676,21 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
     let absentDays = 0;
     monthDates.forEach(date => {
       const isSunday = new Date(date).getDay() === 0;
-      if (isSunday) {
-        row.push("SUN");
+      const val = emp.days[date] || "-";
+      if (attendanceWorked(val)) {
+        // Came in on a Sunday or a holiday — show what they actually did.
+        row.push(val);
+        presentDays += 1;
       } else if (noWorkingDays.has(date)) {
-        // A declared holiday outranks whatever the clock says: the column reads
-        // NWD for everyone and the day counts towards present, never absent.
+        // Declared holiday and no record: counts as present, never absent.
         row.push(NWD_MARK);
         presentDays += 1;
+      } else if (isSunday) {
+        // Not a working day, so it is neither present nor absent.
+        row.push("SUN");
       } else {
-        const val = emp.days[date] || "-";
         row.push(val);
         if (val === "-") absentDays += 1;
-        else if (val !== "PL" && val !== "L" && val !== "HF") presentDays += 1;
       }
     });
     row.push((emp.totalMinutes / 60).toFixed(1));
@@ -5696,12 +5706,16 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
   monthDates.forEach(date => {
     const isSunday = new Date(date).getDay() === 0;
     const dayTotalMins = records.filter(r => r.date === date).reduce((acc, r) => acc + (r.workMinutes || 0), 0);
-    if (isSunday) {
-      footRow.push("SUN");
+    if (dayTotalMins) {
+      // Somebody worked, so the column footer shows the hours rather than the
+      // blanket marker.
+      footRow.push((dayTotalMins / 60).toFixed(1));
     } else if (noWorkingDays.has(date)) {
       footRow.push(NWD_MARK);
+    } else if (isSunday) {
+      footRow.push("SUN");
     } else {
-      footRow.push(dayTotalMins ? (dayTotalMins / 60).toFixed(1) : "-");
+      footRow.push("-");
     }
     // Hours genuinely worked on a holiday still count towards the month's total.
     grandTotalMinutes += dayTotalMins;
@@ -5710,11 +5724,11 @@ async function buildMonthlyAttendancePivot(db, targetDate) {
   Object.values(employeeMap).forEach(emp => {
     monthDates.forEach(date => {
       const isSunday = new Date(date).getDay() === 0;
-      if (isSunday) return;
-      if (noWorkingDays.has(date)) { totalPresents += 1; return; }
       const val = emp.days[date] || "-";
+      if (attendanceWorked(val)) { totalPresents += 1; return; }
+      if (noWorkingDays.has(date)) { totalPresents += 1; return; }
+      if (isSunday) return;
       if (val === "-") totalAbsents += 1;
-      else if (val !== "PL" && val !== "L" && val !== "HF") totalPresents += 1;
     });
   });
 

@@ -130,6 +130,13 @@ function EmptyState({ darkMode, icon: Icon, title, text }) {
   );
 }
 
+// Someone who actually turned up outranks any blanket marker. A cell holding
+// hours or NCO means there is a real clock-in behind it; PL, L, HF and "-" do
+// not. Sunday and NWD only fill the cells of people with no record that day.
+function attendanceWorked(value) {
+  return Boolean(value) && value !== "-" && value !== "PL" && value !== "L" && value !== "HF";
+}
+
 function formatDateLabel(value) {
   if (!value) return "";
   const date = new Date(`${value}T00:00:00`);
@@ -973,18 +980,21 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
         let absentDays = 0;
         monthDates.forEach(date => {
           const isSunday = new Date(date).getDay() === 0;
-          if (isSunday) {
-            row.push("SUN");
+          const val = emp.days[date] || "-";
+          if (attendanceWorked(val)) {
+            // Came in on a Sunday or a holiday — show what they actually did.
+            row.push(val);
+            presentDays += 1;
           } else if (noWorkingDaySet.has(date)) {
-            // A declared holiday: the column reads NWD for everyone and counts
-            // towards present, so nobody is marked absent for a day off.
+            // Declared holiday and no record: counts as present, never absent.
             row.push("NWD");
             presentDays += 1;
+          } else if (isSunday) {
+            // Not a working day, so it is neither present nor absent.
+            row.push("SUN");
           } else {
-            const val = emp.days[date] || "-";
             row.push(val);
             if (val === "-") absentDays += 1;
-            else if (val !== "PL" && val !== "L" && val !== "HF") presentDays += 1;
           }
         });
         row.push((emp.totalMinutes / 60).toFixed(1));
@@ -1000,12 +1010,15 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       monthDates.forEach(date => {
         const isSunday = new Date(date).getDay() === 0;
         const dayTotalMins = filteredAttendanceRecords.filter(r => r.date === date).reduce((acc, r) => acc + (r.workMinutes || 0), 0);
-        if (isSunday) {
-          footRow.push("SUN");
+        if (dayTotalMins) {
+          // Somebody worked, so the footer shows hours rather than the marker.
+          footRow.push((dayTotalMins / 60).toFixed(1));
         } else if (noWorkingDaySet.has(date)) {
           footRow.push("NWD");
+        } else if (isSunday) {
+          footRow.push("SUN");
         } else {
-          footRow.push(dayTotalMins ? (dayTotalMins / 60).toFixed(1) : "-");
+          footRow.push("-");
         }
         grandTotalMinutes += dayTotalMins;
       });
@@ -1013,11 +1026,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       Object.values(employeeMap).forEach(emp => {
         monthDates.forEach(date => {
           const isSunday = new Date(date).getDay() === 0;
-          if (isSunday) return;
-          if (noWorkingDaySet.has(date)) { totalPresents += 1; return; }
           const val = emp.days[date] || "-";
+          if (attendanceWorked(val)) { totalPresents += 1; return; }
+          if (noWorkingDaySet.has(date)) { totalPresents += 1; return; }
+          if (isSunday) return;
           if (val === "-") totalAbsents += 1;
-          else if (val !== "PL" && val !== "L" && val !== "HF") totalPresents += 1;
         });
       });
 

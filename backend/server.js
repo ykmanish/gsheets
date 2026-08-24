@@ -17947,7 +17947,7 @@ async function sendPrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
   const allContacts = whatsappService.listContacts();
   let contacts = allContacts.filter((contact) => contactIds.includes(contact.id) && normalizePhone(contact.phone));
   if (eventName === "actionRequest" && !contacts.length) contacts = allContacts.filter((contact) => contact.source === "manual" && normalizePhone(contact.phone));
-  const submitterContact = eventName === "comment" ? findPrnSubmitterContact(allContacts, row.name) : null;
+  const submitterContact = ["approved", "declined", "comment"].includes(eventName) ? findPrnSubmitterContact(allContacts, row.name) : null;
   if (submitterContact && normalizePhone(submitterContact.phone) && !contacts.some((contact) => normalizePhone(contact.phone) === normalizePhone(submitterContact.phone))) {
     contacts = [...contacts, submitterContact];
   }

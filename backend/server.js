@@ -17953,7 +17953,7 @@ async function sendPrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
             ]
           : [],
       }, actor || { id: "system", displayName: "PRN WhatsApp automation" });
-      const followupText = ["actionRequest", "approved"].includes(eventName) ? prnDetailsFollowupText(row) : "";
+      const followupText = eventName === "approved" ? prnDetailsFollowupText(row) : "";
       let followupMessage = null;
       if (followupText) {
         try {

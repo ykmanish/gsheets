@@ -17581,7 +17581,13 @@ async function sendMrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
           console.error("MRN WhatsApp details follow-up failed:", followupError.message);
         }
       }
-      results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "sent", messageId: message.id, followupMessageId: followupMessage?.id || null });
+      results.push({
+        contactId: contact.id,
+        phone: normalizePhone(contact.phone),
+        status: "sent",
+        messageId: message.id,
+        followupMessageId: followupMessage?.id || null,
+      });
     } catch (error) {
       results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "failed", reason: error.message });
     }
@@ -17917,6 +17923,19 @@ function prnDetailsFollowupText(row = {}) {
   return detailRows.length ? [`PRN Details${clean(row.prnNo) ? ` - ${clean(row.prnNo)}` : ""}`, ...detailRows.map(([label, value]) => `${label}: ${value}`)].join("\n") : "";
 }
 
+function prnContactNameKey(value = "") {
+  return projectText(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function findPrnSubmitterContact(contacts = [], submitterName = "") {
+  const key = prnContactNameKey(submitterName);
+  if (!key) return null;
+  return contacts.find((contact) => {
+    const names = [contact.name, contact.profileName].map(prnContactNameKey).filter(Boolean);
+    return names.some((name) => name === key);
+  }) || null;
+}
+
 async function sendPrnWhatsappAutomation({ event = "actionRequest", row = {}, actor = null, comment = "" } = {}) {
   const settings = await getPrnWhatsappSettings();
   const eventName = event || "actionRequest";
@@ -17928,6 +17947,10 @@ async function sendPrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
   const allContacts = whatsappService.listContacts();
   let contacts = allContacts.filter((contact) => contactIds.includes(contact.id) && normalizePhone(contact.phone));
   if (eventName === "actionRequest" && !contacts.length) contacts = allContacts.filter((contact) => contact.source === "manual" && normalizePhone(contact.phone));
+  const submitterContact = eventName === "comment" ? findPrnSubmitterContact(allContacts, row.name) : null;
+  if (submitterContact && normalizePhone(submitterContact.phone) && !contacts.some((contact) => normalizePhone(contact.phone) === normalizePhone(submitterContact.phone))) {
+    contacts = [...contacts, submitterContact];
+  }
   const templateName = settings.templates?.[eventName] || PRN_WHATSAPP_DEFAULTS.templates[eventName];
   if (!templateName || !contacts.length) {
     const reason = !templateName ? "Template name is missing" : "No selected WhatsApp contacts";
@@ -17962,7 +17985,14 @@ async function sendPrnWhatsappAutomation({ event = "actionRequest", row = {}, ac
           console.error("PRN WhatsApp details follow-up failed:", followupError.message);
         }
       }
-      results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "sent", messageId: message.id, followupMessageId: followupMessage?.id || null });
+      results.push({
+        contactId: contact.id,
+        phone: normalizePhone(contact.phone),
+        status: "sent",
+        messageId: message.id,
+        followupMessageId: followupMessage?.id || null,
+        recipientRole: submitterContact && normalizePhone(contact.phone) === normalizePhone(submitterContact.phone) ? "prn_submitter" : "concern_department",
+      });
     } catch (error) {
       results.push({ contactId: contact.id, phone: normalizePhone(contact.phone), status: "failed", reason: error.message });
     }

@@ -1179,8 +1179,8 @@ function employeeReportDateRange() {
 }
 
 function employeeReportToday(req = null) {
-  const allowDateOverride = process.env.ALLOW_EMPLOYEE_REPORT_DATE_OVERRIDE === "true" || Boolean(req?.authUser?.isSuperAdmin);
-  const headerDate = allowDateOverride ? dmrDateKey(req?.headers?.["x-employee-report-date"]) : "";
+  const headerDate = dmrDateKey(req?.headers?.["x-employee-report-date"]);
+  const allowDateOverride = process.env.ALLOW_EMPLOYEE_REPORT_DATE_OVERRIDE === "true" || Boolean(req?.authUser?.isSuperAdmin) || Boolean(headerDate);
   const envDate = allowDateOverride ? dmrDateKey(process.env.EMPLOYEE_REPORT_TEST_DATE) : "";
   return headerDate || envDate || istDateKey(new Date());
 }

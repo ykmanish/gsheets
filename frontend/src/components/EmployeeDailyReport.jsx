@@ -124,6 +124,7 @@ const emptyForm = {
   department: "",
   taskItems: [createEmptyTaskRow()],
   waitingTaskItems: [createEmptyWaitingRow()],
+  dismissedRecurringIds: [],
   tomorrowPlanTick: true,
   note: "",
 };
@@ -842,8 +843,10 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
     ]);
   }
   function removeRow(index) {
+    const removedRow = rows[index] || {};
+    const nextRows = rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [showStatus ? createEmptyTaskRow() : createEmptyWaitingRow()];
     setExpandedIndex((current) => Math.max(0, current > index ? current - 1 : Math.min(current, rows.length - 2)));
-    onRowsChange(rows.length > 1 ? rows.filter((_, rowIndex) => rowIndex !== index) : [showStatus ? createEmptyTaskRow() : createEmptyWaitingRow()]);
+    onRowsChange(nextRows, { action: "remove", removedRow, index });
   }
 
   const summaryPill = darkMode ? "bg-white/[0.055] text-white/80" : "bg-white text-black/70";
@@ -1836,6 +1839,7 @@ export default function EmployeeDailyReport({ darkMode }) {
       waitingTaskItems: todayReport?.waitingTaskItems?.length
         ? todayReport.waitingTaskItems.map((item) => normalizeTaskRowForForm(item, todayReport, false))
         : [createEmptyWaitingRow()],
+      dismissedRecurringIds: Array.isArray(todayReport?.dismissedRecurringIds) ? todayReport.dismissedRecurringIds : [],
       department: todayReport?.department || data?.profile?.department || "",
       carriedForwardFrom: data?.carriedForwardFrom || "",
     };
@@ -2073,6 +2077,7 @@ export default function EmployeeDailyReport({ darkMode }) {
         involvement: taskItems[0]?.involvement || waitingTaskItems[0]?.involvement || "",
         taskItems,
         waitingTaskItems,
+        dismissedRecurringIds: uniqueClean(form.dismissedRecurringIds || []),
       };
       if (firstSubmission) {
         celebrationStartedAt = Date.now();
@@ -3032,7 +3037,15 @@ export default function EmployeeDailyReport({ darkMode }) {
                     showStatus
                     showInvolvement
                     required
-                    onRowsChange={(rows) => setForm((current) => ({ ...current, taskItems: rows }))}
+                    onRowsChange={(rows, meta) => setForm((current) => {
+                      const removedRow = meta?.action === "remove" ? meta.removedRow || {} : null;
+                      const recurringId = removedRow && (removedRow.recurring || removedRow.recurringId) ? recurringIdForTask(removedRow) : "";
+                      return {
+                        ...current,
+                        taskItems: rows,
+                        dismissedRecurringIds: recurringId ? uniqueClean([...(current.dismissedRecurringIds || []), recurringId]) : (current.dismissedRecurringIds || []),
+                      };
+                    })}
                     onRefineDescription={refineDescription}
                     darkMode={darkMode}
                   />

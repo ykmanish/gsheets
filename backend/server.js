@@ -1396,6 +1396,20 @@ function sanitizeEmployeeTaskItems(items = []) {
   }).filter((item) => item.category && item.description).slice(0, 30);
 }
 
+function sanitizeEmployeeRecurringIds(ids = []) {
+  if (!Array.isArray(ids)) return [];
+  const seen = new Set();
+  return ids
+    .map((id) => projectText(id))
+    .filter((id) => {
+      const key = id.toLowerCase();
+      if (!id || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 100);
+}
+
 function employeeReportOptionUsage(reports = []) {
   const buckets = {
     sites: new Map(),
@@ -1481,6 +1495,10 @@ function employeeRecurringTasksFromReports(reports = [], today) {
     .filter((report) => projectText(report.reportDate) && projectText(report.reportDate) < today)
     .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
     .forEach((report) => {
+      sanitizeEmployeeRecurringIds(report.dismissedRecurringIds).forEach((key) => {
+        if (latest.has(key)) return;
+        latest.set(key, { recurring: false, recurringId: key, dismissed: true, recurringFrom: report.reportDate });
+      });
       sanitizeEmployeeTaskItems(report.taskItems).forEach((item) => {
         const key = employeeRecurringKey(item);
         if (!key || latest.has(key)) return;
@@ -1488,7 +1506,7 @@ function employeeRecurringTasksFromReports(reports = [], today) {
       });
     });
   return [...latest.values()]
-    .filter((item) => item.recurring)
+    .filter((item) => item.recurring && !item.dismissed)
     .map((item) => ({
       site: item.site,
       category: item.category,
@@ -1546,6 +1564,7 @@ function sanitizeEmployeeReport(report) {
     involvement: report.involvement || "",
     waitingTaskDescription: report.waitingTaskDescription || taskItemsToText(waitingTaskItems),
     waitingTaskItems,
+    dismissedRecurringIds: sanitizeEmployeeRecurringIds(report.dismissedRecurringIds),
     tomorrowPlanTick: Boolean(report.tomorrowPlanTick),
     note: report.note || "",
   };
@@ -3752,6 +3771,7 @@ app.post("/employee-daily-report", async (req, res) => {
     if (!department) return res.status(400).json({ error: "Department is required for your first report" });
     const taskItems = sanitizeEmployeeTaskItems(body.taskItems);
     const waitingTaskItems = sanitizeEmployeeTaskItems(body.waitingTaskItems);
+    const dismissedRecurringIds = sanitizeEmployeeRecurringIds(body.dismissedRecurringIds);
     if (!taskItems.length) return res.status(400).json({ error: "Add at least one completed task with site, category, status and description" });
     if (taskItems.some((item) => !item.site) || waitingTaskItems.some((item) => !item.site)) return res.status(400).json({ error: "Choose a site for every task" });
     if (taskItems.some((item) => !item.status)) return res.status(400).json({ error: "Choose a status for every today task" });
@@ -3774,6 +3794,7 @@ app.post("/employee-daily-report", async (req, res) => {
       involvement: taskItems[0]?.involvement || waitingTaskItems[0]?.involvement || "",
       waitingTaskItems,
       waitingTaskDescription: taskItemsToText(waitingTaskItems),
+      dismissedRecurringIds,
       tomorrowPlanTick: Boolean(body.tomorrowPlanTick),
       note: projectText(body.note),
       createdAt: now,
@@ -3812,6 +3833,7 @@ app.put("/employee-daily-report", async (req, res) => {
     if (!department) return res.status(400).json({ error: "Department is required" });
     const taskItems = sanitizeEmployeeTaskItems(body.taskItems);
     const waitingTaskItems = sanitizeEmployeeTaskItems(body.waitingTaskItems);
+    const dismissedRecurringIds = sanitizeEmployeeRecurringIds(body.dismissedRecurringIds);
     if (!taskItems.length) return res.status(400).json({ error: "Add at least one completed task with site, category and description" });
     if (taskItems.some((item) => !item.site) || waitingTaskItems.some((item) => !item.site)) return res.status(400).json({ error: "Choose a site for every task" });
     if (taskItems.some((item) => !item.status)) return res.status(400).json({ error: "Choose a status for every today task" });
@@ -3833,6 +3855,7 @@ app.put("/employee-daily-report", async (req, res) => {
       involvement: taskItems[0]?.involvement || waitingTaskItems[0]?.involvement || "",
       waitingTaskItems,
       waitingTaskDescription: taskItemsToText(waitingTaskItems),
+      dismissedRecurringIds,
       tomorrowPlanTick: Boolean(body.tomorrowPlanTick),
       note: projectText(body.note),
       updatedAt: now,

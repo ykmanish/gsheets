@@ -54,7 +54,7 @@ function PrnWhatsappAutomationDrawer({ darkMode, onClose }) {
     approvalContactIds: [],
     concernContactIds: [],
     templates: {
-      actionRequest: "prn_action_request",
+      actionRequest: "prn_submission",
       approved: "prn_approved_notification",
       declined: "prn_declined_notification",
       comment: "prn_comment_notification",
@@ -69,11 +69,22 @@ function PrnWhatsappAutomationDrawer({ darkMode, onClose }) {
     try {
       setLoading(true);
       const result = await api("/prn-dashboard/whatsapp/settings");
+      const incomingTemplates = result.settings?.templates || {};
+      const templates = {
+        actionRequest: "prn_submission",
+        approved: "prn_approved_notification",
+        declined: "prn_declined_notification",
+        comment: "prn_comment_notification",
+        ...incomingTemplates,
+        actionRequest: incomingTemplates.actionRequest === "prn_action_request"
+          ? "prn_submission"
+          : incomingTemplates.actionRequest || "prn_submission",
+      };
       setContacts(result.contacts || []);
       setSettings((current) => ({
         ...current,
         ...(result.settings || {}),
-        templates: { ...current.templates, ...(result.settings?.templates || {}) },
+        templates: { ...current.templates, ...templates },
         languages: { ...current.languages, ...(result.settings?.languages || {}) },
       }));
     } catch (error) {

@@ -49,7 +49,7 @@ const menuPaths = {
   projects: "/projects",
   "project-dmr": "/projects/dmr",
   "project-mrn": "/projects/mrn",
-  "project-prn": "/projects/prn",
+  "project-prn": "/projects/prn-module",
   "project-stock": "/projects/stock",
   "site-images": "/projects/site-images",
   "hr-dashboard": "/hr",

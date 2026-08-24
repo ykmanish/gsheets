@@ -17213,7 +17213,7 @@ const PRN_WHATSAPP_DEFAULTS = {
   watcherBaselineVersion: "",
   watcherSpreadsheetId: "",
   templates: {
-    actionRequest: "prn_action_request",
+    actionRequest: "prn_submission",
     approved: "prn_approved_notification",
     declined: "prn_declined_notification",
     comment: "prn_comment_notification",
@@ -17759,10 +17759,14 @@ async function handleMrnWhatsappReply(message = {}) {
 async function getPrnWhatsappSettings() {
   const db = await connectAuthDb();
   const saved = await db.collection("platformSettings").findOne({ _id: PRN_WHATSAPP_SETTINGS_ID });
+  const savedTemplates = { ...(saved?.settings?.templates || {}) };
+  if (!savedTemplates.actionRequest || savedTemplates.actionRequest === "prn_action_request") {
+    savedTemplates.actionRequest = PRN_WHATSAPP_DEFAULTS.templates.actionRequest;
+  }
   return {
     ...PRN_WHATSAPP_DEFAULTS,
     ...(saved?.settings || {}),
-    templates: { ...PRN_WHATSAPP_DEFAULTS.templates, ...(saved?.settings?.templates || {}) },
+    templates: { ...PRN_WHATSAPP_DEFAULTS.templates, ...savedTemplates },
     languages: { ...PRN_WHATSAPP_DEFAULTS.languages, ...(saved?.settings?.languages || {}) },
     processedActionRequestPrns: Array.isArray(saved?.settings?.processedActionRequestPrns)
       ? saved.settings.processedActionRequestPrns.map((item) => projectText(item)).filter(Boolean).slice(-1000)
@@ -17782,7 +17786,9 @@ async function savePrnWhatsappSettings(input = {}) {
     approvalContactIds: cleanIds(input.approvalContactIds),
     concernContactIds: cleanIds(input.concernContactIds),
     templates: {
-      actionRequest: projectText(input.templates?.actionRequest) || PRN_WHATSAPP_DEFAULTS.templates.actionRequest,
+      actionRequest: projectText(input.templates?.actionRequest) === "prn_action_request"
+        ? PRN_WHATSAPP_DEFAULTS.templates.actionRequest
+        : projectText(input.templates?.actionRequest) || PRN_WHATSAPP_DEFAULTS.templates.actionRequest,
       approved: projectText(input.templates?.approved) || PRN_WHATSAPP_DEFAULTS.templates.approved,
       declined: projectText(input.templates?.declined) || PRN_WHATSAPP_DEFAULTS.templates.declined,
       comment: projectText(input.templates?.comment) || PRN_WHATSAPP_DEFAULTS.templates.comment,

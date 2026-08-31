@@ -13106,6 +13106,398 @@ function dmrPdfDrawTradeSite(doc, report) {
   }
 }
 
+function dmrTradeSiteExportLabel(groupBy) {
+  return groupBy === "trade" ? "trade" : "site";
+}
+
+const DMR_TRADE_SITE_EXPORT_MODES = new Set(["site", "trade", "combo"]);
+
+function dmrTradeSiteExportModeLabel(mode) {
+  if (mode === "trade") return "trade";
+  if (mode === "combo") return "site + trade";
+  return "site";
+}
+
+// A combo export pins a site, a trade, or both. Group on whichever dimension is
+// left open so the PDF stays compact: one section per site when the trade is
+// pinned, one section per trade when the site is pinned.
+function dmrTradeSiteExportGroupBy(mode, siteFilter, tradeFilter) {
+  if (mode === "trade") return "trade";
+  if (mode === "combo" && !siteFilter && tradeFilter) return "trade";
+  return "site";
+}
+
+function dmrTradeSiteExportScopeLabel(mode, siteFilter, tradeFilter, groupBy) {
+  if (siteFilter && tradeFilter) return `${siteFilter} - ${tradeFilter}`;
+  if (siteFilter) return siteFilter;
+  if (tradeFilter) return tradeFilter;
+  return `All ${dmrTradeSiteExportLabel(groupBy)}s`;
+}
+
+function dmrTradeSiteExportGroups(report, groupBy = "site", { includeEmpty = false, site: siteFilter = "", trade: tradeFilter = "" } = {}) {
+  const mode = groupBy === "trade" ? "trade" : "site";
+  const siteNeedle = projectText(siteFilter).toLowerCase();
+  const tradeNeedle = projectText(tradeFilter).toLowerCase();
+  const groups = new Map();
+  for (const row of report.tradeSiteManpowerByDate || []) {
+    if (row.rowType === "average") continue;
+    const site = dmrPdfSafe(row.site, "Unassigned site");
+    const trade = dmrPdfSafe(row.trade, "General");
+    if (siteNeedle && site.trim().toLowerCase() !== siteNeedle) continue;
+    if (tradeNeedle && trade.trim().toLowerCase() !== tradeNeedle) continue;
+    const groupLabel = mode === "trade" ? trade : site;
+    const childLabel = mode === "trade" ? site : trade;
+    const groupKey = groupLabel.trim().toLowerCase();
+    const childKey = childLabel.trim().toLowerCase();
+    const group = groups.get(groupKey) || { label: groupLabel, planned: 0, actual: 0, children: new Map() };
+    const child = group.children.get(childKey) || { label: childLabel, planned: 0, actual: 0, values: new Map() };
+    const planned = Number(row.planned) || 0;
+    const actual = Number(row.actual) || 0;
+    const cell = child.values.get(row.date) || { planned: 0, actual: 0 };
+    cell.planned += planned;
+    cell.actual += actual;
+    child.values.set(row.date, cell);
+    child.planned += planned;
+    child.actual += actual;
+    group.children.set(childKey, child);
+    group.planned += planned;
+    group.actual += actual;
+    groups.set(groupKey, group);
+  }
+  return [...groups.values()]
+    .map((group) => {
+      const children = [...group.children.values()]
+        .filter((child) => includeEmpty || child.planned || child.actual)
+        .sort((a, b) => (b.planned + b.actual) - (a.planned + a.actual) || a.label.localeCompare(b.label));
+      return {
+        label: group.label,
+        key: group.label.trim().toLowerCase(),
+        planned: group.planned,
+        actual: group.actual,
+        variance: dmrReportVariance(group.planned, group.actual),
+        progress: dmrReportProgress(group.planned, group.actual),
+        hiddenChildren: group.children.size - children.length,
+        children,
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function dmrPdfTradeSitePair(doc, x, y, width, planned, actual, { size = 8.6 } = {}) {
+  const plannedValue = Number(planned) || 0;
+  const actualValue = Number(actual) || 0;
+  if (!plannedValue && !actualValue) {
+    doc.fillColor("#b3b1a9").font(dmrPdfFonts.regular).fontSize(size).text("-", x, y, { width, height: size + 2, align: "center", lineBreak: false });
+    return;
+  }
+  const plannedText = String(plannedValue);
+  const actualText = String(actualValue);
+  doc.font(dmrPdfFonts.bold).fontSize(size);
+  const textWidth = doc.widthOfString(plannedText) + doc.widthOfString("/") + doc.widthOfString(actualText);
+  let cursor = x + Math.max(0, (width - textWidth) / 2);
+  doc.fillColor("#171714").text(plannedText, cursor, y, { lineBreak: false });
+  cursor += doc.widthOfString(plannedText);
+  doc.fillColor("#a3a099").text("/", cursor, y, { lineBreak: false });
+  cursor += doc.widthOfString("/");
+  doc.fillColor(dmrPdfStatusColor(plannedValue, actualValue)).text(actualText, cursor, y, { lineBreak: false });
+}
+
+function dmrPdfTradeSiteDateHeading(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return dmrPdfSafe(value, "-");
+  return String(value).slice(8, 10);
+}
+
+function dmrPdfTradeSiteMonthLabel(dateKey) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return "Other dates";
+  const date = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "Other dates";
+  return date.toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
+}
+
+// One block per calendar month so a whole month sits on a single row of columns
+// and the next month starts a fresh block underneath.
+function dmrPdfTradeSiteDateBlocks(dates = []) {
+  const blocks = [];
+  for (const date of dates) {
+    const key = /^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) ? String(date).slice(0, 7) : "other";
+    const last = blocks[blocks.length - 1];
+    if (last && last.key === key) last.dates.push(date);
+    else blocks.push({ key, label: dmrPdfTradeSiteMonthLabel(date), dates: [date] });
+  }
+  return blocks;
+}
+
+const DMR_TRADE_SITE_EXPORT_LABEL_WIDTH = 118;
+const DMR_TRADE_SITE_EXPORT_TOTAL_WIDTH = 50;
+const DMR_TRADE_SITE_EXPORT_AVG_WIDTH = 44;
+const DMR_TRADE_SITE_EXPORT_MIN_DATE_WIDTH = 25;
+
+// A4 landscape holds about three weeks of columns; a full month needs A3.
+function dmrPdfTradeSiteExportPageSize(dates = []) {
+  const widest = dmrPdfTradeSiteDateBlocks(dates).reduce((max, block) => Math.max(max, block.dates.length), 0);
+  const fixed = DMR_TRADE_SITE_EXPORT_LABEL_WIDTH + DMR_TRADE_SITE_EXPORT_TOTAL_WIDTH + DMR_TRADE_SITE_EXPORT_AVG_WIDTH;
+  const a4Available = 842 - 64 - fixed;
+  return widest * DMR_TRADE_SITE_EXPORT_MIN_DATE_WIDTH <= a4Available ? "A4" : "A3";
+}
+
+function dmrPdfTradeSitePairFontSize(dateWidth) {
+  if (dateWidth >= 34) return 8.6;
+  if (dateWidth >= 28) return 7.8;
+  if (dateWidth >= 24) return 7;
+  return 6.2;
+}
+
+function dmrPdfDrawTradeSiteExportHeader(doc, { report, groupBy, groups, scopeLabel, includeEmpty, mode = "site" }) {
+  const left = doc.page.margins.left;
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const top = doc.y;
+  const generatedAt = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const planned = groups.reduce((sum, group) => sum + (Number(group.planned) || 0), 0);
+  const actual = groups.reduce((sum, group) => sum + (Number(group.actual) || 0), 0);
+  const progress = dmrReportProgress(planned, actual);
+  const progressColor = dmrPdfStatusColor(planned, actual);
+  const dateCount = (report.dateKeys || []).length;
+
+  doc.rect(left, top, pageWidth, 76).fill("#ffffff").stroke("#ece8df");
+  doc.fillColor("#7b7f89").font(dmrPdfFonts.bold).fontSize(7).text(`TRADE BY SITE MANPOWER - ${dmrTradeSiteExportModeLabel(mode).toUpperCase()} EXPORT`, left + 14, top + 10, { characterSpacing: 1.8 });
+  doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(17).text(scopeLabel, left + 14, top + 25, { width: pageWidth - 190, height: 22, ellipsis: true });
+  doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(8).text(
+    `${dmrPdfDateLabel(report.startDate)} to ${dmrPdfDateLabel(report.endDate)} - ${dateCount} date${dateCount === 1 ? "" : "s"} - generated ${generatedAt}`,
+    left + 14,
+    top + 50,
+    { width: pageWidth - 190 },
+  );
+  doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(7.4).text(
+    includeEmpty ? "All rows included, including rows with no planned or actual manpower." : "Rows with no planned and no actual manpower are hidden.",
+    left + 14,
+    top + 62,
+    { width: pageWidth - 190 },
+  );
+
+  doc.roundedRect(left + pageWidth - 160, top + 12, 146, 52, 14).fill(actual >= planned ? "#e8fbf4" : "#fff0f0");
+  doc.fillColor(progressColor).font(dmrPdfFonts.bold).fontSize(20).text(`${progress}%`, left + pageWidth - 152, top + 20, { width: 130, align: "center", lineBreak: false });
+  doc.fillColor(progressColor).font(dmrPdfFonts.regular).fontSize(7).text(`${planned} planned / ${actual} actual`, left + pageWidth - 152, top + 46, { width: 130, align: "center", lineBreak: false });
+  doc.y = top + 90;
+}
+
+function dmrPdfDrawTradeSiteExportGroup(doc, { group, groupBy, dates }) {
+  const left = doc.page.margins.left;
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const bottom = () => doc.page.height - doc.page.margins.bottom;
+  const childHeading = groupBy === "trade" ? "SITE" : "TRADE";
+  // Split by month first; only fall back to slicing a month when even the
+  // widest page cannot hold it at the minimum readable column width.
+  const monthBlocks = dmrPdfTradeSiteDateBlocks(dates);
+  const widestMonth = monthBlocks.reduce((max, block) => Math.max(max, block.dates.length), 0);
+  // Short ranges have width to spare, so give the names a roomier column.
+  const labelWidth = widestMonth >= 22 ? DMR_TRADE_SITE_EXPORT_LABEL_WIDTH : 148;
+  const totalWidth = DMR_TRADE_SITE_EXPORT_TOTAL_WIDTH;
+  const avgWidth = DMR_TRADE_SITE_EXPORT_AVG_WIDTH;
+  const available = pageWidth - labelWidth - totalWidth - avgWidth;
+  const perChunk = Math.max(1, Math.floor(available / DMR_TRADE_SITE_EXPORT_MIN_DATE_WIDTH));
+  const blocks = [];
+  for (const block of monthBlocks.length ? monthBlocks : [{ label: "", dates: [] }]) {
+    if (block.dates.length <= perChunk) {
+      blocks.push(block);
+      continue;
+    }
+    for (let index = 0; index < block.dates.length; index += perChunk) {
+      const slice = block.dates.slice(index, index + perChunk);
+      blocks.push({
+        key: block.key,
+        label: `${block.label} - days ${index + 1}-${index + slice.length} of ${block.dates.length}`,
+        dates: slice,
+      });
+    }
+  }
+  // With several blocks, one shared column width keeps the months lined up and
+  // lets a short trailing month stop early rather than stretch its cells. A
+  // lone block has nothing to line up with, so it fills the page as before.
+  const widestBlock = blocks.reduce((max, block) => Math.max(max, block.dates.length), 0);
+  const evenWidth = available / Math.max(1, widestBlock);
+  const dateWidth = blocks.length > 1 ? Math.min(46, evenWidth) : evenWidth;
+  const pairSize = dmrPdfTradeSitePairFontSize(dateWidth);
+
+  function drawGroupCard() {
+    if (doc.y + 62 > bottom()) doc.addPage();
+    const top = doc.y;
+    doc.roundedRect(left, top, pageWidth, 50, 14).fill("#f7f4ec");
+    doc.fillColor("#e76f42").font(dmrPdfFonts.bold).fontSize(7).text(dmrTradeSiteExportLabel(groupBy).toUpperCase(), left + 16, top + 10, { characterSpacing: 1.6 });
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(14).text(group.label, left + 16, top + 22, { width: pageWidth - 220, height: 18, ellipsis: true });
+    const summary = `${group.children.length} ${childHeading.toLowerCase()}${group.children.length === 1 ? "" : "s"} - variance ${group.variance >= 0 ? "+" : ""}${group.variance}`;
+    doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(7.6).text(summary, left + pageWidth - 200, top + 12, { width: 184, align: "right" });
+    doc.font(dmrPdfFonts.bold).fontSize(13);
+    const plannedText = String(group.planned);
+    const actualText = String(group.actual);
+    const widthOfPair = doc.widthOfString(plannedText) + doc.widthOfString(" / ") + doc.widthOfString(actualText);
+    let cursor = left + pageWidth - 16 - widthOfPair;
+    doc.fillColor("#171714").text(plannedText, cursor, top + 26, { lineBreak: false });
+    cursor += doc.widthOfString(plannedText);
+    doc.fillColor("#a3a099").text(" / ", cursor, top + 26, { lineBreak: false });
+    cursor += doc.widthOfString(" / ");
+    doc.fillColor(dmrPdfStatusColor(group.planned, group.actual)).text(actualText, cursor, top + 26, { lineBreak: false });
+    doc.y = top + 58;
+  }
+
+  function blockWidth(block) {
+    return labelWidth + block.dates.length * dateWidth + totalWidth + avgWidth;
+  }
+
+  function drawTableHeader(block, note) {
+    if (doc.y + 52 > bottom()) doc.addPage();
+    if (note) {
+      doc.fillColor("#4b5563").font(dmrPdfFonts.bold).fontSize(8).text(note, left, doc.y, { width: pageWidth });
+      doc.y += 4;
+    }
+    const top = doc.y;
+    const width = blockWidth(block);
+    doc.rect(left, top, width, 24).fill("#f3f1eb").stroke("#e4ded3");
+    doc.fillColor("#5e6a7f").font(dmrPdfFonts.bold).fontSize(7.4).text(childHeading, left + 9, top + 8, { width: labelWidth - 16, height: 10 });
+    block.dates.forEach((date, index) => {
+      doc.fillColor("#5e6a7f").font(dmrPdfFonts.bold).fontSize(Math.min(7.4, pairSize)).text(dmrPdfTradeSiteDateHeading(date), left + labelWidth + index * dateWidth + 1, top + 8, { width: dateWidth - 2, height: 10, align: "center" });
+    });
+    doc.fillColor("#5e6a7f").font(dmrPdfFonts.bold).fontSize(7).text("TOTAL", left + labelWidth + block.dates.length * dateWidth + 2, top + 8, { width: totalWidth - 4, height: 10, align: "center" });
+    doc.fillColor("#5e6a7f").font(dmrPdfFonts.bold).fontSize(7).text("AVG", left + labelWidth + block.dates.length * dateWidth + totalWidth + 2, top + 8, { width: avgWidth - 4, height: 10, align: "center" });
+    doc.y = top + 24;
+  }
+
+  drawGroupCard();
+
+  if (!group.children.length) {
+    if (doc.y + 54 > bottom()) doc.addPage();
+    const noteTop = doc.y;
+    doc.roundedRect(left, noteTop, pageWidth, 44, 12).fill("#faf9f5").stroke("#ece8df");
+    doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(9).text("No planned or actual manpower recorded for this selection in the selected range.", left + 16, noteTop + 16, { width: pageWidth - 32 });
+    doc.y = noteTop + 56;
+    return;
+  }
+
+  const rowHeight = 16;
+  blocks.forEach((block, blockIndex) => {
+    const width = blockWidth(block);
+    const blockDivisor = Math.max(1, block.dates.length);
+    const totalX = left + labelWidth + block.dates.length * dateWidth;
+    const avgX = totalX + totalWidth;
+    // Totals are per month so each block answers "what happened in this month".
+    const note = blocks.length > 1
+      ? `${block.label} - ${block.dates.length} date${block.dates.length === 1 ? "" : "s"} (TOTAL and AVG cover this month only)`
+      : block.label;
+    // Never open a month with its heading orphaned at the foot of a page - keep
+    // the header with at least three rows (or the whole block, if shorter).
+    const blockOpening = 16 + 24
+      + Math.min(group.children.length, 3) * rowHeight
+      + (group.children.length >= 2 ? 19 : 0);
+    if (blockIndex > 0 && doc.y + blockOpening > bottom()) doc.addPage();
+    drawTableHeader(block, note);
+    let index = 0;
+    for (const child of group.children) {
+      if (doc.y + rowHeight + 4 > bottom()) {
+        doc.addPage();
+        drawTableHeader(block, `${block.label} - ${group.label} (continued)`);
+      }
+      const y = doc.y;
+      let rowPlanned = 0;
+      let rowActual = 0;
+      doc.rect(left, y, width, rowHeight).fill(index % 2 ? "#ffffff" : "#faf9f5").stroke("#ece8df");
+      doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(7.6).text(child.label, left + 8, y + 4.5, { width: labelWidth - 14, height: 10, ellipsis: true });
+      block.dates.forEach((date, dateIndex) => {
+        const cell = child.values.get(date) || { planned: 0, actual: 0 };
+        rowPlanned += Number(cell.planned) || 0;
+        rowActual += Number(cell.actual) || 0;
+        dmrPdfTradeSitePair(doc, left + labelWidth + dateIndex * dateWidth, y + 4.5, dateWidth, cell.planned, cell.actual, { size: pairSize });
+      });
+      dmrPdfTradeSitePair(doc, totalX, y + 4.5, totalWidth, rowPlanned, rowActual, { size: 7.6 });
+      dmrPdfTradeSitePair(doc, avgX, y + 4.5, avgWidth, Number((rowPlanned / blockDivisor).toFixed(1)), Number((rowActual / blockDivisor).toFixed(1)), { size: 7 });
+      doc.y = y + rowHeight;
+      index += 1;
+    }
+
+    function drawHiddenNote() {
+      if (group.hiddenChildren > 0 && blockIndex === blocks.length - 1) {
+        if (doc.y + 18 <= bottom()) {
+          doc.fillColor("#807d76").font(dmrPdfFonts.regular).fontSize(7.4).text(`${group.hiddenChildren} ${childHeading.toLowerCase()} row${group.hiddenChildren === 1 ? "" : "s"} with no manpower hidden.`, left, doc.y + 5, { width: pageWidth });
+        }
+        doc.y += 18;
+      }
+    }
+
+    if (group.children.length < 2) {
+      drawHiddenNote();
+      doc.y += 12;
+      return;
+    }
+    if (doc.y + 20 > bottom()) {
+      doc.addPage();
+      drawTableHeader(block, `${block.label} - ${group.label} (continued)`);
+    }
+    const totalTop = doc.y;
+    let blockPlanned = 0;
+    let blockActual = 0;
+    doc.rect(left, totalTop, width, 19).fill("#f3f1eb").stroke("#e4ded3");
+    doc.fillColor("#171714").font(dmrPdfFonts.bold).fontSize(7.8).text("TOTAL", left + 8, totalTop + 5.5, { width: labelWidth - 14, height: 10 });
+    block.dates.forEach((date, dateIndex) => {
+      const planned = group.children.reduce((sum, child) => sum + (Number(child.values.get(date)?.planned) || 0), 0);
+      const actual = group.children.reduce((sum, child) => sum + (Number(child.values.get(date)?.actual) || 0), 0);
+      blockPlanned += planned;
+      blockActual += actual;
+      dmrPdfTradeSitePair(doc, left + labelWidth + dateIndex * dateWidth, totalTop + 5.5, dateWidth, planned, actual, { size: pairSize });
+    });
+    dmrPdfTradeSitePair(doc, totalX, totalTop + 5.5, totalWidth, blockPlanned, blockActual, { size: 7.6 });
+    dmrPdfTradeSitePair(doc, avgX, totalTop + 5.5, avgWidth, Number((blockPlanned / blockDivisor).toFixed(1)), Number((blockActual / blockDivisor).toFixed(1)), { size: 7 });
+    doc.y = totalTop + 19;
+
+    drawHiddenNote();
+    doc.y += 12;
+  });
+}
+
+function generateDmrTradeSiteExportPdfBuffer({ report, groupBy, groups, scopeLabel, includeEmpty, mode = "site" }) {
+  const dates = (report.dateKeys || report.availableDates || []).filter(Boolean);
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: dmrPdfTradeSiteExportPageSize(dates),
+      layout: "landscape",
+      margin: 32,
+      bufferPages: true,
+      info: {
+        Title: `DMR trade by ${dmrTradeSiteExportModeLabel(mode)} - ${scopeLabel}`,
+        Author: "UIPL Docs",
+        Subject: `Trade by site manpower grouped by ${dmrTradeSiteExportLabel(groupBy)}`,
+      },
+    });
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    registerDmrPdfFonts(doc);
+    dmrPdfDrawTradeSiteExportHeader(doc, { report, groupBy, groups, scopeLabel, includeEmpty, mode });
+    groups.forEach((group, index) => {
+      if (index > 0 && doc.y + 150 > doc.page.height - doc.page.margins.bottom) doc.addPage();
+      dmrPdfDrawTradeSiteExportGroup(doc, { group, groupBy, dates });
+    });
+
+    const range = doc.bufferedPageRange();
+    for (let page = range.start; page < range.start + range.count; page += 1) {
+      doc.switchToPage(page);
+      doc.fillColor("#a3a099").font(dmrPdfFonts.regular).fontSize(7).text(
+        `Trade by site manpower (by ${dmrTradeSiteExportModeLabel(mode)}) - ${scopeLabel} - page ${page - range.start + 1} of ${range.count}`,
+        doc.page.margins.left,
+        doc.page.height - doc.page.margins.bottom + 8,
+        { width: doc.page.width - doc.page.margins.left - doc.page.margins.right, height: 10, align: "center", lineBreak: false },
+      );
+    }
+    doc.end();
+  });
+}
+
 function dmrPdfDrawTradeComments(doc, report, dateKey) {
   const entries = report.tradeComments || [];
   const left = doc.page.margins.left;
@@ -18775,6 +19167,57 @@ app.get("/dmr-dashboard/report", async (req, res) => {
   } catch (error) {
     console.error("DMR report error:", error);
     res.status(500).json({ error: `Could not generate DMR report: ${error.message}` });
+  }
+});
+
+app.get("/dmr-dashboard/report/trade-site/pdf", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "project-dmr")) return res.status(403).json({ error: "DMR module access required" });
+    if (!publicDmrSettings().linked) return res.status(400).json({ error: "DMR sheet is not linked" });
+    const today = istDateKey(new Date());
+    const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.startDate || "")) ? String(req.query.startDate) : addDaysToDateKey(today, -6);
+    const endDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.endDate || "")) ? String(req.query.endDate) : today;
+    const requestedMode = String(req.query.groupBy || "site").trim().toLowerCase();
+    const mode = DMR_TRADE_SITE_EXPORT_MODES.has(requestedMode) ? requestedMode : "site";
+    const includeEmpty = ["1", "true", "yes"].includes(String(req.query.includeEmpty || "").toLowerCase());
+    // `value` is the pre-combo parameter name; keep honouring it so a cached
+    // frontend bundle cannot silently widen the export to every site/trade.
+    const legacyValue = projectText(req.query.value);
+    const siteFilter = projectText(req.query.site) || (mode === "site" ? legacyValue : "");
+    const tradeFilter = projectText(req.query.trade) || (mode === "trade" ? legacyValue : "");
+    const groupBy = dmrTradeSiteExportGroupBy(mode, siteFilter, tradeFilter);
+    const report = await buildDmrReport({ startDate, endDate, sections: ["tradeSiteManpower"] });
+    const allGroups = dmrTradeSiteExportGroups(report, groupBy, { includeEmpty, site: siteFilter, trade: tradeFilter });
+    const pinnedOneGroup = Boolean(siteFilter || tradeFilter) && allGroups.length === 1;
+    const groups = includeEmpty || pinnedOneGroup
+      ? allGroups
+      : allGroups.filter((group) => group.children.length);
+    if (!groups.length) {
+      const scope = [
+        siteFilter ? `site "${siteFilter}"` : "",
+        tradeFilter ? `trade "${tradeFilter}"` : "",
+      ].filter(Boolean).join(" + ");
+      return res.status(404).json({
+        error: scope
+          ? `No trade by site manpower found for ${scope} in this range`
+          : "No trade by site manpower found for this range",
+      });
+    }
+    const scopeLabel = dmrTradeSiteExportScopeLabel(mode, siteFilter, tradeFilter, groupBy);
+    const buffer = await generateDmrTradeSiteExportPdfBuffer({ report, groupBy, groups, scopeLabel, includeEmpty, mode });
+    const slug = scopeLabel
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || dmrTradeSiteExportLabel(groupBy);
+    const fileName = `dmr-trade-by-${dmrTradeSiteExportModeLabel(mode).replace(/[^a-z]+/g, "-")}-${slug}-${startDate}-to-${endDate}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", buffer.length);
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.setHeader("Cache-Control", "no-store");
+    res.send(buffer);
+  } catch (error) {
+    console.error("DMR trade by site PDF error:", error);
+    res.status(500).json({ error: `Could not build trade by site PDF: ${error.message}` });
   }
 });
 

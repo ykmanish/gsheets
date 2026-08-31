@@ -16,6 +16,7 @@ import {
   Minimize2,
   Plus,
   RefreshCw,
+  Rows3,
   Save,
   Search,
   Send,
@@ -95,6 +96,9 @@ const DMR_REPORT_SECTION_OPTIONS = [
   { id: "materials", label: "Materials" },
   { id: "notes", label: "Notes" },
 ];
+
+// The CEO report opens on Trade by site only - the other modules are opt-in.
+const DMR_REPORT_DEFAULT_SECTION = "tradeSiteManpower";
 
 function comparablePlanText(value = "") {
   const text = String(value || "")
@@ -712,9 +716,18 @@ function TradeSiteMatrix({
   muted,
   search,
   onSearch,
+  onExport,
+  exportLoading = "",
 }) {
   const scrollRef = useRef(null);
+  const exportRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportMode, setExportMode] = useState("site");
+  const [exportSite, setExportSite] = useState("");
+  const [exportTrade, setExportTrade] = useState("");
+  const [exportIncludeEmpty, setExportIncludeEmpty] = useState(false);
+  useClickOutside(exportRef, () => setExportOpen(false));
   const query = search.trim().toLowerCase();
   const grouped = rows.reduce((result, item) => {
     if (item.rowType === "average") return result;
@@ -734,25 +747,200 @@ function TradeSiteMatrix({
   }, new Map());
   const matrixRows = [...grouped.values()];
 
+  const exportGroups = useMemo(() => {
+    const sites = new Map();
+    const trades = new Map();
+    for (const item of rows) {
+      if (item.rowType === "average") continue;
+      const site = String(item.site || "Unassigned site");
+      const trade = String(item.trade || "General");
+      const weight = (Number(item.planned) || 0) + (Number(item.actual) || 0);
+      const siteEntry = sites.get(site.toLowerCase()) || { label: site, weight: 0 };
+      siteEntry.weight += weight;
+      sites.set(site.toLowerCase(), siteEntry);
+      const tradeEntry = trades.get(trade.toLowerCase()) || { label: trade, weight: 0 };
+      tradeEntry.weight += weight;
+      trades.set(trade.toLowerCase(), tradeEntry);
+    }
+    const sort = (list) =>
+      [...list.values()].sort((a, b) => a.label.localeCompare(b.label));
+    return { site: sort(sites), trade: sort(trades) };
+  }, [rows]);
+
+  const exportSelectOptions = (dimension) => [
+    {
+      value: "",
+      label: `All ${dimension === "trade" ? "trades" : "sites"} (${(exportGroups[dimension] || []).length})`,
+    },
+    ...(exportGroups[dimension] || []).map((item) => ({
+      value: item.label,
+      label: item.weight ? item.label : `${item.label} - no data`,
+    })),
+  ];
+  const exportBusy = Boolean(exportLoading);
+  const exportKey = `${exportMode}:${exportMode === "trade" ? "" : exportSite}:${exportMode === "site" ? "" : exportTrade}`;
+
+  function runExport(mode, site, trade, includeEmpty = exportIncludeEmpty) {
+    if (!onExport) return;
+    setExportOpen(false);
+    onExport({ mode, site, trade, includeEmpty });
+  }
+
+  function runPopoverExport() {
+    runExport(
+      exportMode,
+      exportMode === "trade" ? "" : exportSite,
+      exportMode === "site" ? "" : exportTrade,
+    );
+  }
+
+  const exportModeHint =
+    exportMode === "combo"
+      ? "Pick a site, a trade, or both. Leaving one on \"All\" keeps every value for that side."
+      : exportMode === "trade"
+        ? "One section per trade with a planned/actual column for every date in the report range."
+        : "One section per site with a planned/actual column for every date in the report range.";
+
   return (
     <section
       className={`overflow-hidden rounded-[26px] border ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
     >
       <div className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h4 className="text-lg font-semibold">Trade by site manpower</h4>
+          <h4 className="text-lg font-semibold lg:whitespace-nowrap">
+            Trade by site manpower
+          </h4>
           <p className={`mt-1 text-xs ${muted}`}>{matrixRows.length} rows</p>
         </div>
-        <div className="relative w-full sm:w-80">
-          <Search
-            className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`}
-          />
-          <input
-            value={search}
-            onChange={(event) => onSearch(event.target.value)}
-            placeholder="Search site or trade..."
-            className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
-          />
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-end lg:w-auto lg:shrink-0">
+          <div className="relative w-full sm:w-72">
+            <Search
+              className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`}
+            />
+            <input
+              value={search}
+              onChange={(event) => onSearch(event.target.value)}
+              placeholder="Search site or trade..."
+              className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+            />
+          </div>
+          {onExport && (
+            <div ref={exportRef} className="relative w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setExportOpen((current) => !current)}
+                disabled={exportBusy}
+                className={`flex h-11 w-full items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold transition disabled:opacity-60 sm:w-auto ${darkMode ? "border-white/10 bg-white/[0.05] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+              >
+                {exportBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                <span>Export PDF</span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition ${exportOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {exportOpen && (
+                <div
+                  className={`absolute right-0 top-[calc(100%+8px)] z-50 w-[320px] rounded-2xl border p-3 shadow-xl ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/10 bg-white"}`}
+                >
+                  <p
+                    className={`px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}
+                  >
+                    Group the PDF by
+                  </p>
+                  <div
+                    className={`mt-2 flex rounded-2xl p-1 ${darkMode ? "bg-white/[0.05]" : "bg-black/[0.04]"}`}
+                  >
+                    {[
+                      { id: "site", label: "Site" },
+                      { id: "trade", label: "Trade" },
+                      { id: "combo", label: "Site + trade" },
+                    ].map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setExportMode(option.id)}
+                        className={`h-9 flex-1 rounded-xl px-1 text-xs font-semibold transition ${exportMode === option.id ? (darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white") : darkMode ? "text-white/60 hover:text-white" : "text-black/55 hover:text-black"}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {exportMode !== "trade" && (
+                    <>
+                      <p
+                        className={`mt-3 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}
+                      >
+                        Site
+                      </p>
+                      <div className="mt-2">
+                        <SelectMenu
+                          darkMode={darkMode}
+                          value={exportSite}
+                          options={exportSelectOptions("site")}
+                          onChange={setExportSite}
+                          searchable
+                          searchPlaceholder="Search site..."
+                          placeholder="Choose a site"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {exportMode !== "site" && (
+                    <>
+                      <p
+                        className={`mt-3 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}
+                      >
+                        Trade
+                      </p>
+                      <div className="mt-2">
+                        <SelectMenu
+                          darkMode={darkMode}
+                          value={exportTrade}
+                          options={exportSelectOptions("trade")}
+                          onChange={setExportTrade}
+                          searchable
+                          searchPlaceholder="Search trade..."
+                          placeholder="Choose a trade"
+                        />
+                      </div>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setExportIncludeEmpty((current) => !current)}
+                    className={`mt-3 flex w-full items-center gap-2.5 rounded-xl px-1 py-2 text-left text-xs ${darkMode ? "text-white/70" : "text-black/65"}`}
+                  >
+                    <span
+                      className={`flex h-4 w-4 items-center justify-center rounded border transition ${exportIncludeEmpty ? "border-[#4b9b16] bg-[#4b9b16] text-white" : darkMode ? "border-white/20" : "border-black/20"}`}
+                    >
+                      {exportIncludeEmpty && <Check className="h-3 w-3" />}
+                    </span>
+                    Include rows with no manpower
+                  </button>
+                  <button
+                    type="button"
+                    onClick={runPopoverExport}
+                    disabled={exportBusy}
+                    className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#4b9b16] text-sm font-semibold text-white transition hover:bg-[#3f8412] disabled:opacity-60"
+                  >
+                    {exportLoading === exportKey ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    Download PDF
+                  </button>
+                  <p className={`mt-2 px-1 text-[10px] leading-4 ${muted}`}>
+                    {exportModeHint}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div
@@ -798,19 +986,69 @@ function TradeSiteMatrix({
             {matrixRows.map((row) => (
               <tr
                 key={`${row.site}-${row.trade}`}
-                className={
-                  darkMode ? "hover:bg-white/[0.035]" : "hover:bg-black/[0.025]"
-                }
+                className={`group ${darkMode ? "hover:bg-white/[0.035]" : "hover:bg-black/[0.025]"}`}
               >
                 <td
                   className={`sticky left-0 z-20 w-[170px] border-b px-5 py-3 align-top font-semibold ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}
                 >
-                  {row.site}
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate">{row.site}</span>
+                    {onExport && (
+                      <button
+                        type="button"
+                        title={`Download PDF for site ${row.site}`}
+                        aria-label={`Download PDF for site ${row.site}`}
+                        onClick={() => runExport("site", row.site, "")}
+                        disabled={exportBusy}
+                        className={`shrink-0 rounded-lg p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-white" : "text-black/40 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                      >
+                        {exportLoading === `site:${row.site}:` ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </span>
                 </td>
                 <td
                   className={`sticky left-[170px] z-20 w-[170px] border-b px-5 py-3 align-top ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}
                 >
-                  {row.trade}
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate">{row.trade}</span>
+                    {onExport && (
+                      <span className="flex shrink-0 items-center">
+                        <button
+                          type="button"
+                          title={`Download PDF for trade ${row.trade}`}
+                          aria-label={`Download PDF for trade ${row.trade}`}
+                          onClick={() => runExport("trade", "", row.trade)}
+                          disabled={exportBusy}
+                          className={`rounded-lg p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-white" : "text-black/40 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                        >
+                          {exportLoading === `trade::${row.trade}` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          title={`Download PDF for ${row.site} + ${row.trade}`}
+                          aria-label={`Download PDF for site ${row.site} and trade ${row.trade}`}
+                          onClick={() => runExport("combo", row.site, row.trade)}
+                          disabled={exportBusy}
+                          className={`rounded-lg p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-white" : "text-black/40 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                        >
+                          {exportLoading === `combo:${row.site}:${row.trade}` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Rows3 className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </span>
+                    )}
+                  </span>
                 </td>
                 {dates.map((date) => {
                   const item = row.values.get(date) || {
@@ -1479,10 +1717,11 @@ export default function DmrDashboard({ darkMode }) {
   const [reportEndDate, setReportEndDate] = useState(() =>
     localDateInputValue(),
   );
-  const [reportSections, setReportSections] = useState(() =>
-    DMR_REPORT_SECTION_OPTIONS.map((option) => option.id),
-  );
+  const [reportSections, setReportSections] = useState(() => [
+    DMR_REPORT_DEFAULT_SECTION,
+  ]);
   const [reportTradeSearch, setReportTradeSearch] = useState("");
+  const [tradeSitePdfLoading, setTradeSitePdfLoading] = useState("");
   const [reminderOpen, setReminderOpen] = useState(false);
   const [reminderLoading, setReminderLoading] = useState(false);
   const [reminderSaving, setReminderSaving] = useState(false);
@@ -2060,9 +2299,7 @@ export default function DmrDashboard({ darkMode }) {
     try {
       setReportLoading(true);
       const sections = (
-        reportSections.length
-          ? reportSections
-          : DMR_REPORT_SECTION_OPTIONS.map((option) => option.id)
+        reportSections.length ? reportSections : [DMR_REPORT_DEFAULT_SECTION]
       ).join(",");
       const result = await api(
         `/dmr-dashboard/report?startDate=${encodeURIComponent(reportStartDate)}&endDate=${encodeURIComponent(reportEndDate)}&sections=${encodeURIComponent(sections)}`,
@@ -2100,6 +2337,56 @@ export default function DmrDashboard({ darkMode }) {
       toast.error(error.message || "Could not download DMR PDF");
     } finally {
       setReportPdfLoading(false);
+    }
+  }
+
+  async function downloadTradeSitePdf({
+    mode = "site",
+    site = "",
+    trade = "",
+    includeEmpty = false,
+  } = {}) {
+    const scope = [site, trade].filter(Boolean).join(" + ");
+    try {
+      setTradeSitePdfLoading(`${mode}:${site}:${trade}`);
+      const params = new URLSearchParams({
+        startDate: reportStartDate,
+        endDate: reportEndDate,
+        groupBy: mode,
+      });
+      if (site) params.set("site", site);
+      if (trade) params.set("trade", trade);
+      if (includeEmpty) params.set("includeEmpty", "1");
+      const response = await fetch(
+        `${API_URL}/dmr-dashboard/report/trade-site/pdf?${params.toString()}`,
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Could not download trade by site PDF");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const slug =
+        String(scope || `all-${mode === "trade" ? "trade" : "site"}s`)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "") || mode;
+      link.href = url;
+      link.download = `dmr-trade-by-${mode}-${slug}-${reportStartDate}-to-${reportEndDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success(
+        scope
+          ? `PDF downloaded for ${scope}`
+          : `PDF downloaded for all ${mode === "trade" ? "trades" : "sites"}`,
+      );
+    } catch (error) {
+      toast.error(error.message || "Could not download trade by site PDF");
+    } finally {
+      setTradeSitePdfLoading("");
     }
   }
 
@@ -3502,6 +3789,8 @@ export default function DmrDashboard({ darkMode }) {
                         muted={muted}
                         search={reportTradeSearch}
                         onSearch={setReportTradeSearch}
+                        onExport={downloadTradeSitePdf}
+                        exportLoading={tradeSitePdfLoading}
                       />
                     )}
                     {reportData.siteManpower?.length > 0 && (

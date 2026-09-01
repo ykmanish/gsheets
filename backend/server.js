@@ -1178,11 +1178,19 @@ function employeeReportDateRange() {
   return dates;
 }
 
+// The report date is server-authoritative. The date override exists only as a
+// testing aid and must be gated on real authority: the previous
+// `|| Boolean(headerDate)` meant merely sending the header granted permission to
+// use it, so any client could pick its own "today". A stale WhatsApp reminder
+// link (employeeReminderLink bakes ?employeeReportDate= into it) was enough to
+// silently file a report against a week-old date.
 function employeeReportToday(req = null) {
+  const serverToday = istDateKey(new Date());
+  const allowDateOverride = process.env.ALLOW_EMPLOYEE_REPORT_DATE_OVERRIDE === "true"
+    || Boolean(req?.authUser?.isSuperAdmin);
+  if (!allowDateOverride) return serverToday;
   const headerDate = dmrDateKey(req?.headers?.["x-employee-report-date"]);
-  const allowDateOverride = process.env.ALLOW_EMPLOYEE_REPORT_DATE_OVERRIDE === "true" || Boolean(req?.authUser?.isSuperAdmin) || Boolean(headerDate);
-  const envDate = allowDateOverride ? dmrDateKey(process.env.EMPLOYEE_REPORT_TEST_DATE) : "";
-  return headerDate || envDate || istDateKey(new Date());
+  return headerDate || dmrDateKey(process.env.EMPLOYEE_REPORT_TEST_DATE) || serverToday;
 }
 
 // Daily cut-off for the employee report. After this the day's submissions are

@@ -3,25 +3,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, ChevronDown, Clock3, Copy, Download, Eye, FileText, Heart, LogIn, Loader2, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Settings2, Sparkles, Star, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
-import { API_URL, useAuth } from "./AuthProvider";
+import { API_URL, getStoredAuth, useAuth } from "./AuthProvider";
 import { ConfirmModal, useClickOutside } from "./ui";
 import UserAvatar from "./UserAvatar";
 
 const employeeReportTestDateKey = "employee-report-test-date";
 
-function employeeReportTestDate() {
+// `?employeeReportDate=` is a debugging aid, nothing more. It used to be written
+// to localStorage and reused forever, so an employee who tapped an OLD WhatsApp
+// reminder link - employeeReminderLink() bakes the date into it - had every later
+// report filed against that stale date. It is now read once per page load, never
+// stored, and only honoured for a Super Admin; everyone else always gets the
+// server's real today. Any value left over from the old behaviour is deleted so
+// affected browsers heal themselves on the next visit.
+let employeeReportDateOverride = null;
+
+function employeeReportDateOverrideValue() {
+  if (employeeReportDateOverride !== null) return employeeReportDateOverride;
   if (typeof window === "undefined") return "";
-  const queryDate = new URLSearchParams(window.location.search).get("employeeReportDate");
-  if (String(queryDate || "").toLowerCase() === "clear") {
+  try {
     window.localStorage.removeItem(employeeReportTestDateKey);
-    return "";
+  } catch {
+    // Private mode can throw on storage access; the override simply stays off.
   }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(queryDate || ""))) {
-    window.localStorage.setItem(employeeReportTestDateKey, queryDate);
-    return queryDate;
-  }
-  const stored = window.localStorage.getItem(employeeReportTestDateKey);
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(stored || "")) ? stored : "";
+  const queryDate = String(new URLSearchParams(window.location.search).get("employeeReportDate") || "");
+  employeeReportDateOverride = /^\d{4}-\d{2}-\d{2}$/.test(queryDate) ? queryDate : "";
+  return employeeReportDateOverride;
+}
+
+function employeeReportTestDate() {
+  const override = employeeReportDateOverrideValue();
+  if (!override) return "";
+  return getStoredAuth().user?.isSuperAdmin ? override : "";
 }
 
 async function api(path, options = {}) {
@@ -39,6 +52,8 @@ async function api(path, options = {}) {
   return data;
 }
 
+// The device clock. Only a placeholder until the server's date arrives - never
+// the value a report is filed against.
 function todayInput() {
   const testDate = employeeReportTestDate();
   if (testDate) return testDate;
@@ -1639,7 +1654,13 @@ export default function EmployeeDailyReport({ darkMode }) {
     || (!reportExempt && !data?.todaySubmitted && isClockedInToday)
     || (clockButtonIsClockOut && (!isClockedInToday || isClockedOutToday));
   const userStorageId = data?.currentUserId || "me";
+  // Always the server's date when we have it; the device clock is a placeholder.
   const currentReportDate = data?.today || todayInput();
+  const deviceToday = todayInput();
+  const clockMismatch = Boolean(data?.today) && data.today !== deviceToday;
+  // A Super Admin keeps the ?employeeReportDate= override, so say so out loud -
+  // an admin who taps an old reminder link should never be backdated silently.
+  const dateOverride = employeeReportTestDate();
   const draftStoragePrefix = `employee-daily-report-draft:${userStorageId}:${currentReportDate}`;
   const draftStorageKey = activeDraftKey || `${draftStoragePrefix}:new`;
   const plannedWorkSourceDate = data?.plannedWorkSourceDate || addDaysInput(currentReportDate, -1);
@@ -2822,6 +2843,26 @@ export default function EmployeeDailyReport({ darkMode }) {
                 <button type="button" onClick={closeFormDrawer} className="px-1 font-semibold text-[#4b9b16]">Close</button>
               </div>
             </div>
+
+            {dateOverride ? (
+              <div className="flex shrink-0 items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Date override active from the page link: this report will be filed for{" "}
+                  <b>{dateOverride}</b>, not today. Remove{" "}
+                  <code>?employeeReportDate=</code> from the URL and reload to file for today.
+                </span>
+              </div>
+            ) : clockMismatch ? (
+              <div className="flex shrink-0 items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  This device&apos;s date is <b>{deviceToday}</b>, but the server date is{" "}
+                  <b>{data?.today}</b>. Your report will be filed for <b>{data?.today}</b>. Please
+                  correct this device&apos;s date and time.
+                </span>
+              </div>
+            ) : null}
 
             <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[270px_minmax(0,1fr)]">
               <aside className={`flex min-h-0 flex-col overflow-hidden border-b md:border-b-0  ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>

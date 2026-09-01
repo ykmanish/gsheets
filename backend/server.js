@@ -6813,10 +6813,19 @@ const foldersPath = path.join(dataDir, "document-folders.json");
 const automationsPath = path.join(dataDir, "automations.json");
 const reportsPath = path.join(dataDir, "reports.json");
 const notificationsPath = path.join(dataDir, "notifications.json");
+// Legacy single-array file, kept only as a migration source.
 const activityLogsPath = path.join(dataDir, "activity-logs.json");
-// Every new entry rewrites this whole file synchronously, so the cap is a write
-// cost as much as a storage one - raise it only alongside batched saves.
-const ACTIVITY_LOG_RETENTION = 1000;
+// Live store: one JSON object per line, oldest first. A new entry is a ~700 byte
+// append instead of a full rewrite, which is what makes a large cap affordable.
+const activityLogsLinePath = path.join(dataDir, "activity-logs.jsonl");
+const ACTIVITY_LOG_RETENTION = Math.max(
+  1000,
+  Number(process.env.ACTIVITY_LOG_RETENTION) || 20000,
+);
+// Compact (rewrite the file down to the retention window) once it has grown a
+// margin past the cap, so compaction is rare rather than per-request.
+const ACTIVITY_LOG_COMPACT_MARGIN = 2000;
+let activityLogFileLines = 0;
 const projectDashboardPath = path.join(dataDir, "project-dashboard.json");
 const projectChatClients = new Map();
 const dmrHistoryPath = path.join(dataDir, "dmr-history.json");
@@ -6915,14 +6924,53 @@ if (fs.existsSync(notificationsPath)) {
   }
 }
 
-if (fs.existsSync(activityLogsPath)) {
-  try {
-    activityLogs = JSON.parse(fs.readFileSync(activityLogsPath, "utf8"));
-  } catch (error) {
-    console.error("Error loading activity logs:", error);
-    activityLogs = [];
+function parseActivityLogLines(raw) {
+  const entries = [];
+  let skipped = 0;
+  for (const line of String(raw).split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const entry = JSON.parse(trimmed);
+      if (entry && typeof entry === "object") entries.push(entry);
+    } catch {
+      // One torn line (a crash mid-append) must not cost the whole history.
+      skipped += 1;
+    }
   }
+  if (skipped) console.warn(`Skipped ${skipped} unreadable activity log line(s)`);
+  return entries;
 }
+
+function loadActivityLogs() {
+  // Newest-first in memory (addActivityLog unshifts), oldest-first on disk.
+  if (fs.existsSync(activityLogsLinePath)) {
+    try {
+      const stored = parseActivityLogLines(fs.readFileSync(activityLogsLinePath, "utf8"));
+      activityLogFileLines = stored.length;
+      activityLogs = stored.slice(-ACTIVITY_LOG_RETENTION).reverse();
+      return;
+    } catch (error) {
+      console.error("Error loading activity logs:", error);
+    }
+  }
+  if (fs.existsSync(activityLogsPath)) {
+    try {
+      const legacy = JSON.parse(fs.readFileSync(activityLogsPath, "utf8"));
+      activityLogs = Array.isArray(legacy) ? legacy.slice(0, ACTIVITY_LOG_RETENTION) : [];
+      // Migrate the old array into the append-only file, keeping every entry.
+      compactActivityLogs();
+      console.log(`Migrated ${activityLogs.length} activity log entries to activity-logs.jsonl`);
+      return;
+    } catch (error) {
+      console.error("Error loading activity logs:", error);
+    }
+  }
+  activityLogs = [];
+  activityLogFileLines = 0;
+}
+
+loadActivityLogs();
 
 if (fs.existsSync(dmrHistoryPath)) {
   try {
@@ -7144,11 +7192,28 @@ function saveNotifications() {
   }
 }
 
-function saveActivityLogs() {
+// Full rewrite from the in-memory window. Only used on migration and
+// compaction - never on the hot path.
+function compactActivityLogs() {
   try {
-    fs.writeFileSync(activityLogsPath, JSON.stringify(activityLogs, null, 2));
+    const oldestFirst = [...activityLogs].reverse();
+    const payload = oldestFirst.map((entry) => JSON.stringify(entry)).join("\n");
+    fs.writeFileSync(activityLogsLinePath, payload ? `${payload}\n` : "");
+    activityLogFileLines = oldestFirst.length;
   } catch (error) {
-    console.error("Error saving activity logs:", error);
+    console.error("Error compacting activity logs:", error);
+  }
+}
+
+function appendActivityLog(entry) {
+  try {
+    fs.appendFileSync(activityLogsLinePath, `${JSON.stringify(entry)}\n`);
+    activityLogFileLines += 1;
+    if (activityLogFileLines > ACTIVITY_LOG_RETENTION + ACTIVITY_LOG_COMPACT_MARGIN) {
+      compactActivityLogs();
+    }
+  } catch (error) {
+    console.error("Error saving activity log:", error);
   }
 }
 
@@ -7650,8 +7715,8 @@ function addActivityLog({ req, action, target = null, status = "success", detail
     macAddress: "N/A",
   };
   activityLogs.unshift(entry);
-  activityLogs = activityLogs.slice(0, ACTIVITY_LOG_RETENTION);
-  saveActivityLogs();
+  if (activityLogs.length > ACTIVITY_LOG_RETENTION) activityLogs.length = ACTIVITY_LOG_RETENTION;
+  appendActivityLog(entry);
   return entry;
 }
 

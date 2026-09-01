@@ -6814,6 +6814,9 @@ const automationsPath = path.join(dataDir, "automations.json");
 const reportsPath = path.join(dataDir, "reports.json");
 const notificationsPath = path.join(dataDir, "notifications.json");
 const activityLogsPath = path.join(dataDir, "activity-logs.json");
+// Every new entry rewrites this whole file synchronously, so the cap is a write
+// cost as much as a storage one - raise it only alongside batched saves.
+const ACTIVITY_LOG_RETENTION = 1000;
 const projectDashboardPath = path.join(dataDir, "project-dashboard.json");
 const projectChatClients = new Map();
 const dmrHistoryPath = path.join(dataDir, "dmr-history.json");
@@ -7647,7 +7650,7 @@ function addActivityLog({ req, action, target = null, status = "success", detail
     macAddress: "N/A",
   };
   activityLogs.unshift(entry);
-  activityLogs = activityLogs.slice(0, 1000);
+  activityLogs = activityLogs.slice(0, ACTIVITY_LOG_RETENTION);
   saveActivityLogs();
   return entry;
 }
@@ -20037,14 +20040,146 @@ app.get("/reports/:id", (req, res) => {
   res.json({ report });
 });
 
+const ACTIVITY_LOG_SYSTEM_KEY = "system";
+const ACTIVITY_LOG_DEFAULT_PAGE_SIZE = 50;
+const ACTIVITY_LOG_MAX_PAGE_SIZE = ACTIVITY_LOG_RETENTION;
+
+// Activity log `createdAt` is a real ISO timestamp, so a day filter has to be
+// compared in IST or entries logged late in the evening land on the wrong date.
+function activityLogDateKey(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return istDateKey(date);
+}
+
+function activityLogHaystack(item) {
+  return [
+    item.action,
+    item.target,
+    item.displayName,
+    item.username,
+    item.roleName,
+    item.category,
+    item.status,
+    item.method,
+    item.path,
+    item.ip,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+// Undated rows would otherwise float to the top of a newest-first sort.
+function activityLogTime(item) {
+  const time = Date.parse(item?.createdAt || "");
+  return Number.isNaN(time) ? -Infinity : time;
+}
+
+function activityLogUserKey(item) {
+  return item.userId ? String(item.userId) : ACTIVITY_LOG_SYSTEM_KEY;
+}
+
+function activityLogVisibleEntries() {
+  return activityLogs.filter((item) => !String(item.path || "").includes("/chat") && item.action !== "POST /chat");
+}
+
+// Pure query layer over the visible entries: filter, sort, then page. Kept
+// separate from the route so it can be exercised without an HTTP round trip.
+function buildActivityLogResponse(visible = [], query = {}) {
+  const userId = projectText(query.userId);
+  const status = projectText(query.status);
+  const category = projectText(query.category);
+  const search = projectText(query.search).toLowerCase();
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(projectText(query.startDate)) ? projectText(query.startDate) : "";
+  const endDate = /^\d{4}-\d{2}-\d{2}$/.test(projectText(query.endDate)) ? projectText(query.endDate) : "";
+  const sort = projectText(query.sort).toLowerCase() === "oldest" ? "oldest" : "newest";
+
+  // Facets come from every visible entry, not the filtered slice, so picking a
+  // user never empties the dropdown you picked them from.
+  const userFacets = new Map();
+  const categoryFacets = new Map();
+  const statusFacets = new Map();
+  const dateKeys = [];
+  for (const item of visible) {
+    const key = activityLogUserKey(item);
+    const facet = userFacets.get(key) || {
+      id: key,
+      displayName: projectText(item.displayName) || projectText(item.username) || "System",
+      username: projectText(item.username) || "System",
+      roleName: "",
+      count: 0,
+    };
+    if (!facet.roleName) facet.roleName = projectText(item.roleName);
+    facet.count += 1;
+    userFacets.set(key, facet);
+    const categoryKey = projectText(item.category) || "system";
+    categoryFacets.set(categoryKey, (categoryFacets.get(categoryKey) || 0) + 1);
+    const statusKey = projectText(item.status) || "success";
+    statusFacets.set(statusKey, (statusFacets.get(statusKey) || 0) + 1);
+    const dateKey = activityLogDateKey(item.createdAt);
+    if (dateKey) dateKeys.push(dateKey);
+  }
+
+  let result = visible;
+  if (userId) {
+    result = userId === ACTIVITY_LOG_SYSTEM_KEY
+      ? result.filter((item) => !item.userId)
+      : result.filter((item) => String(item.userId || "") === userId);
+  }
+  if (status) result = result.filter((item) => String(item.status || "") === status);
+  if (category) result = result.filter((item) => (projectText(item.category) || "system") === category);
+  if (startDate || endDate) {
+    result = result.filter((item) => {
+      const key = activityLogDateKey(item.createdAt);
+      if (!key) return false;
+      if (startDate && key < startDate) return false;
+      if (endDate && key > endDate) return false;
+      return true;
+    });
+  }
+  if (search) result = result.filter((item) => activityLogHaystack(item).includes(search));
+
+  const total = result.length;
+  // Sort on the timestamp rather than trusting insertion order - the stored
+  // file is only mostly newest-first, so a flip of the array is not a sort.
+  result = [...result].sort((a, b) => {
+    const first = activityLogTime(a);
+    const second = activityLogTime(b);
+    if (first !== second) return sort === "oldest" ? first - second : second - first;
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  });
+
+  const requestedPageSize = projectText(query.pageSize ?? query.limit).toLowerCase();
+  const showAll = requestedPageSize === "all" || requestedPageSize === "0";
+  const pageSize = showAll
+    ? Math.max(1, total)
+    : Math.min(ACTIVITY_LOG_MAX_PAGE_SIZE, Math.max(1, Number(requestedPageSize) || ACTIVITY_LOG_DEFAULT_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = showAll ? 1 : Math.min(pageCount, Math.max(1, Number(query.page) || 1));
+  const startIndex = showAll ? 0 : (page - 1) * pageSize;
+  const logs = showAll ? result : result.slice(startIndex, startIndex + pageSize);
+
+  return {
+    logs,
+    total,
+    page,
+    pageSize: showAll ? total : pageSize,
+    pageCount: showAll ? 1 : pageCount,
+    showingAll: showAll,
+    rangeFrom: total ? startIndex + 1 : 0,
+    rangeTo: startIndex + logs.length,
+    sort,
+    retained: visible.length,
+    retentionLimit: ACTIVITY_LOG_RETENTION,
+    earliestDate: dateKeys.length ? dateKeys.reduce((min, key) => (key < min ? key : min)) : "",
+    latestDate: dateKeys.length ? dateKeys.reduce((max, key) => (key > max ? key : max)) : "",
+    users: [...userFacets.values()].sort((a, b) => b.count - a.count || a.displayName.localeCompare(b.displayName)),
+    categories: [...categoryFacets.entries()].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)),
+    statuses: [...statusFacets.entries()].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)),
+  };
+}
+
 app.get("/activity-logs", requirePrivilege("view_activity_log", "Activity log permission required"), (req, res) => {
-  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 200));
-  const userId = req.query.userId ? String(req.query.userId) : "";
-  const status = req.query.status ? String(req.query.status) : "";
-  let result = activityLogs.filter((item) => !String(item.path || "").includes("/chat") && item.action !== "POST /chat");
-  if (userId) result = result.filter((item) => item.userId === userId);
-  if (status) result = result.filter((item) => item.status === status);
-  res.json({ logs: result.slice(0, limit) });
+  res.json(buildActivityLogResponse(activityLogVisibleEntries(), req.query));
 });
 
 app.delete("/reports/:id", requirePrivilege("manage_reports", "Report management permission required"), (req, res) => {

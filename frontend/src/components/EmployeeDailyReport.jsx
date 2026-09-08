@@ -922,7 +922,7 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
               className={`relative rounded-[22px] p-3 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? "cursor-pointer hover:-translate-y-0.5" : ""} ${darkMode ? "border-white/10 bg-[#1c1f24]" : "border-black/10 bg-[#f8f7f3]"}`}
             >
               {row.collaborationTask && row.collaborationSourceName && (
-                <span className={`absolute right-3 top-3 z-10 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#145b39]/10 text-[#145b39]"}`}>
+                <span className={`absolute right-5 top-4 z-10 rounded-full px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] shadow-sm ${darkMode ? "bg-[#89ed3f] text-black shadow-[#89ed3f]/15" : "bg-[#89ed3f] text-black shadow-[#89ed3f]/20"}`}>
                   Collaboration from {row.collaborationSourceName}
                 </span>
               )}

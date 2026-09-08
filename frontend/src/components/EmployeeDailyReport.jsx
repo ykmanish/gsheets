@@ -908,6 +908,15 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
     <div className="md:col-span-2">
       <div className="mb-3 flex items-center justify-between gap-3">
         <label className={`block text-xs font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/60" : "text-black/55"}`}>{title}</label>
+        {rows.some((row) => row.collaborationTask && row.collaborationSourceName) && (
+          <div className="flex flex-wrap justify-end gap-2">
+            {uniqueClean(rows.filter((row) => row.collaborationTask && row.collaborationSourceName).map((row) => row.collaborationSourceName)).map((sourceName) => (
+              <span key={sourceName} className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.08em] shadow-sm ${darkMode ? "bg-[#89ed3f] text-black shadow-[#89ed3f]/15" : "bg-[#89ed3f] text-black shadow-[#89ed3f]/20"}`}>
+                Collaboration from {sourceName}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div className="space-y-3">
         {rows.map((row, index) => {
@@ -921,11 +930,6 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
               onKeyDown={(event) => { if (collapsed && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setExpandedIndex(index); } }}
               className={`relative rounded-[22px] p-3 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? "cursor-pointer hover:-translate-y-0.5" : ""} ${darkMode ? "border-white/10 bg-[#1c1f24]" : "border-black/10 bg-[#f8f7f3]"}`}
             >
-              {row.collaborationTask && row.collaborationSourceName && (
-                <span className={`absolute right-5 top-4 z-10 rounded-full px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] shadow-sm ${darkMode ? "bg-[#89ed3f] text-black shadow-[#89ed3f]/15" : "bg-[#89ed3f] text-black shadow-[#89ed3f]/20"}`}>
-                  Collaboration from {row.collaborationSourceName}
-                </span>
-              )}
               {collapsed ? (
                 <div className={`grid items-center gap-3 ${expandedGridClass} animate-[mrn-drawer-in_260ms_cubic-bezier(0.22,1,0.36,1)]`}>
                   {[

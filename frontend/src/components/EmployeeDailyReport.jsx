@@ -128,11 +128,11 @@ function buildMonthGrid(monthDate) {
 }
 
 function createEmptyTaskRow() {
-  return { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24", recurring: false, recurringId: "" };
+  return { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementValues: [], involvementOther: "", collaboratorUserIds: [], collaborationTask: false, collaborationSourceUserId: "", collaborationSourceName: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24", recurring: false, recurringId: "" };
 }
 
 function createEmptyWaitingRow() {
-  return { site: "", category: "", categoryOther: "", involvement: "", involvementValues: [], involvementOther: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24" };
+  return { site: "", category: "", categoryOther: "", involvement: "", involvementValues: [], involvementOther: "", collaboratorUserIds: [], collaborationTask: false, collaborationSourceUserId: "", collaborationSourceName: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24" };
 }
 
 const emptyForm = {
@@ -162,6 +162,10 @@ function involvementText(row = {}) {
   ]).join(", ");
 }
 
+function hasTeamInvolvement(row = {}) {
+  return involvementValuesFromRow(row).some((value) => value.toLowerCase() === "team");
+}
+
 function recurringIdForTask(item = {}) {
   return item.recurringId || [item.site, item.category, item.description].map((value) => String(value || "").trim().toLowerCase()).join("|");
 }
@@ -174,6 +178,10 @@ function normalizeTaskRowForForm(item = {}, fallback = {}, includeStatus = true)
     status: includeStatus ? item.status || fallback.taskStatus || "" : "",
     involvement: involvementValues.join(", "),
     involvementValues,
+    collaboratorUserIds: Array.isArray(item.collaboratorUserIds) ? item.collaboratorUserIds.map(String).filter(Boolean) : [],
+    collaborationTask: Boolean(item.collaborationTask),
+    collaborationSourceUserId: item.collaborationSourceUserId || "",
+    collaborationSourceName: item.collaborationSourceName || "",
     recurring: includeStatus ? Boolean(item.recurring) : false,
     recurringId: includeStatus ? item.recurringId || recurringIdForTask(item) : "",
   };
@@ -191,6 +199,10 @@ function cleanTaskItems(items = []) {
     status: String(item?.status || "").trim(),
     involvement: String(item?.involvement || "").trim(),
     involvementValues: involvementValuesFromRow(item),
+    collaboratorUserIds: Array.isArray(item?.collaboratorUserIds) ? item.collaboratorUserIds.map(String).filter(Boolean) : [],
+    collaborationTask: Boolean(item?.collaborationTask),
+    collaborationSourceUserId: String(item?.collaborationSourceUserId || ""),
+    collaborationSourceName: String(item?.collaborationSourceName || ""),
     description: String(item?.description || "").trim(),
   })).filter((item) => item.site || item.category || item.description);
 }
@@ -208,6 +220,10 @@ function plannedWorkToTaskRow(item = {}) {
     involvement: involvementValues.join(", "),
     involvementValues,
     involvementOther: item.involvementOther || "",
+    collaboratorUserIds: Array.isArray(item.collaboratorUserIds) ? item.collaboratorUserIds.map(String).filter(Boolean) : [],
+    collaborationTask: Boolean(item.collaborationTask),
+    collaborationSourceUserId: item.collaborationSourceUserId || "",
+    collaborationSourceName: item.collaborationSourceName || "",
     description,
     recurringId: recurringIdForTask({ site, category, description }),
   };
@@ -683,7 +699,7 @@ function SearchableSelect({ darkMode, value, onChange, options = [], popularOpti
   );
 }
 
-function MultiChoiceSelect({ darkMode, values = [], onChange, options = [], popularOptions = [], placeholder }) {
+function MultiChoiceSelect({ darkMode, values = [], onChange, options = [], popularOptions = [], placeholder, onOptionToggle }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -701,6 +717,7 @@ function MultiChoiceSelect({ darkMode, values = [], onChange, options = [], popu
       ? values.filter((value) => value.toLowerCase() !== key)
       : [...values, option];
     onChange(uniqueClean(next));
+    onOptionToggle?.(option, uniqueClean(next), selected.has(key));
   }
 
   return (
@@ -804,13 +821,24 @@ function taskDurationLabel(item = {}) {
   return `${hours}h ${remainder}m`;
 }
 
-function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], involvements = [], popularSites = [], popularCategories = [], popularInvolvements = [], showStatus = false, showInvolvement = false, onRowsChange, onRefineDescription, required = false, darkMode = false }) {
+function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], involvements = [], popularSites = [], popularCategories = [], popularInvolvements = [], collaborationUsers = [], showStatus = false, showInvolvement = false, onRowsChange, onRefineDescription, required = false, darkMode = false }) {
   const [expandedIndex, setExpandedIndex] = useState(0);
   const [refiningIndex, setRefiningIndex] = useState(null);
+  const [teamPickerIndex, setTeamPickerIndex] = useState(null);
   const activeExpandedIndex = Math.min(expandedIndex, Math.max(0, rows.length - 1));
+  const teamPickerRow = teamPickerIndex !== null ? rows[teamPickerIndex] : null;
+  const selectedTeamUsers = new Set(teamPickerRow?.collaboratorUserIds || []);
 
   function updateRow(index, patch) {
     onRowsChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  }
+  function updateTeamUsers(ids) {
+    if (teamPickerIndex === null) return;
+    updateRow(teamPickerIndex, { collaboratorUserIds: ids });
+  }
+  function toggleTeamUser(userId) {
+    const currentIds = teamPickerRow?.collaboratorUserIds || [];
+    updateTeamUsers(selectedTeamUsers.has(userId) ? currentIds.filter((id) => id !== userId) : [...currentIds, userId]);
   }
   async function refineRowDescription(index) {
     const currentText = rows[index]?.description || "";
@@ -854,6 +882,10 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
         timeFormat: source.timeFormat || "24",
         recurring: Boolean(source.recurring),
         recurringId: source.recurringId || "",
+        collaboratorUserIds: Array.isArray(source.collaboratorUserIds) ? source.collaboratorUserIds : [],
+        collaborationTask: Boolean(source.collaborationTask),
+        collaborationSourceUserId: source.collaborationSourceUserId || "",
+        collaborationSourceName: source.collaborationSourceName || "",
       },
     ]);
   }
@@ -938,7 +970,16 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                   {showInvolvement && (
                     <div className="order-3">
                       <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Involvement</p>
-                      <MultiChoiceSelect darkMode={darkMode} values={involvementValuesFromRow(row)} onChange={(values) => updateRow(index, { involvementValues: values, involvement: values.join(", ") })} options={involvements} popularOptions={popularInvolvements} placeholder="Choose involvement" />
+                      <MultiChoiceSelect darkMode={darkMode} values={involvementValuesFromRow(row)} onChange={(values) => {
+                        const hadTeam = hasTeamInvolvement(row);
+                        const hasTeam = values.some((value) => value.toLowerCase() === "team");
+                        updateRow(index, { involvementValues: values, involvement: values.join(", "), collaboratorUserIds: hasTeam ? row.collaboratorUserIds || [] : [] });
+                        if (hasTeam && !hadTeam && !row.collaborationTask) setTeamPickerIndex(index);
+                      }} onOptionToggle={(option, nextValues, wasSelected) => {
+                        const teamStillSelected = nextValues.some((value) => value.toLowerCase() === "team");
+                        if (option.toLowerCase() === "team" && !wasSelected && teamStillSelected && !row.collaborationTask) setTeamPickerIndex(index);
+                      }} options={involvements} popularOptions={popularInvolvements} placeholder="Choose involvement" />
+                      {row.collaborationTask && row.collaborationSourceName && <p className={`mt-2 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Collaboration task from {row.collaborationSourceName}</p>}
                       {involvementValuesFromRow(row).some((value) => value.toLowerCase() === "other") && (
                         <input
                           required={required && index === 0}
@@ -1016,6 +1057,46 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
       <div className="mt-3 flex justify-center">
         <button type="button" onClick={addRow} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold ${darkMode ? "bg-[#89ed3f] text-black hover:bg-[#7dde35]" : "bg-[#171714] text-white"}`}><Plus className="h-4 w-4" /> Add task</button>
       </div>
+      {teamPickerIndex !== null && teamPickerRow && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/35 p-4" onClick={() => setTeamPickerIndex(null)}>
+          <div onClick={(event) => event.stopPropagation()} className={`flex max-h-[82vh] w-full max-w-xl flex-col overflow-hidden rounded-[26px] border shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
+            <div className={`flex items-center justify-between gap-3 border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <div>
+                <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Optional</p>
+                <h3 className="text-xl font-black">Choose team users</h3>
+              </div>
+              <button type="button" onClick={() => setTeamPickerIndex(null)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/[0.04] hover:bg-black/[0.08]"}`}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {collaborationUsers.map((teamUser) => (
+                  <button
+                    key={teamUser.userId}
+                    type="button"
+                    onClick={() => toggleTeamUser(teamUser.userId)}
+                    className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${selectedTeamUsers.has(teamUser.userId) ? darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#145b39]/10 text-[#145b39]" : darkMode ? "bg-white/[0.035] hover:bg-white/10" : "bg-black/[0.025] hover:bg-black/[0.05]"}`}
+                  >
+                    <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg border ${selectedTeamUsers.has(teamUser.userId) ? "border-[#145b39] bg-[#145b39] text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
+                      {selectedTeamUsers.has(teamUser.userId) && <Check className="h-4 w-4" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold">{teamUser.employeeName}</span>
+                      <span className="block truncate text-xs opacity-55">{teamUser.department || "No department"}</span>
+                    </span>
+                  </button>
+                ))}
+                {!collaborationUsers.length && <p className="col-span-full px-3 py-8 text-center text-sm opacity-55">No users available.</p>}
+              </div>
+            </div>
+            <div className={`flex items-center justify-between gap-3 border-t p-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <button type="button" onClick={() => setTeamPickerIndex(null)} className={`h-11 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/[0.05] hover:bg-black/[0.08]"}`}>Skip</button>
+              <button type="button" onClick={() => setTeamPickerIndex(null)} className="h-11 rounded-full bg-[#89ed3f] px-6 text-sm font-black text-black hover:bg-[#7dde35]">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1122,7 +1203,7 @@ function EmployeeReportTable({ title, headers, rows, darkMode }) {
   );
 }
 
-function EmployeeUserMultiSelect({ darkMode, users = [], selectedIds = [], onChange }) {
+function EmployeeUserMultiSelect({ darkMode, users = [], selectedIds = [], onChange, emptyLabel = "All employees", clearLabel = "All" }) {
   const ref = useRef(null);
   const triggerRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -1131,7 +1212,7 @@ function EmployeeUserMultiSelect({ darkMode, users = [], selectedIds = [], onCha
   useClickOutside(ref, () => setOpen(false));
   const selected = new Set(selectedIds);
   const filtered = users.filter((user) => `${user.employeeName} ${user.department}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const label = selectedIds.length ? `${selectedIds.length} employee${selectedIds.length === 1 ? "" : "s"}` : "All employees";
+  const label = selectedIds.length ? `${selectedIds.length} employee${selectedIds.length === 1 ? "" : "s"}` : emptyLabel;
 
   function toggleUser(userId) {
     onChange(selected.has(userId) ? selectedIds.filter((id) => id !== userId) : [...selectedIds, userId]);
@@ -1184,7 +1265,7 @@ function EmployeeUserMultiSelect({ darkMode, users = [], selectedIds = [], onCha
         <div style={panelStyle} className={`fixed z-[80] flex flex-col overflow-hidden rounded-[22px] border p-3 shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
           <div className="mb-2 flex shrink-0 gap-2">
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee..." className={`h-10 min-w-0 flex-1 rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
-            <button type="button" onClick={() => onChange([])} className={`h-10 rounded-2xl px-3 text-xs font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>All</button>
+            <button type="button" onClick={() => onChange([])} className={`h-10 rounded-2xl px-3 text-xs font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>{clearLabel}</button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {filtered.map((user) => (
@@ -1677,6 +1758,7 @@ export default function EmployeeDailyReport({ darkMode }) {
       .filter((item) => item.site && item.category && item.description && !plannedWorkImported[item.plannedKey]);
   }, [data?.plannedWorkItems, plannedWorkDiscarded, plannedWorkImported, plannedWorkSourceDate]);
   const selectedPlannedWorkCount = plannedWorkItems.filter((item) => plannedWorkSelection[item.plannedKey]).length;
+  const collaborationUsers = useMemo(() => (data?.collaborationUsers || []).filter((item) => String(item.userId) !== String(data?.currentUserId)), [data?.collaborationUsers, data?.currentUserId]);
 
   async function load() {
     try {
@@ -1835,6 +1917,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     setFormExpanded(false);
     const todayReport = data?.todayReport;
     const recurringTasks = Array.isArray(data?.carriedForwardTasks) ? data.carriedForwardTasks : [];
+    const collaborationTasks = Array.isArray(data?.collaborationTasks) ? data.collaborationTasks : [];
     const discardedForToday = window.localStorage.getItem(plannedWorkDiscardKey) === "true";
     setPlannedWorkDiscarded(discardedForToday);
     setPlannedWorkImported(safeJsonParse(window.localStorage.getItem(plannedWorkImportedKey), {}) || {});
@@ -1854,8 +1937,11 @@ export default function EmployeeDailyReport({ darkMode }) {
         ? todayReport.taskItems.map((item) => normalizeTaskRowForForm(item, todayReport, true))
         : todoImportRows.length
           ? todoImportRows
-          : recurringTasks.length
-          ? recurringTasks.map((item) => normalizeTaskRowForForm(item, {}, true))
+          : collaborationTasks.length || recurringTasks.length
+          ? [
+            ...collaborationTasks.map((item) => normalizeTaskRowForForm(item, {}, true)),
+            ...recurringTasks.map((item) => normalizeTaskRowForForm(item, {}, true)),
+          ]
           : [createEmptyTaskRow()],
       waitingTaskItems: todayReport?.waitingTaskItems?.length
         ? todayReport.waitingTaskItems.map((item) => normalizeTaskRowForForm(item, todayReport, false))
@@ -2048,7 +2134,7 @@ export default function EmployeeDailyReport({ darkMode }) {
       const missingTaskInvolvement = [...(form.taskItems || []), ...(form.waitingTaskItems || [])].some((item) => (item.category || item.categoryOther || item.description) && !involvementText(item));
       if (missingTaskInvolvement) throw new Error("Choose involvement for every task");
       const taskItems = (form.taskItems || []).map((item) => {
-        const involvementValues = uniqueClean([...involvementValuesFromRow(item), item.involvementOther]);
+        const involvementValues = hasTeamInvolvement(item) ? ["Team"] : uniqueClean([...involvementValuesFromRow(item), item.involvementOther]);
         const site = fieldValue(item.site, item.siteOther).trim();
         const category = fieldValue(item.category, item.categoryOther).trim();
         const description = item.description.trim();
@@ -2070,10 +2156,14 @@ export default function EmployeeDailyReport({ darkMode }) {
           timeFormat: "24",
           recurring: Boolean(item.recurring),
           recurringId: item.recurringId || recurringIdForTask({ site, category, description }),
+          collaboratorUserIds: hasTeamInvolvement(item) ? uniqueClean(item.collaboratorUserIds || []) : [],
+          collaborationTask: Boolean(item.collaborationTask),
+          collaborationSourceUserId: item.collaborationSourceUserId || "",
+          collaborationSourceName: item.collaborationSourceName || "",
         };
       }).filter((item) => item.site && item.category && item.status && item.involvement && item.description);
       const waitingTaskItems = (form.waitingTaskItems || []).map((item) => {
-        const involvementValues = uniqueClean([...involvementValuesFromRow(item), item.involvementOther]);
+        const involvementValues = hasTeamInvolvement(item) ? ["Team"] : uniqueClean([...involvementValuesFromRow(item), item.involvementOther]);
         const durationHours = cleanDurationPart(item.durationHours ?? item.duration?.hours ?? "");
         const durationMinutes = cleanDurationPart(item.durationMinutes ?? item.duration?.minutes ?? "", 59);
         const durationTotalMinutes = (Number(durationHours) || 0) * 60 + (Number(durationMinutes) || 0);
@@ -2089,6 +2179,10 @@ export default function EmployeeDailyReport({ darkMode }) {
           startTime: "",
           endTime: "",
           timeFormat: "24",
+          collaboratorUserIds: hasTeamInvolvement(item) ? uniqueClean(item.collaboratorUserIds || []) : [],
+          collaborationTask: Boolean(item.collaborationTask),
+          collaborationSourceUserId: item.collaborationSourceUserId || "",
+          collaborationSourceName: item.collaborationSourceName || "",
         };
       }).filter((item) => item.site && item.category && item.involvement && item.description);
       const payload = {
@@ -3075,6 +3169,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     popularSites={optionUsage.sites}
                     popularCategories={optionUsage.categories}
                     popularInvolvements={optionUsage.involvements}
+                    collaborationUsers={collaborationUsers}
                     showStatus
                     showInvolvement
                     required
@@ -3099,6 +3194,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                     popularSites={optionUsage.sites}
                     popularCategories={optionUsage.categories}
                     popularInvolvements={optionUsage.involvements}
+                    collaborationUsers={collaborationUsers}
                     showInvolvement
                     onRowsChange={(rows) => setForm((current) => ({ ...current, waitingTaskItems: rows }))}
                     onRefineDescription={refineDescription}

@@ -1373,12 +1373,26 @@ function uniqueEmployeeValues(values = []) {
     });
 }
 
+function sanitizeEmployeeUserIds(ids = []) {
+  if (!Array.isArray(ids)) return [];
+  const seen = new Set();
+  return ids
+    .map((id) => projectText(id))
+    .filter((id) => {
+      if (!ObjectId.isValid(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .slice(0, 50);
+}
+
 function sanitizeEmployeeTaskItems(items = []) {
   if (!Array.isArray(items)) return [];
   return items.map((item) => {
     const durationHours = Math.min(999, Math.max(0, Number.parseInt(item?.durationHours ?? item?.duration?.hours, 10) || 0));
     const durationMinutes = Math.min(59, Math.max(0, Number.parseInt(item?.durationMinutes ?? item?.duration?.minutes, 10) || 0));
     const durationTotalMinutes = Math.max(0, Number.parseInt(item?.durationTotalMinutes ?? item?.durationMinutesTotal, 10) || (durationHours * 60 + durationMinutes));
+    const collaboratorUserIds = sanitizeEmployeeUserIds(item?.collaboratorUserIds);
     return {
       site: projectText(item?.site),
       category: projectText(item?.category),
@@ -1398,6 +1412,10 @@ function sanitizeEmployeeTaskItems(items = []) {
       startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.startTime)) ? projectText(item?.startTime) : "",
       endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.endTime)) ? projectText(item?.endTime) : "",
       timeFormat: projectText(item?.timeFormat) === "12" ? "12" : "24",
+      collaboratorUserIds,
+      collaborationTask: Boolean(item?.collaborationTask),
+      collaborationSourceUserId: ObjectId.isValid(projectText(item?.collaborationSourceUserId)) ? projectText(item?.collaborationSourceUserId) : "",
+      collaborationSourceName: projectText(item?.collaborationSourceName),
       recurring: Boolean(item?.recurring),
       recurringId: projectText(item?.recurringId),
     };
@@ -1528,6 +1546,45 @@ function employeeRecurringTasksFromReports(reports = [], today) {
       recurring: true,
       recurringId: item.recurringId,
       recurringFrom: item.recurringFrom,
+    }))
+    .slice(0, 20);
+}
+
+function employeeCollaborationTasksFromReports(reports = [], userId, today) {
+  const userIdText = String(userId || "");
+  if (!userIdText) return [];
+  const seen = new Set();
+  return reports
+    .filter((report) => projectText(report.reportDate) === today && String(report.userId || "") !== userIdText)
+    .flatMap((report) => [
+      ...sanitizeEmployeeTaskItems(report.taskItems).map((item, index) => ({ report, item, index, source: "task" })),
+      ...sanitizeEmployeeTaskItems(report.waitingTaskItems).map((item, index) => ({ report, item, index, source: "waiting" })),
+    ])
+    .filter(({ item }) => sanitizeEmployeeUserIds(item.collaboratorUserIds).includes(userIdText))
+    .filter(({ report, item, index, source }) => {
+      const key = [
+        report.reportId || report._id || report.userId,
+        source,
+        index,
+        item.site,
+        item.category,
+        item.description,
+      ].map((value) => projectText(value).toLowerCase()).join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map(({ report, item }) => ({
+      ...item,
+      status: item.status || "In Progress",
+      involvement: item.involvement || "Team",
+      involvementValues: item.involvementValues?.length ? item.involvementValues : ["Team"],
+      collaboratorUserIds: [],
+      collaborationTask: true,
+      collaborationSourceUserId: String(report.userId || ""),
+      collaborationSourceName: report.employeeName || "Team member",
+      recurring: false,
+      recurringId: "",
     }))
     .slice(0, 20);
 }
@@ -2944,6 +3001,11 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const linkedUsers = isAdmin
     ? await db.collection("users").find({ employeeDailySpreadsheetId: { $exists: true, $ne: "" } }).limit(500).toArray()
     : [req.user];
+  const collaborationEligibleUsers = await db.collection("users")
+    .find({ blacklisted: { $ne: true } }, { projection: { _id: 1, displayName: 1, username: 1, department: 1, gender: 1, avatarPreset: 1, avatarUrl: 1, usernameLower: 1, roleName: 1 } })
+    .sort({ displayName: 1, username: 1 })
+    .limit(500)
+    .toArray();
   // Must match the filters buildEmployeeReportExportData applies, otherwise the
   // dashboard lists people as "Pending" who are never in the report at all —
   // notably the super admin and DMR managers.
@@ -2952,10 +3014,22 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     .filter((user) => projectText(user.usernameLower || user.username).toLowerCase() !== SUPER_ADMIN_USERNAME.toLowerCase())
     .filter((user) => projectText(user.roleName).toLowerCase() !== "dmr manager");
   const allCachedReports = await getCachedEmployeeReportsForUsers(db, reportEligibleLinkedUsers);
+  const today = employeeReportToday(req);
+  const todayCollaborationSourceReports = await db.collection("employeeDailyReports")
+    .find({
+      reportDate: today,
+      userId: { $ne: userId },
+      $or: [
+        { "taskItems.collaboratorUserIds": userId },
+        { "waitingTaskItems.collaboratorUserIds": userId },
+      ],
+    })
+    .sort({ submittedAt: -1 })
+    .limit(300)
+    .toArray();
   const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(allCachedReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] }))
     .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
     .slice(0, 500);
-  const today = employeeReportToday(req);
   const ownReports = allCachedReports.filter((report) => String(report.userId) === userId);
   const optionUsage = employeeReportOptionUsage(ownReports);
   const todayReport = ownReports.find((report) => String(report.userId) === userId && report.reportDate === today) || null;
@@ -2963,6 +3037,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
   const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
   const carriedForwardTasks = todayReport ? [] : employeeRecurringTasksFromReports(ownReports, today);
+  const collaborationTasks = todayReport ? [] : employeeCollaborationTasksFromReports(todayCollaborationSourceReports, userId, today);
   const plannedWorkSourceDate = addDaysToDateKey(today, -1);
   const plannedWorkSourceReport = ownReports.find((report) => String(report.userId) === userId && report.reportDate === plannedWorkSourceDate) || null;
   const plannedWorkItems = sanitizeEmployeeTaskItems(plannedWorkSourceReport?.waitingTaskItems)
@@ -3026,6 +3101,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     executiveAnswers,
     executiveAnswersSubmitted: Boolean(executiveAnswers?.answers?.length),
     carriedForwardTasks,
+    collaborationTasks,
     carriedForwardFrom: carriedForwardTasks[0]?.recurringFrom || "",
     plannedWorkSourceDate,
     plannedWorkSourceId: plannedWorkSourceReport ? String(plannedWorkSourceReport.reportId || plannedWorkSourceReport._id || "") : "",
@@ -3047,6 +3123,18 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     },
     options: { ...EMPLOYEE_REPORT_OPTIONS, sites: siteOptions },
     optionUsage,
+    collaborationUsers: collaborationEligibleUsers
+      .filter((user) => !isEmployeeDailyReportExempt(user))
+      .filter((user) => projectText(user.usernameLower || user.username).toLowerCase() !== SUPER_ADMIN_USERNAME.toLowerCase())
+      .filter((user) => projectText(user.roleName).toLowerCase() !== "dmr manager")
+      .map((user) => ({
+        userId: String(user._id),
+        employeeName: user.displayName || user.username || "Employee",
+        department: user.department || "",
+        gender: user.gender || "",
+        avatarPreset: user.avatarPreset || "",
+        avatarUrl: user.avatarUrl || "",
+      })),
     reportUsers: reportUsers.map((user) => ({
       userId: String(user._id),
       employeeName: user.employeeName || "Employee",

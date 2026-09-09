@@ -171,6 +171,10 @@ function planActualStatus(plannedValue, actualValue) {
   };
 }
 
+function isDmrOthersRecord(record = {}) {
+  return /^others?$/i.test(String(record.agency || "").trim());
+}
+
 function planStatusTone(status, darkMode) {
   return status.ok
     ? darkMode
@@ -2120,6 +2124,7 @@ export default function DmrDashboard({ darkMode }) {
         quantityColumn: record.quantityColumn,
         unitColumn: record.unitColumn,
         noteColumn: record.noteColumn,
+        remarkColumn: record.remarkColumn,
         statusColumn: record.statusColumn,
         planned: current[record.id]?.planned ?? record.planned,
         actual: current[record.id]?.actual ?? record.actual,
@@ -2128,6 +2133,7 @@ export default function DmrDashboard({ darkMode }) {
         quantity: current[record.id]?.quantity ?? record.quantity,
         unit: current[record.id]?.unit ?? record.unit,
         note: current[record.id]?.note ?? record.note,
+        remark: current[record.id]?.remark ?? record.remark,
         status: current[record.id]?.status ?? record.status,
         [key]: value,
         ...(key === "planned" ? { _autoPlannedFromTodayPlan: false } : {}),
@@ -3897,6 +3903,22 @@ export default function DmrDashboard({ darkMode }) {
                         muted={muted}
                       />
                     )}
+                    {reportData.otherRemarks?.length > 0 && (
+                      <ReportTable
+                        title="Other Remarks"
+                        headers={["Date", "Site", "Actual", "Remark"]}
+                        rows={reportData.otherRemarks
+                          .slice(0, 30)
+                          .map((item) => [
+                            item.date,
+                            item.site || "-",
+                            item.actual || "-",
+                            item.remark || "-",
+                          ])}
+                        darkMode={darkMode}
+                        muted={muted}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -5210,6 +5232,27 @@ export default function DmrDashboard({ darkMode }) {
                                   />
                                 </label>
                               </div>
+                              {isDmrOthersRecord(record) && (
+                                <label
+                                  className={`mt-3 block text-[11px] ${darkMode ? "text-white/60" : "text-black/60"}`}
+                                >
+                                  Remark
+                                  <textarea
+                                    disabled={!canFillDmr}
+                                    value={valueFor(record, "remark")}
+                                    onChange={(event) =>
+                                      updateDraft(
+                                        record,
+                                        "remark",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="Add line for Other work..."
+                                    rows={2}
+                                    className={`mt-2 w-full resize-none rounded-2xl border px-3 py-2 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white text-black"}`}
+                                  />
+                                </label>
+                              )}
                             </article>
                           ))}
                           {!filteredRecords.length && (

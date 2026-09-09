@@ -10417,19 +10417,30 @@ function dmrCell(values, rowIndex, columnIndex) {
   return projectText(values[rowIndex]?.[columnIndex]);
 }
 
-function findDmrManpowerRemarkColumn(values = [], measureRowIndex = -1) {
-  if (measureRowIndex < 0) return null;
+function dmrRemarkHeaderForSite(site) {
+  return `${cleanDmrSiteName(site) || "Site"} Remark`;
+}
+
+function findDmrManpowerRemarkColumns(values = [], measureRowIndex = -1) {
+  const result = new Map();
+  if (measureRowIndex < 0) return result;
   const headerRows = [
     Math.max(0, measureRowIndex - 2),
     Math.max(0, measureRowIndex - 1),
     measureRowIndex,
   ];
   const widest = Math.max(...values.map((row) => row?.length || 0), 0);
+  let currentSite = "";
   for (let columnIndex = 0; columnIndex < widest; columnIndex += 1) {
+    const possibleSite = cleanDmrSiteName(values[Math.max(0, measureRowIndex - 1)]?.[columnIndex]);
+    if (possibleSite) currentSite = possibleSite;
     const headerText = headerRows.map((rowIndex) => projectText(values[rowIndex]?.[columnIndex])).filter(Boolean).join(" ");
-    if (/\b(other\s*)?remarks?\b/i.test(headerText)) return columnIndex + 1;
+    const explicitSite = cleanDmrSiteName(headerText.replace(/\b(other\s*)?remarks?\b/ig, ""));
+    if (/\b(other\s*)?remarks?\b/i.test(headerText)) {
+      result.set(projectSiteMatchKey(explicitSite || currentSite), columnIndex + 1);
+    }
   }
-  return null;
+  return result;
 }
 
 function dmrProjectMatchesSite(project, dmrConfig, siteName) {
@@ -10486,8 +10497,9 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
   for (let index = 0; index < Math.max(siteRow.length, measureRow.length); index += 1) {
     const possibleSite = cleanDmrSiteName(siteRow[index]);
     if (possibleSite) currentSite = possibleSite;
-    const metric = projectText(measureRow[index]).toLowerCase();
-    if (metric === "planned" || metric === "actual") {
+    const metricText = projectText(measureRow[index]).toLowerCase();
+    const metric = /^remarks?$/.test(metricText) || /^other\s+remarks?$/.test(metricText) ? "remark" : metricText;
+    if (metric === "planned" || metric === "actual" || metric === "remark") {
       const sectionHeader = projectText(values[agencyHeaderRowIndex]?.[index]).toLowerCase();
       if (/total.*manpower|total.*site|all\s+site/i.test(sectionHeader)) continue;
       siteColumns.push({ site: currentSite || "Site", metric, columnIndex: index });
@@ -10495,13 +10507,14 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
   }
 
   const sitePairs = [...siteColumns.reduce((result, item) => {
-    if (!result.has(item.site)) result.set(item.site, { site: item.site, plannedColumnIndex: null, actualColumnIndex: null });
+    if (!result.has(item.site)) result.set(item.site, { site: item.site, plannedColumnIndex: null, actualColumnIndex: null, remarkColumnIndex: null });
     const pair = result.get(item.site);
     if (item.metric === "planned" && pair.plannedColumnIndex === null) pair.plannedColumnIndex = item.columnIndex;
     if (item.metric === "actual" && pair.actualColumnIndex === null) pair.actualColumnIndex = item.columnIndex;
+    if (item.metric === "remark" && pair.remarkColumnIndex === null) pair.remarkColumnIndex = item.columnIndex;
     return result;
   }, new Map()).values()].filter((item) => item.plannedColumnIndex !== null || item.actualColumnIndex !== null);
-  const remarkColumn = findDmrManpowerRemarkColumn(values, measureRowIndex);
+  const remarkColumns = findDmrManpowerRemarkColumns(values, measureRowIndex);
 
   const records = [];
   const agencies = new Set();
@@ -10530,8 +10543,8 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
         variance: actual - planned,
         plannedColumn: pair.plannedColumnIndex + 1,
         actualColumn: pair.actualColumnIndex + 1,
-        remark: remarkColumn ? dmrCell(values, rowIndex, remarkColumn - 1) : "",
-        remarkColumn,
+        remark: pair.remarkColumnIndex !== null ? dmrCell(values, rowIndex, pair.remarkColumnIndex) : "",
+        remarkColumn: pair.remarkColumnIndex !== null ? pair.remarkColumnIndex + 1 : remarkColumns.get(projectSiteMatchKey(pair.site)) || null,
       });
     }
   }
@@ -10625,7 +10638,7 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
     staffAttendance,
     sites: sitePairs.map((item) => item.site),
     agencies: [...agencies].sort((a, b) => a.localeCompare(b)),
-    header: { measureRow: measureRowIndex + 1, agencyColumn: agencyColumn + 1, remarkColumn },
+    header: { measureRow: measureRowIndex + 1, agencyColumn: agencyColumn + 1 },
   };
 }
 
@@ -10897,7 +10910,7 @@ async function writeDmrRecords(spreadsheetId, dateKey, updates = []) {
   return { updatedCells: (response.data.totalUpdatedCells || 0) + totalUpdatedCells, sheetName, totalUpdatedCells };
 }
 
-async function ensureDmrManpowerRemarkColumn(spreadsheetId, dateKey) {
+async function ensureDmrManpowerRemarkColumn(spreadsheetId, dateKey, siteName = "") {
   const sheets = await getDmrSpreadsheet(spreadsheetId);
   const { sheetName } = await ensureDmrTab(spreadsheetId, dateKey);
   const response = await sheets.spreadsheets.values.get({
@@ -10906,7 +10919,9 @@ async function ensureDmrManpowerRemarkColumn(spreadsheetId, dateKey) {
   });
   const values = response.data.values || [];
   const parsed = parseDmrSheetValues({ values, sheetName, dateKey });
-  if (parsed.header?.remarkColumn) return parsed.header.remarkColumn;
+  const siteKey = projectSiteMatchKey(siteName);
+  const existing = (parsed.records || []).find((record) => projectSiteMatchKey(record.site) === siteKey && record.remarkColumn);
+  if (existing?.remarkColumn) return existing.remarkColumn;
   const measureRow = Number(parsed.header?.measureRow) || 0;
   const remarkColumn = (parsed.records || []).reduce((max, record) => Math.max(max, Number(record.plannedColumn) || 0, Number(record.actualColumn) || 0), 0) + 1;
   if (!measureRow || !remarkColumn) throw new Error("Could not locate a place for DMR other remarks");
@@ -10917,7 +10932,7 @@ async function ensureDmrManpowerRemarkColumn(spreadsheetId, dateKey) {
       data: [
         {
           range: `${escapeSheetName(sheetName)}!${columnName(remarkColumn)}${measureRow}`,
-          values: [["Remarks"]],
+          values: [[dmrRemarkHeaderForSite(siteName)]],
         },
       ],
     },
@@ -19662,7 +19677,7 @@ app.patch("/dmr-dashboard", async (req, res) => {
         { column: allowed.actualColumn, value: update.actual },
       ];
       if (Object.prototype.hasOwnProperty.call(update, "remark")) {
-        if (!remarkColumn) remarkColumn = await ensureDmrManpowerRemarkColumn(spreadsheetId, date);
+        remarkColumn = allowed.remarkColumn || await ensureDmrManpowerRemarkColumn(spreadsheetId, date, allowed.site);
         cells.push({ column: remarkColumn, value: update.remark });
       }
       updates.push({

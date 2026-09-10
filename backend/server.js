@@ -10403,6 +10403,13 @@ function dmrValueNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function dmrNumericCellInput(value) {
+  const text = projectText(value).replace(/,/g, "");
+  if (!text) return "";
+  const number = Number(text);
+  return Number.isFinite(number) ? value : "";
+}
+
 function findDmrLabel(values, pattern) {
   for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
     const row = values[rowIndex] || [];
@@ -10411,6 +10418,14 @@ function findDmrLabel(values, pattern) {
     }
   }
   return null;
+}
+
+function findDmrSectionColumn(values, rowIndex, pattern, fallbackColumnIndex) {
+  const row = values[rowIndex] || [];
+  for (let columnIndex = 0; columnIndex < row.length; columnIndex += 1) {
+    if (pattern.test(projectText(row[columnIndex]))) return columnIndex;
+  }
+  return fallbackColumnIndex;
 }
 
 function dmrCell(values, rowIndex, columnIndex) {
@@ -10521,12 +10536,17 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
 
   const otherRemarks = [];
   if (otherRemarksLabel) {
+    const headerRowIndex = otherRemarksLabel.rowIndex + 1;
+    const serialColumnIndex = findDmrSectionColumn(values, headerRowIndex, /^(sr\.?\s*no\.?|no\.?)$/i, otherRemarksLabel.columnIndex);
+    const siteColumnIndex = findDmrSectionColumn(values, headerRowIndex, /^site$/i, otherRemarksLabel.columnIndex + 1);
+    const actualColumnIndex = findDmrSectionColumn(values, headerRowIndex, /^actual$/i, otherRemarksLabel.columnIndex + 3);
+    const remarkColumnIndex = findDmrSectionColumn(values, headerRowIndex, /^remarks?$/i, otherRemarksLabel.columnIndex + 4);
     const stopAt = notesLabel ? notesLabel.rowIndex : staffLabel ? staffLabel.rowIndex : Math.min(otherRemarksLabel.rowIndex + 6, values.length);
     for (let rowIndex = otherRemarksLabel.rowIndex + 2; rowIndex < stopAt; rowIndex += 1) {
-      const serial = dmrCell(values, rowIndex, 1);
-      const site = dmrCell(values, rowIndex, 2);
-      const actual = dmrCell(values, rowIndex, 4);
-      const remark = dmrCell(values, rowIndex, 5);
+      const serial = dmrCell(values, rowIndex, serialColumnIndex);
+      const site = dmrCell(values, rowIndex, siteColumnIndex);
+      const actual = dmrCell(values, rowIndex, actualColumnIndex);
+      const remark = dmrCell(values, rowIndex, remarkColumnIndex);
       if (!serial && !site && !actual && !remark) break;
       otherRemarks.push({
         id: `${sheetName}:other-remark:${rowIndex + 1}`,
@@ -10534,9 +10554,9 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
         site,
         actual: dmrValueNumber(actual),
         remark,
-        siteColumn: 3,
-        actualColumn: 5,
-        remarkColumn: 6,
+        siteColumn: siteColumnIndex + 1,
+        actualColumn: actualColumnIndex + 1,
+        remarkColumn: remarkColumnIndex + 1,
       });
     }
   }
@@ -10987,11 +11007,18 @@ async function addDmrSectionRow(spreadsheetId, dateKey, section, valuesToWrite =
     const startRowIndex = label?.rowIndex + 1;
     const sectionStop = normalizedSection === "otherremarks" ? notesLabel?.rowIndex : staffLabel?.rowIndex;
     if (Number.isInteger(startRowIndex) && Number.isInteger(sectionStop)) {
+      const headerRowIndex = label.rowIndex + 1;
+      const serialColumnIndex = normalizedSection === "otherremarks"
+        ? findDmrSectionColumn(values, headerRowIndex, /^(sr\.?\s*no\.?|no\.?)$/i, label.columnIndex)
+        : 1;
+      const siteColumnIndex = findDmrSectionColumn(values, headerRowIndex, /^site$/i, label.columnIndex + 1);
+      const actualColumnIndex = findDmrSectionColumn(values, headerRowIndex, /^actual$/i, label.columnIndex + 3);
+      const remarkColumnIndex = findDmrSectionColumn(values, headerRowIndex, /^remarks?$/i, label.columnIndex + 4);
       let maxSerial = 0;
       for (let rowIndex = startRowIndex; rowIndex < sectionStop; rowIndex += 1) {
-        const serial = Number(dmrCell(values, rowIndex, 1)) || 0;
+        const serial = Number(dmrCell(values, rowIndex, serialColumnIndex)) || 0;
         const note = normalizedSection === "otherremarks"
-          ? [dmrCell(values, rowIndex, 2), dmrCell(values, rowIndex, 4), dmrCell(values, rowIndex, 5)].filter(Boolean).join(" ")
+          ? [dmrCell(values, rowIndex, siteColumnIndex), dmrCell(values, rowIndex, actualColumnIndex), dmrCell(values, rowIndex, remarkColumnIndex)].filter(Boolean).join(" ")
           : dmrCell(values, rowIndex, 2);
         if (!serial && !note) {
           insertBeforeRowIndex = rowIndex;
@@ -11001,10 +11028,10 @@ async function addDmrSectionRow(spreadsheetId, dateKey, section, valuesToWrite =
       }
       if (normalizedSection === "otherremarks") {
         valueUpdates = [
-          { range: `${escapeSheetName(sheetName)}!B${insertBeforeRowIndex + 1}`, values: [[maxSerial + 1]] },
-          { range: `${escapeSheetName(sheetName)}!C${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.site ?? ""]] },
-          { range: `${escapeSheetName(sheetName)}!E${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.actual ?? ""]] },
-          { range: `${escapeSheetName(sheetName)}!F${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.remark ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!${columnName(serialColumnIndex + 1)}${insertBeforeRowIndex + 1}`, values: [[maxSerial + 1]] },
+          { range: `${escapeSheetName(sheetName)}!${columnName(siteColumnIndex + 1)}${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.site ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!${columnName(actualColumnIndex + 1)}${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.actual ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!${columnName(remarkColumnIndex + 1)}${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.remark ?? ""]] },
         ];
       } else {
         valueUpdates = [
@@ -19677,8 +19704,8 @@ app.patch("/dmr-dashboard", async (req, res) => {
         continue;
       }
       const cells = [
-        { column: allowed.plannedColumn, value: update.planned },
-        { column: allowed.actualColumn, value: update.actual },
+        { column: allowed.plannedColumn, value: dmrNumericCellInput(update.planned) },
+        { column: allowed.actualColumn, value: dmrNumericCellInput(update.actual) },
       ];
       if (/^others?$/i.test(projectText(allowed.agency)) && Object.prototype.hasOwnProperty.call(update, "remark")) {
         const siteKey = projectSiteMatchKey(allowed.site);

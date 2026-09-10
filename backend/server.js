@@ -10417,32 +10417,6 @@ function dmrCell(values, rowIndex, columnIndex) {
   return projectText(values[rowIndex]?.[columnIndex]);
 }
 
-function dmrRemarkHeaderForSite(site) {
-  return `${cleanDmrSiteName(site) || "Site"} Remark`;
-}
-
-function findDmrManpowerRemarkColumns(values = [], measureRowIndex = -1) {
-  const result = new Map();
-  if (measureRowIndex < 0) return result;
-  const headerRows = [
-    Math.max(0, measureRowIndex - 2),
-    Math.max(0, measureRowIndex - 1),
-    measureRowIndex,
-  ];
-  const widest = Math.max(...values.map((row) => row?.length || 0), 0);
-  let currentSite = "";
-  for (let columnIndex = 0; columnIndex < widest; columnIndex += 1) {
-    const possibleSite = cleanDmrSiteName(values[Math.max(0, measureRowIndex - 1)]?.[columnIndex]);
-    if (possibleSite) currentSite = possibleSite;
-    const headerText = headerRows.map((rowIndex) => projectText(values[rowIndex]?.[columnIndex])).filter(Boolean).join(" ");
-    const explicitSite = cleanDmrSiteName(headerText.replace(/\b(other\s*)?remarks?\b/ig, ""));
-    if (/\b(other\s*)?remarks?\b/i.test(headerText)) {
-      result.set(projectSiteMatchKey(explicitSite || currentSite), columnIndex + 1);
-    }
-  }
-  return result;
-}
-
 function dmrProjectMatchesSite(project, dmrConfig, siteName) {
   const site = projectSiteMatchKey(cleanDmrSiteName(siteName));
   const accepted = [
@@ -10482,6 +10456,7 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
   }
   const equipmentLabel = findDmrLabel(values, /equipments?\s+and\s+tools/i);
   const materialsLabel = findDmrLabel(values, /materials?\s+details/i);
+  const otherRemarksLabel = findDmrLabel(values, /other\s+remarks?\s*[:-]?/i);
   const notesLabel = findDmrLabel(values, /notes?\s*[:-]/i);
   const staffLabel = findDmrLabel(values, /project\s+staff\s+attend/i);
 
@@ -10497,9 +10472,8 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
   for (let index = 0; index < Math.max(siteRow.length, measureRow.length); index += 1) {
     const possibleSite = cleanDmrSiteName(siteRow[index]);
     if (possibleSite) currentSite = possibleSite;
-    const metricText = projectText(measureRow[index]).toLowerCase();
-    const metric = /^remarks?$/.test(metricText) || /^other\s+remarks?$/.test(metricText) ? "remark" : metricText;
-    if (metric === "planned" || metric === "actual" || metric === "remark") {
+    const metric = projectText(measureRow[index]).toLowerCase();
+    if (metric === "planned" || metric === "actual") {
       const sectionHeader = projectText(values[agencyHeaderRowIndex]?.[index]).toLowerCase();
       if (/total.*manpower|total.*site|all\s+site/i.test(sectionHeader)) continue;
       siteColumns.push({ site: currentSite || "Site", metric, columnIndex: index });
@@ -10507,14 +10481,12 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
   }
 
   const sitePairs = [...siteColumns.reduce((result, item) => {
-    if (!result.has(item.site)) result.set(item.site, { site: item.site, plannedColumnIndex: null, actualColumnIndex: null, remarkColumnIndex: null });
+    if (!result.has(item.site)) result.set(item.site, { site: item.site, plannedColumnIndex: null, actualColumnIndex: null });
     const pair = result.get(item.site);
     if (item.metric === "planned" && pair.plannedColumnIndex === null) pair.plannedColumnIndex = item.columnIndex;
     if (item.metric === "actual" && pair.actualColumnIndex === null) pair.actualColumnIndex = item.columnIndex;
-    if (item.metric === "remark" && pair.remarkColumnIndex === null) pair.remarkColumnIndex = item.columnIndex;
     return result;
   }, new Map()).values()].filter((item) => item.plannedColumnIndex !== null || item.actualColumnIndex !== null);
-  const remarkColumns = findDmrManpowerRemarkColumns(values, measureRowIndex);
 
   const records = [];
   const agencies = new Set();
@@ -10543,15 +10515,35 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
         variance: actual - planned,
         plannedColumn: pair.plannedColumnIndex + 1,
         actualColumn: pair.actualColumnIndex + 1,
-        remark: pair.remarkColumnIndex !== null ? dmrCell(values, rowIndex, pair.remarkColumnIndex) : "",
-        remarkColumn: pair.remarkColumnIndex !== null ? pair.remarkColumnIndex + 1 : remarkColumns.get(projectSiteMatchKey(pair.site)) || null,
+      });
+    }
+  }
+
+  const otherRemarks = [];
+  if (otherRemarksLabel) {
+    const stopAt = notesLabel ? notesLabel.rowIndex : staffLabel ? staffLabel.rowIndex : Math.min(otherRemarksLabel.rowIndex + 6, values.length);
+    for (let rowIndex = otherRemarksLabel.rowIndex + 2; rowIndex < stopAt; rowIndex += 1) {
+      const serial = dmrCell(values, rowIndex, 1);
+      const site = dmrCell(values, rowIndex, 2);
+      const actual = dmrCell(values, rowIndex, 4);
+      const remark = dmrCell(values, rowIndex, 5);
+      if (!serial && !site && !actual && !remark) break;
+      otherRemarks.push({
+        id: `${sheetName}:other-remark:${rowIndex + 1}`,
+        rowNumber: rowIndex + 1,
+        site,
+        actual: dmrValueNumber(actual),
+        remark,
+        siteColumn: 3,
+        actualColumn: 5,
+        remarkColumn: 6,
       });
     }
   }
 
   const equipment = [];
   if (equipmentLabel) {
-    const stopAt = notesLabel ? notesLabel.rowIndex : Math.min(equipmentLabel.rowIndex + 5, values.length);
+    const stopAt = otherRemarksLabel ? otherRemarksLabel.rowIndex : notesLabel ? notesLabel.rowIndex : Math.min(equipmentLabel.rowIndex + 5, values.length);
     for (let rowIndex = equipmentLabel.rowIndex + 2; rowIndex < stopAt; rowIndex += 1) {
       const serial = dmrCell(values, rowIndex, 1);
       const site = dmrCell(values, rowIndex, 2);
@@ -10573,7 +10565,7 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
 
   const materials = [];
   if (materialsLabel) {
-    const stopAt = notesLabel ? notesLabel.rowIndex : Math.min(materialsLabel.rowIndex + 5, values.length);
+    const stopAt = otherRemarksLabel ? otherRemarksLabel.rowIndex : notesLabel ? notesLabel.rowIndex : Math.min(materialsLabel.rowIndex + 5, values.length);
     for (let rowIndex = materialsLabel.rowIndex + 2; rowIndex < stopAt; rowIndex += 1) {
       const serial = dmrCell(values, rowIndex, 8);
       const site = dmrCell(values, rowIndex, 9);
@@ -10632,6 +10624,7 @@ function parseDmrSheetValues({ values = [], sheetName = "", dateKey = "" }) {
 
   return {
     records,
+    otherRemarks,
     equipment,
     materials,
     notes,
@@ -10690,6 +10683,7 @@ async function ensureDmrTab(spreadsheetId, dateKey) {
   const measureRowIndex = values.findIndex((row) => row.filter((cell) => /^(planned|actual)$/i.test(projectText(cell))).length >= 2);
   const equipmentLabel = findDmrLabel(values, /equipments?\s+and\s+tools/i);
   const materialsLabel = findDmrLabel(values, /materials?\s+details/i);
+  const otherRemarksLabel = findDmrLabel(values, /other\s+remarks?\s*[:-]?/i);
   const notesLabel = findDmrLabel(values, /notes?\s*[:-]/i);
   const staffLabel = findDmrLabel(values, /project\s+staff\s+attend/i);
   const clearRanges = [];
@@ -10699,6 +10693,7 @@ async function ensureDmrTab(spreadsheetId, dateKey) {
   }
   if (equipmentLabel) clearRanges.push(`${escapeSheetName(tabName)}!C${equipmentLabel.rowIndex + 3}:F${equipmentLabel.rowIndex + 5}`);
   if (materialsLabel) clearRanges.push(`${escapeSheetName(tabName)}!J${materialsLabel.rowIndex + 3}:P${materialsLabel.rowIndex + 5}`);
+  if (otherRemarksLabel) clearRanges.push(`${escapeSheetName(tabName)}!C${otherRemarksLabel.rowIndex + 3}:F${otherRemarksLabel.rowIndex + 5}`);
   if (notesLabel) clearRanges.push(`${escapeSheetName(tabName)}!C${notesLabel.rowIndex + 2}:C${notesLabel.rowIndex + 3}`);
   if (staffLabel) clearRanges.push(`${escapeSheetName(tabName)}!C${staffLabel.rowIndex + 3}:W${staffLabel.rowIndex + 3}`);
   await Promise.all(clearRanges.map((range) => sheets.spreadsheets.values.clear({ spreadsheetId, range })));
@@ -10724,6 +10719,7 @@ async function readDmrSheet(spreadsheetId, dateKey, { ensure = false } = {}) {
 
 function dmrSnapshotDocument({ spreadsheetId, dateKey, sheet = {}, source = "dmr-dashboard", actor = null } = {}) {
   const records = Array.isArray(sheet.records) ? sheet.records : [];
+  const otherRemarks = Array.isArray(sheet.otherRemarks) ? sheet.otherRemarks : [];
   const equipment = Array.isArray(sheet.equipment) ? sheet.equipment : [];
   const materials = Array.isArray(sheet.materials) ? sheet.materials : [];
   const notes = Array.isArray(sheet.notes) ? sheet.notes : [];
@@ -10742,6 +10738,7 @@ function dmrSnapshotDocument({ spreadsheetId, dateKey, sheet = {}, source = "dmr
       roleName: actor.roleName || "",
     } : null,
     records,
+    otherRemarks,
     equipment,
     materials,
     notes,
@@ -10757,6 +10754,10 @@ function dmrSnapshotDocument({ spreadsheetId, dateKey, sheet = {}, source = "dmr
 async function persistDmrDailySnapshot({ spreadsheetId, dateKey, source = "dmr-dashboard", actor = null } = {}) {
   const sheet = await readDmrSheet(spreadsheetId, dateKey, { ensure: false });
   const doc = dmrSnapshotDocument({ spreadsheetId, dateKey, sheet, source, actor });
+  return persistDmrDailySnapshotDocument(doc);
+}
+
+async function persistDmrDailySnapshotDocument(doc) {
   const db = await connectAuthDb();
   await db.collection("dmrDailySnapshots").updateOne(
     { spreadsheetId: doc.spreadsheetId, date: doc.date },
@@ -10764,6 +10765,11 @@ async function persistDmrDailySnapshot({ spreadsheetId, dateKey, source = "dmr-d
     { upsert: true },
   );
   return doc;
+}
+
+async function persistDmrDailySnapshotFromSheet({ spreadsheetId, dateKey, sheet, source = "dmr-dashboard", actor = null } = {}) {
+  const doc = dmrSnapshotDocument({ spreadsheetId, dateKey, sheet, source, actor });
+  return persistDmrDailySnapshotDocument(doc);
 }
 
 async function refreshDmrManpowerTotals(spreadsheetId, sheetName) {
@@ -10866,8 +10872,8 @@ async function refreshDmrManpowerTotals(spreadsheetId, sheetName) {
   return result.data.totalUpdatedCells || 0;
 }
 
-async function writeDmrRecords(spreadsheetId, dateKey, updates = []) {
-  const { sheetName } = await ensureDmrTab(spreadsheetId, dateKey);
+async function writeDmrRecords(spreadsheetId, dateKey, updates = [], updateOptions = {}) {
+  const sheetName = updateOptions.sheetName || (await ensureDmrTab(spreadsheetId, dateKey)).sheetName;
   const data = [];
   for (const update of updates) {
     const rowNumber = Number(update.rowNumber);
@@ -10904,46 +10910,15 @@ async function writeDmrRecords(spreadsheetId, dateKey, updates = []) {
     spreadsheetId,
     requestBody: { valueInputOption: "USER_ENTERED", data },
   });
-  const totalUpdatedCells = await refreshDmrManpowerTotals(spreadsheetId, sheetName);
+  const totalUpdatedCells = updateOptions.refreshTotals === false ? 0 : await refreshDmrManpowerTotals(spreadsheetId, sheetName);
   sheetDatasetCache.delete(spreadsheetId);
   invalidateRawSheetValuesCache(spreadsheetId);
   return { updatedCells: (response.data.totalUpdatedCells || 0) + totalUpdatedCells, sheetName, totalUpdatedCells };
 }
 
-async function ensureDmrManpowerRemarkColumn(spreadsheetId, dateKey, siteName = "") {
-  const sheets = await getDmrSpreadsheet(spreadsheetId);
-  const { sheetName } = await ensureDmrTab(spreadsheetId, dateKey);
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${escapeSheetName(sheetName)}!A1:ZZ300`,
-  });
-  const values = response.data.values || [];
-  const parsed = parseDmrSheetValues({ values, sheetName, dateKey });
-  const siteKey = projectSiteMatchKey(siteName);
-  const existing = (parsed.records || []).find((record) => projectSiteMatchKey(record.site) === siteKey && record.remarkColumn);
-  if (existing?.remarkColumn) return existing.remarkColumn;
-  const measureRow = Number(parsed.header?.measureRow) || 0;
-  const remarkColumn = (parsed.records || []).reduce((max, record) => Math.max(max, Number(record.plannedColumn) || 0, Number(record.actualColumn) || 0), 0) + 1;
-  if (!measureRow || !remarkColumn) throw new Error("Could not locate a place for DMR other remarks");
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      valueInputOption: "USER_ENTERED",
-      data: [
-        {
-          range: `${escapeSheetName(sheetName)}!${columnName(remarkColumn)}${measureRow}`,
-          values: [[dmrRemarkHeaderForSite(siteName)]],
-        },
-      ],
-    },
-  });
-  invalidateRawSheetValuesCache(spreadsheetId);
-  return remarkColumn;
-}
-
 async function addDmrSectionRow(spreadsheetId, dateKey, section, valuesToWrite = {}) {
   const normalizedSection = projectText(section).toLowerCase();
-  if (!["equipment", "materials", "notes"].includes(normalizedSection)) {
+  if (!["equipment", "materials", "notes", "otherremarks"].includes(normalizedSection)) {
     throw new Error("Unsupported DMR section");
   }
   const sheets = await getDmrSpreadsheet(spreadsheetId);
@@ -10962,15 +10937,18 @@ async function addDmrSectionRow(spreadsheetId, dateKey, section, valuesToWrite =
   const values = response.data.values || [];
   const equipmentLabel = findDmrLabel(values, /equipments?\s+and\s+tools/i);
   const materialsLabel = findDmrLabel(values, /materials?\s+details/i);
+  const otherRemarksLabel = findDmrLabel(values, /other\s+remarks?\s*[:-]?/i);
   const notesLabel = findDmrLabel(values, /notes?\s*[:-]/i);
   const staffLabel = findDmrLabel(values, /project\s+staff\s+attend/i);
   let insertBeforeRowIndex = normalizedSection === "notes"
     ? staffLabel?.rowIndex
-    : notesLabel?.rowIndex;
+    : normalizedSection === "otherremarks"
+      ? notesLabel?.rowIndex
+      : otherRemarksLabel?.rowIndex || notesLabel?.rowIndex;
   let valueUpdates = [];
   if (normalizedSection === "equipment" || normalizedSection === "materials") {
     const startRowIndex = (equipmentLabel || materialsLabel)?.rowIndex + 2;
-    const sectionStop = notesLabel?.rowIndex;
+    const sectionStop = otherRemarksLabel?.rowIndex || notesLabel?.rowIndex;
     if (Number.isInteger(startRowIndex) && Number.isInteger(sectionStop)) {
       let maxSerial = 0;
       for (let rowIndex = startRowIndex; rowIndex < sectionStop; rowIndex += 1) {
@@ -11004,24 +10982,36 @@ async function addDmrSectionRow(spreadsheetId, dateKey, section, valuesToWrite =
         );
       }
     }
-  } else if (normalizedSection === "notes") {
-    const startRowIndex = notesLabel?.rowIndex + 1;
-    const sectionStop = staffLabel?.rowIndex;
+  } else if (normalizedSection === "notes" || normalizedSection === "otherremarks") {
+    const label = normalizedSection === "otherremarks" ? otherRemarksLabel : notesLabel;
+    const startRowIndex = label?.rowIndex + 1;
+    const sectionStop = normalizedSection === "otherremarks" ? notesLabel?.rowIndex : staffLabel?.rowIndex;
     if (Number.isInteger(startRowIndex) && Number.isInteger(sectionStop)) {
       let maxSerial = 0;
       for (let rowIndex = startRowIndex; rowIndex < sectionStop; rowIndex += 1) {
         const serial = Number(dmrCell(values, rowIndex, 1)) || 0;
-        const note = dmrCell(values, rowIndex, 2);
+        const note = normalizedSection === "otherremarks"
+          ? [dmrCell(values, rowIndex, 2), dmrCell(values, rowIndex, 4), dmrCell(values, rowIndex, 5)].filter(Boolean).join(" ")
+          : dmrCell(values, rowIndex, 2);
         if (!serial && !note) {
           insertBeforeRowIndex = rowIndex;
           break;
         }
         maxSerial = Math.max(maxSerial, serial);
       }
-      valueUpdates = [
-        { range: `${escapeSheetName(sheetName)}!B${insertBeforeRowIndex + 1}`, values: [[maxSerial + 1]] },
-        { range: `${escapeSheetName(sheetName)}!C${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.note ?? ""]] },
-      ];
+      if (normalizedSection === "otherremarks") {
+        valueUpdates = [
+          { range: `${escapeSheetName(sheetName)}!B${insertBeforeRowIndex + 1}`, values: [[maxSerial + 1]] },
+          { range: `${escapeSheetName(sheetName)}!C${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.site ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!E${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.actual ?? ""]] },
+          { range: `${escapeSheetName(sheetName)}!F${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.remark ?? ""]] },
+        ];
+      } else {
+        valueUpdates = [
+          { range: `${escapeSheetName(sheetName)}!B${insertBeforeRowIndex + 1}`, values: [[maxSerial + 1]] },
+          { range: `${escapeSheetName(sheetName)}!C${insertBeforeRowIndex + 1}`, values: [[valuesToWrite.note ?? ""]] },
+        ];
+      }
     }
   }
   if (!Number.isInteger(insertBeforeRowIndex) || insertBeforeRowIndex < 1) {
@@ -11924,8 +11914,8 @@ async function buildDmrReport({ startDate, endDate, sections = [] } = {}) {
   const allEquipment = parsedTabs.flatMap((tab) => (tab.equipment || []).filter((item) => item.site || item.details || item.quantity).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
   const allMaterials = parsedTabs.flatMap((tab) => (tab.materials || []).filter((item) => item.site || item.details || item.unit || item.quantity).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
   const allNotes = parsedTabs.flatMap((tab) => (tab.notes || []).filter((item) => item.note).map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
-  const allOtherRemarks = parsedTabs.flatMap((tab) => (tab.records || [])
-    .filter((item) => /^others?$/i.test(projectText(item.agency)) && projectText(item.remark))
+  const allOtherRemarks = parsedTabs.flatMap((tab) => (tab.otherRemarks || [])
+    .filter((item) => projectText(item.site) || Number(item.actual) || projectText(item.remark))
     .map((item) => ({ ...item, date: tab.date, sheetName: tab.sheetName })));
   const filledTradeKeys = new Set(allRecords
     .filter((record) => record.actualFilled)
@@ -19341,8 +19331,8 @@ app.get("/dmr-dashboard", async (req, res) => {
     const dashboard = publicDmrSettings().linked
       ? await readDmrDashboard(date, { ensureToday: isToday, force })
       : emptyDmrDashboard(date);
-    if (dashboard.spreadsheetId) {
-      persistDmrDailySnapshot({ spreadsheetId: dashboard.spreadsheetId, dateKey: date, source: "dmr-dashboard-read", actor: req.authUser })
+    if (dashboard.spreadsheetId && dashboard.today) {
+      persistDmrDailySnapshotFromSheet({ spreadsheetId: dashboard.spreadsheetId, dateKey: date, sheet: dashboard.today, source: "dmr-dashboard-read", actor: req.authUser })
         .catch((snapshotError) => console.warn("DMR snapshot persist skipped:", snapshotError.message));
     }
     res.json({
@@ -19556,6 +19546,7 @@ function dmrHistoryLabel(record) {
   if (record.type === "staff") return record.name || "Staff attendance";
   if (record.type === "equipment") return record.details || record.site || "Equipment & tools";
   if (record.type === "material") return record.details || record.site || "Materials";
+  if (record.type === "otherRemark") return record.site || "Other remarks";
   if (record.type === "note") return `Note row ${record.rowNumber}`;
   return record.label || record.id || "DMR row";
 }
@@ -19593,6 +19584,10 @@ function buildDmrHistoryEntries({ req, date, sheetName, allowed, update }) {
     add("details", allowed.details, update.details);
     add("unit", allowed.unit, update.unit);
     add("quantity", allowed.quantity, update.quantity);
+  } else if (allowed.type === "otherRemark") {
+    add("site", allowed.site, update.site);
+    add("actual", allowed.actual, update.actual);
+    add("remark", allowed.remark, update.remark);
   } else if (allowed.type === "note") {
     add("note", allowed.note, update.note);
   } else if (allowed.type === "staff") {
@@ -19600,9 +19595,6 @@ function buildDmrHistoryEntries({ req, date, sheetName, allowed, update }) {
   } else {
     add("planned", allowed.planned, update.planned);
     add("actual", allowed.actual, update.actual);
-    if (Object.prototype.hasOwnProperty.call(update, "remark")) {
-      add("remark", allowed.remark, update.remark);
-    }
   }
   return entries.map((entry) => ({ ...entry, ip: getClientIp(req) }));
 }
@@ -19621,6 +19613,7 @@ app.patch("/dmr-dashboard", async (req, res) => {
     const today = await readDmrSheet(spreadsheetId, date, { ensure: true });
     const sectionRecords = [
       ...(today.records || []).map((record) => ({ ...record, type: "manpower" })),
+      ...(today.otherRemarks || []).map((record) => ({ ...record, type: "otherRemark" })),
       ...(today.equipment || []).map((record) => ({ ...record, type: "equipment" })),
       ...(today.materials || []).map((record) => ({ ...record, type: "material" })),
       ...(today.notes || []).map((record) => ({ ...record, type: "note" })),
@@ -19628,8 +19621,8 @@ app.patch("/dmr-dashboard", async (req, res) => {
     ];
     const allowedMap = new Map(sectionRecords.map((record) => [record.id, record]));
     const historyEntries = [];
-    let remarkColumn = today.header?.remarkColumn || null;
     const updates = [];
+    const otherRemarkUpserts = new Map();
     for (const rawUpdate of incomingUpdates) {
       const update = { ...rawUpdate, submissionId };
       const allowed = allowedMap.get(projectText(update.id));
@@ -19658,6 +19651,17 @@ app.patch("/dmr-dashboard", async (req, res) => {
         });
         continue;
       }
+      if (allowed.type === "otherRemark") {
+        updates.push({
+          rowNumber: allowed.rowNumber,
+          cells: [
+            { column: allowed.siteColumn, value: update.site },
+            { column: allowed.actualColumn, value: update.actual },
+            { column: allowed.remarkColumn, value: update.remark },
+          ],
+        });
+        continue;
+      }
       if (allowed.type === "note") {
         updates.push({
           rowNumber: allowed.rowNumber,
@@ -19676,9 +19680,26 @@ app.patch("/dmr-dashboard", async (req, res) => {
         { column: allowed.plannedColumn, value: update.planned },
         { column: allowed.actualColumn, value: update.actual },
       ];
-      if (Object.prototype.hasOwnProperty.call(update, "remark")) {
-        remarkColumn = allowed.remarkColumn || await ensureDmrManpowerRemarkColumn(spreadsheetId, date, allowed.site);
-        cells.push({ column: remarkColumn, value: update.remark });
+      if (/^others?$/i.test(projectText(allowed.agency)) && Object.prototype.hasOwnProperty.call(update, "remark")) {
+        const siteKey = projectSiteMatchKey(allowed.site);
+        const matchingRemark = (today.otherRemarks || []).find((item) => projectSiteMatchKey(item.site) === siteKey);
+        const remarkPayload = {
+          site: allowed.site,
+          actual: update.actual,
+          remark: update.remark,
+        };
+        if (matchingRemark) {
+          updates.push({
+            rowNumber: matchingRemark.rowNumber,
+            cells: [
+              { column: matchingRemark.siteColumn, value: remarkPayload.site },
+              { column: matchingRemark.actualColumn, value: remarkPayload.actual },
+              { column: matchingRemark.remarkColumn, value: remarkPayload.remark },
+            ],
+          });
+        } else if (projectText(update.remark)) {
+          otherRemarkUpserts.set(siteKey || allowed.site, remarkPayload);
+        }
       }
       updates.push({
         rowNumber: allowed.rowNumber,
@@ -19686,8 +19707,12 @@ app.patch("/dmr-dashboard", async (req, res) => {
       });
     }
     if (!updates.length) return res.status(400).json({ error: "No matching DMR rows found for this date" });
-    const result = await writeDmrRecords(spreadsheetId, date, updates);
-    await persistDmrDailySnapshot({ spreadsheetId, dateKey: date, source: "dmr-dashboard", actor: req.authUser });
+    const result = await writeDmrRecords(spreadsheetId, date, updates, { sheetName: today.sheetName, refreshTotals: false });
+    for (const remark of otherRemarkUpserts.values()) {
+      await addDmrSectionRow(spreadsheetId, date, "otherremarks", remark);
+    }
+    persistDmrDailySnapshotFromSheet({ spreadsheetId, dateKey: date, sheet: today, source: "dmr-dashboard", actor: req.authUser })
+      .catch((snapshotError) => console.warn("DMR snapshot persist skipped:", snapshotError.message));
     addDmrHistory(req, historyEntries);
     addActivityLog({
       req,

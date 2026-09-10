@@ -2103,10 +2103,21 @@ export default function DmrDashboard({ darkMode }) {
   const hasAutoPlannedDrafts = records.some((record) =>
     autoPlannedForRecord(record),
   );
+  const otherRemarksBySite = useMemo(() => {
+    return new Map(
+      (data?.today?.otherRemarks || []).map((item) => [
+        comparablePlanText(item.site),
+        item,
+      ]),
+    );
+  }, [data?.today?.otherRemarks]);
   const valueFor = (record, key) => {
     if (key === "planned") {
       const autoPlanned = autoPlannedForRecord(record);
       if (autoPlanned !== "") return autoPlanned;
+    }
+    if (key === "remark" && isDmrOthersRecord(record)) {
+      return drafts[record.id]?.remark ?? otherRemarksBySite.get(comparablePlanText(record.site))?.remark ?? "";
     }
     return drafts[record.id]?.[key] ?? record[key] ?? "";
   };
@@ -2124,7 +2135,6 @@ export default function DmrDashboard({ darkMode }) {
         quantityColumn: record.quantityColumn,
         unitColumn: record.unitColumn,
         noteColumn: record.noteColumn,
-        remarkColumn: record.remarkColumn,
         statusColumn: record.statusColumn,
         planned: current[record.id]?.planned ?? record.planned,
         actual: current[record.id]?.actual ?? record.actual,
@@ -2133,7 +2143,11 @@ export default function DmrDashboard({ darkMode }) {
         quantity: current[record.id]?.quantity ?? record.quantity,
         unit: current[record.id]?.unit ?? record.unit,
         note: current[record.id]?.note ?? record.note,
-        remark: current[record.id]?.remark ?? record.remark,
+        remark:
+          current[record.id]?.remark ??
+          (isDmrOthersRecord(record)
+            ? otherRemarksBySite.get(comparablePlanText(record.site))?.remark
+            : record.remark),
         status: current[record.id]?.status ?? record.status,
         [key]: value,
         ...(key === "planned" ? { _autoPlannedFromTodayPlan: false } : {}),
@@ -2198,7 +2212,7 @@ export default function DmrDashboard({ darkMode }) {
       }
       toast.success("DMR saved to Google Sheet");
       setFillOpen(false);
-      await load(true, true);
+      await load(false, true);
     } catch (error) {
       toast.error(error.message || "Could not save DMR");
     } finally {

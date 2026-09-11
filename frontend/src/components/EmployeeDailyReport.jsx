@@ -128,11 +128,11 @@ function buildMonthGrid(monthDate) {
 }
 
 function createEmptyTaskRow() {
-  return { site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementValues: [], involvementOther: "", collaboratorUserIds: [], collaborationTask: false, collaborationSourceUserId: "", collaborationSourceName: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24", recurring: false, recurringId: "" };
+  return { draftTaskId: `task-${Date.now()}-${Math.random().toString(36).slice(2)}`, site: "", category: "", categoryOther: "", status: "", statusOther: "", involvement: "", involvementValues: [], involvementOther: "", collaboratorUserIds: [], collaborationTask: false, collaborationSourceUserId: "", collaborationSourceName: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24", recurring: false, recurringId: "" };
 }
 
 function createEmptyWaitingRow() {
-  return { site: "", category: "", categoryOther: "", involvement: "", involvementValues: [], involvementOther: "", collaboratorUserIds: [], collaborationTask: false, collaborationSourceUserId: "", collaborationSourceName: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24" };
+  return { draftTaskId: `waiting-${Date.now()}-${Math.random().toString(36).slice(2)}`, site: "", category: "", categoryOther: "", involvement: "", involvementValues: [], involvementOther: "", collaboratorUserIds: [], collaborationTask: false, collaborationSourceUserId: "", collaborationSourceName: "", description: "", durationHours: "", durationMinutes: "", startTime: "", endTime: "", timeFormat: "24" };
 }
 
 const emptyForm = {
@@ -175,6 +175,7 @@ function normalizeTaskRowForForm(item = {}, fallback = {}, includeStatus = true)
   return {
     ...(includeStatus ? createEmptyTaskRow() : createEmptyWaitingRow()),
     ...item,
+    draftTaskId: item.draftTaskId || item.collaborationDraftId || item.inviteId || (includeStatus ? createEmptyTaskRow().draftTaskId : createEmptyWaitingRow().draftTaskId),
     status: includeStatus ? item.status || fallback.taskStatus || "" : "",
     involvement: involvementValues.join(", "),
     involvementValues,
@@ -199,6 +200,7 @@ function cleanTaskItems(items = []) {
     status: String(item?.status || "").trim(),
     involvement: String(item?.involvement || "").trim(),
     involvementValues: involvementValuesFromRow(item),
+    draftTaskId: String(item?.draftTaskId || item?.collaborationDraftId || ""),
     collaboratorUserIds: Array.isArray(item?.collaboratorUserIds) ? item.collaboratorUserIds.map(String).filter(Boolean) : [],
     collaborationTask: Boolean(item?.collaborationTask),
     collaborationSourceUserId: String(item?.collaborationSourceUserId || ""),
@@ -220,6 +222,7 @@ function collaborationDraftRows(items = [], includeStatus = true) {
       durationHours: cleanDurationPart(item.durationHours ?? item.duration?.hours ?? ""),
       durationMinutes: cleanDurationPart(item.durationMinutes ?? item.duration?.minutes ?? "", 59),
       collaboratorUserIds: hasTeamInvolvement(item) ? uniqueClean(item.collaboratorUserIds || []) : [],
+      collaborationDraftId: item.draftTaskId || item.collaborationDraftId || "",
     };
   }).filter((item) => item.site && item.category && item.description && item.collaboratorUserIds.length);
 }
@@ -231,6 +234,7 @@ function plannedWorkToTaskRow(item = {}) {
   const involvementValues = involvementValuesFromRow(item);
   return {
     ...createEmptyTaskRow(),
+    draftTaskId: item.draftTaskId || item.collaborationDraftId || createEmptyTaskRow().draftTaskId,
     site,
     category,
     status: "In Progress",
@@ -883,6 +887,7 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
       ...rows,
       {
         site: source.site || "",
+        draftTaskId: createEmptyTaskRow().draftTaskId,
         siteOther: source.siteOther || "",
         category: source.category || "",
         categoryOther: source.categoryOther || "",
@@ -1685,6 +1690,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [plannedWorkImported, setPlannedWorkImported] = useState({});
   const [plannedWorkDiscarded, setPlannedWorkDiscarded] = useState(false);
   const [collaborationResponding, setCollaborationResponding] = useState("");
+  const [activeCollaborationInviteIndex, setActiveCollaborationInviteIndex] = useState(0);
   const [customPrefs, setCustomPrefs] = useState({ useCustomOnly: false, sites: [], categories: [] });
   const [customOptionsOpen, setCustomOptionsOpen] = useState(false);
   const [customSiteInput, setCustomSiteInput] = useState("");
@@ -1785,7 +1791,8 @@ export default function EmployeeDailyReport({ darkMode }) {
   }, [data?.plannedWorkItems, plannedWorkDiscarded, plannedWorkImported, plannedWorkSourceDate]);
   const selectedPlannedWorkCount = plannedWorkItems.filter((item) => plannedWorkSelection[item.plannedKey]).length;
   const collaborationUsers = useMemo(() => (data?.collaborationUsers || []).filter((item) => String(item.userId) !== String(data?.currentUserId)), [data?.collaborationUsers, data?.currentUserId]);
-  const pendingCollaborationTask = !data?.todaySubmitted ? (data?.pendingCollaborationTasks || [])[0] : null;
+  const pendingCollaborationTasks = !data?.todaySubmitted ? (data?.pendingCollaborationTasks || []) : [];
+  const pendingCollaborationTask = pendingCollaborationTasks[Math.min(activeCollaborationInviteIndex, Math.max(0, pendingCollaborationTasks.length - 1))] || null;
 
   async function load() {
     try {
@@ -1919,6 +1926,14 @@ export default function EmployeeDailyReport({ darkMode }) {
     }, 8000);
     return () => window.clearInterval(intervalId);
   }, [data?.todaySubmitted, draftChoiceOpen, submitting]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!pendingCollaborationTasks.length) {
+      if (activeCollaborationInviteIndex !== 0) setActiveCollaborationInviteIndex(0);
+      return;
+    }
+    if (activeCollaborationInviteIndex >= pendingCollaborationTasks.length) setActiveCollaborationInviteIndex(pendingCollaborationTasks.length - 1);
+  }, [activeCollaborationInviteIndex, pendingCollaborationTasks.length]);
 
   useEffect(() => {
     if (!formOpen || data?.todaySubmitted) return;
@@ -2074,9 +2089,9 @@ export default function EmployeeDailyReport({ darkMode }) {
     if (!task?.inviteId || collaborationResponding) return;
     try {
       setCollaborationResponding(`${task.inviteId}:${status}`);
-      await api(`/employee-daily-report/collaboration/${encodeURIComponent(task.inviteId)}`, {
+      await api("/employee-daily-report/collaboration-response", {
         method: "POST",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ inviteId: task.inviteId, status }),
       });
       if (status === "accepted") {
         const nextTask = normalizeTaskRowForForm({ ...task, collaborationStatus: "accepted" }, {}, true);
@@ -2097,7 +2112,12 @@ export default function EmployeeDailyReport({ darkMode }) {
       }
       await load();
     } catch (error) {
-      toast.error(error.message || "Could not save collaboration response");
+      if (/no longer exists/i.test(error.message || "")) {
+        toast.error("This collaboration task no longer exists");
+        await load();
+      } else {
+        toast.error(error.message || "Could not save collaboration response");
+      }
     } finally {
       setCollaborationResponding("");
     }
@@ -2256,6 +2276,7 @@ export default function EmployeeDailyReport({ darkMode }) {
           recurring: Boolean(item.recurring),
           recurringId: item.recurringId || recurringIdForTask({ site, category, description }),
           collaboratorUserIds: hasTeamInvolvement(item) ? uniqueClean(item.collaboratorUserIds || []) : [],
+          collaborationDraftId: item.draftTaskId || item.collaborationDraftId || "",
           inviteId: item.inviteId || "",
           collaborationTask: Boolean(item.collaborationTask),
           collaborationStatus: item.collaborationStatus || "",
@@ -2282,6 +2303,7 @@ export default function EmployeeDailyReport({ darkMode }) {
           endTime: "",
           timeFormat: "24",
           collaboratorUserIds: hasTeamInvolvement(item) ? uniqueClean(item.collaboratorUserIds || []) : [],
+          collaborationDraftId: item.draftTaskId || item.collaborationDraftId || "",
           inviteId: item.inviteId || "",
           collaborationTask: Boolean(item.collaborationTask),
           collaborationStatus: item.collaborationStatus || "",
@@ -3333,10 +3355,31 @@ export default function EmployeeDailyReport({ darkMode }) {
         <div className="fixed inset-0 z-[80] grid place-items-center bg-black/35 p-4">
           <div className={`w-full max-w-lg rounded-[28px] p-5 shadow-2xl ${darkMode ? "bg-[#181a20] text-white" : "bg-white text-black"}`} onMouseDown={(event) => event.stopPropagation()}>
             <span className="rounded-md bg-[#89ed3f] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black">Collaboration task</span>
-            <h3 className="mt-4 text-2xl font-black">You have been added to a team task</h3>
+            <div className="mt-4 flex items-start justify-between gap-3">
+              <h3 className="text-2xl font-black">You have been added to a team task</h3>
+              {pendingCollaborationTasks.length > 1 && (
+                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-black/[0.05] text-black/60"}`}>
+                  {Math.min(activeCollaborationInviteIndex + 1, pendingCollaborationTasks.length)} / {pendingCollaborationTasks.length}
+                </span>
+              )}
+            </div>
             <p className={`mt-2 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
               {pendingCollaborationTask.collaborationSourceName || "A team member"} added you to this task. Accept it to add it to your report, or reject it to skip.
             </p>
+            {pendingCollaborationTasks.length > 1 && (
+              <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                {pendingCollaborationTasks.map((task, index) => (
+                  <button
+                    key={task.inviteId || index}
+                    type="button"
+                    onClick={() => setActiveCollaborationInviteIndex(index)}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${index === activeCollaborationInviteIndex ? "bg-[#89ed3f] text-black" : darkMode ? "bg-white/10 text-white/65 hover:bg-white/15" : "bg-black/[0.05] text-black/60 hover:bg-black/[0.08]"}`}
+                  >
+                    Task {index + 1}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f8f7f3]"}`}>
               <div className="grid gap-3 text-sm sm:grid-cols-2">
                 <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Site</p><p className="mt-1 font-bold">{pendingCollaborationTask.site || "-"}</p></div>
@@ -3346,6 +3389,26 @@ export default function EmployeeDailyReport({ darkMode }) {
                 <div className="sm:col-span-2"><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Description</p><p className="mt-2 whitespace-pre-wrap leading-6">{pendingCollaborationTask.description || "-"}</p></div>
               </div>
             </div>
+            {pendingCollaborationTasks.length > 1 && (
+              <div className="mt-4 flex justify-between gap-2">
+                <button
+                  type="button"
+                  disabled={activeCollaborationInviteIndex <= 0}
+                  onClick={() => setActiveCollaborationInviteIndex((index) => Math.max(0, index - 1))}
+                  className={`h-9 rounded-full px-4 text-xs font-bold disabled:opacity-40 ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/[0.05] hover:bg-black/[0.08]"}`}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={activeCollaborationInviteIndex >= pendingCollaborationTasks.length - 1}
+                  onClick={() => setActiveCollaborationInviteIndex((index) => Math.min(pendingCollaborationTasks.length - 1, index + 1))}
+                  className={`h-9 rounded-full px-4 text-xs font-bold disabled:opacity-40 ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/[0.05] hover:bg-black/[0.08]"}`}
+                >
+                  Next
+                </button>
+              </div>
+            )}
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"

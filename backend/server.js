@@ -1413,6 +1413,7 @@ function sanitizeEmployeeTaskItems(items = []) {
       endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.endTime)) ? projectText(item?.endTime) : "",
       timeFormat: projectText(item?.timeFormat) === "12" ? "12" : "24",
       collaboratorUserIds,
+      collaborationDraftId: projectText(item?.collaborationDraftId || item?.draftTaskId),
       inviteId: projectText(item?.inviteId),
       collaborationTask: Boolean(item?.collaborationTask),
       collaborationStatus: ["accepted", "rejected", "pending"].includes(projectText(item?.collaborationStatus).toLowerCase()) ? projectText(item?.collaborationStatus).toLowerCase() : "",
@@ -1558,7 +1559,7 @@ function employeeCollaborationInviteKey({ report, source, index, item, targetUse
     projectText(report?.userId),
     projectText(report?.reportDate),
     projectText(source),
-    index,
+    projectText(item?.collaborationDraftId) || index,
     projectText(targetUserId),
   ].join("|");
 }
@@ -1612,6 +1613,35 @@ async function employeeCollaborationInvitesFromReports(db, reports = [], userId,
     .toArray();
   const responseMap = new Map(responses.map((response) => [response.inviteId, response.status]));
   return invites.map((invite) => ({ ...invite, collaborationStatus: responseMap.get(invite.inviteId) || "pending" }));
+}
+
+async function currentEmployeeCollaborationInvitesForUser(db, userId, today) {
+  const userIdText = String(userId || "");
+  const sourceReports = await db.collection("employeeDailyReports")
+    .find({
+      reportDate: today,
+      userId: { $ne: userIdText },
+      $or: [
+        { "taskItems.collaboratorUserIds": userIdText },
+        { "waitingTaskItems.collaboratorUserIds": userIdText },
+      ],
+    })
+    .sort({ submittedAt: -1 })
+    .limit(300)
+    .toArray();
+  const draftReports = await db.collection("employeeCollaborationDrafts")
+    .find({
+      reportDate: today,
+      userId: { $ne: userIdText },
+      $or: [
+        { "taskItems.collaboratorUserIds": userIdText },
+        { "waitingTaskItems.collaboratorUserIds": userIdText },
+      ],
+    })
+    .sort({ updatedAt: -1 })
+    .limit(300)
+    .toArray();
+  return employeeCollaborationInvitesFromReports(db, [...draftReports, ...sourceReports], userIdText, today);
 }
 
 function incrementEmployeeReportBucket(map, key, patch = {}) {
@@ -3040,30 +3070,6 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     .filter((user) => projectText(user.roleName).toLowerCase() !== "dmr manager");
   const allCachedReports = await getCachedEmployeeReportsForUsers(db, reportEligibleLinkedUsers);
   const today = employeeReportToday(req);
-  const todayCollaborationSourceReports = await db.collection("employeeDailyReports")
-    .find({
-      reportDate: today,
-      userId: { $ne: userId },
-      $or: [
-        { "taskItems.collaboratorUserIds": userId },
-        { "waitingTaskItems.collaboratorUserIds": userId },
-      ],
-    })
-    .sort({ submittedAt: -1 })
-    .limit(300)
-    .toArray();
-  const todayCollaborationDraftReports = await db.collection("employeeCollaborationDrafts")
-    .find({
-      reportDate: today,
-      userId: { $ne: userId },
-      $or: [
-        { "taskItems.collaboratorUserIds": userId },
-        { "waitingTaskItems.collaboratorUserIds": userId },
-      ],
-    })
-    .sort({ updatedAt: -1 })
-    .limit(300)
-    .toArray();
   const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(allCachedReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] }))
     .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
     .slice(0, 500);
@@ -3074,7 +3080,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
   const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
   const carriedForwardTasks = todayReport ? [] : employeeRecurringTasksFromReports(ownReports, today);
-  const collaborationInvites = todayReport ? [] : await employeeCollaborationInvitesFromReports(db, [...todayCollaborationDraftReports, ...todayCollaborationSourceReports], userId, today);
+  const collaborationInvites = todayReport ? [] : await currentEmployeeCollaborationInvitesForUser(db, userId, today);
   const pendingCollaborationTasks = collaborationInvites.filter((item) => item.collaborationStatus === "pending");
   const collaborationTasks = collaborationInvites.filter((item) => item.collaborationStatus === "accepted");
   const plannedWorkSourceDate = addDaysToDateKey(today, -1);
@@ -3200,15 +3206,21 @@ app.get("/employee-daily-report", async (req, res) => {
   }
 });
 
-app.post("/employee-daily-report/collaboration/:inviteId", async (req, res) => {
+app.post("/employee-daily-report/collaboration-response", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
     if (isEmployeeDailyReportExempt(req.user || req.authUser || {})) return res.status(403).json({ error: "Daily report is not required for this user" });
     const status = projectText(req.body?.status).toLowerCase();
     if (!["accepted", "rejected"].includes(status)) return res.status(400).json({ error: "Choose accept or reject" });
-    const inviteId = projectText(req.params.inviteId);
+    const inviteId = projectText(req.body?.inviteId);
     if (!inviteId) return res.status(400).json({ error: "Collaboration invite is required" });
     const db = await connectAuthDb();
+    const today = employeeReportToday(req);
+    const currentInvites = await currentEmployeeCollaborationInvitesForUser(db, req.authUser.id, today);
+    if (!currentInvites.some((invite) => invite.inviteId === inviteId)) {
+      await db.collection("employeeCollaborationTaskResponses").deleteOne({ inviteId, targetUserId: String(req.authUser.id) });
+      return res.status(410).json({ error: "This collaboration task no longer exists", code: "COLLABORATION_INVITE_GONE" });
+    }
     const now = new Date();
     await db.collection("employeeCollaborationTaskResponses").updateOne(
       { inviteId, targetUserId: String(req.authUser.id) },

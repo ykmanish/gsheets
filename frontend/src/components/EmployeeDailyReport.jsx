@@ -1920,12 +1920,12 @@ export default function EmployeeDailyReport({ darkMode }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (data?.todaySubmitted) return undefined;
+    if (data?.todaySubmitted || search || dateFrom || dateTo) return undefined;
     const intervalId = window.setInterval(() => {
-      if (!submitting && !draftChoiceOpen) void load();
+      if (!submitting && !draftChoiceOpen && document.visibilityState === "visible") void load(false);
     }, 8000);
     return () => window.clearInterval(intervalId);
-  }, [data?.todaySubmitted, draftChoiceOpen, submitting]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data?.todaySubmitted, draftChoiceOpen, submitting, search, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!pendingCollaborationTasks.length) {
@@ -1953,15 +1953,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     });
   }, [data?.collaborationTasks, data?.todaySubmitted, formOpen]);
 
-  useEffect(() => {
-    if (data?.todaySubmitted || search || dateFrom || dateTo) return undefined;
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void load(false);
-      }
-    }, 5000);
-    return () => window.clearInterval(intervalId);
-  }, [data?.todaySubmitted, search, dateFrom, dateTo]);
+
 
   useEffect(() => {
     if (!formOpen || draftChoiceOpen || submitting || !draftStorageKey) return undefined;

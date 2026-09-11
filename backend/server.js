@@ -1591,8 +1591,8 @@ async function employeeCollaborationInvitesFromReports(db, reports = [], userId,
     .map(({ report, item, index, source }) => {
       const inviteId = employeeCollaborationInviteKey({ report, source, index, item, targetUserId: userIdText });
       return {
-        inviteId,
         ...item,
+        inviteId,
         status: item.status || "In Progress",
         involvement: item.involvement || "Team",
         involvementValues: item.involvementValues?.length ? item.involvementValues : ["Team"],
@@ -3209,7 +3209,6 @@ app.get("/employee-daily-report", async (req, res) => {
 app.post("/employee-daily-report/collaboration-response", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
-    if (isEmployeeDailyReportExempt(req.user || req.authUser || {})) return res.status(403).json({ error: "Daily report is not required for this user" });
     const status = projectText(req.body?.status).toLowerCase();
     if (!["accepted", "rejected"].includes(status)) return res.status(400).json({ error: "Choose accept or reject" });
     const inviteId = projectText(req.body?.inviteId);

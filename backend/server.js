@@ -1413,9 +1413,12 @@ function sanitizeEmployeeTaskItems(items = []) {
       endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(projectText(item?.endTime)) ? projectText(item?.endTime) : "",
       timeFormat: projectText(item?.timeFormat) === "12" ? "12" : "24",
       collaboratorUserIds,
+      inviteId: projectText(item?.inviteId),
       collaborationTask: Boolean(item?.collaborationTask),
+      collaborationStatus: ["accepted", "rejected", "pending"].includes(projectText(item?.collaborationStatus).toLowerCase()) ? projectText(item?.collaborationStatus).toLowerCase() : "",
       collaborationSourceUserId: ObjectId.isValid(projectText(item?.collaborationSourceUserId)) ? projectText(item?.collaborationSourceUserId) : "",
       collaborationSourceName: projectText(item?.collaborationSourceName),
+      collaborationSourceReportId: projectText(item?.collaborationSourceReportId),
       recurring: Boolean(item?.recurring),
       recurringId: projectText(item?.recurringId),
     };
@@ -1550,11 +1553,21 @@ function employeeRecurringTasksFromReports(reports = [], today) {
     .slice(0, 20);
 }
 
-function employeeCollaborationTasksFromReports(reports = [], userId, today) {
+function employeeCollaborationInviteKey({ report, source, index, item, targetUserId }) {
+  return [
+    projectText(report?.userId),
+    projectText(report?.reportDate),
+    projectText(source),
+    index,
+    projectText(targetUserId),
+  ].join("|");
+}
+
+async function employeeCollaborationInvitesFromReports(db, reports = [], userId, today) {
   const userIdText = String(userId || "");
   if (!userIdText) return [];
   const seen = new Set();
-  return reports
+  const invites = reports
     .filter((report) => projectText(report.reportDate) === today && String(report.userId || "") !== userIdText)
     .flatMap((report) => [
       ...sanitizeEmployeeTaskItems(report.taskItems).map((item, index) => ({ report, item, index, source: "task" })),
@@ -1574,19 +1587,31 @@ function employeeCollaborationTasksFromReports(reports = [], userId, today) {
       seen.add(key);
       return true;
     })
-    .map(({ report, item }) => ({
-      ...item,
-      status: item.status || "In Progress",
-      involvement: item.involvement || "Team",
-      involvementValues: item.involvementValues?.length ? item.involvementValues : ["Team"],
-      collaboratorUserIds: [],
-      collaborationTask: true,
-      collaborationSourceUserId: String(report.userId || ""),
-      collaborationSourceName: report.employeeName || "Team member",
-      recurring: false,
-      recurringId: "",
-    }))
+    .map(({ report, item, index, source }) => {
+      const inviteId = employeeCollaborationInviteKey({ report, source, index, item, targetUserId: userIdText });
+      return {
+        inviteId,
+        ...item,
+        status: item.status || "In Progress",
+        involvement: item.involvement || "Team",
+        involvementValues: item.involvementValues?.length ? item.involvementValues : ["Team"],
+        collaboratorUserIds: [],
+        collaborationTask: true,
+        collaborationSourceUserId: String(report.userId || ""),
+        collaborationSourceName: report.employeeName || "Team member",
+        collaborationSourceReportId: String(report.reportId || report._id || ""),
+        collaborationSourceType: source,
+        recurring: false,
+        recurringId: "",
+      };
+    })
     .slice(0, 20);
+  if (!invites.length) return [];
+  const responses = await db.collection("employeeCollaborationTaskResponses")
+    .find({ targetUserId: userIdText, inviteId: { $in: invites.map((invite) => invite.inviteId) } })
+    .toArray();
+  const responseMap = new Map(responses.map((response) => [response.inviteId, response.status]));
+  return invites.map((invite) => ({ ...invite, collaborationStatus: responseMap.get(invite.inviteId) || "pending" }));
 }
 
 function incrementEmployeeReportBucket(map, key, patch = {}) {
@@ -3027,6 +3052,18 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     .sort({ submittedAt: -1 })
     .limit(300)
     .toArray();
+  const todayCollaborationDraftReports = await db.collection("employeeCollaborationDrafts")
+    .find({
+      reportDate: today,
+      userId: { $ne: userId },
+      $or: [
+        { "taskItems.collaboratorUserIds": userId },
+        { "waitingTaskItems.collaboratorUserIds": userId },
+      ],
+    })
+    .sort({ updatedAt: -1 })
+    .limit(300)
+    .toArray();
   const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(allCachedReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] }))
     .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
     .slice(0, 500);
@@ -3037,7 +3074,9 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
   const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
   const carriedForwardTasks = todayReport ? [] : employeeRecurringTasksFromReports(ownReports, today);
-  const collaborationTasks = todayReport ? [] : employeeCollaborationTasksFromReports(todayCollaborationSourceReports, userId, today);
+  const collaborationInvites = todayReport ? [] : await employeeCollaborationInvitesFromReports(db, [...todayCollaborationDraftReports, ...todayCollaborationSourceReports], userId, today);
+  const pendingCollaborationTasks = collaborationInvites.filter((item) => item.collaborationStatus === "pending");
+  const collaborationTasks = collaborationInvites.filter((item) => item.collaborationStatus === "accepted");
   const plannedWorkSourceDate = addDaysToDateKey(today, -1);
   const plannedWorkSourceReport = ownReports.find((report) => String(report.userId) === userId && report.reportDate === plannedWorkSourceDate) || null;
   const plannedWorkItems = sanitizeEmployeeTaskItems(plannedWorkSourceReport?.waitingTaskItems)
@@ -3101,6 +3140,7 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     executiveAnswers,
     executiveAnswersSubmitted: Boolean(executiveAnswers?.answers?.length),
     carriedForwardTasks,
+    pendingCollaborationTasks,
     collaborationTasks,
     carriedForwardFrom: carriedForwardTasks[0]?.recurringFrom || "",
     plannedWorkSourceDate,
@@ -3157,6 +3197,77 @@ app.get("/employee-daily-report", async (req, res) => {
   } catch (error) {
     console.error("Employee daily report load error:", employeeSheetErrorMessage(error));
     res.status(isGoogleSheetsQuotaError(error) ? 429 : 500).json({ error: employeeSheetErrorMessage(error, "Could not load employee daily reports") });
+  }
+});
+
+app.post("/employee-daily-report/collaboration/:inviteId", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    if (isEmployeeDailyReportExempt(req.user || req.authUser || {})) return res.status(403).json({ error: "Daily report is not required for this user" });
+    const status = projectText(req.body?.status).toLowerCase();
+    if (!["accepted", "rejected"].includes(status)) return res.status(400).json({ error: "Choose accept or reject" });
+    const inviteId = projectText(req.params.inviteId);
+    if (!inviteId) return res.status(400).json({ error: "Collaboration invite is required" });
+    const db = await connectAuthDb();
+    const now = new Date();
+    await db.collection("employeeCollaborationTaskResponses").updateOne(
+      { inviteId, targetUserId: String(req.authUser.id) },
+      {
+        $set: {
+          inviteId,
+          targetUserId: String(req.authUser.id),
+          status,
+          respondedAt: now,
+          updatedAt: now,
+        },
+        $setOnInsert: { createdAt: now },
+      },
+      { upsert: true },
+    );
+    res.json({ success: true, status });
+  } catch (error) {
+    console.error("Employee collaboration response error:", error);
+    res.status(500).json({ error: "Could not save collaboration response" });
+  }
+});
+
+app.post("/employee-daily-report/collaboration-draft", async (req, res) => {
+  try {
+    if (!hasMenuAccess(req, "employee-daily-report")) return res.status(403).json({ error: "Employee Daily Report access required" });
+    if (isEmployeeDailyReportExempt(req.user || req.authUser || {})) return res.status(403).json({ error: "Daily report is not required for this user" });
+    const db = await connectAuthDb();
+    const today = employeeReportToday(req);
+    const taskItems = sanitizeEmployeeTaskItems(req.body?.taskItems)
+      .filter((item) => item.site && item.category && item.description && sanitizeEmployeeUserIds(item.collaboratorUserIds).length);
+    const waitingTaskItems = sanitizeEmployeeTaskItems(req.body?.waitingTaskItems)
+      .filter((item) => item.site && item.category && item.description && sanitizeEmployeeUserIds(item.collaboratorUserIds).length);
+    const userId = String(req.authUser.id);
+    if (!taskItems.length && !waitingTaskItems.length) {
+      await db.collection("employeeCollaborationDrafts").deleteOne({ userId, reportDate: today });
+      return res.json({ success: true, cleared: true });
+    }
+    const now = new Date();
+    await db.collection("employeeCollaborationDrafts").updateOne(
+      { userId, reportDate: today },
+      {
+        $set: {
+          userId,
+          employeeName: req.authUser.displayName || req.authUser.username || "Employee",
+          department: req.user.department || "",
+          reportDate: today,
+          submittedAt: now,
+          taskItems,
+          waitingTaskItems,
+          updatedAt: now,
+        },
+        $setOnInsert: { createdAt: now },
+      },
+      { upsert: true },
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Employee collaboration draft sync error:", error);
+    res.status(500).json({ error: "Could not sync collaboration draft" });
   }
 });
 
@@ -3898,6 +4009,7 @@ app.post("/employee-daily-report", async (req, res) => {
     };
     await appendEmployeeReportToSheet({ user: req.user, report, taskItems, waitingTaskItems });
     await cacheEmployeeReports(db, [report]);
+    await db.collection("employeeCollaborationDrafts").deleteOne({ userId, reportDate: today });
     const userSet = { updatedAt: now };
     userSet.employeeReportCacheHydratedAt = now;
     if (!req.user.department || req.user.department !== department) userSet.department = department;
@@ -3958,6 +4070,7 @@ app.put("/employee-daily-report", async (req, res) => {
     };
     report.reportId = await updateEmployeeReportInSheet({ user: req.user, report, taskItems, waitingTaskItems });
     await cacheEmployeeReports(db, [report]);
+    await db.collection("employeeCollaborationDrafts").deleteOne({ userId, reportDate: today });
     const userSet = { updatedAt: now };
     userSet.employeeReportCacheHydratedAt = now;
     if (!req.user.department || req.user.department !== department) userSet.department = department;

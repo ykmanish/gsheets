@@ -207,6 +207,23 @@ function cleanTaskItems(items = []) {
   })).filter((item) => item.site || item.category || item.description);
 }
 
+function collaborationDraftRows(items = [], includeStatus = true) {
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const involvementValues = hasTeamInvolvement(item) ? ["Team"] : uniqueClean([...involvementValuesFromRow(item), item.involvementOther]);
+    return {
+      site: fieldValue(item.site, item.siteOther).trim(),
+      category: fieldValue(item.category, item.categoryOther).trim(),
+      status: includeStatus ? fieldValue(item.status, item.statusOther).trim() : "In Progress",
+      involvement: involvementValues.join(", "),
+      involvementValues,
+      description: String(item.description || "").trim(),
+      durationHours: cleanDurationPart(item.durationHours ?? item.duration?.hours ?? ""),
+      durationMinutes: cleanDurationPart(item.durationMinutes ?? item.duration?.minutes ?? "", 59),
+      collaboratorUserIds: hasTeamInvolvement(item) ? uniqueClean(item.collaboratorUserIds || []) : [],
+    };
+  }).filter((item) => item.site && item.category && item.description && item.collaboratorUserIds.length);
+}
+
 function plannedWorkToTaskRow(item = {}) {
   const site = String(item.site || "").trim();
   const category = String(item.category || "").trim();
@@ -1667,6 +1684,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   const [plannedWorkSelection, setPlannedWorkSelection] = useState({});
   const [plannedWorkImported, setPlannedWorkImported] = useState({});
   const [plannedWorkDiscarded, setPlannedWorkDiscarded] = useState(false);
+  const [collaborationResponding, setCollaborationResponding] = useState("");
   const [customPrefs, setCustomPrefs] = useState({ useCustomOnly: false, sites: [], categories: [] });
   const [customOptionsOpen, setCustomOptionsOpen] = useState(false);
   const [customSiteInput, setCustomSiteInput] = useState("");
@@ -1767,6 +1785,7 @@ export default function EmployeeDailyReport({ darkMode }) {
   }, [data?.plannedWorkItems, plannedWorkDiscarded, plannedWorkImported, plannedWorkSourceDate]);
   const selectedPlannedWorkCount = plannedWorkItems.filter((item) => plannedWorkSelection[item.plannedKey]).length;
   const collaborationUsers = useMemo(() => (data?.collaborationUsers || []).filter((item) => String(item.userId) !== String(data?.currentUserId)), [data?.collaborationUsers, data?.currentUserId]);
+  const pendingCollaborationTask = !data?.todaySubmitted ? (data?.pendingCollaborationTasks || [])[0] : null;
 
   async function load() {
     try {
@@ -1894,6 +1913,32 @@ export default function EmployeeDailyReport({ darkMode }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (data?.todaySubmitted) return undefined;
+    const intervalId = window.setInterval(() => {
+      if (!submitting && !draftChoiceOpen) void load();
+    }, 8000);
+    return () => window.clearInterval(intervalId);
+  }, [data?.todaySubmitted, draftChoiceOpen, submitting]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!formOpen || data?.todaySubmitted) return;
+    const activeAcceptedIds = new Set((data?.collaborationTasks || []).map((item) => item.inviteId).filter(Boolean));
+    setForm((current) => {
+      const currentItems = Array.isArray(current.taskItems) ? current.taskItems : [];
+      const acceptedMap = new Map((data?.collaborationTasks || []).map((task) => [task.inviteId, task]));
+      const filteredItems = currentItems
+        .filter((item) => !item.collaborationTask || !item.inviteId || activeAcceptedIds.has(item.inviteId))
+        .map((item) => item.collaborationTask && acceptedMap.has(item.inviteId) ? normalizeTaskRowForForm(acceptedMap.get(item.inviteId), item, true) : item);
+      const missingAccepted = (data?.collaborationTasks || []).filter((task) => !filteredItems.some((item) => item.inviteId === task.inviteId));
+      if (JSON.stringify(filteredItems) === JSON.stringify(currentItems) && !missingAccepted.length) return current;
+      const baseItems = filteredItems.length ? filteredItems : [createEmptyTaskRow()];
+      const hasEmptyOnly = baseItems.length === 1 && !hasEmployeeDraftContent({ taskItems: baseItems, waitingTaskItems: [] });
+      const nextItems = missingAccepted.map((task) => normalizeTaskRowForForm(task, {}, true));
+      return { ...current, taskItems: hasEmptyOnly ? nextItems : [...baseItems, ...nextItems] };
+    });
+  }, [data?.collaborationTasks, data?.todaySubmitted, formOpen]);
+
+  useEffect(() => {
     if (!formOpen || draftChoiceOpen || submitting || !draftStorageKey) return undefined;
     const timeoutId = window.setTimeout(() => {
       if (!hasEmployeeDraftContent(form)) {
@@ -1907,6 +1952,19 @@ export default function EmployeeDailyReport({ darkMode }) {
     }, 450);
     return () => window.clearTimeout(timeoutId);
   }, [draftChoiceOpen, draftStorageKey, form, formOpen, submitting]);
+
+  useEffect(() => {
+    if (!formOpen || draftChoiceOpen || submitting || data?.todaySubmitted) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      const taskItems = collaborationDraftRows(form.taskItems, true);
+      const waitingTaskItems = collaborationDraftRows(form.waitingTaskItems, false);
+      void api("/employee-daily-report/collaboration-draft", {
+        method: "POST",
+        body: JSON.stringify({ taskItems, waitingTaskItems }),
+      }).catch(() => {});
+    }, 650);
+    return () => window.clearTimeout(timeoutId);
+  }, [data?.todaySubmitted, draftChoiceOpen, form.taskItems, form.waitingTaskItems, formOpen, submitting]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -2010,6 +2068,39 @@ export default function EmployeeDailyReport({ darkMode }) {
     setLastDraftSavedAt("");
     setDraftChoiceOpen(false);
     setPendingDraft(null);
+  }
+
+  async function respondToCollaborationTask(task, status) {
+    if (!task?.inviteId || collaborationResponding) return;
+    try {
+      setCollaborationResponding(`${task.inviteId}:${status}`);
+      await api(`/employee-daily-report/collaboration/${encodeURIComponent(task.inviteId)}`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      });
+      if (status === "accepted") {
+        const nextTask = normalizeTaskRowForForm({ ...task, collaborationStatus: "accepted" }, {}, true);
+        if (!formOpen) openForm();
+        setForm((current) => {
+          const currentItems = Array.isArray(current.taskItems) ? current.taskItems : [];
+          const alreadyAdded = currentItems.some((item) => item.inviteId === task.inviteId || (
+            item.collaborationSourceReportId === task.collaborationSourceReportId &&
+            item.description === task.description &&
+            item.category === task.category
+          ));
+          const hasEmptyOnly = currentItems.length === 1 && !hasEmployeeDraftContent({ taskItems: currentItems, waitingTaskItems: [] });
+          return alreadyAdded ? current : { ...current, taskItems: hasEmptyOnly ? [nextTask] : [...currentItems, nextTask] };
+        });
+        toast.success("Collaboration task accepted");
+      } else {
+        toast.success("Collaboration task rejected");
+      }
+      await load();
+    } catch (error) {
+      toast.error(error.message || "Could not save collaboration response");
+    } finally {
+      setCollaborationResponding("");
+    }
   }
 
   function togglePlannedWorkItem(key) {
@@ -2165,9 +2256,12 @@ export default function EmployeeDailyReport({ darkMode }) {
           recurring: Boolean(item.recurring),
           recurringId: item.recurringId || recurringIdForTask({ site, category, description }),
           collaboratorUserIds: hasTeamInvolvement(item) ? uniqueClean(item.collaboratorUserIds || []) : [],
+          inviteId: item.inviteId || "",
           collaborationTask: Boolean(item.collaborationTask),
+          collaborationStatus: item.collaborationStatus || "",
           collaborationSourceUserId: item.collaborationSourceUserId || "",
           collaborationSourceName: item.collaborationSourceName || "",
+          collaborationSourceReportId: item.collaborationSourceReportId || "",
         };
       }).filter((item) => item.site && item.category && item.status && item.involvement && item.description);
       const waitingTaskItems = (form.waitingTaskItems || []).map((item) => {
@@ -2188,9 +2282,12 @@ export default function EmployeeDailyReport({ darkMode }) {
           endTime: "",
           timeFormat: "24",
           collaboratorUserIds: hasTeamInvolvement(item) ? uniqueClean(item.collaboratorUserIds || []) : [],
+          inviteId: item.inviteId || "",
           collaborationTask: Boolean(item.collaborationTask),
+          collaborationStatus: item.collaborationStatus || "",
           collaborationSourceUserId: item.collaborationSourceUserId || "",
           collaborationSourceName: item.collaborationSourceName || "",
+          collaborationSourceReportId: item.collaborationSourceReportId || "",
         };
       }).filter((item) => item.site && item.category && item.involvement && item.description);
       const payload = {
@@ -3229,6 +3326,45 @@ export default function EmployeeDailyReport({ darkMode }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {pendingCollaborationTask && (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/35 p-4">
+          <div className={`w-full max-w-lg rounded-[28px] p-5 shadow-2xl ${darkMode ? "bg-[#181a20] text-white" : "bg-white text-black"}`} onMouseDown={(event) => event.stopPropagation()}>
+            <span className="rounded-md bg-[#89ed3f] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black">Collaboration task</span>
+            <h3 className="mt-4 text-2xl font-black">You have been added to a team task</h3>
+            <p className={`mt-2 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
+              {pendingCollaborationTask.collaborationSourceName || "A team member"} added you to this task. Accept it to add it to your report, or reject it to skip.
+            </p>
+            <div className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f8f7f3]"}`}>
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Site</p><p className="mt-1 font-bold">{pendingCollaborationTask.site || "-"}</p></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Category</p><p className="mt-1 font-bold">{pendingCollaborationTask.category || "-"}</p></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Status</p><p className="mt-1 font-bold">{pendingCollaborationTask.status || "In Progress"}</p></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Involvement</p><p className="mt-1 font-bold">{pendingCollaborationTask.involvement || "Team"}</p></div>
+                <div className="sm:col-span-2"><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Description</p><p className="mt-2 whitespace-pre-wrap leading-6">{pendingCollaborationTask.description || "-"}</p></div>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                disabled={Boolean(collaborationResponding)}
+                onClick={() => respondToCollaborationTask(pendingCollaborationTask, "rejected")}
+                className={`h-11 flex-1 rounded-full border text-sm font-bold disabled:opacity-60 ${darkMode ? "border-white/15 text-white hover:bg-white/10" : "border-black/15 text-black hover:bg-black/[0.04]"}`}
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(collaborationResponding)}
+                onClick={() => respondToCollaborationTask(pendingCollaborationTask, "accepted")}
+                className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-black text-black transition hover:bg-[#7dde35] disabled:opacity-60"
+              >
+                Accept task
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

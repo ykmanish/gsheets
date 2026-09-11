@@ -1794,9 +1794,9 @@ export default function EmployeeDailyReport({ darkMode }) {
   const pendingCollaborationTasks = !data?.todaySubmitted ? (data?.pendingCollaborationTasks || []) : [];
   const pendingCollaborationTask = pendingCollaborationTasks[Math.min(activeCollaborationInviteIndex, Math.max(0, pendingCollaborationTasks.length - 1))] || null;
 
-  async function load() {
+  async function load(showLoading = true) {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (dateFrom) params.set("dateFrom", dateFrom);
@@ -1824,7 +1824,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     } catch (error) {
       toast.error(error.message || "Could not load daily reports");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
@@ -1952,6 +1952,16 @@ export default function EmployeeDailyReport({ darkMode }) {
       return { ...current, taskItems: hasEmptyOnly ? nextItems : [...baseItems, ...nextItems] };
     });
   }, [data?.collaborationTasks, data?.todaySubmitted, formOpen]);
+
+  useEffect(() => {
+    if (data?.todaySubmitted || search || dateFrom || dateTo) return undefined;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void load(false);
+      }
+    }, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [data?.todaySubmitted, search, dateFrom, dateTo]);
 
   useEffect(() => {
     if (!formOpen || draftChoiceOpen || submitting || !draftStorageKey) return undefined;
@@ -3414,16 +3424,18 @@ export default function EmployeeDailyReport({ darkMode }) {
                 type="button"
                 disabled={Boolean(collaborationResponding)}
                 onClick={() => respondToCollaborationTask(pendingCollaborationTask, "rejected")}
-                className={`h-11 flex-1 rounded-full border text-sm font-bold disabled:opacity-60 ${darkMode ? "border-white/15 text-white hover:bg-white/10" : "border-black/15 text-black hover:bg-black/[0.04]"}`}
+                className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-full border text-sm font-bold disabled:opacity-60 ${darkMode ? "border-white/15 text-white hover:bg-white/10" : "border-black/15 text-black hover:bg-black/[0.04]"}`}
               >
+                {collaborationResponding === `${pendingCollaborationTask.inviteId}:rejected` && <Loader2 className="h-4 w-4 animate-spin" />}
                 Reject
               </button>
               <button
                 type="button"
                 disabled={Boolean(collaborationResponding)}
                 onClick={() => respondToCollaborationTask(pendingCollaborationTask, "accepted")}
-                className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-black text-black transition hover:bg-[#7dde35] disabled:opacity-60"
+                className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#89ed3f] text-sm font-black text-black transition hover:bg-[#7dde35] disabled:opacity-60"
               >
+                {collaborationResponding === `${pendingCollaborationTask.inviteId}:accepted` && <Loader2 className="h-4 w-4 animate-spin" />}
                 Accept task
               </button>
             </div>

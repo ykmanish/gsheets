@@ -375,7 +375,7 @@ function createRagaMcpServer() {
   return mcp;
 }
 
-app.all("/mcp", mcpRequireAuth, async (req, res) => {
+async function handleMcpRequest(req, res) {
   try {
     const mcp = createRagaMcpServer();
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
@@ -389,7 +389,9 @@ app.all("/mcp", mcpRequireAuth, async (req, res) => {
     console.error("MCP request failed:", error);
     if (!res.headersSent) res.status(500).json({ error: "MCP request failed" });
   }
-});
+}
+
+app.all(["/mcp", "/api/mcp"], mcpRequireAuth, handleMcpRequest);
 
 async function getDisabledModules({ fresh = false } = {}) {
   if (!fresh && moduleControlCache.expiresAt > Date.now()) return [...moduleControlCache.disabledModules];

@@ -259,7 +259,7 @@ app.get('/health', async (_req, res) => {
   }
 });
 
-app.all('/mcp', requireAuth, async (req, res) => {
+async function handleMcpRequest(req, res) {
   const server = makeServer();
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on('close', () => {
@@ -268,8 +268,10 @@ app.all('/mcp', requireAuth, async (req, res) => {
   });
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
-});
+}
+
+app.all(['/mcp', '/api/mcp'], requireAuth, handleMcpRequest);
 
 app.listen(PORT, () => {
-  console.log(`Raga remote MCP listening on http://localhost:${PORT}/mcp`);
+  console.log(`Raga remote MCP listening on http://localhost:${PORT}/mcp and /api/mcp`);
 });

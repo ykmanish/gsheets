@@ -3172,7 +3172,6 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     options: { ...EMPLOYEE_REPORT_OPTIONS, sites: siteOptions },
     optionUsage,
     collaborationUsers: collaborationEligibleUsers
-      .filter((user) => !isEmployeeDailyReportExempt(user))
       .filter((user) => projectText(user.usernameLower || user.username).toLowerCase() !== SUPER_ADMIN_USERNAME.toLowerCase())
       .map((user) => ({
         userId: String(user._id),

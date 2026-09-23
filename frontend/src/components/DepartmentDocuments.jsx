@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
+  ChevronRight,
   ClipboardList,
   Copy,
   Download,
@@ -16,6 +18,8 @@ import {
   Link2,
   List,
   Loader2,
+  Maximize2,
+  Minimize2,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -29,7 +33,6 @@ import {
   Upload,
   UploadCloud,
   Users,
-  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
@@ -246,20 +249,95 @@ function FileGlyph({ doc, className = "h-12 w-10" }) {
   );
 }
 
-function Modal({ darkMode, title, subtitle, eyebrow, onClose, children, footer, wide = false }) {
+// Same drawer as Employee Daily Report: slides in from the right with the shared
+// employee-report-shell classes and mrn-drawer keyframes, animates out before unmounting.
+const DRAWER_CLOSE_MS = 280;
+
+function useDrawerDismiss() {
+  const [closing, setClosing] = useState(false);
+  const timerRef = useRef(null);
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+  const dismiss = useCallback((after) => {
+    setClosing(true);
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => after?.(), DRAWER_CLOSE_MS);
+  }, []);
+  return [closing, dismiss];
+}
+
+function DrawerButtons({ darkMode, onCancel, onSubmit, submitting, submitLabel }) {
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#0f172a]/45 p-4 backdrop-blur-sm sm:p-7">
-      <div className={`flex max-h-[92vh] w-full flex-col ${wide ? "max-w-3xl" : "max-w-xl"} overflow-hidden rounded-[30px] border ${darkMode ? "border-white/10 bg-[#1a1d22] text-white" : "border-[#dfe7e4] bg-white text-[#171714]"}`}>
-        <div className={`flex shrink-0 items-start justify-between gap-4 border-b px-5 py-5 sm:px-7 ${darkMode ? "border-white/10" : "border-[#e6eeeb]"}`}>
-          <div className="min-w-0">
-            {eyebrow && <p className={`mb-1.5 text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-[#d8f36a]" : "text-[#10a66b]"}`}>{eyebrow}</p>}
-            <h3 className="small text-2xl font-semibold">{title}</h3>
-            {subtitle && <p className={`mt-1 text-sm ${darkMode ? "text-white/48" : "text-black/48"}`}>{subtitle}</p>}
+    <>
+      <button type="button" onClick={onCancel} disabled={submitting} className={`h-11 flex-1 rounded-full border text-sm font-bold transition disabled:opacity-60 ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 hover:bg-black/[0.03]"}`}>Cancel</button>
+      <button type="button" onClick={onSubmit} disabled={submitting} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#89ed3f] px-3 text-sm font-bold text-black transition hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">
+        {submitting && <Loader2 className="h-4 w-4 animate-spin" />} {submitLabel}
+      </button>
+    </>
+  );
+}
+
+function Drawer({ darkMode, closing, onRequestClose, title, context, size = "md", tag, summary = [], footer, eyebrow, heading, subheading, children }) {
+  const [expanded, setExpanded] = useState(false);
+  const closeRef = useRef(onRequestClose);
+  useEffect(() => { closeRef.current = onRequestClose; });
+  useEffect(() => {
+    const previousOverflow = window.document.body.style.overflow;
+    const onKeyDown = (event) => { if (event.key === "Escape") closeRef.current?.(); };
+    window.document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+  const subtle = darkMode ? "text-white/45" : "text-black/40";
+  return (
+    <div
+      className={`fixed inset-0 z-[100] bg-black/40 backdrop-blur-[2px] ${closing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onRequestClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={`employee-report-drawer employee-report-shell dept-drawer-${size} absolute flex flex-col overflow-hidden ${expanded ? "employee-report-shell-expanded" : ""} ${closing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}
+      >
+        <div className={`flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
+          <span className="min-w-0 truncate"><b>{title}</b>{context ? ` · ${context}` : ""}</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={() => setExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={expanded ? "Restore drawer size" : "Expand to full screen"}>
+              {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{expanded ? "Restore" : "Expand"}</span>
+            </button>
+            <button type="button" onClick={onRequestClose} className="px-1 font-semibold text-[#4b9b16]">Close</button>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 hover:bg-white/5" : "border-[#dfe7e4] hover:bg-[#f1f7f4]"}`}><X className="h-4 w-4" /></button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">{children}</div>
-        {footer && <div className={`flex shrink-0 flex-col-reverse gap-3 border-t px-5 py-4 sm:flex-row sm:justify-end sm:px-7 ${darkMode ? "border-white/10" : "border-[#e6eeeb]"}`}>{footer}</div>}
+
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden md:grid-cols-[270px_minmax(0,1fr)] md:grid-rows-1">
+          <aside className={`order-2 flex min-h-0 flex-col overflow-hidden border-t md:order-none md:border-t-0 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
+            <div className="hidden min-h-0 flex-1 overflow-y-auto p-6 md:block">
+              {tag && <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold uppercase text-[#4b9b16]">{tag}</span>}
+              <div className="mt-8 space-y-3">
+                {summary.filter(Boolean).map((item) => (
+                  <div key={item.label} className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${subtle}`}>{item.label}</p>
+                    <div className={`mt-1 break-words text-sm font-bold ${item.accent ? "text-[#4b9b16]" : ""}`}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {footer && <div className={`flex shrink-0 flex-col gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>{footer}</div>}
+          </aside>
+
+          <div className={`order-1 min-h-0 overflow-y-auto p-5 pb-10 sm:p-6 md:order-none ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
+            <div className={`rounded-3xl p-5 sm:p-6 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+              {eyebrow && <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">{eyebrow}</p>}
+              {heading && <h4 className={`mt-1 break-words text-2xl font-bold ${darkMode ? "text-white" : "text-black"}`}>{heading}</h4>}
+              {subheading && <p className={`mt-1 text-sm ${subtle}`}>{subheading}</p>}
+              <div className={heading ? "mt-6" : ""}>{children}</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -359,6 +437,7 @@ function CheckList({ darkMode, items, selected, onToggle, emptyText, searchPlace
 // ---------- Admin: create / edit department ----------
 
 function DepartmentModal({ darkMode, department, colors, users, serviceAccountEmail, onClose, onSaved, onDelete }) {
+  const [closing, dismiss] = useDrawerDismiss();
   const [form, setForm] = useState(() => ({
     name: department?.name || "",
     description: department?.description || "",
@@ -395,7 +474,7 @@ function DepartmentModal({ darkMode, department, colors, users, serviceAccountEm
       if (department) await api(`/department-documents/departments/${department.id}`, { method: "PATCH", body: JSON.stringify(form) });
       else await api("/department-documents/departments", { method: "POST", body: JSON.stringify(form) });
       toast.success(department ? "Department updated" : "Department created");
-      onSaved();
+      dismiss(onSaved);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -404,26 +483,35 @@ function DepartmentModal({ darkMode, department, colors, users, serviceAccountEm
   }
 
   return (
-    <Modal
+    <Drawer
       darkMode={darkMode}
-      wide
-      eyebrow="Admin"
-      title={department ? `Edit ${department.name}` : "New department"}
-      subtitle="Members see only this department's folder and documents shared with it."
-      onClose={onClose}
+      closing={closing}
+      onRequestClose={() => dismiss(onClose)}
+      size="lg"
+      title={department ? "Edit department" : "New department"}
+      context={department?.name || "Department Documents"}
+      tag="Admin"
+      summary={[
+        { label: "Department", value: form.name.trim() || "Not named yet" },
+        { label: "Members", value: `${form.memberUserIds.length} selected`, accent: form.memberUserIds.length > 0 },
+        { label: "Shared drive", value: verified ? verified.name : form.driveFolder.trim() ? "Not verified yet" : "Not linked", accent: Boolean(verified) },
+        { label: "Colour", value: <span className="inline-flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${colorStyle(form.color, darkMode).dot}`} /> <span className="capitalize">{form.color}</span></span> },
+      ]}
       footer={(
         <>
+          <div className="flex gap-2">
+            <DrawerButtons darkMode={darkMode} onCancel={() => dismiss(onClose)} onSubmit={save} submitting={saving} submitLabel={department ? "Save" : "Create"} />
+          </div>
           {department && (
-            <button type="button" onClick={onDelete} className={`mr-auto inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold ${darkMode ? "text-red-300 hover:bg-red-500/10" : "text-red-600 hover:bg-red-50"}`}>
+            <button type="button" onClick={onDelete} className={`inline-flex h-10 items-center justify-center gap-2 rounded-full text-sm font-semibold ${darkMode ? "text-red-300 hover:bg-red-500/10" : "text-red-600 hover:bg-red-50"}`}>
               <Trash2 className="h-4 w-4" /> Delete department
             </button>
           )}
-          <GhostButton darkMode={darkMode} onClick={onClose}>Cancel</GhostButton>
-          <PrimaryButton darkMode={darkMode} onClick={save} disabled={saving}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />} {department ? "Save changes" : "Create department"}
-          </PrimaryButton>
         </>
       )}
+      eyebrow="Department setup"
+      heading={department ? `Edit ${department.name}` : "Create a department"}
+      subheading="Members see only this department's folder and documents shared with it."
     >
       <div className="grid gap-5 md:grid-cols-2">
         <div className="space-y-5">
@@ -441,7 +529,7 @@ function DepartmentModal({ darkMode, department, colors, users, serviceAccountEm
                   key={color}
                   onClick={() => set("color", color)}
                   aria-label={color}
-                  className={`flex h-9 w-9 items-center justify-center rounded-full ring-offset-2 transition ${colorStyle(color, darkMode).dot} ${form.color === color ? `ring-2 ${darkMode ? "ring-white ring-offset-[#1a1d22]" : "ring-[#171714] ring-offset-white"}` : ""}`}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full ring-offset-2 transition ${colorStyle(color, darkMode).dot} ${form.color === color ? `ring-2 ${darkMode ? "ring-white ring-offset-[#15171c]" : "ring-[#171714] ring-offset-white"}` : ""}`}
                 >
                   {form.color === color && <Check className="h-4 w-4 text-white" />}
                 </button>
@@ -482,7 +570,7 @@ function DepartmentModal({ darkMode, department, colors, users, serviceAccountEm
           />
         </Field>
       </div>
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -496,6 +584,7 @@ const ADD_TABS = [
 ];
 
 function DocumentModal({ darkMode, department, document, initialType = "file", forms, categories, maxUploadBytes, onClose, onSaved }) {
+  const [closing, dismiss] = useDrawerDismiss();
   const editing = Boolean(document);
   const [type, setType] = useState(document?.type || initialType);
   const [form, setForm] = useState(() => ({
@@ -554,7 +643,7 @@ function DocumentModal({ darkMode, department, document, initialType = "file", f
         else await api(`/department-documents/departments/${department.id}/documents/link`, { method: "POST", body: JSON.stringify(payload) });
       }
       toast.success(editing ? "Document updated" : "Document added");
-      onSaved();
+      dismiss(onSaved);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -565,20 +654,34 @@ function DocumentModal({ darkMode, department, document, initialType = "file", f
 
   const categoryListId = "department-document-categories";
   return (
-    <Modal
+    <Drawer
       darkMode={darkMode}
-      eyebrow={department?.name || document?.departmentName}
+      closing={closing}
+      onRequestClose={() => { if (!saving) dismiss(onClose); }}
+      size="md"
       title={editing ? "Edit document" : "Add document"}
-      onClose={saving ? () => {} : onClose}
+      context={department?.name || document?.departmentName}
+      tag={editing ? "Edit" : "New document"}
+      summary={[
+        { label: "Department", value: department?.name || document?.departmentName || "—" },
+        { label: "Type", value: type === "file" ? "File upload" : ADD_TABS.find((tab) => tab.id === type)?.label || "Document" },
+        type === "file" ? { label: "File", value: file ? `${file.name} · ${formatBytes(file.size)}` : editing ? document?.originalName || document?.name : "None chosen yet" } : null,
+        { label: "Status", value: progress !== null ? `Uploading ${progress}%` : saving ? "Saving…" : "Ready to save", accent: true },
+      ]}
       footer={(
-        <>
-          <GhostButton darkMode={darkMode} onClick={onClose} disabled={saving}>Cancel</GhostButton>
-          <PrimaryButton darkMode={darkMode} onClick={save} disabled={saving}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {progress !== null ? `Uploading ${progress}%` : editing ? "Save changes" : type === "file" ? "Upload" : "Add"}
-          </PrimaryButton>
-        </>
+        <div className="flex gap-2">
+          <DrawerButtons
+            darkMode={darkMode}
+            onCancel={() => dismiss(onClose)}
+            onSubmit={save}
+            submitting={saving}
+            submitLabel={progress !== null ? `${progress}%` : editing ? "Save" : type === "file" ? "Upload" : "Add"}
+          />
+        </div>
       )}
+      eyebrow={editing ? "Document details" : "Document entry"}
+      heading={editing ? document.name : "Add to this folder"}
+      subheading={editing ? "Update the details, or replace the file with a new version." : "Upload a file, or link a Google Sheet, form or page."}
     >
       {!editing && (
         <div className={`mb-5 grid grid-cols-2 gap-1 rounded-2xl p-1 sm:grid-cols-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#f1f7f4]"}`}>
@@ -696,11 +799,12 @@ function DocumentModal({ darkMode, department, document, initialType = "file", f
           <textarea value={form.description} onChange={(event) => set("description", event.target.value)} rows={3} maxLength={1000} placeholder="Optional notes" className={textareaClass(darkMode)} />
         </Field>
       </div>
-    </Modal>
+    </Drawer>
   );
 }
 
 function ShareModal({ darkMode, document, shareTargets, onClose, onSaved }) {
+  const [closing, dismiss] = useDrawerDismiss();
   const [selected, setSelected] = useState(() => document.sharedWith.map((item) => item.id));
   const [saving, setSaving] = useState(false);
   const targets = shareTargets.filter((target) => target.id !== document.departmentId);
@@ -710,7 +814,7 @@ function ShareModal({ darkMode, document, shareTargets, onClose, onSaved }) {
     try {
       await api(`/department-documents/documents/${document.id}/share`, { method: "PUT", body: JSON.stringify({ departmentIds: selected }) });
       toast.success(selected.length ? `Shared with ${selected.length} department${selected.length === 1 ? "" : "s"}` : "Sharing removed");
-      onSaved();
+      dismiss(onSaved);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -719,20 +823,27 @@ function ShareModal({ darkMode, document, shareTargets, onClose, onSaved }) {
   }
 
   return (
-    <Modal
+    <Drawer
       darkMode={darkMode}
-      eyebrow="Share"
-      title={document.name}
-      subtitle="Chosen departments can open this document but can't edit, delete or re-share it."
-      onClose={onClose}
+      closing={closing}
+      onRequestClose={() => dismiss(onClose)}
+      size="sm"
+      title="Share document"
+      context={document.departmentName}
+      tag="Share"
+      summary={[
+        { label: "Document", value: document.name },
+        { label: "Owner", value: document.departmentName },
+        { label: "Sharing with", value: selected.length ? `${selected.length} department${selected.length === 1 ? "" : "s"}` : "Nobody yet", accent: selected.length > 0 },
+      ]}
       footer={(
-        <>
-          <GhostButton darkMode={darkMode} onClick={onClose}>Cancel</GhostButton>
-          <PrimaryButton darkMode={darkMode} onClick={save} disabled={saving}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save sharing
-          </PrimaryButton>
-        </>
+        <div className="flex gap-2">
+          <DrawerButtons darkMode={darkMode} onCancel={() => dismiss(onClose)} onSubmit={save} submitting={saving} submitLabel="Save" />
+        </div>
       )}
+      eyebrow="Share with departments"
+      heading={document.name}
+      subheading="Chosen departments can open this document but can't edit, delete or re-share it."
     >
       <CheckList
         darkMode={darkMode}
@@ -742,7 +853,7 @@ function ShareModal({ darkMode, document, shareTargets, onClose, onSaved }) {
         emptyText="There are no other departments to share with."
         searchPlaceholder="Search departments"
       />
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -1090,12 +1201,17 @@ const FOLDER_SORTERS = {
 
 // ---------- Main ----------
 
-export default function DepartmentDocuments({ darkMode }) {
+const ROOT_PATH = "/department-documents";
+
+export default function DepartmentDocuments({ darkMode, departmentId = null }) {
+  const router = useRouter();
+  // The open folder lives in the URL (/department-documents/<id>), so it can be
+  // bookmarked, shared and reached with the browser's back and forward buttons.
+  const selectedId = departmentId || null;
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [folder, setFolder] = useState(null);
+  const [folderState, setFolderState] = useState(null);
   const [folderLoading, setFolderLoading] = useState(false);
   const [tab, setTab] = useState("owned");
   const [search, setSearch] = useState("");
@@ -1133,14 +1249,14 @@ export default function DepartmentDocuments({ darkMode }) {
     if (!departmentId) return;
     if (!quiet) setFolderLoading(true);
     try {
-      setFolder(await api(`/department-documents/departments/${departmentId}/documents`));
+      setFolderState(await api(`/department-documents/departments/${departmentId}/documents`));
     } catch (error) {
       toast.error(error.message);
-      setSelectedId(null);
+      router.replace(ROOT_PATH);
     } finally {
       setFolderLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     // Async fetch; state is only set once the request resolves.
@@ -1148,14 +1264,17 @@ export default function DepartmentDocuments({ darkMode }) {
     void loadOverview();
   }, [loadOverview]);
 
+  // Load whichever folder the URL points at (also covers back/forward navigation).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (selectedId) void loadFolder(selectedId);
+  }, [selectedId, loadFolder]);
+
   // A member of exactly one department lands straight in it.
   useEffect(() => {
     if (!overview || overview.isAdmin || selectedId || overview.departments.length !== 1) return;
-    const onlyId = overview.departments[0].id;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSelectedId(onlyId);
-    void loadFolder(onlyId);
-  }, [overview, selectedId, loadFolder]);
+    router.replace(`${ROOT_PATH}/${overview.departments[0].id}`);
+  }, [overview, selectedId, router]);
 
   function changeView(next) {
     setView(next);
@@ -1163,13 +1282,11 @@ export default function DepartmentDocuments({ darkMode }) {
   }
 
   function openDepartment(id) {
-    setSelectedId(id);
-    setFolder(null);
     setTab("owned");
     setSearch("");
     setTypeFilter("all");
     setCategoryFilter("");
-    void loadFolder(id);
+    router.push(`${ROOT_PATH}/${id}`);
   }
 
   async function refreshAll() {
@@ -1177,6 +1294,8 @@ export default function DepartmentDocuments({ darkMode }) {
     if (selectedId) await loadFolder(selectedId, { quiet: true });
   }
 
+  // Ignore a folder still held from the previous route until the new one loads.
+  const folder = folderState && folderState.department?.id === selectedId ? folderState : null;
   const departments = useMemo(() => overview?.departments || [], [overview]);
   const visibleDepartments = useMemo(() => {
     const query = folderSearch.trim().toLowerCase();
@@ -1256,9 +1375,8 @@ export default function DepartmentDocuments({ darkMode }) {
       } else {
         await api(`/department-documents/departments/${confirm.department.id}`, { method: "DELETE" });
         toast.success("Department deleted");
-        setSelectedId(null);
-        setFolder(null);
         setDepartmentModal(null);
+        router.push(ROOT_PATH);
       }
       setConfirm(null);
       await refreshAll();
@@ -1367,32 +1485,38 @@ export default function DepartmentDocuments({ darkMode }) {
     return (
       <main className={shell}>
         <section className={hero}>
-          {showBack && (
-            <button type="button" onClick={() => { setSelectedId(null); setFolder(null); }} className={`mb-5 inline-flex items-center gap-2 text-sm font-semibold ${t.muted} hover:opacity-80`}>
-              <ArrowLeft className="h-4 w-4" /> All departments
-            </button>
-          )}
+          <nav aria-label="Breadcrumb" className={`mb-6 flex min-w-0 items-center gap-1.5 text-sm ${t.muted}`}>
+            {showBack ? (
+              <Link href={ROOT_PATH} className={`inline-flex shrink-0 items-center gap-1.5 font-semibold transition ${darkMode ? "hover:text-white" : "hover:text-[#0f6b49]"}`}>
+                <FolderLock className="h-4 w-4" /> Department Documents
+              </Link>
+            ) : (
+              <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold"><FolderLock className="h-4 w-4" /> Department Documents</span>
+            )}
+            <ChevronRight className="h-4 w-4 shrink-0 opacity-60" aria-hidden="true" />
+            <span aria-current="page" className={`min-w-0 truncate font-semibold ${darkMode ? "text-white" : "text-[#171714]"}`}>{currentDepartment?.name || "Department"}</span>
+          </nav>
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <div className="flex min-w-0 items-start gap-5">
-              <FolderGlyph color={currentDepartment?.color} className="hidden h-[72px] w-[86px] shrink-0 sm:block" />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Pill darkMode={darkMode} icon={FolderLock}>Department folder</Pill>
-                  <Pill darkMode={darkMode} variant="yellow" icon={Users}>{currentDepartment?.memberCount ?? 0} member{currentDepartment?.memberCount === 1 ? "" : "s"}</Pill>
-                  {currentDepartment?.driveConfigured
-                    ? <Pill darkMode={darkMode} variant="blue" icon={HardDrive}>{currentDepartment.driveFolderName || "Shared drive linked"}</Pill>
-                    : <Pill darkMode={darkMode} variant="pink" icon={HardDrive}>No shared drive yet</Pill>}
-                </div>
-                <h1 className={`small mt-5 truncate pb-1 text-4xl font-black leading-[1.08] tracking-tight ${darkMode ? "text-white" : "text-[#161616]"}`}>{currentDepartment?.name || "Department"}</h1>
-                <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>
-                  {currentDepartment?.description || "Files, sheets, forms and links your department keeps together."}
-                </p>
-                {overview.isAdmin && currentDepartment?.driveFolderUrl && (
-                  <a href={currentDepartment.driveFolderUrl} target="_blank" rel="noopener noreferrer" className={`mt-3 inline-flex items-center gap-1 text-xs font-semibold underline-offset-2 hover:underline ${t.muted}`}>
-                    Open folder in Google Drive <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill darkMode={darkMode} icon={FolderLock}>Department folder</Pill>
+                <Pill darkMode={darkMode} variant="yellow" icon={Users}>{currentDepartment?.memberCount ?? 0} member{currentDepartment?.memberCount === 1 ? "" : "s"}</Pill>
+                {currentDepartment?.driveConfigured
+                  ? <Pill darkMode={darkMode} variant="blue" icon={HardDrive}>{currentDepartment.driveFolderName || "Shared drive linked"}</Pill>
+                  : <Pill darkMode={darkMode} variant="pink" icon={HardDrive}>No shared drive yet</Pill>}
               </div>
+              <div className="mt-5 flex min-w-0 items-center gap-4">
+                <FolderGlyph color={currentDepartment?.color} className="h-11 w-[54px] shrink-0" />
+                <h1 className={`small min-w-0 truncate pb-0.5 text-4xl font-black leading-tight tracking-tight ${darkMode ? "text-white" : "text-[#161616]"}`}>{currentDepartment?.name || "Department"}</h1>
+              </div>
+              <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>
+                {currentDepartment?.description || "Files, sheets, forms and links your department keeps together."}
+              </p>
+              {overview.isAdmin && currentDepartment?.driveFolderUrl && (
+                <a href={currentDepartment.driveFolderUrl} target="_blank" rel="noopener noreferrer" className={`mt-3 inline-flex items-center gap-1 text-xs font-semibold underline-offset-2 hover:underline ${t.muted}`}>
+                  Open folder in Google Drive <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
               {overview.isAdmin && adminDepartment && (

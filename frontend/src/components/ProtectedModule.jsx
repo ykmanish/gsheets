@@ -188,7 +188,7 @@ function MaintenanceScreen({ darkMode, maintenance, user, onLogout }) {
   );
 }
 
-function ProtectedModuleContent({ moduleId, projectId }) {
+function ProtectedModuleContent({ moduleId, projectId, departmentId }) {
   const router = useRouter();
   const { user, menus, disabledModules, maintenance, loading, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(() => {
@@ -615,7 +615,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "documents" && (
           <Documents darkMode={darkMode} selectedDocs={selectedDocs} setSelectedDocs={setSelectedDocs} />
         )}
-        {moduleId === "department-documents" && <DepartmentDocuments darkMode={darkMode} />}
+        {moduleId === "department-documents" && <DepartmentDocuments darkMode={darkMode} departmentId={departmentId} />}
         {moduleId === "forms" && <Forms darkMode={darkMode} />}
         {moduleId === "projects" && <ProjectDashboard darkMode={darkMode} projectId={projectId} />}
         {moduleId === "project-dmr" && <DmrDashboard darkMode={darkMode} />}
@@ -701,10 +701,10 @@ function ProtectedModuleContent({ moduleId, projectId }) {
   );
 }
 
-export default function ProtectedModule({ moduleId, projectId }) {
+export default function ProtectedModule({ moduleId, projectId, departmentId }) {
   return (
     <AuthProvider>
-      <ProtectedModuleContent moduleId={moduleId} projectId={projectId} />
+      <ProtectedModuleContent moduleId={moduleId} projectId={projectId} departmentId={departmentId} />
     </AuthProvider>
   );
 }

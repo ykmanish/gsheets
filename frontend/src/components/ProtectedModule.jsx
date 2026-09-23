@@ -17,6 +17,7 @@ import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import Dashboard from "./Dashboard";
 import Documents from "./Documents";
+import DepartmentDocuments from "./DepartmentDocuments";
 import Automations from "./Automations";
 import Reports from "./Reports";
 import AccountsDashboard from "./AccountsDashboard";
@@ -45,6 +46,7 @@ import CommandPalette from "./CommandPalette";
 const menuPaths = {
   dashboard: "/dashboard",
   documents: "/documents",
+  "department-documents": "/department-documents",
   forms: "/forms",
   projects: "/projects",
   "project-dmr": "/projects/dmr",
@@ -77,6 +79,7 @@ const menuPaths = {
 function notificationPath(notification = {}) {
   if (notification.path || notification.href || notification.url) return notification.path || notification.href || notification.url;
   if (notification.type === "hr-leave") return "/hr/leave";
+  if (notification.type === "department-document") return "/department-documents";
   if (notification.type === "folder" || notification.type === "document") return "/documents";
   if (notification.type === "automation") return "/automations";
   if (notification.type === "report") return "/reports";
@@ -612,6 +615,7 @@ function ProtectedModuleContent({ moduleId, projectId }) {
         {moduleId === "documents" && (
           <Documents darkMode={darkMode} selectedDocs={selectedDocs} setSelectedDocs={setSelectedDocs} />
         )}
+        {moduleId === "department-documents" && <DepartmentDocuments darkMode={darkMode} />}
         {moduleId === "forms" && <Forms darkMode={darkMode} />}
         {moduleId === "projects" && <ProjectDashboard darkMode={darkMode} projectId={projectId} />}
         {moduleId === "project-dmr" && <DmrDashboard darkMode={darkMode} />}

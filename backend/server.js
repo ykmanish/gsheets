@@ -25,6 +25,7 @@ const { createWhatsAppService, normalizePhone } = require("./lib/whatsappService
 const { callClaude, retrieveRelevantChunks, routeClaudeModel, modelIdForTier } = require("./lib/claudeRag");
 const { registerFormsModule } = require("./lib/formsModule");
 const { registerRecruitmentModule } = require("./lib/recruitmentModule");
+const { registerDepartmentDocumentsModule } = require("./lib/departmentDocumentsModule");
 const { registerAccountsFormsModule, MAX_UPLOAD_BYTES: ACCOUNTS_FORM_MAX_UPLOAD } = require("./lib/accountsFormsModule");
 const adminMiscExpensesArchitecture = require("./sheetArchitectures/adminMiscExpenses");
 const assetPurchaseRequestsArchitecture = require("./sheetArchitectures/assetPurchaseRequests");
@@ -70,6 +71,7 @@ const DEFAULT_PRN_SPREADSHEET_ID = process.env.PRN_SPREADSHEET_ID || "1ueqDLa6WU
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "documents", label: "Documents" },
+  { id: "department-documents", label: "Department Documents" },
   { id: "forms", label: "Forms" },
   { id: "projects", label: "Project Control", group: "projects" },
   { id: "project-dmr", label: "DMR", parent: "projects", group: "projects" },
@@ -122,6 +124,7 @@ const PRIVILEGE_ITEMS = [
   { id: "manage_project_stock", label: "Manage project stock sheets" },
   { id: "manage_hr", label: "Manage HR employees, documents, salary slips, and leave" },
   { id: "manage_accounts", label: "Manage accounts and CRBR sync" },
+  { id: "manage_department_documents", label: "Manage Department Documents (create departments, assign users and drive folders, see every department)" },
 ];
 
 let mongoClient;
@@ -8069,6 +8072,18 @@ function describeActivity(req) {
   if (method === "DELETE" && pathValue.startsWith("/documents/")) return { action: "Deleted document", target: pathId };
   if (method === "PATCH" && pathValue.startsWith("/documents/") && !pathValue.endsWith("/toggle")) return { action: "Renamed document", target: req.body?.name || pathId };
   if (method === "PATCH" && pathValue.endsWith("/toggle")) return { action: "Toggled document source", target: pathValue.split("/").filter(Boolean).at(-2) };
+  if (pathValue.startsWith("/department-documents/")) {
+    if (method === "POST" && pathValue === "/department-documents/departments") return { action: "Created document department", target: req.body?.name || "Department" };
+    if (method === "PATCH" && pathValue.startsWith("/department-documents/departments/")) return { action: "Updated document department", target: req.body?.name || pathId };
+    if (method === "DELETE" && pathValue.startsWith("/department-documents/departments/")) return { action: "Deleted document department", target: pathId };
+    if (method === "POST" && pathValue.endsWith("/documents/upload")) return { action: "Uploaded department document", target: "Document" };
+    if (method === "POST" && pathValue.endsWith("/documents/link")) return { action: "Linked department document", target: req.body?.name || req.body?.url || "Link" };
+    if (method === "POST" && pathValue.endsWith("/replace")) return { action: "Replaced department document file", target: pathId };
+    if (method === "PATCH" && pathValue.startsWith("/department-documents/documents/")) return { action: "Edited department document", target: req.body?.name || pathId };
+    if (method === "DELETE" && pathValue.startsWith("/department-documents/documents/")) return { action: "Deleted department document", target: pathId };
+    if (method === "PUT" && pathValue.endsWith("/share")) return { action: "Shared department document", target: pathId };
+    return null;
+  }
   if (method === "POST" && pathValue === "/automations") return { action: "Created automation", target: req.body?.name || "Automation" };
   if (method === "PATCH" && pathValue.startsWith("/automations/")) return { action: "Updated automation", target: pathId };
   if (method === "DELETE" && pathValue.startsWith("/automations/")) return { action: "Deleted automation", target: pathId };
@@ -8435,6 +8450,18 @@ app.post("/hr/employees/:id/documents/link", async (req, res) => {
     console.error("HR employee document link error:", error);
     res.status(400).json({ error: error.message || "Could not save employee document link" });
   }
+});
+
+registerDepartmentDocumentsModule(app, {
+  connectDb: connectAuthDb,
+  google,
+  getGoogleAuth,
+  hasMenuAccess,
+  hasPrivilege,
+  notifyUsers,
+  extractDriveFileId,
+  safeFileName,
+  uploadsDir,
 });
 
 function driveExportInfo(mimeType) {

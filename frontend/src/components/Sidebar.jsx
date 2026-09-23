@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, BriefcaseBusiness, PackageSearch, CalendarDays, MapPin, ListTodo, MessagesSquare, CircleDollarSign, UserRoundSearch } from "lucide-react";
+import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, BriefcaseBusiness, PackageSearch, CalendarDays, MapPin, ListTodo, MessagesSquare, FolderLock, CircleDollarSign, UserRoundSearch } from "lucide-react";
 import Image from "next/image";
 import { API_URL } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
@@ -11,6 +11,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "documents", label: "Documents", icon: FileText },
+    { id: "department-documents", label: "Department Documents", icon: FolderLock },
     { id: "forms", label: "Forms", icon: ClipboardList },
     { id: "projects", label: "Project Control", icon: Building2 },
     { id: "project-dmr", label: "DMR", icon: FileSpreadsheet, parent: "projects" },

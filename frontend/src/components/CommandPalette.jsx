@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowRight, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, ClipboardList, FileSpreadsheet, FileText, Images, LayoutDashboard, ListTodo, MessageCircleMore, MessagesSquare, PackageSearch, Search, ShieldCheck, SlidersHorizontal, UserRound, UserRoundSearch, Users, Workflow, X, ChartNoAxesCombined, Sheet } from "lucide-react";
+import { Activity, ArrowRight, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, ClipboardList, FileSpreadsheet, FileText, FolderLock, Images, LayoutDashboard, ListTodo, MessageCircleMore, MessagesSquare, PackageSearch, Search, ShieldCheck, SlidersHorizontal, UserRound, UserRoundSearch, Users, Workflow, X, ChartNoAxesCombined, Sheet } from "lucide-react";
 
 const COMMAND_ITEMS = [
   { id: "dashboard", label: "Dashboard", description: "Overview, documents, activity, and workspace status", group: "Workspace", keywords: ["home", "overview"], icon: LayoutDashboard },
   { id: "documents", label: "Documents", description: "Browse, upload, search, and manage documents", group: "Workspace", keywords: ["files", "drive"], icon: FileText },
+  { id: "department-documents", label: "Department Documents", description: "Department folders: uploads, sheet and form links, sharing", group: "Workspace", keywords: ["department", "folder", "shared drive", "files"], icon: FolderLock },
   { id: "forms", label: "Forms", description: "Create and submit internal requests", group: "Workspace", keywords: ["requests"], icon: ClipboardList },
   { id: "projects", label: "Project Control", description: "Project dashboard, tasks, phases, and files", group: "Projects", keywords: ["project", "control"], icon: Building2 },
   { id: "project-dmr", label: "DMR", description: "Daily manpower and site progress reports", group: "Projects", parent: "Project Control", keywords: ["daily", "manpower"], icon: FileSpreadsheet },

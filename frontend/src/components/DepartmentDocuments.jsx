@@ -14,6 +14,7 @@ import {
   FolderLock,
   FolderPlus,
   HardDrive,
+  Info,
   LayoutGrid,
   Link2,
   List,
@@ -872,13 +873,19 @@ function readStoredView() {
 
 function Pill({ darkMode, variant = "green", icon: Icon, children }) {
   const light = {
-    green: "border-[#dfe7e4] bg-[#e8f6ee] text-[#0f6b49]",
-    yellow: "border-[#eadb8f] bg-[#fff4a8] text-[#5b4b00]",
-    pink: "border-[#efaccb] bg-[#f7bdd7] text-[#6f123b]",
-    blue: "border-[#c7ddf5] bg-[#e3effc] text-[#1d4f86]",
+    green: "bg-[#e8f6ee] text-[#0f6b49]",
+    yellow: "bg-[#fff4a8] text-[#5b4b00]",
+    pink: "bg-[#f7bdd7] text-[#6f123b]",
+    blue: "bg-[#e3effc] text-[#1d4f86]",
+  }[variant];
+  const dark = {
+    green: "bg-emerald-400/12 text-emerald-200",
+    yellow: "bg-yellow-300/12 text-yellow-100",
+    pink: "bg-pink-400/14 text-pink-200",
+    blue: "bg-sky-400/12 text-sky-200",
   }[variant];
   return (
-    <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : light}`}>
+    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${darkMode ? dark : light}`}>
       {Icon && <Icon className="h-3.5 w-3.5" />} {children}
     </span>
   );
@@ -887,7 +894,7 @@ function Pill({ darkMode, variant = "green", icon: Icon, children }) {
 function ViewToggle({ darkMode, view, onChange }) {
   const t = tone(darkMode);
   return (
-    <div className={`inline-flex h-11 shrink-0 items-center rounded-2xl border p-1 ${t.line} ${darkMode ? "bg-white/[0.03]" : "bg-white"}`}>
+    <div className={`inline-flex h-11 shrink-0 items-center rounded-2xl p-1 ${t.soft}`}>
       {[{ id: "grid", icon: LayoutGrid, label: "Grid view" }, { id: "list", icon: List, label: "List view" }].map((option) => {
         const Icon = option.icon;
         const active = view === option.id;
@@ -898,7 +905,7 @@ function ViewToggle({ darkMode, view, onChange }) {
             onClick={() => onChange(option.id)}
             aria-label={option.label}
             aria-pressed={active}
-            className={`flex h-9 w-10 items-center justify-center rounded-xl transition ${active ? darkMode ? "bg-white/12 text-white" : "bg-[#f1f7f4] text-[#0f6b49]" : t.muted}`}
+            className={`flex h-9 w-10 items-center justify-center rounded-xl transition ${active ? darkMode ? "bg-white/12 text-white" : "bg-white text-[#0f6b49]" : t.muted}`}
           >
             <Icon className="h-4 w-4" />
           </button>
@@ -1002,31 +1009,58 @@ function FolderCard({ darkMode, department, isAdmin, onOpen, onManage }) {
   );
 }
 
-function FolderRow({ darkMode, department, isAdmin, onOpen, onManage }) {
+// Admin-only (i) next to the overview heading: how to prepare a department's
+// shared drive folder, with the service account address to share it with.
+function ServiceAccountInfo({ darkMode, email }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const ref = useRef(null);
+  useClickOutside(ref, () => setOpen(false));
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (event) => { if (event.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  function copy() {
+    navigator.clipboard?.writeText(email).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }
+
   const t = tone(darkMode);
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(); } }}
-      className={`grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 transition sm:px-5 md:grid-cols-[44px_minmax(0,2fr)_minmax(0,1.5fr)_110px_72px] ${darkMode ? "hover:bg-white/[0.04]" : "hover:bg-[#f6faf8]"}`}
-    >
-      <FolderGlyph color={department.color} className="h-9 w-11" />
-      <div className="min-w-0">
-        <p className="truncate font-semibold">{department.name}</p>
-        <p className={`truncate text-xs ${t.muted}`}>{department.description || "No description"}</p>
-      </div>
-      <p className={`hidden truncate text-sm md:block ${t.muted}`}>{memberSummary(department)}</p>
-      <p className={`hidden text-sm md:block ${t.muted}`}>{department.documentCount} file{department.documentCount === 1 ? "" : "s"}</p>
-      <div className="flex items-center justify-end gap-1">
-        {isAdmin && !department.driveConfigured && <HardDrive className={`h-4 w-4 ${darkMode ? "text-amber-300" : "text-amber-600"}`} aria-label="No shared drive folder" />}
-        {isAdmin && (
-          <IconButton darkMode={darkMode} label="Manage department" onClick={(event) => { event.stopPropagation(); onManage(); }}>
-            <Settings2 className="h-4 w-4" />
-          </IconButton>
-        )}
-      </div>
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label="How to link a shared drive folder"
+        className={`flex h-9 w-9 items-center justify-center rounded-full transition ${open ? darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#dff3e8] text-[#0f6b49]" : darkMode ? "bg-white/[0.06] text-white/60 hover:text-white" : "bg-[#f3f5f4] text-black/45 hover:text-[#0f6b49]"}`}
+      >
+        <Info className="h-4 w-4" />
+      </button>
+      {open && (
+        <div role="dialog" aria-label="Shared drive setup" className={`absolute right-0 top-[calc(100%+10px)] z-40 w-[min(360px,calc(100vw-48px))] rounded-[22px] border p-4 animate-[mrn-backdrop-in_160ms_ease-out] sm:left-0 sm:right-auto ${darkMode ? "border-white/10 bg-[#1f2228] text-white" : "border-[#dfe7e4] bg-white text-[#171714]"}`}>
+          <div className="flex items-center gap-2">
+            <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${t.soft}`}><HardDrive className={`h-4 w-4 ${t.muted}`} /></span>
+            <p className="text-sm font-semibold">Linking a shared drive folder</p>
+          </div>
+          <ol className={`mt-3 list-decimal space-y-1.5 pl-5 text-[13px] leading-5 ${darkMode ? "text-white/65" : "text-black/60"}`}>
+            <li>Create a folder for the department inside a Google <span className="font-semibold">Shared Drive</span>.</li>
+            <li>Share it as <span className="font-semibold">Content manager</span> with the address below.</li>
+            <li>Paste the folder link into the department and press Verify.</li>
+          </ol>
+          <div className={`mt-3 flex items-center gap-2 rounded-2xl p-2 pl-3 ${t.soft}`}>
+            <span className={`min-w-0 flex-1 break-all font-mono text-[11px] leading-4 ${darkMode ? "text-white/85" : "text-black/75"}`}>{email}</span>
+            <button type="button" onClick={copy} className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-white text-[#0f6b49] hover:bg-[#e8f6ee]"}`}>
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1227,7 +1261,6 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
   const [confirm, setConfirm] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [busyDocId, setBusyDocId] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -1387,14 +1420,6 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
     }
   }
 
-  function copyServiceEmail() {
-    if (!overview?.serviceAccountEmail) return;
-    navigator.clipboard?.writeText(overview.serviceAccountEmail).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
-  }
-
   const t = tone(darkMode);
   const shell = `flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`;
   const hero = `relative mb-5 rounded-[30px] border p-6 sm:p-8 ${darkMode ? "border-white/10 bg-[#202328]" : "border-[#dfe7e4] bg-white/95"}`;
@@ -1537,7 +1562,7 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
               <GhostButton darkMode={darkMode} onClick={() => setDocumentModal({ type: "file" })} className="h-11">
                 <Upload className="h-4 w-4" /> Upload files
               </GhostButton>
-              <div className={`inline-flex h-11 items-center rounded-2xl border p-1 ${t.line}`}>
+              <div className={`inline-flex h-11 items-center rounded-2xl p-1 ${t.soft}`}>
                 {[
                   { id: "owned", label: "Our files", count: ownedCount },
                   { id: "shared", label: "Shared with us", count: sharedCount },
@@ -1546,7 +1571,7 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
                     type="button"
                     key={item.id}
                     onClick={() => setTab(item.id)}
-                    className={`flex h-9 items-center gap-1.5 rounded-xl px-3.5 text-sm font-semibold transition ${tab === item.id ? darkMode ? "bg-white/12 text-white" : "bg-[#f1f7f4] text-[#0f6b49]" : t.muted}`}
+                    className={`flex h-9 items-center gap-1.5 rounded-xl px-3.5 text-sm font-semibold transition ${tab === item.id ? darkMode ? "bg-white/12 text-white" : "bg-white text-[#0f6b49]" : t.muted}`}
                   >
                     {item.label} <span className="opacity-60">{item.count}</span>
                   </button>
@@ -1576,7 +1601,7 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
                   type="button"
                   key={filter.id}
                   onClick={() => setTypeFilter(filter.id)}
-                  className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${typeFilter === filter.id ? darkMode ? "border-[#d8f36a]/40 bg-[#d8f36a]/10 text-[#d8f36a]" : "border-[#bfe3cf] bg-[#e8f6ee] text-[#0f6b49]" : darkMode ? "border-white/10 text-white/55 hover:text-white" : "border-[#dfe7e4] text-black/50 hover:text-black"}`}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${typeFilter === filter.id ? darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#dff3e8] text-[#0f6b49]" : darkMode ? "bg-white/[0.05] text-white/55 hover:text-white" : "bg-[#f3f5f4] text-black/50 hover:text-black"}`}
                 >
                   {filter.label}
                 </button>
@@ -1643,7 +1668,10 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
               <Pill darkMode={darkMode} variant="yellow">{overview.isAdmin ? "Admin view" : `${departments.length} department${departments.length === 1 ? "" : "s"}`}</Pill>
               {overview.isAdmin && <Pill darkMode={darkMode} variant={linkedCount === departments.length ? "blue" : "pink"} icon={HardDrive}>{linkedCount}/{departments.length} drives linked</Pill>}
             </div>
-            <h1 className={`small mt-5 max-w-4xl text-4xl font-black leading-[0.96] tracking-tight ${darkMode ? "text-white" : "text-[#161616]"}`}>Every department, its own folder.</h1>
+            <div className="mt-5 flex items-center gap-3">
+              <h1 className={`small max-w-4xl text-4xl font-black leading-[1.02] tracking-tight ${darkMode ? "text-white" : "text-[#161616]"}`}>Every department, its own folder.</h1>
+              {overview.isAdmin && overview.serviceAccountEmail && <ServiceAccountInfo darkMode={darkMode} email={overview.serviceAccountEmail} />}
+            </div>
             <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>
               Keep files, Google Sheets, forms and links in one calm place. Members only see their department&apos;s folder and what others share with them.
             </p>
@@ -1656,18 +1684,6 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
             </div>
           )}
         </div>
-        {overview.isAdmin && overview.serviceAccountEmail && (
-          <div className={`mt-6 flex flex-col gap-3 rounded-[22px] border p-4 sm:flex-row sm:items-center ${t.line} ${darkMode ? "bg-white/[0.03]" : "bg-[#f6faf8]"}`}>
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${darkMode ? "bg-white/10" : "bg-white"}`}><HardDrive className={`h-4 w-4 ${t.muted}`} /></span>
-            <p className={`min-w-0 flex-1 text-sm ${darkMode ? "text-white/60" : "text-black/55"}`}>
-              Create a folder per department in a Google <span className="font-semibold">Shared Drive</span> and share it as <span className="font-semibold">Content manager</span> with
-              <span className={`ml-1 break-all font-mono text-xs ${darkMode ? "text-white/85" : "text-black/75"}`}>{overview.serviceAccountEmail}</span>
-            </p>
-            <GhostButton darkMode={darkMode} onClick={copyServiceEmail} className="h-10 shrink-0 px-4">
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} {copied ? "Copied" : "Copy email"}
-            </GhostButton>
-          </div>
-        )}
       </section>
 
       <section className={`rounded-[28px] border ${t.panel}`}>
@@ -1678,10 +1694,7 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <SearchBox darkMode={darkMode} value={folderSearch} onChange={setFolderSearch} placeholder="Search departments…" />
-            <div className="flex items-center justify-between gap-2">
-              <SortControl darkMode={darkMode} options={FOLDER_SORT_OPTIONS} sort={folderSort} onChange={setFolderSort} />
-              <ViewToggle darkMode={darkMode} view={view} onChange={changeView} />
-            </div>
+            <SortControl darkMode={darkMode} options={FOLDER_SORT_OPTIONS} sort={folderSort} onChange={setFolderSort} />
           </div>
         </div>
 
@@ -1701,7 +1714,7 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
             </EmptyState>
           ) : visibleDepartments.length === 0 ? (
             <EmptyState darkMode={darkMode} icon={Search} title="No departments match your search" />
-          ) : view === "grid" ? (
+          ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {visibleDepartments.map((department) => (
                 <FolderCard
@@ -1713,22 +1726,6 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
                   onManage={() => setDepartmentModal({ department })}
                 />
               ))}
-            </div>
-          ) : (
-            <div className={`overflow-hidden rounded-[22px] border ${t.line}`}>
-              <ListHeader darkMode={darkMode} className="grid-cols-[44px_minmax(0,2fr)_minmax(0,1.5fr)_110px_72px]" columns={["", "Department", "Members", "Files", ""]} />
-              <div className={`divide-y ${darkMode ? "divide-white/10" : "divide-[#e6eeeb]"}`}>
-                {visibleDepartments.map((department) => (
-                  <FolderRow
-                    key={department.id}
-                    darkMode={darkMode}
-                    department={department}
-                    isAdmin={overview.isAdmin}
-                    onOpen={() => openDepartment(department.id)}
-                    onManage={() => setDepartmentModal({ department })}
-                  />
-                ))}
-              </div>
             </div>
           )}
         </div>

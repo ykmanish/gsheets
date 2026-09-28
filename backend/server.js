@@ -1048,6 +1048,11 @@ function employeeSheetErrorMessage(error, fallback = "Could not read employee re
     : error?.message || fallback;
 }
 
+function isEmployeeSheetWritePermissionError(error) {
+  const status = Number(error?.code || error?.status || error?.response?.status || 0);
+  return status === 403 && /permission|forbidden|not authorized/i.test(error?.message || error?.response?.data?.error?.message || "");
+}
+
 function canViewEmployeeDailyReports(req) {
   return Boolean(req.authUser?.isSuperAdmin || hasPrivilege(req, "view_employee_daily_reports"));
 }
@@ -1691,6 +1696,8 @@ function sanitizeEmployeeReport(report) {
     waitingTaskItems,
     dismissedRecurringIds: sanitizeEmployeeRecurringIds(report.dismissedRecurringIds),
     tomorrowPlanTick: Boolean(report.tomorrowPlanTick),
+    sheetSyncStatus: report.sheetSyncStatus || "",
+    sheetSyncError: report.sheetSyncError || "",
     note: report.note || "",
   };
 }
@@ -1717,10 +1724,14 @@ async function getEmployeeSpreadsheetMeta(spreadsheetId, preferredTabName = "") 
       .map((sheet) => sheet.properties)
       .filter((sheet) => sheet?.sheetType === "GRID" && !sheet.hidden && sheet.title !== EMPLOYEE_REPORT_APP_TAB);
     if (!tabs.length) throw new Error("No visible sheet tab found");
-    const preferred = tabs.find((tab) => preferredTabName && tab.title === preferredTabName);
-    const tab = preferred || tabs[0];
+    const preferred = tabs.find((tab) => preferredTabName && tab.title === preferredTabName && !isEmployeeDailyDateTab(tab.title));
+    const tab = preferred || tabs.find((item) => !isEmployeeDailyDateTab(item.title)) || tabs[0];
     return { title: response.data.properties?.title || "Employee report sheet", tabName: tab.title || "Sheet1", tabId: tab.sheetId };
   });
+}
+
+function isEmployeeDailyDateTab(name = "") {
+  return /^\d{4}-\d{2}-\d{2}$/.test(projectText(name));
 }
 
 function employeeDailyTabName(reportDate = "") {
@@ -1745,7 +1756,10 @@ async function ensureEmployeeDailySheetTab(sheets, spreadsheetId, templateMeta, 
     .filter((sheet) => sheet?.sheetType === "GRID" && !sheet.hidden);
   const existing = visibleTabs.find((sheet) => sheet.title === dailyTabName);
   if (existing) return { tabName: existing.title, tabId: existing.sheetId, created: false };
-  const template = visibleTabs.find((sheet) => sheet.title === templateMeta.tabName) || visibleTabs.find((sheet) => sheet.title !== EMPLOYEE_REPORT_APP_TAB);
+  const reportTabs = visibleTabs.filter((sheet) => sheet.title !== EMPLOYEE_REPORT_APP_TAB);
+  const template = reportTabs.find((sheet) => sheet.title === templateMeta.tabName)
+    || reportTabs.find((sheet) => !isEmployeeDailyDateTab(sheet.title))
+    || reportTabs[0];
   if (!template || template.sheetId === null || template.sheetId === undefined) throw new Error("Could not find employee report template sheet");
   const duplicateResponse = await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
@@ -1761,13 +1775,20 @@ async function ensureEmployeeDailySheetTab(sheets, spreadsheetId, templateMeta, 
     },
   });
   const createdSheetId = duplicateResponse.data?.replies?.[0]?.duplicateSheet?.properties?.sheetId ?? null;
-  await sheets.spreadsheets.values.clear({
+  const copiedResponse = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${escapeSheetName(dailyTabName)}!A4:Z5`,
-  }).catch(() => {});
-  await sheets.spreadsheets.values.clear({
+    range: `${escapeSheetName(dailyTabName)}!A1:R20`,
+  }).catch(() => ({ data: { values: [] } }));
+  const copiedValues = copiedResponse.data.values || [];
+  const copiedFromFilledDailyTab = isEmployeeDailyDateTab(template.title) && !hasEmployeeTemplateHeader(copiedValues);
+  await sheets.spreadsheets.values.batchClear({
     spreadsheetId,
-    range: `${escapeSheetName(dailyTabName)}!A8:Z1000`,
+    requestBody: {
+      ranges: [
+        `${escapeSheetName(dailyTabName)}!A4:Z5`,
+        `${escapeSheetName(dailyTabName)}!A${copiedFromFilledDailyTab ? 6 : 8}:Z1000`,
+      ],
+    },
   }).catch(() => {});
   return { tabName: dailyTabName, tabId: createdSheetId, created: true };
 }
@@ -1904,6 +1925,16 @@ function findEmployeeTemplateColumns(values = []) {
     tomorrowTick,
     note: detectedNote,
   };
+}
+
+function hasEmployeeTemplateHeader(values = []) {
+  return values.slice(0, 20).some((row = []) => {
+    const labels = new Set(row.map((cell) => projectText(cell).toLowerCase()).filter(Boolean));
+    return (labels.has("client") && labels.has("site"))
+      || labels.has("task type")
+      || labels.has("task status")
+      || [...labels].some((label) => /task\s*description/.test(label));
+  });
 }
 
 function findNextEmployeeTemplateRow(values = [], columns = findEmployeeTemplateColumns(values)) {
@@ -4021,7 +4052,19 @@ app.post("/employee-daily-report", async (req, res) => {
       createdAt: now,
       updatedAt: now,
     };
-    await appendEmployeeReportToSheet({ user: req.user, report, taskItems, waitingTaskItems });
+    let sheetWarning = "";
+    try {
+      await appendEmployeeReportToSheet({ user: req.user, report, taskItems, waitingTaskItems });
+      report.sheetSyncStatus = "synced";
+      report.sheetSyncError = "";
+    } catch (error) {
+      if (error.code === 11000 || error.code === "EMPLOYEE_REPORT_EXISTS") throw error;
+      if (!isEmployeeSheetWritePermissionError(error)) throw error;
+      sheetWarning = `Daily report saved, but Google Sheets rejected the sync for the linked workbook: ${employeeSheetErrorMessage(error)}`;
+      report.sheetSyncStatus = "failed";
+      report.sheetSyncError = employeeSheetErrorMessage(error);
+      console.warn("Employee daily report sheet sync skipped:", req.authUser?.username || userId, report.reportDate, employeeSheetErrorMessage(error));
+    }
     await cacheEmployeeReports(db, [report]);
     await db.collection("employeeCollaborationDrafts").deleteOne({ userId, reportDate: today });
     const userSet = { updatedAt: now };
@@ -4033,7 +4076,7 @@ app.post("/employee-daily-report", async (req, res) => {
     const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
     // Analysis is on-demand only, via the "Employee Report" capability in the Loop assistant
     // DM — it no longer auto-fires for every single report submission.
-    res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }), celebration, executiveQuestions, executiveAnswers });
+    res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }), celebration, executiveQuestions, executiveAnswers, sheetWarning });
   } catch (error) {
     if (error.code === 11000 || error.code === "EMPLOYEE_REPORT_EXISTS") return res.status(409).json({ error: "Today's report is already submitted" });
     if (/link your google sheet|could not open|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });
@@ -4082,7 +4125,19 @@ app.put("/employee-daily-report", async (req, res) => {
       note: projectText(body.note),
       updatedAt: now,
     };
-    report.reportId = await updateEmployeeReportInSheet({ user: req.user, report, taskItems, waitingTaskItems });
+    let sheetWarning = "";
+    try {
+      report.reportId = await updateEmployeeReportInSheet({ user: req.user, report, taskItems, waitingTaskItems });
+      report.sheetSyncStatus = "synced";
+      report.sheetSyncError = "";
+    } catch (error) {
+      if (error.code === "EMPLOYEE_REPORT_NOT_FOUND") throw error;
+      if (!isEmployeeSheetWritePermissionError(error)) throw error;
+      sheetWarning = `Today’s report was updated in the app, but Google Sheets rejected the sync for the linked workbook: ${employeeSheetErrorMessage(error)}`;
+      report.sheetSyncStatus = "failed";
+      report.sheetSyncError = employeeSheetErrorMessage(error);
+      console.warn("Employee daily report sheet update sync skipped:", req.authUser?.username || userId, report.reportDate, employeeSheetErrorMessage(error));
+    }
     await cacheEmployeeReports(db, [report]);
     await db.collection("employeeCollaborationDrafts").deleteOne({ userId, reportDate: today });
     const userSet = { updatedAt: now };
@@ -4091,7 +4146,7 @@ app.put("/employee-daily-report", async (req, res) => {
     await db.collection("users").updateOne({ _id: req.user._id }, { $set: userSet });
     const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
     const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
-    res.json({ success: true, report: sanitizeEmployeeReport(report), executiveQuestions, executiveAnswers });
+    res.json({ success: true, report: sanitizeEmployeeReport(report), executiveQuestions, executiveAnswers, sheetWarning });
   } catch (error) {
     if (error.code === "EMPLOYEE_REPORT_NOT_FOUND") return res.status(404).json({ error: error.message });
     if (/link your google sheet|could not open|permission|not found|no visible sheet/i.test(error.message || "")) return res.status(400).json({ error: error.message });

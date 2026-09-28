@@ -2356,6 +2356,7 @@ export default function EmployeeDailyReport({ darkMode }) {
       } else {
         toast.success("Today’s report updated");
       }
+      if (result.sheetWarning) toast(result.sheetWarning, { duration: 8000 });
       window.dispatchEvent(new Event("uipl:employee-daily-report-submitted"));
       void loadTodayAttendance();
       closeFormDrawer();

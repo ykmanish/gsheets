@@ -557,6 +557,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceAdjustOpen, setAttendanceAdjustOpen] = useState(false);
   const [attendanceAdjustSaving, setAttendanceAdjustSaving] = useState(false);
   const [attendanceAdjustForm, setAttendanceAdjustForm] = useState({ userId: "", date: todayInput(), clockInTime: "10:30", clockOutTime: "19:30", workMode: "office", reason: "" });
+  const [attendanceRequestOpen, setAttendanceRequestOpen] = useState(false);
+  const [attendanceRequestSaving, setAttendanceRequestSaving] = useState(false);
+  const [attendanceRequestMode, setAttendanceRequestMode] = useState("single");
+  const [attendanceRequestRows, setAttendanceRequestRows] = useState([{ date: todayInput(), clockInTime: "10:30", clockOutTime: "19:30", workMode: "office", reason: "" }]);
+  const [attendanceRequestReviewingId, setAttendanceRequestReviewingId] = useState("");
   // The Adjustments drawer holds two unrelated jobs, so it carries a tab rather
   // than a second drawer. "nwd" is the company-holiday list.
   const [adjustTab, setAdjustTab] = useState("time");
@@ -674,6 +679,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
           canManageHr: result.canManageHr ?? current?.canManageHr,
           attendanceSettings: result.settings || current?.attendanceSettings,
           attendanceRecords: result.records || [],
+          attendanceAdjustmentRequests: result.adjustmentRequests || current?.attendanceAdjustmentRequests || [],
           remoteWorkEnabled: result.remoteWorkEnabled ?? current?.remoteWorkEnabled,
           reportExempt: result.reportExempt ?? current?.reportExempt,
         }));
@@ -699,6 +705,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const salarySlips = data?.salarySlips || [];
   const leaveRequests = data?.leaveRequests || [];
   const attendanceRecords = data?.attendanceRecords || [];
+  const attendanceAdjustmentRequests = data?.attendanceAdjustmentRequests || [];
   const attendanceSettings = data?.attendanceSettings || {};
   const canManageSalary = Boolean(data?.canManageHr);
   const currentName = user?.displayName || user?.username || "Employee";
@@ -777,6 +784,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const selectedAttendanceAdjustEmployeeText = selectedAttendanceAdjustEmployee ? `${selectedAttendanceAdjustEmployee.displayName || selectedAttendanceAdjustEmployee.username} · ${selectedAttendanceAdjustEmployee.designation || selectedAttendanceAdjustEmployee.department || selectedAttendanceAdjustEmployee.roleName || "Employee"}` : "";
   const attendanceAdjustmentIsToday = attendanceAdjustForm.date === todayInput();
   const selectedAttendanceAdjustRecord = attendanceRecords.find((record) => String(record.userId || "") === String(attendanceAdjustForm.userId || "") && record.date === attendanceAdjustForm.date);
+  const myAttendanceAdjustmentRequests = attendanceAdjustmentRequests.filter((request) => data?.canManageHr || String(request.userId || "") === String(user?.id || ""));
+  const pendingAttendanceAdjustmentRequests = myAttendanceAdjustmentRequests.filter((request) => request.status === "pending");
 
   const attendanceDateRangeLabel = attendanceDateFilter.startDate && attendanceDateFilter.endDate && attendanceDateFilter.startDate !== attendanceDateFilter.endDate 
     ? `${formatDateLabel(attendanceDateFilter.startDate)} - ${formatDateLabel(attendanceDateFilter.endDate)}` 
@@ -1515,6 +1524,98 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       hrToast.error(error.message || "Could not adjust attendance");
     } finally {
       setAttendanceAdjustSaving(false);
+    }
+  }
+
+  function openAttendanceRequest(record = null, mode = "single") {
+    setAttendanceRequestMode(mode);
+    setAttendanceRequestRows([{
+      date: record?.date || attendanceDateFilter.startDate || todayInput(),
+      clockInTime: timeInputFromDate(record?.clockInAt, "10:30"),
+      clockOutTime: timeInputFromDate(record?.clockOutAt, record?.date === todayInput() ? "" : "19:30"),
+      workMode: record?.workMode || "office",
+      reason: "",
+    }]);
+    setAttendanceRequestOpen(true);
+  }
+
+  function updateAttendanceRequestRow(index, patch) {
+    setAttendanceRequestRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+  }
+
+  function addAttendanceRequestRow() {
+    setAttendanceRequestRows((rows) => [...rows, { date: todayInput(), clockInTime: "10:30", clockOutTime: "19:30", workMode: "office", reason: "" }]);
+  }
+
+  function removeAttendanceRequestRow(index) {
+    setAttendanceRequestRows((rows) => rows.length === 1 ? rows : rows.filter((_, rowIndex) => rowIndex !== index));
+  }
+
+  async function submitAttendanceAdjustmentRequest(event) {
+    event.preventDefault();
+    const rows = attendanceRequestRows.filter((row) => row.date || row.clockInTime || row.clockOutTime || row.reason);
+    if (!rows.length) {
+      hrToast.error("Add at least one adjustment row");
+      return;
+    }
+    try {
+      setAttendanceRequestSaving(true);
+      const response = await fetch(`${API_URL}/hr/attendance/adjustment-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: attendanceRequestMode === "bulk" ? rows : rows.slice(0, 1) }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not submit adjustment request");
+      setData((current) => ({
+        ...(current || {}),
+        attendanceAdjustmentRequests: [result.request, ...(current?.attendanceAdjustmentRequests || [])],
+      }));
+      setAttendanceRequestOpen(false);
+      setAttendanceRequestRows([{ date: todayInput(), clockInTime: "10:30", clockOutTime: "19:30", workMode: "office", reason: "" }]);
+      hrToast.success("Adjustment request sent");
+    } catch (error) {
+      hrToast.error(error.message || "Could not submit adjustment request");
+    } finally {
+      setAttendanceRequestSaving(false);
+    }
+  }
+
+  async function validateAttendanceAdjustmentRequest(request) {
+    if (!request?.id || attendanceRequestReviewingId) return;
+    try {
+      setAttendanceRequestReviewingId(request.id);
+      const response = await fetch(`${API_URL}/hr/attendance/adjustment-requests/${request.id}/validate`, { method: "PATCH" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not validate request");
+      setData((current) => {
+        const records = current?.attendanceRecords || [];
+        const nextRecords = [...records];
+        (result.records || []).forEach((record) => {
+          const index = nextRecords.findIndex((item) => item.id === record.id || (item.userId === record.userId && item.date === record.date));
+          if (index >= 0) nextRecords[index] = record;
+          else nextRecords.unshift(record);
+        });
+        return {
+          ...(current || {}),
+          attendanceRecords: nextRecords,
+          attendanceAdjustmentRequests: (current?.attendanceAdjustmentRequests || []).map((item) => item.id === result.request?.id ? result.request : item),
+        };
+      });
+      if (result.records?.length) {
+        setAttendanceDateFilter((current) => {
+          const dates = result.records.map((record) => record.date).filter(Boolean).sort();
+          return {
+            startDate: !current.startDate || dates[0] < current.startDate ? dates[0] : current.startDate,
+            endDate: !current.endDate || dates[dates.length - 1] > current.endDate ? dates[dates.length - 1] : current.endDate,
+          };
+        });
+      }
+      hrToast.success("Adjustment request validated");
+    } catch (error) {
+      hrToast.error(error.message || "Could not validate request");
+    } finally {
+      setAttendanceRequestReviewingId("");
     }
   }
 
@@ -2296,6 +2397,9 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               <button onClick={loadHr} disabled={loading} className={`flex h-12 items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/[0.08] bg-[#0f151c] text-slate-100 hover:border-emerald-300/25 hover:bg-[#141b24]" : "border-[#e1e5df] bg-white text-slate-700 hover:bg-[#fbfcf7]"}`}>
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
               </button>
+              <button type="button" onClick={() => openAttendanceRequest()} className={`flex h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-sky-400/14 text-sky-200 hover:bg-sky-400/20" : "bg-sky-50 text-sky-700 hover:bg-sky-100"}`}>
+                <MessageSquare className="h-4 w-4" /> Request adjustment
+              </button>
               {data?.canManageHr && (
                 <>
                   <button type="button" onClick={() => { setAdjustTab("time"); openAttendanceAdjustment(); }} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#171714] px-5 text-sm font-bold text-white">
@@ -2305,6 +2409,9 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     <SlidersHorizontal className="h-4 w-4" /> Settings
                   </button>
                 </>
+              )}
+              {!!pendingAttendanceAdjustmentRequests.length && (
+                <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-50 text-amber-700"}`}>{pendingAttendanceAdjustmentRequests.length} pending</span>
               )}
               <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{filteredAttendanceRecords.length} record{filteredAttendanceRecords.length === 1 ? "" : "s"}</span>
             </div>
@@ -2359,6 +2466,49 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     )}
                   </div>
                 </div>
+              </div>
+
+              <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/[0.06] bg-[#0c1117]" : "bg-[#fbfcf9]"}`}>
+                <div className={`flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "border-white/[0.06]" : "border-[#edf0ea]"}`}>
+                  <div>
+                    <p className="text-sm font-black">{data?.canManageHr ? "Adjustment requests" : "My adjustment requests"}</p>
+                    <p className={`mt-1 text-xs ${muted}`}>{data?.canManageHr ? "Validate employee requests to update attendance records." : "Requests stay pending until HR validates them."}</p>
+                  </div>
+                  <button type="button" onClick={() => openAttendanceRequest(null, "bulk")} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                    <Plus className="h-4 w-4" /> Bulk request
+                  </button>
+                </div>
+                {myAttendanceAdjustmentRequests.length ? (
+                  <div className="grid gap-2 p-4">
+                    {myAttendanceAdjustmentRequests.slice(0, 8).map((request) => {
+                      const firstItem = request.items?.[0] || {};
+                      const statusTone = request.status === "approved"
+                        ? darkMode ? "bg-emerald-300/12 text-emerald-200" : "bg-[#e7f6ed] text-[#08764f]"
+                        : darkMode ? "bg-amber-300/12 text-amber-200" : "bg-amber-50 text-amber-700";
+                      return (
+                        <div key={request.id} className={`flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-black">{data?.canManageHr ? request.employeeName : `${request.items?.length || 0} adjustment row${request.items?.length === 1 ? "" : "s"}`}</p>
+                              <span className={`rounded-full px-3 py-1 text-[11px] font-black capitalize ${statusTone}`}>{request.status}</span>
+                            </div>
+                            <p className={`mt-1 text-xs ${muted}`}>
+                              {firstItem.date ? formatDateLabel(firstItem.date) : "No date"} · {firstItem.clockInTime ? displayTimeInput(firstItem.clockInTime) : "-"}{firstItem.clockOutTime ? ` - ${displayTimeInput(firstItem.clockOutTime)}` : ""}
+                              {(request.items?.length || 0) > 1 ? ` · +${request.items.length - 1} more` : ""}
+                            </p>
+                          </div>
+                          {data?.canManageHr && request.status === "pending" && (
+                            <button type="button" onClick={() => validateAttendanceAdjustmentRequest(request)} disabled={Boolean(attendanceRequestReviewingId)} className="flex h-10 items-center justify-center gap-2 rounded-full bg-[#6ee72f] px-5 text-sm font-black text-[#10210c] disabled:opacity-60">
+                              {attendanceRequestReviewingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Validate
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className={`px-5 py-8 text-center text-sm ${muted}`}>No adjustment requests yet.</p>
+                )}
               </div>
 
               <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/[0.06] bg-[#0c1117]" : "bg-[#fbfcf9]"}`}>
@@ -2476,6 +2626,91 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
             </div>
           </div>
         </section>
+      )}
+
+      {attendanceRequestOpen && (
+        <div onMouseDown={() => setAttendanceRequestOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
+          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={submitAttendanceAdjustmentRequest} className={`employee-report-drawer relative flex h-full w-full max-w-2xl flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.32)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`}>
+            <div className={`flex items-start justify-between border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <div>
+                <h2 className="text-xl font-black">Attendance adjustment request</h2>
+                <p className={`mt-1 text-xs ${muted}`}>Send corrected clock in and clock out time to HR for validation.</p>
+                <div className={`mt-3 inline-flex rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f2f4f0]"}`}>
+                  {[{ id: "single", label: "Single" }, { id: "bulk", label: "Bulk" }].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setAttendanceRequestMode(tab.id)}
+                      className={`h-8 rounded-full px-4 text-xs font-bold transition ${attendanceRequestMode === tab.id ? "bg-[#171714] text-white" : darkMode ? "text-white/60" : "text-slate-600"}`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button type="button" onClick={() => setAttendanceRequestOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
+            </div>
+            <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
+              <div className="grid gap-4">
+                {(attendanceRequestMode === "bulk" ? attendanceRequestRows : attendanceRequestRows.slice(0, 1)).map((row, index) => (
+                  <section key={index} className={`rounded-[26px] border p-4 sm:p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black">Adjustment {index + 1}</p>
+                        <p className={`mt-1 text-xs ${muted}`}>{row.date ? formatDateLabel(row.date) : "Select date"}</p>
+                      </div>
+                      {attendanceRequestMode === "bulk" && attendanceRequestRows.length > 1 && (
+                        <button type="button" onClick={() => removeAttendanceRequestRow(index)} className={`grid h-9 w-9 place-items-center rounded-xl ${darkMode ? "bg-rose-400/10 text-rose-200 hover:bg-rose-400/20" : "bg-rose-50 text-rose-600 hover:bg-rose-100"}`} title="Remove row">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-xs font-medium text-black/65 dark:text-white/60">Date *
+                        <input
+                          type="date"
+                          value={row.date}
+                          onChange={(event) => updateAttendanceRequestRow(index, { date: event.target.value })}
+                          className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.045] text-white" : "border-black/10 bg-white text-[#171714]"}`}
+                        />
+                      </label>
+                      <DrawerSelect
+                        darkMode={darkMode}
+                        label="Work mode"
+                        value={row.workMode === "remote" ? "Remote" : "Office"}
+                        placeholder="Select work mode"
+                        options={["Office", "Remote"]}
+                        onChange={(workMode) => updateAttendanceRequestRow(index, { workMode: workMode.toLowerCase() })}
+                      />
+                      <AttendanceTimePicker darkMode={darkMode} label="Clock in" value={row.clockInTime} onChange={(clockInTime) => updateAttendanceRequestRow(index, { clockInTime })} />
+                      <AttendanceTimePicker darkMode={darkMode} label="Clock out" value={row.clockOutTime} onChange={(clockOutTime) => updateAttendanceRequestRow(index, { clockOutTime })} emptyLabel={row.date === todayInput() ? "Optional today" : "No record"} />
+                    </div>
+                    <label className="mt-4 block text-xs font-medium text-black/65 dark:text-white/60">Reason / note
+                      <textarea
+                        value={row.reason}
+                        onChange={(event) => updateAttendanceRequestRow(index, { reason: event.target.value })}
+                        rows={3}
+                        placeholder="Example: Forgot to clock out after site visit."
+                        className={`mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-sm font-semibold leading-6 outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:ring-2 focus:ring-emerald-300/20" : "border-black/10 bg-white text-[#171714] placeholder:text-black/35 focus:ring-2 focus:ring-[#6ee72f]/20"}`}
+                      />
+                    </label>
+                  </section>
+                ))}
+                {attendanceRequestMode === "bulk" && (
+                  <button type="button" onClick={addAttendanceRequestRow} className={`flex h-11 w-fit items-center gap-2 rounded-2xl border px-5 text-sm font-black ${darkMode ? "border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/70 hover:bg-[#f6faf2]"}`}>
+                    <Plus className="h-4 w-4" /> Add another date
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className={`flex shrink-0 items-center justify-between gap-4 border-t px-6 py-5 ${darkMode ? "border-white/[0.07] bg-[#080c11]" : "border-black/10 bg-white"}`}>
+              <button type="button" onClick={() => setAttendanceRequestOpen(false)} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
+              <button disabled={attendanceRequestSaving || !attendanceRequestRows[0]?.date || !attendanceRequestRows[0]?.clockInTime} className="h-11 min-w-[180px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">
+                {attendanceRequestSaving ? "Sending..." : "Send request"}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {attendanceAdjustOpen && (

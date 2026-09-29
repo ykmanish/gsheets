@@ -2666,14 +2666,13 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       )}
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="block text-xs font-medium text-black/65 dark:text-white/60">Date *
-                        <input
-                          type="date"
-                          value={row.date}
-                          onChange={(event) => updateAttendanceRequestRow(index, { date: event.target.value })}
-                          className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.045] text-white" : "border-black/10 bg-white text-[#171714]"}`}
-                        />
-                      </label>
+                      <DrawerDatePicker
+                        darkMode={darkMode}
+                        label="Date"
+                        value={row.date}
+                        placeholder="Select attendance date"
+                        onChange={(date) => updateAttendanceRequestRow(index, { date })}
+                      />
                       <DrawerSelect
                         darkMode={darkMode}
                         label="Work mode"

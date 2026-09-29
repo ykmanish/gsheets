@@ -1529,14 +1529,27 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
   function openAttendanceRequest(record = null, mode = "single") {
     setAttendanceRequestMode(mode);
+    const date = record?.date || attendanceDateFilter.startDate || todayInput();
+    const patch = record ? {
+      clockInTime: timeInputFromDate(record.clockInAt, "10:30"),
+      clockOutTime: timeInputFromDate(record.clockOutAt, record.date === todayInput() ? "" : "19:30"),
+      workMode: record.workMode || "office",
+    } : attendanceRequestPatch(date);
     setAttendanceRequestRows([{
-      date: record?.date || attendanceDateFilter.startDate || todayInput(),
-      clockInTime: timeInputFromDate(record?.clockInAt, "10:30"),
-      clockOutTime: timeInputFromDate(record?.clockOutAt, record?.date === todayInput() ? "" : "19:30"),
-      workMode: record?.workMode || "office",
+      date,
+      ...patch,
       reason: "",
     }]);
     setAttendanceRequestOpen(true);
+  }
+
+  function attendanceRequestPatch(date) {
+    const record = attendanceRecords.find((item) => String(item.userId || "") === String(user?.id || "") && item.date === date);
+    return {
+      clockInTime: timeInputFromDate(record?.clockInAt, "10:30"),
+      clockOutTime: timeInputFromDate(record?.clockOutAt, date === todayInput() ? "" : "19:30"),
+      workMode: record?.workMode || "office",
+    };
   }
 
   function updateAttendanceRequestRow(index, patch) {
@@ -1544,7 +1557,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   }
 
   function addAttendanceRequestRow() {
-    setAttendanceRequestRows((rows) => [...rows, { date: todayInput(), clockInTime: "10:30", clockOutTime: "19:30", workMode: "office", reason: "" }]);
+    const date = todayInput();
+    setAttendanceRequestRows((rows) => [...rows, { date, ...attendanceRequestPatch(date), reason: "" }]);
   }
 
   function removeAttendanceRequestRow(index) {
@@ -2671,7 +2685,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         label="Date"
                         value={row.date}
                         placeholder="Select attendance date"
-                        onChange={(date) => updateAttendanceRequestRow(index, { date })}
+                        onChange={(date) => updateAttendanceRequestRow(index, { date, ...attendanceRequestPatch(date) })}
                       />
                       <DrawerSelect
                         darkMode={darkMode}

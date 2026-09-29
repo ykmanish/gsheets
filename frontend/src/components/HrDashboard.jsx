@@ -1478,15 +1478,18 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
   function openAttendanceAdjustment(record = null) {
     const fallbackEmployee = activeEmployees[0];
+    const userId = record?.userId || fallbackEmployee?.id || "";
+    const date = record?.date || attendanceDateFilter.startDate || todayInput();
     setAttendanceAdjustForm({
-      userId: record?.userId || fallbackEmployee?.id || "",
-      date: record?.date || attendanceDateFilter.startDate || todayInput(),
+      userId,
+      date,
       clockInTime: timeInputFromDate(record?.clockInAt, "10:30"),
       clockOutTime: timeInputFromDate(record?.clockOutAt, "19:30"),
       workMode: record?.workMode || "office",
       reason: "",
     });
     setAttendanceAdjustOpen(true);
+    if (!record) void applyAttendanceAdjustmentDate(userId, date);
   }
 
   function attendanceAdjustmentPatch(userId, date) {
@@ -1495,6 +1498,39 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       clockInTime: timeInputFromDate(record?.clockInAt, ""),
       clockOutTime: timeInputFromDate(record?.clockOutAt, ""),
       workMode: record?.workMode || "office",
+    };
+  }
+
+  async function fetchAttendanceRecordForDate(userId, date) {
+    if (!userId || !date) return null;
+    const localRecord = attendanceRecords.find((item) => String(item.userId || "") === String(userId || "") && item.date === date);
+    if (localRecord) return localRecord;
+    const params = new URLSearchParams({ startDate: date, endDate: date });
+    const result = await api(`/hr/attendance?${params.toString()}`);
+    const records = result.records || [];
+    return records.find((item) => String(item.userId || "") === String(userId || "") && item.date === date) || null;
+  }
+
+  async function applyAttendanceAdjustmentDate(userId, date) {
+    setAttendanceAdjustForm((current) => ({ ...current, userId, date, ...attendanceAdjustmentPatch(userId, date) }));
+    try {
+      const record = await fetchAttendanceRecordForDate(userId, date);
+      if (!record) return;
+      setAttendanceAdjustForm((current) => {
+        if (String(current.userId || "") !== String(userId || "") || current.date !== date) return current;
+        return { ...current, ...attendanceAdjustmentPatchFromRecord(record) };
+      });
+      mergeAttendanceRecord(record);
+    } catch {
+      // The local patch still gives a usable form if the one-day lookup fails.
+    }
+  }
+
+  function attendanceAdjustmentPatchFromRecord(record = {}) {
+    return {
+      clockInTime: timeInputFromDate(record.clockInAt, ""),
+      clockOutTime: timeInputFromDate(record.clockOutAt, ""),
+      workMode: record.workMode || "office",
     };
   }
 
@@ -1541,6 +1577,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       reason: "",
     }]);
     setAttendanceRequestOpen(true);
+    if (!record) void applyAttendanceRequestDate(0, date);
   }
 
   function attendanceRequestPatch(date) {
@@ -1552,8 +1589,32 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     };
   }
 
+  function attendanceRequestPatchFromRecord(record = {}, date = "") {
+    return {
+      clockInTime: timeInputFromDate(record.clockInAt, "10:30"),
+      clockOutTime: timeInputFromDate(record.clockOutAt, date === todayInput() ? "" : "19:30"),
+      workMode: record.workMode || "office",
+    };
+  }
+
   function updateAttendanceRequestRow(index, patch) {
     setAttendanceRequestRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+  }
+
+  async function applyAttendanceRequestDate(index, date) {
+    updateAttendanceRequestRow(index, { date, ...attendanceRequestPatch(date) });
+    try {
+      const record = await fetchAttendanceRecordForDate(user?.id, date);
+      if (!record) return;
+      setAttendanceRequestRows((rows) => rows.map((row, rowIndex) => (
+        rowIndex === index && row.date === date
+          ? { ...row, ...attendanceRequestPatchFromRecord(record, date) }
+          : row
+      )));
+      mergeAttendanceRecord(record);
+    } catch {
+      // Keep the local/default times if the one-day lookup fails.
+    }
   }
 
   function addAttendanceRequestRow() {
@@ -2685,7 +2746,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         label="Date"
                         value={row.date}
                         placeholder="Select attendance date"
-                        onChange={(date) => updateAttendanceRequestRow(index, { date, ...attendanceRequestPatch(date) })}
+                        onChange={(date) => { void applyAttendanceRequestDate(index, date); }}
                       />
                       <DrawerSelect
                         darkMode={darkMode}
@@ -2855,6 +2916,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         const userId = employee?.id || "";
                         return { ...current, userId, ...attendanceAdjustmentPatch(userId, current.date) };
                       });
+                      void applyAttendanceAdjustmentDate(userId, attendanceAdjustForm.date);
                     }}
                   />
                   <DrawerDatePicker
@@ -2862,7 +2924,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     label="Date"
                     value={attendanceAdjustForm.date}
                     placeholder="Select attendance date"
-                    onChange={(date) => setAttendanceAdjustForm((current) => ({ ...current, date, ...attendanceAdjustmentPatch(current.userId, date) }))}
+                    onChange={(date) => { void applyAttendanceAdjustmentDate(attendanceAdjustForm.userId, date); }}
                   />
                   <div className={`grid gap-3 ${attendanceAdjustmentIsToday ? "" : "sm:grid-cols-2"}`}>
                     <AttendanceTimePicker darkMode={darkMode} label="Clock in" value={attendanceAdjustForm.clockInTime} onChange={(clockInTime) => setAttendanceAdjustForm((current) => ({ ...current, clockInTime }))} />

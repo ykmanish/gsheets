@@ -2606,51 +2606,6 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </div>
 
               <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/[0.06] bg-[#0c1117]" : "bg-[#fbfcf9]"}`}>
-                <div className={`flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "border-white/[0.06]" : "border-[#edf0ea]"}`}>
-                  <div>
-                    <p className="text-sm font-black">{data?.canManageHr ? "Adjustment requests" : "My adjustment requests"}</p>
-                    <p className={`mt-1 text-xs ${muted}`}>{data?.canManageHr ? "Validate employee requests to update attendance records." : "Requests stay pending until HR validates them."}</p>
-                  </div>
-                  {!data?.canManageHr && (
-                    <button type="button" onClick={() => openAttendanceRequest(null, "bulk")} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
-                      <Plus className="h-4 w-4" /> Bulk request
-                    </button>
-                  )}
-                </div>
-                {myAttendanceAdjustmentRequests.length ? (
-                  <div className="grid gap-2 p-4">
-                    {myAttendanceAdjustmentRequests.slice(0, 8).map((request) => {
-                      const firstItem = request.items?.[0] || {};
-                      const statusTone = request.status === "approved"
-                        ? darkMode ? "bg-emerald-300/12 text-emerald-200" : "bg-[#e7f6ed] text-[#08764f]"
-                        : darkMode ? "bg-amber-300/12 text-amber-200" : "bg-amber-50 text-amber-700";
-                      return (
-                        <div key={request.id} className={`flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-black">{data?.canManageHr ? request.employeeName : `${request.items?.length || 0} adjustment row${request.items?.length === 1 ? "" : "s"}`}</p>
-                              <span className={`rounded-full px-3 py-1 text-[11px] font-black capitalize ${statusTone}`}>{request.status}</span>
-                            </div>
-                            <p className={`mt-1 text-xs ${muted}`}>
-                              {firstItem.date ? formatDateLabel(firstItem.date) : "No date"} · {firstItem.clockInTime ? displayTimeInput(firstItem.clockInTime) : "-"}{firstItem.clockOutTime ? ` - ${displayTimeInput(firstItem.clockOutTime)}` : ""}
-                              {(request.items?.length || 0) > 1 ? ` · +${request.items.length - 1} more` : ""}
-                            </p>
-                          </div>
-                          {data?.canManageHr && request.status === "pending" && (
-                            <button type="button" onClick={() => validateAttendanceAdjustmentRequest(request)} disabled={Boolean(attendanceRequestReviewingId)} className="flex h-10 items-center justify-center gap-2 rounded-full bg-[#6ee72f] px-5 text-sm font-black text-[#10210c] disabled:opacity-60">
-                              {attendanceRequestReviewingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Validate
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className={`px-5 py-8 text-center text-sm ${muted}`}>No adjustment requests yet.</p>
-                )}
-              </div>
-
-              <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/[0.06] bg-[#0c1117]" : "bg-[#fbfcf9]"}`}>
                 <div className={`flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-end sm:justify-between ${darkMode ? "border-white/[0.06]" : "border-[#edf0ea]"}`}>
                   <div>
                     <p className="text-sm font-black">Attendance records</p>
@@ -2761,6 +2716,51 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/[0.06] bg-[#0c1117]" : "bg-[#fbfcf9]"}`}>
+                <div className={`flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "border-white/[0.06]" : "border-[#edf0ea]"}`}>
+                  <div>
+                    <p className="text-sm font-black">{data?.canManageHr ? "Adjustment requests" : "My adjustment requests"}</p>
+                    <p className={`mt-1 text-xs ${muted}`}>{data?.canManageHr ? "Validate employee requests to update attendance records." : "Requests stay pending until HR validates them."}</p>
+                  </div>
+                  {!data?.canManageHr && (
+                    <button type="button" onClick={() => openAttendanceRequest(null, "bulk")} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                      <Plus className="h-4 w-4" /> Bulk request
+                    </button>
+                  )}
+                </div>
+                {myAttendanceAdjustmentRequests.length ? (
+                  <div className="grid gap-2 p-4">
+                    {myAttendanceAdjustmentRequests.slice(0, 8).map((request) => {
+                      const firstItem = request.items?.[0] || {};
+                      const statusTone = request.status === "approved"
+                        ? darkMode ? "bg-emerald-300/12 text-emerald-200" : "bg-[#e7f6ed] text-[#08764f]"
+                        : darkMode ? "bg-amber-300/12 text-amber-200" : "bg-amber-50 text-amber-700";
+                      return (
+                        <div key={request.id} className={`flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-black">{data?.canManageHr ? request.employeeName : `${request.items?.length || 0} adjustment row${request.items?.length === 1 ? "" : "s"}`}</p>
+                              <span className={`rounded-full px-3 py-1 text-[11px] font-black capitalize ${statusTone}`}>{request.status}</span>
+                            </div>
+                            <p className={`mt-1 text-xs ${muted}`}>
+                              {firstItem.date ? formatDateLabel(firstItem.date) : "No date"} · {firstItem.clockInTime ? displayTimeInput(firstItem.clockInTime) : "-"}{firstItem.clockOutTime ? ` - ${displayTimeInput(firstItem.clockOutTime)}` : ""}
+                              {(request.items?.length || 0) > 1 ? ` · +${request.items.length - 1} more` : ""}
+                            </p>
+                          </div>
+                          {data?.canManageHr && request.status === "pending" && (
+                            <button type="button" onClick={() => validateAttendanceAdjustmentRequest(request)} disabled={Boolean(attendanceRequestReviewingId)} className="flex h-10 items-center justify-center gap-2 rounded-full bg-[#6ee72f] px-5 text-sm font-black text-[#10210c] disabled:opacity-60">
+                              {attendanceRequestReviewingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Validate
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className={`px-5 py-8 text-center text-sm ${muted}`}>No adjustment requests yet.</p>
+                )}
               </div>
             </div>
           </div>

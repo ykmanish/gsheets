@@ -564,6 +564,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const [attendanceRequestMode, setAttendanceRequestMode] = useState("single");
   const [attendanceRequestRows, setAttendanceRequestRows] = useState([{ date: todayInput(), clockInTime: "10:30", clockOutTime: "19:30", workMode: "office", reason: "" }]);
   const [attendanceRequestReviewingId, setAttendanceRequestReviewingId] = useState("");
+  const [attendanceRequestHistoryOpen, setAttendanceRequestHistoryOpen] = useState(false);
   // The Adjustments drawer holds two unrelated jobs, so it carries a tab rather
   // than a second drawer. "nwd" is the company-holiday list.
   const [adjustTab, setAdjustTab] = useState("time");
@@ -2221,6 +2222,34 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     return darkMode ? "bg-white/10" : "bg-black/10";
   }
 
+  function renderAttendanceAdjustmentRequest(request, { compact = false } = {}) {
+    const firstItem = request.items?.[0] || {};
+    const statusTone = request.status === "approved"
+      ? darkMode ? "bg-emerald-300/12 text-emerald-200" : "bg-[#e7f6ed] text-[#08764f]"
+      : request.status === "declined"
+        ? darkMode ? "bg-red-300/12 text-red-200" : "bg-red-50 text-red-700"
+        : darkMode ? "bg-amber-300/12 text-amber-200" : "bg-amber-50 text-amber-700";
+    return (
+      <div key={request.id} className={`flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "bg-white/[0.04]" : "bg-white"} ${compact ? darkMode ? "border border-amber-300/15" : "border border-amber-100" : ""}`}>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-black">{data?.canManageHr ? request.employeeName : `${request.items?.length || 0} adjustment row${request.items?.length === 1 ? "" : "s"}`}</p>
+            <span className={`rounded-full px-3 py-1 text-[11px] font-black capitalize ${statusTone}`}>{request.status}</span>
+          </div>
+          <p className={`mt-1 text-xs ${muted}`}>
+            {firstItem.date ? formatDateLabel(firstItem.date) : "No date"} · {firstItem.clockInTime ? displayTimeInput(firstItem.clockInTime) : "-"}{firstItem.clockOutTime ? ` - ${displayTimeInput(firstItem.clockOutTime)}` : ""}
+            {(request.items?.length || 0) > 1 ? ` · +${request.items.length - 1} more` : ""}
+          </p>
+        </div>
+        {data?.canManageHr && request.status === "pending" && (
+          <button type="button" onClick={() => validateAttendanceAdjustmentRequest(request)} disabled={Boolean(attendanceRequestReviewingId)} className="flex h-10 items-center justify-center gap-2 rounded-full bg-[#6ee72f] px-5 text-sm font-black text-[#10210c] disabled:opacity-60">
+            {attendanceRequestReviewingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Validate
+          </button>
+        )}
+      </div>
+    );
+  }
+
   const hero = {
     dashboard: {
       eyebrow: "HR Workspace",
@@ -2547,9 +2576,9 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                   </button>
                 </>
               )}
-              {!!pendingAttendanceAdjustmentRequests.length && (
-                <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-50 text-amber-700"}`}>{pendingAttendanceAdjustmentRequests.length} pending</span>
-              )}
+              <button type="button" onClick={() => setAttendanceRequestHistoryOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-bold transition ${pendingAttendanceAdjustmentRequests.length ? darkMode ? "bg-amber-300/14 text-amber-200 hover:bg-amber-300/20" : "bg-amber-50 text-amber-700 hover:bg-amber-100" : darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/[0.1]" : "bg-[#f2ece5] text-[#6f6258] hover:bg-[#ebe3da]"}`}>
+                <MessageCircle className="h-4 w-4" /> {pendingAttendanceAdjustmentRequests.length ? `${pendingAttendanceAdjustmentRequests.length} pending` : "Request history"}
+              </button>
               <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{filteredAttendanceRecords.length} record{filteredAttendanceRecords.length === 1 ? "" : "s"}</span>
             </div>
           </div>
@@ -2661,6 +2690,22 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     )}
                   </div>
                 </div>
+                {!!pendingAttendanceAdjustmentRequests.length && (
+                  <div className={`border-b px-5 py-4 ${darkMode ? "border-white/[0.06] bg-amber-300/[0.035]" : "border-[#edf0ea] bg-[#fffaf0]"}`}>
+                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-black">New attendance adjustment request{pendingAttendanceAdjustmentRequests.length === 1 ? "" : "s"}</p>
+                        <p className={`mt-1 text-xs ${muted}`}>{pendingAttendanceAdjustmentRequests.length} request{pendingAttendanceAdjustmentRequests.length === 1 ? "" : "s"} waiting for validation.</p>
+                      </div>
+                      <button type="button" onClick={() => setAttendanceRequestHistoryOpen(true)} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-amber-300/20 bg-amber-300/10 text-amber-100 hover:bg-amber-300/15" : "border-amber-100 bg-white text-amber-700 hover:bg-amber-50"}`}>
+                        <Eye className="h-4 w-4" /> View history
+                      </button>
+                    </div>
+                    <div className="grid gap-2">
+                      {pendingAttendanceAdjustmentRequests.slice(0, 3).map((request) => renderAttendanceAdjustmentRequest(request, { compact: true }))}
+                    </div>
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
@@ -2718,53 +2763,43 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 </div>
               </div>
 
-              <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/[0.06] bg-[#0c1117]" : "bg-[#fbfcf9]"}`}>
-                <div className={`flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "border-white/[0.06]" : "border-[#edf0ea]"}`}>
-                  <div>
-                    <p className="text-sm font-black">{data?.canManageHr ? "Adjustment requests" : "My adjustment requests"}</p>
-                    <p className={`mt-1 text-xs ${muted}`}>{data?.canManageHr ? "Validate employee requests to update attendance records." : "Requests stay pending until HR validates them."}</p>
-                  </div>
-                  {!data?.canManageHr && (
-                    <button type="button" onClick={() => openAttendanceRequest(null, "bulk")} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
-                      <Plus className="h-4 w-4" /> Bulk request
-                    </button>
-                  )}
-                </div>
-                {myAttendanceAdjustmentRequests.length ? (
-                  <div className="grid gap-2 p-4">
-                    {myAttendanceAdjustmentRequests.slice(0, 8).map((request) => {
-                      const firstItem = request.items?.[0] || {};
-                      const statusTone = request.status === "approved"
-                        ? darkMode ? "bg-emerald-300/12 text-emerald-200" : "bg-[#e7f6ed] text-[#08764f]"
-                        : darkMode ? "bg-amber-300/12 text-amber-200" : "bg-amber-50 text-amber-700";
-                      return (
-                        <div key={request.id} className={`flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-black">{data?.canManageHr ? request.employeeName : `${request.items?.length || 0} adjustment row${request.items?.length === 1 ? "" : "s"}`}</p>
-                              <span className={`rounded-full px-3 py-1 text-[11px] font-black capitalize ${statusTone}`}>{request.status}</span>
-                            </div>
-                            <p className={`mt-1 text-xs ${muted}`}>
-                              {firstItem.date ? formatDateLabel(firstItem.date) : "No date"} · {firstItem.clockInTime ? displayTimeInput(firstItem.clockInTime) : "-"}{firstItem.clockOutTime ? ` - ${displayTimeInput(firstItem.clockOutTime)}` : ""}
-                              {(request.items?.length || 0) > 1 ? ` · +${request.items.length - 1} more` : ""}
-                            </p>
-                          </div>
-                          {data?.canManageHr && request.status === "pending" && (
-                            <button type="button" onClick={() => validateAttendanceAdjustmentRequest(request)} disabled={Boolean(attendanceRequestReviewingId)} className="flex h-10 items-center justify-center gap-2 rounded-full bg-[#6ee72f] px-5 text-sm font-black text-[#10210c] disabled:opacity-60">
-                              {attendanceRequestReviewingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Validate
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className={`px-5 py-8 text-center text-sm ${muted}`}>No adjustment requests yet.</p>
-                )}
-              </div>
             </div>
           </div>
         </section>
+      )}
+
+      {attendanceRequestHistoryOpen && (
+        <div onMouseDown={() => setAttendanceRequestHistoryOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
+          <aside onMouseDown={(event) => event.stopPropagation()} className={`employee-report-drawer hr-request-history-drawer relative flex h-full w-full flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.32)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`} role="dialog" aria-modal="true" aria-label="Attendance adjustment request history">
+            <div className={`flex items-start justify-between gap-4 border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <div>
+                <h2 className="text-xl font-black">{data?.canManageHr ? "Adjustment request history" : "My adjustment requests"}</h2>
+                <p className={`mt-1 text-xs ${muted}`}>{data?.canManageHr ? "Review pending and past employee attendance update requests." : "Track every attendance correction request you have sent to HR."}</p>
+              </div>
+              <button type="button" onClick={() => setAttendanceRequestHistoryOpen(false)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
+            </div>
+            <div className={`flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-5 py-4 ${darkMode ? "border-white/10 bg-[#0d131a]" : "border-black/10 bg-[#f7f8f4]"}`}>
+              <div className="flex flex-wrap gap-2">
+                <span className={`rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-50 text-amber-700"}`}>{pendingAttendanceAdjustmentRequests.length} pending</span>
+                <span className={`rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{myAttendanceAdjustmentRequests.length} total</span>
+              </div>
+              {!data?.canManageHr && (
+                <button type="button" onClick={() => { setAttendanceRequestHistoryOpen(false); openAttendanceRequest(null, "bulk"); }} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                  <Plus className="h-4 w-4" /> Bulk request
+                </button>
+              )}
+            </div>
+            <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
+              {myAttendanceAdjustmentRequests.length ? (
+                <div className="grid gap-2">
+                  {myAttendanceAdjustmentRequests.map((request) => renderAttendanceAdjustmentRequest(request))}
+                </div>
+              ) : (
+                <EmptyState darkMode={darkMode} icon={MessageSquare} title="No adjustment requests yet" text={data?.canManageHr ? "New attendance correction requests will appear here." : "Use Request adjustment to send a correction to HR."} />
+              )}
+            </div>
+          </aside>
+        </div>
       )}
 
       {attendanceRequestOpen && (

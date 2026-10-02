@@ -193,6 +193,12 @@ function GlyphLabel({ text: label }) {
   return <text x="20" y="35" textAnchor="middle" fontSize={label.length > 3 ? 7.5 : 9} fontWeight="800" fill="#fff" fontFamily="system-ui, -apple-system, Segoe UI, sans-serif">{label}</text>;
 }
 
+function initialsFor(name = "") {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
 // Drawn file-type logos: a folded page tinted per type, with a white mark inside.
 function FileGlyph({ doc, className = "h-12 w-10" }) {
   const kind = fileKind(doc);
@@ -871,7 +877,7 @@ function readStoredView() {
   }
 }
 
-function Pill({ darkMode, variant = "green", icon: Icon, children }) {
+function Pill({ darkMode, variant = "green", icon: Icon, children, as = "span", className = "", ...props }) {
   const light = {
     green: "bg-[#e8f6ee] text-[#0f6b49]",
     yellow: "bg-[#fff4a8] text-[#5b4b00]",
@@ -884,10 +890,11 @@ function Pill({ darkMode, variant = "green", icon: Icon, children }) {
     pink: "bg-pink-400/14 text-pink-200",
     blue: "bg-sky-400/12 text-sky-200",
   }[variant];
+  const Element = as;
   return (
-    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${darkMode ? dark : light}`}>
+    <Element className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition ${as === "button" ? "hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-[#10a66b]/25 active:scale-[0.98]" : ""} ${darkMode ? dark : light} ${className}`} {...props}>
       {Icon && <Icon className="h-3.5 w-3.5" />} {children}
-    </span>
+    </Element>
   );
 }
 
@@ -968,6 +975,54 @@ function memberSummary(department) {
   const names = (department.members || []).map((member) => member.name.split(" ")[0]);
   if (!names.length) return "No members yet";
   return names.length > 3 ? `${names.slice(0, 3).join(" • ")} +${names.length - 3}` : names.join(" • ");
+}
+
+function MembersDrawer({ darkMode, department, onClose }) {
+  const [closing, dismiss] = useDrawerDismiss();
+  const members = department?.members || [];
+  const t = tone(darkMode);
+
+  return (
+    <Drawer
+      darkMode={darkMode}
+      closing={closing}
+      onRequestClose={() => dismiss(onClose)}
+      title="Members"
+      context={department?.name || "Department"}
+      size="sm"
+      tag="Department"
+      summary={[
+        { label: "Folder", value: department?.name || "Department" },
+        { label: "Members", value: members.length ? `${members.length} member${members.length === 1 ? "" : "s"}` : "No members yet", accent: members.length > 0 },
+      ]}
+      eyebrow="Department members"
+      heading={department?.name || "Department"}
+      subheading={members.length ? "People who can access this department folder." : "No one has been assigned to this department yet."}
+    >
+      {members.length ? (
+        <div className="space-y-3">
+          {members.map((member) => (
+            <div key={member.id || member.name} className={`flex items-center gap-3 rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-[#e4ece8] bg-[#fbfdfc]"}`}>
+              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sm font-black ${darkMode ? "bg-emerald-400/12 text-emerald-100" : "bg-[#dff3e8] text-[#0f6b49]"}`}>
+                {initialsFor(member.name)}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold">{member.name || "Unknown user"}</p>
+                <p className={`mt-0.5 text-xs ${t.muted}`}>Department member</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          darkMode={darkMode}
+          icon={Users}
+          title="No members yet"
+          body="Use Manage to assign users to this department."
+        />
+      )}
+    </Drawer>
+  );
 }
 
 // ---------- Folder views ----------
@@ -1258,6 +1313,7 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
   const [departmentModal, setDepartmentModal] = useState(null);
   const [documentModal, setDocumentModal] = useState(null);
   const [shareDoc, setShareDoc] = useState(null);
+  const [memberDrawer, setMemberDrawer] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [busyDocId, setBusyDocId] = useState("");
@@ -1485,6 +1541,13 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
           onSaved={async () => { setShareDoc(null); await refreshAll(); }}
         />
       )}
+      {memberDrawer && (
+        <MembersDrawer
+          darkMode={darkMode}
+          department={memberDrawer}
+          onClose={() => setMemberDrawer(null)}
+        />
+      )}
       <ConfirmModal
         darkMode={darkMode}
         open={Boolean(confirm)}
@@ -1505,6 +1568,7 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
   if (selectedId) {
     const showBack = overview.isAdmin || departments.length > 1;
     const adminDepartment = departments.find((department) => department.id === selectedId) || currentDepartment;
+    const memberDepartment = departments.find((department) => department.id === selectedId) || currentDepartment;
     const ownedCount = folder?.documents?.length ?? 0;
     const sharedCount = folder?.sharedDocuments?.length ?? 0;
     return (
@@ -1525,7 +1589,18 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <Pill darkMode={darkMode} icon={FolderLock}>Department folder</Pill>
-                <Pill darkMode={darkMode} variant="yellow" icon={Users}>{currentDepartment?.memberCount ?? 0} member{currentDepartment?.memberCount === 1 ? "" : "s"}</Pill>
+                <Pill
+                  darkMode={darkMode}
+                  as="button"
+                  type="button"
+                  variant="yellow"
+                  icon={Users}
+                  onClick={() => memberDepartment && setMemberDrawer(memberDepartment)}
+                  aria-label={`Show ${currentDepartment?.name || "department"} members`}
+                  className="cursor-pointer"
+                >
+                  {currentDepartment?.memberCount ?? 0} member{currentDepartment?.memberCount === 1 ? "" : "s"}
+                </Pill>
                 {currentDepartment?.driveConfigured
                   ? <Pill darkMode={darkMode} variant="blue" icon={HardDrive}>{currentDepartment.driveFolderName || "Shared drive linked"}</Pill>
                   : <Pill darkMode={darkMode} variant="pink" icon={HardDrive}>No shared drive yet</Pill>}

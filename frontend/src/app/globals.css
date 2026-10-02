@@ -167,6 +167,10 @@
     width: min(84vw, 1120px);
     max-width: 1120px;
   }
+  .employee-report-drawer.hr-request-history-drawer:not(.employee-report-shell-expanded) {
+    width: min(50vw, 760px);
+    max-width: 760px;
+  }
   .employee-report-drawer.dept-drawer-lg:not(.employee-report-shell-expanded) {
     width: min(90vw, 1080px);
     max-width: 1080px;

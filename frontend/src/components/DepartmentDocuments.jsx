@@ -38,6 +38,7 @@ import {
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
 import { ConfirmModal, SelectMenu, useClickOutside } from "./ui";
+import UserAvatar from "./UserAvatar";
 
 async function api(path, options = {}) {
   const isForm = options.body instanceof FormData;
@@ -191,12 +192,6 @@ function fileKind(doc) {
 
 function GlyphLabel({ text: label }) {
   return <text x="20" y="35" textAnchor="middle" fontSize={label.length > 3 ? 7.5 : 9} fontWeight="800" fill="#fff" fontFamily="system-ui, -apple-system, Segoe UI, sans-serif">{label}</text>;
-}
-
-function initialsFor(name = "") {
-  const parts = String(name).trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "?";
-  return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
 // Drawn file-type logos: a folded page tinted per type, with a white mark inside.
@@ -1003,9 +998,7 @@ function MembersDrawer({ darkMode, department, onClose }) {
         <div className="space-y-3">
           {members.map((member) => (
             <div key={member.id || member.name} className={`flex items-center gap-3 rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-[#e4ece8] bg-[#fbfdfc]"}`}>
-              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sm font-black ${darkMode ? "bg-emerald-400/12 text-emerald-100" : "bg-[#dff3e8] text-[#0f6b49]"}`}>
-                {initialsFor(member.name)}
-              </span>
+              <UserAvatar user={member} name={member.name || member.displayName || member.username} rounded="lg" className="h-11 w-11" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold">{member.name || "Unknown user"}</p>
                 <p className={`mt-0.5 text-xs ${t.muted}`}>Department member</p>

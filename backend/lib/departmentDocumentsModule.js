@@ -168,7 +168,7 @@ function registerDepartmentDocumentsModule(app, {
     return isAdmin(req) || memberIds.has(String(doc.departmentId));
   }
 
-  function serializeDepartment(department, { admin = false, counts = {}, userNames = new Map() } = {}) {
+  function serializeDepartment(department, { admin = false, counts = {}, userNames = new Map(), userProfiles = new Map() } = {}) {
     const id = String(department._id);
     const base = {
       id,
@@ -176,7 +176,19 @@ function registerDepartmentDocumentsModule(app, {
       description: department.description || "",
       color: department.color || "emerald",
       memberCount: (department.memberUserIds || []).length,
-      members: (department.memberUserIds || []).map((userId) => ({ id: userId, name: userNames.get(userId) || "Unknown user" })),
+      members: (department.memberUserIds || []).map((userId) => {
+        const profile = userProfiles.get(userId);
+        const name = profile?.displayName || profile?.username || userNames.get(userId) || "Unknown user";
+        return {
+          id: userId,
+          name,
+          displayName: profile?.displayName || name,
+          username: profile?.username || "",
+          avatarPreset: profile?.avatarPreset || "",
+          avatarUrl: profile?.avatarUrl || "",
+          gender: profile?.gender || "",
+        };
+      }),
       documentCount: counts[id]?.owned || 0,
       sharedInCount: counts[id]?.sharedIn || 0,
       driveConfigured: Boolean(department.driveFolderId),
@@ -410,9 +422,16 @@ function registerDepartmentDocumentsModule(app, {
 
       const memberIds = [...new Set(visible.flatMap((department) => department.memberUserIds || []))];
       const users = memberIds.length
-        ? await database.collection("users").find({ _id: { $in: memberIds.map((id) => new ObjectId(id)) } }, { projection: { displayName: 1, username: 1 } }).toArray()
+        ? await database.collection("users").find({ _id: { $in: memberIds.map((id) => new ObjectId(id)) } }, { projection: { displayName: 1, username: 1, avatarPreset: 1, avatarUrl: 1, gender: 1 } }).toArray()
         : [];
       const userNames = new Map(users.map((user) => [String(user._id), user.displayName || user.username]));
+      const userProfiles = new Map(users.map((user) => [String(user._id), {
+        displayName: user.displayName || user.username || "",
+        username: user.username || "",
+        avatarPreset: user.avatarPreset || "",
+        avatarUrl: user.avatarUrl || "",
+        gender: user.gender || "",
+      }]));
 
       const forms = await database.collection("forms")
         .find(admin ? {} : { isActive: true }, { projection: { name: 1, slug: 1, department: 1 } })
@@ -424,7 +443,7 @@ function registerDepartmentDocumentsModule(app, {
         serviceAccountEmail: admin ? await serviceEmail() : "",
         colors: DEPARTMENT_COLORS,
         maxUploadBytes: MAX_UPLOAD_BYTES,
-        departments: visible.map((department) => serializeDepartment(department, { admin, counts, userNames })),
+        departments: visible.map((department) => serializeDepartment(department, { admin, counts, userNames, userProfiles })),
         // Share targets: names only, so members can pick a department without seeing into it.
         shareTargets: all.map((department) => ({ id: String(department._id), name: department.name, color: department.color || "emerald" })),
         forms: forms.map((form) => ({ id: String(form._id), name: form.name, slug: form.slug || "", department: form.department || "" })),

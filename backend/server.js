@@ -67,6 +67,9 @@ const SUPER_ADMIN_PASSWORD = "Admin@9579";
 const DEFAULT_DMR_SPREADSHEET_ID = process.env.DMR_SPREADSHEET_ID || "";
 const DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID = process.env.DMR_TOMORROW_PLAN_SPREADSHEET_ID || "1592O80hnVL7scepUdvi1hX72MyWIfiP61vh-94TmTaw";
 const DEFAULT_MRN_SPREADSHEET_ID = process.env.MRN_SPREADSHEET_ID || "1Vfjgihl1Cf4Xe9SdBDoJWQHxaEGkn8c2KhH6qN92BJw";
+const MRN_VENDOR_SPREADSHEET_ID = process.env.MRN_VENDOR_SPREADSHEET_ID || "1E2ggJmYVK26DPrKFTI0KyMV_R6HktQaxnvglGw3SjWA";
+const MRN_VENDOR_SHEET_NAME = process.env.MRN_VENDOR_SHEET_NAME || "POs";
+const MRN_VENDOR_CACHE_TTL_MS = Math.max(60_000, Number(process.env.MRN_VENDOR_CACHE_TTL_MS) || 5 * 60_000);
 const DEFAULT_PRN_SPREADSHEET_ID = process.env.PRN_SPREADSHEET_ID || "1ueqDLa6WUN_1Fae44eo_QgrS4Rx-2AhdrbmYVXhcv1M";
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard" },
@@ -7312,6 +7315,7 @@ let notifications = [];
 let activityLogs = [];
 let dmrHistory = [];
 let mrnHistory = [];
+let mrnVendorRowsCache = { loadedAt: 0, rows: [] };
 let dmrSettings = {
   spreadsheetId: normalizeSpreadsheetId(DEFAULT_DMR_SPREADSHEET_ID),
   linkedAt: null,
@@ -17549,6 +17553,144 @@ function nextMrnNumber(records = []) {
   return `MRN${String(max + 1).padStart(2, "0")}`;
 }
 
+function mrnMaterialItems(value = "") {
+  return projectText(value)
+    .replace(/\r/g, "\n")
+    .split(/\n+|(?=\s*\*)/)
+    .map((item) => item.replace(/^\s*\*\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function vendorMatchTokens(value = "") {
+  const stopWords = new Set([
+    "for", "and", "the", "with", "without", "material", "materials", "nos", "no", "pcs", "pc", "set", "rmt", "sft", "sqft",
+    "mm", "cm", "mtr", "meter", "metre", "ltr", "liter", "litre", "kg", "gm", "sit", "site", "qty", "quantity",
+  ]);
+  const normalized = projectText(value)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  return [...new Set(normalized.split(/\s+/).filter((token) => token.length > 1 && !stopWords.has(token)))];
+}
+
+function vendorMaterialScore(material = "", description = "") {
+  const materialText = projectText(material).toLowerCase();
+  const descriptionText = projectText(description).toLowerCase();
+  if (!materialText || !descriptionText) return 0;
+  if (descriptionText.includes(materialText) || materialText.includes(descriptionText)) return 1;
+  const materialTokens = vendorMatchTokens(materialText);
+  const descriptionTokens = vendorMatchTokens(descriptionText);
+  if (!materialTokens.length || !descriptionTokens.length) return 0;
+  const descriptionSet = new Set(descriptionTokens);
+  const overlap = materialTokens.filter((token) => descriptionSet.has(token)).length;
+  const coverage = overlap / materialTokens.length;
+  const density = overlap / Math.max(descriptionTokens.length, 1);
+  return (coverage * 0.75) + (density * 0.25);
+}
+
+function mapRowsByHeader(values = []) {
+  const headers = values[0] || [];
+  const headerMap = headers.reduce((map, header, index) => {
+    const key = normalizeHeaderKey(header);
+    if (!key) return map;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(index);
+    return map;
+  }, new Map());
+  const valueAt = (row, names = []) => {
+    for (const name of names) {
+      const indices = headerMap.get(normalizeHeaderKey(name)) || [];
+      for (const index of indices) {
+        const value = projectText(row[index]);
+        if (value) return value;
+      }
+    }
+    return "";
+  };
+  return { headers, valueAt };
+}
+
+function mapPoVendorRows(values = []) {
+  const { valueAt } = mapRowsByHeader(values);
+  const rows = [];
+  for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    const row = values[rowIndex] || [];
+    const vendorName = valueAt(row, ["Vendor", "Vendor Name"]);
+    const description = valueAt(row, ["Description", "Material", "Material Requirement", "Particulars"]);
+    if (!vendorName && !description) continue;
+    rows.push({
+      rowNumber: rowIndex + 1,
+      mrnNo: valueAt(row, ["MRN No", "MRN"]),
+      poNo: valueAt(row, ["PO", "PO ", "PO ID"]),
+      date: valueAt(row, ["Date"]),
+      project: valueAt(row, ["Project", "Project Name", "Project / Site"]),
+      category: valueAt(row, ["Category", "Catagory"]),
+      vendorName,
+      description,
+      units: valueAt(row, ["Units", "Unit"]),
+      unitPrice: valueAt(row, ["Unit Price", "Rate"]),
+      quantity: valueAt(row, ["Quantity", "Qty"]),
+      amount: valueAt(row, ["Amount"]),
+      totalPoValue: valueAt(row, ["Total PO Value", "Total"]),
+    });
+  }
+  return rows;
+}
+
+async function readMrnVendorRows() {
+  const spreadsheetId = normalizeSpreadsheetId(MRN_VENDOR_SPREADSHEET_ID);
+  if (!spreadsheetId) return [];
+  if (Date.now() - mrnVendorRowsCache.loadedAt < MRN_VENDOR_CACHE_TTL_MS) {
+    return mrnVendorRowsCache.rows;
+  }
+  try {
+    const sheets = await getDmrSpreadsheet(spreadsheetId);
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${escapeSheetName(MRN_VENDOR_SHEET_NAME)}!A1:Z10000`,
+    });
+    const rows = mapPoVendorRows(response.data.values || []);
+    mrnVendorRowsCache = { loadedAt: Date.now(), rows };
+    return rows;
+  } catch (error) {
+    console.error("Could not load MRN vendor rows:", error.message || error);
+    return mrnVendorRowsCache.rows || [];
+  }
+}
+
+function attachMrnMaterialVendorMatches(records = [], vendorRows = []) {
+  if (!vendorRows.length) {
+    return records.map((record) => ({
+      ...record,
+      materialVendorMatches: mrnMaterialItems(record.materialRequirement).map((material) => ({ material, vendors: [] })),
+    }));
+  }
+  return records.map((record) => {
+    const recordMrn = normalizedMrnNumber(record.mrnNo);
+    const materialVendorMatches = mrnMaterialItems(record.materialRequirement).map((material) => {
+      const scored = vendorRows
+        .map((vendor) => {
+          const materialScore = vendorMaterialScore(material, vendor.description);
+          const sameMrn = recordMrn && normalizedMrnNumber(vendor.mrnNo) === recordMrn;
+          const score = materialScore + (sameMrn ? 0.35 : 0);
+          return { ...vendor, score };
+        })
+        .filter((vendor) => vendor.score >= 0.45 || (recordMrn && normalizedMrnNumber(vendor.mrnNo) === recordMrn && vendorMaterialScore(material, vendor.description) >= 0.25))
+        .sort((a, b) => b.score - a.score || projectText(a.vendorName).localeCompare(projectText(b.vendorName)));
+      const seen = new Set();
+      const vendors = scored.filter((vendor) => {
+        const key = `${projectText(vendor.vendorName).toLowerCase()}|${projectText(vendor.description).toLowerCase()}|${projectText(vendor.poNo).toLowerCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 4);
+      return { material, vendors };
+    });
+    return { ...record, materialVendorMatches };
+  });
+}
+
 function mapMrnRows(values = []) {
   const rawHeaders = values[0] || [];
   const headers = normalizeMrnHeaders(rawHeaders);
@@ -17662,7 +17804,9 @@ async function readMrnDashboard({ startDate, endDate, all = false } = {}) {
       range: `${escapeSheetName(MRN_SHEET_NAME)}!A1:Z10000`,
     });
   }
-  const { records } = mapMrnRows(response.data.values || []);
+  const { records: rawRecords } = mapMrnRows(response.data.values || []);
+  const vendorRows = await readMrnVendorRows();
+  const records = attachMrnMaterialVendorMatches(rawRecords, vendorRows);
   const today = istDateKey(new Date());
   const start = /^\d{4}-\d{2}-\d{2}$/.test(String(startDate || "")) ? String(startDate) : addDaysToDateKey(today, -6);
   const end = /^\d{4}-\d{2}-\d{2}$/.test(String(endDate || "")) ? String(endDate) : today;

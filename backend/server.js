@@ -69,6 +69,7 @@ const DEFAULT_DMR_TOMORROW_PLAN_SPREADSHEET_ID = process.env.DMR_TOMORROW_PLAN_S
 const DEFAULT_MRN_SPREADSHEET_ID = process.env.MRN_SPREADSHEET_ID || "1Vfjgihl1Cf4Xe9SdBDoJWQHxaEGkn8c2KhH6qN92BJw";
 const MRN_VENDOR_SPREADSHEET_ID = process.env.MRN_VENDOR_SPREADSHEET_ID || "1E2ggJmYVK26DPrKFTI0KyMV_R6HktQaxnvglGw3SjWA";
 const MRN_VENDOR_SHEET_NAME = process.env.MRN_VENDOR_SHEET_NAME || "POs";
+const MRN_VENDOR_CONTACTS_SHEET_NAME = process.env.MRN_VENDOR_CONTACTS_SHEET_NAME || "Vendor Contacts";
 const MRN_VENDOR_CACHE_TTL_MS = Math.max(60_000, Number(process.env.MRN_VENDOR_CACHE_TTL_MS) || 5 * 60_000);
 const DEFAULT_PRN_SPREADSHEET_ID = process.env.PRN_SPREADSHEET_ID || "1ueqDLa6WUN_1Fae44eo_QgrS4Rx-2AhdrbmYVXhcv1M";
 const MENU_ITEMS = [
@@ -17638,6 +17639,60 @@ function mapPoVendorRows(values = []) {
   return rows;
 }
 
+function vendorContactKey(value = "") {
+  return projectText(value)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/\b(pvt|private|limited|ltd|llp|co|company|corporation|enterprise|enterprises|trading|traders)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function vendorContactMatchScore(vendorName = "", contactName = "") {
+  const vendor = vendorContactKey(vendorName);
+  const contact = vendorContactKey(contactName);
+  if (!vendor || !contact) return 0;
+  if (vendor === contact) return 1;
+  if (vendor.includes(contact) || contact.includes(vendor)) return 0.92;
+  const vendorTokens = new Set(vendor.split(" ").filter((token) => token.length > 2));
+  const contactTokens = contact.split(" ").filter((token) => token.length > 2);
+  if (!vendorTokens.size || !contactTokens.length) return 0;
+  const overlap = contactTokens.filter((token) => vendorTokens.has(token)).length;
+  return overlap / Math.max(vendorTokens.size, contactTokens.length);
+}
+
+function mapVendorContactRows(values = []) {
+  const { valueAt } = mapRowsByHeader(values);
+  const rows = [];
+  for (let rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    const row = values[rowIndex] || [];
+    const vendorName = valueAt(row, ["U & I Vendors", "Vendor", "Vendor Name"]);
+    const proprietorName = valueAt(row, ["Name of the Propreitor", "Name of the Proprietor", "Proprietor"]);
+    const contactNo = valueAt(row, ["Contact No.", "Contact No", "Contact Number", "Mobile"]);
+    if (!vendorName && !proprietorName && !contactNo) continue;
+    rows.push({ vendorName, proprietorName, contactNo });
+  }
+  return rows;
+}
+
+function enrichVendorRowsWithContacts(vendorRows = [], contactRows = []) {
+  return vendorRows.map((vendor) => {
+    const contact = contactRows
+      .map((row) => ({ ...row, score: vendorContactMatchScore(vendor.vendorName, row.vendorName) }))
+      .filter((row) => row.score >= 0.45)
+      .sort((a, b) => b.score - a.score)[0];
+    return contact
+      ? {
+          ...vendor,
+          contactVendorName: contact.vendorName,
+          proprietorName: contact.proprietorName,
+          contactNo: contact.contactNo,
+        }
+      : vendor;
+  });
+}
+
 async function readMrnVendorRows() {
   const spreadsheetId = normalizeSpreadsheetId(MRN_VENDOR_SPREADSHEET_ID);
   if (!spreadsheetId) return [];
@@ -17650,7 +17705,14 @@ async function readMrnVendorRows() {
       spreadsheetId,
       range: `${escapeSheetName(MRN_VENDOR_SHEET_NAME)}!A1:Z10000`,
     });
-    const rows = mapPoVendorRows(response.data.values || []);
+    const contactsResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${escapeSheetName(MRN_VENDOR_CONTACTS_SHEET_NAME)}!R1:V10000`,
+    }).catch(() => ({ data: { values: [] } }));
+    const rows = enrichVendorRowsWithContacts(
+      mapPoVendorRows(response.data.values || []),
+      mapVendorContactRows(contactsResponse.data.values || []),
+    );
     mrnVendorRowsCache = { loadedAt: Date.now(), rows };
     return rows;
   } catch (error) {

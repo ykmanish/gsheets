@@ -7,18 +7,54 @@ on:
 
   workflow_dispatch:
 
+# One deploy at a time. A push that lands mid-deploy waits its turn instead of
+# cancelling a deploy that may be halfway through switching releases.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_HOST: ${{ secrets.AWS_HOST }}
+      DEPLOY_USER: ubuntu
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ec2-user
-          key: ${{ secrets.AWS_SSH_KEY }}
-          script: |
-            cd /var/www/app
-            chmod +x deploy.sh
-            ./deploy.sh
+      - uses: actions/checkout@v5
+
+      - name: Package release
+        run: |
+          git archive --format=tar.gz -o "raga-release-${GITHUB_SHA}.tar.gz" HEAD
+          cp deploy/deploy.sh "raga-deploy-${GITHUB_SHA}.sh"
+
+      - name: Configure SSH
+        env:
+          AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
+          AWS_KNOWN_HOSTS: ${{ secrets.AWS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$AWS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pin the server's host key when AWS_KNOWN_HOSTS is set; otherwise trust what it presents now.
+          if [ -n "$AWS_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$AWS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -T 15 "$AWS_HOST" > ~/.ssh/known_hosts
+          fi
+          cat > ~/.ssh/config <<EOF
+          Host prod
+            HostName $AWS_HOST
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            BatchMode yes
+            ServerAliveInterval 30
+          EOF
+
+      - name: Upload release
+        run: scp "raga-release-${GITHUB_SHA}.tar.gz" "raga-deploy-${GITHUB_SHA}.sh" prod:/tmp/
+
+      - name: Deploy
+        run: |
+          ssh prod "bash /tmp/raga-deploy-${GITHUB_SHA}.sh /tmp/raga-release-${GITHUB_SHA}.tar.gz ${GITHUB_SHA}; rc=\$?; rm -f /tmp/raga-deploy-${GITHUB_SHA}.sh; exit \$rc"

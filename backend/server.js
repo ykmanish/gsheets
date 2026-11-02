@@ -15,7 +15,7 @@ const ExcelJS = require("exceljs");
 const PDFDocument = require("pdfkit");
 const { pipeline } = require("@xenova/transformers");
 const crypto = require("crypto");
-const { MongoClient, ObjectId } = require("mongodb");
+const { MongoClient, ObjectId, Collection } = require("mongodb");
 const { z } = require("zod");
 const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
 const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
@@ -134,7 +134,16 @@ const PRIVILEGE_ITEMS = [
 let mongoClient;
 let authDb;
 let mongoConnectPromise;
-let moduleControlCache = { disabledModules: [], maintenance: { enabled: false, estimatedEndAt: "", message: "" }, expiresAt: 0 };
+// Read on every request but only changed from Module Control, which refreshes
+// the cache itself. Each half has its own expiry so refreshing one can't leave
+// the other stale.
+const MODULE_CONTROL_CACHE_TTL_MS = 30_000;
+let moduleControlCache = {
+  disabledModules: [],
+  modulesExpiresAt: 0,
+  maintenance: { enabled: false, estimatedEndAt: "", message: "" },
+  maintenanceExpiresAt: 0,
+};
 const employeeDailyQuoteBuilds = new Map();
 
 async function connectAuthDb() {
@@ -401,16 +410,16 @@ async function handleMcpRequest(req, res) {
 app.all(["/mcp", "/api/mcp"], mcpRequireAuth, handleMcpRequest);
 
 async function getDisabledModules({ fresh = false } = {}) {
-  if (!fresh && moduleControlCache.expiresAt > Date.now()) return [...moduleControlCache.disabledModules];
+  if (!fresh && moduleControlCache.modulesExpiresAt > Date.now()) return [...moduleControlCache.disabledModules];
   const db = await connectAuthDb();
   const setting = await db.collection("platformSettings").findOne({ _id: "module-control" });
   const disabledModules = (setting?.disabledModules || []).filter((id) => MENU_ITEM_IDS.has(id) && !PROTECTED_GLOBAL_MODULES.has(id));
-  moduleControlCache = { disabledModules, maintenance: moduleControlCache.maintenance, expiresAt: Date.now() + 5000 };
+  moduleControlCache = { ...moduleControlCache, disabledModules, modulesExpiresAt: Date.now() + MODULE_CONTROL_CACHE_TTL_MS };
   return [...disabledModules];
 }
 
 async function getMaintenanceSettings({ fresh = false } = {}) {
-  if (!fresh && moduleControlCache.expiresAt > Date.now()) return { ...(moduleControlCache.maintenance || {}) };
+  if (!fresh && moduleControlCache.maintenanceExpiresAt > Date.now()) return { ...(moduleControlCache.maintenance || {}) };
   const db = await connectAuthDb();
   const setting = await db.collection("platformSettings").findOne({ _id: "maintenance-mode" });
   const maintenance = {
@@ -420,7 +429,7 @@ async function getMaintenanceSettings({ fresh = false } = {}) {
     updatedAt: setting?.updatedAt || null,
     updatedBy: setting?.updatedBy || "",
   };
-  moduleControlCache = { disabledModules: moduleControlCache.disabledModules, maintenance, expiresAt: Date.now() + 5000 };
+  moduleControlCache = { ...moduleControlCache, maintenance, maintenanceExpiresAt: Date.now() + MODULE_CONTROL_CACHE_TTL_MS };
   return { ...maintenance };
 }
 
@@ -593,9 +602,61 @@ async function seedSuperAdmin() {
   }
 }
 
+// Every API request authenticates, and each session -> user -> role lookup is a
+// full round trip to Atlas. Resolved identities are cached per token; any write
+// to users, roles or sessions (from anywhere in the codebase, see the Collection
+// patch below) clears the cache, so logging out, blocking a user or editing a
+// role still takes effect on the very next request. The TTL only bounds how long
+// an edit made outside this server (Atlas UI, scripts) can go unnoticed.
+const AUTH_CACHE_TTL_MS = 2 * 60_000;
+const AUTH_CACHE_MAX_ENTRIES = 5000;
+const AUTH_CACHE_COLLECTIONS = new Set(["users", "roles", "sessions"]);
+const authCache = new Map();
+let authCacheGeneration = 0;
+
+function clearAuthCache() {
+  authCache.clear();
+  authCacheGeneration += 1;
+}
+
+for (const method of [
+  "insertOne", "insertMany", "updateOne", "updateMany", "replaceOne", "deleteOne", "deleteMany",
+  "findOneAndUpdate", "findOneAndReplace", "findOneAndDelete", "bulkWrite",
+]) {
+  const original = Collection.prototype[method];
+  Collection.prototype[method] = function clearAuthCacheAfterWrite(...args) {
+    const result = original.apply(this, args);
+    if (!AUTH_CACHE_COLLECTIONS.has(this.collectionName)) return result;
+    clearAuthCache();
+    return Promise.resolve(result).finally(clearAuthCache);
+  };
+}
+
+// Returns { session, user, role } for a live token, or null.
+async function resolveAuthToken(token) {
+  const tokenHash = hashToken(token);
+  const now = Date.now();
+  const cached = authCache.get(tokenHash);
+  if (cached && cached.expiresAt > now && cached.session.expiresAt > new Date(now)) return cached;
+  authCache.delete(tokenHash);
+
+  const generation = authCacheGeneration;
+  const db = await connectAuthDb();
+  const session = await db.collection("sessions").findOne({ tokenHash, expiresAt: { $gt: new Date() } });
+  if (!session) return null;
+  const user = await db.collection("users").findOne({ _id: session.userId });
+  const role = user ? await getRole(user.roleId) : null;
+  const entry = { session, user, role, expiresAt: now + AUTH_CACHE_TTL_MS };
+  // A write that landed while these reads were in flight may have made them stale.
+  if (generation === authCacheGeneration) {
+    if (authCache.size >= AUTH_CACHE_MAX_ENTRIES) authCache.clear();
+    authCache.set(tokenHash, entry);
+  }
+  return entry;
+}
+
 async function requireAuth(req, res, next) {
   try {
-    const db = await connectAuthDb();
     const header = req.headers.authorization || "";
     const streamToken =
       req.method === "GET" && (/^\/project-dashboard\/projects\/[^/]+\/chat\/stream$/.test(req.path) || /^\/forum\/files\/[^/]+\/preview$/.test(req.path))
@@ -603,11 +664,12 @@ async function requireAuth(req, res, next) {
         : "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : streamToken || null;
     if (!token) return res.status(401).json({ error: "Authentication required" });
-    const session = await db.collection("sessions").findOne({ tokenHash: hashToken(token), expiresAt: { $gt: new Date() } });
-    if (!session) return res.status(401).json({ error: "Session expired" });
-    const user = await db.collection("users").findOne({ _id: session.userId });
-    if (!user || user.blacklisted) return res.status(403).json({ error: "User is blocked" });
-    const role = await getRole(user.roleId);
+    const auth = await resolveAuthToken(token);
+    if (!auth) return res.status(401).json({ error: "Session expired" });
+    if (!auth.user || auth.user.blacklisted) return res.status(403).json({ error: "User is blocked" });
+    // Shallow copies so a handler that tweaks req.user can't alter the cached record.
+    const user = { ...auth.user };
+    const role = auth.role ? { ...auth.role } : null;
     req.user = user;
     req.role = role;
     req.authUser = sanitizeUser(user, role);
@@ -728,7 +790,7 @@ app.post("/auth/login", async (req, res) => {
 });
 
 app.get("/auth/me", requireAuth, async (req, res) => {
-  res.json({ user: req.authUser, menus: roleMenusForUser(req.user, req.role), disabledModules: await getDisabledModules(), maintenance: await getMaintenanceSettings({ fresh: true }) });
+  res.json({ user: req.authUser, menus: roleMenusForUser(req.user, req.role), disabledModules: await getDisabledModules(), maintenance: await getMaintenanceSettings() });
 });
 
 app.get("/profile", requireAuth, async (req, res) => {
@@ -4960,7 +5022,12 @@ app.put("/admin/module-control", requireSuperAdmin, async (req, res) => {
       { $set: maintenance },
       { upsert: true },
     );
-    moduleControlCache = { disabledModules, maintenance, expiresAt: Date.now() + 5000 };
+    moduleControlCache = {
+      disabledModules,
+      modulesExpiresAt: Date.now() + MODULE_CONTROL_CACHE_TTL_MS,
+      maintenance,
+      maintenanceExpiresAt: Date.now() + MODULE_CONTROL_CACHE_TTL_MS,
+    };
     addActivityLog({ req, action: "Updated module control", target: "Platform modules", status: "success", details: { disabledModules, maintenance } });
     res.json({ success: true, disabledModules, maintenance });
   } catch (error) {
@@ -7584,18 +7651,33 @@ function saveProjectDashboardConfig() {
   return projectDashboardSaveQueue;
 }
 
+// GET /documents inspects every visible document on every request and vector
+// files run to megabytes of JSON, so only re-parse a file when it changes.
+const vectorFileInspections = new Map();
+
 function inspectVectorFile(documentId) {
   const vectorPath = path.join(vectorsDir, `${documentId}.json`);
-  if (!fs.existsSync(vectorPath)) return { exists: false, valid: false, chunks: 0, vectorPath };
+  let stat;
+  try {
+    stat = fs.statSync(vectorPath);
+  } catch {
+    vectorFileInspections.delete(vectorPath);
+    return { exists: false, valid: false, chunks: 0, vectorPath };
+  }
+  const cached = vectorFileInspections.get(vectorPath);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return { ...cached.result };
+  let result;
   try {
     const records = JSON.parse(fs.readFileSync(vectorPath, "utf8"));
     const chunks = Array.isArray(records)
       ? records.filter((record) => Array.isArray(record?.embedding) && record?.text).length
       : 0;
-    return { exists: true, valid: chunks > 0, chunks, vectorPath };
+    result = { exists: true, valid: chunks > 0, chunks, vectorPath };
   } catch (error) {
-    return { exists: true, valid: false, chunks: 0, vectorPath, error: error.message };
+    result = { exists: true, valid: false, chunks: 0, vectorPath, error: error.message };
   }
+  vectorFileInspections.set(vectorPath, { mtimeMs: stat.mtimeMs, size: stat.size, result });
+  return { ...result };
 }
 
 function reconcileDocumentVector(doc, { persist = false } = {}) {
@@ -17562,32 +17644,41 @@ function mrnMaterialItems(value = "") {
     .filter(Boolean);
 }
 
+const VENDOR_MATCH_STOP_WORDS = new Set([
+  "for", "and", "the", "with", "without", "material", "materials", "nos", "no", "pcs", "pc", "set", "rmt", "sft", "sqft",
+  "mm", "cm", "mtr", "meter", "metre", "ltr", "liter", "litre", "kg", "gm", "sit", "site", "qty", "quantity",
+]);
+
 function vendorMatchTokens(value = "") {
-  const stopWords = new Set([
-    "for", "and", "the", "with", "without", "material", "materials", "nos", "no", "pcs", "pc", "set", "rmt", "sft", "sqft",
-    "mm", "cm", "mtr", "meter", "metre", "ltr", "liter", "litre", "kg", "gm", "sit", "site", "qty", "quantity",
-  ]);
   const normalized = projectText(value)
     .toLowerCase()
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
-  return [...new Set(normalized.split(/\s+/).filter((token) => token.length > 1 && !stopWords.has(token)))];
+  return [...new Set(normalized.split(/\s+/).filter((token) => token.length > 1 && !VENDOR_MATCH_STOP_WORDS.has(token)))];
+}
+
+// Lowercased text and token set for one side of a material/description match,
+// computed once instead of on every comparison.
+function vendorMatchFeatures(value = "") {
+  const text = projectText(value).toLowerCase();
+  const tokens = vendorMatchTokens(text);
+  return { text, tokens, tokenSet: new Set(tokens) };
+}
+
+function vendorMaterialFeatureScore(material, description) {
+  if (!material.text || !description.text) return 0;
+  if (description.text.includes(material.text) || material.text.includes(description.text)) return 1;
+  if (!material.tokens.length || !description.tokens.length) return 0;
+  let overlap = 0;
+  for (const token of material.tokens) if (description.tokenSet.has(token)) overlap += 1;
+  const coverage = overlap / material.tokens.length;
+  const density = overlap / Math.max(description.tokens.length, 1);
+  return (coverage * 0.75) + (density * 0.25);
 }
 
 function vendorMaterialScore(material = "", description = "") {
-  const materialText = projectText(material).toLowerCase();
-  const descriptionText = projectText(description).toLowerCase();
-  if (!materialText || !descriptionText) return 0;
-  if (descriptionText.includes(materialText) || materialText.includes(descriptionText)) return 1;
-  const materialTokens = vendorMatchTokens(materialText);
-  const descriptionTokens = vendorMatchTokens(descriptionText);
-  if (!materialTokens.length || !descriptionTokens.length) return 0;
-  const descriptionSet = new Set(descriptionTokens);
-  const overlap = materialTokens.filter((token) => descriptionSet.has(token)).length;
-  const coverage = overlap / materialTokens.length;
-  const density = overlap / Math.max(descriptionTokens.length, 1);
-  return (coverage * 0.75) + (density * 0.25);
+  return vendorMaterialFeatureScore(vendorMatchFeatures(material), vendorMatchFeatures(description));
 }
 
 function mapRowsByHeader(values = []) {
@@ -17721,6 +17812,52 @@ async function readMrnVendorRows() {
   }
 }
 
+// Scoring every MRN material against every PO row used to re-tokenize both
+// strings per pair and blocked the event loop for seconds. Vendor features are
+// now computed once per loaded vendor sheet (readMrnVendorRows caches the array),
+// and results are memoized per (MRN, material) for as long as that array lives.
+const mrnVendorMatchIndexes = new WeakMap();
+
+function mrnVendorMatchIndex(vendorRows) {
+  let index = mrnVendorMatchIndexes.get(vendorRows);
+  if (!index) {
+    index = {
+      vendors: vendorRows.map((vendor) => ({
+        vendor,
+        description: vendorMatchFeatures(vendor.description),
+        mrn: normalizedMrnNumber(vendor.mrnNo),
+      })),
+      matches: new Map(),
+    };
+    mrnVendorMatchIndexes.set(vendorRows, index);
+  }
+  return index;
+}
+
+function matchMaterialVendors(index, material, recordMrn) {
+  const memoKey = `${recordMrn}\u0000${material}`;
+  const memo = index.matches.get(memoKey);
+  if (memo) return memo;
+  const materialFeatures = vendorMatchFeatures(material);
+  const scored = [];
+  for (const entry of index.vendors) {
+    const materialScore = vendorMaterialFeatureScore(materialFeatures, entry.description);
+    const sameMrn = Boolean(recordMrn) && entry.mrn === recordMrn;
+    const score = materialScore + (sameMrn ? 0.35 : 0);
+    if (score >= 0.45 || (sameMrn && materialScore >= 0.25)) scored.push({ ...entry.vendor, score });
+  }
+  scored.sort((a, b) => b.score - a.score || projectText(a.vendorName).localeCompare(projectText(b.vendorName)));
+  const seen = new Set();
+  const vendors = scored.filter((vendor) => {
+    const key = `${projectText(vendor.vendorName).toLowerCase()}|${projectText(vendor.description).toLowerCase()}|${projectText(vendor.poNo).toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 4);
+  index.matches.set(memoKey, vendors);
+  return vendors;
+}
+
 function attachMrnMaterialVendorMatches(records = [], vendorRows = []) {
   if (!vendorRows.length) {
     return records.map((record) => ({
@@ -17728,27 +17865,13 @@ function attachMrnMaterialVendorMatches(records = [], vendorRows = []) {
       materialVendorMatches: mrnMaterialItems(record.materialRequirement).map((material) => ({ material, vendors: [] })),
     }));
   }
+  const index = mrnVendorMatchIndex(vendorRows);
   return records.map((record) => {
     const recordMrn = normalizedMrnNumber(record.mrnNo);
-    const materialVendorMatches = mrnMaterialItems(record.materialRequirement).map((material) => {
-      const scored = vendorRows
-        .map((vendor) => {
-          const materialScore = vendorMaterialScore(material, vendor.description);
-          const sameMrn = recordMrn && normalizedMrnNumber(vendor.mrnNo) === recordMrn;
-          const score = materialScore + (sameMrn ? 0.35 : 0);
-          return { ...vendor, score };
-        })
-        .filter((vendor) => vendor.score >= 0.45 || (recordMrn && normalizedMrnNumber(vendor.mrnNo) === recordMrn && vendorMaterialScore(material, vendor.description) >= 0.25))
-        .sort((a, b) => b.score - a.score || projectText(a.vendorName).localeCompare(projectText(b.vendorName)));
-      const seen = new Set();
-      const vendors = scored.filter((vendor) => {
-        const key = `${projectText(vendor.vendorName).toLowerCase()}|${projectText(vendor.description).toLowerCase()}|${projectText(vendor.poNo).toLowerCase()}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      }).slice(0, 4);
-      return { material, vendors };
-    });
+    const materialVendorMatches = mrnMaterialItems(record.materialRequirement).map((material) => ({
+      material,
+      vendors: matchMaterialVendors(index, material, recordMrn).map((vendor) => ({ ...vendor })),
+    }));
     return { ...record, materialVendorMatches };
   });
 }
@@ -17838,7 +17961,9 @@ function mapMrnRows(values = []) {
   return { headers, records };
 }
 
-async function readMrnDashboard({ startDate, endDate, all = false } = {}) {
+// Vendor suggestions are only shown in the UI, so background callers (the
+// WhatsApp watcher, digests, webhook handlers) skip matching them.
+async function readMrnDashboard({ startDate, endDate, all = false, withVendorMatches = false } = {}) {
   const spreadsheetId = getActiveMrnSpreadsheetId();
   await assertNativeGoogleSpreadsheet(spreadsheetId, "MRN sheet");
   const sheets = await getDmrSpreadsheet(spreadsheetId);
@@ -17867,8 +17992,9 @@ async function readMrnDashboard({ startDate, endDate, all = false } = {}) {
     });
   }
   const { records: rawRecords } = mapMrnRows(response.data.values || []);
-  const vendorRows = await readMrnVendorRows();
-  const records = attachMrnMaterialVendorMatches(rawRecords, vendorRows);
+  const records = withVendorMatches
+    ? attachMrnMaterialVendorMatches(rawRecords, await readMrnVendorRows())
+    : rawRecords;
   const today = istDateKey(new Date());
   const start = /^\d{4}-\d{2}-\d{2}$/.test(String(startDate || "")) ? String(startDate) : addDaysToDateKey(today, -6);
   const end = /^\d{4}-\d{2}-\d{2}$/.test(String(endDate || "")) ? String(endDate) : today;
@@ -19814,7 +19940,7 @@ app.get("/mrn-dashboard", async (req, res) => {
   try {
     if (!hasMenuAccess(req, "project-mrn")) return res.status(403).json({ error: "MRN module access required" });
     const dashboard = publicMrnSettings().linked
-      ? await readMrnDashboard({ startDate: req.query.startDate, endDate: req.query.endDate, all: String(req.query.all || "") === "true" })
+      ? await readMrnDashboard({ startDate: req.query.startDate, endDate: req.query.endDate, all: String(req.query.all || "") === "true", withVendorMatches: true })
       : {
           spreadsheetId: "",
           sheetName: MRN_SHEET_NAME,
@@ -22038,17 +22164,24 @@ async function createLoopProjectAssistantReply({ req, conversation, question }) 
 app.get("/forum/bootstrap", async (req, res) => {
   try {
     const db = await connectAuthDb();
-    const group = await ensureForumGroupConversation(db);
-    const loopAssistant = await forumLoopAssistantProfile(db);
     // The Loop assistant DM (direct AI chat) is off by default for everyone except super
     // admins — a regular employee only gets it if a super admin explicitly grants access
     // via the Loop Drive folder settings' access list.
-    const loopSettings = await db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" });
-    const loopAllowedUserIds = (loopSettings?.allowedUserIds || []).map(String);
-    const hasLoopDmAccess = Boolean(req.authUser?.isSuperAdmin) || loopAllowedUserIds.includes(String(req.authUser.id));
-    if (hasLoopDmAccess) {
-      await ensureLoopAssistantConversation(db, req.authUser.id);
-    }
+    const loopDmAccess = db.collection("platformSettings").findOne({ _id: "loop-assistant-settings" })
+      .then(async (loopSettings) => {
+        const loopAllowedUserIds = (loopSettings?.allowedUserIds || []).map(String);
+        const hasAccess = Boolean(req.authUser?.isSuperAdmin) || loopAllowedUserIds.includes(String(req.authUser.id));
+        if (hasAccess) await ensureLoopAssistantConversation(db, req.authUser.id);
+        return hasAccess;
+      });
+    // These lookups don't depend on each other, and each is a round trip to Atlas.
+    const [group, loopAssistant, hasLoopDmAccess, users, projectGroupLinks] = await Promise.all([
+      ensureForumGroupConversation(db),
+      forumLoopAssistantProfile(db),
+      loopDmAccess,
+      db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1, username: 1 }).toArray(),
+      forumProjectGroupLinks(db),
+    ]);
     let conversations = await db.collection("forumConversations").find({
       participantIds: req.authUser.id,
       deletedForUsers: { $ne: String(req.authUser.id) },
@@ -22059,12 +22192,15 @@ app.get("/forum/bootstrap", async (req, res) => {
     if (!hasLoopDmAccess) {
       conversations = conversations.filter((item) => !((item.participantIds || []).includes("loop") || String(item._id).startsWith("assistant-loop-")));
     }
-    const users = await db.collection("users").find({ blacklisted: { $ne: true } }).sort({ displayName: 1, username: 1 }).toArray();
+    const [groupSummary, conversationSummaries] = await Promise.all([
+      forumConversationSummary(group, req.authUser.id),
+      Promise.all(conversations.map((item) => forumConversationSummary(item, req.authUser.id))),
+    ]);
     const onlineUserIds = [...forumClients.keys()];
     res.json({
       currentUser: req.authUser,
-      group: await forumConversationSummary(group, req.authUser.id),
-      conversations: await Promise.all(conversations.map((item) => forumConversationSummary(item, req.authUser.id))),
+      group: groupSummary,
+      conversations: conversationSummaries,
       users: users.map(forumUserProfile),
       projects: projectDashboardConfig.projects
         .filter((project) => project.status !== "archived" && canViewProject(project, req))
@@ -22072,7 +22208,7 @@ app.get("/forum/bootstrap", async (req, res) => {
           ...forumProjectSummary(project),
           memberIds: forumProjectMemberIds(project),
         })),
-      projectGroupLinks: await forumProjectGroupLinks(db),
+      projectGroupLinks,
       loopAssistant,
       onlineUserIds,
     });
@@ -23263,13 +23399,9 @@ async function authenticateForumSocket(request) {
   const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
   const token = url.searchParams.get("token");
   if (!token) return null;
-  const db = await connectAuthDb();
-  const session = await db.collection("sessions").findOne({ tokenHash: hashToken(token), expiresAt: { $gt: new Date() } });
-  if (!session) return null;
-  const user = await db.collection("users").findOne({ _id: session.userId });
-  if (!user || user.blacklisted) return null;
-  const role = await getRole(user.roleId);
-  return sanitizeUser(user, role);
+  const auth = await resolveAuthToken(token);
+  if (!auth?.user || auth.user.blacklisted) return null;
+  return sanitizeUser(auth.user, auth.role);
 }
 
 server.on("upgrade", async (request, socket) => {

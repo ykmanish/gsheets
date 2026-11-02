@@ -1739,7 +1739,7 @@ export default function MrnDashboard({ darkMode }) {
                     className={`flex items-center gap-3 text-sm font-medium ${muted}`}
                   >
                     <Image
-                      src="/gsheet.svg"
+                      src="/gsheet-icon.png"
                       alt="Google Sheets"
                       width={22}
                       height={22}
@@ -1845,7 +1845,7 @@ export default function MrnDashboard({ darkMode }) {
                   <span className="flex -space-x-2">
                     <span className="grid h-9 w-9 place-items-center rounded-full border-2 border-white bg-[#eaf8e6]">
                       <Image
-                        src="/gsheet.svg"
+                        src="/gsheet-icon.png"
                         alt="Google Sheets"
                         width={21}
                         height={21}
@@ -1874,7 +1874,7 @@ export default function MrnDashboard({ darkMode }) {
                 >
                   <span className="grid h-11 w-11 place-items-center rounded-xl bg-white">
                     <Image
-                      src="/gsheet.svg"
+                      src="/gsheet-icon.png"
                       alt="Google Sheets"
                       width={25}
                       height={25}

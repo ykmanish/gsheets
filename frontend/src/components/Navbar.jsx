@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Activity, Bell, Menu, MessageCircleMore, Wifi, WifiOff } from "lucide-react";
 import { ThemeSwitch } from "./ui";
-import { API_URL } from "./AuthProvider";
+import { API_URL, fetchJsonShared } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 
 export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNotificationsClick, onNewNotification, onLoopClick, loopUnreadCount = 0, showLoopButton = false }) {
@@ -51,7 +51,9 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
     const handleOffline = () => setNetworkStatus("offline");
 
     void checkNetwork();
-    timeoutId = window.setInterval(checkNetwork, 12000);
+    timeoutId = window.setInterval(() => {
+      if (document.visibilityState === "visible") void checkNetwork();
+    }, 12000);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
@@ -94,14 +96,15 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
   }[networkStatus] || {};
   const NetworkIcon = networkMeta.Icon || Wifi;
 
+  const userId = user?.id;
   useEffect(() => {
-    if (!user) return;
-    
-    const checkNotifications = async () => {
+    if (!userId) return;
+
+    const checkNotifications = async ({ force = false } = {}) => {
       try {
-        const response = await fetch(`${API_URL}/notifications?limit=20`);
-        if (!response.ok) return;
-        const data = await response.json();
+        // Shared and briefly reused: every page navigation remounts the navbar.
+        const { ok, data } = await fetchJsonShared(`${API_URL}/notifications?limit=20`, { maxAgeMs: 10000, force });
+        if (!ok || !data) return;
         const notifications = data.notifications || [];
         setUnreadCount(Number.isFinite(data.unreadCount) ? data.unreadCount : notifications.filter(n => !n.readAt).length);
         onNewNotification?.(notifications.find((notification) => !notification.readAt) || null);
@@ -128,14 +131,20 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
       }
     };
 
+    const refreshNow = () => void checkNotifications({ force: true });
+    const checkWhenVisible = () => {
+      if (document.visibilityState === "visible") void checkNotifications();
+    };
     checkNotifications();
-    const interval = setInterval(checkNotifications, 15000);
-    window.addEventListener("uipl:notifications-changed", checkNotifications);
+    const interval = setInterval(checkWhenVisible, 15000);
+    window.addEventListener("uipl:notifications-changed", refreshNow);
+    document.addEventListener("visibilitychange", checkWhenVisible);
     return () => {
       clearInterval(interval);
-      window.removeEventListener("uipl:notifications-changed", checkNotifications);
+      window.removeEventListener("uipl:notifications-changed", refreshNow);
+      document.removeEventListener("visibilitychange", checkWhenVisible);
     };
-  }, [darkMode, onNewNotification, user]);
+  }, [darkMode, onNewNotification, userId]);
 
   return (
     <div

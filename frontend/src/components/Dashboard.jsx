@@ -128,8 +128,8 @@ export default function Dashboard({ darkMode, selectedDocs, setSelectedDocs }) {
       void fetchDocuments({ showLoader: true });
     }, 0);
     const interval = setInterval(() => {
-      void fetchDocuments();
-    }, 10000);
+      if (document.visibilityState === "visible") void fetchDocuments();
+    }, 30000);
     return () => {
       clearTimeout(timeoutId);
       clearInterval(interval);

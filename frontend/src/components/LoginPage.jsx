@@ -88,7 +88,7 @@ export default function LoginPage() {
   }
   
   const backgroundImage = {
-    backgroundImage: "url('/tbgss.png')",
+    backgroundImage: "url('/tbgss.webp')",
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",

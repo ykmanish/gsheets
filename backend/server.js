@@ -3155,14 +3155,21 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const search = projectText(query.search).toLowerCase();
   const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateFrom || "")) ? String(query.dateFrom) : "";
   const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateTo || "")) ? String(query.dateTo) : "";
-  const linkedUsers = isAdmin
-    ? await db.collection("users").find({ employeeDailySpreadsheetId: { $exists: true, $ne: "" } }).limit(500).toArray()
-    : [req.user];
-  const collaborationEligibleUsers = await db.collection("users")
-    .find({ blacklisted: { $ne: true } }, { projection: { _id: 1, displayName: 1, username: 1, department: 1, gender: 1, avatarPreset: 1, avatarUrl: 1, usernameLower: 1, roleName: 1 } })
-    .sort({ displayName: 1, username: 1 })
-    .limit(500)
-    .toArray();
+  const today = employeeReportToday(req);
+  // The page polls this endpoint, and each read is a round trip to Atlas, so
+  // reads that don't depend on each other go out together.
+  const [linkedUsers, collaborationEligibleUsers, executiveQuestions, reminderSettings] = await Promise.all([
+    isAdmin
+      ? db.collection("users").find({ employeeDailySpreadsheetId: { $exists: true, $ne: "" } }).limit(500).toArray()
+      : [req.user],
+    db.collection("users")
+      .find({ blacklisted: { $ne: true } }, { projection: { _id: 1, displayName: 1, username: 1, department: 1, gender: 1, avatarPreset: 1, avatarUrl: 1, usernameLower: 1, roleName: 1 } })
+      .sort({ displayName: 1, username: 1 })
+      .limit(500)
+      .toArray(),
+    employeeExecutiveQuestionsForUser(req.user || req.authUser || {}),
+    isAdmin ? getEmployeeReminderSettings() : null,
+  ]);
   // Must match the filters buildEmployeeReportExportData applies, otherwise the
   // dashboard lists people as "Pending" who are never in the report at all —
   // notably the super admin and DMR managers.
@@ -3170,8 +3177,10 @@ async function buildEmployeeReportDashboard(req, query = {}) {
     .filter((user) => !isEmployeeDailyReportExempt(user))
     .filter((user) => projectText(user.usernameLower || user.username).toLowerCase() !== SUPER_ADMIN_USERNAME.toLowerCase())
     .filter((user) => projectText(user.roleName).toLowerCase() !== "dmr manager");
-  const allCachedReports = await getCachedEmployeeReportsForUsers(db, reportEligibleLinkedUsers);
-  const today = employeeReportToday(req);
+  const [allCachedReports, executiveAnswers] = await Promise.all([
+    getCachedEmployeeReportsForUsers(db, reportEligibleLinkedUsers),
+    executiveQuestions.length ? employeeExecutiveAnswersForUserDate(db, userId, today) : null,
+  ]);
   const reports = dedupeEmployeeReportsByDate(filterEmployeeReports(allCachedReports, { search, dateFrom, dateTo, userIds: isAdmin ? [] : [userId] }))
     .sort((a, b) => String(b.reportDate).localeCompare(String(a.reportDate)) || new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0))
     .slice(0, 500);
@@ -3179,8 +3188,6 @@ async function buildEmployeeReportDashboard(req, query = {}) {
   const optionUsage = employeeReportOptionUsage(ownReports);
   const todayReport = ownReports.find((report) => String(report.userId) === userId && report.reportDate === today) || null;
   const todaySubmitted = Boolean(todayReport);
-  const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
-  const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
   const carriedForwardTasks = todayReport ? [] : employeeRecurringTasksFromReports(ownReports, today);
   const collaborationInvites = todayReport ? [] : await currentEmployeeCollaborationInvitesForUser(db, userId, today);
   const pendingCollaborationTasks = collaborationInvites.filter((item) => item.collaborationStatus === "pending");
@@ -3238,7 +3245,6 @@ async function buildEmployeeReportDashboard(req, query = {}) {
       };
     })
     : [];
-  const reminderSettings = isAdmin ? await getEmployeeReminderSettings() : null;
   return {
     isAdmin,
     today,

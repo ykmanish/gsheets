@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, BriefcaseBusiness, PackageSearch, CalendarDays, MapPin, ListTodo, MessagesSquare, FolderLock, CircleDollarSign, UserRoundSearch } from "lucide-react";
 import Image from "next/image";
-import { API_URL } from "./AuthProvider";
+import { API_URL, fetchJsonShared } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
 
 const ACCENT = "#2563eb";
@@ -92,13 +92,13 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     const storageKey = `uipl_site_images_seen_${user?.id || "user"}`;
     async function check() {
       try {
-        const docsResponse = await fetch(`${API_URL}/documents`);
-        const docsData = await docsResponse.json();
-        const doc = (docsData.documents || []).find((item) => item.type === "sheet" && /site\s*daily\s*report/i.test(item.name));
+        // Both reads are shared and reused for a minute: the sidebar remounts on
+        // every page navigation, and the sheet download is large.
+        const { data: docsData } = await fetchJsonShared(`${API_URL}/documents`, { maxAgeMs: 60000 });
+        const doc = (docsData?.documents || []).find((item) => item.type === "sheet" && /site\s*daily\s*report/i.test(item.name));
         if (!doc || stopped) return;
-        const response = await fetch(`${API_URL}/sheets/${doc.id}/data`);
-        const data = await response.json();
-        if (!response.ok || stopped) return;
+        const { ok, data } = await fetchJsonShared(`${API_URL}/sheets/${doc.id}/data`, { maxAgeMs: 60000 });
+        if (!ok || !data || stopped) return;
         const signature = (data.sheets || []).flatMap((sheet) => (sheet.rows || []).flatMap((row) => (sheet.headers || []).flatMap((header) => String(row[header] ?? "").match(/https?:\/\/[^\s,;]+/g) || []))).sort().join("|");
         const seen = window.localStorage.getItem(storageKey);
         if (!seen || activeMenu === "site-images") {
@@ -110,7 +110,9 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
       }
     }
     void check();
-    const timer = window.setInterval(check, 60000);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void check();
+    }, 60000);
     return () => { stopped = true; window.clearInterval(timer); };
   }, [activeMenu, user?.id]);
 

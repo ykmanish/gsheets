@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Toaster } from "react-hot-toast";
 import { BellRing, Clock3, LogOut, MessageCircleMore, Minimize, ShieldCheck, Sparkles, Wrench, X } from "lucide-react";
-import { API_URL, AuthProvider, getStoredAuth, useAuth } from "./AuthProvider";
+import { API_URL, AuthProvider, fetchJsonShared, getStoredAuth, useAuth } from "./AuthProvider";
 import {
   MessagePopupStack,
   forumMessagePopupContext,
@@ -283,10 +283,10 @@ function ProtectedModuleContent({ moduleId, projectId, departmentId }) {
         return;
       }
       try {
-        const response = await fetch(`${API_URL}/forum/bootstrap`);
-        if (!response.ok) return;
-        const data = await response.json();
-        if (stopped) return;
+        // The badge is recomputed on every page navigation; reuse a recent answer
+        // unless something announced that the unread state changed.
+        const { ok, data } = await fetchJsonShared(`${API_URL}/forum/bootstrap`, { maxAgeMs: 30000, force: Boolean(event) });
+        if (!ok || !data || stopped) return;
         const unreadIds = (data.conversations || []).filter((conversation) => Number(conversation.unreadCount || 0) > 0).map((conversation) => String(conversation.id));
         forumUnreadConversationIdsRef.current = new Set(unreadIds);
         setForumUnreadTotal(unreadIds.length);

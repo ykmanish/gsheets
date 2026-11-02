@@ -1923,7 +1923,7 @@ export default function EmployeeDailyReport({ darkMode }) {
     if (data?.todaySubmitted || search || dateFrom || dateTo) return undefined;
     const intervalId = window.setInterval(() => {
       if (!submitting && !draftChoiceOpen && document.visibilityState === "visible") void load(false);
-    }, 8000);
+    }, 20000);
     return () => window.clearInterval(intervalId);
   }, [data?.todaySubmitted, draftChoiceOpen, submitting, search, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 

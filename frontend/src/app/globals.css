@@ -747,3 +747,80 @@ body * {
   .finance-modal { animation-duration: 1ms !important; }
   .finance-ping::after { animation: none; }
 }
+
+/* ─── Page entrance and loading ────────────────────────────────────────────
+   The shell (sidebar, navbar) stays put between pages; only the module under
+   it changes. A module rises in when it opens, its top-level sections one
+   after another, on the same curve as the sidebar's sliding highlight. The
+   entrance only runs while .module-entering is on (ProtectedModule removes it
+   once it has played), so dialogs and rows a page adds later just appear.   */
+
+.module-frame {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.module-entering > * > * {
+  animation: module-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.module-entering > * > :nth-child(2) { animation-delay: 60ms; }
+.module-entering > * > :nth-child(3) { animation-delay: 120ms; }
+.module-entering > * > :nth-child(4) { animation-delay: 180ms; }
+.module-entering > * > :nth-child(5) { animation-delay: 240ms; }
+.module-entering > * > :nth-child(6) { animation-delay: 300ms; }
+.module-entering > * > :nth-child(n + 7) { animation-delay: 360ms; }
+
+@keyframes module-rise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes module-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Held back a moment, so a module that is already downloaded never flashes it. */
+.module-skeleton {
+  animation: module-fade 220ms ease-out 140ms backwards;
+}
+
+.shell-root {
+  animation: module-fade 260ms ease-out backwards;
+}
+
+.skeleton-bar {
+  background: linear-gradient(90deg, #e2eae7 25%, #f2f6f4 50%, #e2eae7 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-bar-dark {
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.045) 25%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.045) 75%);
+}
+
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.notification-strip-in {
+  animation: notification-strip-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes notification-strip-in {
+  from { opacity: 0; transform: translate3d(0, -10px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .module-entering > * > *,
+  .module-skeleton,
+  .shell-root,
+  .notification-strip-in { animation: none; }
+  .skeleton-bar { animation-duration: 4s; }
+}

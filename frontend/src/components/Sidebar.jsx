@@ -1,11 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, BriefcaseBusiness, PackageSearch, CalendarDays, MapPin, ListTodo, MessagesSquare, FolderLock, CircleDollarSign, UserRoundSearch } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
+import { motion } from "motion/react";
 import { API_URL, fetchJsonShared } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
+import { menuPaths, preloadModule } from "./appModules";
 
 const ACCENT = "#2563eb";
 const ACCENT_DARK_TEXT = "#93c5fd";
+// The active highlight glides to the next item instead of jumping.
+const PILL_SPRING = { type: "spring", stiffness: 480, damping: 38 };
+const GROUP_CHILDREN = {
+  projects: ["projects", "project-dmr", "project-mrn", "project-prn", "project-stock", "site-images"],
+  hr: ["hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment"],
+  finance: ["accounts", "accounts-forms"],
+  access: ["manage-roles", "manage-users", "module-control"],
+};
+const CLOSED_GROUPS = { projects: false, hr: false, access: false, finance: false };
+const groupOf = (menuId) => Object.keys(GROUP_CHILDREN).find((group) => GROUP_CHILDREN[group].includes(menuId));
 
 export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMenus = [], mobileOpen = false, setMobileOpen, collapsed = false, setCollapsed, user, onLogout, onOpenSearch }) {
   const menuItems = [
@@ -51,6 +64,14 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     access: accessSubMenu.some((item) => item.id === activeMenu),
     finance: financeSubMenu.some((item) => item.id === activeMenu),
   }));
+  // The sidebar stays mounted across pages, so when a page inside a closed group is reached
+  // some other way (search, a notification, a link), open that group to show where you are.
+  const [lastActiveMenu, setLastActiveMenu] = useState(activeMenu);
+  if (activeMenu !== lastActiveMenu) {
+    setLastActiveMenu(activeMenu);
+    const group = groupOf(activeMenu);
+    if (group && !openGroups[group]) setOpenGroups({ ...CLOSED_GROUPS, [group]: true });
+  }
   const [menuSearch, setMenuSearch] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [newSiteImages, setNewSiteImages] = useState(false);
@@ -92,8 +113,8 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     const storageKey = `uipl_site_images_seen_${user?.id || "user"}`;
     async function check() {
       try {
-        // Both reads are shared and reused for a minute: the sidebar remounts on
-        // every page navigation, and the sheet download is large.
+        // Both reads are shared and reused for a minute: this re-runs on every page
+        // change, the Documents page reads the same list, and the sheet download is large.
         const { data: docsData } = await fetchJsonShared(`${API_URL}/documents`, { maxAgeMs: 60000 });
         const doc = (docsData?.documents || []).find((item) => item.type === "sheet" && /site\s*daily\s*report/i.test(item.name));
         if (!doc || stopped) return;
@@ -157,15 +178,15 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
   // Top-level leaf items (no children): active state is the same light-blue tint used for
   // active/hovered sub-module rows — no solid fill — for one consistent visual language
   // across the whole sidebar, in both themes.
-  const leafItemClass = ({ active = false } = {}) => `newq group flex h-11 items-center gap-3 rounded-2xl text-left font-medium transition-all duration-300 ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-2xl md:p-0" : "w-full px-3"} ${
+  const leafItemClass = ({ active = false } = {}) => `newq group relative flex h-11 items-center gap-3 rounded-2xl text-left font-medium transition-all duration-300 active:scale-[0.98] ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-2xl md:p-0" : "w-full px-3"} ${
     active
-      ? darkMode ? "bg-[#2563eb]/20 text-[#93c5fd] font-semibold" : "bg-[#2563eb]/10 text-[#2563eb] font-semibold"
+      ? darkMode ? "text-[#93c5fd] font-semibold" : "text-[#2563eb] font-semibold"
       : darkMode
       ? "text-white/60 hover:bg-[#2563eb]/15 hover:text-[#93c5fd]"
       : "text-slate-600 hover:bg-[#2563eb]/8 hover:text-[#2563eb]"
   }`;
 
-  const leafIconClass = ({ active = false } = {}) => `flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${collapsed ? "md:h-10 md:w-10" : ""} ${
+  const leafIconClass = ({ active = false } = {}) => `relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110 ${collapsed ? "md:h-10 md:w-10" : ""} ${
     active
       ? darkMode ? "bg-[#2563eb]/30 text-[#93c5fd]" : "bg-[#2563eb]/15 text-[#2563eb]"
       : darkMode ? "text-white/55 group-hover:text-[#93c5fd]" : "text-slate-500 group-hover:text-[#2563eb]"
@@ -175,27 +196,42 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
   // like a top-level active item — but they DO get the same light-blue tint when one of their
   // children is the current page (parentActive) or on hover, so the collapsed icon-only rail
   // still shows which section you're in even without the label visible.
-  const groupHeaderClass = ({ parentActive = false } = {}) => `newq group flex h-11 w-full items-center gap-3 rounded-2xl text-left font-semibold transition-all duration-300 ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-2xl md:p-0" : "px-3"} ${
+  const groupHeaderClass = ({ parentActive = false } = {}) => `newq group relative flex h-11 w-full items-center gap-3 rounded-2xl text-left font-semibold transition-all duration-300 active:scale-[0.98] ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-2xl md:p-0" : "px-3"} ${
     parentActive
-      ? darkMode ? "bg-[#2563eb]/20" : "bg-[#2563eb]/12"
+      ? ""
       : darkMode ? "text-white/90 hover:bg-[#2563eb]/15 hover:text-[#93c5fd]" : "text-slate-800 hover:bg-[#2563eb]/8 hover:text-[#2563eb]"
   }`;
 
-  const groupHeaderIconClass = ({ parentActive = false } = {}) => `flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${collapsed ? "md:h-10 md:w-10" : ""} ${
+  const groupHeaderIconClass = ({ parentActive = false } = {}) => `relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110 ${collapsed ? "md:h-10 md:w-10" : ""} ${
     parentActive
       ? darkMode ? "bg-[#2563eb]/25" : "bg-white"
       : darkMode ? "text-white/75 group-hover:text-[#93c5fd]" : "text-slate-600 group-hover:text-[#2563eb]"
   }`;
 
-  const childItemClass = ({ active = false } = {}) => `newq group relative flex h-9 items-center gap-2.5 rounded-xl px-3 text-left transition-all duration-200 w-full ${
+  // `pill: true` when a sliding highlight paints the active background (the flyout has none).
+  const childItemClass = ({ active = false, pill = false } = {}) => `newq group relative flex h-9 items-center gap-2.5 rounded-xl px-3 text-left transition-all duration-200 active:scale-[0.98] w-full ${
     active
-      ? darkMode ? "bg-[#2563eb]/20 font-semibold" : "bg-[#2563eb]/10 font-semibold"
+      ? pill ? "font-semibold" : darkMode ? "bg-[#2563eb]/20 font-semibold" : "bg-[#2563eb]/10 font-semibold"
       : darkMode ? "font-normal text-white/55 hover:bg-[#2563eb]/15 hover:text-[#93c5fd]" : "font-normal text-slate-500 hover:bg-[#2563eb]/8 hover:text-[#2563eb]"
   }`;
 
-  const childIconClass = ({ active = false } = {}) => `flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-lg ${
+  const childIconClass = ({ active = false } = {}) => `relative z-10 flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-lg ${
     active ? (darkMode ? "bg-[#2563eb]/30" : "bg-[#2563eb]/15") : darkMode ? "text-white/40 group-hover:text-[#93c5fd]" : "text-slate-400 group-hover:text-[#2563eb]"
   }`;
+
+  const pillClass = darkMode ? "bg-[#2563eb]/20" : "bg-[#2563eb]/10";
+  // One pill for top-level rows (a group header holds it while one of its pages is open) and
+  // one per group for its pages, so it slides within a list rather than across clipped groups.
+  const activePill = (layoutId, rounded = "rounded-2xl") => (
+    <motion.span layoutId={layoutId} className={`absolute inset-0 ${rounded} ${pillClass}`} transition={PILL_SPRING} aria-hidden />
+  );
+  const linkProps = (menuId) => ({
+    href: menuPaths[menuId] || "/dashboard",
+    onClick: () => setMobileOpen?.(false),
+    onMouseEnter: () => void preloadModule(menuId),
+    onFocus: () => void preloadModule(menuId),
+    onTouchStart: () => void preloadModule(menuId),
+  });
 
   function renderGroup({ groupKey, label, GroupIcon, allChildren, filtered }) {
     if (!allChildren.length) return null;
@@ -215,18 +251,19 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
             if (collapsed) return;
             // Accordion behavior: opening one group closes any other open group instead of
             // stacking them all expanded at once.
-            setOpenGroups((current) => (current[groupKey] ? { ...current, [groupKey]: false } : { projects: false, hr: false, access: false, finance: false, [groupKey]: true }));
+            setOpenGroups((current) => (current[groupKey] ? { ...current, [groupKey]: false } : { ...CLOSED_GROUPS, [groupKey]: true }));
           }}
           onMouseEnter={(event) => openFlyout(groupKey, event.currentTarget, label, GroupIcon, list)}
           onMouseLeave={scheduleCloseFlyout}
           className={groupHeaderClass({ parentActive: childActive })}
           title={collapsed ? label : undefined}
         >
+          {childActive && activePill("sidebar-pill")}
           <span className={groupHeaderIconClass({ parentActive: childActive })}>
             <GroupIcon className="h-4.5 w-4.5" style={parentTint} />
           </span>
-          <span className={`min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`} style={parentTint}>{label}</span>
-          <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/40" : "text-black/35"}`} />
+          <span className={`relative z-10 min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`} style={parentTint}>{label}</span>
+          <ChevronDown className={`relative z-10 h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/40" : "text-black/35"}`} />
         </button>
 
         <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:grid-rows-[0fr] md:opacity-0" : isOpen || searchTerm ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
@@ -237,20 +274,21 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                 const ChildIcon = child.icon;
                 const active = activeMenu === child.id;
                 return (
-                  <button
+                  <Link
                     key={child.id}
                     data-sidebar-menu={child.id}
-                    type="button"
-                    onClick={() => setActiveMenu(child.id)}
-                    className={childItemClass({ active })}
+                    {...linkProps(child.id)}
+                    aria-current={active ? "page" : undefined}
+                    className={childItemClass({ active, pill: true })}
                   >
+                    {active && activePill(`sidebar-pill-${groupKey}`, "rounded-xl")}
                     <span className={`absolute -left-4 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
                     <span className={childIconClass({ active })}>
                       <ChildIcon className="h-3.5 w-3.5" style={active ? { color: ACCENT } : undefined} />
                     </span>
-                    <span className="max-w-full truncate text-[13px]" style={active ? { color: darkMode ? ACCENT_DARK_TEXT : ACCENT } : undefined}>{child.label}</span>
-                    {child.id === "site-images" && newSiteImages && <span className="ml-auto flex h-2 w-2 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" title="New site photos" />}
-                  </button>
+                    <span className="relative z-10 max-w-full truncate text-[13px]" style={active ? { color: darkMode ? ACCENT_DARK_TEXT : ACCENT } : undefined}>{child.label}</span>
+                    {child.id === "site-images" && newSiteImages && <span className="relative z-10 ml-auto flex h-2 w-2 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" title="New site photos" />}
+                  </Link>
                 );
               })}
             </div>
@@ -323,7 +361,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           </div>
         </div>
 
-        <nav ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-2 transition-all duration-500 ${collapsed ? "md:px-0" : ""}`}>
+        <motion.nav layoutScroll ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-2 transition-all duration-500 ${collapsed ? "md:px-0" : ""}`}>
           <p className={`overflow-hidden px-3 newq text-[9px] font-bold uppercase tracking-[0.14em] transition-[max-height,opacity,margin] duration-300 ${muted} ${collapsed ? "md:mb-0 md:max-h-0 md:opacity-0" : "mb-2 max-h-5 opacity-100"}`}>Workspace</p>
           <div className={`space-y-1 ${collapsed ? "md:flex md:flex-col md:items-center md:gap-2 md:space-y-0" : ""}`}>
           {filteredMenuItems.map((item) => {
@@ -349,22 +387,24 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
             const isActive = activeMenu === item.id;
 
             return (
-              <button
+              <Link
                 key={item.id}
                 data-sidebar-menu={item.id}
-                onClick={() => setActiveMenu(item.id)}
+                {...linkProps(item.id)}
+                aria-current={isActive ? "page" : undefined}
                 className={leafItemClass({ active: isActive })}
                 title={collapsed ? item.label : undefined}
               >
+                {isActive && activePill("sidebar-pill")}
                 <span className={leafIconClass({ active: isActive })}>
                   <Icon className="w-4.5 h-4.5" />
                 </span>
-                <span className={`overflow-hidden whitespace-nowrap text-[13px] transition-[max-width,opacity,transform] duration-300 ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[160px] opacity-100"}`}>{item.label}</span>
-              </button>
+                <span className={`relative z-10 overflow-hidden whitespace-nowrap text-[13px] transition-[max-width,opacity,transform] duration-300 ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[160px] opacity-100"}`}>{item.label}</span>
+              </Link>
             );
           })}
           </div>
-        </nav>
+        </motion.nav>
 
         <div ref={profileRef} className={`relative newq shrink-0 px-3 pb-4 pt-3 transition-all duration-500 ${collapsed ? "md:flex md:justify-center md:px-0" : ""}`}>
           <div
@@ -428,13 +468,11 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
               const ChildIcon = child.icon;
               const active = activeMenu === child.id;
               return (
-                <button
+                <Link
                   key={child.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveMenu(child.id);
-                    setFlyout(null);
-                  }}
+                  {...linkProps(child.id)}
+                  onClick={() => setFlyout(null)}
+                  aria-current={active ? "page" : undefined}
                   className={childItemClass({ active })}
                 >
                   <span className={childIconClass({ active })}>
@@ -442,7 +480,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                   </span>
                   <span className="max-w-full truncate text-[13px]" style={active ? { color: darkMode ? ACCENT_DARK_TEXT : ACCENT } : undefined}>{child.label}</span>
                   {child.id === "site-images" && newSiteImages && <span className="ml-auto flex h-2 w-2 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" />}
-                </button>
+                </Link>
               );
             })}
           </div>

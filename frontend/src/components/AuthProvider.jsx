@@ -29,10 +29,10 @@ if (typeof window !== "undefined" && !window.__vectordocsFetchPatched) {
   window.__vectordocsFetchPatched = true;
 }
 
-// Every page mounts its own ProtectedModule, so the session check, notification
-// badge, Loop unread badge and sidebar indicators all refetch on each navigation,
-// often several at once. Background reads go through here instead: one request in
-// flight per URL, and a recent successful answer is reused for `maxAgeMs`.
+// The session check, notification badge, Loop unread badge and sidebar indicators
+// poll the same URLs that the open page also reads, often several at once.
+// Background reads go through here instead: one request in flight per URL, and a
+// recent successful answer is reused for `maxAgeMs`.
 // Entries are keyed by the session token so a different login never sees them.
 const sharedJsonRequests = new Map();
 

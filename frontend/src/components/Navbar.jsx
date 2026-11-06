@@ -102,7 +102,7 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
 
     const checkNotifications = async ({ force = false } = {}) => {
       try {
-        // Shared and briefly reused: every page navigation remounts the navbar.
+        // Shared and briefly reused, so overlapping checks cost one request.
         const { ok, data } = await fetchJsonShared(`${API_URL}/notifications?limit=20`, { maxAgeMs: 10000, force });
         if (!ok || !data) return;
         const notifications = data.notifications || [];

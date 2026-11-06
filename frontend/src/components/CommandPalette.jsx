@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "motion/react";
 import { Activity, ArrowRight, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, ClipboardList, FileSpreadsheet, FileText, FolderLock, Images, LayoutDashboard, ListTodo, MessageCircleMore, MessagesSquare, PackageSearch, Search, ShieldCheck, SlidersHorizontal, UserRound, UserRoundSearch, Users, Workflow, X, ChartNoAxesCombined, Sheet } from "lucide-react";
+import { preloadModule } from "./appModules";
 
 const COMMAND_ITEMS = [
   { id: "dashboard", label: "Dashboard", description: "Overview, documents, activity, and workspace status", group: "Workspace", keywords: ["home", "overview"], icon: LayoutDashboard },
@@ -73,6 +75,7 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
 
   function selectItem(item = filteredItems[activeIndex]) {
     if (!item) return;
+    void preloadModule(item.id);
     onNavigate(item.id);
     setQuery("");
     setActiveIndex(0);
@@ -139,14 +142,26 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
                   <button
                     key={item.id}
                     type="button"
-                    onMouseEnter={() => setActiveIndex(index)}
+                    onMouseEnter={() => {
+                      setActiveIndex(index);
+                      void preloadModule(item.id);
+                    }}
                     onClick={() => selectItem(item)}
-                    className={`group flex w-full items-center gap-4 rounded-[22px] border p-4 text-left transition-all duration-200 ${active ? darkMode ? "border-[#d8f36a]/30 bg-[#d8f36a]/10" : "border-emerald-100 bg-[#f5fbf7]" : darkMode ? "border-white/10 bg-white/[0.035] hover:bg-white/[0.07]" : "border-slate-200 bg-white hover:border-emerald-100 hover:bg-[#f8fcfa]"}`}
+                    className={`group relative flex w-full items-center gap-4 rounded-[22px] border p-4 text-left transition-colors duration-200 active:scale-[0.99] ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-slate-200 bg-white"} ${active ? "" : darkMode ? "hover:bg-white/[0.07]" : "hover:border-emerald-100 hover:bg-[#f8fcfa]"}`}
                   >
-                    <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${item.group === "Access Control" ? "bg-rose-50 text-rose-600" : item.group === "HR" ? "bg-emerald-50 text-emerald-600" : darkMode ? "bg-white/10 text-[#d8f36a]" : "bg-blue-50 text-blue-600"}`}>
+                    {/* The highlight glides between results as the pointer or arrow keys move. */}
+                    {active && (
+                      <motion.span
+                        layoutId="command-palette-highlight"
+                        className={`absolute -inset-px rounded-[22px] border ${darkMode ? "border-[#d8f36a]/30 bg-[#d8f36a]/10" : "border-emerald-100 bg-[#f5fbf7]"}`}
+                        transition={{ type: "spring", stiffness: 650, damping: 42 }}
+                        aria-hidden
+                      />
+                    )}
+                    <span className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${item.group === "Access Control" ? "bg-rose-50 text-rose-600" : item.group === "HR" ? "bg-emerald-50 text-emerald-600" : darkMode ? "bg-white/10 text-[#d8f36a]" : "bg-blue-50 text-blue-600"}`}>
                       <Icon className="h-5 w-5" />
                     </span>
-                    <span className="min-w-0 flex-1">
+                    <span className="relative min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate text-base font-semibold">{item.label}</span>
                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/55" : "bg-slate-100 text-slate-500"}`}>{item.parent ? "submenu" : "module"}</span>
@@ -154,7 +169,7 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
                       <span className={`mt-1 block truncate text-sm ${darkMode ? "text-white/45" : "text-slate-500"}`}>{item.description}</span>
                       {item.parent && <span className={`mt-1 block truncate text-xs ${darkMode ? "text-white/35" : "text-slate-400"}`}>{item.parent} / {item.group}</span>}
                     </span>
-                    <ArrowRight className={`h-5 w-5 shrink-0 transition ${active ? "translate-x-0 opacity-70" : "-translate-x-1 opacity-25 group-hover:translate-x-0 group-hover:opacity-60"}`} />
+                    <ArrowRight className={`relative h-5 w-5 shrink-0 transition ${active ? "translate-x-0 opacity-70" : "-translate-x-1 opacity-25 group-hover:translate-x-0 group-hover:opacity-60"}`} />
                   </button>
                 );
               })}

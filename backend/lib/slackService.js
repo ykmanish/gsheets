@@ -144,6 +144,7 @@ function createSlackService({ token = "", signingSecret = "" } = {}) {
   }
 
   const uploadFile = ({ channel, filename, title, buffer, initialComment = "" }) => uploadFiles({ channel, files: [{ filename, title, buffer }], initialComment });
+  const deleteFile = (fileId) => api("files.delete", { file: fileId });
 
   /** The OAuth scopes the bot token carries, as Slack reports them. */
   async function grantedScopes() {
@@ -251,6 +252,7 @@ function createSlackService({ token = "", signingSecret = "" } = {}) {
     sendDm,
     uploadFile,
     uploadFiles,
+    deleteFile,
     grantedScopes,
     verifyRequest,
     approvalCardBlocks,

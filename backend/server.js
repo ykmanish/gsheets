@@ -20033,6 +20033,54 @@ async function ceoCutoffRecord(date) {
   return (await connectAuthDb()).collection("platformSettings").findOne({ _id: ceoCutoffRecordId(date) });
 }
 
+// Each post goes out once a day: the first send posts it, every later send (scheduled or
+// "Send now") edits that same message with the latest numbers. A claim in the database
+// stops two sends at the same moment from both posting.
+const ceoPostsRecordId = (date) => `ceo-report-posts:${date}`;
+
+async function postCeoReportOnce({ date, kind, channel, message }) {
+  const posts = (await connectAuthDb()).collection("platformSettings");
+  const _id = ceoPostsRecordId(date);
+  let claimed = false;
+  try {
+    claimed = Boolean(await posts.findOneAndUpdate(
+      { _id, [`${kind}.ts`]: { $exists: false }, [`${kind}.claimedAt`]: { $exists: false } },
+      { $set: { date, [`${kind}.claimedAt`]: new Date() } },
+      { upsert: true, returnDocument: "after" },
+    ));
+  } catch (error) {
+    if (error?.code !== 11000) throw error; // the day's record exists and this post is already claimed
+  }
+  if (!claimed) {
+    const existing = (await posts.findOne({ _id }))?.[kind];
+    if (!existing?.ts) return { skipped: "another send is posting it right now" };
+    if (existing.channel === channel) {
+      await slackService.updateMessage({ channel, ts: existing.ts, ...message });
+      await posts.updateOne({ _id }, { $set: { [`${kind}.updatedAt`]: new Date() } });
+      return { ...existing, updated: true };
+    }
+  }
+  try {
+    const posted = await slackService.postMessage({ channel, ...message });
+    await posts.updateOne({ _id }, { $set: { date, [`${kind}.channel`]: posted.channel, [`${kind}.ts`]: posted.ts, [`${kind}.postedAt`]: new Date() }, $unset: { [`${kind}.fileIds`]: "" } }, { upsert: true });
+    return { channel: posted.channel, ts: posted.ts, updated: false };
+  } catch (error) {
+    if (claimed) await posts.updateOne({ _id }, { $unset: { [`${kind}.claimedAt`]: "" } });
+    throw error;
+  }
+}
+
+// The evening PDFs: the previous upload is removed before the new one, so the channel only
+// ever holds the latest pair.
+async function replaceCeoReportFiles({ date, channel, files }) {
+  const posts = (await connectAuthDb()).collection("platformSettings");
+  const _id = ceoPostsRecordId(date);
+  const previous = (await posts.findOne({ _id }))?.brief?.fileIds || [];
+  for (const fileId of previous) await slackService.deleteFile(fileId).catch(() => {});
+  const result = await slackService.uploadFiles({ channel, files });
+  await posts.updateOne({ _id }, { $set: { "brief.fileIds": (result.files || []).map((file) => file.id).filter(Boolean) } }, { upsert: true });
+}
+
 async function sendCeoDmrUpdate({ date = istDateKey(new Date()), record = true } = {}) {
   const settings = await getCeoBriefSettings();
   const channel = await resolveCeoBriefChannel(settings);
@@ -20041,8 +20089,8 @@ async function sendCeoDmrUpdate({ date = istDateKey(new Date()), record = true }
   const timing = record ? { atTheCutoff: true } : { atCutoff: (await ceoCutoffRecord(date))?.dmr || null };
   const items = [ceoDmrItem(dmr, { cutoff: settings.dmrCutoff, ...timing }), ceoManpowerItem(dmr)].filter(Boolean);
   items[items.length - 1] = ceoWithButton(items[items.length - 1], "Open DMR", `${APP_PUBLIC_URL}/projects/dmr`);
-  await slackService.postMessage({ channel, text: `Site reports (DMR) · ${dmrPdfDateLabel(date)}`, blocks: [ceoReportHeader(date)], attachments: items });
-  return { sentTo: `#${settings.channel}`, dmr };
+  const post = await postCeoReportOnce({ date, kind: "dmr", channel, message: { text: `Site reports (DMR) · ${dmrPdfDateLabel(date)}`, blocks: [ceoReportHeader(date)], attachments: items } });
+  return { sentTo: `#${settings.channel}`, updated: Boolean(post.updated), dmr };
 }
 
 async function sendCeoPlanUpdate({ date = istDateKey(new Date()), record = true } = {}) {
@@ -20054,8 +20102,8 @@ async function sendCeoPlanUpdate({ date = istDateKey(new Date()), record = true 
   if (!plan) throw new Error("Couldn't read tomorrow's plan");
   const timing = record ? { atTheCutoff: true } : { atCutoff: (await ceoCutoffRecord(date))?.tomorrowPlan || null };
   const item = ceoWithButton(ceoPlanItem(plan, { cutoff: settings.tomorrowPlanCutoff, ...timing }), "Open DMR", `${APP_PUBLIC_URL}/projects/dmr`);
-  await slackService.postMessage({ channel, text: `Tomorrow's plan · ${dmrPdfDateLabel(plan.date)}`, blocks: [ceoReportHeader(date)], attachments: [item] });
-  return { sentTo: `#${settings.channel}`, plan };
+  const post = await postCeoReportOnce({ date, kind: "tomorrowPlan", channel, message: { text: `Tomorrow's plan · ${dmrPdfDateLabel(plan.date)}`, blocks: [ceoReportHeader(date)], attachments: [item] } });
+  return { sentTo: `#${settings.channel}`, updated: Boolean(post.updated), plan };
 }
 
 // MRN/PRN requests raised and decided today, read from the activity log the WhatsApp flow writes.
@@ -20215,11 +20263,11 @@ async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
     ],
   };
 
-  await slackService.postMessage({
+  const post = await postCeoReportOnce({
+    date,
+    kind: "brief",
     channel,
-    text: `Today's Report · ${label}`,
-    blocks: [ceoReportHeader(date)],
-    attachments: [...items, priorities],
+    message: { text: `Today's Report · ${label}`, blocks: [ceoReportHeader(date)], attachments: [...items, priorities] },
   });
 
   // The day's PDFs, shared together under the report: the DMR CEO report (built fresh, so it
@@ -20249,7 +20297,7 @@ async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
   let pdf = files.map((file) => file.filename).join(", ") || "none";
   if (files.length) {
     try {
-      await slackService.uploadFiles({ channel, files, initialComment: `Full reports · ${label}` });
+      await replaceCeoReportFiles({ date, channel, files });
     } catch (error) {
       pdf = `link (${error.slackError || error.message})`;
       console.error("CEO report PDF upload failed:", error.message);
@@ -20267,7 +20315,7 @@ async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
       blocks: [{ type: "section", text: { type: "mrkdwn", text: `Couldn't attach every PDF here. Open in UIPL Docs: ${missing.join(" · ")}` } }],
     });
   }
-  return { sentTo: `#${settings.channel}`, ai: Boolean(narrative), pdf };
+  return { sentTo: `#${settings.channel}`, updated: Boolean(post.updated), ai: Boolean(narrative), pdf };
 }
 
 // Production only, so a developer's local backend never posts a second report.

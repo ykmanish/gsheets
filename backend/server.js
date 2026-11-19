@@ -19833,10 +19833,10 @@ function startSlackEmployeeDigest() {
 
 /* ───────── Slack: CEO daily report (#uipl-updates) ───────── */
 
-// Three posts land in the report channel, Mon–Sat: whether today's DMR is filled by its
-// cut-off, whether tomorrow's plan is added by its cut-off, and an evening brief with the
-// employee report PDF plus a Claude-written summary of the day and its efficiency numbers.
-// Each opens with a large "Today's Report" header carrying the day and date.
+// One post a day in the report channel, Mon–Sat, under a large "Today's Report" header:
+// site reports (DMR), tomorrow's plan, employee reports and approvals, a Claude-written
+// summary, and the employee report PDF. At the DMR and tomorrow-plan cut-offs the status is
+// recorded quietly, so the report can say whether each came in on time.
 const CEO_BRIEF_SETTINGS_ID = "ceo-daily-brief-settings";
 const CEO_BRIEF_DEFAULTS = { enabled: true, channel: "uipl-updates", dmrCutoff: "12:00", tomorrowPlanCutoff: "16:00", briefTime: "21:45" };
 const CEO_BRIEF_MODEL = process.env.CEO_BRIEF_MODEL || "claude-opus-5-5";
@@ -19930,49 +19930,47 @@ async function ceoBriefTomorrowPlanStatus(date, dmr = null) {
   };
 }
 
-// Notification preview text: the message without bold markers.
-const ceoPlainText = (text = "") => text.replace(/\*/g, "").trim();
 const ceoList = (items = [], max = 12) => (items.length ? items.slice(0, max).join(", ") + (items.length > max ? ` and ${items.length - max} more` : "") : "none");
 const ceoPlural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
-const ceoDmrButton = { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Open DMR" }, url: `${APP_PUBLIC_URL}/projects/dmr`, action_id: "link:dmr" }] };
 
-// One plain status line each, worded the same in the midday posts and the evening report.
-function ceoDmrLine(dmr, cutoff = "") {
+// `atCutoff` is the status recorded at the cut-off (null when none was recorded that day).
+const ceoCutoffNote = (madeIt, cutoff) => (madeIt ? ` In by the ${cutoff} cut-off.` : ` Came in after the ${cutoff} cut-off.`);
+
+function ceoDmrLine(dmr, atCutoff = null, cutoff = "") {
   if (!dmr?.linked) return "*Site reports (DMR):* the DMR sheet isn't linked in UIPL Docs.";
-  const by = cutoff ? ` by ${cutoff}` : "";
   const total = dmr.filledSites.length + dmr.missingSites.length;
   if (!dmr.filled) {
-    return `*Site reports (DMR):* not filled${by}. No attendance entered${total ? ` for any of the ${ceoPlural(total, "planned site")} (${ceoList(dmr.missingSites)})` : ""}.`;
+    const when = atCutoff ? ` (cut-off ${cutoff})` : " yet";
+    return `*Site reports (DMR):* not filled${when}. No attendance entered${total ? ` for any of the ${ceoPlural(total, "planned site")} (${ceoList(dmr.missingSites)})` : ""}.`;
   }
   const coverage = total ? ` for ${dmr.filledSites.length} of ${ceoPlural(total, "site")}` : "";
+  const timing = atCutoff ? ceoCutoffNote(atCutoff.filled, cutoff) : "";
   const missing = dmr.missingSites.length ? ` Not filled: ${ceoList(dmr.missingSites)}.` : "";
-  return `*Site reports (DMR):* filled${coverage}${by}, ${dmr.actual} people on site against ${dmr.planned} planned.${missing}`;
+  return `*Site reports (DMR):* filled${coverage}, ${dmr.actual} people on site against ${dmr.planned} planned.${timing}${missing}`;
 }
 
-function ceoPlanLine(plan, cutoff = "") {
+function ceoPlanLine(plan, atCutoff = null, cutoff = "") {
   const day = dmrPdfDateLabel(plan.date);
-  if (!plan.added) return `*Tomorrow's plan (${day}):* not added${cutoff ? ` by ${cutoff}` : " yet"}.`;
+  if (!plan.added) return `*Tomorrow's plan (${day}):* not added${atCutoff ? ` (cut-off ${cutoff})` : " yet"}.`;
+  const timing = atCutoff ? ceoCutoffNote(atCutoff.added, cutoff) : "";
   const missing = plan.missingSites.length ? ` Missing for ${ceoList(plan.missingSites)}, which worked today.` : "";
-  return `*Tomorrow's plan (${day}):* added for ${ceoPlural(plan.sites.length, "site")}, ${plan.planned} people planned.${missing}`;
+  return `*Tomorrow's plan (${day}):* added for ${ceoPlural(plan.sites.length, "site")}, ${plan.planned} people planned.${timing}${missing}`;
 }
 
-async function sendCeoDmrCheck({ date = istDateKey(new Date()) } = {}) {
-  const settings = await getCeoBriefSettings();
-  const channel = await resolveCeoBriefChannel(settings);
-  const dmr = await ceoBriefDmrStatus(date);
-  const text = ceoDmrLine(dmr, settings.dmrCutoff);
-  await slackService.postMessage({ channel, text: ceoPlainText(text), blocks: [ceoReportHeader(date), { type: "section", text: { type: "mrkdwn", text } }, ceoDmrButton] });
-  return { sentTo: `#${settings.channel}`, dmr };
-}
+const ceoCutoffRecordId = (date) => `ceo-report-cutoffs:${date}`;
 
-async function sendCeoTomorrowPlanCheck({ date = istDateKey(new Date()) } = {}) {
-  const settings = await getCeoBriefSettings();
-  const channel = await resolveCeoBriefChannel(settings);
+// Runs at each cut-off: records the status without posting anything.
+async function recordCeoCutoff({ kind, date = istDateKey(new Date()) } = {}) {
   const dmr = await ceoBriefDmrStatus(date).catch(() => null);
-  const plan = await ceoBriefTomorrowPlanStatus(date, dmr);
-  const text = ceoPlanLine(plan, settings.tomorrowPlanCutoff);
-  await slackService.postMessage({ channel, text: ceoPlainText(text), blocks: [ceoReportHeader(date), { type: "section", text: { type: "mrkdwn", text } }, ceoDmrButton] });
-  return { sentTo: `#${settings.channel}`, plan };
+  const status = kind === "dmr" ? dmr : await ceoBriefTomorrowPlanStatus(date, dmr);
+  if (!status) return null;
+  const db = await connectAuthDb();
+  await db.collection("platformSettings").updateOne(
+    { _id: ceoCutoffRecordId(date) },
+    { $set: { date, [kind]: { ...status, recordedAt: new Date() } } },
+    { upsert: true },
+  );
+  return status;
 }
 
 // MRN/PRN requests raised and decided today, read from the activity log the WhatsApp flow writes.
@@ -20020,8 +20018,15 @@ async function buildCeoBriefFacts(date) {
   const answers = await db.collection("employeeExecutiveReportAnswers").find({ reportDate: date }).toArray();
   const dmr = await ceoBriefDmrStatus(date).catch((error) => ({ linked: false, error: error.message }));
   const tomorrowPlan = await ceoBriefTomorrowPlanStatus(date, dmr).catch((error) => ({ date: addDaysToDateKey(date, 1) || date, added: false, error: error.message, sites: [], missingSites: [] }));
+  const settings = await getCeoBriefSettings();
+  const atCutoff = await db.collection("platformSettings").findOne({ _id: ceoCutoffRecordId(date) });
   return {
     date,
+    cutoffs: {
+      dmr: { time: settings.dmrCutoff, recorded: Boolean(atCutoff?.dmr), filledByCutoff: atCutoff?.dmr ? Boolean(atCutoff.dmr.filled) : null },
+      tomorrowPlan: { time: settings.tomorrowPlanCutoff, recorded: Boolean(atCutoff?.tomorrowPlan), addedByCutoff: atCutoff?.tomorrowPlan ? Boolean(atCutoff.tomorrowPlan.added) : null },
+    },
+    atCutoff: { dmr: atCutoff?.dmr || null, tomorrowPlan: atCutoff?.tomorrowPlan || null },
     employeeReports: {
       expected: users.length,
       submitted: reports.length,
@@ -20063,7 +20068,7 @@ Use exactly these four bold headings, in this order, each on its own line follow
 *Bottom line*: one or two sentences on how the day went and the single thing that matters most.
 *Needs your attention*: up to 3 bullets starting with "• ", each a concrete issue with who or where and why it matters. Write "• Nothing urgent." if there is none.
 *Progress today*: up to 3 bullets of real outcomes (finished work, decisions, approvals), not activity. Write "• Little to report yet." if there is none.
-*Team discipline*: one or two sentences on whether site reports, tomorrow's plan and employee reports came in, using the numbers exactly as given.
+*Team discipline*: one or two sentences on whether site reports, tomorrow's plan and employee reports came in, and whether the DMR and plan met their cut-offs, using the numbers exactly as given.
 
 At most 150 words in total. If most employee reports are not in yet, say so plainly and draw no conclusions from the few that are. Name people only when it helps the CEO act. No greeting or sign-off.
 
@@ -20104,14 +20109,15 @@ async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
   const settings = await getCeoBriefSettings();
   const channel = await resolveCeoBriefChannel(settings);
   const facts = await buildCeoBriefFacts(date);
-  const narrative = await writeCeoBriefNarrative(facts);
+  const { atCutoff, ...modelFacts } = facts;
+  const narrative = await writeCeoBriefNarrative(modelFacts);
   const { employeeReports, approvals, dmr, tomorrowPlan } = facts;
   const label = dmrPdfDateLabel(date);
 
   const raised = approvals.paymentRequestsRaised + approvals.materialRequestsRaised;
   const statusLines = [
-    ceoDmrLine(dmr),
-    ceoPlanLine(tomorrowPlan),
+    ceoDmrLine(dmr, atCutoff.dmr, settings.dmrCutoff),
+    ceoPlanLine(tomorrowPlan, atCutoff.tomorrowPlan, settings.tomorrowPlanCutoff),
     `*Employee reports:* ${employeeReports.submitted} of ${employeeReports.expected} submitted.`,
     ...(raised ? [`*Approvals:* ${ceoPlural(approvals.paymentRequestsRaised, "payment request")} and ${ceoPlural(approvals.materialRequestsRaised, "material request")} raised; ${approvals.paymentRequestsDecided + approvals.materialRequestsDecided} decided.`] : []),
   ];
@@ -20169,10 +20175,10 @@ function configureCeoBriefCrons(settings) {
         .catch((error) => console.error(`CEO brief: ${label} failed:`, error.message));
     }, { timezone: "Asia/Kolkata" }));
   };
-  schedule(settings.dmrCutoff, "DMR check", sendCeoDmrCheck);
-  schedule(settings.tomorrowPlanCutoff, "tomorrow-plan check", sendCeoTomorrowPlanCheck);
-  schedule(settings.briefTime, "daily brief", sendCeoDailyBrief);
-  console.log(`CEO brief scheduled: DMR ${settings.dmrCutoff}, tomorrow plan ${settings.tomorrowPlanCutoff}, brief ${settings.briefTime} IST`);
+  schedule(settings.dmrCutoff, "DMR cut-off recorded", () => recordCeoCutoff({ kind: "dmr" }));
+  schedule(settings.tomorrowPlanCutoff, "tomorrow-plan cut-off recorded", () => recordCeoCutoff({ kind: "tomorrowPlan" }));
+  schedule(settings.briefTime, "daily report", sendCeoDailyBrief);
+  console.log(`CEO report scheduled at ${settings.briefTime} IST (cut-offs recorded at ${settings.dmrCutoff} and ${settings.tomorrowPlanCutoff})`);
 }
 
 app.get("/slack/ceo-brief/settings", requireSuperAdmin, async (req, res) => {
@@ -20200,12 +20206,9 @@ app.put("/slack/ceo-brief/settings", requireSuperAdmin, async (req, res) => {
 });
 
 app.post("/slack/ceo-brief/send-now", requireSuperAdmin, async (req, res) => {
-  const senders = { dmr: sendCeoDmrCheck, tomorrowPlan: sendCeoTomorrowPlanCheck, brief: sendCeoDailyBrief };
-  const send = senders[req.body?.part];
-  if (!send) return res.status(400).json({ error: "part must be dmr, tomorrowPlan or brief" });
   try {
-    const result = await send({ date: dmrDateKey(req.body?.date) || istDateKey(new Date()) });
-    addActivityLog({ req, action: "Sent CEO brief test", target: req.body.part, details: result });
+    const result = await sendCeoDailyBrief({ date: dmrDateKey(req.body?.date) || istDateKey(new Date()) });
+    addActivityLog({ req, action: "Sent CEO report now", target: "CEO report", details: result });
     res.json({ success: true, result });
   } catch (error) {
     res.status(400).json({ error: error.message || "Could not send" });
@@ -24401,7 +24404,7 @@ cron.schedule("0 23 * * *", async () => {
   }
 });
 
-module.exports = { app, generateEmployeeDailyReportPdf, buildCeoBriefFacts, sendCeoDmrCheck, sendCeoTomorrowPlanCheck, sendCeoDailyBrief };
+module.exports = { app, generateEmployeeDailyReportPdf, buildCeoBriefFacts, recordCeoCutoff, sendCeoDailyBrief };
 
 app.patch("/reports/:id/read", (req, res) => {
   const report = reports.find((item) => item.id === req.params.id);

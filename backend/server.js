@@ -19613,8 +19613,15 @@ async function slackApproverFor(module, userId) {
 // A decision taken in Slack goes through the same step as a WhatsApp reply: the people
 // concerned are told on WhatsApp, and the card updates through notifySlackApproval.
 async function applySlackDecision({ module, recordNo, event, approver, comment = "" }) {
-  const dashboard = module === "MRN" ? await readMrnDashboard({ all: true }) : await readPrnDashboard({ all: true });
   const key = slackRecordKey(module);
+  // Test cards (TEST-…) carry their own sample row: the card and thread update, but no sheet
+  // lookup and no WhatsApp message.
+  if (/^TEST-/i.test(recordNo)) {
+    const card = await (await connectAuthDb()).collection("slackApprovalCards").findOne({ _id: `${module}:${recordNo.toLowerCase()}` });
+    const actor = { id: `slack:${approver.id}`, displayName: approver.name, username: approver.email || approver.name };
+    return notifySlackApproval({ module, event, row: card?.testRow || { [key]: recordNo }, actor, comment });
+  }
+  const dashboard = module === "MRN" ? await readMrnDashboard({ all: true }) : await readPrnDashboard({ all: true });
   const row = (dashboard.records || []).find((record) => projectText(record[key]).toLowerCase() === recordNo.toLowerCase());
   if (!row) throw new Error(`${module} ${recordNo} was not found in the sheet`);
   const actor = { id: `slack:${approver.id}`, displayName: approver.name, username: approver.email || approver.name };

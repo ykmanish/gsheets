@@ -20055,9 +20055,14 @@ async function postCeoReportOnce({ date, kind, channel, message }) {
     const existing = (await posts.findOne({ _id }))?.[kind];
     if (!existing?.ts) return { skipped: "another send is posting it right now" };
     if (existing.channel === channel) {
-      await slackService.updateMessage({ channel, ts: existing.ts, ...message });
-      await posts.updateOne({ _id }, { $set: { [`${kind}.updatedAt`]: new Date() } });
-      return { ...existing, updated: true };
+      try {
+        await slackService.updateMessage({ channel, ts: existing.ts, ...message });
+        await posts.updateOne({ _id }, { $set: { [`${kind}.updatedAt`]: new Date() } });
+        return { ...existing, updated: true };
+      } catch (error) {
+        // Deleted in Slack since it was posted: post it afresh below.
+        if (error.slackError !== "message_not_found") throw error;
+      }
     }
   }
   try {

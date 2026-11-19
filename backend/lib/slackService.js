@@ -127,17 +127,23 @@ function createSlackService({ token = "", signingSecret = "" } = {}) {
     return postMessage({ channel: await openDm(userId), ...message });
   }
 
-  /** Uploads a file into a channel or DM (needs the files:write scope). */
-  async function uploadFile({ channel, filename, title, buffer, initialComment = "" }) {
-    const { upload_url: uploadUrl, file_id: fileId } = await api("files.getUploadURLExternal", { filename, length: String(buffer.length) }, { json: false });
-    const response = await fetch(uploadUrl, { method: "POST", body: buffer });
-    if (!response.ok) throw new Error(`Slack file upload failed: HTTP ${response.status}`);
+  /** Uploads files into a channel or DM as one message (needs the files:write scope). */
+  async function uploadFiles({ channel, files = [], initialComment = "" }) {
+    const uploaded = [];
+    for (const { filename, title, buffer } of files) {
+      const { upload_url: uploadUrl, file_id: fileId } = await api("files.getUploadURLExternal", { filename, length: String(buffer.length) }, { json: false });
+      const response = await fetch(uploadUrl, { method: "POST", body: buffer });
+      if (!response.ok) throw new Error(`Slack file upload failed: HTTP ${response.status}`);
+      uploaded.push({ id: fileId, title: title || filename });
+    }
     return api("files.completeUploadExternal", {
-      files: [{ id: fileId, title: title || filename }],
+      files: uploaded,
       channel_id: channel,
       ...(initialComment ? { initial_comment: initialComment } : {}),
     });
   }
+
+  const uploadFile = ({ channel, filename, title, buffer, initialComment = "" }) => uploadFiles({ channel, files: [{ filename, title, buffer }], initialComment });
 
   /** The OAuth scopes the bot token carries, as Slack reports them. */
   async function grantedScopes() {
@@ -244,6 +250,7 @@ function createSlackService({ token = "", signingSecret = "" } = {}) {
     openDm,
     sendDm,
     uploadFile,
+    uploadFiles,
     grantedScopes,
     verifyRequest,
     approvalCardBlocks,

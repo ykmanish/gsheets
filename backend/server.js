@@ -19835,7 +19835,7 @@ function startSlackEmployeeDigest() {
 
 // One post a day in the report channel, Mon–Sat, under a large "Today's Report" header:
 // site reports (DMR), tomorrow's plan, employee reports and approvals, a Claude-written
-// summary, and the employee report PDF. At the DMR and tomorrow-plan cut-offs the status is
+// summary, and two PDFs: the DMR CEO report and the employee report. At the DMR and tomorrow-plan cut-offs the status is
 // recorded quietly, so the report can say whether each came in on time.
 const CEO_BRIEF_SETTINGS_ID = "ceo-daily-brief-settings";
 const CEO_BRIEF_DEFAULTS = { enabled: true, channel: "uipl-updates", dmrCutoff: "12:00", tomorrowPlanCutoff: "16:00", briefTime: "21:45" };
@@ -20130,32 +20130,53 @@ async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
       { type: "section", text: { type: "mrkdwn", text: statusLines.join("\n") } },
       { type: "divider" },
       ...(narrative ? ceoNarrativeSections(narrative) : [{ type: "section", text: { type: "mrkdwn", text: "_The written summary is unavailable right now; the status above is complete._" } }]),
-      { type: "context", elements: [{ type: "mrkdwn", text: `Prepared by UIPL Docs${narrative ? " · summary by Claude" : ""} · full employee report attached below` }] },
+      { type: "context", elements: [{ type: "mrkdwn", text: `Prepared by UIPL Docs${narrative ? " · summary by Claude" : ""} · DMR and employee reports attached below` }] },
     ],
   });
 
-  // The day's employee report PDF, the same file the dashboard serves after its cut-off.
-  let pdf = "sent";
+  // The day's PDFs, shared together under the report: the DMR CEO report (built fresh, so it
+  // has the full day; this also refreshes the copy the DMR page serves) and the employee
+  // report the dashboard caches after its cut-off.
+  const files = [];
+  const missing = [];
+  if (dmr.linked) {
+    try {
+      const { buffer } = await buildDmrDailyPdf(date, { save: true });
+      files.push({ filename: dmrPdfFilename(date), title: `DMR report · ${label}`, buffer });
+    } catch (error) {
+      console.error("CEO report: DMR PDF failed:", error.message);
+      missing.push(`<${APP_PUBLIC_URL}/projects/dmr|DMR report>`);
+    }
+  }
   try {
     const buffer = fs.existsSync(employeeReportPdfPath(date))
       ? fs.readFileSync(employeeReportPdfPath(date))
       : (await buildEmployeeDailyReportPdfFor(date, { save: false })).buffer;
-    await slackService.uploadFile({
-      channel,
-      filename: `employee-daily-report-${date}.pdf`,
-      title: `Employee report · ${label}`,
-      buffer,
-      initialComment: `Full employee report · ${label}`,
-    });
+    files.push({ filename: `employee-daily-report-${date}.pdf`, title: `Employee report · ${label}`, buffer });
   } catch (error) {
-    pdf = `link (${error.slackError || error.message})`;
-    console.error("CEO brief PDF upload failed:", error.message);
-    // Posting text into a public channel needs no membership, but sharing a file does.
-    const hint = error.slackError === "not_in_channel" ? " To attach it next time, add the app here: type `/invite @UIPL Docs` in this channel." : "";
+    console.error("CEO report: employee PDF failed:", error.message);
+    missing.push(`<${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}|Employee report>`);
+  }
+
+  let pdf = files.map((file) => file.filename).join(", ") || "none";
+  if (files.length) {
+    try {
+      await slackService.uploadFiles({ channel, files, initialComment: `Full reports · ${label}` });
+    } catch (error) {
+      pdf = `link (${error.slackError || error.message})`;
+      console.error("CEO report PDF upload failed:", error.message);
+      missing.unshift(...files.map((file) => (file.filename.startsWith("dmr-")
+        ? `<${APP_PUBLIC_URL}/projects/dmr|DMR report>`
+        : `<${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}|Employee report>`)));
+      // Posting text into a public channel needs no membership, but sharing a file does.
+      if (error.slackError === "not_in_channel") missing.push("To attach them next time, add the app here: type `/invite @UIPL Docs` in this channel.");
+    }
+  }
+  if (missing.length) {
     await slackService.postMessage({
       channel,
-      text: `Employee daily report PDF: ${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}`,
-      blocks: [{ type: "section", text: { type: "mrkdwn", text: `The employee report PDF couldn't be attached here. <${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}|Open it in UIPL Docs>.${hint}` } }],
+      text: "Some report PDFs couldn't be attached",
+      blocks: [{ type: "section", text: { type: "mrkdwn", text: `Couldn't attach every PDF here. Open in UIPL Docs: ${missing.join(" · ")}` } }],
     });
   }
   return { sentTo: `#${settings.channel}`, ai: Boolean(narrative), pdf };

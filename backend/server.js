@@ -22,6 +22,7 @@ const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/ser
 
 const { processDocument, processSheetText } = require("./lib/processDocument");
 const { createWhatsAppService, normalizePhone } = require("./lib/whatsappService");
+const { createSlackService } = require("./lib/slackService");
 const { callClaude, retrieveRelevantChunks, routeClaudeModel, modelIdForTier } = require("./lib/claudeRag");
 const { registerFormsModule } = require("./lib/formsModule");
 const { registerRecruitmentModule } = require("./lib/recruitmentModule");
@@ -869,6 +870,28 @@ const whatsappService = createWhatsAppService({
   graphVersion: process.env.META_GRAPH_API_VERSION || "v23.0",
 });
 
+// Slack runs alongside WhatsApp: MRN/PRN approval cards, report reminders by DM and an
+// evening report digest. Channels may be names or IDs; approvers are listed by email, and
+// with no list only the workspace's owners and admins may approve.
+const slackService = createSlackService({
+  token: process.env.SLACK_BOT_TOKEN,
+  signingSecret: process.env.SLACK_SIGNING_SECRET,
+});
+const slackEmailList = (value = "") => String(value).split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+const SLACK_CHANNELS = {
+  MRN: process.env.SLACK_MRN_CHANNEL || "mrn-notification",
+  PRN: process.env.SLACK_PRN_CHANNEL || "prn-notification",
+  employeeReport: process.env.SLACK_EMPLOYEE_REPORT_CHANNEL || "employee-report",
+  // DMR manpower reminders; until a #site-manpower channel exists they go to the general channel.
+  dmr: process.env.SLACK_DMR_CHANNEL || "site-manpower",
+  dmrFallback: process.env.SLACK_FALLBACK_CHANNEL || "all-juniper",
+};
+const SLACK_APPROVER_EMAILS = {
+  MRN: slackEmailList(process.env.SLACK_MRN_APPROVER_EMAILS),
+  PRN: slackEmailList(process.env.SLACK_PRN_APPROVER_EMAILS),
+};
+const SLACK_EMPLOYEE_DIGEST_TIME = process.env.SLACK_EMPLOYEE_DIGEST_TIME || "19:00";
+
 function verifyWhatsAppWebhook(req, res) {
   const challenge = whatsappService.verifyWebhook(req.query);
   if (challenge === null) return res.status(403).send("Webhook verification failed");
@@ -907,6 +930,8 @@ app.get("/webhooks/whatsapp", verifyWhatsAppWebhook);
 app.post("/webhooks/whatsapp", receiveWhatsAppWebhook);
 app.get("/api/webhooks/whatsapp", verifyWhatsAppWebhook);
 app.post("/api/webhooks/whatsapp", receiveWhatsAppWebhook);
+// Slack posts button clicks and modal submissions form-encoded; the signature covers the raw body.
+app.post("/webhooks/slack/interactions", express.raw({ type: "application/x-www-form-urlencoded", limit: "1mb" }), receiveSlackInteraction);
 
 app.get("/health", (req, res) => {
   res.json({ ok: true, status: "connected", timestamp: new Date().toISOString() });
@@ -2411,12 +2436,19 @@ async function sendEmployeeDailyReportReminders({ dateKey = employeeReportToday(
     }
   }
 
+  // People who still haven't filed also get a Slack DM, matched by their profile email.
+  const slackReminders = await sendSlackReportReminders({
+    date,
+    users: reminderUsers.filter((user) => !submitted.has(String(user._id || user.id || ""))),
+  }).catch((error) => ({ sent: 0, failed: 0, skipped: 0, error: error.message }));
+
   const finishedAt = new Date();
   const run = {
     _id: runId,
     date,
     status: "completed",
     source,
+    slack: slackReminders,
     templateName,
     language: EMPLOYEE_REPORT_REMINDER_TEMPLATE_LANGUAGE,
     link: employeeReminderLink(date),
@@ -2712,6 +2744,10 @@ async function sendDmrWhatsAppReminder({ type = "actualManpower", dateKey = istD
     }
   }
 
+  // The same reminder in Slack, while both run side by side.
+  const slackReminder = await sendSlackDmrReminder({ type, date, results })
+    .catch((error) => ({ status: "failed", error: error.message }));
+
   const finishedAt = new Date();
   const run = {
     _id: runId,
@@ -2720,6 +2756,7 @@ async function sendDmrWhatsAppReminder({ type = "actualManpower", dateKey = istD
     scope,
     status: "completed",
     source,
+    slack: slackReminder,
     templateName,
     language: DMR_REMINDER_TEMPLATE_LANGUAGE,
     recipients: contacts.length,
@@ -18921,6 +18958,9 @@ function formatDateForMessage(value) {
 async function sendMrnWhatsappAutomation({ event = "actionRequest", row = {}, actor = null, comment = "" } = {}) {
   const settings = await getMrnWhatsappSettings();
   const eventName = event || "actionRequest";
+  // Every request and decision, from WhatsApp or Slack, also lands on the Slack card.
+  void notifySlackApproval({ module: "MRN", event: eventName, row, actor, comment })
+    .catch((error) => console.error("Slack MRN card error:", error.message));
   if (!settings.enabled) {
     const lastRun = await recordMrnWhatsappLastRun({ event: eventName, status: "disabled", mrnNo: row.mrnNo, reason: "Automation is disabled" });
     return { status: "disabled", sent: 0, failed: 0, results: [], lastRun };
@@ -19326,6 +19366,9 @@ function findPrnSubmitterContact(contacts = [], submitterName = "") {
 async function sendPrnWhatsappAutomation({ event = "actionRequest", row = {}, actor = null, comment = "" } = {}) {
   const settings = await getPrnWhatsappSettings();
   const eventName = event || "actionRequest";
+  // Every request and decision, from WhatsApp or Slack, also lands on the Slack card.
+  void notifySlackApproval({ module: "PRN", event: eventName, row, actor, comment })
+    .catch((error) => console.error("Slack PRN card error:", error.message));
   if (!settings.enabled) {
     const lastRun = await recordPrnWhatsappLastRun({ event: eventName, status: "disabled", prnNo: row.prnNo, reason: "Automation is disabled" });
     return { status: "disabled", sent: 0, failed: 0, results: [], lastRun };
@@ -19463,6 +19506,344 @@ async function handleApprovalWhatsappReply(message = {}) {
     || await handlePrnWhatsappReply(message)
     || await handleMrnWhatsappReply(message);
 }
+
+/* ───────── Slack: MRN/PRN approval cards ───────── */
+
+const slackRecordKey = (module) => (module === "MRN" ? "mrnNo" : "prnNo");
+
+function slackApprovalContent(module, row = {}) {
+  if (module === "MRN") {
+    const [, project, issuedBy, materials, neededBy] = mrnWhatsappParams(row, "", "").actionRequest;
+    return {
+      title: "New material request needs approval",
+      fields: [
+        ["Project", project],
+        ["Issued by", issuedBy],
+        ["Materials", materials],
+        ["Needed by", neededBy],
+        ["Quotation amount", row.quotationAmount],
+        ["Vendor", row.vendorName],
+      ],
+      links: [
+        ["MRN photo", row.mrnPhoto],
+        ["Quotation", row.quotationPhoto],
+        ["Open in UIPL Docs", `${APP_PUBLIC_URL}/projects/mrn`],
+      ],
+    };
+  }
+  const [, project, requestedBy, vendor, paymentType, amount, remark] = prnWhatsappParams(row, "", "").actionRequest;
+  return {
+    title: "New payment request needs approval",
+    fields: [
+      ["Project", project],
+      ["Requested by", requestedBy],
+      ["Vendor", vendor],
+      ["Payment type", paymentType],
+      ["Amount", amount],
+      ["Remark", remark],
+    ],
+    links: [["Open in UIPL Docs", `${APP_PUBLIC_URL}/projects/prn`]],
+  };
+}
+
+// Posts the card for a new request, then follows it: decisions update the card in place
+// (the first one wins) and comments go into its thread. A request raised before Slack was
+// connected has no card, so its later decisions are skipped here.
+async function notifySlackApproval({ module, event, row = {}, actor = null, comment = "" }) {
+  if (!slackService.configured) return null;
+  const recordNo = projectText(row[slackRecordKey(module)]);
+  if (!recordNo) return null;
+  const cards = (await connectAuthDb()).collection("slackApprovalCards");
+  const _id = `${module}:${recordNo.toLowerCase()}`;
+  const content = slackApprovalContent(module, row);
+
+  if (event === "actionRequest") {
+    // The watcher retries a request every minute until WhatsApp delivers it; post once.
+    if (await cards.findOne({ _id })) return null;
+    const channel = await slackService.resolveChannel(SLACK_CHANNELS[module]);
+    const posted = await slackService.postMessage({
+      channel,
+      text: `${module} ${recordNo} needs approval`,
+      blocks: slackService.approvalCardBlocks({ module, recordNo, ...content }),
+    });
+    const now = new Date();
+    await cards.insertOne({ _id, module, recordNo, channel: posted.channel, ts: posted.ts, status: "pending", createdAt: now, updatedAt: now })
+      .catch((error) => { if (error?.code !== 11000) throw error; });
+    return posted;
+  }
+
+  const card = await cards.findOne({ _id });
+  if (!card) return null;
+  const by = actor?.system ? "UIPL Docs" : (actor?.displayName || actor?.username || "Someone");
+  const note = projectText(comment, 1500);
+
+  if (event === "comment") {
+    return slackService.postMessage({ channel: card.channel, thread_ts: card.ts, text: `:speech_balloon: *${by}*: ${note || "(no text)"}` });
+  }
+  if (!["approved", "declined"].includes(event)) return null;
+
+  const decidedAt = new Date();
+  const claimed = await cards.findOneAndUpdate(
+    { _id, status: "pending" },
+    { $set: { status: event, decidedBy: by, decidedAt, comment: note, updatedAt: decidedAt } },
+  );
+  if (!claimed) return null;
+  await slackService.updateMessage({
+    channel: card.channel,
+    ts: card.ts,
+    text: `${module} ${recordNo} ${event}`,
+    blocks: slackService.approvalCardBlocks({ module, recordNo, ...content, decision: { event, by, at: decidedAt, comment: note } }),
+  });
+  return slackService.postMessage({
+    channel: card.channel,
+    thread_ts: card.ts,
+    text: `${event === "approved" ? ":white_check_mark: Approved" : ":x: Declined"} by *${by}*${note ? `: ${note}` : ""}`,
+  });
+}
+
+async function slackApproverFor(module, userId) {
+  const user = await slackService.userInfo(userId);
+  const email = projectText(user?.profile?.email).toLowerCase();
+  const name = user?.real_name || user?.profile?.real_name || user?.name || "Slack user";
+  const allowList = SLACK_APPROVER_EMAILS[module] || [];
+  const allowed = allowList.length ? allowList.includes(email) : Boolean(user?.is_primary_owner || user?.is_owner || user?.is_admin);
+  return { id: userId, name, email, allowed };
+}
+
+// A decision taken in Slack goes through the same step as a WhatsApp reply: the people
+// concerned are told on WhatsApp, and the card updates through notifySlackApproval.
+async function applySlackDecision({ module, recordNo, event, approver, comment = "" }) {
+  const dashboard = module === "MRN" ? await readMrnDashboard({ all: true }) : await readPrnDashboard({ all: true });
+  const key = slackRecordKey(module);
+  const row = (dashboard.records || []).find((record) => projectText(record[key]).toLowerCase() === recordNo.toLowerCase());
+  if (!row) throw new Error(`${module} ${recordNo} was not found in the sheet`);
+  const actor = { id: `slack:${approver.id}`, displayName: approver.name, username: approver.email || approver.name };
+  const send = module === "MRN" ? sendMrnWhatsappAutomation : sendPrnWhatsappAutomation;
+  const result = await send({ event, row, actor, comment });
+  addActivityLog({
+    action: `Slack ${module} ${event}`,
+    target: recordNo,
+    actor,
+    details: { by: approver.name, email: approver.email, comment, whatsapp: result?.status },
+  });
+  return result;
+}
+
+async function handleSlackInteraction(payload = {}) {
+  const userId = payload.user?.id;
+  if (payload.type === "block_actions") {
+    const action = payload.actions?.[0];
+    if (!action?.action_id?.startsWith("approval:")) return;
+    const kind = action.action_id.slice("approval:".length);
+    const { module, recordNo } = JSON.parse(action.value || "{}");
+    if (!["MRN", "PRN"].includes(module) || !recordNo) return;
+    const channel = payload.channel?.id;
+    const approver = await slackApproverFor(module, userId);
+    if (!approver.allowed) {
+      await slackService.postEphemeral({ channel, user: userId, text: `Only ${module} approvers can act on ${recordNo}. Ask an admin to add your email to the approver list.` });
+      return;
+    }
+    if (kind !== "comment") {
+      const card = await (await connectAuthDb()).collection("slackApprovalCards").findOne({ _id: `${module}:${recordNo.toLowerCase()}` });
+      if (card && card.status !== "pending") {
+        await slackService.postEphemeral({ channel, user: userId, text: `${recordNo} was already ${card.status} by ${card.decidedBy}.` });
+        return;
+      }
+    }
+    if (kind === "approved") {
+      await applySlackDecision({ module, recordNo, event: "approved", approver });
+      return;
+    }
+    await slackService.openView(payload.trigger_id, slackService.decisionModal({ kind, module, recordNo }));
+    return;
+  }
+  if (payload.type === "view_submission") {
+    const kind = { approval_declined: "declined", approval_comment: "comment" }[payload.view?.callback_id];
+    if (!kind) return;
+    const { module, recordNo } = JSON.parse(payload.view.private_metadata || "{}");
+    if (!["MRN", "PRN"].includes(module) || !recordNo) return;
+    const approver = await slackApproverFor(module, userId);
+    if (!approver.allowed) return;
+    const text = projectText(payload.view.state?.values?.reason?.text?.value, 1500);
+    await applySlackDecision({ module, recordNo, event: kind, approver, comment: text });
+  }
+}
+
+async function receiveSlackInteraction(req, res) {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
+  const verified = slackService.verifyRequest({
+    rawBody,
+    timestamp: req.headers["x-slack-request-timestamp"],
+    signature: req.headers["x-slack-signature"],
+  });
+  if (!verified) return res.status(401).send("Invalid Slack signature");
+  let payload;
+  try {
+    payload = JSON.parse(new URLSearchParams(rawBody).get("payload") || "{}");
+  } catch {
+    return res.status(400).send("Malformed payload");
+  }
+  // Slack wants an answer within 3 seconds; an empty 200 also closes a submitted modal.
+  res.status(200).send("");
+  handleSlackInteraction(payload).catch((error) => {
+    console.error("Slack interaction error:", error.message);
+    if (payload.user?.id && payload.channel?.id) {
+      slackService.postEphemeral({ channel: payload.channel.id, user: payload.user.id, text: `Couldn't complete that: ${error.message}` }).catch(() => {});
+    }
+  });
+}
+
+/* ───────── Slack: daily report reminders and digest ───────── */
+
+async function sendSlackReportReminders({ date, users = [] }) {
+  if (!slackService.configured) return { sent: 0, failed: 0, skipped: users.length, reason: "Slack is not configured" };
+  const summary = { sent: 0, failed: 0, skipped: 0, notInSlack: [] };
+  for (const user of users) {
+    const name = user.displayName || user.username || "there";
+    try {
+      const slackUser = await slackService.userByEmail(user.email);
+      if (!slackUser) {
+        summary.skipped += 1;
+        summary.notInSlack.push(name);
+        continue;
+      }
+      await slackService.sendDm(slackUser.id, {
+        text: `Your daily report for ${dmrPdfDateLabel(date)} isn't in yet.`,
+        blocks: [
+          { type: "section", text: { type: "mrkdwn", text: `Hi ${name.split(" ")[0]}, your daily report for *${dmrPdfDateLabel(date)}* isn't in yet.` } },
+          { type: "actions", elements: [{ type: "button", style: "primary", text: { type: "plain_text", text: "Fill today's report" }, url: employeeReminderLink(date), action_id: "link:report" }] },
+        ],
+      });
+      summary.sent += 1;
+    } catch (error) {
+      summary.failed += 1;
+      console.error(`Slack report reminder failed for ${name}:`, error.message);
+    }
+  }
+  return summary;
+}
+
+async function postSlackEmployeeDigest({ date = employeeReportToday() } = {}) {
+  if (!slackService.configured) throw new Error("Slack is not configured");
+  const db = await connectAuthDb();
+  const linkedUsers = await db.collection("users").find({
+    employeeDailySpreadsheetId: { $exists: true, $ne: "" },
+    isActive: { $ne: false },
+  }).limit(500).toArray();
+  const expected = linkedUsers.filter((user) => !isEmployeeDailyReportExempt(user));
+  const ids = expected.map((user) => String(user._id));
+  const reports = await db.collection("employeeDailyReports").find({ userId: { $in: ids }, reportDate: date }).toArray();
+  const filed = new Set(reports.map((report) => String(report.userId)));
+  const pending = expected.filter((user) => !filed.has(String(user._id))).map((user) => user.displayName || user.username || "Employee");
+  const openItems = reports.reduce((sum, report) => sum + (report.taskItems || []).filter((item) => !/^completed$/i.test(projectText(item.status))).length, 0);
+  const tomorrowItems = reports.reduce((sum, report) => sum + (report.waitingTaskItems || []).length, 0);
+  const channel = await slackService.resolveChannel(SLACK_CHANNELS.employeeReport);
+  return slackService.postMessage({
+    channel,
+    text: `Daily reports for ${dmrPdfDateLabel(date)}: ${filed.size} of ${expected.length} filed`,
+    blocks: [
+      { type: "header", text: { type: "plain_text", text: `Daily reports · ${dmrPdfDateLabel(date)}` } },
+      { type: "section", text: { type: "mrkdwn", text: `*${filed.size} of ${expected.length}* filed` } },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Pending*\n${pending.length ? pending.slice(0, 15).join(", ") + (pending.length > 15 ? ` +${pending.length - 15} more` : "") : "Nobody :tada:"}` },
+          { type: "mrkdwn", text: `*Open items*\n${openItems}` },
+          { type: "mrkdwn", text: `*Tomorrow's plan*\n${tomorrowItems} items` },
+        ],
+      },
+      { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Open dashboard" }, url: `${APP_PUBLIC_URL}/employee-daily-report`, action_id: "link:dashboard" }] },
+    ],
+  });
+}
+
+/* ───────── Slack: DMR manpower reminders ───────── */
+
+const SLACK_DMR_REMINDER_TITLES = {
+  actualManpower: (label) => `Actual manpower for ${label} is due`,
+  tomorrowPlan: (label) => `Tomorrow's planned manpower (${label}) is due`,
+  siteDailyReport: (label) => `Site daily report for ${label} is due`,
+};
+
+// Last ten digits, so "+91 98765 43210" on a Slack profile matches WhatsApp's "919876543210".
+const slackPhoneKey = (value = "") => String(value).replace(/\D/g, "").slice(-10);
+
+// `results` are the WhatsApp run's per-contact outcomes: "skipped" means already filled.
+async function sendSlackDmrReminder({ type, date, results = [] }) {
+  if (!slackService.configured) return { status: "skipped", reason: "Slack is not configured" };
+  const label = dmrPdfDateLabel(date);
+  const title = (SLACK_DMR_REMINDER_TITLES[type] || SLACK_DMR_REMINDER_TITLES.actualManpower)(label);
+  const due = results.filter((item) => item.status !== "skipped");
+  const filled = results.filter((item) => item.status === "skipped");
+  const channel = await slackService.resolveChannel(SLACK_CHANNELS.dmr)
+    .catch(() => slackService.resolveChannel(SLACK_CHANNELS.dmrFallback));
+  const fields = [];
+  if (due.length) fields.push({ type: "mrkdwn", text: `*Still to fill*\n${due.map((item) => item.name).join(", ")}` });
+  if (filled.length) fields.push({ type: "mrkdwn", text: `*Already filled*\n${filled.map((item) => item.name).join(", ")}` });
+  await slackService.postMessage({
+    channel,
+    text: title,
+    blocks: [
+      { type: "section", text: { type: "mrkdwn", text: `:alarm_clock: *${title}*` } },
+      ...(fields.length ? [{ type: "section", fields }] : []),
+      { type: "actions", elements: [{ type: "button", style: "primary", text: { type: "plain_text", text: "Open DMR" }, url: `${APP_PUBLIC_URL}/projects/dmr`, action_id: "link:dmr" }] },
+    ],
+  });
+
+  // Also DM the people still due whose Slack profile carries the same phone number.
+  const duePhones = new Map(due.map((item) => [slackPhoneKey(item.phone), item]).filter(([key]) => key.length === 10));
+  let dms = 0;
+  if (duePhones.size) {
+    const members = await slackService.listMembers();
+    for (const member of members) {
+      const match = duePhones.get(slackPhoneKey(member.profile?.phone));
+      if (!match) continue;
+      await slackService.sendDm(member.id, { text: `Hi ${match.name.split(" ")[0]}, ${title.charAt(0).toLowerCase()}${title.slice(1)}. ${APP_PUBLIC_URL}/projects/dmr` })
+        .then(() => { dms += 1; })
+        .catch((error) => console.error(`Slack DMR DM failed for ${match.name}:`, error.message));
+    }
+  }
+  return { status: "posted", channel, due: due.length, filled: filled.length, dms };
+}
+
+// Production only, so a developer's local backend never posts a second digest.
+function startSlackEmployeeDigest() {
+  if (!slackService.configured || process.env.SLACK_EMPLOYEE_DIGEST_ENABLED === "false") return;
+  if (process.env.NODE_ENV !== "production" && process.env.SLACK_EMPLOYEE_DIGEST_ENABLED !== "true") return;
+  const time = validEmployeeReminderTime(SLACK_EMPLOYEE_DIGEST_TIME) || "19:00";
+  const [hour, minute] = time.split(":");
+  cron.schedule(`${Number(minute)} ${Number(hour)} * * 1-6`, () => {
+    postSlackEmployeeDigest()
+      .then(() => console.log("Slack employee report digest posted"))
+      .catch((error) => console.error("Slack employee report digest error:", error.message));
+  }, { timezone: "Asia/Kolkata" });
+  console.log(`Slack employee report digest scheduled at ${time} IST`);
+}
+
+app.get("/slack/status", requireSuperAdmin, async (req, res) => {
+  if (!slackService.configured) return res.json({ configured: false });
+  try {
+    const auth = await slackService.api("auth.test", {}, { json: false });
+    const channels = {};
+    for (const [flow, name] of Object.entries(SLACK_CHANNELS)) {
+      channels[flow] = await slackService.resolveChannel(name).then((id) => ({ name, id })).catch((error) => ({ name, error: error.message }));
+    }
+    res.json({ configured: true, team: auth.team, bot: auth.user, channels, approvers: SLACK_APPROVER_EMAILS, digestTime: SLACK_EMPLOYEE_DIGEST_TIME });
+  } catch (error) {
+    res.status(502).json({ configured: true, error: error.message });
+  }
+});
+
+app.post("/slack/digest/send-now", requireSuperAdmin, async (req, res) => {
+  try {
+    const date = dmrDateKey(req.body?.date) || employeeReportToday(req);
+    await postSlackEmployeeDigest({ date });
+    addActivityLog({ req, action: "Posted Slack report digest", target: date });
+    res.json({ success: true, date });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not post the Slack digest" });
+  }
+});
 
 async function checkPrnWhatsappAutomationQueue({ source = "watcher" } = {}) {
   if (prnWhatsappWatcherRunning) return { status: "busy", sent: 0, checked: 0 };
@@ -23531,6 +23912,7 @@ if (require.main === module) {
   });
   startMrnWhatsappWatcher();
   startPrnWhatsappWatcher();
+  startSlackEmployeeDigest();
 
   cron.schedule("0 12 * * *", async () => {
     try {

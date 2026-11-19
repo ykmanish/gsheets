@@ -118,9 +118,32 @@ function createSlackService({ token = "", signingSecret = "" } = {}) {
   const postEphemeral = (message) => api("chat.postEphemeral", message);
   const openView = (triggerId, view) => api("views.open", { trigger_id: triggerId, view });
 
-  async function sendDm(userId, message) {
+  async function openDm(userId) {
     const { channel } = await api("conversations.open", { users: userId });
-    return postMessage({ channel: channel.id, ...message });
+    return channel.id;
+  }
+
+  async function sendDm(userId, message) {
+    return postMessage({ channel: await openDm(userId), ...message });
+  }
+
+  /** Uploads a file into a channel or DM (needs the files:write scope). */
+  async function uploadFile({ channel, filename, title, buffer, initialComment = "" }) {
+    const { upload_url: uploadUrl, file_id: fileId } = await api("files.getUploadURLExternal", { filename, length: String(buffer.length) }, { json: false });
+    const response = await fetch(uploadUrl, { method: "POST", body: buffer });
+    if (!response.ok) throw new Error(`Slack file upload failed: HTTP ${response.status}`);
+    return api("files.completeUploadExternal", {
+      files: [{ id: fileId, title: title || filename }],
+      channel_id: channel,
+      ...(initialComment ? { initial_comment: initialComment } : {}),
+    });
+  }
+
+  /** The OAuth scopes the bot token carries, as Slack reports them. */
+  async function grantedScopes() {
+    if (!token) return [];
+    const response = await fetch(`${SLACK_API}/auth.test`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    return String(response.headers.get("x-oauth-scopes") || "").split(",").map((scope) => scope.trim()).filter(Boolean);
   }
 
   function verifyRequest({ rawBody = "", timestamp = "", signature = "" } = {}) {
@@ -218,7 +241,10 @@ function createSlackService({ token = "", signingSecret = "" } = {}) {
     updateMessage,
     postEphemeral,
     openView,
+    openDm,
     sendDm,
+    uploadFile,
+    grantedScopes,
     verifyRequest,
     approvalCardBlocks,
     decisionModal,

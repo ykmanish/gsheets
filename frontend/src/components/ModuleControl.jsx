@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Power, Save, Search, ShieldCheck, Wrench } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
+import CeoBriefSettings from "./CeoBriefSettings";
 
 function formatDateLabel(value) {
   if (!value) return "";
@@ -421,6 +422,7 @@ export default function ModuleControl({ darkMode }) {
         </div>
       </section>
 
+      <CeoBriefSettings darkMode={darkMode} />
       <section className={`overflow-hidden rounded-[30px] border p-5 sm:p-7 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white"}`}>
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>

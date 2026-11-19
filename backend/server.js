@@ -23,6 +23,8 @@ const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/ser
 const { processDocument, processSheetText } = require("./lib/processDocument");
 const { createWhatsAppService, normalizePhone } = require("./lib/whatsappService");
 const { createSlackService } = require("./lib/slackService");
+const AnthropicSdk = require("@anthropic-ai/sdk");
+const Anthropic = AnthropicSdk.default || AnthropicSdk;
 const { callClaude, retrieveRelevantChunks, routeClaudeModel, modelIdForTier } = require("./lib/claudeRag");
 const { registerFormsModule } = require("./lib/formsModule");
 const { registerRecruitmentModule } = require("./lib/recruitmentModule");
@@ -19827,6 +19829,381 @@ function startSlackEmployeeDigest() {
   console.log(`Slack employee report digest scheduled at ${time} IST`);
 }
 
+/* ───────── Slack: CEO daily brief (DM to the CEO) ───────── */
+
+// Three checks land in the CEO's Slack DMs, Mon–Sat: whether today's DMR is filled by its
+// cut-off, whether tomorrow's plan is added by its cut-off, and an evening brief with the
+// employee report PDF plus a Claude-written summary of the day and its efficiency numbers.
+const CEO_BRIEF_SETTINGS_ID = "ceo-daily-brief-settings";
+const CEO_BRIEF_DEFAULTS = { enabled: true, ceoEmail: "", dmrCutoff: "12:00", tomorrowPlanCutoff: "16:00", briefTime: "21:45" };
+const CEO_BRIEF_MODEL = process.env.CEO_BRIEF_MODEL || "claude-opus-5-5";
+const ceoBriefAnthropic = (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY)
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY })
+  : null;
+let ceoBriefCronTasks = [];
+
+async function getCeoBriefSettings() {
+  const db = await connectAuthDb();
+  const saved = await db.collection("platformSettings").findOne({ _id: CEO_BRIEF_SETTINGS_ID });
+  return {
+    enabled: saved ? saved.enabled !== false : CEO_BRIEF_DEFAULTS.enabled,
+    ceoEmail: projectText(saved?.ceoEmail),
+    dmrCutoff: validEmployeeReminderTime(saved?.dmrCutoff) || CEO_BRIEF_DEFAULTS.dmrCutoff,
+    tomorrowPlanCutoff: validEmployeeReminderTime(saved?.tomorrowPlanCutoff) || CEO_BRIEF_DEFAULTS.tomorrowPlanCutoff,
+    briefTime: validEmployeeReminderTime(saved?.briefTime) || CEO_BRIEF_DEFAULTS.briefTime,
+    updatedAt: saved?.updatedAt || null,
+    updatedBy: saved?.updatedBy || null,
+  };
+}
+
+async function saveCeoBriefSettings(input = {}, actor = null) {
+  const times = {};
+  for (const key of ["dmrCutoff", "tomorrowPlanCutoff", "briefTime"]) {
+    times[key] = validEmployeeReminderTime(input[key]);
+    if (!times[key]) throw new Error("Choose valid times for every cut-off");
+  }
+  const ceoEmail = projectText(input.ceoEmail, 200).toLowerCase();
+  if (ceoEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ceoEmail)) throw new Error("Enter a valid email for the CEO's Slack account");
+  const db = await connectAuthDb();
+  await db.collection("platformSettings").updateOne(
+    { _id: CEO_BRIEF_SETTINGS_ID },
+    { $set: { enabled: input.enabled !== false, ceoEmail, ...times, updatedAt: new Date(), updatedBy: actor?.displayName || actor?.username || null } },
+    { upsert: true },
+  );
+  const settings = await getCeoBriefSettings();
+  configureCeoBriefCrons(settings);
+  return settings;
+}
+
+// The CEO's Slack account: the email in settings, or the workspace's primary owner until one is set.
+async function resolveCeoSlackUser(settings) {
+  if (settings.ceoEmail) {
+    const user = await slackService.userByEmail(settings.ceoEmail);
+    if (!user) throw new Error(`No Slack member with ${settings.ceoEmail}; invite the CEO to the workspace first`);
+    return user;
+  }
+  const owner = (await slackService.listMembers()).find((member) => member.is_primary_owner) || (await slackService.listMembers()).find((member) => member.is_owner);
+  if (!owner) throw new Error("No CEO email set and no workspace owner found");
+  return owner;
+}
+
+const ceoSiteKey = (value = "") => projectText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+
+async function ceoBriefDmrStatus(date) {
+  if (!publicDmrSettings().linked) return { linked: false };
+  const dashboard = await readDmrDashboard(date, { ensureToday: false, force: true });
+  const sites = dashboard.today?.siteBreakdown || [];
+  const planRecords = dashboard.todayPlan?.records || [];
+  const filledSites = sites.filter((site) => Number(site.actual) > 0).map((site) => site.label || site.site).filter(Boolean);
+  const filledKeys = new Set(filledSites.map(ceoSiteKey));
+  const plannedSites = [...new Set(planRecords.map((record) => projectText(record.site)).filter(Boolean))];
+  const planned = planRecords.reduce((sum, record) => sum + (Number(record.plannedManpower) || 0), 0) || Number(dashboard.today?.totals?.planned) || 0;
+  const actual = Number(dashboard.today?.totals?.actual) || 0;
+  return {
+    linked: true,
+    filled: actual > 0,
+    actual,
+    planned,
+    filledSites,
+    missingSites: plannedSites.filter((site) => !filledKeys.has(ceoSiteKey(site))),
+  };
+}
+
+async function ceoBriefTomorrowPlanStatus(date, dmr = null) {
+  const tomorrow = addDaysToDateKey(date, 1) || date;
+  const plan = await readDmrTomorrowPlan(tomorrow).catch(() => null);
+  const records = plan?.records || [];
+  const sites = [...new Set(records.map((record) => projectText(record.site)).filter(Boolean))];
+  const siteKeys = new Set(sites.map(ceoSiteKey));
+  return {
+    date: tomorrow,
+    added: records.length > 0,
+    sites,
+    submitters: [...new Set(records.map((record) => projectText(record.submittedBy)).filter(Boolean))],
+    planned: records.reduce((sum, record) => sum + (Number(record.plannedManpower) || 0), 0),
+    // Sites working today with no plan for tomorrow yet.
+    missingSites: (dmr?.filledSites || []).filter((site) => !siteKeys.has(ceoSiteKey(site))),
+  };
+}
+
+// Notification preview text: the message without bold markers or :emoji: codes.
+const ceoPlainText = (text = "") => text.replace(/\*/g, "").replace(/:[a-z_]+:\s*/g, "").trim();
+const ceoList = (items = [], max = 12) => (items.length ? items.slice(0, max).join(", ") + (items.length > max ? ` +${items.length - max} more` : "") : "None");
+const ceoDmrButton = { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Open DMR" }, url: `${APP_PUBLIC_URL}/projects/dmr`, action_id: "link:dmr" }] };
+
+async function sendCeoDmrCheck({ date = istDateKey(new Date()) } = {}) {
+  const settings = await getCeoBriefSettings();
+  const ceo = await resolveCeoSlackUser(settings);
+  const dmr = await ceoBriefDmrStatus(date);
+  const label = dmrPdfDateLabel(date);
+  let text;
+  if (!dmr.linked) text = `:grey_question: *Today's DMR* (${label}): the DMR sheet isn't linked in UIPL Docs.`;
+  else if (dmr.filled) {
+    text = `:white_check_mark: *Today's DMR is filled* (${label}, checked at ${settings.dmrCutoff})\nActual manpower *${dmr.actual}* vs planned *${dmr.planned}* · Sites filled: ${ceoList(dmr.filledSites)}`;
+    if (dmr.missingSites.length) text += `\n:warning: Planned but not filled yet: ${ceoList(dmr.missingSites)}`;
+  } else {
+    text = `:warning: *Today's DMR is not filled* by ${settings.dmrCutoff} (${label})\nNo actual manpower has been entered.${dmr.missingSites.length ? ` Planned sites: ${ceoList(dmr.missingSites)}` : ""}`;
+  }
+  await slackService.sendDm(ceo.id, { text: ceoPlainText(text), blocks: [{ type: "section", text: { type: "mrkdwn", text } }, ceoDmrButton] });
+  return { sentTo: ceo.real_name || ceo.name, dmr };
+}
+
+async function sendCeoTomorrowPlanCheck({ date = istDateKey(new Date()) } = {}) {
+  const settings = await getCeoBriefSettings();
+  const ceo = await resolveCeoSlackUser(settings);
+  const dmr = await ceoBriefDmrStatus(date).catch(() => null);
+  const plan = await ceoBriefTomorrowPlanStatus(date, dmr);
+  const label = dmrPdfDateLabel(plan.date);
+  let text;
+  if (plan.added) {
+    text = `:white_check_mark: *Tomorrow's plan is added* for ${label} (checked at ${settings.tomorrowPlanCutoff})\n${plan.sites.length} site${plan.sites.length === 1 ? "" : "s"}, *${plan.planned}* planned manpower · Sites: ${ceoList(plan.sites)} · By: ${ceoList(plan.submitters, 6)}`;
+    if (plan.missingSites.length) text += `\n:warning: Working today but no plan for tomorrow: ${ceoList(plan.missingSites)}`;
+  } else {
+    text = `:warning: *Tomorrow's plan is not added* for ${label} by ${settings.tomorrowPlanCutoff}.${plan.missingSites.length ? `\nSites working today: ${ceoList(plan.missingSites)}` : ""}`;
+  }
+  await slackService.sendDm(ceo.id, { text: ceoPlainText(text), blocks: [{ type: "section", text: { type: "mrkdwn", text } }, ceoDmrButton] });
+  return { sentTo: ceo.real_name || ceo.name, plan };
+}
+
+// Everything the evening brief says comes from here; the numbers are computed, not written by the model.
+async function buildCeoBriefFacts(date) {
+  const db = await connectAuthDb();
+  const users = (await db.collection("users").find({
+    employeeDailySpreadsheetId: { $exists: true, $ne: "" },
+    isActive: { $ne: false },
+  }).limit(500).toArray()).filter((user) => !isEmployeeDailyReportExempt(user));
+  const reports = await db.collection("employeeDailyReports").find({ userId: { $in: users.map((user) => String(user._id)) }, reportDate: date }).toArray();
+  const filedIds = new Set(reports.map((report) => String(report.userId)));
+  const reminderTime = (await getEmployeeReminderSettings()).time;
+  const [reminderHour, reminderMinute] = reminderTime.split(":").map(Number);
+  const istMinutes = (value) => {
+    const ist = new Date(new Date(value).getTime() + 5.5 * 3600e3);
+    return ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  };
+  const tasks = reports.flatMap((report) => (report.taskItems || []).map((task) => ({
+    employee: report.employeeName,
+    department: report.department,
+    site: projectText(task.site),
+    status: projectText(task.status) || "No status",
+    description: projectText(task.description, 180),
+  })));
+  const completed = tasks.filter((task) => /^completed$/i.test(task.status)).length;
+  const answers = await db.collection("employeeExecutiveReportAnswers").find({ reportDate: date }).toArray();
+
+  const dayStart = new Date(`${date}T00:00:00+05:30`);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 3600e3);
+  const cards = (await db.collection("slackApprovalCards").find({ createdAt: { $gte: dayStart, $lt: dayEnd } }).toArray())
+    .filter((card) => !/^TEST-/i.test(card.recordNo));
+  const decided = cards.filter((card) => card.decidedAt);
+  const turnaround = decided.length
+    ? Math.round(decided.reduce((sum, card) => sum + (new Date(card.decidedAt) - new Date(card.createdAt)), 0) / decided.length / 60000)
+    : null;
+
+  const dmr = await ceoBriefDmrStatus(date).catch((error) => ({ linked: false, error: error.message }));
+  const tomorrowPlan = await ceoBriefTomorrowPlanStatus(date, dmr).catch((error) => ({ added: false, error: error.message, sites: [], missingSites: [] }));
+  return {
+    date,
+    reports: {
+      expected: users.length,
+      filed: reports.length,
+      filedBeforeReminder: reports.filter((report) => report.submittedAt && istMinutes(report.submittedAt) < reminderHour * 60 + reminderMinute).length,
+      reminderTime,
+      pending: users.filter((user) => !filedIds.has(String(user._id))).map((user) => user.displayName || user.username),
+    },
+    tasks: {
+      total: tasks.length,
+      completed,
+      open: tasks.length - completed,
+      stuck: tasks.filter((task) => /halt|hold|suspend|cancel/i.test(task.status)).slice(0, 10),
+      tomorrowPlanned: reports.reduce((sum, report) => sum + (report.waitingTaskItems || []).length, 0),
+      items: tasks.slice(0, 150),
+    },
+    managementAnswers: answers.map((doc) => ({
+      employee: doc.employeeName,
+      answers: (doc.answers || []).filter((answer) => projectText(answer.answer)).map((answer) => ({ question: answer.label, answer: projectText(answer.answer, 300) })),
+    })).filter((doc) => doc.answers.length),
+    approvals: {
+      mrnRaised: cards.filter((card) => card.module === "MRN").length,
+      prnRaised: cards.filter((card) => card.module === "PRN").length,
+      decided: decided.length,
+      pending: cards.length - decided.length,
+      averageMinutesToDecide: turnaround,
+    },
+    dmr,
+    tomorrowPlan,
+  };
+}
+
+const ceoPercent = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
+
+// Claude writes the narrative from the facts; on any API failure the brief goes out with the numbers alone.
+async function writeCeoBriefNarrative(facts) {
+  if (!ceoBriefAnthropic) return null;
+  try {
+    const response = await ceoBriefAnthropic.beta.messages.create({
+      model: CEO_BRIEF_MODEL,
+      max_tokens: 16000,
+      output_config: { effort: "medium" },
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      system: "You write the end-of-day brief for the CEO of UIPL, a company running construction and interior projects across several sites (daily manpower reports, employee daily reports, material and payment approvals). Use only the facts provided: never invent people, sites, vendors, amounts or numbers. Be direct and specific. Reply in Slack mrkdwn only.",
+      messages: [{
+        role: "user",
+        content: `Write the CEO's brief for ${dmrPdfDateLabel(facts.date)}.
+
+Use these bold headings, in this order: *Today in one line*, *What moved*, *Risks and blockers*, *Needs your decision*, *Efficiency*, *Tomorrow*.
+Under each heading write at most 4 bullets starting with "• ", each at most 25 words; about 250 words in total.
+Under *Efficiency*, interpret the computed numbers (report compliance, filing before the reminder, task completion, DMR and tomorrow-plan discipline, approval turnaround) and name the biggest gap. Do not recompute them.
+Name people only where the facts name them. If a heading has nothing to report, write "• Nothing reported."
+No greeting, preamble or sign-off.
+
+Facts (JSON):
+${JSON.stringify(facts)}`,
+      }],
+    }, { timeout: 120_000 });
+    if (response.stop_reason === "refusal") {
+      console.warn("CEO brief narrative refused:", response.stop_details?.category || "no category");
+      return null;
+    }
+    return response.content.filter((block) => block.type === "text").map((block) => block.text).join("\n").trim() || null;
+  } catch (error) {
+    if (error instanceof Anthropic.RateLimitError) console.warn("CEO brief narrative: rate limited");
+    else if (error instanceof Anthropic.APIConnectionError) console.warn("CEO brief narrative: connection failed:", error.message);
+    else if (error instanceof Anthropic.APIError) console.warn(`CEO brief narrative: API error ${error.status}:`, error.message);
+    else throw error;
+    return null;
+  }
+}
+
+// Slack caps a section at 3000 characters; split on paragraph breaks.
+function ceoNarrativeSections(text = "") {
+  const sections = [];
+  let current = "";
+  for (const paragraph of text.split(/\n{2,}/)) {
+    if (current && (current.length + paragraph.length + 2) > 2800) {
+      sections.push(current);
+      current = "";
+    }
+    current = current ? `${current}\n\n${paragraph}` : paragraph.slice(0, 2800);
+  }
+  if (current) sections.push(current);
+  return sections.map((chunk) => ({ type: "section", text: { type: "mrkdwn", text: chunk } }));
+}
+
+async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
+  const settings = await getCeoBriefSettings();
+  const ceo = await resolveCeoSlackUser(settings);
+  const channel = await slackService.openDm(ceo.id);
+  const facts = await buildCeoBriefFacts(date);
+  const narrative = await writeCeoBriefNarrative(facts);
+  const { reports, tasks, approvals, dmr, tomorrowPlan } = facts;
+  const label = dmrPdfDateLabel(date);
+  const yesNo = (value) => (value ? "Yes :white_check_mark:" : "No :warning:");
+
+  await slackService.postMessage({
+    channel,
+    text: `CEO daily brief · ${label}`,
+    blocks: [
+      { type: "header", text: { type: "plain_text", text: `CEO daily brief · ${label}` } },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Reports filed*\n${reports.filed} of ${reports.expected} (${ceoPercent(reports.filed, reports.expected)}%) · ${reports.filedBeforeReminder} before ${reports.reminderTime}` },
+          { type: "mrkdwn", text: `*Tasks completed*\n${tasks.completed} of ${tasks.total} (${ceoPercent(tasks.completed, tasks.total)}%) · ${tasks.stuck.length} stuck` },
+          { type: "mrkdwn", text: `*Today's DMR filled*\n${dmr.linked ? `${yesNo(dmr.filled)} · ${dmr.actual} of ${dmr.planned} planned` : "DMR sheet not linked"}` },
+          { type: "mrkdwn", text: `*Tomorrow's plan added*\n${yesNo(tomorrowPlan.added)}${tomorrowPlan.added ? ` · ${tomorrowPlan.sites.length} sites` : ""}` },
+          { type: "mrkdwn", text: `*Approvals (MRN / PRN)*\n${approvals.mrnRaised} / ${approvals.prnRaised} raised · ${approvals.decided} decided${approvals.averageMinutesToDecide !== null ? ` · avg ${approvals.averageMinutesToDecide} min` : ""}` },
+          { type: "mrkdwn", text: `*Still to file*\n${reports.pending.length ? ceoList(reports.pending, 8) : "Nobody"}` },
+        ],
+      },
+      { type: "divider" },
+      ...(narrative ? ceoNarrativeSections(narrative) : [{ type: "section", text: { type: "mrkdwn", text: "_The AI summary is unavailable right now; the numbers above are complete._" } }]),
+      { type: "context", elements: [{ type: "mrkdwn", text: `Numbers from UIPL Docs${narrative ? " · summary written by Claude from those numbers and today's reports" : ""}` }] },
+    ],
+  });
+
+  // The day's employee report PDF, the same file the dashboard serves after its cut-off.
+  let pdf = "sent";
+  try {
+    const buffer = fs.existsSync(employeeReportPdfPath(date))
+      ? fs.readFileSync(employeeReportPdfPath(date))
+      : (await buildEmployeeDailyReportPdfFor(date, { save: false })).buffer;
+    await slackService.uploadFile({
+      channel,
+      filename: `employee-daily-report-${date}.pdf`,
+      title: `Employee daily report · ${label}`,
+      buffer,
+      initialComment: `Employee daily report · ${label}`,
+    });
+  } catch (error) {
+    pdf = `link (${error.slackError || error.message})`;
+    console.error("CEO brief PDF upload failed:", error.message);
+    await slackService.postMessage({
+      channel,
+      text: `Employee daily report PDF: ${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}`,
+      blocks: [{ type: "section", text: { type: "mrkdwn", text: `The employee report PDF couldn't be attached here. <${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}|Open it in UIPL Docs>` } }],
+    });
+  }
+  return { sentTo: ceo.real_name || ceo.name, ai: Boolean(narrative), pdf };
+}
+
+// Production only, so a developer's local backend never DMs the CEO.
+function configureCeoBriefCrons(settings) {
+  for (const task of ceoBriefCronTasks) task.stop();
+  ceoBriefCronTasks = [];
+  if (!slackService.configured || !settings.enabled) return;
+  if (process.env.NODE_ENV !== "production" && process.env.CEO_BRIEF_DEV !== "true") return;
+  const schedule = (time, label, run) => {
+    const [hour, minute] = time.split(":");
+    ceoBriefCronTasks.push(cron.schedule(`${Number(minute)} ${Number(hour)} * * 1-6`, () => {
+      run({})
+        .then(() => console.log(`CEO brief: ${label} sent`))
+        .catch((error) => console.error(`CEO brief: ${label} failed:`, error.message));
+    }, { timezone: "Asia/Kolkata" }));
+  };
+  schedule(settings.dmrCutoff, "DMR check", sendCeoDmrCheck);
+  schedule(settings.tomorrowPlanCutoff, "tomorrow-plan check", sendCeoTomorrowPlanCheck);
+  schedule(settings.briefTime, "daily brief", sendCeoDailyBrief);
+  console.log(`CEO brief scheduled: DMR ${settings.dmrCutoff}, tomorrow plan ${settings.tomorrowPlanCutoff}, brief ${settings.briefTime} IST`);
+}
+
+app.get("/slack/ceo-brief/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const settings = await getCeoBriefSettings();
+    const status = { slackConfigured: slackService.configured, aiConfigured: Boolean(ceoBriefAnthropic), model: CEO_BRIEF_MODEL };
+    if (slackService.configured) {
+      status.canAttachPdf = (await slackService.grantedScopes().catch(() => [])).includes("files:write");
+      status.ceo = await resolveCeoSlackUser(settings).then((user) => user.real_name || user.name).catch((error) => ({ error: error.message }));
+    }
+    res.json({ settings, status });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Could not load CEO brief settings" });
+  }
+});
+
+app.put("/slack/ceo-brief/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const settings = await saveCeoBriefSettings(req.body || {}, req.authUser);
+    addActivityLog({ req, action: "Updated CEO daily brief settings", target: "CEO brief" });
+    res.json({ success: true, settings });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not save CEO brief settings" });
+  }
+});
+
+app.post("/slack/ceo-brief/send-now", requireSuperAdmin, async (req, res) => {
+  const senders = { dmr: sendCeoDmrCheck, tomorrowPlan: sendCeoTomorrowPlanCheck, brief: sendCeoDailyBrief };
+  const send = senders[req.body?.part];
+  if (!send) return res.status(400).json({ error: "part must be dmr, tomorrowPlan or brief" });
+  try {
+    const result = await send({ date: dmrDateKey(req.body?.date) || istDateKey(new Date()) });
+    addActivityLog({ req, action: "Sent CEO brief test", target: req.body.part, details: result });
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not send" });
+  }
+});
+
 app.get("/slack/status", requireSuperAdmin, async (req, res) => {
   if (!slackService.configured) return res.json({ configured: false });
   try {
@@ -23920,6 +24297,9 @@ if (require.main === module) {
   startMrnWhatsappWatcher();
   startPrnWhatsappWatcher();
   startSlackEmployeeDigest();
+  getCeoBriefSettings()
+    .then(configureCeoBriefCrons)
+    .catch((error) => console.error("CEO brief schedule error:", error.message));
 
   cron.schedule("0 12 * * *", async () => {
     try {
@@ -24013,7 +24393,7 @@ cron.schedule("0 23 * * *", async () => {
   }
 });
 
-module.exports = { app, generateEmployeeDailyReportPdf };
+module.exports = { app, generateEmployeeDailyReportPdf, buildCeoBriefFacts, sendCeoDmrCheck, sendCeoTomorrowPlanCheck, sendCeoDailyBrief };
 
 app.patch("/reports/:id/read", (req, res) => {
   const report = reports.find((item) => item.id === req.params.id);

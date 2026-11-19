@@ -20142,10 +20142,12 @@ async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
   } catch (error) {
     pdf = `link (${error.slackError || error.message})`;
     console.error("CEO brief PDF upload failed:", error.message);
+    // Posting text into a public channel needs no membership, but sharing a file does.
+    const hint = error.slackError === "not_in_channel" ? " To attach it next time, add the app here: type `/invite @UIPL Docs` in this channel." : "";
     await slackService.postMessage({
       channel,
       text: `Employee daily report PDF: ${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}`,
-      blocks: [{ type: "section", text: { type: "mrkdwn", text: `The employee report PDF couldn't be attached here. <${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}|Open it in UIPL Docs>` } }],
+      blocks: [{ type: "section", text: { type: "mrkdwn", text: `The employee report PDF couldn't be attached here. <${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}|Open it in UIPL Docs>.${hint}` } }],
     });
   }
   return { sentTo: `#${settings.channel}`, ai: Boolean(narrative), pdf };

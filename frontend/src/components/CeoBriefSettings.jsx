@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, CalendarCheck, Clock3, FileText, Loader2, Save, Send, UserRound } from "lucide-react";
+import { Bot, CalendarCheck, Clock3, FileText, Hash, Loader2, Save, Send } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 
@@ -77,7 +77,7 @@ export default function CeoBriefSettings({ darkMode }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not send");
-      toast.success(`Sent to ${data.result?.sentTo || "the CEO"} on Slack`);
+      toast.success(`Posted in ${data.result?.sentTo || "Slack"}`);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -93,19 +93,19 @@ export default function CeoBriefSettings({ darkMode }) {
     );
   }
 
-  const ceoName = typeof status?.ceo === "string" ? status.ceo : null;
-  const ceoError = status?.ceo?.error;
+  const channelName = typeof status?.channel === "string" ? status.channel : null;
+  const channelError = status?.channel?.error;
 
   return (
     <section className={`mb-5 overflow-hidden rounded-[30px] border p-5 sm:p-7 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white"}`}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <span className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-xs font-black uppercase tracking-[0.14em] ${darkMode ? "bg-[#4a154b]/40 text-[#e9c8ea]" : "bg-[#4a154b]/10 text-[#4a154b]"}`}>
-            <SlackMark /> CEO daily brief
+            <SlackMark /> CEO daily report
           </span>
-          <h2 className="small mt-4 text-2xl font-black">What the CEO gets on Slack</h2>
+          <h2 className="small mt-4 text-2xl font-black">Today&apos;s report on Slack</h2>
           <p className={`mt-2 max-w-2xl text-sm leading-6 ${muted}`}>
-            Sent as a personal Slack message, Monday to Saturday. Set the cut-off for each check; the evening brief attaches the employee report PDF and an AI summary of the day with its efficiency numbers.
+            Posted in one Slack channel, Monday to Saturday, each under a &quot;Today&apos;s Report&quot; title with the day and date. Set the cut-off for each check; the evening brief attaches the employee report PDF and an AI summary of the day with its efficiency numbers. Nothing else goes to Slack.
           </p>
         </div>
         <button
@@ -126,8 +126,8 @@ export default function CeoBriefSettings({ darkMode }) {
         <span className={`${chip} ${status?.slackConfigured ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-500"}`}>
           <SlackMark className="h-3.5 w-3.5" /> {status?.slackConfigured ? "Slack connected" : "Slack not connected"}
         </span>
-        <span className={`${chip} ${ceoName ? "bg-sky-500/10 text-sky-600" : "bg-amber-500/10 text-amber-600"}`}>
-          <UserRound className="h-3.5 w-3.5" /> {ceoName ? `Sends to ${ceoName}` : ceoError || "CEO not found"}
+        <span className={`${chip} ${channelName ? "bg-sky-500/10 text-sky-600" : "bg-amber-500/10 text-amber-600"}`}>
+          <Hash className="h-3.5 w-3.5" /> {channelName ? `Posts in ${channelName}` : channelError || "Channel not found"}
         </span>
         <span className={`${chip} ${status?.canAttachPdf ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
           <FileText className="h-3.5 w-3.5" /> {status?.canAttachPdf ? "PDF attaches in Slack" : "PDF sent as a link (add files:write to the Slack app)"}
@@ -138,14 +138,17 @@ export default function CeoBriefSettings({ darkMode }) {
       </div>
 
       <label className="mt-6 block max-w-xl">
-        <span className={`text-xs font-semibold uppercase tracking-wide ${muted}`}>CEO&apos;s Slack email</span>
-        <input
-          type="email"
-          value={settings.ceoEmail}
-          onChange={(event) => setSettings((current) => ({ ...current, ceoEmail: event.target.value }))}
-          placeholder="Leave empty to send to the workspace owner"
-          className={`mt-2 ${field}`}
-        />
+        <span className={`text-xs font-semibold uppercase tracking-wide ${muted}`}>Slack channel</span>
+        <div className="relative mt-2">
+          <Hash className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+          <input
+            type="text"
+            value={settings.channel}
+            onChange={(event) => setSettings((current) => ({ ...current, channel: event.target.value.replace(/^#/, "") }))}
+            placeholder="uipl-updates"
+            className={`${field} pl-9`}
+          />
+        </div>
       </label>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">

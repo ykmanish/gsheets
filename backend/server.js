@@ -872,13 +872,15 @@ const whatsappService = createWhatsAppService({
   graphVersion: process.env.META_GRAPH_API_VERSION || "v23.0",
 });
 
-// Slack runs alongside WhatsApp: MRN/PRN approval cards, report reminders by DM and an
-// evening report digest. Channels may be names or IDs; approvers are listed by email, and
-// with no list only the workspace's owners and admins may approve.
+// Slack carries the CEO daily report (#uipl-updates). Mirroring the WhatsApp notifications
+// to Slack — MRN/PRN approval cards, report and DMR reminders, the evening digest — is off
+// unless SLACK_WHATSAPP_MIRROR=true. Channels may be names or IDs; approvers are listed by
+// email, and with no list only the workspace's owners and admins may approve.
 const slackService = createSlackService({
   token: process.env.SLACK_BOT_TOKEN,
   signingSecret: process.env.SLACK_SIGNING_SECRET,
 });
+const SLACK_WHATSAPP_MIRROR = process.env.SLACK_WHATSAPP_MIRROR === "true";
 const slackEmailList = (value = "") => String(value).split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
 const SLACK_CHANNELS = {
   MRN: process.env.SLACK_MRN_CHANNEL || "mrn-notification",
@@ -19552,7 +19554,7 @@ function slackApprovalContent(module, row = {}) {
 // (the first one wins) and comments go into its thread. A request raised before Slack was
 // connected has no card, so its later decisions are skipped here.
 async function notifySlackApproval({ module, event, row = {}, actor = null, comment = "" }) {
-  if (!slackService.configured) return null;
+  if (!slackService.configured || !SLACK_WHATSAPP_MIRROR) return null;
   const recordNo = projectText(row[slackRecordKey(module)]);
   if (!recordNo) return null;
   const cards = (await connectAuthDb()).collection("slackApprovalCards");
@@ -19705,7 +19707,7 @@ async function receiveSlackInteraction(req, res) {
 /* ───────── Slack: daily report reminders and digest ───────── */
 
 async function sendSlackReportReminders({ date, users = [] }) {
-  if (!slackService.configured) return { sent: 0, failed: 0, skipped: users.length, reason: "Slack is not configured" };
+  if (!slackService.configured || !SLACK_WHATSAPP_MIRROR) return { sent: 0, failed: 0, skipped: users.length, reason: "Slack mirror is off" };
   const summary = { sent: 0, failed: 0, skipped: 0, notInSlack: [] };
   for (const user of users) {
     const name = user.displayName || user.username || "there";
@@ -19779,7 +19781,7 @@ const slackPhoneKey = (value = "") => String(value).replace(/\D/g, "").slice(-10
 
 // `results` are the WhatsApp run's per-contact outcomes: "skipped" means already filled.
 async function sendSlackDmrReminder({ type, date, results = [] }) {
-  if (!slackService.configured) return { status: "skipped", reason: "Slack is not configured" };
+  if (!slackService.configured || !SLACK_WHATSAPP_MIRROR) return { status: "skipped", reason: "Slack mirror is off" };
   const label = dmrPdfDateLabel(date);
   const title = (SLACK_DMR_REMINDER_TITLES[type] || SLACK_DMR_REMINDER_TITLES.actualManpower)(label);
   const due = results.filter((item) => item.status !== "skipped");
@@ -19817,7 +19819,7 @@ async function sendSlackDmrReminder({ type, date, results = [] }) {
 
 // Production only, so a developer's local backend never posts a second digest.
 function startSlackEmployeeDigest() {
-  if (!slackService.configured || process.env.SLACK_EMPLOYEE_DIGEST_ENABLED === "false") return;
+  if (!slackService.configured || !SLACK_WHATSAPP_MIRROR || process.env.SLACK_EMPLOYEE_DIGEST_ENABLED === "false") return;
   if (process.env.NODE_ENV !== "production" && process.env.SLACK_EMPLOYEE_DIGEST_ENABLED !== "true") return;
   const time = validEmployeeReminderTime(SLACK_EMPLOYEE_DIGEST_TIME) || "19:00";
   const [hour, minute] = time.split(":");
@@ -19829,13 +19831,14 @@ function startSlackEmployeeDigest() {
   console.log(`Slack employee report digest scheduled at ${time} IST`);
 }
 
-/* ───────── Slack: CEO daily brief (DM to the CEO) ───────── */
+/* ───────── Slack: CEO daily report (#uipl-updates) ───────── */
 
-// Three checks land in the CEO's Slack DMs, Mon–Sat: whether today's DMR is filled by its
+// Three posts land in the report channel, Mon–Sat: whether today's DMR is filled by its
 // cut-off, whether tomorrow's plan is added by its cut-off, and an evening brief with the
 // employee report PDF plus a Claude-written summary of the day and its efficiency numbers.
+// Each opens with a large "Today's Report" header carrying the day and date.
 const CEO_BRIEF_SETTINGS_ID = "ceo-daily-brief-settings";
-const CEO_BRIEF_DEFAULTS = { enabled: true, ceoEmail: "", dmrCutoff: "12:00", tomorrowPlanCutoff: "16:00", briefTime: "21:45" };
+const CEO_BRIEF_DEFAULTS = { enabled: true, channel: "uipl-updates", dmrCutoff: "12:00", tomorrowPlanCutoff: "16:00", briefTime: "21:45" };
 const CEO_BRIEF_MODEL = process.env.CEO_BRIEF_MODEL || "claude-opus-5-5";
 const ceoBriefAnthropic = (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY)
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY })
@@ -19847,7 +19850,7 @@ async function getCeoBriefSettings() {
   const saved = await db.collection("platformSettings").findOne({ _id: CEO_BRIEF_SETTINGS_ID });
   return {
     enabled: saved ? saved.enabled !== false : CEO_BRIEF_DEFAULTS.enabled,
-    ceoEmail: projectText(saved?.ceoEmail),
+    channel: projectText(saved?.channel) || CEO_BRIEF_DEFAULTS.channel,
     dmrCutoff: validEmployeeReminderTime(saved?.dmrCutoff) || CEO_BRIEF_DEFAULTS.dmrCutoff,
     tomorrowPlanCutoff: validEmployeeReminderTime(saved?.tomorrowPlanCutoff) || CEO_BRIEF_DEFAULTS.tomorrowPlanCutoff,
     briefTime: validEmployeeReminderTime(saved?.briefTime) || CEO_BRIEF_DEFAULTS.briefTime,
@@ -19862,12 +19865,12 @@ async function saveCeoBriefSettings(input = {}, actor = null) {
     times[key] = validEmployeeReminderTime(input[key]);
     if (!times[key]) throw new Error("Choose valid times for every cut-off");
   }
-  const ceoEmail = projectText(input.ceoEmail, 200).toLowerCase();
-  if (ceoEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ceoEmail)) throw new Error("Enter a valid email for the CEO's Slack account");
+  const channel = projectText(input.channel, 80).replace(/^#/, "").trim().toLowerCase() || CEO_BRIEF_DEFAULTS.channel;
+  if (!/^[a-z0-9][a-z0-9._-]*$/.test(channel)) throw new Error("Enter a Slack channel name like uipl-updates");
   const db = await connectAuthDb();
   await db.collection("platformSettings").updateOne(
     { _id: CEO_BRIEF_SETTINGS_ID },
-    { $set: { enabled: input.enabled !== false, ceoEmail, ...times, updatedAt: new Date(), updatedBy: actor?.displayName || actor?.username || null } },
+    { $set: { enabled: input.enabled !== false, channel, ...times, updatedAt: new Date(), updatedBy: actor?.displayName || actor?.username || null } },
     { upsert: true },
   );
   const settings = await getCeoBriefSettings();
@@ -19875,16 +19878,17 @@ async function saveCeoBriefSettings(input = {}, actor = null) {
   return settings;
 }
 
-// The CEO's Slack account: the email in settings, or the workspace's primary owner until one is set.
-async function resolveCeoSlackUser(settings) {
-  if (settings.ceoEmail) {
-    const user = await slackService.userByEmail(settings.ceoEmail);
-    if (!user) throw new Error(`No Slack member with ${settings.ceoEmail}; invite the CEO to the workspace first`);
-    return user;
-  }
-  const owner = (await slackService.listMembers()).find((member) => member.is_primary_owner) || (await slackService.listMembers()).find((member) => member.is_owner);
-  if (!owner) throw new Error("No CEO email set and no workspace owner found");
-  return owner;
+// The bot posts to public channels without joining; a private one isn't visible to it.
+async function resolveCeoBriefChannel(settings) {
+  return slackService.resolveChannel(settings.channel).catch(() => {
+    throw new Error(`Slack channel #${settings.channel} not found. Create it as a public channel, or pick another on the Module Control page.`);
+  });
+}
+
+// The large title every report post opens with, e.g. "Today's Report · Thursday, 19 November 2026".
+function ceoReportHeader(date) {
+  const day = new Date(`${date}T12:00:00+05:30`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
+  return { type: "header", text: { type: "plain_text", text: `📅 Today's Report · ${day}` } };
 }
 
 const ceoSiteKey = (value = "") => projectText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -19933,7 +19937,7 @@ const ceoDmrButton = { type: "actions", elements: [{ type: "button", text: { typ
 
 async function sendCeoDmrCheck({ date = istDateKey(new Date()) } = {}) {
   const settings = await getCeoBriefSettings();
-  const ceo = await resolveCeoSlackUser(settings);
+  const channel = await resolveCeoBriefChannel(settings);
   const dmr = await ceoBriefDmrStatus(date);
   const label = dmrPdfDateLabel(date);
   let text;
@@ -19944,13 +19948,13 @@ async function sendCeoDmrCheck({ date = istDateKey(new Date()) } = {}) {
   } else {
     text = `:warning: *Today's DMR is not filled* by ${settings.dmrCutoff} (${label})\nNo actual manpower has been entered.${dmr.missingSites.length ? ` Planned sites: ${ceoList(dmr.missingSites)}` : ""}`;
   }
-  await slackService.sendDm(ceo.id, { text: ceoPlainText(text), blocks: [{ type: "section", text: { type: "mrkdwn", text } }, ceoDmrButton] });
-  return { sentTo: ceo.real_name || ceo.name, dmr };
+  await slackService.postMessage({ channel, text: ceoPlainText(text), blocks: [ceoReportHeader(date), { type: "section", text: { type: "mrkdwn", text } }, ceoDmrButton] });
+  return { sentTo: `#${settings.channel}`, dmr };
 }
 
 async function sendCeoTomorrowPlanCheck({ date = istDateKey(new Date()) } = {}) {
   const settings = await getCeoBriefSettings();
-  const ceo = await resolveCeoSlackUser(settings);
+  const channel = await resolveCeoBriefChannel(settings);
   const dmr = await ceoBriefDmrStatus(date).catch(() => null);
   const plan = await ceoBriefTomorrowPlanStatus(date, dmr);
   const label = dmrPdfDateLabel(plan.date);
@@ -19961,8 +19965,8 @@ async function sendCeoTomorrowPlanCheck({ date = istDateKey(new Date()) } = {}) 
   } else {
     text = `:warning: *Tomorrow's plan is not added* for ${label} by ${settings.tomorrowPlanCutoff}.${plan.missingSites.length ? `\nSites working today: ${ceoList(plan.missingSites)}` : ""}`;
   }
-  await slackService.sendDm(ceo.id, { text: ceoPlainText(text), blocks: [{ type: "section", text: { type: "mrkdwn", text } }, ceoDmrButton] });
-  return { sentTo: ceo.real_name || ceo.name, plan };
+  await slackService.postMessage({ channel, text: ceoPlainText(text), blocks: [ceoReportHeader(date), { type: "section", text: { type: "mrkdwn", text } }, ceoDmrButton] });
+  return { sentTo: `#${settings.channel}`, plan };
 }
 
 // Everything the evening brief says comes from here; the numbers are computed, not written by the model.
@@ -20092,8 +20096,7 @@ function ceoNarrativeSections(text = "") {
 
 async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
   const settings = await getCeoBriefSettings();
-  const ceo = await resolveCeoSlackUser(settings);
-  const channel = await slackService.openDm(ceo.id);
+  const channel = await resolveCeoBriefChannel(settings);
   const facts = await buildCeoBriefFacts(date);
   const narrative = await writeCeoBriefNarrative(facts);
   const { reports, tasks, approvals, dmr, tomorrowPlan } = facts;
@@ -20102,9 +20105,10 @@ async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
 
   await slackService.postMessage({
     channel,
-    text: `CEO daily brief · ${label}`,
+    text: `Today's Report · ${label}`,
     blocks: [
-      { type: "header", text: { type: "plain_text", text: `CEO daily brief · ${label}` } },
+      ceoReportHeader(date),
+      { type: "context", elements: [{ type: "mrkdwn", text: "*Evening brief* · the day in numbers, a summary, and the employee report PDF" }] },
       {
         type: "section",
         fields: [
@@ -20144,7 +20148,7 @@ async function sendCeoDailyBrief({ date = istDateKey(new Date()) } = {}) {
       blocks: [{ type: "section", text: { type: "mrkdwn", text: `The employee report PDF couldn't be attached here. <${APP_PUBLIC_URL}/employee-daily-report?employeeReportDate=${date}|Open it in UIPL Docs>` } }],
     });
   }
-  return { sentTo: ceo.real_name || ceo.name, ai: Boolean(narrative), pdf };
+  return { sentTo: `#${settings.channel}`, ai: Boolean(narrative), pdf };
 }
 
 // Production only, so a developer's local backend never DMs the CEO.
@@ -20173,7 +20177,7 @@ app.get("/slack/ceo-brief/settings", requireSuperAdmin, async (req, res) => {
     const status = { slackConfigured: slackService.configured, aiConfigured: Boolean(ceoBriefAnthropic), model: CEO_BRIEF_MODEL };
     if (slackService.configured) {
       status.canAttachPdf = (await slackService.grantedScopes().catch(() => [])).includes("files:write");
-      status.ceo = await resolveCeoSlackUser(settings).then((user) => user.real_name || user.name).catch((error) => ({ error: error.message }));
+      status.channel = await resolveCeoBriefChannel(settings).then(() => `#${settings.channel}`).catch((error) => ({ error: error.message }));
     }
     res.json({ settings, status });
   } catch (error) {

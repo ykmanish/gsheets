@@ -20027,23 +20027,33 @@ async function recordCeoCutoff({ kind, date = istDateKey(new Date()) } = {}) {
   return status;
 }
 
-async function sendCeoDmrUpdate({ date = istDateKey(new Date()) } = {}) {
+// The scheduled run records the cut-off status; a manual send (`record: false`) only reads
+// it, so testing can never rewrite whether the day made its cut-off.
+async function ceoCutoffRecord(date) {
+  return (await connectAuthDb()).collection("platformSettings").findOne({ _id: ceoCutoffRecordId(date) });
+}
+
+async function sendCeoDmrUpdate({ date = istDateKey(new Date()), record = true } = {}) {
   const settings = await getCeoBriefSettings();
   const channel = await resolveCeoBriefChannel(settings);
-  const dmr = await recordCeoCutoff({ kind: "dmr", date });
+  const dmr = record ? await recordCeoCutoff({ kind: "dmr", date }) : await ceoBriefDmrStatus(date);
   if (!dmr) throw new Error("Couldn't read today's DMR");
-  const items = [ceoDmrItem(dmr, { cutoff: settings.dmrCutoff, atTheCutoff: true }), ceoManpowerItem(dmr)].filter(Boolean);
+  const timing = record ? { atTheCutoff: true } : { atCutoff: (await ceoCutoffRecord(date))?.dmr || null };
+  const items = [ceoDmrItem(dmr, { cutoff: settings.dmrCutoff, ...timing }), ceoManpowerItem(dmr)].filter(Boolean);
   items[items.length - 1] = ceoWithButton(items[items.length - 1], "Open DMR", `${APP_PUBLIC_URL}/projects/dmr`);
   await slackService.postMessage({ channel, text: `Site reports (DMR) · ${dmrPdfDateLabel(date)}`, blocks: [ceoReportHeader(date)], attachments: items });
   return { sentTo: `#${settings.channel}`, dmr };
 }
 
-async function sendCeoPlanUpdate({ date = istDateKey(new Date()) } = {}) {
+async function sendCeoPlanUpdate({ date = istDateKey(new Date()), record = true } = {}) {
   const settings = await getCeoBriefSettings();
   const channel = await resolveCeoBriefChannel(settings);
-  const plan = await recordCeoCutoff({ kind: "tomorrowPlan", date });
+  const plan = record
+    ? await recordCeoCutoff({ kind: "tomorrowPlan", date })
+    : await ceoBriefTomorrowPlanStatus(date, await ceoBriefDmrStatus(date).catch(() => null));
   if (!plan) throw new Error("Couldn't read tomorrow's plan");
-  const item = ceoWithButton(ceoPlanItem(plan, { cutoff: settings.tomorrowPlanCutoff, atTheCutoff: true }), "Open DMR", `${APP_PUBLIC_URL}/projects/dmr`);
+  const timing = record ? { atTheCutoff: true } : { atCutoff: (await ceoCutoffRecord(date))?.tomorrowPlan || null };
+  const item = ceoWithButton(ceoPlanItem(plan, { cutoff: settings.tomorrowPlanCutoff, ...timing }), "Open DMR", `${APP_PUBLIC_URL}/projects/dmr`);
   await slackService.postMessage({ channel, text: `Tomorrow's plan · ${dmrPdfDateLabel(plan.date)}`, blocks: [ceoReportHeader(date)], attachments: [item] });
   return { sentTo: `#${settings.channel}`, plan };
 }
@@ -20308,7 +20318,7 @@ app.post("/slack/ceo-brief/send-now", requireSuperAdmin, async (req, res) => {
   const senders = { dmr: sendCeoDmrUpdate, tomorrowPlan: sendCeoPlanUpdate, brief: sendCeoDailyBrief };
   const part = senders[req.body?.part] ? req.body.part : "brief";
   try {
-    const result = await senders[part]({ date: dmrDateKey(req.body?.date) || istDateKey(new Date()) });
+    const result = await senders[part]({ date: dmrDateKey(req.body?.date) || istDateKey(new Date()), record: false });
     addActivityLog({ req, action: "Sent CEO report now", target: part, details: result });
     res.json({ success: true, result });
   } catch (error) {

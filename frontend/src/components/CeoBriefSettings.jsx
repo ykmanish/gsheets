@@ -17,12 +17,11 @@ function SlackMark({ className = "h-4 w-4" }) {
   );
 }
 
-// One post a day, Monday to Saturday (IST). The two cut-offs post nothing: the report says
-// whether the DMR and tomorrow's plan were in by them.
+// Three colour-coded posts, Monday to Saturday (IST), each at its own time.
 const TIMES = [
-  { key: "dmrCutoff", label: "DMR cut-off", hint: "The report says whether today's site attendance was in by this time", icon: CalendarCheck },
-  { key: "tomorrowPlanCutoff", label: "Tomorrow's plan cut-off", hint: "The report says whether tomorrow's plan was in by this time", icon: Clock3 },
-  { key: "briefTime", label: "Report time", hint: "When the day's one post goes to Slack, with the summary and PDF", icon: FileText, sends: true },
+  { key: "dmrCutoff", part: "dmr", label: "DMR cut-off", hint: "Posts whether today's DMR is filled, with actual vs planned manpower by site", icon: CalendarCheck },
+  { key: "tomorrowPlanCutoff", part: "tomorrowPlan", label: "Tomorrow's plan cut-off", hint: "Posts whether tomorrow's plan is in, with planned manpower by site", icon: Clock3 },
+  { key: "briefTime", part: "brief", label: "Evening report", hint: "The day's status, the CEO's priorities, and the DMR and employee PDFs", icon: FileText },
 ];
 
 export default function CeoBriefSettings({ darkMode }) {
@@ -68,13 +67,13 @@ export default function CeoBriefSettings({ darkMode }) {
     }
   }
 
-  async function sendNow() {
-    setSending("report");
+  async function sendNow(part) {
+    setSending(part);
     try {
       const response = await fetch(`${API_URL}/slack/ceo-brief/send-now`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ part }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not send");
@@ -106,7 +105,7 @@ export default function CeoBriefSettings({ darkMode }) {
           </span>
           <h2 className="small mt-4 text-2xl font-black">Today&apos;s report on Slack</h2>
           <p className={`mt-2 max-w-2xl text-sm leading-6 ${muted}`}>
-            One post a day in the Slack channel, Monday to Saturday, under a &quot;Today&apos;s Report&quot; title with the day and date: site reports, tomorrow&apos;s plan, employee reports and approvals, a short summary, and the employee report PDF. The cut-offs post nothing; the report says whether each was met. Nothing else goes to Slack.
+            Three posts in the Slack channel, Monday to Saturday, each under a &quot;Today&apos;s Report&quot; title with the day and date and colour-coded green, amber or red: the DMR at its cut-off, tomorrow&apos;s plan at its cut-off, and the evening report with the CEO&apos;s priorities and the DMR and employee PDFs. Nothing else goes to Slack.
           </p>
         </div>
         <button
@@ -153,7 +152,7 @@ export default function CeoBriefSettings({ darkMode }) {
       </label>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {TIMES.map(({ key, label, hint, icon: Icon, sends }) => (
+        {TIMES.map(({ key, part, label, hint, icon: Icon }) => (
           <div key={key} className={`rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-slate-200 bg-[#f8f9fc]"}`}>
             <div className="flex items-center gap-2 text-sm font-black">
               <Icon className="h-4 w-4" /> {label}
@@ -166,16 +165,14 @@ export default function CeoBriefSettings({ darkMode }) {
               className={`mt-3 ${field}`}
               aria-label={`${label} time`}
             />
-            {sends && (
-              <button
-                type="button"
-                onClick={sendNow}
-                disabled={Boolean(sending)}
-                className={`mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-full text-xs font-semibold transition active:scale-[0.98] disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-[#171714] ring-1 ring-black/10 hover:bg-slate-50"}`}
-              >
-                {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send report now
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => sendNow(part)}
+              disabled={Boolean(sending)}
+              className={`mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-full text-xs font-semibold transition active:scale-[0.98] disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-[#171714] ring-1 ring-black/10 hover:bg-slate-50"}`}
+            >
+              {sending === part ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send now
+            </button>
           </div>
         ))}
       </div>

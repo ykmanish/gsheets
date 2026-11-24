@@ -23,14 +23,38 @@ function isUrl(value = "") {
   return /^https?:\/\/\S+$/i.test(String(value || "").trim());
 }
 
-function createSlackService({ token = "", signingSecret = "" } = {}) {
+// Methods that change something in Slack. In a dry run they are recorded, not sent.
+const SLACK_WRITE_METHODS = new Set([
+  "chat.postMessage", "chat.update", "chat.postEphemeral", "chat.delete",
+  "conversations.open", "views.open",
+  "files.getUploadURLExternal", "files.completeUploadExternal", "files.delete",
+]);
+
+/**
+ * `dryRun`: "" (off), "on" (writes recorded in `dryRunLog`, reads real), or "everyone" (as
+ * "on", and every email resolves to a pretend Slack user, to show the full reach).
+ */
+function createSlackService({ token = "", signingSecret = "", dryRun = "" } = {}) {
   const configured = Boolean(token && signingSecret);
   let channelCache = { at: 0, byName: new Map() };
   const userCache = new Map();
   const emailCache = new Map();
+  const dryRunLog = [];
+  let dryRunSeq = 0;
+
+  function recordDryRun(method, params) {
+    dryRunSeq += 1;
+    const ts = `${Math.floor(Date.now() / 1000)}.${String(dryRunSeq).padStart(6, "0")}`;
+    const channel = method === "conversations.open" ? `DM:${params.users}` : params.channel || params.channel_id || "";
+    dryRunLog.push({ method, channel, user: params.user || "", ts: params.ts || ts, threadTs: params.thread_ts || "", text: params.text || "", blocks: params.blocks || [] });
+    if (method === "conversations.open") return { ok: true, channel: { id: channel } };
+    if (method === "files.getUploadURLExternal") return { ok: true, upload_url: "", file_id: `FDRY${dryRunSeq}` };
+    return { ok: true, channel, ts: params.ts || ts, message_ts: ts };
+  }
 
   // Write methods take JSON; read methods are sent form-encoded, which every method accepts.
   async function api(method, params = {}, { json = true } = {}) {
+    if (dryRun && SLACK_WRITE_METHODS.has(method)) return recordDryRun(method, params);
     if (!token) throw new Error("Slack is not configured (SLACK_BOT_TOKEN missing)");
     const response = await fetch(`${SLACK_API}/${method}`, {
       method: "POST",
@@ -66,6 +90,8 @@ function createSlackService({ token = "", signingSecret = "" } = {}) {
       channelCache = { at: Date.now(), byName };
     }
     const id = channelCache.byName.get(key);
+    // A dry run carries on with a placeholder, so the report can show what the channel would get.
+    if (!id && dryRun) return `MISSING#${value}`;
     if (!id) throw new Error(`Slack channel #${value} not found`);
     return id;
   }
@@ -82,6 +108,14 @@ function createSlackService({ token = "", signingSecret = "" } = {}) {
   async function userByEmail(email = "") {
     const key = String(email || "").trim().toLowerCase();
     if (!key) return null;
+    if (dryRun === "everyone") {
+      const real = await userByEmailReal(key).catch(() => null);
+      return real || { id: `PRETEND:${key}`, pretend: true, profile: { email: key } };
+    }
+    return userByEmailReal(key);
+  }
+
+  async function userByEmailReal(key) {
     const cached = emailCache.get(key);
     if (cached && Date.now() - cached.at < USER_CACHE_MS) return cached.user;
     try {
@@ -257,6 +291,8 @@ function createSlackService({ token = "", signingSecret = "" } = {}) {
     verifyRequest,
     approvalCardBlocks,
     decisionModal,
+    dryRun,
+    dryRunLog,
   };
 }
 

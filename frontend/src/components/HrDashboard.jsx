@@ -7,9 +7,7 @@ import { BadgeCheck, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, 
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { GeistRegularBase64 } from "../lib/geistFont";
+import { DateInput, DatePicker, SelectMenu, TimePicker } from "./ui";
 
 async function api(path) {
   const response = await fetch(`${API_URL}${path}`);
@@ -223,175 +221,28 @@ function roundedMoneyValue(value) {
 }
 
 function DrawerSelect({ darkMode, label, value, placeholder, options, onChange, required, searchable = false, searchPlaceholder = "Search..." }) {
-  const selectRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const filteredOptions = searchable
-    ? options.filter((option) => String(option || "").toLowerCase().includes(search.trim().toLowerCase()))
-    : options;
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function closeOnOutside(event) {
-      if (selectRef.current?.contains(event.target)) return;
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", closeOnOutside);
-    return () => document.removeEventListener("mousedown", closeOnOutside);
-  }, [open]);
-
   return (
-    <label ref={selectRef} className="relative block text-xs font-normal text-black/65 dark:text-white/60">
+    <div className="relative block text-xs font-normal text-black/65 dark:text-white/60">
       {label}{required ? " *" : ""}
-      <button type="button" onClick={() => { setOpen((current) => !current); setSearch(""); }} className={`mt-2 flex h-10 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-normal outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]" : "border-black/10 bg-white text-[#171714] hover:bg-[#fafbf8]"}`}>
-        <span className={value ? "" : muted}>{value || placeholder}</span>
-        <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""} ${muted}`} />
-      </button>
-      {open && (
-        <div className={`absolute left-0 top-[calc(100%+8px)] z-[110] w-full rounded-2xl border p-1.5 shadow-2xl ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-          {searchable && (
-            <div className="relative mb-1.5">
-              <Search className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={searchPlaceholder} className={`h-10 w-full rounded-xl border pl-9 pr-3 text-sm font-normal outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white text-[#171714]"}`} />
-            </div>
-          )}
-          <div className="max-h-72 overflow-y-auto">
-          {filteredOptions.map((option) => (
-            <button key={option} type="button" onClick={() => { onChange(option); setOpen(false); }} className={`flex h-9 w-full items-center rounded-xl px-3 text-left text-sm font-normal transition ${value === option ? "bg-[#171714] text-white" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}>
-              {option}
-            </button>
-          ))}
-          {!filteredOptions.length && <p className={`px-3 py-3 text-sm font-normal ${muted}`}>No employee found</p>}
-          </div>
-        </div>
-      )}
-    </label>
+      <SelectMenu
+        darkMode={darkMode}
+        className="mt-2"
+        value={value}
+        options={options.map((option) => ({ value: option, label: String(option) }))}
+        onChange={onChange}
+        placeholder={placeholder}
+        searchable={searchable}
+        searchPlaceholder={searchPlaceholder}
+      />
+    </div>
   );
 }
 
 function DrawerDatePicker({ darkMode, label, value, placeholder, onChange, minDate }) {
-  const pickerRef = useRef(null);
-  const triggerRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [monthDate, setMonthDate] = useState(() => value ? new Date(`${value}T00:00:00`) : new Date());
-  const [panelStyle, setPanelStyle] = useState({});
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
-  const toInput = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  const displayValue = value ? formatDateLabel(value) : placeholder;
-  function monthDays(baseDate) {
-    const first = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
-    const start = new Date(first.getFullYear(), first.getMonth(), 1 - first.getDay());
-    return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
-  }
-  function chooseDate(day) {
-    const value = toInput(day);
-    if (minDate && value < minDate) return;
-    onChange(value);
-    setOpen(false);
-  }
-  function renderMonth(baseDate) {
-    const baseMonth = baseDate.getMonth();
-    const title = baseDate.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
-    return (
-      <div>
-        <p className="mb-2 text-xs font-medium">{title}</p>
-          <div className="grid grid-cols-7 gap-y-1 text-center">
-          {monthDays(baseDate).map((day) => {
-            const key = toInput(day);
-            const isSelected = key === value;
-            const disabled = minDate && key < minDate;
-            const inMonth = day.getMonth() === baseMonth;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => chooseDate(day)}
-                className={`grid h-8 place-items-center text-xs font-normal transition ${
-                  disabled
-                    ? darkMode ? "cursor-not-allowed text-white/16" : "cursor-not-allowed text-black/15"
-                    : isSelected
-                    ? "rounded-full bg-blue-600 text-white shadow-sm"
-                    : inMonth
-                        ? darkMode ? "text-white hover:bg-white/10" : "text-black hover:bg-black/[0.04]"
-                        : darkMode ? "text-white/22" : "text-black/18"
-                }`}
-              >
-                {day.getDate()}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function closeOnOutside(event) {
-      if (pickerRef.current?.contains(event.target)) return;
-      setOpen(false);
-    }
-    function updatePanelPosition() {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const margin = 12;
-      const gap = 8;
-      const panelWidth = 280;
-      const wantedHeight = 392;
-      const roomBelow = window.innerHeight - rect.bottom - gap - margin;
-      const roomAbove = rect.top - gap - margin;
-      const openUpward = roomBelow < wantedHeight && roomAbove > roomBelow;
-      setPanelStyle({
-        position: "fixed",
-        width: panelWidth,
-        left: Math.min(Math.max(margin, rect.left), window.innerWidth - panelWidth - margin),
-        top: openUpward ? undefined : rect.bottom + gap,
-        bottom: openUpward ? window.innerHeight - rect.top + gap : undefined,
-        maxHeight: Math.max(300, Math.min(wantedHeight, openUpward ? roomAbove : roomBelow)),
-      });
-    }
-    updatePanelPosition();
-    document.addEventListener("mousedown", closeOnOutside);
-    window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", updatePanelPosition, true);
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutside);
-      window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", updatePanelPosition, true);
-    };
-  }, [open]);
-
   return (
-    <div ref={pickerRef} className="relative">
+    <div className="relative">
       <p className="text-xs font-medium text-black/65 dark:text-white/60">{label} *</p>
-      <button ref={triggerRef} type="button" onClick={() => setOpen((current) => !current)} className={`mt-2 flex h-10 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-normal outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]" : "border-black/10 bg-white text-[#171714] hover:bg-[#fafbf8]"}`}>
-        <span className={value ? "" : muted}>{displayValue}</span>
-        <CalendarDays className={`h-4 w-4 ${muted}`} />
-      </button>
-      {open && (
-        <div style={panelStyle} className={`z-[110] overflow-hidden rounded-[20px] border shadow-2xl ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-          <div className="p-4 pb-3">
-          <div className="mb-3 flex items-center justify-between">
-            <button type="button" onClick={() => setMonthDate(new Date(year, month - 1, 1))} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.04]"}`}><ChevronLeft className="h-4 w-4" /></button>
-            <p className="text-xs font-medium text-blue-600">Choose {label.toLowerCase()}</p>
-            <button type="button" onClick={() => setMonthDate(new Date(year, month + 1, 1))} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.04]"}`}><ChevronRight className="h-4 w-4" /></button>
-          </div>
-          <div className={`mb-1 grid grid-cols-7 text-center text-[10px] font-medium uppercase ${muted}`}>
-            {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => <span key={`${day}-${index}`} className="py-1">{day}</span>)}
-          </div>
-          <div>
-            {renderMonth(new Date(year, month, 1))}
-          </div>
-          </div>
-          <div className={`flex items-center justify-end gap-5 border-t px-4 py-3 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-            <button type="button" onClick={() => setOpen(false)} className={`text-xs font-bold ${muted}`}>Cancel</button>
-            <button type="button" onClick={() => setOpen(false)} className="text-xs font-black text-[#171714] dark:text-white">Apply</button>
-          </div>
-        </div>
-      )}
+      <DatePicker darkMode={darkMode} className="mt-2" value={value || ""} onChange={onChange} placeholder={placeholder} minDate={minDate} />
     </div>
   );
 }
@@ -413,111 +264,12 @@ function currentTimeInput() {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+// Time of a clock in/out: the kit's time picker (type a time or pick from the list).
 function AttendanceTimePicker({ darkMode, label, value, onChange, emptyLabel = "No record" }) {
-  const ref = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [draftTime, setDraftTime] = useState(value || currentTimeInput());
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const [selectedHour = "10", selectedMinute = "30"] = String(draftTime || currentTimeInput()).split(":");
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function closeOnOutside(event) {
-      if (ref.current?.contains(event.target)) return;
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", closeOnOutside);
-    return () => document.removeEventListener("mousedown", closeOnOutside);
-  }, [open, value]);
-
-  function commitTime(nextHour = selectedHour, nextMinute = selectedMinute) {
-    const next = `${nextHour}:${nextMinute}`;
-    setDraftTime(next);
-    onChange(next);
-  }
-
   return (
-    <div ref={ref} className="relative">
+    <div className="relative">
       <p className="text-xs font-medium text-black/65 dark:text-white/60">{label} *</p>
-      <button
-        type="button"
-        onClick={() => {
-          setDraftTime(value || currentTimeInput());
-          setOpen((current) => !current);
-        }}
-        className={`mt-2 flex h-11 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-semibold outline-none transition ${
-          darkMode
-            ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]"
-            : "border-black/10 bg-white text-[#171714] hover:bg-[#fafbf8]"
-        } ${open ? (darkMode ? "ring-2 ring-emerald-300/20" : "ring-2 ring-[#6ee72f]/25") : ""}`}
-      >
-        <span className="flex items-center gap-2">
-          <Clock3 className={`h-4 w-4 ${darkMode ? "text-emerald-200" : "text-[#08764f]"}`} />
-          {value ? displayTimeInput(value) : emptyLabel}
-        </span>
-        <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""} ${muted}`} />
-      </button>
-      {open && (
-        <div className={`absolute left-0 right-0 top-[calc(100%+8px)] z-[120] overflow-hidden rounded-2xl border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-          <div className={`mb-2 rounded-2xl p-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f6faf2]"}`}>
-            <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Selected time</p>
-            <p className="mt-1 text-lg font-black">{displayTimeInput(draftTime)}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className={`mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}>Hour</p>
-              <div className="max-h-56 overflow-y-auto pr-1">
-                {ATTENDANCE_HOUR_OPTIONS.map((option) => {
-                  const active = option.value === selectedHour;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => commitTime(option.value, selectedMinute)}
-                      className={`mb-1 flex h-9 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${
-                        active
-                          ? "bg-[#6ee72f] text-[#10210c]"
-                          : darkMode
-                          ? "text-white/70 hover:bg-white/[0.07]"
-                          : "text-black/65 hover:bg-[#f6faf2]"
-                      }`}
-                    >
-                      <span>{option.label}</span>
-                      {active && <Check className="h-4 w-4" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <p className={`mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}>Minute</p>
-              <div className="max-h-56 overflow-y-auto pr-1">
-                {ATTENDANCE_MINUTE_OPTIONS.map((minute) => {
-                  const active = minute === selectedMinute;
-                  return (
-                    <button
-                      key={minute}
-                      type="button"
-                      onClick={() => commitTime(selectedHour, minute)}
-                      className={`mb-1 flex h-9 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${
-                        active
-                          ? "bg-[#6ee72f] text-[#10210c]"
-                          : darkMode
-                          ? "text-white/70 hover:bg-white/[0.07]"
-                          : "text-black/65 hover:bg-[#f6faf2]"
-                      }`}
-                    >
-                      <span>{minute}</span>
-                      {active && <Check className="h-4 w-4" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-          <button type="button" onClick={() => setOpen(false)} className={`mt-2 h-10 w-full rounded-xl text-sm font-black transition ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#171714] text-white hover:bg-black/80"}`}>Done</button>
-        </div>
-      )}
+      <TimePicker darkMode={darkMode} className="mt-2" value={value || ""} onChange={onChange} placeholder={emptyLabel} step={5} />
     </div>
   );
 }
@@ -711,6 +463,23 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
   const attendanceAdjustmentRequests = data?.attendanceAdjustmentRequests || [];
   const attendanceSettings = data?.attendanceSettings || {};
   const canManageSalary = Boolean(data?.canManageHr);
+
+  // The Slack look-back links here with ?adjust=YYYY-MM-DD: open the adjustment request for
+  // that day once the data is in, then drop the parameter so a reload doesn't reopen it.
+  const slackAdjustHandled = useRef(false);
+  useEffect(() => {
+    if (section !== "attendance" || !data || slackAdjustHandled.current) return undefined;
+    const params = new URLSearchParams(window.location.search);
+    const date = params.get("adjust") || "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return undefined;
+    slackAdjustHandled.current = true;
+    params.delete("adjust");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    const record = attendanceRecords.find((item) => String(item.userId || "") === String(user?.id || "") && item.date === date);
+    const timer = window.setTimeout(() => openAttendanceRequest(record || { date, workMode: "office" }), 0);
+    return () => window.clearTimeout(timer);
+  }, [section, data]); // eslint-disable-line react-hooks/exhaustive-deps
   const currentName = user?.displayName || user?.username || "Employee";
   const muted = darkMode ? "text-slate-400" : "text-black/58";
   const panel = darkMode ? "border-white/[0.075] bg-[#090d12]" : "border-[#dfe7e4] bg-white";
@@ -835,11 +604,17 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     }
   };
 
-  const downloadAttendanceReport = () => {
+  const downloadAttendanceReport = async () => {
     if (!attendanceReportEmployees.length) {
       hrToast.error("No employee found for this attendance search");
       return;
     }
+    // The PDF library and its embedded font (~0.5 MB together) load only when someone exports.
+    const [{ default: jsPDF }, { default: autoTable }, { GeistRegularBase64 }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+      import("../lib/geistFont"),
+    ]);
     const doc = new jsPDF("landscape");
     doc.addFileToVFS("Geist-Regular.ttf", GeistRegularBase64);
     doc.addFont("Geist-Regular.ttf", "Geist", "normal");
@@ -2925,11 +2700,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                   <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,180px)_1fr_auto] sm:items-end">
                     <label className="block">
                       <span className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Date</span>
-                      <input
-                        type="date"
+                      <DateInput
+                        darkMode={darkMode}
                         value={nwdForm.date}
                         onChange={(event) => setNwdForm((current) => ({ ...current, date: event.target.value }))}
-                        className={`mt-1.5 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-[#0b1016] text-white/85" : "border-black/10 bg-white text-black/75"}`}
+                        className="mt-1.5"
                       />
                     </label>
                     <label className="block">

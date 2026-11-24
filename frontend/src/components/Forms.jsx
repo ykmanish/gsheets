@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Check, CheckCircle2, ChevronRight, Clipboard, ClipboardList, Copy, FilePenLine, FilePlus2, History, LayoutList, Link2, Loader2, Plus, RefreshCw, Save, Settings2, Sheet, Sparkles, Table2, Trash2, Users, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
-import { SelectMenu } from "./ui";
+import { SelectMenu, Select as KitSelect } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -47,7 +47,7 @@ function Input({ darkMode, className = "", ...props }) {
 }
 
 function Select({ darkMode, children, ...props }) {
-  return <select {...props} className={`h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-[#191b20] text-white" : "border-black/10 bg-white text-black"}`}>{children}</select>;
+  return <KitSelect darkMode={darkMode} {...props}>{children}</KitSelect>;
 }
 
 function DynamicField({ field, value, onChange, darkMode, isLast }) {

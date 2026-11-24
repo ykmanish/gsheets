@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, ChevronDown, Clock3, Copy, Download, Eye, FileText, Heart, LogIn, Loader2, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Settings2, Sparkles, Star, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth, useAuth } from "./AuthProvider";
-import { ConfirmModal, useClickOutside } from "./ui";
+import { ConfirmModal, DateRangePicker, MultiSelect, SelectMenu, useClickOutside } from "./ui";
 import UserAvatar from "./UserAvatar";
 
 const employeeReportTestDateKey = "employee-report-test-date";
@@ -411,134 +411,6 @@ function timePartsToValue(hour, minute, period, format = "24") {
   return `${padTimePart(hourNumber)}:${padTimePart(minute)}`;
 }
 
-function TimePartDropdown({ label, value, placeholder, options, onChange, darkMode, columns = 3, compact = false }) {
-  const ref = useRef(null);
-  const popupRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [placement, setPlacement] = useState({ vertical: "down", horizontal: "right" });
-  useClickOutside(ref, () => setOpen(false));
-
-  useEffect(() => {
-    if (!open || typeof window === "undefined") return undefined;
-    function updatePlacement() {
-      const trigger = ref.current?.getBoundingClientRect();
-      if (!trigger) return;
-      const popupWidth = popupRef.current?.offsetWidth || (compact ? 96 : 180);
-      const popupHeight = popupRef.current?.offsetHeight || 220;
-      const spaceBelow = window.innerHeight - trigger.bottom;
-      const spaceAbove = trigger.top;
-      const vertical = spaceBelow < popupHeight + 12 && spaceAbove > spaceBelow ? "up" : "down";
-      const horizontal = trigger.right - popupWidth < 12 && window.innerWidth - trigger.left >= popupWidth + 12 ? "left" : "right";
-      setPlacement({ vertical, horizontal });
-    }
-    updatePlacement();
-    window.addEventListener("resize", updatePlacement);
-    window.addEventListener("scroll", updatePlacement, true);
-    return () => {
-      window.removeEventListener("resize", updatePlacement);
-      window.removeEventListener("scroll", updatePlacement, true);
-    };
-  }, [compact, open]);
-
-  return (
-    <div ref={ref} className="relative min-w-0 flex-1">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        aria-label={label}
-        className={`flex h-8 w-full items-center justify-center rounded-lg px-1 text-xs font-black tabular-nums transition ${value ? darkMode ? "bg-[#d8f36a]/14 text-[#d8f36a]" : "bg-[#eafbdc] text-[#34780d]" : darkMode ? "bg-white/[0.045] text-white/35 hover:bg-white/10 hover:text-white/65" : "bg-[#f4f6f1] text-black/35 hover:bg-[#eafbdc] hover:text-black/65"}`}
-      >
-        {value || placeholder}
-      </button>
-      {open && (
-        <div
-          ref={popupRef}
-          className={`absolute z-50 ${compact ? "w-[96px]" : "w-[180px]"} overflow-hidden rounded-2xl border p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] ${placement.vertical === "up" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"} ${placement.horizontal === "left" ? "left-0" : "right-0"} ${darkMode ? "border-white/10 bg-[#11171f]" : "border-[#e1e5df] bg-white"}`}
-        >
-          <p className={`px-1 pb-1.5 text-[9px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/40" : "text-black/40"}`}>{label}</p>
-          <div className={`grid gap-1 ${columns === 2 ? "grid-cols-2" : columns === 1 ? "grid-cols-1" : "grid-cols-3"} max-h-44 overflow-y-auto pr-1`}>
-            {options.map((item) => {
-              const active = value === item;
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => { onChange(item); setOpen(false); }}
-                  className={`h-8 rounded-lg text-xs font-black tabular-nums transition ${active ? "bg-[#89ed3f] text-black shadow-[0_8px_18px_rgba(137,237,63,0.22)]" : darkMode ? "bg-white/[0.045] text-white/70 hover:bg-white/10" : "bg-[#f6f7f3] text-black/65 hover:bg-[#eafbdc]"}`}
-                >
-                  {item}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TaskTimeField({ label, value, onChange, format = "24", darkMode }) {
-  const initialParts = timeDisplayParts(value, format);
-  const [draftHour, setDraftHour] = useState(initialParts.hour);
-  const [draftMinute, setDraftMinute] = useState(initialParts.minute);
-  const [draftPeriod, setDraftPeriod] = useState(initialParts.period);
-  const hourOptions = format === "12"
-    ? Array.from({ length: 12 }, (_, index) => padTimePart(index + 1))
-    : Array.from({ length: 24 }, (_, index) => padTimePart(index));
-  const minuteOptions = Array.from({ length: 60 }, (_, index) => padTimePart(index));
-
-  function commit(nextHour = draftHour, nextMinute = draftMinute, nextPeriod = draftPeriod) {
-    const next = timePartsToValue(nextHour, nextMinute, nextPeriod, format);
-    if (!next) {
-      onChange("");
-      return;
-    }
-    onChange(next);
-  }
-
-  function selectHour(nextHour) {
-    setDraftHour(nextHour);
-    commit(nextHour, draftMinute, draftPeriod);
-  }
-
-  function selectMinute(nextMinute) {
-    setDraftMinute(nextMinute);
-    commit(draftHour, nextMinute, draftPeriod);
-  }
-
-  function selectPeriod(nextPeriod) {
-    setDraftPeriod(nextPeriod);
-    commit(draftHour, draftMinute, nextPeriod);
-  }
-
-  function clearTime() {
-    setDraftHour("");
-    setDraftMinute("");
-    onChange("");
-  }
-
-  return (
-    <div className="min-w-0">
-      <span className={`mb-1 block text-[10px] font-bold ${darkMode ? "text-white/40" : "text-black/40"}`}>{label}</span>
-      <div className={`flex h-10 items-center gap-1 rounded-xl border px-1.5 transition focus-within:ring-4 ${darkMode ? "border-white/10 bg-[#0f151c] focus-within:border-[#d8f36a]/25 focus-within:ring-[#d8f36a]/10" : "border-black/10 bg-[#fbfcf9] focus-within:border-[#8bd85b]/40 focus-within:ring-[#8bd85b]/15"}`}>
-        <TimePartDropdown label={`${label} hour`} value={draftHour} placeholder="HH" options={hourOptions} onChange={selectHour} darkMode={darkMode} columns={3} />
-        <span className={`px-1 text-xs font-black ${darkMode ? "text-white/30" : "text-black/30"}`}>:</span>
-        <TimePartDropdown label={`${label} minute`} value={draftMinute} placeholder="MM" options={minuteOptions} onChange={selectMinute} darkMode={darkMode} columns={3} />
-        {format === "12" && (
-          <TimePartDropdown label={`${label} period`} value={draftPeriod} placeholder="AM" options={["AM", "PM"]} onChange={selectPeriod} darkMode={darkMode} columns={1} compact />
-        )}
-        {draftHour || draftMinute ? (
-          <button type="button" onClick={clearTime} className={`ml-1 grid h-6 w-6 shrink-0 place-items-center rounded-full transition ${darkMode ? "text-white/35 hover:bg-white/10 hover:text-white" : "text-black/35 hover:bg-black/[0.05] hover:text-black"}`} aria-label={`Clear ${label} time`}>
-            <X className="h-3 w-3" />
-          </button>
-        ) : (
-          <Clock3 className={`ml-1 h-3.5 w-3.5 shrink-0 ${darkMode ? "text-white/35" : "text-black/35"}`} />
-        )}
-      </div>
-    </div>
-  );
-}
-
 function TaskDurationField({ row, onChange, darkMode }) {
   const hours = cleanDurationPart(row.durationHours ?? row.duration?.hours ?? "");
   const minutes = cleanDurationPart(row.durationMinutes ?? row.duration?.minutes ?? "", 59);
@@ -647,143 +519,49 @@ function taskStatusMeta(status, darkMode = false) {
   };
 }
 
+// Site, category and status pickers: "Most used" first, then the rest, then "Other".
 function SearchableSelect({ darkMode, value, onChange, options = [], popularOptions = [], placeholder, allowOther = true, variant = "default" }) {
-  const ref = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  useClickOutside(ref, () => setOpen(false));
-  const selectedLabel = value === "__other" ? "Other" : value;
   const popularKeys = new Set(popularOptions.map((option) => String(option.value || option).toLowerCase()));
-  const filtered = options.filter((option) => option.toLowerCase().includes(query.trim().toLowerCase()));
-  const popular = filtered.filter((option) => popularKeys.has(option.toLowerCase()));
-  const regular = filtered.filter((option) => !popularKeys.has(option.toLowerCase()));
-  const selectedStatus = variant === "status" && selectedLabel ? taskStatusMeta(selectedLabel, darkMode) : null;
-  const SelectedIcon = selectedStatus?.Icon;
+  const iconFor = (option) => (variant === "status" ? taskStatusMeta(option, darkMode)?.Icon : undefined);
+  const popular = options.filter((option) => popularKeys.has(option.toLowerCase()));
+  const regular = options.filter((option) => !popularKeys.has(option.toLowerCase()));
+  const items = [
+    ...popular.map((option) => ({ value: option, label: option, icon: iconFor(option), group: "Most used", badge: "Most used" })),
+    ...regular.map((option) => ({ value: option, label: option, icon: iconFor(option), group: popular.length ? "All" : undefined })),
+    ...(allowOther ? [{ value: "__other", label: "Other", group: " " }] : []),
+  ];
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className={`flex h-12 w-full items-center justify-between rounded-2xl border px-4 text-left text-sm transition ${selectedStatus ? selectedStatus.selected : darkMode ? "border-white/10 bg-white/[0.035] text-white" : "border-black/10 bg-white text-black"}`}
-      >
-        <span className={`flex min-w-0 items-center gap-2 ${selectedLabel ? "" : darkMode ? "text-white/35" : "text-black/35"}`}>
-          {SelectedIcon && <SelectedIcon className="h-4 w-4 shrink-0" />}
-          <span className="truncate">{selectedLabel || placeholder}</span>
-        </span>
-        <Search className="h-4 w-4 opacity-45" />
-      </button>
-      {open && (
-        <div className={`absolute left-0 top-[calc(100%+8px)] z-50 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/10 bg-white"}`}>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search..."
-            className={`mb-2 h-10 w-full rounded-xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white"}`}
-          />
-          <div className="max-h-56 overflow-y-auto">
-            {popular.length > 0 && (
-              <p className={`px-3 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>Most used</p>
-            )}
-            {[...popular, ...regular].map((option, optionIndex) => {
-              const meta = variant === "status" ? taskStatusMeta(option, darkMode) : null;
-              const OptionIcon = meta?.Icon;
-              const isPopular = popularKeys.has(option.toLowerCase());
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => { onChange(option); setOpen(false); setQuery(""); }}
-                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${option === value ? meta?.active || (darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white") : isPopular ? darkMode ? "bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15" : "bg-emerald-50 text-emerald-900 hover:bg-emerald-100" : meta?.option || (darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]")}`}
-                >
-                  {OptionIcon ? <OptionIcon className="h-4 w-4 shrink-0" /> : null}
-                  {!OptionIcon && variant === "status" ? <span className={`h-2 w-2 rounded-full ${meta?.dot || "bg-slate-400"}`} /> : null}
-                  <span className="min-w-0 flex-1 truncate">{option}</span>
-                  {isPopular && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] ${option === value ? "bg-white/20" : darkMode ? "bg-emerald-300/15 text-emerald-200" : "bg-emerald-200/70 text-emerald-800"}`}>Most used</span>}
-                  {optionIndex === popular.length - 1 && regular.length > 0 && <span className="sr-only">End of most used options</span>}
-                </button>
-              );
-            })}
-            {allowOther && (
-              <button
-                type="button"
-                onClick={() => { onChange("__other"); setOpen(false); setQuery(""); }}
-                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${value === "__other" ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
-              >
-                {variant === "status" && <span className="grid h-4 w-4 place-items-center rounded-full bg-slate-200 text-[10px] text-slate-700">+</span>}
-                <span>Other</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    <SelectMenu
+      darkMode={darkMode}
+      value={value}
+      options={items}
+      onChange={onChange}
+      placeholder={placeholder}
+      searchable
+      groupLabels
+      size="lg"
+    />
   );
 }
 
 function MultiChoiceSelect({ darkMode, values = [], onChange, options = [], popularOptions = [], placeholder, onOptionToggle }) {
-  const ref = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  useClickOutside(ref, () => setOpen(false));
-  const selected = new Set(values.map((value) => String(value).toLowerCase()));
   const popularKeys = new Set(popularOptions.map((option) => String(option.value || option).toLowerCase()));
-  const filtered = options.filter((option) => option.toLowerCase().includes(query.trim().toLowerCase()));
-  const popular = filtered.filter((option) => popularKeys.has(option.toLowerCase()));
-  const regular = filtered.filter((option) => !popularKeys.has(option.toLowerCase()));
-  const label = values.length ? values.join(", ") : placeholder;
-
-  function toggle(option) {
-    const key = option.toLowerCase();
-    const next = selected.has(key)
-      ? values.filter((value) => value.toLowerCase() !== key)
-      : [...values, option];
-    onChange(uniqueClean(next));
-    onOptionToggle?.(option, uniqueClean(next), selected.has(key));
-  }
-
+  const popular = options.filter((option) => popularKeys.has(option.toLowerCase()));
+  const regular = options.filter((option) => !popularKeys.has(option.toLowerCase()));
+  const items = [
+    ...popular.map((option) => ({ value: option, label: option, group: "Most used", badge: "Most used" })),
+    ...regular.map((option) => ({ value: option, label: option, group: popular.length ? "All" : undefined })),
+  ];
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-2 text-left text-sm transition ${darkMode ? "border-white/10 bg-white/[0.035] text-white" : "border-black/10 bg-white text-black"}`}
-      >
-        <span className={`min-w-0 flex-1 truncate ${values.length ? "" : darkMode ? "text-white/35" : "text-black/35"}`}>{label}</span>
-        {values.length > 0 && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-emerald-300/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>{values.length}</span>}
-        <Search className="h-4 w-4 opacity-45" />
-      </button>
-      {open && (
-        <div className={`absolute left-0 top-[calc(100%+8px)] z-50 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/10 bg-white"}`}>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search..."
-            className={`mb-2 h-10 w-full rounded-xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white"}`}
-          />
-          <div className="max-h-56 overflow-y-auto">
-            {popular.length > 0 && <p className={`px-3 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>Most used</p>}
-            {[...popular, ...regular].map((option) => {
-              const checked = selected.has(option.toLowerCase());
-              const isPopular = popularKeys.has(option.toLowerCase());
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => toggle(option)}
-                  className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-all duration-200 ${checked ? darkMode ? "bg-emerald-400/15 text-emerald-100" : "bg-emerald-50 text-emerald-900" : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
-                >
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-lg border transition-all duration-200 ${checked ? "scale-105 border-emerald-500 bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
-                    {checked && <Check className="h-3.5 w-3.5" />}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">{option}</span>
-                  {isPopular && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] ${darkMode ? "bg-emerald-300/15 text-emerald-200" : "bg-emerald-200/70 text-emerald-800"}`}>Most used</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
+    <MultiSelect
+      darkMode={darkMode}
+      values={values}
+      options={items}
+      placeholder={placeholder}
+      size="lg"
+      onChange={(next) => onChange(uniqueClean(next))}
+      onToggle={(option, next, was) => onOptionToggle?.(option, uniqueClean(next), was)}
+    />
   );
 }
 
@@ -1234,245 +1012,40 @@ function EmployeeReportTable({ title, headers, rows, darkMode }) {
 }
 
 function EmployeeUserMultiSelect({ darkMode, users = [], selectedIds = [], onChange, emptyLabel = "All employees", clearLabel = "All" }) {
-  const ref = useRef(null);
-  const triggerRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [panelStyle, setPanelStyle] = useState({});
-  useClickOutside(ref, () => setOpen(false));
-  const selected = new Set(selectedIds);
-  const filtered = users.filter((user) => `${user.employeeName} ${user.department}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const label = selectedIds.length ? `${selectedIds.length} employee${selectedIds.length === 1 ? "" : "s"}` : emptyLabel;
-
-  function toggleUser(userId) {
-    onChange(selected.has(userId) ? selectedIds.filter((id) => id !== userId) : [...selectedIds, userId]);
-  }
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function updatePanelPosition() {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const margin = 12;
-      const gap = 10;
-      const panelWidth = Math.min(window.innerWidth - margin * 2, 360);
-      const desiredHeight = 420;
-      const roomBelow = window.innerHeight - rect.bottom - gap - margin;
-      const roomAbove = rect.top - gap - margin;
-      const openUpward = roomBelow < desiredHeight && roomAbove > roomBelow;
-      const availableHeight = openUpward ? roomAbove : roomBelow;
-      const maxHeight = Math.max(160, Math.min(desiredHeight, availableHeight));
-      const left = Math.min(Math.max(margin, rect.right - panelWidth), window.innerWidth - panelWidth - margin);
-      setPanelStyle({
-        left,
-        width: panelWidth,
-        maxHeight,
-        top: openUpward ? undefined : rect.bottom + gap,
-        bottom: openUpward ? window.innerHeight - rect.top + gap : undefined,
-      });
-    }
-    updatePanelPosition();
-    window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", updatePanelPosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", updatePanelPosition, true);
-    };
-  }, [open]);
-
   return (
-    <div ref={ref} className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className={`flex h-11 min-w-[220px] items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
-      >
-        <span className="truncate">{label}</span>
-        <Search className="h-4 w-4 opacity-45" />
-      </button>
-      {open && (
-        <div style={panelStyle} className={`fixed z-[80] flex flex-col overflow-hidden rounded-[22px] border p-3 shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
-          <div className="mb-2 flex shrink-0 gap-2">
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee..." className={`h-10 min-w-0 flex-1 rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
-            <button type="button" onClick={() => onChange([])} className={`h-10 rounded-2xl px-3 text-xs font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>{clearLabel}</button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            {filtered.map((user) => (
-              <button
-                key={user.userId}
-                type="button"
-                onClick={() => toggleUser(user.userId)}
-                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm ${selected.has(user.userId) ? darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#145b39]/10 text-[#145b39]" : darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.04]"}`}
-              >
-                <span className={`grid h-5 w-5 place-items-center rounded-md border ${selected.has(user.userId) ? "border-[#145b39] bg-[#145b39] text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
-                  {selected.has(user.userId) && <Check className="h-3.5 w-3.5" />}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate font-semibold">{user.employeeName}</span>
-                  <span className="block truncate text-xs opacity-55">{user.department || "No department"}</span>
-                </span>
-              </button>
-            ))}
-            {!filtered.length && <p className="px-3 py-6 text-center text-sm opacity-55">No employees found.</p>}
-          </div>
-        </div>
-      )}
-    </div>
+    <MultiSelect
+      darkMode={darkMode}
+      values={selectedIds}
+      options={users.map((user) => ({ value: user.userId, label: user.employeeName, description: user.department || "No department" }))}
+      onChange={onChange}
+      emptyLabel={emptyLabel}
+      clearLabel={clearLabel}
+      searchPlaceholder="Search employees..."
+      menuWidth={300}
+    />
   );
 }
 
+// Applies as soon as a full range is chosen (the old picker had an Apply button).
 function EmployeeDateRangePicker({ darkMode, from, to, onFromChange, onToChange, onApply }) {
-  const ref = useRef(null);
-  const triggerRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [panelStyle, setPanelStyle] = useState({});
-  const [activeSide, setActiveSide] = useState("start");
-  const [monthDate, setMonthDate] = useState(() => parseInputDate(from) || parseInputDate(to) || parseInputDate(todayInput()) || new Date());
-  useClickOutside(ref, () => setOpen(false));
-  const days = useMemo(() => buildMonthGrid(monthDate), [monthDate]);
-  const fromDate = parseInputDate(from);
-  const toDate = parseInputDate(to);
-
+  const appliedRef = useRef(`${from}|${to}`);
   useEffect(() => {
-    if (!open) return undefined;
-    function updatePanelPosition() {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const margin = 12;
-      const gap = 10;
-      const panelWidth = Math.min(window.innerWidth - margin * 2, 400);
-      const wantedHeight = 420;
-      const roomBelow = window.innerHeight - rect.bottom - gap - margin;
-      const roomAbove = rect.top - gap - margin;
-      const openUpward = roomBelow < wantedHeight && roomAbove > roomBelow;
-      const maxHeight = Math.max(300, Math.min(wantedHeight, openUpward ? roomAbove : roomBelow));
-      const left = Math.min(Math.max(margin, rect.right - panelWidth), window.innerWidth - panelWidth - margin);
-      setPanelStyle({
-        left,
-        width: panelWidth,
-        maxHeight,
-        top: openUpward ? undefined : rect.bottom + gap,
-        bottom: openUpward ? window.innerHeight - rect.top + gap : undefined,
-      });
-    }
-    updatePanelPosition();
-    window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", updatePanelPosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", updatePanelPosition, true);
-    };
-  }, [open]);
-
-  function chooseDate(day) {
-    const value = dateInputValue(day);
-    if (activeSide === "start") {
-      if (to && value > to) onToChange(value);
-      onFromChange(value);
-      setActiveSide("end");
-      return;
-    }
-    if (from && value < from) {
-      onFromChange(value);
-      onToChange(from);
-      return;
-    }
-    onToChange(value);
-  }
-
-  function applyShortcut(nextFrom, nextTo) {
-    onFromChange(nextFrom);
-    onToChange(nextTo);
-    setMonthDate(parseInputDate(nextFrom) || new Date());
-    setActiveSide("end");
-  }
-
+    const key = `${from}|${to}`;
+    if (!onApply || !from || !to || appliedRef.current === key) return;
+    appliedRef.current = key;
+    onApply();
+  }, [from, to]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div ref={ref} className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => {
-          setOpen((current) => !current);
-          const selectedDate = fromDate || toDate;
-          if (selectedDate) setMonthDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
-        }}
-        className={`flex h-11 min-w-[240px] items-center gap-2 rounded-2xl border px-4 text-sm ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
-      >
-        <CalendarCheck className="h-4 w-4 text-indigo-600" />
-        <span className="truncate">{rangeLabel(from, to)}</span>
-      </button>
-      {open && (
-        <div style={panelStyle} className={`fixed z-[90] flex flex-col overflow-hidden rounded-[24px] border shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            <div className="mb-2 grid gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveSide("start");
-                if (fromDate) setMonthDate(new Date(fromDate.getFullYear(), fromDate.getMonth(), 1));
-              }}
-              className={`rounded-2xl border p-2.5 text-left transition ${activeSide === "start" ? "border-indigo-600 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-600/10" : darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
-            >
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] opacity-55">Start</span>
-              <span className="mt-1 block text-sm font-semibold">{from ? formatShortDate(from) : "From date"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveSide("end");
-                if (toDate) setMonthDate(new Date(toDate.getFullYear(), toDate.getMonth(), 1));
-              }}
-              className={`rounded-2xl border p-2.5 text-left transition ${activeSide === "end" ? "border-indigo-600 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-600/10" : darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
-            >
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] opacity-55">End</span>
-              <span className="mt-1 block text-sm font-semibold">{to ? formatShortDate(to) : "To date"}</span>
-            </button>
-          </div>
-
-          <div className="mb-2 flex flex-wrap gap-2">
-            <button type="button" onClick={() => applyShortcut(todayInput(), todayInput())} className={`h-8 rounded-full px-3 text-xs font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>Today</button>
-            <button type="button" onClick={() => applyShortcut(addDaysInput(todayInput(), -6), todayInput())} className={`h-8 rounded-full px-3 text-xs font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>This week</button>
-            <button type="button" onClick={() => applyShortcut(todayInput().slice(0, 8) + "01", todayInput())} className={`h-8 rounded-full px-3 text-xs font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>This month</button>
-          </div>
-
-          <div className="mb-2 flex items-center justify-between">
-            <button type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))} className="grid h-8 w-8 place-items-center rounded-full hover:bg-black/[0.04]">‹</button>
-            <p className="text-lg font-semibold">{monthTitle(monthDate)}</p>
-            <button type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))} className="grid h-8 w-8 place-items-center rounded-full hover:bg-black/[0.04]">›</button>
-          </div>
-
-          <div className={`grid grid-cols-7 text-center text-xs ${darkMode ? "text-white/55" : "text-black/55"}`}>
-            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((day) => <span key={day} className="py-1.5">{day}</span>)}
-          </div>
-          <div className="grid grid-cols-7 gap-1 text-center">
-            {days.map((day) => {
-              const value = dateInputValue(day);
-              const inMonth = day.getMonth() === monthDate.getMonth();
-              const isStart = value === from;
-              const isEnd = value === to;
-              const inRange = from && to && value > from && value < to;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => chooseDate(day)}
-                  className={`grid h-7 place-items-center rounded-xl text-sm transition ${isStart || isEnd ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : inRange ? "bg-indigo-50 text-indigo-700" : inMonth ? darkMode ? "text-white hover:bg-white/10" : "text-black hover:bg-black/[0.04]" : darkMode ? "text-white/25" : "text-black/30"}`}
-                >
-                  {day.getDate()}
-                </button>
-              );
-            })}
-            </div>
-          </div>
-
-          <div className={`flex shrink-0 justify-end border-t p-3 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/5 bg-white"}`}>
-            <button type="button" onClick={() => { setOpen(false); onApply?.(); }} className={`h-10 rounded-2xl px-5 text-sm font-semibold ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}>Apply range</button>
-          </div>
-        </div>
-      )}
-    </div>
+    <DateRangePicker
+      darkMode={darkMode}
+      from={from}
+      to={to}
+      className=""
+      onChange={({ from: nextFrom, to: nextTo }) => {
+        onFromChange(nextFrom);
+        onToChange(nextTo);
+      }}
+    />
   );
 }
 

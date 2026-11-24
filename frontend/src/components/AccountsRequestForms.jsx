@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
+import { Select } from "./ui";
 
 const FIELD_TYPES = [
   { value: "text", label: "Text" },
@@ -605,9 +606,9 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
                     <input value={field.label} onChange={(e) => updateField(index, { label: e.target.value })} placeholder="Question or label" className={inputClass} />
 
                     <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      <select value={field.type} onChange={(e) => updateField(index, { type: e.target.value })} className={inputClass.replace("mt-2 ", "")}>
+                      <Select darkMode={darkMode} value={field.type} onChange={(e) => updateField(index, { type: e.target.value })}>
                         {FIELD_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                      </select>
+                      </Select>
                       <input value={field.sheetColumn} onChange={(e) => updateField(index, { sheetColumn: e.target.value })} placeholder="Sheet column (defaults to label)" className={inputClass.replace("mt-2 ", "")} />
                     </div>
 

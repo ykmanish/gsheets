@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Bot, CalendarCheck, Clock3, FileText, Hash, Loader2, Save, Send } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
+import { TimeInput } from "./ui";
 
 // Slack's four-colour mark (lucide no longer ships brand icons).
 function SlackMark({ className = "h-4 w-4" }) {
@@ -158,11 +159,11 @@ export default function CeoBriefSettings({ darkMode }) {
               <Icon className="h-4 w-4" /> {label}
             </div>
             <p className={`mt-1 text-xs leading-5 ${muted}`}>{hint}</p>
-            <input
-              type="time"
+            <TimeInput
+              darkMode={darkMode}
               value={settings[key]}
               onChange={(event) => setSettings((current) => ({ ...current, [key]: event.target.value }))}
-              className={`mt-3 ${field}`}
+              className="mt-3"
               aria-label={`${label} time`}
             />
             <button

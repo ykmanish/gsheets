@@ -28,6 +28,7 @@ const ActivityLog = lazy(moduleLoaders.ActivityLog);
 const WhatsApp = lazy(moduleLoaders.WhatsApp);
 const ManageRoles = lazy(moduleLoaders.ManageRoles);
 const ModuleControl = lazy(moduleLoaders.ModuleControl);
+const SlackCenter = lazy(moduleLoaders.SlackCenter);
 const ProfilePage = lazy(moduleLoaders.ProfilePage);
 
 /** Shimmering stand-in while a module's code downloads, laid out like a typical module page. */
@@ -112,6 +113,7 @@ export default function ProtectedModule({ moduleId, projectId, departmentId }) {
         {moduleId === "employee-daily-report" && <EmployeeDailyReport darkMode={darkMode} />}
         {moduleId === "activity-log" && <ActivityLog darkMode={darkMode} />}
         {moduleId === "whatsapp" && user?.isSuperAdmin && <WhatsApp darkMode={darkMode} />}
+        {moduleId === "slack" && user?.isSuperAdmin && <SlackCenter darkMode={darkMode} />}
         {moduleId === "manage-roles" && <ManageRoles darkMode={darkMode} mode="roles" />}
         {moduleId === "manage-users" && <ManageRoles darkMode={darkMode} mode="users" />}
         {moduleId === "module-control" && user?.isSuperAdmin && <ModuleControl darkMode={darkMode} />}

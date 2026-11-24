@@ -1522,37 +1522,28 @@ function TaskDrawer({
               </a>
             ))}
             {isEditing && (
-              <label className="relative flex min-h-[58px] items-center justify-center rounded-lg border border-dashed border-[#ccd2c8] text-[#7d837a] hover:bg-[#f4f6f2] dark:border-white/15 dark:hover:bg-white/[0.04]">
-                <Plus className="pointer-events-none h-4 w-4" />
-                <select
-                  value=""
-                  aria-label="Attach project file"
-                  onChange={(event) =>
-                    event.target.value &&
-                    onChange({
-                      documentIds: [
-                        ...new Set([
-                          ...(task.documentIds || []),
-                          event.target.value,
-                        ]),
-                      ],
-                    })
-                  }
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                >
-                  <option value="">Attach file</option>
-                  {documents
-                    .filter((doc) => !attachments.includes(doc))
-                    .map((doc) => (
-                      <option
-                        key={doc.id || doc.driveFileId || doc.url}
-                        value={doc.id || doc.driveFileId}
-                      >
-                        {doc.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
+              <SelectMenu
+                darkMode={darkMode}
+                value=""
+                searchable
+                searchPlaceholder="Search files..."
+                menuWidth={300}
+                ariaLabel="Attach project file"
+                options={documents
+                  .filter((doc) => !attachments.includes(doc))
+                  .map((doc) => ({ value: doc.id || doc.driveFileId, label: doc.name }))}
+                onChange={(documentId) =>
+                  documentId &&
+                  onChange({
+                    documentIds: [...new Set([...(task.documentIds || []), documentId])],
+                  })
+                }
+                renderTrigger={() => (
+                  <span className="flex min-h-[58px] items-center justify-center rounded-lg border border-dashed border-[#ccd2c8] text-[#7d837a] hover:bg-[#f4f6f2] dark:border-white/15 dark:hover:bg-white/[0.04]">
+                    <Plus className="h-4 w-4" />
+                  </span>
+                )}
+              />
             )}
           </div>
         </section>

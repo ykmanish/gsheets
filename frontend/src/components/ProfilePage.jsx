@@ -261,6 +261,34 @@ export default function ProfilePage({ darkMode }) {
     return () => window.clearTimeout(timer);
   }, []);
 
+  // The Slack reminders link here with ?attendance=clock-in|clock-out: once attendance and
+  // report status have loaded, do that action (the browser supplies the location), then drop
+  // the parameter so a reload doesn't repeat it.
+  const slackAttendanceActionDone = useRef(false);
+  useEffect(() => {
+    if (slackAttendanceActionDone.current || attendanceLoading || reportChecking) return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get("attendance");
+    if (action !== "clock-in" && action !== "clock-out") return;
+    slackAttendanceActionDone.current = true;
+    params.delete("attendance");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    const timer = window.setTimeout(() => {
+      if (action === "clock-in") {
+        if (todayAttendance?.clockInAt) toast.success("You're already clocked in for today");
+        else void clockInFromProfile();
+        return;
+      }
+      if (todayAttendance?.clockOutAt) toast.success("You're already clocked out for today");
+      else if (!todayAttendance?.clockInAt) toast.error("Clock in first before clocking out");
+      else if (mustFillReportBeforeClockOut) toast.error("File today's daily report first, then clock out");
+      else void clockOutFromProfile();
+    }, 0);
+    // No cleanup: the action runs once even if a focus refresh re-renders meanwhile.
+    void timer;
+  }, [attendanceLoading, reportChecking]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     function refreshReportStatus() {
       void loadReportStatus();

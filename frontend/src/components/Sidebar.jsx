@@ -2,15 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, BriefcaseBusiness, PackageSearch, CalendarDays, MapPin, ListTodo, MessagesSquare, FolderLock, CircleDollarSign, UserRoundSearch } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "motion/react";
 import { API_URL, fetchJsonShared } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
 import { menuPaths, preloadModule } from "./appModules";
+import SlackLogo from "./SlackLogo";
 
-const ACCENT = "#2563eb";
-const ACCENT_DARK_TEXT = "#93c5fd";
-// The active highlight glides to the next item instead of jumping.
-const PILL_SPRING = { type: "spring", stiffness: 480, damping: 38 };
 const GROUP_CHILDREN = {
   projects: ["projects", "project-dmr", "project-mrn", "project-prn", "project-stock", "site-images"],
   hr: ["hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment"],
@@ -37,6 +33,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     { id: "hr-leave", label: "Leave", icon: CalendarDays, parent: "hr" },
     { id: "hr-attendance", label: "Attendance", icon: MapPin, parent: "hr" },
     { id: "hr-recruitment", label: "Recruitment", icon: UserRoundSearch, parent: "hr" },
+    { id: "slack", label: "Slack", icon: SlackLogo },
     { id: "todos", label: "Todos", icon: ListTodo },
     // { id: "forum", label: "Loop", icon: MessagesSquare },
     { id: "sheet-dashboard", label: "Sheet Dashboard", icon: Sheet },
@@ -164,10 +161,8 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     }
   }
 
-  const shell = darkMode
-    ? "border-white/10 bg-[#101114]"
-    : "border-[#e7eaee] bg-white";
-  const muted = darkMode ? "text-white/38" : "text-slate-400";
+  const shell = darkMode ? "bg-[#0b0c0f]" : "bg-[#f3f3f1]";
+  const muted = darkMode ? "text-white/38" : "text-[#9a9a97]";
   const displayName = user?.displayName || user?.username || "User";
 
   function openProfileModal() {
@@ -175,56 +170,37 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     setProfileOpen(false);
   }
 
-  // Top-level leaf items (no children): active state is the same light-blue tint used for
-  // active/hovered sub-module rows — no solid fill — for one consistent visual language
-  // across the whole sidebar, in both themes.
-  const leafItemClass = ({ active = false } = {}) => `newq group relative flex h-11 items-center gap-3 rounded-2xl text-left font-medium transition-all duration-300 active:scale-[0.98] ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-2xl md:p-0" : "w-full px-3"} ${
-    active
-      ? darkMode ? "text-[#93c5fd] font-semibold" : "text-[#2563eb] font-semibold"
-      : darkMode
-      ? "text-white/60 hover:bg-[#2563eb]/15 hover:text-[#93c5fd]"
-      : "text-slate-600 hover:bg-[#2563eb]/8 hover:text-[#2563eb]"
+  // Rows after the reference: quiet text, a soft hover, and a white bordered pill for the
+  // current page. The same pill marks a group whose page is open.
+  const activeRow = darkMode
+    ? "bg-white/[0.08] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+    : "bg-white text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_0_0_1px_#e6e6e3]";
+  const idleRow = darkMode ? "text-white/65 hover:bg-white/[0.05] hover:text-white" : "text-[#3d3d3b] hover:bg-black/[0.04] hover:text-[#171717]";
+
+  const leafItemClass = ({ active = false } = {}) => `newq group relative flex h-9 items-center gap-2.5 rounded-[10px] text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-150 ${collapsed ? "md:mx-auto md:h-10 md:w-10 md:justify-center md:gap-0 md:p-0" : "w-full px-2.5"} ${active ? `${activeRow} font-medium` : idleRow}`;
+
+  const leafIconClass = ({ active = false } = {}) => `relative z-10 flex h-5 w-5 shrink-0 items-center justify-center ${
+    active ? (darkMode ? "text-white" : "text-[#171717]") : darkMode ? "text-white/50 group-hover:text-white/80" : "text-[#7a7a77] group-hover:text-[#3d3d3b]"
   }`;
 
-  const leafIconClass = ({ active = false } = {}) => `relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110 ${collapsed ? "md:h-10 md:w-10" : ""} ${
-    active
-      ? darkMode ? "bg-[#2563eb]/30 text-[#93c5fd]" : "bg-[#2563eb]/15 text-[#2563eb]"
-      : darkMode ? "text-white/55 group-hover:text-[#93c5fd]" : "text-slate-500 group-hover:text-[#2563eb]"
+  const groupHeaderClass = ({ parentActive = false } = {}) => `newq group relative flex h-9 w-full items-center gap-2.5 rounded-[10px] text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-150 ${collapsed ? "md:mx-auto md:h-10 md:w-10 md:justify-center md:gap-0 md:p-0" : "px-2.5"} ${
+    parentActive ? (collapsed ? activeRow : darkMode ? "font-medium text-white" : "font-medium text-[#171717]") : idleRow
   }`;
 
-  // Group headers (Projects / HR / Access Control) are plain, bold rows — never a solid pill
-  // like a top-level active item — but they DO get the same light-blue tint when one of their
-  // children is the current page (parentActive) or on hover, so the collapsed icon-only rail
-  // still shows which section you're in even without the label visible.
-  const groupHeaderClass = ({ parentActive = false } = {}) => `newq group relative flex h-11 w-full items-center gap-3 rounded-2xl text-left font-semibold transition-all duration-300 active:scale-[0.98] ${collapsed ? "md:mx-auto md:h-12 md:w-12 md:justify-center md:gap-0 md:rounded-2xl md:p-0" : "px-3"} ${
-    parentActive
-      ? ""
-      : darkMode ? "text-white/90 hover:bg-[#2563eb]/15 hover:text-[#93c5fd]" : "text-slate-800 hover:bg-[#2563eb]/8 hover:text-[#2563eb]"
+  const groupHeaderIconClass = ({ parentActive = false } = {}) => `relative z-10 flex h-5 w-5 shrink-0 items-center justify-center ${
+    parentActive ? (darkMode ? "text-white" : "text-[#171717]") : darkMode ? "text-white/50 group-hover:text-white/80" : "text-[#7a7a77] group-hover:text-[#3d3d3b]"
   }`;
 
-  const groupHeaderIconClass = ({ parentActive = false } = {}) => `relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110 ${collapsed ? "md:h-10 md:w-10" : ""} ${
-    parentActive
-      ? darkMode ? "bg-[#2563eb]/25" : "bg-white"
-      : darkMode ? "text-white/75 group-hover:text-[#93c5fd]" : "text-slate-600 group-hover:text-[#2563eb]"
+  const childItemClass = ({ active = false } = {}) => `newq group relative flex h-8 w-full items-center gap-2 rounded-[9px] px-2.5 text-left text-[13px] transition-[background-color,color,box-shadow] duration-150 ${
+    active ? `${activeRow} font-medium` : darkMode ? "text-white/55 hover:bg-white/[0.05] hover:text-white" : "text-[#5f5f5c] hover:bg-black/[0.04] hover:text-[#171717]"
   }`;
 
-  // `pill: true` when a sliding highlight paints the active background (the flyout has none).
-  const childItemClass = ({ active = false, pill = false } = {}) => `newq group relative flex h-9 items-center gap-2.5 rounded-xl px-3 text-left transition-all duration-200 active:scale-[0.98] w-full ${
-    active
-      ? pill ? "font-semibold" : darkMode ? "bg-[#2563eb]/20 font-semibold" : "bg-[#2563eb]/10 font-semibold"
-      : darkMode ? "font-normal text-white/55 hover:bg-[#2563eb]/15 hover:text-[#93c5fd]" : "font-normal text-slate-500 hover:bg-[#2563eb]/8 hover:text-[#2563eb]"
+  const childIconClass = ({ active = false } = {}) => `relative z-10 flex h-4 w-4 shrink-0 items-center justify-center ${
+    active ? (darkMode ? "text-white" : "text-[#171717]") : darkMode ? "text-white/40" : "text-[#9a9a97] group-hover:text-[#5f5f5c]"
   }`;
 
-  const childIconClass = ({ active = false } = {}) => `relative z-10 flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-lg ${
-    active ? (darkMode ? "bg-[#2563eb]/30" : "bg-[#2563eb]/15") : darkMode ? "text-white/40 group-hover:text-[#93c5fd]" : "text-slate-400 group-hover:text-[#2563eb]"
-  }`;
-
-  const pillClass = darkMode ? "bg-[#2563eb]/20" : "bg-[#2563eb]/10";
-  // One pill for top-level rows (a group header holds it while one of its pages is open) and
-  // one per group for its pages, so it slides within a list rather than across clipped groups.
-  const activePill = (layoutId, rounded = "rounded-2xl") => (
-    <motion.span layoutId={layoutId} className={`absolute inset-0 ${rounded} ${pillClass}`} transition={PILL_SPRING} aria-hidden />
-  );
+  // Kept as a no-op so the render code below stays the same: the pill is the row's own style now.
+  const activePill = () => null;
   const linkProps = (menuId) => ({
     href: menuPaths[menuId] || "/dashboard",
     onClick: () => setMobileOpen?.(false),
@@ -241,7 +217,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     // most on the collapsed icon-only rail, where the label is hidden and the icon tint is
     // the only cue for "your current page lives in this section".
     const childActive = allChildren.some((child) => child.id === activeMenu);
-    const parentTint = childActive ? { color: darkMode ? ACCENT_DARK_TEXT : ACCENT } : undefined;
+    const parentTint = undefined;
 
     return (
       <div key={`${groupKey}-group`} className="transition-all duration-300">
@@ -260,7 +236,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
         >
           {childActive && activePill("sidebar-pill")}
           <span className={groupHeaderIconClass({ parentActive: childActive })}>
-            <GroupIcon className="h-4.5 w-4.5" style={parentTint} />
+            <GroupIcon className="h-[17px] w-[17px]" style={parentTint} />
           </span>
           <span className={`relative z-10 min-w-0 flex-1 truncate text-[13px] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:opacity-0" : "max-w-[140px] opacity-100"}`} style={parentTint}>{label}</span>
           <ChevronDown className={`relative z-10 h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${collapsed ? "md:w-0 md:opacity-0" : ""} ${isOpen ? "rotate-180" : ""} ${darkMode ? "text-white/40" : "text-black/35"}`} />
@@ -268,8 +244,8 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
 
         <div className={`grid transition-all duration-300 ease-out ${collapsed ? "md:grid-rows-[0fr] md:opacity-0" : isOpen || searchTerm ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
           <div className="min-h-0 overflow-hidden">
-            <div className="relative ml-6 mt-1 space-y-0.5 pb-2 pl-4">
-              <span className={`absolute bottom-4 left-0 top-0 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
+            <div className="relative ml-[18px] mt-0.5 space-y-0.5 pb-1.5 pl-3">
+              <span className={`absolute bottom-3 left-0 top-1 w-px rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.08]"}`} />
               {list.map((child) => {
                 const ChildIcon = child.icon;
                 const active = activeMenu === child.id;
@@ -279,14 +255,13 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                     data-sidebar-menu={child.id}
                     {...linkProps(child.id)}
                     aria-current={active ? "page" : undefined}
-                    className={childItemClass({ active, pill: true })}
+                    className={childItemClass({ active })}
                   >
                     {active && activePill(`sidebar-pill-${groupKey}`, "rounded-xl")}
-                    <span className={`absolute -left-4 h-px w-4 ${darkMode ? "bg-white/10" : "bg-black/10"}`} />
-                    <span className={childIconClass({ active })}>
-                      <ChildIcon className="h-3.5 w-3.5" style={active ? { color: ACCENT } : undefined} />
+                                        <span className={childIconClass({ active })}>
+                      <ChildIcon className="h-[15px] w-[15px]" />
                     </span>
-                    <span className="relative z-10 max-w-full truncate text-[13px]" style={active ? { color: darkMode ? ACCENT_DARK_TEXT : ACCENT } : undefined}>{child.label}</span>
+                    <span className="relative z-10 max-w-full truncate text-[13px]">{child.label}</span>
                     {child.id === "site-images" && newSiteImages && <span className="relative z-10 ml-auto flex h-2 w-2 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" title="New site photos" />}
                   </Link>
                 );
@@ -313,27 +288,18 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
             '"Google Sans", "Product Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
       >
-        <div className={`relative px-4 pb-2 pt-4 transition-all duration-300 ${collapsed ? "md:px-3" : ""}`}>
-          <div className="flex items-center justify-center gap-3 transition-all duration-500">
-            <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all duration-500 `}
-            >
-              <Image src="/logo.png" alt="Logo" width={26} height={26} className="h-8 w-8 rounded-md" />
-            </div>
-            <div className={`min-w-0 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-300 ease-out ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[150px] opacity-100"}`}>
-              <h1
-                className={`truncate text-[22px] small font-bold leading-none ${
-                  darkMode ? "text-white" : "text-black"
-                }`}
-              >
-                UIPL Docs
-              </h1>
-            </div>
+        <div className={`relative px-3 pb-1 pt-4 transition-all duration-300 ${collapsed ? "md:px-2" : ""}`}>
+          <div className={`flex items-center gap-2.5 px-1.5 ${collapsed ? "md:flex-col md:gap-3 md:px-0" : ""}`}>
+            <Image src="/logo.png" alt="UIPL Docs" width={26} height={26} className="h-7 w-7 shrink-0 rounded-[8px]" priority />
+            <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:flex-none md:opacity-0" : "max-w-[150px] opacity-100"} ${darkMode ? "text-white" : "text-[#171717]"}`}>
+              UIPL Docs
+            </span>
             <button
               onClick={() => setMobileOpen?.(false)}
-              className={`ml-auto flex h-10 w-10 items-center justify-center rounded-full md:hidden ${darkMode ? "hover:bg-white/5 text-white/70" : "hover:bg-black/5 text-black/60"}`}
+              className={`grid h-8 w-8 place-items-center rounded-[9px] md:hidden ${darkMode ? "text-white/70 hover:bg-white/10" : "text-[#5f5f5c] hover:bg-black/5"}`}
+              aria-label="Close menu"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -341,7 +307,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                 setCollapsed?.(!collapsed);
                 setFlyout(null);
               }}
-              className={`absolute -right-3.5 top-4 z-[60] hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-sm transition-[background-color,color,transform] duration-300 hover:scale-105 md:flex ${darkMode ? "border-white/10 bg-[#17181c] text-white/65 hover:bg-[#22242a]" : "border-[#dfe4e8] bg-white text-slate-500 hover:bg-[#f3f6f8]"}`}
+              className={`hidden h-8 w-8 shrink-0 place-items-center rounded-[9px] transition-colors md:grid ${darkMode ? "text-white/55 hover:bg-white/10" : "text-[#7a7a77] hover:bg-black/[0.05] hover:text-[#171717]"}`}
               title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
@@ -355,13 +321,13 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
               onFocus={() => onOpenSearch?.()}
               onChange={(event) => setMenuSearch(event.target.value)}
               placeholder="Global Search"
-              className={`h-10 w-full rounded-xl border-0 pl-9 pr-16 text-sm outline-none ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35" : "bg-[#f1f4f8] text-slate-800 placeholder:text-slate-400"}`}
+              className={`h-9 w-full rounded-[10px] border pl-9 pr-16 text-[13px] outline-none transition-shadow focus:ring-[3px] ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35 focus:ring-white/10" : "border-[#e4e4e1] bg-white text-[#171717] placeholder:text-[#a3a3a0] shadow-[0_1px_1px_rgba(0,0,0,0.03)] focus:ring-black/[0.05]"}`}
             />
             <kbd className={`pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold sm:block ${darkMode ? "border-white/10 text-white/35" : "border-slate-200 text-slate-400"}`}>Ctrl K</kbd>
           </div>
         </div>
 
-        <motion.nav layoutScroll ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-2 transition-all duration-500 ${collapsed ? "md:px-0" : ""}`}>
+        <nav ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-2 transition-all duration-500 ${collapsed ? "md:px-0" : ""}`}>
           <p className={`overflow-hidden px-3 newq text-[9px] font-bold uppercase tracking-[0.14em] transition-[max-height,opacity,margin] duration-300 ${muted} ${collapsed ? "md:mb-0 md:max-h-0 md:opacity-0" : "mb-2 max-h-5 opacity-100"}`}>Workspace</p>
           <div className={`space-y-1 ${collapsed ? "md:flex md:flex-col md:items-center md:gap-2 md:space-y-0" : ""}`}>
           {filteredMenuItems.map((item) => {
@@ -397,14 +363,14 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
               >
                 {isActive && activePill("sidebar-pill")}
                 <span className={leafIconClass({ active: isActive })}>
-                  <Icon className="w-4.5 h-4.5" />
+                  <Icon className="h-[17px] w-[17px]" />
                 </span>
                 <span className={`relative z-10 overflow-hidden whitespace-nowrap text-[13px] transition-[max-width,opacity,transform] duration-300 ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[160px] opacity-100"}`}>{item.label}</span>
               </Link>
             );
           })}
           </div>
-        </motion.nav>
+        </nav>
 
         <div ref={profileRef} className={`relative newq shrink-0 px-3 pb-4 pt-3 transition-all duration-500 ${collapsed ? "md:flex md:justify-center md:px-0" : ""}`}>
           <div
@@ -438,13 +404,13 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           <button
             type="button"
             onClick={() => setProfileOpen((open) => !open)}
-            className={`flex items-center gap-3 text-left   transition-all duration-300 hover:-translate-y-0.5 ${collapsed ? "md:mx-auto md:grid md:h-14 md:w-14 md:place-items-center md:gap-0 md:rounded-[20px] md:p-0" : "h-14 w-full rounded-[18px] px-3"} ${darkMode ? "bg-white/[0.075] text-white ring-white/10" : "bg-[#f8fbf9] text-[#171714] ring-black/5"}`}
+            className={`flex items-center gap-2.5 text-left transition-colors duration-150 ${collapsed ? "md:mx-auto md:grid md:h-11 md:w-11 md:place-items-center md:gap-0 md:rounded-[12px] md:p-0" : "h-12 w-full rounded-[12px] px-2"} ${darkMode ? "text-white hover:bg-white/[0.06]" : "text-[#171717] hover:bg-black/[0.04]"}`}
             aria-expanded={profileOpen}
           >
-            <UserAvatar user={user} name={displayName} className={`h-9 w-9 ${collapsed ? "md:m-0 md:h-10 md:w-10 md:translate-y-[1px]" : ""}`} />
+            <UserAvatar user={user} name={displayName} className={`h-8 w-8 ${collapsed ? "md:m-0 md:h-9 md:w-9" : ""}`} />
             <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-300 ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[145px] opacity-100"}`}>
-              <span className="block truncate text-sm font-semibold">{displayName}</span>
-              <span className={`block truncate text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{user?.roleName || user?.username || "User"}</span>
+              <span className="block truncate text-[13px] font-medium">{displayName}</span>
+              <span className={`block truncate text-[11.5px] ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>{user?.email || user?.username || user?.roleName || "User"}</span>
             </span>
             <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${profileOpen ? "rotate-180" : ""} ${collapsed ? "md:w-0 md:opacity-0" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
           </button>
@@ -476,9 +442,9 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
                   className={childItemClass({ active })}
                 >
                   <span className={childIconClass({ active })}>
-                    <ChildIcon className="h-3.5 w-3.5" style={active ? { color: ACCENT } : undefined} />
+                    <ChildIcon className="h-[15px] w-[15px]" />
                   </span>
-                  <span className="max-w-full truncate text-[13px]" style={active ? { color: darkMode ? ACCENT_DARK_TEXT : ACCENT } : undefined}>{child.label}</span>
+                  <span className="max-w-full truncate text-[13px]">{child.label}</span>
                   {child.id === "site-images" && newSiteImages && <span className="ml-auto flex h-2 w-2 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-500/15" />}
                 </Link>
               );

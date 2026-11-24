@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Power, Save, Search, ShieldCheck, Wrench } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
-import CeoBriefSettings from "./CeoBriefSettings";
+import { DatePicker, TimePicker } from "./ui";
 
 function formatDateLabel(value) {
   if (!value) return "";
@@ -45,99 +45,10 @@ function currentTimeInput() {
 }
 
 function MaintenanceDatePicker({ darkMode, label, value, placeholder, onChange }) {
-  const pickerRef = useRef(null);
-  const triggerRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [monthDate, setMonthDate] = useState(() => value ? new Date(`${value}T00:00:00`) : new Date());
-  const [panelStyle, setPanelStyle] = useState({});
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
-  const toInput = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  const displayValue = value ? formatDateLabel(value) : placeholder;
-
-  function monthDays(baseDate) {
-    const first = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
-    const start = new Date(first.getFullYear(), first.getMonth(), 1 - first.getDay());
-    return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
-  }
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function closeOnOutside(event) {
-      if (pickerRef.current?.contains(event.target)) return;
-      setOpen(false);
-    }
-    function updatePanelPosition() {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const margin = 12;
-      const gap = 8;
-      const panelWidth = 280;
-      const wantedHeight = 392;
-      const roomBelow = window.innerHeight - rect.bottom - gap - margin;
-      const roomAbove = rect.top - gap - margin;
-      const openUpward = roomBelow < wantedHeight && roomAbove > roomBelow;
-      setPanelStyle({
-        position: "fixed",
-        width: panelWidth,
-        left: Math.min(Math.max(margin, rect.left), window.innerWidth - panelWidth - margin),
-        top: openUpward ? undefined : rect.bottom + gap,
-        bottom: openUpward ? window.innerHeight - rect.top + gap : undefined,
-        maxHeight: Math.max(300, Math.min(wantedHeight, openUpward ? roomAbove : roomBelow)),
-      });
-    }
-    updatePanelPosition();
-    document.addEventListener("mousedown", closeOnOutside);
-    window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", updatePanelPosition, true);
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutside);
-      window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", updatePanelPosition, true);
-    };
-  }, [open]);
-
   return (
-    <div ref={pickerRef} className="relative">
+    <div className="relative">
       <p className="text-xs font-medium text-black/65 dark:text-white/60">{label}</p>
-      <button ref={triggerRef} type="button" onClick={() => setOpen((current) => !current)} className={`mt-2 flex h-11 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-semibold outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]" : "border-black/10 bg-white text-[#171714] hover:bg-[#fafbf8]"}`}>
-        <span className={value ? "" : muted}>{displayValue}</span>
-        <CalendarDays className={`h-4 w-4 ${muted}`} />
-      </button>
-      {open && (
-        <div style={panelStyle} className={`z-[110] overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-          <div className="p-4 pb-3">
-            <div className="mb-3 flex items-center justify-between">
-              <button type="button" onClick={() => setMonthDate(new Date(year, month - 1, 1))} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.04]"}`}><ChevronLeft className="h-4 w-4" /></button>
-              <p className="text-xs font-medium text-blue-600">Choose date</p>
-              <button type="button" onClick={() => setMonthDate(new Date(year, month + 1, 1))} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.04]"}`}><ChevronRight className="h-4 w-4" /></button>
-            </div>
-            <div className={`mb-1 grid grid-cols-7 text-center text-[10px] font-medium uppercase ${muted}`}>
-              {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => <span key={`${day}-${index}`} className="py-1">{day}</span>)}
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-medium">{monthDate.toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</p>
-              <div className="grid grid-cols-7 gap-y-1 text-center">
-                {monthDays(new Date(year, month, 1)).map((day) => {
-                  const key = toInput(day);
-                  const isSelected = key === value;
-                  const inMonth = day.getMonth() === month;
-                  return (
-                    <button key={key} type="button" onClick={() => { onChange(key); setOpen(false); }} className={`grid h-8 place-items-center text-xs font-normal transition ${isSelected ? "rounded-full bg-blue-600 text-white" : inMonth ? darkMode ? "text-white hover:bg-white/10" : "text-black hover:bg-black/[0.04]" : darkMode ? "text-white/22" : "text-black/18"}`}>
-                      {day.getDate()}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-          <div className={`flex items-center justify-end gap-5 border-t px-4 py-3 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-            <button type="button" onClick={() => setOpen(false)} className={`text-xs font-bold ${muted}`}>Cancel</button>
-            <button type="button" onClick={() => setOpen(false)} className="text-xs font-black text-[#171714] dark:text-white">Apply</button>
-          </div>
-        </div>
-      )}
+      <DatePicker darkMode={darkMode} className="mt-2" value={value || ""} placeholder={placeholder} onChange={onChange} />
     </div>
   );
 }
@@ -149,95 +60,10 @@ const MAINTENANCE_HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
 const MAINTENANCE_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, minute) => String(minute).padStart(2, "0"));
 
 function MaintenanceTimePicker({ darkMode, label, value, onChange }) {
-  const ref = useRef(null);
-  const triggerRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [draftTime, setDraftTime] = useState(value || currentTimeInput());
-  const [panelStyle, setPanelStyle] = useState({});
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const [selectedHour = "10", selectedMinute = "30"] = String(draftTime || currentTimeInput()).split(":");
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function closeOnOutside(event) {
-      if (ref.current?.contains(event.target)) return;
-      setOpen(false);
-    }
-    function updatePanelPosition() {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const margin = 12;
-      const gap = 8;
-      const panelWidth = Math.max(300, Math.min(380, rect.width));
-      const wantedHeight = 392;
-      const roomBelow = window.innerHeight - rect.bottom - gap - margin;
-      const roomAbove = rect.top - gap - margin;
-      const openUpward = roomBelow < wantedHeight && roomAbove > roomBelow;
-      setPanelStyle({
-        position: "fixed",
-        width: panelWidth,
-        left: Math.min(Math.max(margin, rect.left), window.innerWidth - panelWidth - margin),
-        top: openUpward ? undefined : rect.bottom + gap,
-        bottom: openUpward ? window.innerHeight - rect.top + gap : undefined,
-        maxHeight: Math.max(300, Math.min(wantedHeight, openUpward ? roomAbove : roomBelow)),
-      });
-    }
-    updatePanelPosition();
-    document.addEventListener("mousedown", closeOnOutside);
-    window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", updatePanelPosition, true);
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutside);
-      window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", updatePanelPosition, true);
-    };
-  }, [open]);
-
-  function commitTime(nextHour = selectedHour, nextMinute = selectedMinute) {
-    const next = `${nextHour}:${nextMinute}`;
-    setDraftTime(next);
-    onChange(next);
-  }
-
   return (
-    <div ref={ref} className="relative">
+    <div className="relative">
       <p className="text-xs font-medium text-black/65 dark:text-white/60">{label}</p>
-      <button ref={triggerRef} type="button" onClick={() => { setDraftTime(value || currentTimeInput()); setOpen((current) => !current); }} className={`mt-2 flex h-11 w-full items-center justify-between rounded-2xl border px-3 text-left text-sm font-semibold outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white hover:bg-white/[0.07]" : "border-black/10 bg-white text-[#171714] hover:bg-[#fafbf8]"} ${open ? (darkMode ? "ring-2 ring-rose-300/20" : "ring-2 ring-rose-500/15") : ""}`}>
-        <span className="flex items-center gap-2">
-          <Clock3 className={`h-4 w-4 ${darkMode ? "text-rose-200" : "text-rose-600"}`} />
-          {value ? displayTimeInput(value) : "Select time"}
-        </span>
-        <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""} ${muted}`} />
-      </button>
-      {open && (
-        <div style={panelStyle} className={`z-[120] overflow-hidden rounded-2xl border p-2 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-          <div className={`mb-2 rounded-2xl p-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#fff5f5]"}`}>
-            <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Selected time</p>
-            <p className="mt-1 text-lg font-black">{displayTimeInput(draftTime)}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className={`mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}>Hour</p>
-              <div className="max-h-56 overflow-y-auto pr-1">
-                {MAINTENANCE_HOUR_OPTIONS.map((option) => {
-                  const active = option.value === selectedHour;
-                  return <button key={option.value} type="button" onClick={() => commitTime(option.value, selectedMinute)} className={`mb-1 flex h-9 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${active ? "bg-rose-500 text-white" : darkMode ? "text-white/70 hover:bg-white/[0.07]" : "text-black/65 hover:bg-rose-50"}`}><span>{option.label}</span>{active && <Check className="h-4 w-4" />}</button>;
-                })}
-              </div>
-            </div>
-            <div>
-              <p className={`mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}>Minute</p>
-              <div className="max-h-56 overflow-y-auto pr-1">
-                {MAINTENANCE_MINUTE_OPTIONS.map((minute) => {
-                  const active = minute === selectedMinute;
-                  return <button key={minute} type="button" onClick={() => commitTime(selectedHour, minute)} className={`mb-1 flex h-9 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${active ? "bg-rose-500 text-white" : darkMode ? "text-white/70 hover:bg-white/[0.07]" : "text-black/65 hover:bg-rose-50"}`}><span>{minute}</span>{active && <Check className="h-4 w-4" />}</button>;
-                })}
-              </div>
-            </div>
-          </div>
-          <button type="button" onClick={() => setOpen(false)} className={`mt-2 h-10 w-full rounded-xl text-sm font-black transition ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#171714] text-white hover:bg-black/80"}`}>Done</button>
-        </div>
-      )}
+      <TimePicker darkMode={darkMode} className="mt-2" value={value || ""} onChange={onChange} step={15} />
     </div>
   );
 }
@@ -422,7 +248,6 @@ export default function ModuleControl({ darkMode }) {
         </div>
       </section>
 
-      <CeoBriefSettings darkMode={darkMode} />
       <section className={`overflow-hidden rounded-[30px] border p-5 sm:p-7 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white"}`}>
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>

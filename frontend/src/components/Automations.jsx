@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { ConfirmModal } from "./ui";
+import { ConfirmModal, Select } from "./ui";
 import { API_URL } from "./AuthProvider";
 
 const schedules = {
@@ -451,9 +451,9 @@ export default function Automations({ darkMode }) {
 
                 <label>
                   <span className={`text-xs uppercase tracking-wider block mb-2 ${muted}`}>3. Frequency</span>
-                  <select value={form.scheduleKey} onChange={(e) => setForm({ ...form, scheduleKey: e.target.value })} className={`w-full rounded-2xl px-4 py-3 outline-none ${input}`}>
+                  <Select darkMode={darkMode} value={form.scheduleKey} onChange={(e) => setForm({ ...form, scheduleKey: e.target.value })}>
                     {Object.entries(schedules).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}
-                  </select>
+                  </Select>
                 </label>
               </div>
 
@@ -463,7 +463,7 @@ export default function Automations({ darkMode }) {
                     <span className={`text-xs uppercase tracking-wider block mb-2 ${muted}`}>Condition</span>
                     <div className="grid gap-2 sm:grid-cols-3">
                       <input value={form.condition.column} onChange={(e) => setForm({ ...form, condition: { ...form.condition, column: e.target.value } })} placeholder="Column" className={`rounded-2xl px-4 py-3 outline-none ${input}`} />
-                      <select value={form.condition.operator} onChange={(e) => setForm({ ...form, condition: { ...form.condition, operator: e.target.value } })} className={`rounded-2xl px-4 py-3 outline-none ${input}`}>
+                      <Select darkMode={darkMode} value={form.condition.operator} onChange={(e) => setForm({ ...form, condition: { ...form.condition, operator: e.target.value } })}>
                         <option value="contains_any">contains any</option>
                         <option value="contains">contains</option>
                         <option value="equals">equals</option>
@@ -471,7 +471,7 @@ export default function Automations({ darkMode }) {
                         <option value="less_than">less than</option>
                         <option value="is_empty">is empty</option>
                         <option value="is_not_empty">is not empty</option>
-                      </select>
+                      </Select>
                       <input value={form.condition.value} onChange={(e) => setForm({ ...form, condition: { ...form.condition, value: e.target.value } })} placeholder="Value" className={`rounded-2xl px-4 py-3 outline-none ${input}`} />
                     </div>
                   </div>

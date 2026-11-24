@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowDownLeft, ArrowDownToLine, ArrowRightLeft, ArrowUpR
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
 import AccountsGoogleGuard, { GoogleSessionButton, muteFor } from "./AccountsGoogleGuard";
+import { DateInput } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -692,7 +693,7 @@ function AccountsDashboardInner({ darkMode, gate, signOutGoogle }) {
                 </label>
                 <label className={`block rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
                   <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Read raw entries from</span>
-                  <input type="date" value={settingsForm.rawStartDate} onChange={(event) => updateSettingsField("rawStartDate", event.target.value)} className={inputClass} />
+                  <DateInput darkMode={darkMode} value={settingsForm.rawStartDate} onChange={(event) => updateSettingsField("rawStartDate", event.target.value)} className="mt-2" />
                   <span className={`mt-2 block text-xs ${muted}`}>
                     Applies to both steps: only entries dated on or after this day are read from the raw sheet into Mam&apos;s sheet, and on from there into the all-projects sheet. Anything earlier is left alone, and nothing already in either sheet is changed or removed. Leave blank to read everything.
                   </span>

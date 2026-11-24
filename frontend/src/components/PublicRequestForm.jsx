@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CircleCheckBig, Info, Link2Off, Loader2, Paperclip, Send, Ticket, TriangleAlert, X } from "lucide-react";
 import { API_URL } from "./AuthProvider";
+import { Select } from "./ui";
 
 // The shareable side of an accounts request form. Deliberately standalone: no sidebar,
 // no auth provider, nothing that assumes a signed-in raga user — a link recipient may
@@ -252,10 +253,9 @@ export default function PublicRequestForm({ slug }) {
                       className="mt-2 w-full rounded-xl border border-black/[0.12] bg-white p-4 text-sm text-[#171714] outline-none transition placeholder:text-black/30 focus:border-black/40"
                     />
                   ) : item.type === "select" ? (
-                    <select value={values[item.key] || ""} onChange={(event) => setValue(item.key, event.target.value)} className={`mt-2 ${field}`}>
-                      <option value="">Choose...</option>
+                    <Select darkMode={false} value={values[item.key] || ""} onChange={(event) => setValue(item.key, event.target.value)} className="mt-2" placeholder="Choose..." size="lg">
                       {(item.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
-                    </select>
+                    </Select>
                   ) : item.type === "file" ? null : (
                     <input
                       type={item.type === "number" ? "number" : item.type === "date" ? "date" : "text"}

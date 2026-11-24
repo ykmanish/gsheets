@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
 import { Activity, ArrowRight, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, ClipboardList, FileSpreadsheet, FileText, FolderLock, Images, LayoutDashboard, ListTodo, MessageCircleMore, MessagesSquare, PackageSearch, Search, ShieldCheck, SlidersHorizontal, UserRound, UserRoundSearch, Users, Workflow, X, ChartNoAxesCombined, Sheet } from "lucide-react";
 import { preloadModule } from "./appModules";
 
@@ -104,10 +103,10 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
   const visibleItems = query.trim() ? filteredItems : filteredItems.slice(0, 8);
 
   return (
-    <div className={`fixed inset-0 z-[100] flex items-start justify-center px-3 pt-[7vh] transition duration-300 ${open ? "pointer-events-auto bg-black/45 backdrop-blur-md opacity-100" : "pointer-events-none bg-black/0 backdrop-blur-0 opacity-0"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closePalette(); }}>
-      <div className={`flex max-h-[86vh] w-full max-w-3xl origin-top flex-col overflow-hidden rounded-[30px] border shadow-[0_36px_120px_rgba(15,23,42,0.30)] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "translate-y-0 scale-100 opacity-100" : "-translate-y-5 scale-[0.96] opacity-0"} ${darkMode ? "border-white/10 bg-[#111318] text-white" : "border-white/70 bg-white text-[#172033]"}`}>
-        <div className={`flex h-24 shrink-0 items-center gap-4 border-b px-6 ${darkMode ? "border-white/10" : "border-black/5"}`}>
-          <Search className={`h-6 w-6 shrink-0 ${darkMode ? "text-white/45" : "text-slate-400"}`} />
+    <div className={`fixed inset-0 z-[100] flex items-start justify-center px-3 pt-[10vh] newq transition duration-200 ${open ? "pointer-events-auto bg-black/25 opacity-100" : "pointer-events-none bg-black/0 opacity-0"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closePalette(); }}>
+      <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`flex max-h-[70vh] w-full max-w-xl origin-top flex-col overflow-hidden rounded-[16px] border transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "translate-y-0 scale-100 opacity-100" : "-translate-y-2 scale-[0.98] opacity-0"} ${darkMode ? "border-white/10 bg-[#17181c] text-white" : "border-[#e8e8e6] bg-white text-[#171717]"}`}>
+        <div className={`flex h-12 shrink-0 items-center gap-2.5 border-b px-4 ${darkMode ? "border-white/10" : "border-[#efefed]"}`}>
+          <Search className={`h-4 w-4 shrink-0 ${darkMode ? "text-white/45" : "text-[#a3a3a0]"}`} />
           <input
             ref={inputRef}
             value={query}
@@ -117,24 +116,24 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
             }}
             onKeyDown={handleKeyDown}
             placeholder="Search modules, pages, or actions..."
-            className={`min-w-0 flex-1 bg-transparent text-lg outline-none ${darkMode ? "placeholder:text-white/35" : "placeholder:text-slate-400"}`}
+            className={`min-w-0 flex-1 bg-transparent text-[14px] outline-none ${darkMode ? "placeholder:text-white/35" : "placeholder:text-[#a3a3a0]"}`}
           />
-          <kbd className={`hidden rounded-lg border px-3 py-1.5 text-xs sm:inline ${darkMode ? "border-white/10 bg-white/5 text-white/55" : "border-slate-200 bg-slate-50 text-slate-500"}`}>Esc</kbd>
-          <button type="button" onClick={closePalette} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "text-white/55 hover:bg-white/10" : "text-slate-400 hover:bg-slate-100"}`} aria-label="Close search">
-            <X className="h-5 w-5" />
+          <kbd className={`hidden rounded-[6px] border px-1.5 py-0.5 text-[11px] sm:inline ${darkMode ? "border-white/10 text-white/50" : "border-[#e4e4e1] text-[#8a8a87]"}`}>Esc</kbd>
+          <button type="button" onClick={closePalette} className={`grid h-7 w-7 place-items-center rounded-[8px] ${darkMode ? "text-white/55 hover:bg-white/10" : "text-[#8a8a87] hover:bg-[#f1f1ef]"}`} aria-label="Close search">
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
           {!query.trim() && (
-            <p className={`mb-4 text-sm font-semibold ${darkMode ? "text-white/60" : "text-slate-600"}`}>Popular modules</p>
+            <p className={`px-2.5 pb-1 pt-2 text-[11.5px] font-medium ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>Go to</p>
           )}
           {query.trim() && filteredItems.length > 0 && (
-            <p className={`mb-4 text-sm font-semibold ${darkMode ? "text-white/55" : "text-slate-500"}`}>Found {filteredItems.length} result{filteredItems.length === 1 ? "" : "s"}</p>
+            <p className={`px-2.5 pb-1 pt-2 text-[11.5px] font-medium ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>{filteredItems.length} result{filteredItems.length === 1 ? "" : "s"}</p>
           )}
 
           {visibleItems.length > 0 ? (
-            <div className={!query.trim() ? "grid gap-3 sm:grid-cols-2" : "space-y-2"}>
+            <div className="space-y-0.5">
               {visibleItems.map((item, index) => {
                 const Icon = item.icon || Search;
                 const active = index === activeIndex;
@@ -147,29 +146,19 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
                       void preloadModule(item.id);
                     }}
                     onClick={() => selectItem(item)}
-                    className={`group relative flex w-full items-center gap-4 rounded-[22px] border p-4 text-left transition-colors duration-200 active:scale-[0.99] ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-slate-200 bg-white"} ${active ? "" : darkMode ? "hover:bg-white/[0.07]" : "hover:border-emerald-100 hover:bg-[#f8fcfa]"}`}
+                    className={`group relative flex w-full items-center gap-3 rounded-[9px] px-2.5 py-2 text-left transition-colors duration-100 ${active ? (darkMode ? "bg-white/[0.07]" : "bg-[#f3f3f1]") : ""}`}
                   >
-                    {/* The highlight glides between results as the pointer or arrow keys move. */}
-                    {active && (
-                      <motion.span
-                        layoutId="command-palette-highlight"
-                        className={`absolute -inset-px rounded-[22px] border ${darkMode ? "border-[#d8f36a]/30 bg-[#d8f36a]/10" : "border-emerald-100 bg-[#f5fbf7]"}`}
-                        transition={{ type: "spring", stiffness: 650, damping: 42 }}
-                        aria-hidden
-                      />
-                    )}
-                    <span className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${item.group === "Access Control" ? "bg-rose-50 text-rose-600" : item.group === "HR" ? "bg-emerald-50 text-emerald-600" : darkMode ? "bg-white/10 text-[#d8f36a]" : "bg-blue-50 text-blue-600"}`}>
-                      <Icon className="h-5 w-5" />
+                    <span className={`relative grid h-7 w-7 shrink-0 place-items-center rounded-[8px] border ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70" : "border-[#ececea] bg-white text-[#5f5f5c]"}`}>
+                      <Icon className="h-[15px] w-[15px]" />
                     </span>
                     <span className="relative min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-base font-semibold">{item.label}</span>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/55" : "bg-slate-100 text-slate-500"}`}>{item.parent ? "submenu" : "module"}</span>
+                        <span className="truncate text-[13.5px] font-medium">{item.label}</span>
+                        {item.parent && <span className={`shrink-0 text-[11.5px] ${darkMode ? "text-white/40" : "text-[#a3a3a0]"}`}>in {item.parent}</span>}
                       </span>
-                      <span className={`mt-1 block truncate text-sm ${darkMode ? "text-white/45" : "text-slate-500"}`}>{item.description}</span>
-                      {item.parent && <span className={`mt-1 block truncate text-xs ${darkMode ? "text-white/35" : "text-slate-400"}`}>{item.parent} / {item.group}</span>}
+                      <span className={`block truncate text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>{item.description}</span>
                     </span>
-                    <ArrowRight className={`relative h-5 w-5 shrink-0 transition ${active ? "translate-x-0 opacity-70" : "-translate-x-1 opacity-25 group-hover:translate-x-0 group-hover:opacity-60"}`} />
+                    <ArrowRight className={`relative h-4 w-4 shrink-0 transition ${active ? "opacity-60" : "opacity-0 group-hover:opacity-40"}`} />
                   </button>
                 );
               })}
@@ -192,9 +181,9 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
           )}
         </div>
 
-        <div className={`grid shrink-0 grid-cols-2 items-center gap-3 border-t px-5 py-4 text-xs sm:grid-cols-3 ${darkMode ? "border-white/10 bg-white/[0.03] text-white/45" : "border-black/5 bg-slate-50 text-slate-500"}`}>
-          <span><kbd className="rounded-md border px-2 py-1">↑↓</kbd> Navigate</span>
-          <span className="text-center"><kbd className="rounded-md border px-2 py-1">Enter</kbd> Select</span>
+        <div className={`grid shrink-0 grid-cols-2 items-center gap-3 border-t px-4 py-2.5 text-[11.5px] sm:grid-cols-3 ${darkMode ? "border-white/10 text-white/45" : "border-[#efefed] text-[#8a8a87]"}`}>
+          <span><kbd className="rounded-[5px] border px-1.5 py-0.5">↑↓</kbd> Navigate</span>
+          <span className="text-center"><kbd className="rounded-[5px] border px-1.5 py-0.5">Enter</kbd> Select</span>
           <span className="hidden text-right sm:block">{query.trim() ? `Showing ${filteredItems.length} of ${items.length}` : `Search across ${items.length} items`}</span>
         </div>
       </div>

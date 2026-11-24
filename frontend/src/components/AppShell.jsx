@@ -202,7 +202,7 @@ function ShellContent({ children }) {
   const forumUnreadConversationIdsRef = useRef(new Set());
   const allowedMenus = useMemo(() => {
     const assigned = [
-      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-prn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment", "todos", "forum", "whatsapp", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "module-control"].includes(menu))),
+      ...(user?.isSuperAdmin ? [...menus, "project-mrn", "project-prn", "project-stock", "hr-dashboard", "hr-employees", "hr-leave", "hr-attendance", "hr-recruitment", "todos", "forum", "whatsapp", "slack", "manage-users", "module-control"] : menus.filter((menu) => !["access-management", "manage-roles", "manage-users", "whatsapp", "slack", "module-control"].includes(menu))),
       "projects",
       "profile",
       // Splitting Finance into Accounts + Forms must not revoke anyone: whoever already had
@@ -580,7 +580,7 @@ function ShellContent({ children }) {
   );
 
   return (
-    <div className={`shell-root flex newq ${hideTopChrome ? "h-dvh max-h-dvh overflow-hidden" : "min-h-dvh md:h-screen"} ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#eef3f2]"}`}>
+    <div className={`shell-root flex newq ${hideTopChrome ? "h-dvh max-h-dvh overflow-hidden" : "min-h-dvh md:h-screen"} ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#f3f3f1]"}`}>
       <Toaster position="top-center" />
       <Sidebar
         activeMenu={moduleId}
@@ -595,7 +595,8 @@ function ShellContent({ children }) {
         onLogout={logout}
         onOpenSearch={() => setCommandPaletteOpen(true)}
       />
-      <div className="flex-1 newq flex min-h-0 min-w-0 flex-col overflow-hidden">
+      {/* Each page sits on a white rounded panel inside the grey frame, as in the reference. */}
+      <div className={`app-panel flex-1 newq flex min-h-0 min-w-0 flex-col overflow-hidden md:my-2 md:mr-2 md:rounded-[16px] md:border ${darkMode ? "bg-[#101114] md:border-white/10" : "bg-white md:border-[#e8e8e6] md:shadow-[0_1px_2px_rgba(0,0,0,0.04)]"}`}>
         {!hideTopChrome && (
           <>
             <Navbar
@@ -608,6 +609,8 @@ function ShellContent({ children }) {
               showLoopButton={forumWidgetAvailable}
               loopUnreadCount={forumUnreadTotal}
               onLoopClick={openForumWidget}
+              moduleId={moduleId}
+              onOpenSearch={() => setCommandPaletteOpen(true)}
             />
             <NotificationStrip
               notification={latestNotification}

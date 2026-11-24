@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { ConfirmModal } from "./ui";
+import { ConfirmModal, SelectMenu } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -60,52 +60,7 @@ function initials(name = "Site") {
 }
 
 function SoftDropdown({ darkMode, value, options = [], onChange, placeholder = "Select" }) {
-  const [open, setOpen] = useState(false);
-  const selected = options.find((option) => option.value === value);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className={`flex h-14 w-full items-center justify-between gap-3 rounded-[20px] border px-4 text-left text-sm font-semibold transition ${
-          darkMode ? "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]" : "border-black/10 bg-white hover:bg-[#f8faf5]"
-        }`}
-      >
-        <span className={selected ? "" : darkMode ? "text-white/35" : "text-black/35"}>{selected?.label || placeholder}</span>
-        <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
-      </button>
-      {open && (
-        <>
-          <button type="button" aria-label="Close dropdown" className="fixed inset-0 z-[120] cursor-default" onClick={() => setOpen(false)} />
-          <div className={`absolute left-0 right-0 top-[calc(100%+8px)] z-[125] max-h-72 overflow-y-auto rounded-[22px] border p-2 shadow-2xl ${
-            darkMode ? "border-white/10 bg-[#191b20]" : "border-black/10 bg-white"
-          }`}>
-            {options.map((option) => {
-              const active = option.value === value;
-              return (
-                <button
-                  type="button"
-                  key={option.value}
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                  }}
-                  className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition ${
-                    active
-                      ? "bg-[#eafbdc] font-bold text-[#319000]"
-                      : darkMode ? "text-white/75 hover:bg-white/10" : "text-black/70 hover:bg-[#f4f6f1]"
-                  }`}
-                >
-                  <span className="truncate">{option.label}</span>
-                  {option.meta && <span className={active ? "text-[#319000]" : darkMode ? "text-white/35" : "text-black/35"}>{option.meta}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  );
+  return <SelectMenu darkMode={darkMode} value={value} options={options} onChange={onChange} placeholder={placeholder} />;
 }
 
 function Metric({ darkMode, icon: Icon, label, value, note, tone = "green" }) {

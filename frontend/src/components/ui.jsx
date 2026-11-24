@@ -1,22 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// UIPL's UI kit. Neutral, compact controls after the reference designs: white popovers with a
+// search row, rows with icons and a check on the chosen one, black for "selected", calendars
+// and time lists that match. No dependencies beyond React and lucide icons, and every popover
+// renders into <body> so a scrolling page or a drawer never clips it.
+
+import { Children, createElement, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
+  Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   File,
   FileArchive,
   FileText,
   FileType,
   Image as ImageIcon,
+  Info,
   Moon,
   Search,
   Sheet,
   Sun,
+  X,
 } from "lucide-react";
 import { createPortal } from "react-dom";
+
+export const cx = (...parts) => parts.filter(Boolean).join(" ");
 
 export function useClickOutside(ref, onOutside) {
   useEffect(() => {
@@ -24,758 +36,1027 @@ export function useClickOutside(ref, onOutside) {
       if (!ref.current || ref.current.contains(event.target)) return;
       onOutside?.();
     }
-
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [ref, onOutside]);
 }
+
+/* ───────── Popover plumbing ───────── */
+
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+// Fixed position under (or above, when there is no room) an anchor, kept in place while
+// anything scrolls. `width: "anchor"` matches the anchor's width.
+function usePopoverPosition(open, anchorRef, { width = "anchor", height = 320, align = "start" } = {}) {
+  const [style, setStyle] = useState(null);
+  const place = useCallback(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const margin = 8;
+    const gap = 6;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const w = Math.min(width === "anchor" ? Math.max(rect.width, 200) : width, viewportWidth - margin * 2);
+    const below = viewportHeight - rect.bottom - gap - margin;
+    const above = rect.top - gap - margin;
+    const opensBelow = below >= Math.min(height, 220) || below >= above;
+    const maxHeight = Math.max(180, Math.min(height, opensBelow ? below : above));
+    const preferredLeft = align === "end" ? rect.right - w : rect.left;
+    const left = Math.max(margin, Math.min(preferredLeft, viewportWidth - w - margin));
+    setStyle({
+      position: "fixed",
+      left,
+      width: w,
+      maxHeight,
+      ...(opensBelow ? { top: rect.bottom + gap } : { bottom: viewportHeight - rect.top + gap }),
+      transformOrigin: opensBelow ? "top center" : "bottom center",
+    });
+  }, [anchorRef, width, height, align]);
+
+  useIsoLayoutEffect(() => {
+    if (!open) return undefined;
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, place]);
+  return style;
+}
+
+// The floating surface itself. Closes on outside pointer-down (anchor excluded) and Escape.
+export function Popover({ open, onClose, anchorRef, darkMode, width = "anchor", height = 320, align = "start", className = "", children, role = "dialog", labelledBy }) {
+  const panelRef = useRef(null);
+  const style = usePopoverPosition(open, anchorRef, { width, height, align });
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function handlePointerDown(event) {
+      if (panelRef.current?.contains(event.target)) return;
+      if (anchorRef.current?.contains(event.target)) return;
+      onClose?.();
+    }
+    function handleKey(event) {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose?.();
+        anchorRef.current?.querySelector?.("button")?.focus?.();
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open, onClose, anchorRef]);
+
+  if (!open || !style || typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      ref={panelRef}
+      role={role}
+      aria-labelledby={labelledBy}
+      style={{ ...style, boxShadow: "var(--ui-shadow-pop)" }}
+      className={cx(
+        "ui-pop z-[400] flex flex-col overflow-hidden rounded-[14px] border text-[13px] newq",
+        darkMode ? "border-white/10 bg-[#17181c] text-white" : "border-[#e8e8e6] bg-white text-[#171717]",
+        className,
+      )}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+/* ───────── Shared styling ───────── */
+
+const SIZES = { sm: "h-8 text-[12.5px] px-2.5 rounded-[9px]", md: "h-10 text-[13.5px] px-3 rounded-[10px]", lg: "h-12 text-sm px-4 rounded-[12px]" };
+
+export function fieldClass(darkMode, { open = false, size = "md", invalid = false } = {}) {
+  return cx(
+    "flex w-full min-w-0 items-center gap-2 border text-left outline-none transition-[background-color,border-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-55",
+    SIZES[size] || SIZES.md,
+    darkMode
+      ? "border-white/10 bg-[#17181c] text-white hover:bg-white/[0.05] focus-visible:ring-[3px] focus-visible:ring-white/10"
+      : "border-[#e4e4e1] bg-white text-[#171717] shadow-[0_1px_1px_rgba(0,0,0,0.03)] hover:bg-[#fafaf9] focus-visible:ring-[3px] focus-visible:ring-black/[0.06]",
+    open && (darkMode ? "ring-[3px] ring-white/10 border-white/20" : "ring-[3px] ring-black/[0.06] border-[#cfcfcb]"),
+    invalid && "border-red-400",
+  );
+}
+
+const optionRowClass = (darkMode, { active, highlighted, disabled }) => cx(
+  "flex w-full items-center gap-2.5 rounded-[8px] px-2.5 py-[7px] text-left text-[13px] transition-colors",
+  disabled && "cursor-not-allowed opacity-45",
+  active
+    ? darkMode ? "bg-white/[0.08] font-medium text-white" : "bg-[#f1f1ef] font-medium text-[#171717]"
+    : highlighted
+    ? darkMode ? "bg-white/[0.05] text-white" : "bg-[#f6f6f4] text-[#171717]"
+    : darkMode ? "text-white/80" : "text-[#3d3d3b]",
+);
+
+function SearchRow({ darkMode, value, onChange, placeholder, onKeyDown }) {
+  return (
+    <div className={cx("flex items-center gap-2 border-b px-3", darkMode ? "border-white/10" : "border-[#efefed]")}>
+      <Search className={cx("h-3.5 w-3.5 shrink-0", darkMode ? "text-white/40" : "text-[#a3a3a0]")} />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        autoFocus
+        className={cx("h-10 w-full bg-transparent text-[13px] outline-none", darkMode ? "text-white placeholder:text-white/35" : "text-[#171717] placeholder:text-[#a3a3a0]")}
+      />
+    </div>
+  );
+}
+
+/* ───────── Select ───────── */
+
+/**
+ * options: [{ value, label, icon?: LucideIcon | ReactNode, description?, disabled?, group? }]
+ * A change of `group` between neighbours draws a divider, as in the reference menu.
+ */
+export function SelectMenu({
+  darkMode,
+  value,
+  options = [],
+  onChange,
+  disabled = false,
+  placeholder = "Select an option",
+  className = "",
+  searchable = false,
+  searchPlaceholder = "Search...",
+  size = "md",
+  icon: LeadingIcon = null,
+  menuWidth = "anchor",
+  label,
+  renderTrigger,
+  ariaLabel,
+  groupLabels = false,
+}) {
+  const anchorRef = useRef(null);
+  const listRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlight, setHighlight] = useState(-1);
+  const labelId = useId();
+  const showSearch = searchable || options.length > 9;
+  const selected = options.find((option) => option.value === value);
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? options.filter((option) => `${option.label} ${option.description || ""}`.toLowerCase().includes(q)) : options;
+  }, [options, query]);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+    setHighlight(-1);
+  }, []);
+
+  function choose(option) {
+    if (!option || option.disabled) return;
+    onChange?.(option.value);
+    close();
+  }
+
+  function onKeyDown(event) {
+    if (!open && ["ArrowDown", "Enter", " "].includes(event.key)) {
+      event.preventDefault();
+      setOpen(true);
+      setHighlight(Math.max(0, visible.findIndex((option) => option.value === value)));
+      return;
+    }
+    if (!open) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setHighlight((current) => {
+        let next = current;
+        for (let i = 0; i < visible.length; i += 1) {
+          next = (next + step + visible.length) % visible.length;
+          if (!visible[next]?.disabled) break;
+        }
+        listRef.current?.querySelector(`[data-index="${next}"]`)?.scrollIntoView({ block: "nearest" });
+        return next;
+      });
+    }
+    if (event.key === "Enter" && highlight >= 0) {
+      event.preventDefault();
+      choose(visible[highlight]);
+    }
+    if (event.key === "Tab") close();
+  }
+
+  // An icon may be a component (lucide) or an element someone already rendered.
+  const renderIcon = (Icon, cls) => (!Icon ? null : isValidElement(Icon) ? Icon : createElement(Icon, { className: cls }));
+
+  return (
+    <div ref={anchorRef} className={cx("relative min-w-0", className)}>
+      {label && <span id={labelId} className={cx("mb-1.5 block text-xs font-medium", darkMode ? "text-white/60" : "text-[#6f6f6c]")}>{label}</span>}
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        aria-labelledby={label ? labelId : undefined}
+        onClick={() => (open ? close() : setOpen(true))}
+        onKeyDown={onKeyDown}
+        className={renderTrigger ? "w-full text-left" : fieldClass(darkMode, { open, size })}
+      >
+        {renderTrigger ? renderTrigger({ open, selected }) : (<>
+        {LeadingIcon && renderIcon(LeadingIcon, cx("h-4 w-4 shrink-0", darkMode ? "text-white/50" : "text-[#8a8a87]"))}
+        {selected?.icon && !LeadingIcon && renderIcon(selected.icon, cx("h-4 w-4 shrink-0", darkMode ? "text-white/60" : "text-[#5f5f5c]"))}
+        <span className={cx("min-w-0 flex-1 truncate", !selected && (darkMode ? "text-white/40" : "text-[#a3a3a0]"))}>{selected?.label || placeholder}</span>
+        <ChevronDown className={cx("h-4 w-4 shrink-0 transition-transform duration-200", open && "rotate-180", darkMode ? "text-white/45" : "text-[#8a8a87]")} />
+        </>)}
+      </button>
+
+      <Popover open={open && !disabled} onClose={close} anchorRef={anchorRef} darkMode={darkMode} width={menuWidth} height={340} role="listbox">
+        {showSearch && <SearchRow darkMode={darkMode} value={query} onChange={(next) => { setQuery(next); setHighlight(0); }} placeholder={searchPlaceholder} onKeyDown={onKeyDown} />}
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5">
+          {visible.map((option, index) => {
+            const active = option.value === value;
+            const newGroup = option.group && (index === 0 || option.group !== visible[index - 1].group);
+            return (
+              <div key={`${option.value}`}>
+                {newGroup && groupLabels && option.group.trim() && <p className={cx("px-2.5 pb-1 pt-2 text-[11px] font-medium", darkMode ? "text-white/40" : "text-[#8a8a87]")}>{option.group}</p>}
+                {newGroup && index > 0 && (!groupLabels || !option.group.trim()) && <div className={cx("my-1.5 h-px", darkMode ? "bg-white/10" : "bg-[#efefed]")} />}
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  data-index={index}
+                  disabled={option.disabled}
+                  onMouseEnter={() => setHighlight(index)}
+                  onClick={() => choose(option)}
+                  className={optionRowClass(darkMode, { active, highlighted: highlight === index, disabled: option.disabled })}
+                >
+                  {option.icon && renderIcon(option.icon, cx("h-4 w-4 shrink-0", darkMode ? "text-white/60" : "text-[#5f5f5c]"))}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{option.label}</span>
+                    {option.description && <span className={cx("block truncate text-[11.5px]", darkMode ? "text-white/45" : "text-[#8a8a87]")}>{option.description}</span>}
+                  </span>
+                  {option.badge && <span className={cx("shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-medium", darkMode ? "bg-white/10 text-white/60" : "bg-[#f1f1ef] text-[#6f6f6c]")}>{option.badge}</span>}
+                  {active && <Check className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+              </div>
+            );
+          })}
+          {!visible.length && <p className={cx("px-3 py-5 text-center text-xs", darkMode ? "text-white/45" : "text-[#8a8a87]")}>No matches</p>}
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
+/* ───────── Multi-select ───────── */
+
+// values: array of option values. The trigger shows the first picks as chips and "+N".
+export function MultiSelect({ darkMode, values = [], onChange, options = [], placeholder = "Select", emptyLabel, clearLabel = "Clear", searchable = true, searchPlaceholder = "Search...", size = "md", className = "", menuWidth = "anchor", onToggle, groupLabels = true }) {
+  const anchorRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const close = useCallback(() => { setOpen(false); setQuery(""); }, []);
+  const chosen = new Set(values.map((value) => String(value)));
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? options.filter((option) => `${option.label} ${option.description || ""}`.toLowerCase().includes(q)) : options;
+  }, [options, query]);
+  const picked = options.filter((option) => chosen.has(String(option.value)));
+
+  function toggle(option) {
+    const was = chosen.has(String(option.value));
+    const next = was ? values.filter((value) => String(value) !== String(option.value)) : [...values, option.value];
+    onChange?.(next);
+    onToggle?.(option.value, next, was);
+  }
+
+  return (
+    <div ref={anchorRef} className={cx("relative min-w-0", className)}>
+      <button type="button" onClick={() => (open ? close() : setOpen(true))} aria-haspopup="listbox" aria-expanded={open} className={cx(fieldClass(darkMode, { open, size }), "h-auto min-h-10 py-1.5")}>
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          {picked.length === 0 && <span className={cx("truncate", darkMode ? "text-white/40" : "text-[#a3a3a0]")}>{emptyLabel || placeholder}</span>}
+          {picked.slice(0, 2).map((option) => (
+            <span key={option.value} className={cx("inline-flex max-w-[140px] items-center rounded-[6px] px-1.5 py-0.5 text-[12px] font-medium", darkMode ? "bg-white/10" : "bg-[#f1f1ef]")}>
+              <span className="truncate">{option.label}</span>
+            </span>
+          ))}
+          {picked.length > 2 && <span className={cx("text-[12px] font-medium", darkMode ? "text-white/55" : "text-[#6f6f6c]")}>+{picked.length - 2}</span>}
+        </span>
+        <ChevronDown className={cx("h-4 w-4 shrink-0 transition-transform", open && "rotate-180", darkMode ? "text-white/45" : "text-[#8a8a87]")} />
+      </button>
+      <Popover open={open} onClose={close} anchorRef={anchorRef} darkMode={darkMode} width={menuWidth} height={360} role="listbox">
+        {searchable && <SearchRow darkMode={darkMode} value={query} onChange={setQuery} placeholder={searchPlaceholder} />}
+        <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+          {visible.map((option, index) => {
+            const checked = chosen.has(String(option.value));
+            const newGroup = option.group && (index === 0 || option.group !== visible[index - 1].group);
+            return (
+              <div key={option.value}>
+                {newGroup && groupLabels && <p className={cx("px-2.5 pb-1 pt-2 text-[11px] font-medium", darkMode ? "text-white/40" : "text-[#8a8a87]")}>{option.group}</p>}
+                <button type="button" role="option" aria-selected={checked} onClick={() => toggle(option)} className={optionRowClass(darkMode, { highlighted: false })}>
+                  <span className={cx("grid h-4 w-4 shrink-0 place-items-center rounded-[5px] border transition-colors", checked ? (darkMode ? "border-white bg-white text-black" : "border-[#171717] bg-[#171717] text-white") : darkMode ? "border-white/25" : "border-[#cfcfcb] bg-white")}>
+                    {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{option.label}</span>
+                    {option.description && <span className={cx("block truncate text-[11.5px]", darkMode ? "text-white/45" : "text-[#8a8a87]")}>{option.description}</span>}
+                  </span>
+                  {option.badge && <span className={cx("shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-medium", darkMode ? "bg-white/10 text-white/60" : "bg-[#f1f1ef] text-[#6f6f6c]")}>{option.badge}</span>}
+                </button>
+              </div>
+            );
+          })}
+          {!visible.length && <p className={cx("px-3 py-5 text-center text-xs", darkMode ? "text-white/45" : "text-[#8a8a87]")}>No matches</p>}
+        </div>
+        <div className={cx("flex items-center justify-between border-t px-2 py-1.5", darkMode ? "border-white/10" : "border-[#efefed]")}>
+          <FooterButton darkMode={darkMode} onClick={() => onChange?.([])}>{clearLabel}</FooterButton>
+          <span className={cx("text-[11.5px]", darkMode ? "text-white/45" : "text-[#8a8a87]")}>{values.length} selected</span>
+          <FooterButton darkMode={darkMode} strong onClick={close}>Done</FooterButton>
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
+/* ───────── Dates ───────── */
+
+export function toDateInputValue(date) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function fromDateInputValue(value) {
+  if (!value) return null;
+  const [year, month, day] = String(value).slice(0, 10).split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDisplayDate(value, fallback = "Select date") {
+  const date = fromDateInputValue(value);
+  return date ? date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : fallback;
+}
+
+const sameDay = (a, b) => Boolean(a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate());
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+function monthGrid(monthDate) {
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+  return Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+}
+
+const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+// One month of days. `isSelected`, `inRange` and `isDisabled` decide each cell's look.
+export function Calendar({ darkMode, monthDate, onMonthChange, onSelect, isSelected, inRange, isDisabled, isEdge, onHoverDay }) {
+  const today = new Date();
+  const days = useMemo(() => monthGrid(monthDate), [monthDate]);
+  const navButton = cx("grid h-7 w-7 place-items-center rounded-[8px] transition-colors", darkMode ? "text-white/70 hover:bg-white/10" : "text-[#5f5f5c] hover:bg-[#f1f1ef]");
+  return (
+    <div className="select-none">
+      <div className="flex items-center justify-between px-1 pb-2">
+        <button type="button" aria-label="Previous month" onClick={() => onMonthChange(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))} className={navButton}>
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <p className="text-[13px] font-semibold">{monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</p>
+        <button type="button" aria-label="Next month" onClick={() => onMonthChange(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))} className={navButton}>
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      <div className={cx("grid grid-cols-7 pb-1 text-center text-[11px] font-medium", darkMode ? "text-white/40" : "text-[#a3a3a0]")}>
+        {WEEKDAYS.map((label) => <span key={label} className="py-1">{label}</span>)}
+      </div>
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {days.map((day) => {
+          const outside = day.getMonth() !== monthDate.getMonth();
+          const selected = isSelected?.(day);
+          const ranged = inRange?.(day);
+          const disabled = isDisabled?.(day);
+          const edge = isEdge?.(day);
+          return (
+            <div key={day.toISOString()} className={cx("flex justify-center", ranged && (darkMode ? "bg-white/[0.06]" : "bg-[#f3f3f1]"), edge === "start" && "rounded-l-[9px]", edge === "end" && "rounded-r-[9px]")}>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onSelect(day)}
+                onMouseEnter={() => onHoverDay?.(day)}
+                aria-pressed={selected}
+                className={cx(
+                  "relative h-8 w-8 rounded-[9px] text-[12.5px] tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-30",
+                  selected
+                    ? darkMode ? "bg-white font-semibold text-black" : "bg-[#171717] font-semibold text-white"
+                    : outside
+                    ? darkMode ? "text-white/25 hover:bg-white/[0.06]" : "text-[#c4c4c1] hover:bg-[#f3f3f1]"
+                    : darkMode ? "text-white/85 hover:bg-white/[0.08]" : "text-[#2b2b29] hover:bg-[#f1f1ef]",
+                )}
+              >
+                {day.getDate()}
+                {sameDay(day, today) && !selected && <span className={cx("absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full", darkMode ? "bg-white/70" : "bg-[#171717]")} />}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FooterButton({ darkMode, onClick, children, strong = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        "h-8 rounded-[8px] px-3 text-[12.5px] font-medium transition-colors",
+        strong
+          ? darkMode ? "bg-white text-black hover:bg-white/90" : "bg-[#171717] text-white hover:bg-black"
+          : darkMode ? "text-white/70 hover:bg-white/10" : "text-[#5f5f5c] hover:bg-[#f1f1ef]",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function DatePicker({ darkMode, value, onChange, placeholder = "Choose date", disabled = false, minDate, maxDate, size = "md", className = "", label, clearable = false }) {
+  const anchorRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const selected = fromDateInputValue(value);
+  const [monthDate, setMonthDate] = useState(() => selected || new Date());
+  const min = minDate ? fromDateInputValue(minDate) : null;
+  const max = maxDate ? fromDateInputValue(maxDate) : null;
+  const close = useCallback(() => setOpen(false), []);
+
+  function select(day) {
+    onChange?.(toDateInputValue(day));
+    setMonthDate(day);
+    setOpen(false);
+  }
+
+  return (
+    <div ref={anchorRef} className={cx("relative min-w-0", className)}>
+      {label && <span className={cx("mb-1.5 block text-xs font-medium", darkMode ? "text-white/60" : "text-[#6f6f6c]")}>{label}</span>}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          if (!open && selected) setMonthDate(selected);
+          setOpen((current) => !current);
+        }}
+        className={cx(fieldClass(darkMode, { open, size }), "min-w-[150px]")}
+      >
+        <CalendarDays className={cx("h-4 w-4 shrink-0", darkMode ? "text-white/50" : "text-[#8a8a87]")} />
+        <span className={cx("min-w-0 flex-1 truncate", !value && (darkMode ? "text-white/40" : "text-[#a3a3a0]"))}>{value ? formatDisplayDate(value) : placeholder}</span>
+        {clearable && value && !disabled && (
+          <span role="button" tabIndex={-1} aria-label="Clear date" onClick={(event) => { event.stopPropagation(); onChange?.(""); }} className={cx("grid h-5 w-5 place-items-center rounded-full", darkMode ? "hover:bg-white/10" : "hover:bg-black/5")}>
+            <X className="h-3 w-3" />
+          </span>
+        )}
+      </button>
+      <Popover open={open && !disabled} onClose={close} anchorRef={anchorRef} darkMode={darkMode} width={286} height={360}>
+        <div className="p-3">
+          <Calendar
+            darkMode={darkMode}
+            monthDate={monthDate}
+            onMonthChange={setMonthDate}
+            onSelect={select}
+            isSelected={(day) => sameDay(day, selected)}
+            isDisabled={(day) => Boolean((min && day < min) || (max && day > max))}
+          />
+        </div>
+        <div className={cx("flex items-center justify-between border-t px-2 py-1.5", darkMode ? "border-white/10" : "border-[#efefed]")}>
+          <FooterButton darkMode={darkMode} onClick={() => { onChange?.(""); setOpen(false); }}>Clear</FooterButton>
+          <FooterButton darkMode={darkMode} onClick={() => select(startOfDay(new Date()))}>Today</FooterButton>
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
+const QUICK_RANGES = [
+  { label: "Today", range: () => [new Date(), new Date()] },
+  { label: "Yesterday", range: () => { const d = new Date(); d.setDate(d.getDate() - 1); return [d, d]; } },
+  { label: "Last 7 days", range: () => { const d = new Date(); d.setDate(d.getDate() - 6); return [d, new Date()]; } },
+  { label: "This week", range: () => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return [d, new Date()]; } },
+  { label: "Last 30 days", range: () => { const d = new Date(); d.setDate(d.getDate() - 29); return [d, new Date()]; } },
+  { label: "This month", range: () => { const d = new Date(); return [new Date(d.getFullYear(), d.getMonth(), 1), d]; } },
+  { label: "Last month", range: () => { const d = new Date(); return [new Date(d.getFullYear(), d.getMonth() - 1, 1), new Date(d.getFullYear(), d.getMonth(), 0)]; } },
+];
+
+export function DateRangePicker({ darkMode, from, to, onChange, placeholder = "Choose dates", className = "md:col-span-2", size = "md", disabled = false, minDate, maxDate }) {
+  const anchorRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const fromDate = fromDateInputValue(from);
+  const toDate = fromDateInputValue(to);
+  const [monthDate, setMonthDate] = useState(() => fromDate || new Date());
+  const [picking, setPicking] = useState("from");
+  const [hovered, setHovered] = useState(null);
+  const min = minDate ? fromDateInputValue(minDate) : null;
+  const max = maxDate ? fromDateInputValue(maxDate) : null;
+  const close = useCallback(() => setOpen(false), []);
+
+  function setRange(start, end) {
+    onChange?.({ from: toDateInputValue(start), to: toDateInputValue(end) });
+  }
+
+  function select(day) {
+    if (picking === "from" || !fromDate || day < fromDate) {
+      setRange(day, null);
+      setPicking("to");
+      return;
+    }
+    setRange(fromDate, day);
+    setPicking("from");
+    setOpen(false);
+  }
+
+  const previewEnd = picking === "to" && fromDate && hovered && hovered >= fromDate ? hovered : toDate;
+  const label = from || to ? `${formatDisplayDate(from, "Start")} – ${formatDisplayDate(to, "End")}` : placeholder;
+
+  return (
+    <div ref={anchorRef} className={cx("relative min-w-0", className)}>
+      <button type="button" disabled={disabled} onClick={() => { setPicking("from"); setOpen((current) => !current); }} className={fieldClass(darkMode, { open, size })}>
+        <CalendarDays className={cx("h-4 w-4 shrink-0", darkMode ? "text-white/50" : "text-[#8a8a87]")} />
+        <span className={cx("min-w-0 flex-1 truncate", !(from || to) && (darkMode ? "text-white/40" : "text-[#a3a3a0]"))}>{label}</span>
+        <ChevronDown className={cx("h-4 w-4 shrink-0 transition-transform", open && "rotate-180", darkMode ? "text-white/45" : "text-[#8a8a87]")} />
+      </button>
+      <Popover open={open && !disabled} onClose={close} anchorRef={anchorRef} darkMode={darkMode} width={468} height={380}>
+        <div className="flex min-h-0">
+          <div className={cx("hidden w-[140px] shrink-0 flex-col gap-0.5 border-r p-1.5 sm:flex", darkMode ? "border-white/10" : "border-[#efefed]")}>
+            {QUICK_RANGES.map((quick) => (
+              <button
+                key={quick.label}
+                type="button"
+                onClick={() => {
+                  const [start, end] = quick.range();
+                  setRange(start, end);
+                  setMonthDate(start);
+                  setPicking("from");
+                  setOpen(false);
+                }}
+                className={optionRowClass(darkMode, {})}
+              >
+                {quick.label}
+              </button>
+            ))}
+          </div>
+          <div className="min-w-0 flex-1 p-3" onMouseLeave={() => setHovered(null)}>
+            <div className={cx("mb-3 grid grid-cols-2 gap-1.5 rounded-[10px] p-1 text-[12px]", darkMode ? "bg-white/[0.05]" : "bg-[#f3f3f1]")}>
+              {[["from", "Start", from], ["to", "End", to]].map(([key, name, val]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setPicking(key)}
+                  className={cx("rounded-[8px] px-2.5 py-1.5 text-left transition", picking === key ? (darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.06)]") : darkMode ? "text-white/55" : "text-[#8a8a87]")}
+                >
+                  <span className="block text-[10.5px] uppercase tracking-wide opacity-70">{name}</span>
+                  <span className="block truncate font-medium">{formatDisplayDate(val, "—")}</span>
+                </button>
+              ))}
+            </div>
+            <div>
+              <Calendar
+                onHoverDay={setHovered}
+                darkMode={darkMode}
+                monthDate={monthDate}
+                onMonthChange={setMonthDate}
+                onSelect={select}
+                isSelected={(day) => sameDay(day, fromDate) || sameDay(day, toDate)}
+                inRange={(day) => Boolean(fromDate && previewEnd && day >= fromDate && day <= previewEnd)}
+                isEdge={(day) => (sameDay(day, fromDate) ? "start" : sameDay(day, previewEnd) ? "end" : null)}
+                isDisabled={(day) => Boolean((min && day < min) || (max && day > max))}
+              />
+            </div>
+          </div>
+        </div>
+        <div className={cx("flex items-center justify-between border-t px-2 py-1.5", darkMode ? "border-white/10" : "border-[#efefed]")}>
+          <FooterButton darkMode={darkMode} onClick={() => { onChange?.({ from: "", to: "" }); setPicking("from"); }}>Clear</FooterButton>
+          <FooterButton darkMode={darkMode} strong onClick={close}>Done</FooterButton>
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
+/* ───────── Time ───────── */
+
+function parseTime(value = "") {
+  const match = /^(\d{1,2}):(\d{2})/.exec(String(value));
+  return match ? { h: Number(match[1]), m: Number(match[2]) } : null;
+}
+export function formatTime12(value) {
+  const t = parseTime(value);
+  if (!t) return "";
+  return `${((t.h + 11) % 12) + 1}:${String(t.m).padStart(2, "0")} ${t.h < 12 ? "AM" : "PM"}`;
+}
+const toHHMM = (h, m) => `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+
+// value and onChange use "HH:MM" (24-hour), like <input type="time">.
+export function TimePicker({ darkMode, value, onChange, placeholder = "Select time", disabled = false, step = 15, minTime, maxTime, size = "md", className = "", label, clearable = false }) {
+  const anchorRef = useRef(null);
+  const listRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const close = useCallback(() => { setOpen(false); setQuery(""); }, []);
+  const options = useMemo(() => {
+    const list = [];
+    for (let minutes = 0; minutes < 24 * 60; minutes += step) list.push(toHHMM(Math.floor(minutes / 60), minutes % 60));
+    if (value && parseTime(value) && !list.includes(value.slice(0, 5))) list.push(value.slice(0, 5));
+    return list.sort().filter((t) => (!minTime || t >= minTime) && (!maxTime || t <= maxTime));
+  }, [step, value, minTime, maxTime]);
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase().replace(/\s+/g, "");
+    if (!q) return options;
+    return options.filter((t) => formatTime12(t).toLowerCase().replace(/\s+/g, "").includes(q) || t.includes(q));
+  }, [options, query]);
+
+  // Typing an exact time ("9:05 pm", "21:05") offers it even off the step grid.
+  const typed = useMemo(() => {
+    const match = /^(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?$/i.exec(query.trim());
+    if (!match) return null;
+    let h = Number(match[1]);
+    const m = Number(match[2] || 0);
+    if (match[3]) h = (h % 12) + (/pm/i.test(match[3]) ? 12 : 0);
+    return h < 24 && m < 60 ? toHHMM(h, m) : null;
+  }, [query]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const id = window.requestAnimationFrame(() => {
+      const target = listRef.current?.querySelector('[aria-selected="true"]') || listRef.current?.querySelector('[data-time="09:00"]');
+      target?.scrollIntoView({ block: "center" });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [open]);
+
+  function choose(t) {
+    onChange?.(t);
+    close();
+  }
+
+  return (
+    <div ref={anchorRef} className={cx("relative min-w-0", className)}>
+      {label && <span className={cx("mb-1.5 block text-xs font-medium", darkMode ? "text-white/60" : "text-[#6f6f6c]")}>{label}</span>}
+      <button type="button" disabled={disabled} onClick={() => (open ? close() : setOpen(true))} className={fieldClass(darkMode, { open, size })}>
+        <Clock3 className={cx("h-4 w-4 shrink-0", darkMode ? "text-white/50" : "text-[#8a8a87]")} />
+        <span className={cx("min-w-0 flex-1 truncate tabular-nums", !value && (darkMode ? "text-white/40" : "text-[#a3a3a0]"))}>{value ? formatTime12(value) : placeholder}</span>
+        {clearable && value && !disabled ? (
+          <span role="button" tabIndex={-1} aria-label="Clear time" onClick={(event) => { event.stopPropagation(); onChange?.(""); }} className={cx("grid h-5 w-5 place-items-center rounded-full", darkMode ? "hover:bg-white/10" : "hover:bg-black/5")}>
+            <X className="h-3 w-3" />
+          </span>
+        ) : <ChevronDown className={cx("h-4 w-4 shrink-0 transition-transform", open && "rotate-180", darkMode ? "text-white/45" : "text-[#8a8a87]")} />}
+      </button>
+      <Popover open={open && !disabled} onClose={close} anchorRef={anchorRef} darkMode={darkMode} width={200} height={300}>
+        <SearchRow
+          darkMode={darkMode}
+          value={query}
+          onChange={setQuery}
+          placeholder="Type a time, e.g. 9:30 pm"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              if (typed) choose(typed);
+              else if (visible[0]) choose(visible[0]);
+            }
+          }}
+        />
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5">
+          {typed && !visible.includes(typed) && (
+            <button type="button" onClick={() => choose(typed)} className={optionRowClass(darkMode, { highlighted: true })}>
+              <Clock3 className="h-3.5 w-3.5 shrink-0" /> Use {formatTime12(typed)}
+            </button>
+          )}
+          {visible.map((t) => {
+            const active = value?.slice(0, 5) === t;
+            return (
+              <button key={t} type="button" role="option" data-time={t} aria-selected={active} onClick={() => choose(t)} className={cx(optionRowClass(darkMode, { active }), "tabular-nums")}>
+                <span className="flex-1">{formatTime12(t)}</span>
+                {active && <Check className="h-3.5 w-3.5 shrink-0" />}
+              </button>
+            );
+          })}
+          {!visible.length && !typed && <p className={cx("px-3 py-5 text-center text-xs", darkMode ? "text-white/45" : "text-[#8a8a87]")}>No matching time</p>}
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
+function fromDateTimeInputValue(value) {
+  if (!value) return null;
+  const [datePart, timePart = "00:00"] = String(value).split("T");
+  const date = fromDateInputValue(datePart);
+  const time = parseTime(timePart) || { h: 0, m: 0 };
+  return date ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), time.h, time.m) : null;
+}
+
+// value and onChange use "YYYY-MM-DDTHH:MM", like <input type="datetime-local">.
+export function DateTimePicker({ darkMode, value, onChange, placeholder = "Choose date", disabled = false, minDate }) {
+  const current = fromDateTimeInputValue(value);
+  const datePart = current ? toDateInputValue(current) : "";
+  const timePart = current ? toHHMM(current.getHours(), current.getMinutes()) : "";
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_150px] gap-2">
+      <DatePicker darkMode={darkMode} value={datePart} placeholder={placeholder} disabled={disabled} minDate={minDate} onChange={(next) => onChange?.(next ? `${next}T${timePart || "18:00"}` : "")} />
+      <TimePicker darkMode={darkMode} value={timePart} placeholder="Time" disabled={disabled || !datePart} step={30} onChange={(next) => onChange?.(datePart ? `${datePart}T${next || "00:00"}` : "")} />
+    </div>
+  );
+}
+
+/* ───────── Drop-in replacements for native inputs ─────────
+   Same props as <select>, <input type="date"> and <input type="time"> (onChange receives an
+   event-like { target: { value } }), so old call sites only change the tag. */
+
+const textOf = (node) => Children.toArray(node).map((part) => (typeof part === "string" || typeof part === "number" ? String(part) : isValidElement(part) ? textOf(part.props.children) : "")).join("");
+
+function optionsFromChildren(children, group) {
+  const out = [];
+  Children.toArray(children).forEach((child) => {
+    if (!isValidElement(child)) return;
+    if (child.type === "option") {
+      const text = textOf(child.props.children);
+      out.push({ value: child.props.value ?? text, label: text, disabled: Boolean(child.props.disabled), group });
+    } else if (child.type === "optgroup") {
+      out.push(...optionsFromChildren(child.props.children, child.props.label));
+    }
+  });
+  return out;
+}
+
+// Margins and widths from an old input's className still apply to the new control's wrapper.
+const layoutClasses = (className = "") => String(className).split(/\s+/).filter((token) => /^(?:[a-z]+:)?(?:m[trblxy]?-|w-|max-w-|min-w-|flex-|col-span|self-|justify-self-|order-)/.test(token)).join(" ");
+const fakeEvent = (value, name) => ({ target: { value, name }, currentTarget: { value, name } });
+
+export function Select({ value, onChange, children, darkMode, disabled, placeholder, name, className = "", size = "md", searchable, "aria-label": ariaLabel }) {
+  const options = optionsFromChildren(children);
+  return (
+    <SelectMenu
+      darkMode={darkMode}
+      value={value ?? ""}
+      options={options}
+      onChange={(next) => onChange?.(fakeEvent(next, name))}
+      disabled={disabled}
+      placeholder={placeholder || "Select"}
+      className={layoutClasses(className)}
+      size={size}
+      searchable={searchable}
+      ariaLabel={ariaLabel}
+    />
+  );
+}
+
+export function DateInput({ value, onChange, darkMode, disabled, min, max, name, className = "", placeholder = "Choose date", size = "md" }) {
+  return <DatePicker darkMode={darkMode} value={value || ""} disabled={disabled} minDate={min} maxDate={max} placeholder={placeholder} size={size} className={layoutClasses(className)} onChange={(next) => onChange?.(fakeEvent(next, name))} />;
+}
+
+export function TimeInput({ value, onChange, darkMode, disabled, name, className = "", placeholder = "Select time", step = 15, size = "md", "aria-label": ariaLabel }) {
+  return (
+    <div className={layoutClasses(className)} aria-label={ariaLabel}>
+      <TimePicker darkMode={darkMode} value={value || ""} disabled={disabled} placeholder={placeholder} step={step} size={size} onChange={(next) => onChange?.(fakeEvent(next, name))} />
+    </div>
+  );
+}
+
+/* ───────── Small pieces ───────── */
 
 export function ThemeSwitch({ darkMode, onToggle }) {
   return (
     <button
       type="button"
       onClick={onToggle}
-      className={`relative h-10 w-[74px] rounded-full border p-1 transition-all duration-500 ease-out sm:h-11 sm:w-20 ${
-        darkMode
-          ? "border-white/10 bg-white/10 shadow-[inset_0_0_18px_rgba(216,243,106,0.08)]"
-          : "border-black/10 bg-black/[0.04]"
-      }`}
+      className={cx("grid h-9 w-9 place-items-center rounded-[10px] border transition-colors", darkMode ? "border-white/10 bg-white/[0.04] text-white/80 hover:bg-white/10" : "border-[#e4e4e1] bg-white text-[#5f5f5c] hover:bg-[#f6f6f4]")}
       aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+      title={darkMode ? "Light mode" : "Dark mode"}
     >
-      <span
-        className={`absolute inset-y-1 flex h-8 w-8 items-center justify-center rounded-full transition-all duration-500 ease-out sm:h-9 sm:w-9 ${
-          darkMode ? "translate-x-8 bg-[#d8f36a] text-black sm:translate-x-9" : "translate-x-0 bg-black text-white"
-        }`}
-      >
-        {darkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-      </span>
+      {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </button>
   );
 }
 
-export function SelectMenu({ darkMode, value, options, onChange, disabled = false, placeholder = "Select an option", className = "", searchable = false, searchPlaceholder = "Search..." }) {
-  const [open, setOpen] = useState(false);
-  const [opensUpward, setOpensUpward] = useState(false);
-  const [query, setQuery] = useState("");
-  const ref = useRef(null);
-  const closeMenu = useCallback(() => {
-    setOpen(false);
-    setQuery("");
-  }, []);
-  useClickOutside(ref, closeMenu);
-  const selected = options.find((option) => option.value === value);
-  const normalizedQuery = query.trim().toLowerCase();
-  const visibleOptions = searchable && normalizedQuery
-    ? options.filter((option) => String(option.label || "").toLowerCase().includes(normalizedQuery))
-    : options;
-
-  const updatePlacement = useCallback(() => {
-    const rect = ref.current?.getBoundingClientRect();
-    if (!rect) return;
-    const estimatedMenuHeight = Math.min(options.length * 44 + 20, 276);
-    const spaceBelow = window.innerHeight - rect.bottom - 16;
-    const spaceAbove = rect.top - 16;
-    setOpensUpward(spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow);
-  }, [options.length]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    updatePlacement();
-    window.addEventListener("resize", updatePlacement);
-    window.addEventListener("scroll", updatePlacement, true);
-    return () => {
-      window.removeEventListener("resize", updatePlacement);
-      window.removeEventListener("scroll", updatePlacement, true);
-    };
-  }, [open, updatePlacement]);
-
+export function Toggle({ checked, onChange, label, disabled = false, darkMode, size = "md" }) {
+  const small = size === "sm";
   return (
-    <div ref={ref} className={`relative min-w-0 ${className}`}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => {
-          updatePlacement();
-          setOpen((current) => {
-            if (current) setQuery("");
-            return !current;
-          });
-        }}
-        className={`h-12 w-full rounded-2xl border px-4 flex items-center justify-between gap-3 text-left transition disabled:opacity-60 ${
-          darkMode
-            ? "bg-[#15171c] border-white/10 text-white hover:bg-white/10"
-            : "bg-white border-black/10 text-black hover:bg-black/[0.03]"
-        } ${open ? (darkMode ? "ring-2 ring-[#d8f36a]/25" : "ring-2 ring-black/10") : ""}`}
-      >
-        <span className={`truncate ${selected ? "" : darkMode ? "text-white/35" : "text-black/35"}`}>
-          {selected?.label || placeholder}
-        </span>
-        <ChevronDown className={`w-4 h-4 flex-shrink-0 transition ${open ? "rotate-180" : ""}`} />
-      </button>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={Boolean(checked)}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange?.(!checked)}
+      className={cx(
+        "relative shrink-0 rounded-full transition-colors duration-200 disabled:opacity-50",
+        small ? "h-5 w-9" : "h-6 w-11",
+        checked ? "bg-[#1f9d55]" : darkMode ? "bg-white/20" : "bg-[#d9d9d6]",
+      )}
+    >
+      <span className={cx("absolute top-0.5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-transform duration-200", small ? "left-0.5 h-4 w-4" : "left-0.5 h-5 w-5", checked && (small ? "translate-x-4" : "translate-x-5"))} />
+    </button>
+  );
+}
 
-      {open && !disabled && (
-        <div
-          className={`absolute left-0 right-0 z-40 rounded-2xl border p-2 shadow-xl ${opensUpward ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"} ${
-            darkMode ? "bg-[#181a20] border-white/10" : "bg-white border-black/5"
-          }`}
-        >
-          {searchable && (
-            <div className="relative mb-2">
-              <Search className={`pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${darkMode ? "text-white/35" : "text-black/35"}`} />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={searchPlaceholder}
-                className={`h-10 w-full rounded-xl border pl-9 pr-3 text-sm outline-none ${
-                  darkMode
-                    ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/30"
-                    : "border-black/10 bg-white text-black placeholder:text-black/35"
-                }`}
-                autoFocus
-              />
-            </div>
-          )}
-          <div className="max-h-64 overflow-y-auto pr-1">
-            {visibleOptions.map((option) => {
-              const active = option.value === value;
-              return (
-                <button
-                  type="button"
-                  key={option.value}
-                  onClick={() => {
-                    onChange(option.value);
-                    closeMenu();
-                  }}
-                  className={`w-full rounded-xl px-3 py-2.5 flex items-center justify-between gap-3 text-left text-sm transition ${
-                    active
-                      ? darkMode
-                        ? "bg-[#d8f36a] text-black"
-                        : "bg-black text-white"
-                      : darkMode
-                      ? "text-white/70 hover:bg-white/8"
-                      : "text-black/65 hover:bg-black/[0.04]"
-                  }`}
-                >
-                  <span className="truncate">{option.label}</span>
-                </button>
-              );
-            })}
-            {!visibleOptions.length && (
-              <div className={`px-3 py-4 text-center text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>
-                No options found.
-              </div>
+// Segmented tabs: [{ id, label, icon? }]
+export function Tabs({ darkMode, items = [], value, onChange, className = "" }) {
+  return (
+    <div role="tablist" className={cx("inline-flex rounded-[11px] p-1", darkMode ? "bg-white/[0.06]" : "bg-[#f1f1ef]", className)}>
+      {items.map(({ id, label, icon: Icon, count }) => {
+        const active = value === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange?.(id)}
+            className={cx(
+              "inline-flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium transition",
+              active ? (darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.07)]") : darkMode ? "text-white/55 hover:text-white" : "text-[#6f6f6c] hover:text-[#171717]",
             )}
-          </div>
-        </div>
-      )}
+          >
+            {Icon && <Icon className="h-3.5 w-3.5" />}
+            {label}
+            {count != null && <span className={cx("rounded-full px-1.5 text-[11px]", darkMode ? "bg-white/10" : "bg-[#ececea]")}>{count}</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function toDateInputValue(date) {
-  if (!date) return "";
-  const normalized = new Date(date);
-  if (Number.isNaN(normalized.getTime())) return "";
-  normalized.setMinutes(normalized.getMinutes() - normalized.getTimezoneOffset());
-  return normalized.toISOString().slice(0, 10);
-}
+const BUTTON_VARIANTS = {
+  primary: (dm) => (dm ? "bg-white text-black hover:bg-white/90" : "bg-[#171717] text-white hover:bg-black"),
+  secondary: (dm) => (dm ? "border border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border border-[#e4e4e1] bg-white text-[#171717] shadow-[0_1px_1px_rgba(0,0,0,0.03)] hover:bg-[#f6f6f4]"),
+  ghost: (dm) => (dm ? "text-white/75 hover:bg-white/10" : "text-[#3d3d3b] hover:bg-[#f1f1ef]"),
+  danger: () => "bg-[#e5484d] text-white hover:bg-[#d93f44]",
+};
 
-function fromDateInputValue(value) {
-  if (!value) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function formatDisplayDate(value) {
-  if (!value) return "Select date";
-  const date = fromDateInputValue(value);
-  if (!date) return "Select date";
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function monthLabel(date) {
-  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-}
-
-function sameDay(a, b) {
-  return Boolean(a && b && toDateInputValue(a) === toDateInputValue(b));
-}
-
-function toDateTimeInputValue(date) {
-  if (!date) return "";
-  const normalized = new Date(date);
-  normalized.setMinutes(normalized.getMinutes() - normalized.getTimezoneOffset());
-  return normalized.toISOString().slice(0, 16);
-}
-
-function fromDateTimeInputValue(value) {
-  if (!value) return null;
-  const [datePart, timePart = "00:00"] = value.split("T");
-  const [year, month, day] = datePart.split("-").map(Number);
-  const [hour, minute] = timePart.split(":").map(Number);
-  return new Date(year, month - 1, day, hour || 0, minute || 0);
-}
-
-export function DateRangePicker({ darkMode, from, to, onChange, placeholder = "Choose report dates" }) {
-  const ref = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [activeField, setActiveField] = useState("from");
-  const [monthDate, setMonthDate] = useState(() => fromDateInputValue(from) || new Date());
-  useClickOutside(ref, () => setOpen(false));
-
-  const fromDate = fromDateInputValue(from);
-  const toDate = fromDateInputValue(to);
-  const days = useMemo(() => {
-    const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-    const gridStart = new Date(start);
-    gridStart.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    return Array.from({ length: 42 }, (_, index) => {
-      const day = new Date(gridStart);
-      day.setDate(gridStart.getDate() + index);
-      return day;
-    });
-  }, [monthDate]);
-
-  const quickRanges = [
-    ["Last week", -7],
-    ["Last Month", -30],
-    ["This week", "week"],
-    ["This month", "month"],
-  ];
-
-  function setRange(nextFrom, nextTo) {
-    onChange({ from: toDateInputValue(nextFrom), to: toDateInputValue(nextTo) });
-  }
-
-  function handleDayClick(day) {
-    if (activeField === "from") {
-      const nextTo = toDate && day > toDate ? day : toDate;
-      setRange(day, nextTo);
-      setActiveField("to");
-      return;
-    }
-    const nextFrom = fromDate && day < fromDate ? day : fromDate;
-    setRange(nextFrom, day);
-  }
-
-  function applyQuick(value) {
-    const today = new Date();
-    if (value === "week") {
-      const start = new Date(today);
-      start.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-      setRange(start, today);
-      setMonthDate(start);
-      return;
-    }
-    if (value === "month") {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      setRange(start, today);
-      setMonthDate(start);
-      return;
-    }
-    const start = new Date(today);
-    start.setDate(today.getDate() + value);
-    setRange(start, today);
-    setMonthDate(start);
-  }
-
+export function Button({ variant = "secondary", size = "md", darkMode, icon: Icon, iconRight: IconRight, className = "", children, loading = false, ...props }) {
   return (
-    <div ref={ref} className="relative md:col-span-2">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className={`h-12 w-full rounded-2xl border px-4 text-left transition ${
-          darkMode
-            ? "bg-[#15171c] border-white/10 text-white hover:bg-white/10"
-            : "bg-white border-black/10 text-black hover:bg-black/[0.03]"
-        }`}
-      >
-        <span className="flex items-center gap-2 text-sm">
-          <CalendarDays className={`h-4 w-4 ${darkMode ? "text-[#d8f36a]" : "text-indigo-600"}`} />
-          <span className="truncate">{from || to ? `${formatDisplayDate(from)} - ${formatDisplayDate(to)}` : placeholder}</span>
-        </span>
-      </button>
-
-      {open && (
-        <div
-          className={`absolute left-0 top-[calc(100%+10px)] z-[200] w-[min(92vw,462px)] rounded-[22px] border p-3 shadow-2xl sm:p-4 ${
-            darkMode ? "bg-[#121317] border-white/10 text-white" : "bg-white border-black/10 text-black"
-          }`}
-        >
-          <div className="rounded-2xl border p-3 shadow-sm sm:p-4 dark:border-white/10">
-            <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2 sm:gap-3">
-              <div>
-                <p className={`mb-1 text-sm ${darkMode ? "text-white/70" : "text-black/65"}`}>Start day</p>
-                <button
-                  type="button"
-                  onClick={() => setActiveField("from")}
-                  className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 text-left text-sm font-semibold transition sm:text-base ${
-                    activeField === "from"
-                      ? darkMode
-                        ? "border-[#d8f36a] text-[#d8f36a] ring-2 ring-[#d8f36a]/20"
-                        : "border-indigo-600 text-indigo-700 ring-2 ring-indigo-600/20"
-                      : darkMode
-                      ? "border-white/10 text-white"
-                      : "border-black/15 text-black"
-                  }`}
-                >
-                  <CalendarDays className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{formatDisplayDate(from)}</span>
-                </button>
-              </div>
-              <span className={`pb-3 text-xl ${darkMode ? "text-white/50" : "text-black/45"}`}>→</span>
-              <div>
-                <p className={`mb-1 text-sm ${darkMode ? "text-white/70" : "text-black/65"}`}>End day</p>
-                <button
-                  type="button"
-                  onClick={() => setActiveField("to")}
-                  className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 text-left text-sm font-semibold transition sm:text-base ${
-                    activeField === "to"
-                      ? darkMode
-                        ? "border-[#d8f36a] text-[#d8f36a] ring-2 ring-[#d8f36a]/20"
-                        : "border-indigo-600 text-indigo-700 ring-2 ring-indigo-600/20"
-                      : darkMode
-                      ? "border-white/10 text-white"
-                      : "border-black/15 text-black"
-                  }`}
-                >
-                  <CalendarDays className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{formatDisplayDate(to)}</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {quickRanges.map(([label, value]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => applyQuick(value)}
-                  className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm ${darkMode ? "bg-white/5 text-white/75" : "bg-black/[0.04] text-black/75"}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-5 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}
-              className="rounded-full px-3 py-2 text-sm"
-            >
-              <ChevronDown className="h-4 w-4 rotate-90" />
-            </button>
-            <p className="text-xl font-semibold">{monthLabel(monthDate)}</p>
-            <button
-              type="button"
-              onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}
-              className="rounded-full px-3 py-2 text-sm"
-            >
-              <ChevronDown className="h-4 w-4 -rotate-90" />
-            </button>
-          </div>
-
-          <div className={`mt-5 grid grid-cols-7 gap-y-2 text-center text-sm ${darkMode ? "text-white/55" : "text-black/55"}`}>
-            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((label) => (
-              <span key={label}>{label}</span>
-            ))}
-          </div>
-          <div className="mt-3 grid grid-cols-7 gap-y-2 text-center">
-            {days.map((day) => {
-              const inMonth = day.getMonth() === monthDate.getMonth();
-              const selected = sameDay(day, fromDate) || sameDay(day, toDate);
-              const inRange = fromDate && toDate && day > fromDate && day < toDate;
-              return (
-                <button
-                  key={day.toISOString()}
-                  type="button"
-                  onClick={() => handleDayClick(day)}
-                  className={`mx-auto h-9 w-9 rounded-xl text-sm transition sm:h-10 sm:w-10 sm:text-base ${
-                    selected
-                      ? darkMode
-                        ? "bg-[#d8f36a] text-black shadow-lg"
-                        : "bg-indigo-600 text-white shadow-lg"
-                      : inRange
-                      ? darkMode
-                        ? "bg-[#d8f36a]/10 text-[#d8f36a]"
-                        : "bg-indigo-50 text-indigo-700"
-                      : inMonth
-                      ? darkMode
-                        ? "text-white hover:bg-white/8"
-                        : "text-black hover:bg-black/[0.04]"
-                      : darkMode
-                      ? "text-white/25"
-                      : "text-black/35"
-                  }`}
-                >
-                  {day.getDate()}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+    <button
+      type="button"
+      {...props}
+      className={cx(
+        "inline-flex items-center justify-center gap-2 font-medium transition-[background-color,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55",
+        size === "sm" ? "h-8 rounded-[9px] px-3 text-[12.5px]" : size === "lg" ? "h-11 rounded-[12px] px-5 text-sm" : "h-9 rounded-[10px] px-3.5 text-[13px]",
+        (BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.secondary)(darkMode),
+        className,
       )}
+    >
+      {loading ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" /> : Icon ? <Icon className="h-4 w-4" /> : null}
+      {children}
+      {IconRight && <IconRight className="h-4 w-4" />}
+    </button>
+  );
+}
+
+const CHIP_TONES = {
+  neutral: (dm) => (dm ? "bg-white/[0.07] text-white/75" : "bg-[#f1f1ef] text-[#3d3d3b]"),
+  green: (dm) => (dm ? "bg-emerald-400/12 text-emerald-200" : "bg-[#e6f6ec] text-[#16794a]"),
+  amber: (dm) => (dm ? "bg-amber-400/12 text-amber-200" : "bg-[#fff3dc] text-[#94600a]"),
+  red: (dm) => (dm ? "bg-red-400/12 text-red-200" : "bg-[#fdeceb] text-[#b4342f]"),
+  blue: (dm) => (dm ? "bg-blue-400/12 text-blue-200" : "bg-[#e9f0fe] text-[#2856c7]"),
+  violet: (dm) => (dm ? "bg-violet-400/12 text-violet-200" : "bg-[#f1ecfe] text-[#6440c4]"),
+  outline: (dm) => (dm ? "border border-white/12 text-white/75" : "border border-[#e4e4e1] bg-white text-[#3d3d3b]"),
+};
+
+export function Chip({ tone = "neutral", darkMode, icon: Icon, children, className = "", onRemove }) {
+  return (
+    <span className={cx("inline-flex h-7 items-center gap-1.5 rounded-[8px] px-2.5 text-[12.5px] font-medium", (CHIP_TONES[tone] || CHIP_TONES.neutral)(darkMode), className)}>
+      {Icon && <Icon className="h-3.5 w-3.5" />}
+      {children}
+      {onRemove && (
+        <button type="button" onClick={onRemove} aria-label="Remove" className="-mr-1 grid h-5 w-5 place-items-center rounded-[6px] opacity-60 hover:opacity-100">
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </span>
+  );
+}
+
+export function Card({ darkMode, title, icon: Icon, actions, className = "", bodyClassName = "", children }) {
+  return (
+    <section className={cx("rounded-[18px] border", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#e8e8e6] bg-white text-[#171717]", className)}>
+      {(title || actions) && (
+        <header className="flex items-center justify-between gap-3 px-5 pt-4">
+          <h3 className="flex min-w-0 items-center gap-2 text-[14.5px] font-semibold">
+            {Icon && <Icon className={cx("h-4 w-4 shrink-0", darkMode ? "text-white/60" : "text-[#6f6f6c]")} />}
+            <span className="truncate">{title}</span>
+          </h3>
+          {actions}
+        </header>
+      )}
+      <div className={cx("p-5", title && "pt-3", bodyClassName)}>{children}</div>
+    </section>
+  );
+}
+
+// Label / value rows on a soft panel, like the reference's detail cards.
+export function InfoRows({ darkMode, rows = [], className = "" }) {
+  return (
+    <dl className={cx("grid grid-cols-[minmax(0,110px)_1fr] gap-x-4 gap-y-2.5 rounded-[12px] p-3.5 text-[13px]", darkMode ? "bg-white/[0.04]" : "bg-[#f6f6f5]", className)}>
+      {rows.filter(Boolean).map(([label, value, Icon]) => (
+        <div key={label} className="contents">
+          <dt className={cx("flex items-center gap-2", darkMode ? "text-white/50" : "text-[#7a7a77]")}>{Icon && <Icon className="h-3.5 w-3.5" />}{label}</dt>
+          <dd className="min-w-0 font-medium">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+const NOTICE_TONES = {
+  amber: { box: (dm) => (dm ? "bg-amber-400/[0.08] text-amber-100" : "bg-gradient-to-b from-[#fff8ec] to-[#fffcf6] text-[#4a3a1c]"), icon: "text-[#f0a020]" },
+  blue: { box: (dm) => (dm ? "bg-blue-400/[0.08] text-blue-100" : "bg-[#f1f5fe] text-[#1f3463]"), icon: "text-[#3b6fe0]" },
+  red: { box: (dm) => (dm ? "bg-red-400/[0.08] text-red-100" : "bg-[#fdf1f0] text-[#5c1f1c]"), icon: "text-[#e5484d]" },
+  green: { box: (dm) => (dm ? "bg-emerald-400/[0.08] text-emerald-100" : "bg-[#eef8f2] text-[#16432c]"), icon: "text-[#1f9d55]" },
+};
+
+export function Notice({ tone = "amber", darkMode, icon: Icon = Info, children, className = "" }) {
+  const t = NOTICE_TONES[tone] || NOTICE_TONES.amber;
+  return (
+    <div className={cx("flex items-start gap-2.5 px-4 py-3 text-[13px] leading-5", t.box(darkMode), className)}>
+      <Icon className={cx("mt-0.5 h-4 w-4 shrink-0", t.icon)} />
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
 
-export function DatePicker({ darkMode, value, onChange, placeholder = "Choose date", disabled = false }) {
-  const ref = useRef(null);
-  const popoverRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [popoverStyle, setPopoverStyle] = useState({ top: 0, left: 0, maxHeight: 380 });
-  const selectedDate = fromDateInputValue(value);
-  const [monthDate, setMonthDate] = useState(() => selectedDate || new Date());
+// Activity timeline: [{ id, icon?, tone?, title, time, children }]
+export function Timeline({ darkMode, items = [] }) {
+  return (
+    <ol className="relative">
+      {items.map((item, index) => {
+        const Icon = item.icon;
+        return (
+          <li key={item.id || index} className="relative grid grid-cols-[22px_1fr] gap-3 pb-6 last:pb-0">
+            {index < items.length - 1 && <span className={cx("absolute bottom-0 left-[10.5px] top-6 w-px", darkMode ? "bg-white/10" : "bg-[#e8e8e6]")} />}
+            <span className={cx("relative mt-0.5 grid h-[22px] w-[22px] place-items-center rounded-full", item.tone === "green" ? "bg-[#e6f6ec] text-[#1f9d55]" : darkMode ? "bg-white/10 text-white/70" : "bg-[#f1f1ef] text-[#5f5f5c]")}>
+              {Icon ? <Icon className="h-3 w-3" /> : <span className="h-2 w-2 rounded-full bg-current" />}
+            </span>
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-medium">{item.title}</p>
+              {item.time && <p className={cx("mt-0.5 text-[12px]", darkMode ? "text-white/45" : "text-[#8a8a87]")}>{item.time}</p>}
+              {item.children && <div className="mt-3">{item.children}</div>}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
-  const positionPopover = useCallback(() => {
-    if (!ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const gap = 8;
-    const margin = 8;
-    const width = Math.min(300, viewportWidth - margin * 2);
-    const desiredHeight = 370;
-    const spaceBelow = viewportHeight - rect.bottom - gap - margin;
-    const spaceAbove = rect.top - gap - margin;
-    const opensBelow = spaceBelow >= Math.min(desiredHeight, spaceAbove);
-    const maxHeight = Math.max(240, Math.min(desiredHeight, opensBelow ? spaceBelow : spaceAbove));
-    const top = opensBelow
-      ? Math.min(rect.bottom + gap, viewportHeight - maxHeight - margin)
-      : Math.max(margin, rect.top - maxHeight - gap);
-    const preferredLeft = rect.left;
-    const left = Math.max(margin, Math.min(preferredLeft, viewportWidth - width - margin));
-    setPopoverStyle({ top, left, width, maxHeight });
-  }, []);
+// Right-side panel with a slide in/out. Escape and the backdrop close it.
+export function Drawer({ open, onClose, darkMode, title, icon: Icon, width = 520, footer, children, notice }) {
+  const [mounted, setMounted] = useState(open);
+  const [closing, setClosing] = useState(false);
+  if (open && !mounted) {
+    setMounted(true);
+    setClosing(false);
+  }
+  if (!open && mounted && !closing) setClosing(true);
 
   useEffect(() => {
-    function handlePointerDown(event) {
-      if (ref.current?.contains(event.target)) return;
-      if (popoverRef.current?.contains(event.target)) return;
-      setOpen(false);
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, []);
+    if (!closing) return undefined;
+    const id = window.setTimeout(() => { setMounted(false); setClosing(false); }, 220);
+    return () => window.clearTimeout(id);
+  }, [closing]);
 
   useEffect(() => {
     if (!open) return undefined;
-    positionPopover();
-    const frame = requestAnimationFrame(positionPopover);
-    window.addEventListener("resize", positionPopover);
-    window.addEventListener("scroll", positionPopover, true);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("resize", positionPopover);
-      window.removeEventListener("scroll", positionPopover, true);
-    };
-  }, [open, positionPopover]);
+    const onKey = (event) => { if (event.key === "Escape") onClose?.(); };
+    document.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = overflow; };
+  }, [open, onClose]);
 
-  const days = useMemo(() => {
-    const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-    const gridStart = new Date(start);
-    gridStart.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    return Array.from({ length: 42 }, (_, index) => {
-      const day = new Date(gridStart);
-      day.setDate(gridStart.getDate() + index);
-      return day;
-    });
-  }, [monthDate]);
-
-  function selectDay(day) {
-    onChange(toDateInputValue(day));
-    setMonthDate(day);
-    setOpen(false);
-  }
-
-  function selectToday() {
-    const today = new Date();
-    selectDay(today);
-  }
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => {
-          if (disabled) return;
-          positionPopover();
-          setOpen((current) => !current);
-        }}
-        className={`h-10 w-full min-w-[150px] rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
-          darkMode
-            ? "bg-[#15171c] border-white/10 text-white hover:bg-white/10"
-            : "bg-white border-black/10 text-black hover:bg-black/[0.03]"
-        }`}
-      >
-        <span className="flex items-center gap-2 text-sm">
-          <CalendarDays className={`h-3.5 w-3.5 ${darkMode ? "text-[#89ed3f]" : "text-[#4b9b16]"}`} />
-          <span className="truncate">{value ? formatDisplayDate(value) : placeholder}</span>
-        </span>
-      </button>
-
-      {open && !disabled && typeof document !== "undefined" && createPortal(
-        <div
-          ref={popoverRef}
-          style={popoverStyle}
-          className={`fixed z-[300] overflow-y-auto rounded-2xl border p-3 shadow-[0_18px_60px_rgba(0,0,0,0.2)] ${
-            darkMode ? "bg-[#121317] border-white/10 text-white" : "bg-white border-black/10 text-black"
-          }`}
-        >
-          <div className="rounded-xl border p-2.5 dark:border-white/10">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className={`mb-1 text-[10px] font-semibold uppercase tracking-wide ${darkMode ? "text-white/55" : "text-black/45"}`}>Selected day</p>
-                <div
-                  className={`flex h-9 items-center gap-2 rounded-lg border px-2.5 text-xs font-semibold ${
-                    darkMode
-                      ? "border-[#89ed3f] text-[#89ed3f]"
-                      : "border-[#69c832] text-[#4b9b16]"
-                  }`}
-                >
-                  <CalendarDays className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{formatDisplayDate(value)}</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={selectToday}
-                className={`mt-4 rounded-lg px-2.5 py-2 text-xs font-semibold ${darkMode ? "bg-white/5 text-white/75" : "bg-[#f3f5ef] text-black/65"}`}
-              >
-                Today
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}
-              className="rounded-full p-2 text-sm"
-            >
-              <ChevronDown className="h-4 w-4 rotate-90" />
-            </button>
-            <p className="text-base font-bold">{monthLabel(monthDate)}</p>
-            <button
-              type="button"
-              onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}
-              className="rounded-full p-2 text-sm"
-            >
-              <ChevronDown className="h-4 w-4 -rotate-90" />
-            </button>
-          </div>
-
-          <div className={`mt-2 grid grid-cols-7 text-center text-[11px] font-semibold ${darkMode ? "text-white/45" : "text-black/45"}`}>
-            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((label) => (
-              <span key={label}>{label}</span>
-            ))}
-          </div>
-          <div className="mt-1.5 grid grid-cols-7 gap-y-1 text-center">
-            {days.map((day) => {
-              const inMonth = day.getMonth() === monthDate.getMonth();
-              const selected = sameDay(day, selectedDate);
-              return (
-                <button
-                  key={day.toISOString()}
-                  type="button"
-                  onClick={() => selectDay(day)}
-                  className={`mx-auto h-8 w-8 rounded-lg text-xs transition ${
-                    selected
-                      ? darkMode
-                        ? "bg-[#89ed3f] text-black shadow-sm"
-                        : "bg-[#89ed3f] text-black shadow-sm"
-                      : inMonth
-                      ? darkMode
-                        ? "text-white hover:bg-white/8"
-                        : "text-black hover:bg-black/[0.04]"
-                      : darkMode
-                      ? "text-white/25"
-                      : "text-black/35"
-                  }`}
-                >
-                  {day.getDate()}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      , document.body)}
-    </div>
-  );
-}
-
-export function DateTimePicker({ darkMode, value, onChange, placeholder = "Choose expiry" }) {
-  const ref = useRef(null);
-  const [open, setOpen] = useState(null);
-  const selectedDate = fromDateTimeInputValue(value);
-  const [monthDate, setMonthDate] = useState(() => selectedDate || new Date());
-  useClickOutside(ref, () => setOpen(null));
-
-  const days = useMemo(() => {
-    const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-    const gridStart = new Date(start);
-    gridStart.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    return Array.from({ length: 42 }, (_, index) => {
-      const day = new Date(gridStart);
-      day.setDate(gridStart.getDate() + index);
-      return day;
-    });
-  }, [monthDate]);
-
-  const selectedHour = selectedDate?.getHours() ?? 18;
-  const selectedMinute = selectedDate?.getMinutes() ?? 0;
-  const timeOptions = useMemo(() => Array.from({ length: 48 }, (_, index) => {
-    const hour = Math.floor(index / 2);
-    const minute = index % 2 === 0 ? 0 : 30;
-    const date = new Date(2000, 0, 1, hour, minute);
-    return { hour, minute, label: date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) };
-  }), []);
-
-  function commitDateTime(day, hour = selectedHour, minute = selectedMinute) {
-    const next = new Date(day);
-    next.setHours(hour, minute, 0, 0);
-    onChange(toDateTimeInputValue(next));
-  }
-
-  function selectTime(hour, minute) {
-    commitDateTime(selectedDate || new Date(), hour, minute);
-    setOpen(null);
-  }
-
-  return (
-    <div ref={ref} className="relative">
-      <div className="grid grid-cols-[minmax(0,1fr)_140px] gap-2">
-        <button
-          type="button"
-          onClick={() => setOpen((current) => current === "date" ? null : "date")}
-          className={`flex h-12 min-w-0 items-center gap-2 rounded-2xl border px-4 text-left text-sm transition ${
-            darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"
-          } ${open === "date" ? (darkMode ? "ring-2 ring-[#d8f36a]/25" : "ring-2 ring-orange-500/20") : ""}`}
-        >
-          <CalendarDays className={`h-4 w-4 shrink-0 ${darkMode ? "text-[#d8f36a]" : "text-orange-500"}`} />
-          <span className={`truncate ${value ? "" : darkMode ? "text-white/35" : "text-black/35"}`}>
-            {selectedDate ? selectedDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : placeholder}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen((current) => current === "time" ? null : "time")}
-          className={`flex h-12 items-center gap-2 rounded-2xl border px-4 text-left text-sm transition ${
-            darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"
-          } ${open === "time" ? (darkMode ? "ring-2 ring-[#d8f36a]/25" : "ring-2 ring-orange-500/20") : ""}`}
-        >
-          <Clock3 className={`h-4 w-4 shrink-0 ${darkMode ? "text-[#d8f36a]" : "text-orange-500"}`} />
-          <span className={value ? "" : darkMode ? "text-white/35" : "text-black/35"}>
-            {selectedDate ? selectedDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "Time"}
-          </span>
-        </button>
-      </div>
-
-      {open === "date" && (
-        <div
-          className={`absolute left-0 top-[calc(100%+10px)] z-[200] w-[min(92vw,330px)] rounded-[18px] border p-3 shadow-2xl ${
-            darkMode ? "bg-[#121317] border-white/10 text-white" : "bg-white border-orange-200 text-black"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}
-              className={`h-9 w-9 rounded-xl flex items-center justify-center ${darkMode ? "bg-white/5 hover:bg-white/10" : "bg-black/[0.03] hover:bg-black/[0.06]"}`}
-            >
-              <ChevronDown className="h-4 w-4 rotate-90" />
-            </button>
-            <p className="text-sm font-semibold">{monthLabel(monthDate)}</p>
-            <button
-              type="button"
-              onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}
-              className={`h-9 w-9 rounded-xl flex items-center justify-center ${darkMode ? "bg-white/5 hover:bg-white/10" : "bg-black/[0.03] hover:bg-black/[0.06]"}`}
-            >
-              <ChevronDown className="h-4 w-4 -rotate-90" />
-            </button>
-          </div>
-
-          <div className={`mt-4 grid grid-cols-7 gap-y-2 text-center text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
-              <span key={label}>{label}</span>
-            ))}
-          </div>
-          <div className="mt-2 grid grid-cols-7 gap-y-2 text-center">
-            {days.map((day) => {
-              const inMonth = day.getMonth() === monthDate.getMonth();
-              const selected = sameDay(day, selectedDate);
-              return (
-                <button
-                  key={day.toISOString()}
-                  type="button"
-                  onClick={() => {
-                    commitDateTime(day);
-                    setOpen(null);
-                  }}
-                  className={`mx-auto h-8 w-8 rounded-lg text-sm transition ${
-                    selected
-                      ? darkMode
-                        ? "bg-[#d8f36a] text-black shadow-lg"
-                        : "bg-orange-500 text-white shadow-lg"
-                      : inMonth
-                      ? darkMode
-                        ? "text-white hover:bg-white/8"
-                        : "text-black hover:bg-black/[0.04]"
-                      : darkMode
-                      ? "text-white/20"
-                      : "text-black/25"
-                  }`}
-                >
-                  {day.getDate()}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-3">
-            <button
-              type="button"
-              onClick={() => {
-                onChange("");
-                setOpen(null);
-              }}
-              className={`w-full rounded-xl px-3 py-2 text-sm ${darkMode ? "bg-white/5 text-white/65" : "bg-black/[0.04] text-black/65"}`}
-            >
-              Clear expiry
-            </button>
-          </div>
-        </div>
-      )}
-
-      {open === "time" && (
-        <div className={`absolute right-0 top-[calc(100%+10px)] z-[200] w-[180px] rounded-[18px] border p-2 shadow-2xl ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-orange-200 bg-white text-black"}`}>
-          <p className={`px-2 pb-2 pt-1 text-[11px] uppercase tracking-[0.2em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Select time</p>
-          <div className="max-h-64 overflow-y-auto pr-1">
-            {timeOptions.map((option) => {
-              const active = selectedHour === option.hour && selectedMinute === option.minute && Boolean(value);
-              return (
-                <button
-                  key={`${option.hour}-${option.minute}`}
-                  type="button"
-                  onClick={() => selectTime(option.hour, option.minute)}
-                  className={`mb-1 w-full rounded-xl px-3 py-2 text-left text-sm transition ${active ? darkMode ? "bg-[#d8f36a] text-black" : "bg-orange-500 text-white" : darkMode ? "text-white/70 hover:bg-white/5" : "text-black/65 hover:bg-black/[0.04]"}`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
+  if (!mounted || typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[300] flex justify-end newq">
+      <div className={cx("ui-backdrop absolute inset-0 bg-black/25", closing && "is-closing")} onMouseDown={onClose} aria-hidden />
+      <aside role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : undefined} style={{ maxWidth: width }} className={cx("ui-drawer relative flex h-full w-full flex-col border-l shadow-[0_24px_70px_rgba(0,0,0,0.18)] sm:m-2 sm:h-[calc(100%-16px)] sm:rounded-[18px] sm:border", closing && "is-closing", darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#e8e8e6] bg-white text-[#171717]")}>
+        <header className={cx("flex items-center justify-between gap-3 border-b px-5 py-4", darkMode ? "border-white/10" : "border-[#efefed]")}>
+          <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold">{Icon && <Icon className="h-4 w-4" />}<span className="truncate">{title}</span></h2>
+          <button type="button" onClick={onClose} aria-label="Close" className={cx("grid h-8 w-8 place-items-center rounded-[9px]", darkMode ? "hover:bg-white/10" : "hover:bg-[#f1f1ef]")}>
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        {notice}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        {footer && <footer className={cx("flex items-center justify-end gap-2 border-t px-5 py-3.5", darkMode ? "border-white/10" : "border-[#efefed]")}>{footer}</footer>}
+      </aside>
+    </div>,
+    document.body,
   );
 }
 
@@ -791,38 +1072,21 @@ export function ConfirmModal({
   onConfirm,
 }) {
   if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className={`w-full max-w-lg rounded-[28px] border p-6 ${darkMode ? "border-white/10 bg-[#121317]" : "border-black/5 bg-white"}`}>
-        <div className="mb-5 flex items-start gap-4">
-          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${darkMode ? "bg-red-500/10" : "bg-red-50"}`}>
-            <AlertTriangle className="h-5 w-5 text-red-500" />
+    <div className="ui-backdrop fixed inset-0 z-[320] flex items-center justify-center bg-black/35 p-4 newq">
+      <div role="alertdialog" aria-modal="true" className={cx("ui-pop w-full max-w-md rounded-[18px] border p-5", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#e8e8e6] bg-white text-[#171717]")} style={{ boxShadow: "var(--ui-shadow-pop)" }}>
+        <div className="flex items-start gap-3.5">
+          <span className={cx("grid h-10 w-10 shrink-0 place-items-center rounded-[11px]", darkMode ? "bg-red-500/10" : "bg-[#fdeceb]")}>
+            <AlertTriangle className="h-[18px] w-[18px] text-[#e5484d]" />
           </span>
           <div className="min-w-0">
-            <p className={`mb-2 text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>Confirm action</p>
-            <h3 className={`text-2xl small font-semibold ${darkMode ? "text-white" : "text-black"}`}>{title}</h3>
-            <p className={`mt-3 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/50"}`}>{message}</p>
+            <h3 className="text-[15.5px] font-semibold">{title}</h3>
+            <p className={cx("mt-1.5 text-[13px] leading-5", darkMode ? "text-white/55" : "text-[#6f6f6c]")}>{message}</p>
           </div>
         </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={loading}
-            className={`flex-1 rounded-full px-4 py-3 transition disabled:opacity-60 ${darkMode ? "bg-white/5 text-white hover:bg-white/10" : "bg-black/[0.04] text-black hover:bg-black/[0.07]"}`}
-          >
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={loading}
-            className="flex-1 rounded-full bg-red-500 px-4 py-3 text-white transition hover:bg-red-600 disabled:opacity-60"
-          >
-            {loading ? "Deleting..." : confirmLabel}
-          </button>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button darkMode={darkMode} variant="secondary" onClick={onCancel} disabled={loading}>{cancelLabel}</Button>
+          <Button darkMode={darkMode} variant="danger" onClick={onConfirm} disabled={loading} loading={loading}>{loading ? "Deleting…" : confirmLabel}</Button>
         </div>
       </div>
     </div>
@@ -833,15 +1097,10 @@ export function DocumentIcon({ doc, darkMode, className = "w-4 h-4" }) {
   const name = doc?.name || "";
   const ext = name.split(".").pop()?.toLowerCase();
   const base = darkMode ? "text-white/55" : "text-black/45";
-
-  if (doc?.type === "sheet" || ["csv", "xls", "xlsx"].includes(ext)) {
-    return <Sheet className={`${className} ${darkMode ? "text-[#d8f36a]" : "text-green-600"}`} />;
-  }
+  if (doc?.type === "sheet" || ["csv", "xls", "xlsx"].includes(ext)) return <Sheet className={`${className} ${darkMode ? "text-[#d8f36a]" : "text-green-600"}`} />;
   if (ext === "pdf") return <FileText className={`${className} text-red-500`} />;
   if (["doc", "docx"].includes(ext)) return <FileType className={`${className} text-blue-500`} />;
-  if (["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"].includes(ext)) {
-    return <ImageIcon className={`${className} text-fuchsia-500`} />;
-  }
+  if (["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"].includes(ext)) return <ImageIcon className={`${className} text-fuchsia-500`} />;
   if (["zip", "rar", "7z"].includes(ext)) return <FileArchive className={`${className} text-amber-500`} />;
   if (["txt", "md", "rtf"].includes(ext)) return <FileText className={`${className} ${base}`} />;
   return <File className={`${className} ${base}`} />;

@@ -328,12 +328,14 @@ body * {
 
 @font-face {
   font-family: "Regular";
-  src: url("./font/regular.otf") format("truetype");
+  src: url("./font/regular.woff2") format("woff2"), url("./font/regular.otf") format("opentype");
+  font-display: swap;
   /* Add additional font weights and styles if needed */
 }
 @font-face {
   font-family: "Gvibet";
-  src: url("./font/regular.otf") format("truetype");
+  src: url("./font/regular.woff2") format("woff2"), url("./font/regular.otf") format("opentype");
+  font-display: swap;
   /* Add additional font weights and styles if needed */
 }
 @font-face {
@@ -355,7 +357,8 @@ body * {
 
 @font-face {
   font-family: "Geist";
-  src: url("./font/satre.ttf") format("truetype");
+  src: url("./font/satre.woff2") format("woff2"), url("./font/satre.ttf") format("truetype");
+  font-display: swap;
   /* Add additional font weights and styles if needed */
 }
 
@@ -823,4 +826,100 @@ body * {
   .shell-root,
   .notification-strip-in { animation: none; }
   .skeleton-bar { animation-duration: 4s; }
+}
+
+/* ───────────────── Reference look: tokens, motion and the page theme layer ─────────────────
+   The shell is a light grey frame; each page sits on a white rounded panel (.app-panel).
+   Pages still carry older hard-coded colours and very round corners, so the rules below map
+   the common ones onto the neutral palette in one place instead of editing every page. */
+:root {
+  --ui-frame: #f3f3f1;
+  --ui-panel: #ffffff;
+  --ui-soft: #f6f6f5;
+  --ui-soft-2: #efefed;
+  --ui-line: #e8e8e6;
+  --ui-line-strong: #dcdcd9;
+  --ui-text: #171717;
+  --ui-muted: #6f6f6c;
+  --ui-faint: #a3a3a0;
+  --ui-accent: #171717;
+  --ui-shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px rgba(0, 0, 0, 0.1);
+  --ui-radius-card: 18px;
+}
+.dark {
+  --ui-frame: #0b0c0f;
+  --ui-panel: #121317;
+  --ui-soft: #1a1b20;
+  --ui-soft-2: #212228;
+  --ui-line: rgba(255, 255, 255, 0.08);
+  --ui-line-strong: rgba(255, 255, 255, 0.14);
+  --ui-text: #f2f2f2;
+  --ui-muted: rgba(255, 255, 255, 0.55);
+  --ui-faint: rgba(255, 255, 255, 0.35);
+  --ui-accent: #f2f2f2;
+  --ui-shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes ui-pop-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes ui-drawer-in {
+  from { transform: translateX(104%); }
+  to { transform: translateX(0); }
+}
+@keyframes ui-drawer-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(104%); }
+}
+@keyframes ui-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-fade-out { from { opacity: 1; } to { opacity: 0; } }
+.ui-pop { animation: ui-pop-in 140ms cubic-bezier(0.22, 1, 0.36, 1) both; transform-origin: top center; }
+.ui-drawer { animation: ui-drawer-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.ui-drawer.is-closing { animation: ui-drawer-out 220ms ease both; }
+.ui-backdrop { animation: ui-fade-in 180ms ease-out both; }
+.ui-backdrop.is-closing { animation: ui-fade-out 220ms ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .ui-pop, .ui-drawer, .ui-backdrop { animation-duration: 1ms !important; }
+}
+
+/* Sidebar highlight that slides between items (replaces the motion library). */
+.sidebar-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 10px;
+  pointer-events: none;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), height 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease;
+}
+
+/* Page theme layer (light mode, inside the white panel). */
+.shell-root:not(.dark) .app-panel :is(.bg-\[\#f5f7f2\], .bg-\[\#f3f5ef\], .bg-\[\#fafbf8\], .bg-\[\#f7f5ef\], .bg-\[\#fbfcf9\], .bg-\[\#f7f8f5\], .bg-\[\#f1f7f4\], .bg-\[\#f6faf2\], .bg-\[\#f4f7fb\], .bg-\[\#f7f8fb\], .bg-\[\#fbfbfd\], .bg-\[\#f8f9fc\], .bg-\[\#f8faf9\], .bg-\[\#f3f6f8\], .bg-\[\#f8fbf9\], .bg-\[\#fbfcf7\]) {
+  background-color: var(--ui-soft);
+}
+.shell-root:not(.dark) .app-panel :is(.bg-\[\#eef3f2\], .bg-\[\#f4f5f8\], .bg-\[\#efeee9\], .bg-\[\#f5f7f2\].min-h-full, .bg-\[\#eef3f2\].min-h-full) {
+  background-color: var(--ui-panel);
+  background-image: none;
+}
+.shell-root:not(.dark) .app-panel :is(.border-\[\#dfe7e4\], .border-\[\#dfe3dc\], .border-\[\#e1e5df\], .border-\[\#e4e7e1\], .border-\[\#edf0ea\], .border-\[\#e0e4dd\], .border-\[\#e5e8e2\], .border-\[\#d7dcd3\], .border-\[\#e1e5de\], .border-\[\#eef1f5\], .border-\[\#e7eaee\], .border-black\/10, .border-black\/\[0\.06\], .border-black\/5) {
+  border-color: var(--ui-line);
+}
+.shell-root:not(.dark) .app-panel :is(.text-\[\#858b82\], .text-\[\#777d74\], .text-\[\#7b8178\], .text-\[\#71809a\]) {
+  color: var(--ui-muted);
+}
+.app-panel :is(.rounded-\[34px\], .rounded-\[32px\], .rounded-\[30px\], .rounded-\[28px\]) { border-radius: 20px; }
+.app-panel :is(.rounded-\[26px\], .rounded-\[24px\]) { border-radius: 18px; }
+.app-panel .rounded-\[22px\] { border-radius: 16px; }
+
+/* Primary buttons: the reference uses black where pages used bright lime (light mode only). */
+.shell-root:not(.dark) .app-panel button:is(.bg-\[\#89ed3f\], .bg-\[\#7dde35\], .bg-\[\#6ee72f\], .bg-\[\#69c832\], .bg-\[\#00c853\]) {
+  background-color: #171717;
+  color: #ffffff;
+  box-shadow: none;
+}
+.shell-root:not(.dark) .app-panel button:is(.bg-\[\#89ed3f\], .bg-\[\#7dde35\], .bg-\[\#6ee72f\], .bg-\[\#69c832\], .bg-\[\#00c853\]):hover {
+  background-color: #000000;
+}
+.shell-root:not(.dark) .app-panel button:is(.bg-\[\#89ed3f\], .bg-\[\#7dde35\], .bg-\[\#6ee72f\], .bg-\[\#69c832\], .bg-\[\#00c853\]) :is(svg, span) {
+  color: inherit;
 }

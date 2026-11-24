@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { ConfirmModal, DatePicker, SelectMenu, useClickOutside } from "./ui";
+import { ConfirmModal, DatePicker, DateRangePicker, SelectMenu, TimeInput, useClickOutside } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -391,225 +391,18 @@ function TomorrowSiteBars({
   );
 }
 
-function ReportDateRangePicker({
-  darkMode,
-  startValue,
-  endValue,
-  onStartChange,
-  onEndChange,
-}) {
-  const ref = useRef(null);
-  const buttonRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [selecting, setSelecting] = useState("start");
-  const [monthDate, setMonthDate] = useState(() =>
-    dateInputToDate(endValue || startValue),
-  );
-  const [panelStyle, setPanelStyle] = useState({});
-  const startDate = dateInputToDate(startValue);
-  const endDate = dateInputToDate(endValue);
-  useClickOutside(ref, () => setOpen(false));
-
-  const days = useMemo(() => {
-    const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-    const gridStart = new Date(start);
-    gridStart.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    return Array.from({ length: 42 }, (_, index) => {
-      const day = new Date(gridStart);
-      day.setDate(gridStart.getDate() + index);
-      return day;
-    });
-  }, [monthDate]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function placePanel() {
-      const rect = buttonRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const width = Math.min(430, window.innerWidth - 32);
-      const left = Math.min(
-        Math.max(16, rect.left),
-        window.innerWidth - width - 16,
-      );
-      const belowTop = rect.bottom + 10;
-      const aboveTop = Math.max(16, rect.top - 430);
-      const top = window.innerHeight - belowTop < 390 ? aboveTop : belowTop;
-      setPanelStyle({ left, top, width });
-    }
-    placePanel();
-    window.addEventListener("resize", placePanel);
-    window.addEventListener("scroll", placePanel, true);
-    return () => {
-      window.removeEventListener("resize", placePanel);
-      window.removeEventListener("scroll", placePanel, true);
-    };
-  }, [open]);
-
-  function openPicker(mode) {
-    setSelecting(mode);
-    setMonthDate(dateInputToDate(mode === "start" ? startValue : endValue));
-    setOpen(true);
-  }
-
-  function selectDay(day) {
-    const value = localDateInputValue(day);
-    if (selecting === "start") {
-      onStartChange(value);
-      if (!endValue || value > endValue) onEndChange(value);
-      setSelecting("end");
-      return;
-    }
-    if (value < startValue) {
-      onStartChange(value);
-      onEndChange(startValue);
-    } else {
-      onEndChange(value);
-    }
-    setOpen(false);
-  }
-
+function ReportDateRangePicker({ darkMode, startValue, endValue, onStartChange, onEndChange }) {
   return (
-    <div ref={ref} className="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => openPicker("start")}
-        className={`flex h-12 w-full min-w-[300px] items-center gap-3 rounded-3xl border px-4 text-left transition ${
-          darkMode
-            ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10"
-            : "border-black/10 bg-white text-black hover:bg-black/[0.03]"
-        }`}
-      >
-        <CalendarDays
-          className={`h-4 w-4 shrink-0 ${darkMode ? "text-[#d8f36a]" : "text-indigo-600"}`}
-        />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {reportDateLabel(startValue)} - {reportDateLabel(endValue)}
-        </span>
-      </button>
-
-      {open && (
-        <div
-          style={panelStyle}
-          className={`fixed z-[80] max-h-[min(76vh,430px)] overflow-y-auto rounded-[24px] border p-4 shadow-2xl ${
-            darkMode
-              ? "border-white/10 bg-[#121317] text-white"
-              : "border-black/10 bg-white text-black"
-          }`}
-        >
-          <div className="grid gap-2 sm:grid-cols-2">
-            {[
-              ["start", "Start", startValue],
-              ["end", "End", endValue],
-            ].map(([mode, label, value]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => openPicker(mode)}
-                className={`rounded-2xl border px-3 py-2 text-left text-sm ${
-                  selecting === mode
-                    ? darkMode
-                      ? "border-[#d8f36a] bg-[#d8f36a]/10 text-[#d8f36a]"
-                      : "border-indigo-600 bg-indigo-50 text-indigo-700"
-                    : darkMode
-                      ? "border-white/10 bg-white/5"
-                      : "border-black/10 bg-black/[0.025]"
-                }`}
-              >
-                <span
-                  className={`block text-[10px] uppercase tracking-[0.18em] ${darkMode ? "text-white/45" : "text-black/45"}`}
-                >
-                  {label}
-                </span>
-                <span className="mt-1 block font-semibold">
-                  {reportDateLabel(value)}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-4 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() =>
-                setMonthDate(
-                  new Date(
-                    monthDate.getFullYear(),
-                    monthDate.getMonth() - 1,
-                    1,
-                  ),
-                )
-              }
-              className="rounded-full px-3 py-2 text-sm"
-            >
-              {"<"}
-            </button>
-            <p className="text-lg font-semibold">
-              {reportMonthLabel(monthDate)}
-            </p>
-            <button
-              type="button"
-              onClick={() =>
-                setMonthDate(
-                  new Date(
-                    monthDate.getFullYear(),
-                    monthDate.getMonth() + 1,
-                    1,
-                  ),
-                )
-              }
-              className="rounded-full px-3 py-2 text-sm"
-            >
-              {">"}
-            </button>
-          </div>
-
-          <div
-            className={`mt-4 grid grid-cols-7 gap-y-2 text-center text-xs ${darkMode ? "text-white/55" : "text-black/55"}`}
-          >
-            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((label) => (
-              <span key={label}>{label}</span>
-            ))}
-          </div>
-          <div className="mt-2 grid grid-cols-7 gap-y-1 text-center">
-            {days.map((day) => {
-              const value = localDateInputValue(day);
-              const inMonth = day.getMonth() === monthDate.getMonth();
-              const selected =
-                sameCalendarDay(day, startDate) ||
-                sameCalendarDay(day, endDate);
-              const inRange = value > startValue && value < endValue;
-              return (
-                <button
-                  key={day.toISOString()}
-                  type="button"
-                  onClick={() => selectDay(day)}
-                  className={`mx-auto h-9 w-9 rounded-xl text-sm transition ${
-                    selected
-                      ? darkMode
-                        ? "bg-[#d8f36a] text-black shadow-lg"
-                        : "bg-indigo-600 text-white shadow-lg"
-                      : inRange
-                        ? darkMode
-                          ? "bg-[#d8f36a]/10 text-[#d8f36a]"
-                          : "bg-indigo-50 text-indigo-700"
-                        : inMonth
-                          ? darkMode
-                            ? "text-white hover:bg-white/10"
-                            : "text-black hover:bg-black/[0.04]"
-                          : darkMode
-                            ? "text-white/25"
-                            : "text-black/35"
-                  }`}
-                >
-                  {day.getDate()}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
+    <DateRangePicker
+      darkMode={darkMode}
+      from={startValue}
+      to={endValue}
+      className=""
+      onChange={({ from, to }) => {
+        onStartChange(from);
+        onEndChange(to);
+      }}
+    />
   );
 }
 
@@ -4349,15 +4142,15 @@ export default function DmrDashboard({ darkMode }) {
                               >
                                 Reminder time
                               </span>
-                              <input
-                                type="time"
+                              <TimeInput
+                                darkMode={darkMode}
                                 value={reminder.time || item.defaultTime}
                                 onChange={(event) =>
                                   updateDmrReminder(item.id, {
                                     time: event.target.value,
                                   })
                                 }
-                                className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm font-semibold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-[#fafafa]"}`}
+                                className="mt-2"
                               />
                             </label>
                             <button

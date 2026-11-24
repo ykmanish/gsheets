@@ -8,7 +8,7 @@ import { API_URL, getStoredAuth } from "./AuthProvider";
 import { playForumNotificationSound } from "./forumNotificationSound";
 import UserAvatar from "./UserAvatar";
 import dynamic from "next/dynamic";
-import { GiphyFetch } from "@giphy/js-fetch-api";
+import { DateInput, TimeInput } from "./ui";
 
 const PickerFallback = () => (
   <div className="grid h-full w-full place-items-center text-xs opacity-60">Loading…</div>
@@ -16,7 +16,12 @@ const PickerFallback = () => (
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false, loading: PickerFallback });
 const Grid = dynamic(() => import("@giphy/react-components").then((mod) => mod.Grid), { ssr: false, loading: PickerFallback });
 
-const gf = new GiphyFetch(process.env.NEXT_PUBLIC_GIPHY_API_KEY || "eGCEt3kYBuQiWaTPQhS2lSod97pS9Fpi");
+// The GIF client loads with the GIF picker, not with Loop.
+let giphyClient = null;
+const getGiphy = () => {
+  giphyClient ||= import("@giphy/js-fetch-api").then(({ GiphyFetch }) => new GiphyFetch(process.env.NEXT_PUBLIC_GIPHY_API_KEY || "eGCEt3kYBuQiWaTPQhS2lSod97pS9Fpi"));
+  return giphyClient;
+};
 
 const GROUP_ID = "workspace-forum";
 // Stable identity for "no one is typing" so memoized rows are not invalidated by a
@@ -1459,7 +1464,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                     <div className="mt-2 space-y-2">
                       <div className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
                         <span className={`text-sm font-semibold ${muted}`}>Report time</span>
-                        <TimePickerInput value={group?.dailyReportTime || "08:00"} disabled={Boolean(pendingAction) || groupDeleted} onSave={(val) => saveGroup({ dailyReportTime: val }, "dailyReportTime")} className={`rounded-lg border px-2 py-1 text-sm font-semibold outline-none ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`} />
+                        <TimePickerInput darkMode={darkMode} value={group?.dailyReportTime || "08:00"} disabled={Boolean(pendingAction) || groupDeleted} onSave={(val) => saveGroup({ dailyReportTime: val }, "dailyReportTime")} className={`rounded-lg border px-2 py-1 text-sm font-semibold outline-none ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`} />
                       </div>
                       <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => onSendDailyReport?.()} className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`}>
                         {pendingAction === "dailyReport" ? <TinySpinner className="h-3 w-3" /> : null}
@@ -1745,19 +1750,18 @@ const DirectConversationRow = memo(function DirectConversationRow({ conversation
   );
 });
 
-function TimePickerInput({ value, disabled, onSave, className }) {
-  const [localValue, setLocalValue] = useState(value || "08:00");
-  useEffect(() => { setLocalValue(value || "08:00"); }, [value]);
+// Picking a time saves it straight away (the old field saved on blur).
+function TimePickerInput({ value, disabled, onSave, className, darkMode }) {
   return (
-    <input
-      type="time"
-      value={localValue}
+    <TimeInput
+      darkMode={darkMode}
+      value={value || "08:00"}
       disabled={disabled}
-      onChange={(e) => setLocalValue(e.target.value)}
-      onBlur={(e) => {
-        if (e.target.value !== value) onSave(e.target.value);
+      onChange={(e) => {
+        if (e.target.value && e.target.value !== value) onSave(e.target.value);
       }}
       className={className}
+      size="sm"
     />
   );
 }
@@ -4932,11 +4936,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   </div>
                   {loopCapabilityPicker === "employee-report" && (
                     <div className="flex items-center gap-2 animate-in slide-in-from-top-2 duration-200">
-                      <input 
-                        type="date" 
-                        value={loopCapabilityDate} 
-                        onChange={(e) => setLoopCapabilityDate(e.target.value)} 
-                        className={`rounded-lg border px-3 py-1.5 text-xs outline-none focus:border-[#2563eb] ${darkMode ? "border-white/10 bg-black/20 text-white" : "border-black/10 bg-white text-black"}`} 
+                      <DateInput
+                        darkMode={darkMode}
+                        value={loopCapabilityDate}
+                        onChange={(e) => setLoopCapabilityDate(e.target.value)}
+                        size="sm"
                       />
                       <button type="button" disabled={!loopCapabilityDate || refiningMessage} onClick={() => {
                         const dateObj = new Date(loopCapabilityDate);
@@ -5176,7 +5180,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   key={`${mediaPickerTab}-${giphySearch}`}
                                   width={340}
                                   columns={mediaPickerTab === "gif" ? 2 : 3}
-                                  fetchGifs={(offset) => giphySearch ? gf.search(giphySearch, { offset, limit: 20, type: mediaPickerTab === "sticker" ? "stickers" : "gifs" }) : gf.trending({ offset, limit: 20, type: mediaPickerTab === "sticker" ? "stickers" : "gifs" })}
+                                  fetchGifs={async (offset) => { const gf = await getGiphy(); return giphySearch ? gf.search(giphySearch, { offset, limit: 20, type: mediaPickerTab === "sticker" ? "stickers" : "gifs" }) : gf.trending({ offset, limit: 20, type: mediaPickerTab === "sticker" ? "stickers" : "gifs" }); }}
                                   onGifClick={(gif, e) => {
                                     e.preventDefault();
                                     setMediaPickerOpen(false);

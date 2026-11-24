@@ -105,7 +105,7 @@ const MENU_ITEMS = [
   { id: "manage-roles", label: "Manage Roles", parent: "access-management", group: "access" },
   { id: "manage-users", label: "Manage Users", parent: "access-management", group: "access" },
 ];
-const SUPER_ADMIN_MENU_ITEMS = [{ id: "whatsapp", label: "WhatsApp" }, { id: "module-control", label: "Module Control" }];
+const SUPER_ADMIN_MENU_ITEMS = [{ id: "whatsapp", label: "WhatsApp" }, { id: "slack", label: "Slack" }, { id: "module-control", label: "Module Control" }];
 const ALL_MENU_ITEMS = [...MENU_ITEMS, ...SUPER_ADMIN_MENU_ITEMS];
 const MENU_ITEM_IDS = new Set(ALL_MENU_ITEMS.map((item) => item.id));
 const ROLE_MENU_ITEM_IDS = new Set(MENU_ITEMS.map((item) => item.id));
@@ -876,10 +876,15 @@ const whatsappService = createWhatsAppService({
 // to Slack — MRN/PRN approval cards, report and DMR reminders, the evening digest — is off
 // unless SLACK_WHATSAPP_MIRROR=true. Channels may be names or IDs; approvers are listed by
 // email, and with no list only the workspace's owners and admins may approve.
+// SLACK_DRY_RUN=on|everyone (scripts only): Slack writes are recorded instead of sent, and the
+// Slack bookkeeping goes to throwaway "dryrun_" collections. See lib/slackService.js.
+const SLACK_DRY_RUN = ["on", "everyone"].includes(process.env.SLACK_DRY_RUN) ? process.env.SLACK_DRY_RUN : "";
 const slackService = createSlackService({
   token: process.env.SLACK_BOT_TOKEN,
   signingSecret: process.env.SLACK_SIGNING_SECRET,
+  dryRun: SLACK_DRY_RUN,
 });
+const slackCollectionName = (name) => (SLACK_DRY_RUN ? `dryrun_${name}` : name);
 const SLACK_WHATSAPP_MIRROR = process.env.SLACK_WHATSAPP_MIRROR === "true";
 const slackEmailList = (value = "") => String(value).split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
 const SLACK_CHANNELS = {
@@ -4187,6 +4192,8 @@ app.post("/employee-daily-report", async (req, res) => {
     const celebration = await generateEmployeeSubmissionPraise({ employeeName: report.employeeName, taskItems, waitingTaskItems, date: today });
     const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
     const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
+    // Send the filed responses to the employee (privately) and to HR's Slack thread.
+    void postSlackReportResponses({ report }).catch((error) => console.error("Slack report echo error:", error.message));
     // Analysis is on-demand only, via the "Employee Report" capability in the Loop assistant
     // DM — it no longer auto-fires for every single report submission.
     res.json({ success: true, report: sanitizeEmployeeReport({ ...report, _id: report._id }), celebration, executiveQuestions, executiveAnswers, sheetWarning });
@@ -4257,6 +4264,7 @@ app.put("/employee-daily-report", async (req, res) => {
     userSet.employeeReportCacheHydratedAt = now;
     if (!req.user.department || req.user.department !== department) userSet.department = department;
     await db.collection("users").updateOne({ _id: req.user._id }, { $set: userSet });
+    void postSlackReportResponses({ report, edited: true }).catch((error) => console.error("Slack report echo error:", error.message));
     const executiveQuestions = await employeeExecutiveQuestionsForUser(req.user || req.authUser || {});
     const executiveAnswers = executiveQuestions.length ? await employeeExecutiveAnswersForUserDate(db, userId, today) : null;
     res.json({ success: true, report: sanitizeEmployeeReport(report), executiveQuestions, executiveAnswers, sheetWarning });
@@ -6458,6 +6466,7 @@ app.post("/hr/attendance/clock-in", async (req, res) => {
     const result = await db.collection("hrAttendanceRecords").insertOne(doc);
     doc._id = result.insertedId;
     addActivityLog({ req, action: "Clocked in", target: `${doc.employeeName} · ${date}`, details: { distanceMeters: distance, workMode: doc.workMode } });
+    void syncSlackAttendanceMessages({ date, userId: String(userId), event: "clock-in" }).catch((error) => console.error("Slack clock-in sync error:", error.message));
     res.json({ success: true, record: serializeAttendanceRecord(doc), settings });
   } catch (error) {
     console.error("Attendance clock-in error:", error);
@@ -6492,6 +6501,7 @@ app.post("/hr/attendance/clock-out", async (req, res) => {
     await db.collection("hrAttendanceRecords").updateOne({ _id: existing._id }, { $set: update });
     const record = { ...existing, ...update };
     addActivityLog({ req, action: "Clocked out", target: `${record.employeeName} · ${date}`, details: { distanceMeters: distance, workMinutes, workMode: update.workMode } });
+    void syncSlackAttendanceMessages({ date, userId: String(userId), event: "clock-out" }).catch((error) => console.error("Slack clock-out sync error:", error.message));
     res.json({ success: true, record: serializeAttendanceRecord(record), settings });
   } catch (error) {
     console.error("Attendance clock-out error:", error);
@@ -7109,6 +7119,7 @@ app.post("/hr/leave-requests", async (req, res) => {
       leaveRequestId: String(result.insertedId),
     }, req.authUser.id);
     addActivityLog({ req, action: "Created leave request", target: `${doc.employeeName} · ${doc.startDate} to ${doc.endDate}`, details: { leaveType, days: doc.days } });
+    void notifySlackLeaveRequest(doc).catch((error) => console.error("Slack leave request error:", error.message));
     res.json({ success: true, leaveRequest: serializeLeaveRequest(doc) });
   } catch (error) {
     console.error("HR leave create error:", error);
@@ -7134,6 +7145,7 @@ app.delete("/hr/leave-requests/:id", async (req, res) => {
     });
     saveNotifications();
     addActivityLog({ req, action: "Deleted leave request", target: `${existing.employeeName} · ${existing.startDate} to ${existing.endDate}`, details: { leaveType: existing.leaveType, days: existing.days } });
+    void notifySlackLeaveDecision(existing, { status: "withdrawn" }).catch((error) => console.error("Slack leave withdraw error:", error.message));
     res.json({ success: true, id: String(_id) });
   } catch (error) {
     console.error("HR leave delete error:", error);
@@ -7148,28 +7160,12 @@ app.patch("/hr/leave-requests/:id/review", async (req, res) => {
     if (!["approved", "declined"].includes(status)) return res.status(400).json({ error: "Use approved or declined status" });
     const adminComment = projectText(req.body?.adminComment, 1200);
     const db = await connectAuthDb();
-    const _id = new ObjectId(req.params.id);
-    const existing = await db.collection("hrLeaveRequests").findOne({ _id });
-    if (!existing) return res.status(404).json({ error: "Leave request not found" });
-    const now = new Date();
-    const update = {
-      status,
-      adminComment,
-      reviewedAt: now,
-      reviewedBy: { id: req.authUser.id, name: req.authUser.displayName || req.authUser.username || "Admin" },
-      updatedAt: now,
-    };
-    await db.collection("hrLeaveRequests").updateOne({ _id }, { $set: update });
-    const updated = { ...existing, ...update };
-    notifyUsers([String(existing.userId)], {
-      title: `Leave request ${status}`,
-      message: `${req.authUser.displayName || "Admin"} ${status} your leave from ${existing.startDate} to ${existing.endDate}${adminComment ? `: ${adminComment}` : "."}`,
-      type: "hr-leave",
-    });
-    addActivityLog({ req, action: status === "approved" ? "Approved leave request" : "Declined leave request", target: `${existing.employeeName} · ${existing.startDate} to ${existing.endDate}`, details: { adminComment } });
+    if (!ObjectId.isValid(req.params.id)) return res.status(404).json({ error: "Leave request not found" });
+    const { updated } = await reviewLeaveRequest({ id: req.params.id, status, adminComment, reviewer: req.authUser, req });
     const userMap = await leavePolicyUsersForRequests(db, [updated]);
     res.json({ success: true, leaveRequest: serializeLeaveRequest(applyLeavePolicyToRequests([updated], userMap)[0]) });
   } catch (error) {
+    if (error.statusCode === 404) return res.status(404).json({ error: error.message });
     console.error("HR leave review error:", error);
     res.status(500).json({ error: "Could not review leave request" });
   }
@@ -19644,6 +19640,7 @@ async function handleSlackInteraction(payload = {}) {
   const userId = payload.user?.id;
   if (payload.type === "block_actions") {
     const action = payload.actions?.[0];
+    if (action?.action_id?.startsWith("leave:")) return handleSlackLeaveAction(payload, action);
     if (!action?.action_id?.startsWith("approval:")) return;
     const kind = action.action_id.slice("approval:".length);
     const { module, recordNo } = JSON.parse(action.value || "{}");
@@ -19669,6 +19666,7 @@ async function handleSlackInteraction(payload = {}) {
     return;
   }
   if (payload.type === "view_submission") {
+    if (payload.view?.callback_id === "leave_review") return handleSlackLeaveSubmission(payload);
     const kind = { approval_declined: "declined", approval_comment: "comment" }[payload.view?.callback_id];
     if (!kind) return;
     const { module, recordNo } = JSON.parse(payload.view.private_metadata || "{}");
@@ -19712,7 +19710,7 @@ async function sendSlackReportReminders({ date, users = [] }) {
   for (const user of users) {
     const name = user.displayName || user.username || "there";
     try {
-      const slackUser = await slackService.userByEmail(user.email);
+      const slackUser = await slackUserFor(user);
       if (!slackUser) {
         summary.skipped += 1;
         summary.notInSlack.push(name);
@@ -19768,54 +19766,7 @@ async function postSlackEmployeeDigest({ date = employeeReportToday() } = {}) {
   });
 }
 
-/* ───────── Slack: DMR manpower reminders ───────── */
-
-const SLACK_DMR_REMINDER_TITLES = {
-  actualManpower: (label) => `Actual manpower for ${label} is due`,
-  tomorrowPlan: (label) => `Tomorrow's planned manpower (${label}) is due`,
-  siteDailyReport: (label) => `Site daily report for ${label} is due`,
-};
-
-// Last ten digits, so "+91 98765 43210" on a Slack profile matches WhatsApp's "919876543210".
-const slackPhoneKey = (value = "") => String(value).replace(/\D/g, "").slice(-10);
-
-// `results` are the WhatsApp run's per-contact outcomes: "skipped" means already filled.
-async function sendSlackDmrReminder({ type, date, results = [] }) {
-  if (!slackService.configured || !SLACK_WHATSAPP_MIRROR) return { status: "skipped", reason: "Slack mirror is off" };
-  const label = dmrPdfDateLabel(date);
-  const title = (SLACK_DMR_REMINDER_TITLES[type] || SLACK_DMR_REMINDER_TITLES.actualManpower)(label);
-  const due = results.filter((item) => item.status !== "skipped");
-  const filled = results.filter((item) => item.status === "skipped");
-  const channel = await slackService.resolveChannel(SLACK_CHANNELS.dmr)
-    .catch(() => slackService.resolveChannel(SLACK_CHANNELS.dmrFallback));
-  const fields = [];
-  if (due.length) fields.push({ type: "mrkdwn", text: `*Still to fill*\n${due.map((item) => item.name).join(", ")}` });
-  if (filled.length) fields.push({ type: "mrkdwn", text: `*Already filled*\n${filled.map((item) => item.name).join(", ")}` });
-  await slackService.postMessage({
-    channel,
-    text: title,
-    blocks: [
-      { type: "section", text: { type: "mrkdwn", text: `:alarm_clock: *${title}*` } },
-      ...(fields.length ? [{ type: "section", fields }] : []),
-      { type: "actions", elements: [{ type: "button", style: "primary", text: { type: "plain_text", text: "Open DMR" }, url: `${APP_PUBLIC_URL}/projects/dmr`, action_id: "link:dmr" }] },
-    ],
-  });
-
-  // Also DM the people still due whose Slack profile carries the same phone number.
-  const duePhones = new Map(due.map((item) => [slackPhoneKey(item.phone), item]).filter(([key]) => key.length === 10));
-  let dms = 0;
-  if (duePhones.size) {
-    const members = await slackService.listMembers();
-    for (const member of members) {
-      const match = duePhones.get(slackPhoneKey(member.profile?.phone));
-      if (!match) continue;
-      await slackService.sendDm(member.id, { text: `Hi ${match.name.split(" ")[0]}, ${title.charAt(0).toLowerCase()}${title.slice(1)}. ${APP_PUBLIC_URL}/projects/dmr` })
-        .then(() => { dms += 1; })
-        .catch((error) => console.error(`Slack DMR DM failed for ${match.name}:`, error.message));
-    }
-  }
-  return { status: "posted", channel, due: due.length, filled: filled.length, dms };
-}
+/* Slack DMR reminders: see "DMR reminders (the WhatsApp ones, on Slack too)" below. */
 
 // Production only, so a developer's local backend never posts a second digest.
 function startSlackEmployeeDigest() {
@@ -19830,6 +19781,1238 @@ function startSlackEmployeeDigest() {
   }, { timezone: "Asia/Kolkata" });
   console.log(`Slack employee report digest scheduled at ${time} IST`);
 }
+
+/* ───────── Slack: attendance and daily-report reminders ───────── */
+
+// Mon–Sat: a clock-in reminder (10:00), a daily-report reminder (18:50) and a clock-out
+// reminder (19:00, repeated every 10 minutes for whoever is still clocked in). Each one can
+// reach three audiences, chosen per reminder on the Module Control page:
+//   team      — a plain post in the everyone channel: the reminder and its button, no names,
+//               counts or times.
+//   personal  — each employee's own status, only to them: "only visible to you" in the team
+//               channel (or a DM), e.g. "You clocked in at 10:38 AM", their filed report.
+//   hr        — the full picture in the HR channel (who has / hasn't, times, everyone's
+//               reports in a thread), edited live. Who sees it is whoever is in that channel.
+// The buttons open the dashboard, which does the clock in/out (with location for the office
+// geofence) and writes hrAttendanceRecords exactly as before.
+// Runs in production (SLACK_ATTENDANCE_ASSIST=true runs it elsewhere, =false stops it) when the
+// settings switch is on.
+const SLACK_ASSIST_RUNTIME = slackService.configured
+  && process.env.SLACK_ATTENDANCE_ASSIST !== "false"
+  && (process.env.NODE_ENV === "production" || process.env.SLACK_ATTENDANCE_ASSIST === "true");
+const SLACK_ATTENDANCE_SETTINGS_ID = "slack-attendance-settings";
+const SLACK_ATTENDANCE_KINDS = ["clockIn", "report", "clockOut"];
+const SLACK_ATTENDANCE_DEFAULTS = {
+  enabled: true,
+  teamChannel: process.env.SLACK_ATTENDANCE_CHANNEL || "uipl-daily",
+  hrChannel: process.env.SLACK_ATTENDANCE_HR_CHANNEL || "",
+  personalDelivery: "dm",
+  clockInAt: "10:00",
+  reportAt: "18:50",
+  clockOutAt: "19:00",
+  clockOutRepeatMinutes: 10,
+  clockOutUntil: "21:00",
+  messages: {
+    clockIn: { team: true, personal: true, hr: true },
+    report: { team: true, personal: true, hr: true, responses: "both" },
+    clockOut: { team: true, personal: true, hr: true },
+  },
+  // After midnight, the day's everyone-channel posts and personal notes are deleted.
+  cleanup: { enabled: true, time: "00:05", includeHr: false },
+  // With the clock-in reminder: what was missed on the last working day.
+  morningRecap: { enabled: true },
+  // WhatsApp reminders that also go to Slack (the daily-report one is the report reminder above).
+  whatsappMirror: { dmr: true },
+  leave: { enabled: true },
+  announcements: { enabled: true, channel: "announcements", departments: ["Human Resource", "Administration"] },
+};
+// A reminder missed by a restart still goes out if the server is back within this window.
+const SLACK_ASSIST_GRACE_MINUTES = 30;
+
+const slackChannelSetting = (value = "") => projectText(value, 80).replace(/^#/, "").trim();
+const validSlackChannelSetting = (value = "") => !value || /^[CG][A-Z0-9]{6,}$/.test(value) || /^[a-z0-9][a-z0-9._-]*$/.test(value);
+
+function normalizeSlackAttendanceSettings(saved = {}) {
+  const d = SLACK_ATTENDANCE_DEFAULTS;
+  const messages = {};
+  for (const kind of SLACK_ATTENDANCE_KINDS) {
+    const source = saved.messages?.[kind] || {};
+    messages[kind] = {
+      team: source.team === undefined ? d.messages[kind].team : source.team !== false,
+      personal: source.personal === undefined ? d.messages[kind].personal : source.personal !== false,
+      hr: source.hr === undefined ? d.messages[kind].hr : source.hr !== false,
+    };
+  }
+  messages.report.responses = ["both", "employee", "hr", "off"].includes(saved.messages?.report?.responses) ? saved.messages.report.responses : d.messages.report.responses;
+  return {
+    enabled: saved.enabled === undefined ? d.enabled : saved.enabled !== false,
+    teamChannel: slackChannelSetting(saved.teamChannel) || d.teamChannel,
+    hrChannel: saved.hrChannel === undefined ? d.hrChannel : slackChannelSetting(saved.hrChannel),
+    personalDelivery: saved.personalDelivery === "ephemeral" ? "ephemeral" : "dm",
+    clockInAt: validEmployeeReminderTime(saved.clockInAt) || d.clockInAt,
+    reportAt: validEmployeeReminderTime(saved.reportAt) || d.reportAt,
+    clockOutAt: validEmployeeReminderTime(saved.clockOutAt) || d.clockOutAt,
+    clockOutRepeatMinutes: Math.min(60, Math.max(5, Number(saved.clockOutRepeatMinutes) || d.clockOutRepeatMinutes)),
+    clockOutUntil: validEmployeeReminderTime(saved.clockOutUntil) || d.clockOutUntil,
+    messages,
+    cleanup: {
+      enabled: saved.cleanup?.enabled === undefined ? d.cleanup.enabled : saved.cleanup.enabled !== false,
+      time: validEmployeeReminderTime(saved.cleanup?.time) || d.cleanup.time,
+      includeHr: Boolean(saved.cleanup?.includeHr),
+    },
+    morningRecap: { enabled: saved.morningRecap?.enabled === undefined ? d.morningRecap.enabled : saved.morningRecap.enabled !== false },
+    whatsappMirror: { dmr: saved.whatsappMirror?.dmr === undefined ? d.whatsappMirror.dmr : saved.whatsappMirror.dmr !== false },
+    leave: { enabled: saved.leave?.enabled === undefined ? d.leave.enabled : saved.leave.enabled !== false },
+    announcements: {
+      enabled: saved.announcements?.enabled === undefined ? d.announcements.enabled : saved.announcements.enabled !== false,
+      channel: slackChannelSetting(saved.announcements?.channel).toLowerCase() || d.announcements.channel,
+      departments: Array.isArray(saved.announcements?.departments)
+        ? [...new Set(saved.announcements.departments.map((item) => projectText(item, 80)).filter(Boolean))].slice(0, 30)
+        : d.announcements.departments,
+    },
+    updatedAt: saved.updatedAt || null,
+    updatedBy: saved.updatedBy || null,
+  };
+}
+
+let slackAttendanceSettingsCache = { at: 0, value: null };
+async function getSlackAttendanceSettings({ fresh = false } = {}) {
+  if (!fresh && slackAttendanceSettingsCache.value && Date.now() - slackAttendanceSettingsCache.at < 60000) return slackAttendanceSettingsCache.value;
+  const saved = await (await connectAuthDb()).collection("platformSettings").findOne({ _id: SLACK_ATTENDANCE_SETTINGS_ID });
+  const value = normalizeSlackAttendanceSettings(saved || {});
+  // A dry run exercises the HR view even before an HR channel is chosen.
+  if (SLACK_DRY_RUN && !value.hrChannel) value.hrChannel = "hr-channel-not-set";
+  slackAttendanceSettingsCache = { at: Date.now(), value };
+  return value;
+}
+
+async function saveSlackAttendanceSettings(input = {}, actor = null) {
+  const teamChannel = slackChannelSetting(input.teamChannel).toLowerCase();
+  const hrChannel = slackChannelSetting(input.hrChannel);
+  if (!teamChannel || !validSlackChannelSetting(teamChannel)) throw new Error("Enter the everyone channel's name, like all-juniper");
+  if (!validSlackChannelSetting(/^[cg][a-z0-9]{6,}$/i.test(hrChannel) ? hrChannel.toUpperCase() : hrChannel.toLowerCase())) throw new Error("Enter the HR channel's name, or its channel ID for a private channel");
+  for (const key of ["clockInAt", "reportAt", "clockOutAt", "clockOutUntil"]) {
+    if (!validEmployeeReminderTime(input[key])) throw new Error("Choose a valid time for every reminder");
+  }
+  if (input.clockOutUntil <= input.clockOutAt) throw new Error("Clock-out reminders must stop after they start");
+  if (input.cleanup && !validEmployeeReminderTime(input.cleanup.time)) throw new Error("Choose a valid clean-up time");
+  const announcementChannel = slackChannelSetting(input.announcements?.channel).toLowerCase();
+  if (input.announcements && (!announcementChannel || !validSlackChannelSetting(announcementChannel))) throw new Error("Enter the announcement channel's name, like announcements");
+  const normalized = normalizeSlackAttendanceSettings({
+    ...input,
+    teamChannel,
+    hrChannel: /^[cg][a-z0-9]{6,}$/i.test(hrChannel) ? hrChannel.toUpperCase() : hrChannel.toLowerCase(),
+  });
+  const { updatedAt, updatedBy, ...stored } = normalized;
+  await (await connectAuthDb()).collection("platformSettings").updateOne(
+    { _id: SLACK_ATTENDANCE_SETTINGS_ID },
+    { $set: { ...stored, updatedAt: new Date(), updatedBy: actor?.displayName || actor?.username || null } },
+    { upsert: true },
+  );
+  return getSlackAttendanceSettings({ fresh: true });
+}
+
+const slackAssistCollection = async () => (await connectAuthDb()).collection(slackCollectionName("slackAttendanceAssist"));
+const slackAssistDayId = (date) => `day:${date}`;
+const slackAssistMinutes = (hhmm = "00:00") => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+function istClockMinutes(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: IST_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value) % 24;
+  return hour * 60 + Number(parts.find((part) => part.type === "minute")?.value);
+}
+
+function istTimeLabel(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleTimeString("en-IN", { timeZone: IST_TIME_ZONE, hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase();
+}
+
+function slackAssistDayLabel(date) {
+  return new Date(`${date}T12:00:00+05:30`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: IST_TIME_ZONE });
+}
+
+function escapeSlack(value = "") {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// A user's Slack account is found by `slackEmail` when their Slack email differs from the
+// dashboard one, else by their dashboard email.
+const slackEmailFor = (user = {}) => projectText(user.slackEmail) || projectText(user.email);
+// Matched by email first, then by phone: the dashboard's phone/WhatsApp number against the phone
+// on the Slack profile (last ten digits), so people with no email on the dashboard still match.
+async function slackUserFor(user = {}) {
+  if (slackEmailFor(user)) {
+    const byEmail = await slackService.userByEmail(slackEmailFor(user)).catch(() => null);
+    if (byEmail) return byEmail;
+  }
+  const phone = slackPhoneKey(employeeReminderPhone(user));
+  if (phone.length !== 10) return null;
+  const members = await slackService.listMembers().catch(() => []);
+  const byPhone = members.find((member) => slackPhoneKey(member.profile?.phone) === phone);
+  if (byPhone) return byPhone;
+  // Dry run in "everyone" mode: show the reach as if this person were in Slack.
+  return SLACK_DRY_RUN === "everyone" ? { id: `PRETEND:phone:${phone}`, pretend: true } : null;
+}
+const slackUserName = (user = {}) => user.displayName || user.username || "Employee";
+const isBuiltInSuperAdminName = (user = {}) => /^super\s*admin$/i.test(String(slackUserName(user)).trim());
+const slackFirstName = (user = {}) => String(slackUserName(user)).trim().split(/\s+/)[0];
+const slackAttendanceLink = (action) => `${APP_PUBLIC_URL}/profile?attendance=${action}`;
+const slackReportLink = () => `${APP_PUBLIC_URL}/employee-daily-report`;
+const slackDuration = (minutes = 0) => `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+
+const slackTextSection = (text) => ({ type: "section", text: { type: "mrkdwn", text: String(text).slice(0, 2900) } });
+const slackContext = (text) => ({ type: "context", elements: [{ type: "mrkdwn", text: String(text).slice(0, 2900) }] });
+const slackListSection = (title, lines = [], empty = "") => slackTextSection(`*${title}*\n${lines.length ? lines.join("\n") : empty}`);
+const slackLinkButton = (text, url, actionId, primary = false) => ({ type: "button", ...(primary ? { style: "primary" } : {}), text: { type: "plain_text", text }, url, action_id: actionId });
+const slackButtons = (blockId, ...buttons) => ({ type: "actions", block_id: blockId, elements: buttons });
+
+// Sunday or a company holiday: no reminders at all.
+async function slackAssistDayOff(db, date) {
+  if (new Date(`${date}T12:00:00+05:30`).getUTCDay() === 0) return "Sunday";
+  if (await db.collection("hrNoWorkingDays").findOne({ date }, { projection: { _id: 1 } })) return "No working day";
+  return "";
+}
+
+async function slackAssistOnLeave(db, date) {
+  const leaves = await db.collection("hrLeaveRequests")
+    .find({ status: "approved", startDate: { $lte: date }, endDate: { $gte: date } }, { projection: { userId: 1 } })
+    .toArray();
+  return new Set(leaves.map((leave) => String(leave.userId)));
+}
+
+// People expected to clock in: active, with attendance access, not on leave. Super Admins get
+// every menu, so they count only if they have actually clocked in this past month.
+async function slackAttendanceExpected(db, date) {
+  const users = await db.collection("users").find({ isActive: { $ne: false }, blacklisted: { $ne: true } }).limit(500).toArray();
+  const disabledModules = await getDisabledModules();
+  const since = istDateKey(new Date(new Date(`${date}T12:00:00+05:30`).getTime() - 30 * 86400000));
+  const recentClockers = new Set((await db.collection("hrAttendanceRecords").distinct("userId", { date: { $gte: since } })).map(String));
+  const onLeave = await slackAssistOnLeave(db, date);
+  const roles = new Map();
+  const expected = [];
+  for (const user of users) {
+    if (onLeave.has(String(user._id))) continue;
+    const roleKey = String(user.roleId || "");
+    if (!roles.has(roleKey)) roles.set(roleKey, await getRole(user.roleId).catch(() => null));
+    const authUser = sanitizeUser(user, roles.get(roleKey));
+    if (!hasMenuAccess({ authUser, disabledModules }, "hr-attendance")) continue;
+    if (authUser.isSuperAdmin && !recentClockers.has(String(user._id))) continue;
+    expected.push(user);
+  }
+  return expected;
+}
+
+async function slackReportExpected(db, date) {
+  const onLeave = await slackAssistOnLeave(db, date);
+  const users = await db.collection("users").find({
+    employeeDailySpreadsheetId: { $exists: true, $ne: "" },
+    isActive: { $ne: false },
+    blacklisted: { $ne: true },
+  }).limit(500).toArray();
+  // The built-in "Super Admin" account is never a person to chase.
+  return users.filter((user) => !isEmployeeDailyReportExempt(user) && !onLeave.has(String(user._id)) && !isBuiltInSuperAdminName(user));
+}
+
+async function slackMentions(users = []) {
+  const labels = await Promise.all(users.map(async (user) => {
+    const slackUser = await slackUserFor(user);
+    return slackUser ? `<@${slackUser.id}>` : escapeSlack(slackUserName(user));
+  }));
+  return labels.join("  ");
+}
+
+// Claims a one-time send (a channel post, or one person's note), so two servers, a repeated
+// tick, or "Send now" can't send it twice. `condition` says when it is still free.
+async function claimSlackAssist(id, condition = {}, set = {}) {
+  try {
+    await (await slackAssistCollection()).updateOne({ _id: id, ...condition }, { $set: { updatedAt: new Date(), ...set } }, { upsert: true });
+    return true;
+  } catch (error) {
+    if (error?.code === 11000) return false;
+    throw error;
+  }
+}
+
+/* Team channel: the reminder and its button, nothing about anyone */
+
+function slackTeamMessage(kind, date) {
+  const day = slackAssistDayLabel(date);
+  if (kind === "clockIn") {
+    return {
+      text: `Good morning team! Please mark your attendance for ${day}.`,
+      blocks: [
+        slackTextSection(`:sunrise: *Good morning team!* Please mark your attendance for *${day}*.`),
+        slackButtons("attendance_clock_in", slackLinkButton("Clock in", slackAttendanceLink("clock-in"), "link:attendance-clock-in", true)),
+        slackContext("Opens the dashboard and clocks you in (allow location if you're at the office)."),
+      ],
+    };
+  }
+  if (kind === "report") {
+    return {
+      text: `Time to fill today's daily report (${day}).`,
+      blocks: [
+        slackTextSection(`:memo: *Time to fill today's daily report* (${day}).`),
+        slackButtons("report_reminder", slackLinkButton("Fill today's report", slackReportLink(), "link:report", true)),
+      ],
+    };
+  }
+  return {
+    text: `It's time to clock out (${day}).`,
+    blocks: [
+      slackTextSection(`:alarm_clock: *It's time to clock out.* Please file today's report, then clock out before you leave. (${day})`),
+      slackButtons("attendance_clock_out",
+        slackLinkButton("Clock out", slackAttendanceLink("clock-out"), "link:attendance-clock-out", true),
+        slackLinkButton("Fill today's report", slackReportLink(), "link:report-before-clock-out")),
+    ],
+  };
+}
+
+/* HR channel: the full picture, rebuilt from the database on every edit */
+
+async function slackHrClockInMessage(db, date) {
+  const expected = await slackAttendanceExpected(db, date);
+  const records = await db.collection("hrAttendanceRecords").find({ date, clockInAt: { $ne: null } }).sort({ clockInAt: 1 }).toArray();
+  const inIds = new Set(records.map((record) => String(record.userId)));
+  const pending = expected.filter((user) => !inIds.has(String(user._id)));
+  const done = records.map((record) => `:white_check_mark: ${escapeSlack(record.employeeName || "Employee")} — ${istTimeLabel(record.clockInAt)}${record.workMode === "remote" ? " (remote)" : ""}`);
+  return {
+    text: `Attendance ${slackAssistDayLabel(date)}: ${done.length} clocked in, ${pending.length} not yet.`,
+    blocks: [
+      slackTextSection(`:busts_in_silhouette: *Attendance · ${slackAssistDayLabel(date)}*  (HR view)`),
+      slackListSection(`Clocked in (${done.length})`, done, "_Nobody yet_"),
+      pending.length ? slackTextSection(`*Not clocked in yet (${pending.length})*\n${pending.map((user) => escapeSlack(slackUserName(user))).join(", ")}`) : slackContext(":tada: Everyone is in."),
+      slackContext("Updates live as people clock in."),
+    ],
+  };
+}
+
+async function slackHrReportMessage(db, date) {
+  const expected = await slackReportExpected(db, date);
+  const reports = await db.collection("employeeDailyReports")
+    .find({ reportDate: date, userId: { $in: expected.map((user) => String(user._id)) } })
+    .sort({ submittedAt: 1 })
+    .toArray();
+  const filedIds = new Set(reports.map((report) => String(report.userId)));
+  const pending = expected.filter((user) => !filedIds.has(String(user._id)));
+  const done = reports.map((report) => `:white_check_mark: ${escapeSlack(report.employeeName || "Employee")} — ${istTimeLabel(report.submittedAt)}`);
+  return {
+    text: `Daily reports ${slackAssistDayLabel(date)}: ${done.length} filed, ${pending.length} not yet.`,
+    blocks: [
+      slackTextSection(`:memo: *Daily reports · ${slackAssistDayLabel(date)}*  (HR view)`),
+      slackListSection(`Filed (${done.length})`, done, "_Nobody yet_"),
+      pending.length ? slackTextSection(`*Not filed yet (${pending.length})*\n${pending.map((user) => escapeSlack(slackUserName(user))).join(", ")}`) : slackContext(":tada: Everyone has filed."),
+      slackContext("Each report is posted in this thread once it's filed."),
+    ],
+  };
+}
+
+async function slackHrClockOutMessage(db, date) {
+  const records = await db.collection("hrAttendanceRecords").find({ date, clockInAt: { $ne: null } }).sort({ clockOutAt: 1 }).toArray();
+  const open = records.filter((record) => !record.clockOutAt);
+  const closed = records.filter((record) => record.clockOutAt);
+  const done = closed.map((record) => `:white_check_mark: ${escapeSlack(record.employeeName || "Employee")} — ${istTimeLabel(record.clockOutAt)} (${slackDuration(Number(record.workMinutes) || 0)})`);
+  const stillIn = open.map((record) => `:hourglass_flowing_sand: ${escapeSlack(record.employeeName || "Employee")} — in since ${istTimeLabel(record.clockInAt)}`);
+  return {
+    text: `Clock-out ${slackAssistDayLabel(date)}: ${closed.length} out, ${open.length} still in.`,
+    blocks: [
+      slackTextSection(`:alarm_clock: *Clock-out · ${slackAssistDayLabel(date)}*  (HR view)`),
+      slackListSection(`Still clocked in (${open.length})`, stillIn, "_Nobody_ :tada:"),
+      slackListSection(`Clocked out (${closed.length})`, done, "_Nobody yet_"),
+      slackContext("Updates live. Everyone still clocked in is reminded privately every few minutes."),
+    ],
+  };
+}
+
+const SLACK_HR_BUILDERS = { clockIn: slackHrClockInMessage, report: slackHrReportMessage, clockOut: slackHrClockOutMessage };
+
+function slackReportItemLines(items = []) {
+  return items.map((item, index) => {
+    const meta = [projectText(item.site), projectText(item.category), projectText(item.status), projectText(item.involvement)].filter(Boolean).map(escapeSlack);
+    const description = escapeSlack(projectText(item.description)).replace(/\s+/g, " ").slice(0, 600);
+    return `*${index + 1}.* ${meta.length ? `${meta.join(" · ")}\n` : ""}${description}`;
+  });
+}
+
+// Section text is capped at 3000 characters, so long lists are spread over several sections.
+function slackSectionsFromLines(heading, lines = []) {
+  const sections = [];
+  let current = heading;
+  for (const line of lines) {
+    if (current.length + line.length + 2 > 2900) {
+      sections.push(current);
+      current = "";
+    }
+    current = current ? `${current}\n\n${line}` : line;
+  }
+  if (current) sections.push(current);
+  return sections.map((text) => slackTextSection(text));
+}
+
+// `own` words it to the employee ("Your daily report"); otherwise it carries their name.
+function slackReportResponsesMessage({ report, edited = false, own = false }) {
+  const today = report.taskItems || [];
+  const tomorrow = report.waitingTaskItems || [];
+  const name = report.employeeName || "Employee";
+  const title = own ? "Your daily report" : `${escapeSlack(name)}'s daily report`;
+  const blocks = [
+    slackTextSection(`${own ? ":white_check_mark: " : ""}*${title}* · ${slackAssistDayLabel(report.reportDate)}`),
+    slackContext(`${escapeSlack(report.department || "")} · ${edited ? "updated" : "filed"} ${istTimeLabel(edited ? report.updatedAt : report.submittedAt)}`),
+    ...slackSectionsFromLines(`*Today's work (${today.length})*`, slackReportItemLines(today)),
+  ];
+  if (tomorrow.length) {
+    blocks.push({ type: "divider" });
+    blocks.push(...slackSectionsFromLines(`*Tomorrow's plan (${tomorrow.length})*`, slackReportItemLines(tomorrow)));
+  }
+  if (projectText(report.note)) blocks.push(slackTextSection(`*Note*\n${escapeSlack(projectText(report.note))}`));
+  return {
+    text: `${own ? "Your" : `${name}'s`} daily report: ${today.length} task${today.length === 1 ? "" : "s"} today, ${tomorrow.length} planned for tomorrow.`,
+    blocks: blocks.slice(0, 50),
+  };
+}
+
+/* Personal: one employee's own status, only to them */
+
+const slackPersonal = {
+  clockInDue: (user, date) => ({
+    text: `You haven't clocked in yet today (${slackAssistDayLabel(date)}).`,
+    blocks: [
+      slackTextSection(`:wave: Hi ${escapeSlack(slackFirstName(user))}, you haven't clocked in yet today (*${slackAssistDayLabel(date)}*).`),
+      slackButtons("attendance_clock_in", slackLinkButton("Clock in", slackAttendanceLink("clock-in"), "link:attendance-clock-in", true)),
+    ],
+  }),
+  clockedIn: (record) => ({
+    text: `You clocked in at ${istTimeLabel(record.clockInAt)}.`,
+    blocks: [slackTextSection(`:white_check_mark: *You clocked in at ${istTimeLabel(record.clockInAt)}* · ${slackAssistDayLabel(record.date)}${record.workMode === "remote" ? " (remote)" : ""}`)],
+  }),
+  reportDue: (user, date) => ({
+    text: `Your daily report for ${slackAssistDayLabel(date)} isn't in yet.`,
+    blocks: [
+      slackTextSection(`:memo: Hi ${escapeSlack(slackFirstName(user))}, your daily report for *${slackAssistDayLabel(date)}* isn't in yet.`),
+      slackButtons("report_reminder", slackLinkButton("Fill today's report", slackReportLink(), "link:report", true)),
+    ],
+  }),
+  clockOutDue: (user, record, { count, reportDue }) => ({
+    text: count > 1 ? `Reminder ${count}: you're still clocked in.` : "It's time to clock out.",
+    blocks: [
+      slackTextSection(`${count > 1 ? `:alarm_clock: *Reminder ${count}:* you're still clocked in` : ":alarm_clock: *It's time to clock out*"}, ${escapeSlack(slackFirstName(user))}. You clocked in at *${istTimeLabel(record.clockInAt)}*.`),
+      ...(reportDue ? [slackTextSection(":memo: Your daily report isn't in yet; file it first, then clock out.")] : []),
+      slackButtons("attendance_clock_out",
+        slackLinkButton("Clock out", slackAttendanceLink("clock-out"), "link:attendance-clock-out", !reportDue),
+        ...(reportDue ? [slackLinkButton("Fill today's report", slackReportLink(), "link:report-before-clock-out", true)] : [])),
+    ],
+  }),
+  clockedOut: (record) => ({
+    text: `You clocked out at ${istTimeLabel(record.clockOutAt)}.`,
+    blocks: [slackTextSection(`:white_check_mark: *You clocked out at ${istTimeLabel(record.clockOutAt)}* · in at ${istTimeLabel(record.clockInAt)}, worked ${slackDuration(Number(record.workMinutes) || 0)}.`)],
+  }),
+};
+
+// "Only visible to you" in the team channel, or a DM. Slack shows an in-channel private note
+// only while the person has Slack open, and it can't be edited later, so if Slack refuses it
+// (not in the channel, deactivated…) it falls back to a DM.
+async function sendSlackPersonal(settings, user, message, { date = attendanceDateKey(), kind = "" } = {}) {
+  const slackUser = await slackUserFor(user);
+  if (!slackUser) return { status: "not-in-slack" };
+  return sendSlackPersonalTo(settings, slackUser.id, message, { date, kind });
+}
+
+async function sendSlackPersonalTo(settings, slackUserId, message, { date = attendanceDateKey(), kind = "" } = {}) {
+  if (settings.personalDelivery === "ephemeral") {
+    // A missing channel (not created yet) also falls back to a DM.
+    const channel = await slackService.resolveChannel(settings.teamChannel).catch(() => "");
+    if (channel) {
+      try {
+        await slackService.postEphemeral({ channel, user: slackUserId, ...message });
+        return { status: "sent", via: "ephemeral" };
+      } catch (error) {
+        if (!["user_not_in_channel", "channel_not_found", "not_in_channel"].includes(error.slackError)) throw error;
+      }
+    }
+  }
+  const posted = await slackService.sendDm(slackUserId, message);
+  await logSlackPost({ date, scope: "personal", kind, channel: posted.channel, ts: posted.ts });
+  return { status: "sent", via: "dm" };
+}
+
+/* Sending, per reminder */
+
+async function postSlackTeamReminder(settings, kind, date, force) {
+  if (!settings.messages[kind].team) return null;
+  const claimed = await claimSlackAssist(slackAssistDayId(date), force ? {} : { [`team.${kind}`]: { $exists: false } }, { date, [`team.${kind}`]: new Date() });
+  if (!claimed) return "already posted";
+  try {
+    const posted = await slackService.postMessage({ channel: await slackService.resolveChannel(settings.teamChannel), ...slackTeamMessage(kind, date) });
+    await logSlackPost({ date, scope: "team", kind, channel: posted.channel, ts: posted.ts });
+    return "posted";
+  } catch (error) {
+    // A missing channel mustn't stop everyone's private notes; free the slot for the next tick.
+    await (await slackAssistCollection()).updateOne({ _id: slackAssistDayId(date) }, { $unset: { [`team.${kind}`]: "" } }).catch(() => {});
+    console.error(`Slack ${kind} team post failed:`, error.message);
+    return `failed: ${error.message}`;
+  }
+}
+
+async function postSlackHrReminder(settings, kind, date, force) {
+  if (!settings.messages[kind].hr || !settings.hrChannel) return null;
+  const claimed = await claimSlackAssist(slackAssistDayId(date), force ? {} : { [`hr.${kind}.claimedAt`]: { $exists: false } }, { date, [`hr.${kind}.claimedAt`]: new Date() });
+  if (!claimed) return "already posted";
+  const db = await connectAuthDb();
+  let posted;
+  try {
+    const channel = await slackService.resolveChannel(settings.hrChannel);
+    posted = await slackService.postMessage({ channel, ...(await SLACK_HR_BUILDERS[kind](db, date)) });
+  } catch (error) {
+    await (await slackAssistCollection()).updateOne({ _id: slackAssistDayId(date) }, { $unset: { [`hr.${kind}.claimedAt`]: "" } }).catch(() => {});
+    console.error(`Slack ${kind} HR post failed:`, error.message);
+    return `failed: ${error.message}`;
+  }
+  await logSlackPost({ date, scope: "hr", kind, channel: posted.channel, ts: posted.ts });
+  await (await slackAssistCollection()).updateOne({ _id: slackAssistDayId(date) }, { $set: { [`hr.${kind}.channel`]: posted.channel, [`hr.${kind}.ts`]: posted.ts, ...(kind === "report" ? { "hr.report.replies": {} } : {}) } });
+  if (kind === "report" && ["both", "hr"].includes(settings.messages.report.responses)) {
+    // Reports filed before the reminder went out go into its thread now.
+    const filed = await db.collection("employeeDailyReports").find({ reportDate: date }).sort({ submittedAt: 1 }).toArray();
+    for (const report of filed) await postSlackHrReportReply(report).catch((error) => console.error("Slack HR report reply failed:", error.message));
+  }
+  return "posted";
+}
+
+async function sendSlackClockInReminders({ date = attendanceDateKey(), force = false } = {}) {
+  const settings = await getSlackAttendanceSettings();
+  const db = await connectAuthDb();
+  const dayOff = await slackAssistDayOff(db, date);
+  if (dayOff && !force) return { kind: "clockIn", date, skipped: dayOff };
+  const result = { kind: "clockIn", date, team: await postSlackTeamReminder(settings, "clockIn", date, force), hr: await postSlackHrReminder(settings, "clockIn", date, force), personal: 0, notInSlack: [] };
+  if (settings.messages.clockIn.personal) {
+    const clockedIn = new Set((await db.collection("hrAttendanceRecords").distinct("userId", { date, clockInAt: { $ne: null } })).map(String));
+    for (const user of await slackAttendanceExpected(db, date)) {
+      if (clockedIn.has(String(user._id))) continue;
+      if (!await claimSlackAssist(`personal:clockIn:${user._id}:${date}`, force ? {} : { sentAt: { $exists: false } }, { sentAt: new Date() })) continue;
+      const sent = await sendSlackPersonal(settings, user, slackPersonal.clockInDue(user, date), { date, kind: "clockIn" }).catch((error) => ({ status: "failed", error: error.message }));
+      if (sent.status === "sent") result.personal += 1;
+      else if (sent.status === "not-in-slack") result.notInSlack.push(slackUserName(user));
+    }
+  }
+  return result;
+}
+
+async function sendSlackReportReminderPost({ date = employeeReportToday(), force = false } = {}) {
+  const settings = await getSlackAttendanceSettings();
+  const db = await connectAuthDb();
+  const dayOff = await slackAssistDayOff(db, date);
+  if (dayOff && !force) return { kind: "report", date, skipped: dayOff };
+  const result = { kind: "report", date, team: await postSlackTeamReminder(settings, "report", date, force), hr: await postSlackHrReminder(settings, "report", date, force), personal: 0, notInSlack: [] };
+  if (settings.messages.report.personal) {
+    const expected = await slackReportExpected(db, date);
+    const filed = new Set((await db.collection("employeeDailyReports").distinct("userId", { reportDate: date, userId: { $in: expected.map((user) => String(user._id)) } })).map(String));
+    for (const user of expected) {
+      if (filed.has(String(user._id))) continue;
+      if (!await claimSlackAssist(`personal:report:${user._id}:${date}`, force ? {} : { sentAt: { $exists: false } }, { sentAt: new Date() })) continue;
+      const sent = await sendSlackPersonal(settings, user, slackPersonal.reportDue(user, date), { date, kind: "report" }).catch((error) => ({ status: "failed", error: error.message }));
+      if (sent.status === "sent") result.personal += 1;
+      else if (sent.status === "not-in-slack") result.notInSlack.push(slackUserName(user));
+    }
+  }
+  return result;
+}
+
+// The team and HR posts go once; the private note goes to each person still clocked in, again
+// every clockOutRepeatMinutes until they clock out.
+async function sendSlackClockOutReminders({ date = attendanceDateKey(), force = false } = {}) {
+  const settings = await getSlackAttendanceSettings();
+  const db = await connectAuthDb();
+  const open = await db.collection("hrAttendanceRecords").find({ date, clockInAt: { $ne: null }, clockOutAt: { $in: [null] } }).toArray();
+  if (!open.length && !force) return { kind: "clockOut", date, skipped: "Nobody is clocked in" };
+  const result = { kind: "clockOut", date, team: await postSlackTeamReminder(settings, "clockOut", date, force), hr: await postSlackHrReminder(settings, "clockOut", date, force), personal: 0, notInSlack: [] };
+  if (!settings.messages.clockOut.personal || !open.length) return result;
+  const users = await db.collection("users").find({ _id: { $in: open.map((record) => record.userId) } }).toArray();
+  const usersById = new Map(users.map((user) => [String(user._id), user]));
+  const filed = new Set((await db.collection("employeeDailyReports").distinct("userId", { reportDate: date, userId: { $in: users.map((user) => String(user._id)) } })).map(String));
+  const now = new Date();
+  const repeatMs = settings.clockOutRepeatMinutes * 60000;
+  for (const record of open) {
+    const user = usersById.get(String(record.userId));
+    if (!user || user.isActive === false || user.blacklisted) continue;
+    const id = `personal:clockOut:${user._id}:${date}`;
+    // 30 seconds of leeway so a tick that lands a moment early still counts as on time.
+    const due = force ? {} : { $or: [{ lastSentAt: { $exists: false } }, { lastSentAt: { $lte: new Date(now.getTime() - repeatMs + 30000) } }] };
+    if (!await claimSlackAssist(id, due, { lastSentAt: now })) continue;
+    const entry = await (await slackAssistCollection()).findOneAndUpdate({ _id: id }, { $inc: { count: 1 } }, { returnDocument: "after" });
+    const reportDue = Boolean(user.employeeDailySpreadsheetId) && !isEmployeeDailyReportExempt(user) && !filed.has(String(user._id));
+    const sent = await sendSlackPersonal(settings, user, slackPersonal.clockOutDue(user, record, { count: entry?.count || 1, reportDue }), { date, kind: "clockOut" }).catch((error) => ({ status: "failed", error: error.message }));
+    if (sent.status === "sent") result.personal += 1;
+    else if (sent.status === "not-in-slack") result.notInSlack.push(slackUserName(user));
+  }
+  return result;
+}
+
+/* Keeping things in step after someone acts */
+
+async function refreshSlackHrPosts(date) {
+  const entry = await (await slackAssistCollection()).findOne({ _id: slackAssistDayId(date) });
+  if (!entry?.hr) return;
+  const db = await connectAuthDb();
+  const edits = SLACK_ATTENDANCE_KINDS
+    .filter((kind) => entry.hr[kind]?.ts)
+    .map((kind) => SLACK_HR_BUILDERS[kind](db, date).then((message) => slackService.updateMessage({ channel: entry.hr[kind].channel, ts: entry.hr[kind].ts, ...message })));
+  for (const result of await Promise.allSettled(edits)) {
+    if (result.status === "rejected") console.error("Slack HR post update failed:", result.reason?.message);
+  }
+}
+
+// After a clock in/out from the dashboard: tell the employee privately, and update HR's lists.
+async function syncSlackAttendanceMessages({ date, userId = "", event = "" }) {
+  if (!slackService.configured) return;
+  const settings = await getSlackAttendanceSettings();
+  if (!settings.enabled) return;
+  await refreshSlackHrPosts(date);
+  const kind = event === "clock-in" ? "clockIn" : event === "clock-out" ? "clockOut" : "";
+  if (!kind || !userId || !settings.messages[kind].personal) return;
+  const db = await connectAuthDb();
+  const [user, record] = await Promise.all([
+    db.collection("users").findOne({ _id: new ObjectId(String(userId)) }),
+    db.collection("hrAttendanceRecords").findOne({ userId: new ObjectId(String(userId)), date }),
+  ]);
+  if (!user || !record) return;
+  await sendSlackPersonal(settings, user, kind === "clockIn" ? slackPersonal.clockedIn(record) : slackPersonal.clockedOut(record), { date, kind });
+}
+
+async function postSlackHrReportReply(report, { edited = false } = {}) {
+  const collection = await slackAssistCollection();
+  const entry = await collection.findOne({ _id: slackAssistDayId(report.reportDate) });
+  const post = entry?.hr?.report;
+  if (!post?.ts) return;
+  const userId = String(report.userId);
+  const message = slackReportResponsesMessage({ report, edited });
+  if (post.replies?.[userId]) {
+    try {
+      await slackService.updateMessage({ channel: post.channel, ts: post.replies[userId], ...message });
+      return;
+    } catch (error) {
+      if (error.slackError !== "message_not_found") throw error;
+    }
+  }
+  const reply = await slackService.postMessage({ channel: post.channel, thread_ts: post.ts, ...message });
+  await logSlackPost({ date: report.reportDate, scope: "hr", kind: "report-reply", channel: reply.channel, ts: reply.ts });
+  await collection.updateOne({ _id: entry._id }, { $set: { [`hr.report.replies.${userId}`]: reply.ts } });
+}
+
+// After a report is filed or edited: the employee gets their own responses privately, HR gets
+// them in the report thread (whichever the settings allow), and HR's lists update.
+async function postSlackReportResponses({ report, edited = false }) {
+  if (!slackService.configured) return;
+  const settings = await getSlackAttendanceSettings();
+  if (!settings.enabled) return;
+  const responses = settings.messages.report.responses;
+  const db = await connectAuthDb();
+  if (["both", "employee"].includes(responses) && ObjectId.isValid(String(report.userId))) {
+    const user = await db.collection("users").findOne({ _id: new ObjectId(String(report.userId)) });
+    if (user) await sendSlackPersonal(settings, user, slackReportResponsesMessage({ report, edited, own: true }), { date: report.reportDate, kind: "report" }).catch((error) => console.error("Slack own report failed:", error.message));
+  }
+  if (["both", "hr"].includes(responses)) await postSlackHrReportReply(report, { edited }).catch((error) => console.error("Slack HR report reply failed:", error.message));
+  await refreshSlackHrPosts(report.reportDate);
+}
+
+/* Schedule */
+
+// One tick a minute, Mon–Sat. Every send is claimed, so a repeated tick or a restart mid-window
+// never sends twice.
+let slackAssistTickRunning = false;
+async function slackAssistTick(now = new Date()) {
+  if (slackAssistTickRunning) return;
+  slackAssistTickRunning = true;
+  try {
+    const settings = await getSlackAttendanceSettings();
+    if (!settings.enabled) return;
+    const minutes = istClockMinutes(now);
+    const inWindow = (start) => minutes >= slackAssistMinutes(start) && minutes < slackAssistMinutes(start) + SLACK_ASSIST_GRACE_MINUTES;
+    const runs = [];
+    const today = attendanceDateKey(now);
+    if (settings.cleanup.enabled && minutes >= slackAssistMinutes(settings.cleanup.time)
+      && await claimSlackAssist(`cleanup:${today}`, { doneAt: { $exists: false } }, { doneAt: new Date() })) {
+      runs.push(cleanUpSlackDailyPosts({ today, settings }).then((result) => ({ kind: "cleanup", ...result })));
+    }
+    // The look-back goes first so it lands above today's clock-in reminder.
+    if (inWindow(settings.clockInAt)) runs.push(sendSlackMorningRecaps().then((recap) => sendSlackClockInReminders().then((clockIn) => ({ ...clockIn, recap }))));
+    if (inWindow(settings.reportAt)) runs.push(sendSlackReportReminderPost());
+    if (minutes >= slackAssistMinutes(settings.clockOutAt) && minutes < slackAssistMinutes(settings.clockOutUntil)) {
+      const db = await connectAuthDb();
+      if (!(await slackAssistDayOff(db, attendanceDateKey()))) runs.push(sendSlackClockOutReminders());
+    }
+    for (const result of await Promise.allSettled(runs)) {
+      if (result.status === "rejected") console.error("Slack attendance reminder error:", result.reason?.message);
+    }
+  } finally {
+    slackAssistTickRunning = false;
+  }
+}
+
+function startSlackAttendanceAssistant() {
+  if (!SLACK_ASSIST_RUNTIME) return;
+  cron.schedule("* * * * *", () => {
+    slackAssistTick().catch((error) => console.error("Slack attendance reminder tick error:", error.message));
+  }, { timezone: "Asia/Kolkata" });
+  console.log("Slack attendance reminders scheduled (times and audiences on the Module Control page)");
+}
+
+/* Settings (Module Control) */
+
+async function slackAttendanceStatus(settings) {
+  const status = { slackConfigured: slackService.configured, scheduleRunning: SLACK_ASSIST_RUNTIME };
+  if (!slackService.configured) return status;
+  const describe = async (value) => {
+    if (!value) return null;
+    try {
+      const id = await slackService.resolveChannel(value);
+      return { name: /^[CG][A-Z0-9]{6,}$/.test(value) ? value : `#${value}`, id };
+    } catch (error) {
+      return { name: value, error: error.message };
+    }
+  };
+  status.teamChannel = await describe(settings.teamChannel);
+  status.hrChannel = await describe(settings.hrChannel);
+  const db = await connectAuthDb();
+  const date = attendanceDateKey();
+  const expected = await slackAttendanceExpected(db, date);
+  const inSlack = await Promise.all(expected.map((user) => slackUserFor(user)));
+  const missing = expected.filter((_, index) => !inSlack[index]);
+  status.employees = {
+    total: expected.length,
+    inSlack: inSlack.filter(Boolean).length,
+    missing: missing.map(slackUserName),
+    // No email and no 10-digit phone on the dashboard account: Slack can never match them.
+    noContact: missing.filter((user) => !slackEmailFor(user) && slackPhoneKey(employeeReminderPhone(user)).length !== 10).map(slackUserName),
+    noEmail: missing.filter((user) => !slackEmailFor(user)).map(slackUserName),
+  };
+  // Who should be in the HR channel: everyone the dashboard lets manage HR.
+  const users = await db.collection("users").find({ isActive: { $ne: false }, blacklisted: { $ne: true } }).limit(500).toArray();
+  const roles = new Map();
+  const hrPeople = [];
+  for (const user of users) {
+    const roleKey = String(user.roleId || "");
+    if (!roles.has(roleKey)) roles.set(roleKey, await getRole(user.roleId).catch(() => null));
+    const authUser = sanitizeUser(user, roles.get(roleKey));
+    if (isBuiltInSuperAdminName(user)) continue;
+    if (authUser.isSuperAdmin || authUser.privileges.includes("manage_hr")) hrPeople.push({ name: slackUserName(user), inSlack: Boolean(await slackUserFor(user)) });
+  }
+  status.hrPeople = hrPeople;
+  const departments = new Set(EMPLOYEE_REPORT_OPTIONS.departments || []);
+  for (const user of users) if (projectText(user.department) && !/^super\s*admin$/i.test(projectText(user.department))) departments.add(projectText(user.department));
+  status.departments = [...departments].sort((a, b) => a.localeCompare(b));
+  status.announcementChannel = await describe(settings.announcements.channel);
+  return status;
+}
+
+app.get("/slack/overview", requireSuperAdmin, async (req, res) => {
+  try {
+    const db = await connectAuthDb();
+    const date = attendanceDateKey();
+    const monthStart = new Date(`${date.slice(0, 7)}-01T00:00:00+05:30`);
+    const [posts, pendingLeave, announcementsThisMonth, cleanup] = await Promise.all([
+      db.collection(slackCollectionName("slackAssistPosts")).aggregate([
+        { $match: { date } },
+        { $group: { _id: { scope: "$scope", kind: "$kind" }, count: { $sum: 1 } } },
+      ]).toArray(),
+      db.collection(slackCollectionName("slackLeaveCards")).countDocuments({ status: "pending" }),
+      db.collection("announcements").countDocuments({ source: "slack", createdAt: { $gte: monthStart } }),
+      db.collection(slackCollectionName("slackAttendanceAssist")).findOne({ _id: `cleanup:${date}` }),
+    ]);
+    const byScope = { team: 0, personal: 0, hr: 0 };
+    const byKind = {};
+    for (const row of posts) {
+      byScope[row._id.scope] = (byScope[row._id.scope] || 0) + row.count;
+      const kind = String(row._id.kind || "other").split(":")[0].replace("report-reply", "report");
+      byKind[kind] = (byKind[kind] || 0) + row.count;
+    }
+    res.json({ date, sentToday: byScope, byKind, pendingLeave, announcementsThisMonth, cleanedAt: cleanup?.doneAt || null });
+  } catch (error) {
+    console.error("Slack overview error:", error);
+    res.status(500).json({ error: error.message || "Could not load the Slack overview" });
+  }
+});
+
+app.get("/slack/attendance/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const settings = await getSlackAttendanceSettings({ fresh: true });
+    res.json({ settings, status: await slackAttendanceStatus(settings) });
+  } catch (error) {
+    console.error("Slack attendance settings load error:", error);
+    res.status(500).json({ error: error.message || "Could not load Slack attendance settings" });
+  }
+});
+
+app.put("/slack/attendance/settings", requireSuperAdmin, async (req, res) => {
+  try {
+    const settings = await saveSlackAttendanceSettings(req.body || {}, req.authUser);
+    addActivityLog({ req, action: "Updated Slack attendance reminders", target: `#${settings.teamChannel}`, details: { hrChannel: settings.hrChannel, personalDelivery: settings.personalDelivery } });
+    res.json({ settings, status: await slackAttendanceStatus(settings) });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not save Slack attendance settings" });
+  }
+});
+
+// Sends one reminder now, outside its time, to every audience it is set to reach.
+app.post("/slack/attendance/send-now", requireSuperAdmin, async (req, res) => {
+  try {
+    if (!slackService.configured) return res.status(400).json({ error: "Slack is not configured" });
+    const senders = {
+      clockIn: sendSlackClockInReminders,
+      report: sendSlackReportReminderPost,
+      clockOut: sendSlackClockOutReminders,
+      recap: sendSlackMorningRecaps,
+      cleanup: () => cleanUpSlackDailyPosts(),
+    };
+    const kind = projectText(req.body?.kind);
+    if (!senders[kind]) return res.status(400).json({ error: "kind must be clockIn, report, clockOut, recap or cleanup" });
+    const result = await senders[kind]({ force: true });
+    addActivityLog({ req, action: `Sent Slack ${kind} reminder now`, target: attendanceDateKey(), details: result });
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error("Slack attendance send-now error:", error);
+    res.status(500).json({ error: error.message || "Could not send" });
+  }
+});
+
+/* ───────── Slack: post log and the midnight clean-up ───────── */
+
+// Every daily post (team, personal DM, HR) is logged so the day can be cleared after midnight.
+// "Only visible to you" notes need no clean-up: Slack drops them by itself.
+const slackPostLog = async () => (await connectAuthDb()).collection(slackCollectionName("slackAssistPosts"));
+
+async function logSlackPost({ date, scope, kind, channel, ts }) {
+  if (!channel || !ts) return;
+  await (await slackPostLog()).insertOne({ date, scope, kind, channel, ts, createdAt: new Date() }).catch((error) => console.error("Slack post log failed:", error.message));
+}
+
+// Deletes the daily posts of every day before `today`: the everyone channel and personal
+// notes, plus the HR channel when settings.cleanup.includeHr is on.
+async function cleanUpSlackDailyPosts({ today = attendanceDateKey(), settings = null } = {}) {
+  const config = settings || await getSlackAttendanceSettings();
+  const scopes = ["team", "personal", ...(config.cleanup.includeHr ? ["hr"] : [])];
+  const posts = await (await slackPostLog()).find({ date: { $lt: today }, scope: { $in: scopes }, deletedAt: { $exists: false } }).limit(2000).toArray();
+  const summary = { deleted: 0, gone: 0, failed: 0 };
+  for (const post of posts) {
+    try {
+      await slackService.api("chat.delete", { channel: post.channel, ts: post.ts });
+      summary.deleted += 1;
+    } catch (error) {
+      if (error.slackError !== "message_not_found") {
+        summary.failed += 1;
+        console.error("Slack clean-up delete failed:", error.message);
+        continue;
+      }
+      summary.gone += 1;
+    }
+    await (await slackPostLog()).updateOne({ _id: post._id }, { $set: { deletedAt: new Date() } });
+  }
+  return summary;
+}
+
+/* ───────── Slack: the morning look-back at the last working day ───────── */
+
+async function slackPreviousWorkingDay(db, date) {
+  for (let back = 1; back <= 7; back += 1) {
+    const day = istDateKey(new Date(new Date(`${date}T12:00:00+05:30`).getTime() - back * 86400000));
+    if (!(await slackAssistDayOff(db, day))) return day;
+  }
+  return "";
+}
+
+const slackAdjustmentLink = (date) => `${APP_PUBLIC_URL}/hr/attendance?adjust=${date}`;
+
+function slackRecapMessage(user, previous, misses, today) {
+  const lines = misses.map((miss) => `• ${miss.text}`);
+  const needsAdjustment = misses.some((miss) => miss.adjust);
+  return {
+    text: `On ${slackAssistDayLabel(previous)} some things were missed: ${misses.map((miss) => miss.short).join(", ")}.`,
+    blocks: [
+      slackTextSection(`:clipboard: *Hi ${escapeSlack(slackFirstName(user))}, a few things were missed on ${slackAssistDayLabel(previous)}*\n${lines.join("\n")}`),
+      ...(needsAdjustment ? [slackButtons("attendance_adjustment", slackLinkButton(`Request adjustment for ${slackAssistDayLabel(previous)}`, slackAdjustmentLink(previous), "link:attendance-adjustment", true))] : []),
+      slackContext(`${needsAdjustment ? "The button opens the dashboard with that day filled in; add the right times and a reason, and HR will review it. " : ""}Today's (${slackAssistDayLabel(today)}) reminders follow as usual.`),
+    ],
+  };
+}
+
+// Sent at the clock-in time to each person expected today, about the last working day:
+// no clock-in, no clock-out, or no daily report. Nothing is sent to people with nothing missed.
+async function sendSlackMorningRecaps({ date = attendanceDateKey(), force = false } = {}) {
+  const settings = await getSlackAttendanceSettings();
+  const db = await connectAuthDb();
+  const result = { kind: "recap", date, personal: 0, notInSlack: [] };
+  if (!settings.morningRecap.enabled) return { ...result, skipped: "Turned off" };
+  if (!force && await slackAssistDayOff(db, date)) return { ...result, skipped: "Day off" };
+  const previous = await slackPreviousWorkingDay(db, date);
+  if (!previous) return { ...result, skipped: "No working day in the last week" };
+  result.previous = previous;
+  const [todayExpected, attendanceExpected, reportExpected] = await Promise.all([
+    slackAttendanceExpected(db, date),
+    slackAttendanceExpected(db, previous),
+    slackReportExpected(db, previous),
+  ]);
+  const attendanceIds = new Set(attendanceExpected.map((user) => String(user._id)));
+  const reportIds = new Set(reportExpected.map((user) => String(user._id)));
+  const records = new Map((await db.collection("hrAttendanceRecords").find({ date: previous }).toArray()).map((record) => [String(record.userId), record]));
+  const filed = new Set((await db.collection("employeeDailyReports").distinct("userId", { reportDate: previous })).map(String));
+  const pendingAdjustments = new Set((await db.collection("hrAttendanceAdjustmentRequests")
+    .find({ status: "pending", "items.date": previous }, { projection: { userId: 1 } }).toArray()).map((request) => String(request.userId)));
+  for (const user of todayExpected) {
+    const id = String(user._id);
+    const record = records.get(id);
+    const misses = [];
+    const adjustmentPending = pendingAdjustments.has(id);
+    if (attendanceIds.has(id) && !record?.clockInAt && record?.status !== "leave") {
+      misses.push({ short: "no clock-in", text: `You didn't clock in.${adjustmentPending ? " Your adjustment request is with HR." : ""}`, adjust: !adjustmentPending });
+    } else if (record?.clockInAt && !record.clockOutAt) {
+      misses.push({ short: "no clock-out", text: `You didn't clock out (you clocked in at ${istTimeLabel(record.clockInAt)}).${adjustmentPending ? " Your adjustment request is with HR." : ""}`, adjust: !adjustmentPending });
+    }
+    if (reportIds.has(id) && !filed.has(id)) misses.push({ short: "no daily report", text: "Your daily report wasn't filed. Speak to HR if it needs adding." });
+    if (!misses.length) continue;
+    if (!await claimSlackAssist(`personal:recap:${id}:${date}`, force ? {} : { sentAt: { $exists: false } }, { sentAt: new Date() })) continue;
+    const sent = await sendSlackPersonal(settings, user, slackRecapMessage(user, previous, misses, date), { date, kind: "recap" }).catch((error) => ({ status: "failed", error: error.message }));
+    if (sent.status === "sent") result.personal += 1;
+    else if (sent.status === "not-in-slack") result.notInSlack.push(slackUserName(user));
+  }
+  return result;
+}
+
+/* ───────── Slack: DMR reminders (the WhatsApp ones, on Slack too) ───────── */
+
+const SLACK_DMR_REMINDER_TITLES = {
+  actualManpower: (label) => `Actual manpower for ${label} is due`,
+  tomorrowPlan: (label) => `Tomorrow's planned manpower (${label}) is due`,
+  siteDailyReport: (label) => `Site daily report for ${label} is due`,
+};
+
+// Last ten digits, so "+91 98765 43210" on a Slack profile matches WhatsApp's "919876543210".
+const slackPhoneKey = (value = "") => String(value).replace(/\D/g, "").slice(-10);
+
+// Called after each WhatsApp DMR reminder run with its per-contact results ("skipped" means
+// already filled). Each person still due gets a private note; HR gets the full list.
+async function sendSlackDmrReminder({ type, date, results = [] }) {
+  if (!SLACK_ASSIST_RUNTIME) return { status: "skipped", reason: "Slack reminders run on the live server only" };
+  const settings = await getSlackAttendanceSettings();
+  if (!settings.enabled || !settings.whatsappMirror.dmr) return { status: "skipped", reason: "Turned off in settings" };
+  const label = dmrPdfDateLabel(date);
+  const title = (SLACK_DMR_REMINDER_TITLES[type] || SLACK_DMR_REMINDER_TITLES.actualManpower)(label);
+  const due = results.filter((item) => item.status !== "skipped");
+  const filled = results.filter((item) => item.status === "skipped");
+  const summary = { status: "done", due: due.length, filled: filled.length, personal: 0, hr: false };
+
+  if (settings.hrChannel) {
+    const lines = [];
+    if (due.length) lines.push(`*Still to fill (${due.length})*\n${due.map((item) => escapeSlack(item.name)).join(", ")}`);
+    if (filled.length) lines.push(`*Already filled (${filled.length})*\n${filled.map((item) => escapeSlack(item.name)).join(", ")}`);
+    const posted = await slackService.postMessage({
+      channel: await slackService.resolveChannel(settings.hrChannel),
+      text: `${title} (HR view)`,
+      blocks: [slackTextSection(`:construction: *${escapeSlack(title)}*  (HR view)`), ...lines.map(slackTextSection)],
+    });
+    await logSlackPost({ date: istDateKey(new Date()), scope: "hr", kind: `dmr:${type}`, channel: posted.channel, ts: posted.ts });
+    summary.hr = true;
+  }
+
+  // People still due: matched by the phone on their Slack profile, or through their dashboard account.
+  const duePhones = new Map(due.map((item) => [slackPhoneKey(item.phone), item]).filter(([key]) => key.length === 10));
+  if (!duePhones.size) return summary;
+  const db = await connectAuthDb();
+  const targets = new Map();
+  for (const member of await slackService.listMembers()) {
+    const match = duePhones.get(slackPhoneKey(member.profile?.phone));
+    if (match) targets.set(slackPhoneKey(match.phone), { slackUserId: member.id, name: match.name });
+  }
+  const users = await db.collection("users").find({ isActive: { $ne: false } }).limit(500).toArray();
+  for (const user of users) {
+    const key = slackPhoneKey(employeeReminderPhone(user));
+    if (!duePhones.has(key) || targets.has(key)) continue;
+    const slackUser = await slackUserFor(user);
+    if (slackUser) targets.set(key, { slackUserId: slackUser.id, name: duePhones.get(key).name });
+  }
+  for (const target of targets.values()) {
+    const message = {
+      text: `${title}.`,
+      blocks: [
+        slackTextSection(`:construction: Hi ${escapeSlack(String(target.name).split(" ")[0])}, ${escapeSlack(title.charAt(0).toLowerCase() + title.slice(1))}.`),
+        slackButtons("dmr_reminder", slackLinkButton("Open DMR", `${APP_PUBLIC_URL}/projects/dmr`, "link:dmr", true)),
+      ],
+    };
+    const sent = await sendSlackPersonalTo(settings, target.slackUserId, message, { date: istDateKey(new Date()), kind: `dmr:${type}` }).catch((error) => ({ status: "failed", error: error.message }));
+    if (sent.status === "sent") summary.personal += 1;
+  }
+  return summary;
+}
+
+/* ───────── Slack: leave requests (apply → HR approves/declines → employee told) ───────── */
+
+const slackLeaveCards = async () => (await connectAuthDb()).collection(slackCollectionName("slackLeaveCards"));
+const leaveDateLabel = (date) => slackAssistDayLabel(date);
+
+function slackLeaveCardMessage(leave, decision = null) {
+  const id = String(leave._id);
+  const range = leave.startDate === leave.endDate ? leaveDateLabel(leave.startDate) : `${leaveDateLabel(leave.startDate)} → ${leaveDateLabel(leave.endDate)}`;
+  const pay = `${leave.days} day${leave.days === 1 ? "" : "s"}${leave.paidLeaveDays ? ` (${leave.paidLeaveDays} paid, ${leave.unpaidLeaveDays} unpaid)` : leave.unpaidLeaveDays ? " (unpaid)" : ""}`;
+  const blocks = [
+    slackTextSection(`:palm_tree: *Leave request* from *${escapeSlack(leave.employeeName || "Employee")}*`),
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Dates*\n${range}` },
+        { type: "mrkdwn", text: `*Days*\n${pay}` },
+        { type: "mrkdwn", text: `*Type*\n${escapeSlack(leave.leaveType || "Leave")}` },
+        { type: "mrkdwn", text: `*Department*\n${escapeSlack(leave.department || "—")}` },
+      ],
+    },
+    slackTextSection(`*Reason*\n${escapeSlack(leave.reason || "—")}`),
+  ];
+  if (!decision) {
+    blocks.push(slackButtons("leave_review",
+      { type: "button", style: "primary", text: { type: "plain_text", text: "Approve" }, action_id: "leave:approved", value: JSON.stringify({ id }) },
+      { type: "button", style: "danger", text: { type: "plain_text", text: "Decline" }, action_id: "leave:declined", value: JSON.stringify({ id }) },
+      slackLinkButton("Open in dashboard", `${APP_PUBLIC_URL}/hr/leave`, "link:leave")));
+    blocks.push(slackContext(`:hourglass_flowing_sand: Waiting for HR · applied ${istTimeLabel(leave.createdAt)} ${slackAssistDayLabel(istDateKey(leave.createdAt || new Date()))}`));
+  } else {
+    const icon = { approved: ":white_check_mark:", declined: ":x:", withdrawn: ":leftwards_arrow_with_hook:" }[decision.status] || ":information_source:";
+    const verb = { approved: "Approved", declined: "Declined", withdrawn: "Withdrawn by the employee" }[decision.status] || decision.status;
+    blocks.push(slackContext(`${icon} *${verb}*${decision.by ? ` by ${escapeSlack(decision.by)}` : ""}${decision.comment ? ` — ${escapeSlack(decision.comment)}` : ""}`));
+  }
+  return { text: `Leave request from ${leave.employeeName}: ${range}`, blocks };
+}
+
+// HR people in Slack: who gets the card when there is no HR channel.
+async function slackHrPeople(db) {
+  const users = await db.collection("users").find({ isActive: { $ne: false }, blacklisted: { $ne: true } }).limit(500).toArray();
+  const roles = new Map();
+  const people = [];
+  for (const user of users) {
+    const roleKey = String(user.roleId || "");
+    if (!roles.has(roleKey)) roles.set(roleKey, await getRole(user.roleId).catch(() => null));
+    const authUser = sanitizeUser(user, roles.get(roleKey));
+    if (isBuiltInSuperAdminName(user)) continue;
+    if (authUser.isSuperAdmin || authUser.privileges.includes("manage_hr")) people.push({ user, authUser });
+  }
+  return people;
+}
+
+// On a new request: a card with Approve/Decline to HR (the HR channel, else each HR person),
+// and a note to the employee that it went.
+async function notifySlackLeaveRequest(leave) {
+  if (!slackService.configured) return;
+  const settings = await getSlackAttendanceSettings();
+  if (!settings.enabled || !settings.leave.enabled) return;
+  const db = await connectAuthDb();
+  const message = slackLeaveCardMessage(leave);
+  const posts = [];
+  if (settings.hrChannel) {
+    const posted = await slackService.postMessage({ channel: await slackService.resolveChannel(settings.hrChannel), ...message });
+    posts.push({ channel: posted.channel, ts: posted.ts });
+  } else {
+    for (const { user } of await slackHrPeople(db)) {
+      if (String(user._id) === String(leave.userId)) continue;
+      const slackUser = await slackUserFor(user);
+      if (!slackUser) continue;
+      const posted = await slackService.sendDm(slackUser.id, message).catch((error) => console.error("Slack leave card DM failed:", error.message));
+      if (posted?.ts) posts.push({ channel: posted.channel, ts: posted.ts });
+    }
+  }
+  await (await slackLeaveCards()).updateOne({ _id: String(leave._id) }, { $set: { posts, status: "pending", createdAt: new Date() } }, { upsert: true });
+  const applicant = await db.collection("users").findOne({ _id: new ObjectId(String(leave.userId)) });
+  const slackApplicant = applicant ? await slackUserFor(applicant) : null;
+  if (slackApplicant) {
+    await slackService.sendDm(slackApplicant.id, {
+      text: "Your leave request was sent to HR.",
+      blocks: [slackTextSection(`:palm_tree: Your leave request for *${leave.startDate === leave.endDate ? leaveDateLabel(leave.startDate) : `${leaveDateLabel(leave.startDate)} → ${leaveDateLabel(leave.endDate)}`}* was sent to HR. You'll get their answer here.`)],
+    }).catch((error) => console.error("Slack leave confirmation failed:", error.message));
+  }
+}
+
+// After a decision (from Slack or the dashboard) or a withdrawal: the cards show the outcome,
+// and the employee is told (with the comment, if any).
+async function notifySlackLeaveDecision(leave, { status, by = "", comment = "" }) {
+  if (!slackService.configured) return;
+  const cards = await slackLeaveCards();
+  const card = await cards.findOne({ _id: String(leave._id) });
+  for (const post of card?.posts || []) {
+    await slackService.updateMessage({ channel: post.channel, ts: post.ts, ...slackLeaveCardMessage(leave, { status, by, comment }) })
+      .catch((error) => console.error("Slack leave card update failed:", error.message));
+  }
+  if (card) await cards.updateOne({ _id: card._id }, { $set: { status, decidedBy: by, decidedAt: new Date() } });
+  if (status === "withdrawn") return;
+  const settings = await getSlackAttendanceSettings();
+  if (!settings.enabled || !settings.leave.enabled) return;
+  const db = await connectAuthDb();
+  const applicant = await db.collection("users").findOne({ _id: new ObjectId(String(leave.userId)) });
+  const slackApplicant = applicant ? await slackUserFor(applicant) : null;
+  if (!slackApplicant) return;
+  const range = leave.startDate === leave.endDate ? leaveDateLabel(leave.startDate) : `${leaveDateLabel(leave.startDate)} → ${leaveDateLabel(leave.endDate)}`;
+  const approved = status === "approved";
+  await slackService.sendDm(slackApplicant.id, {
+    text: `Your leave for ${range} was ${status}.`,
+    blocks: [
+      slackTextSection(`${approved ? ":white_check_mark:" : ":x:"} Your leave for *${range}* was *${status}*${by ? ` by ${escapeSlack(by)}` : ""}.`),
+      ...(comment ? [slackTextSection(`*Comment*\n${escapeSlack(comment)}`)] : []),
+    ],
+  });
+}
+
+// One review step for the dashboard and Slack alike. `requirePending` makes the first decision
+// win (Slack); the dashboard keeps its old behaviour of letting HR change a decision.
+async function reviewLeaveRequest({ id, status, adminComment = "", reviewer, req = null, requirePending = false }) {
+  const db = await connectAuthDb();
+  const _id = new ObjectId(String(id));
+  const existing = await db.collection("hrLeaveRequests").findOne({ _id });
+  if (!existing) {
+    const error = new Error("Leave request not found");
+    error.statusCode = 404;
+    throw error;
+  }
+  if (requirePending && existing.status !== "pending") return { already: true, existing };
+  const now = new Date();
+  const update = {
+    status,
+    adminComment,
+    reviewedAt: now,
+    reviewedBy: { id: reviewer.id, name: reviewer.displayName || reviewer.username || "Admin" },
+    updatedAt: now,
+  };
+  const result = await db.collection("hrLeaveRequests").updateOne(requirePending ? { _id, status: "pending" } : { _id }, { $set: update });
+  if (!result.matchedCount) return { already: true, existing: await db.collection("hrLeaveRequests").findOne({ _id }) };
+  const updated = { ...existing, ...update };
+  notifyUsers([String(existing.userId)], {
+    title: `Leave request ${status}`,
+    message: `${update.reviewedBy.name} ${status} your leave from ${existing.startDate} to ${existing.endDate}${adminComment ? `: ${adminComment}` : "."}`,
+    type: "hr-leave",
+  });
+  addActivityLog({ req, actor: req ? null : reviewer, action: status === "approved" ? "Approved leave request" : "Declined leave request", target: `${existing.employeeName} · ${existing.startDate} to ${existing.endDate}`, details: { adminComment, ...(req ? {} : { source: "slack" }) } });
+  void notifySlackLeaveDecision(updated, { status, by: update.reviewedBy.name, comment: adminComment }).catch((error) => console.error("Slack leave decision error:", error.message));
+  return { updated };
+}
+
+// Slack user → dashboard user, by their Slack email (matched against slackEmail, then email).
+async function dashboardUserForSlack(slackUserId) {
+  const slackUser = await slackService.userInfo(slackUserId);
+  const email = String(slackUser?.profile?.email || "").trim().toLowerCase();
+  if (!email) return null;
+  const pattern = new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+  const db = await connectAuthDb();
+  const user = await db.collection("users").findOne({ slackEmail: pattern }) || await db.collection("users").findOne({ email: pattern });
+  if (!user || user.isActive === false || user.blacklisted) return null;
+  return sanitizeUser(user, await getRole(user.roleId).catch(() => null));
+}
+
+async function slackLeaveReviewer(slackUserId) {
+  const authUser = await dashboardUserForSlack(slackUserId);
+  if (!authUser) return null;
+  const allowed = hasMenuAccess({ authUser, disabledModules: await getDisabledModules() }, "hr-leave") && (authUser.isSuperAdmin || authUser.privileges.includes("manage_hr"));
+  return allowed ? authUser : null;
+}
+
+function slackLeaveReviewModal({ id, status, channel }) {
+  const approving = status === "approved";
+  return {
+    type: "modal",
+    callback_id: "leave_review",
+    private_metadata: JSON.stringify({ id, status, channel }),
+    title: { type: "plain_text", text: approving ? "Approve leave" : "Decline leave" },
+    submit: { type: "plain_text", text: approving ? "Approve" : "Decline" },
+    close: { type: "plain_text", text: "Cancel" },
+    blocks: [{
+      type: "input",
+      block_id: "comment",
+      optional: true,
+      label: { type: "plain_text", text: "Comment (optional)" },
+      element: { type: "plain_text_input", action_id: "text", multiline: true, max_length: 1200 },
+    }],
+  };
+}
+
+async function slackLeaveNotice(payload, channel, text) {
+  if (channel) return slackService.postEphemeral({ channel, user: payload.user.id, text }).catch(() => slackService.sendDm(payload.user.id, { text }));
+  return slackService.sendDm(payload.user.id, { text });
+}
+
+async function handleSlackLeaveAction(payload, action) {
+  const status = action.action_id.slice("leave:".length);
+  const { id } = JSON.parse(action.value || "{}");
+  const channel = payload.channel?.id || payload.container?.channel_id || "";
+  if (!["approved", "declined"].includes(status) || !ObjectId.isValid(String(id || ""))) return;
+  if (!await slackLeaveReviewer(payload.user.id)) return slackLeaveNotice(payload, channel, "Only HR can approve or decline leave. Your Slack email must match an HR account on the dashboard.");
+  const leave = await (await connectAuthDb()).collection("hrLeaveRequests").findOne({ _id: new ObjectId(id) });
+  if (!leave) return slackLeaveNotice(payload, channel, "That leave request no longer exists.");
+  if (leave.status !== "pending") return slackLeaveNotice(payload, channel, `This leave was already ${leave.status}${leave.reviewedBy?.name ? ` by ${leave.reviewedBy.name}` : ""}.`);
+  await slackService.openView(payload.trigger_id, slackLeaveReviewModal({ id, status, channel }));
+}
+
+async function handleSlackLeaveSubmission(payload) {
+  const { id, status, channel } = JSON.parse(payload.view?.private_metadata || "{}");
+  if (!["approved", "declined"].includes(status) || !ObjectId.isValid(String(id || ""))) return;
+  const reviewer = await slackLeaveReviewer(payload.user.id);
+  if (!reviewer) return slackLeaveNotice(payload, channel, "Only HR can approve or decline leave.");
+  const comment = projectText(payload.view.state?.values?.comment?.text?.value, 1200);
+  const outcome = await reviewLeaveRequest({ id, status, adminComment: comment, reviewer, requirePending: true });
+  if (outcome.already) await slackLeaveNotice(payload, channel, `This leave was already ${outcome.existing?.status}${outcome.existing?.reviewedBy?.name ? ` by ${outcome.existing.reviewedBy.name}` : ""}.`);
+}
+
+/* ───────── Slack: announcements from designated departments ───────── */
+
+function canPostSlackAnnouncement(authUser, settings) {
+  if (!authUser) return false;
+  if (authUser.isSuperAdmin) return true;
+  const department = String(authUser.department || "").trim().toLowerCase();
+  return Boolean(department) && settings.announcements.departments.some((item) => item.toLowerCase() === department);
+}
+
+app.get("/slack/announcements/permission", async (req, res) => {
+  try {
+    const settings = await getSlackAttendanceSettings();
+    const enabled = slackService.configured && settings.announcements.enabled;
+    const canPost = enabled && canPostSlackAnnouncement(req.authUser, settings);
+    let recent = [];
+    if (canPost) {
+      recent = (await (await connectAuthDb()).collection("announcements").find({ source: "slack" }).sort({ createdAt: -1 }).limit(5).toArray())
+        .map((item) => ({ id: String(item._id), title: item.title, authorName: item.authorName, department: item.department, createdAt: item.createdAt }));
+    }
+    res.json({ enabled, canPost, channel: settings.announcements.channel, recent });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Could not check announcement access" });
+  }
+});
+
+// "From <name> · <department>", leaving out a department that only repeats the name or role.
+async function postSlackAnnouncement({ settings, title, message, notifyAll = false, author = "", department = "" }) {
+  const channel = await slackService.resolveChannel(settings.announcements.channel).catch(() => {
+    throw new Error(`Slack channel #${settings.announcements.channel} not found. Create it, or pick another on the Module Control page.`);
+  });
+  const showDepartment = department && department.toLowerCase() !== author.toLowerCase() && !/^super\s*admin$/i.test(department);
+  return slackService.postMessage({
+    channel,
+    text: `${notifyAll ? "<!channel> " : ""}${title}`,
+    blocks: [
+      { type: "header", text: { type: "plain_text", text: `📣 ${title}`.slice(0, 150) } },
+      slackTextSection(`${notifyAll ? "<!channel> " : ""}${escapeSlack(message)}`),
+      slackContext(`From ${escapeSlack(author)}${showDepartment ? ` · ${escapeSlack(department)}` : ""}`),
+    ],
+  });
+}
+
+app.post("/slack/announcements", async (req, res) => {
+  try {
+    const settings = await getSlackAttendanceSettings();
+    if (!slackService.configured || !settings.announcements.enabled) return res.status(400).json({ error: "Slack announcements are turned off" });
+    if (!canPostSlackAnnouncement(req.authUser, settings)) return res.status(403).json({ error: "Your department can't post announcements" });
+    const title = projectText(req.body?.title, 150);
+    const message = String(req.body?.message || "").trim().slice(0, 2800);
+    if (!title || message.length < 3) return res.status(400).json({ error: "Add a title and a message" });
+    const notifyAll = req.body?.notifyAll === true;
+    const author = req.authUser.displayName || req.authUser.username || "Admin";
+    const department = req.authUser.department || (req.authUser.isSuperAdmin ? "Management" : "");
+    const posted = await postSlackAnnouncement({ settings, title, message, notifyAll, author, department });
+    const doc = { source: "slack", title, message, notifyAll, authorId: req.authUser.id, authorName: author, department, slack: { channel: posted.channel, ts: posted.ts }, createdAt: new Date() };
+    const inserted = await (await connectAuthDb()).collection("announcements").insertOne(doc);
+    addActivityLog({ req, action: "Posted Slack announcement", target: title, details: { channel: settings.announcements.channel, notifyAll } });
+    res.json({ success: true, announcement: { id: String(inserted.insertedId), title, authorName: author, department, createdAt: doc.createdAt } });
+  } catch (error) {
+    console.error("Slack announcement error:", error);
+    res.status(400).json({ error: error.message || "Could not post the announcement" });
+  }
+});
 
 /* ───────── Slack: CEO daily report (#uipl-updates) ───────── */
 
@@ -24472,6 +25655,7 @@ if (require.main === module) {
   startMrnWhatsappWatcher();
   startPrnWhatsappWatcher();
   startSlackEmployeeDigest();
+  startSlackAttendanceAssistant();
   getCeoBriefSettings()
     .then(configureCeoBriefCrons)
     .catch((error) => console.error("CEO brief schedule error:", error.message));
@@ -24568,7 +25752,7 @@ cron.schedule("0 23 * * *", async () => {
   }
 });
 
-module.exports = { app, generateEmployeeDailyReportPdf, buildCeoBriefFacts, recordCeoCutoff, sendCeoDmrUpdate, sendCeoPlanUpdate, sendCeoDailyBrief };
+module.exports = { app, generateEmployeeDailyReportPdf, buildCeoBriefFacts, recordCeoCutoff, sendCeoDmrUpdate, sendCeoPlanUpdate, sendCeoDailyBrief, sendSlackClockInReminders, sendSlackReportReminderPost, sendSlackClockOutReminders, syncSlackAttendanceMessages, postSlackReportResponses, getSlackAttendanceSettings, slackAttendanceStatus, sendSlackMorningRecaps, cleanUpSlackDailyPosts, notifySlackLeaveRequest, notifySlackLeaveDecision, sendSlackDmrReminder, postSlackAnnouncement, slackAssistTick, slackService, slackAssistMessages: { slackRecapMessage, slackLeaveCardMessage, slackTeamMessage, slackHrClockInMessage, slackHrReportMessage, slackHrClockOutMessage, slackReportResponsesMessage, slackPersonal } };
 
 app.patch("/reports/:id/read", (req, res) => {
   const report = reports.find((item) => item.id === req.params.id);

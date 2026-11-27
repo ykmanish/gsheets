@@ -1,0 +1,200 @@
+[
+  {
+    "top": 112.3,
+    "bottom": 145.75,
+    "lines": 3,
+    "text": "MBA student in Cyber Security Management with internship experience reviewing IT service management processes, identifying gaps and preparing documentation for audit review. Completed ISO/IEC 27001:2022 Lead Auditor training and built an ISMS GRC platform connecting findings, risks and corrective actions."
+  },
+  {
+    "top": 188.7,
+    "bottom": 211.0,
+    "lines": 2,
+    "text": "Governance, Risk &amp; Compliance: ISO/IEC 27001:2022, ISO/IEC 20000-1:2018, NIST CSF; IAM &amp; BCM; ISMS internal audit, risk assessment &amp; treatment, control evaluation."
+  },
+  {
+    "top": 215.9,
+    "bottom": 238.20000000000002,
+    "lines": 2,
+    "text": "IT Service Management: ITIL 4, PinkVERIFY requirements; Incident, Service Level &amp; IT Asset Management; Release &amp; Deployment, Service Catalog, Monitoring &amp; Alerting, SLA tracking."
+  },
+  {
+    "top": 243.1,
+    "bottom": 265.4,
+    "lines": 2,
+    "text": "IT Audit &amp; Assurance: Process documentation review, gap analysis, audit evidence &amp; work papers, observation reporting, nonconformities &amp; corrective actions, remediation ownership &amp; closure verification."
+  },
+  {
+    "top": 270.3,
+    "bottom": 292.6,
+    "lines": 2,
+    "text": "Security &amp; Technical: Network security &amp; digital forensics fundamentals; Wireshark, Nmap, traffic analysis; applied cryptography basics; static &amp; dynamic malware analysis."
+  },
+  {
+    "top": 297.5,
+    "bottom": 319.8,
+    "lines": 2,
+    "text": "Communication &amp; Delivery: Technical writing &amp; documentation, risk communication, requirements analysis, stakeholder discussions, analytical problem solving &amp; teamwork."
+  },
+  {
+    "top": 354.7,
+    "bottom": 366.4,
+    "lines": 1,
+    "text": "Cyber Security Compliance Intern | Tectona Software Solutions Pvt. Ltd. Ahmedabad | Jun 2026 - Jul 2026"
+  },
+  {
+    "top": 368.5,
+    "bottom": 379.65,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 368.5,
+    "bottom": 390.8,
+    "lines": 2,
+    "text": "Reviewed, validated and improved ITSM process documentation across six areas: Service Level, IT Asset, Incident, Monitoring &amp; Alerting, Release &amp; Deployment and Service Catalog Management."
+  },
+  {
+    "top": 393.9,
+    "bottom": 405.04999999999995,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 393.9,
+    "bottom": 416.2,
+    "lines": 2,
+    "text": "Compared process documentation with ITIL 4 practices, PinkVERIFY requirements and ISO/IEC 20000 guidance, identifying documentation gaps and recommending practical process improvements."
+  },
+  {
+    "top": 419.3,
+    "bottom": 430.45,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 419.3,
+    "bottom": 441.6,
+    "lines": 2,
+    "text": "Studied ITIL 4 practices and PinkVERIFY certification criteria to assess process maturity and readiness, building an understanding of how service management controls and supporting evidence are reviewed."
+  },
+  {
+    "top": 444.7,
+    "bottom": 455.84999999999997,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 444.7,
+    "bottom": 467.0,
+    "lines": 2,
+    "text": "Participated in requirements analysis sessions and team discussions, turning discussion outcomes into clear, structured process documentation suitable for audit review."
+  },
+  {
+    "top": 470.1,
+    "bottom": 481.25,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 470.1,
+    "bottom": 503.55,
+    "lines": 3,
+    "text": "Gained exposure to information security, ISO-related compliance, audit requirements and remediation processes. Learned how findings connect to risk ratings, corrective actions, responsible owners and closure verification, and applied this understanding when building the ISMS GRC platform."
+  },
+  {
+    "top": 547.7,
+    "bottom": 559.4000000000001,
+    "lines": 1,
+    "text": "ISMS GRC Platform | ISO 27001 Internal Audit, Risk and Remediation Management"
+  },
+  {
+    "top": 561.5,
+    "bottom": 572.65,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 561.5,
+    "bottom": 594.95,
+    "lines": 3,
+    "text": "Built a centralised ISMS GRC platform to manage ISO 27001 internal audit findings, risk management and IT remediation through one dashboard, bringing control assessments, risk ratings, corrective actions and remediation status into a single place for review."
+  },
+  {
+    "top": 598.2,
+    "bottom": 609.35,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 598.2,
+    "bottom": 620.5,
+    "lines": 2,
+    "text": "Connected the compliance lifecycle from ISO control assessment to finding, risk rating, corrective action, ITSM ticket, SLA tracking and final resolution."
+  },
+  {
+    "top": 623.6,
+    "bottom": 634.75,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 623.6,
+    "bottom": 645.9,
+    "lines": 2,
+    "text": "Built end-to-end traceability so each issue can be followed from the ISO control where it was raised through the related risk, assigned corrective action, remediation and formal closure."
+  },
+  {
+    "top": 649.0,
+    "bottom": 660.15,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 649.0,
+    "bottom": 671.3,
+    "lines": 2,
+    "text": "Modelled risk ratings, corrective action ownership and SLA-based due dates for each finding, making overdue remediation visible and helping users review pending actions and follow up on closure."
+  },
+  {
+    "top": 703.6,
+    "bottom": 714.75,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 703.6,
+    "bottom": 714.75,
+    "lines": 1,
+    "text": "ISO/IEC 27001:2022 Lead Auditor Training | Bureau Veritas | June 2026"
+  },
+  {
+    "top": 715.2,
+    "bottom": 726.35,
+    "lines": 1,
+    "text": "CQI &amp; IRCA certified course PR373; covered ISMS implementation, risk assessment, audit planning and reporting."
+  },
+  {
+    "top": 729.2,
+    "bottom": 740.35,
+    "lines": 1,
+    "text": "&#8226;"
+  },
+  {
+    "top": 729.2,
+    "bottom": 740.35,
+    "lines": 1,
+    "text": "Certified Information Systems Security Professional (CISSP) Course | INE | In Progress"
+  },
+  {
+    "top": 772.8,
+    "bottom": 783.3,
+    "lines": 1,
+    "text": "MBA Cyber Security Management | National Forensic Sciences University | Gandhinagar | CGPI 8.50 | 2025 - Present"
+  },
+  {
+    "top": 786,
+    "bottom": 796.5,
+    "lines": 1,
+    "text": "Bachelor of Computer Applications (BCA) | University of Rajasthan | Jaipur | 80.7% | 2022 - 2025"
+  }
+]

@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UIPL Docs on Slack — company plan</title>
+<style>
+  /* Everything is set in Regular (Aeonik); its missing punctuation (: / % ( ) ₹ → –) falls back to Manrope. */
+  @font-face { font-family: "Regular"; src: url("fonts/regular.otf"); font-weight: 400; }
+  @font-face { font-family: "Fill"; src: url("fonts/manrope-regular.ttf"); font-weight: 400; }
+  @page { size: 210mm 297mm; margin: 0; }
+  :root {
+    --ink: #0f0f10;
+    --soft: #4b4b52;
+    --muted: #8a8a92;
+    --line: #e9e9ee;
+    --pill: #f1f1f3;
+    --blue: #2f6bf2;
+    --blue-soft: #e8efff;
+    --red: #e5483f;
+    --green: #21b46b;
+    --aubergine: #4a154b;
+    --good: #2eb67d;
+    --warn: #ecb22e;
+    --bad: #e01e5a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Regular", "Fill", sans-serif; color: var(--ink); font-size: 11px; line-height: 1.45; font-synthesis: none; }
+  b, h1, h2, h3 { font-weight: 400; }
+  .page { position: relative; width: 794px; height: 1123px; overflow: hidden; background: #fff; page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+
+  .brand { position: absolute; left: 0; right: 0; top: 30px; display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 14px; letter-spacing: -0.01em; z-index: 4; }
+  .brand svg { width: 14px; height: 14px; }
+  .pno { position: absolute; right: 40px; bottom: 28px; font-size: 10px; color: var(--muted); }
+  .center { text-align: center; }
+  .hero { font-size: 70px; line-height: 0.93; letter-spacing: -0.04em; }
+  .h1 { font-size: 50px; line-height: 0.95; letter-spacing: -0.035em; }
+  .h2 { font-size: 30px; line-height: 1.02; letter-spacing: -0.025em; }
+  .h3 { font-size: 16px; line-height: 1.15; letter-spacing: -0.01em; }
+  .lead { font-size: 13px; line-height: 1.45; color: var(--ink); }
+  .small { font-size: 10px; line-height: 1.45; color: var(--soft); }
+  .blue { color: var(--blue); }
+  .pills { display: flex; justify-content: center; gap: 8px; }
+  .pill { height: 34px; border-radius: 999px; padding: 0 18px; display: inline-flex; align-items: center; font-size: 11px; }
+  .pill.grey { background: var(--pill); color: var(--muted); min-width: 230px; }
+  .pill.blue { background: var(--blue); color: #fff; }
+  .pill.dark { background: var(--ink); color: #fff; }
+  .pill.line { border: 1.4px solid var(--ink); }
+  .tag { display: inline-flex; align-items: center; height: 20px; padding: 0 9px; border-radius: 999px; font-size: 8.6px; letter-spacing: .04em; }
+  .tag.live { background: #e3f6ec; color: #11804b; }
+  .tag.built { background: var(--blue-soft); color: var(--blue); }
+  .tag.next { background: var(--pill); color: var(--soft); }
+  .tag.stays { background: #e7f9ee; color: #128a46; }
+
+  /* Logo circles, after the reference's portrait circles */
+  .orb { position: absolute; border-radius: 50%; display: grid; place-items: center; overflow: hidden; }
+  .orb svg, .orb img { width: 44%; height: 44%; }
+
+  /* Phone mock-up */
+  .phone { position: absolute; width: 252px; height: 512px; border-radius: 42px; background: #121214; padding: 9px; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden; background: #fff; }
+  .notch { position: absolute; left: 50%; top: 9px; width: 84px; height: 22px; border-radius: 12px; background: #121214; transform: translateX(-50%); z-index: 3; }
+  .status { height: 40px; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 24px 6px; font-size: 9px; font-family: "Segoe UI", sans-serif; font-weight: 600; }
+  .s-top { background: var(--aubergine); color: #fff; padding: 9px 14px; font-family: "Segoe UI", sans-serif; font-size: 11px; font-weight: 700; display: flex; justify-content: space-between; }
+  .s-top span { font-weight: 400; opacity: .7; font-size: 9px; }
+  .s-body { padding: 10px 11px; font-family: "Segoe UI", sans-serif; color: #1d1c1d; }
+  .s-msg { display: grid; grid-template-columns: 26px 1fr; gap: 7px; margin-bottom: 9px; }
+  .s-ava { width: 26px; height: 26px; border-radius: 6px; background: #0b1035; display: grid; place-items: center; }
+  .s-ava img { width: 16px; height: 16px; }
+  .s-meta { font-size: 9px; }
+  .s-meta b { font-weight: 800; }
+  .s-meta .app { font-size: 6.5px; font-weight: 700; background: #e8e8e8; color: #616061; padding: 0 3px; border-radius: 2px; margin-left: 3px; }
+  .s-meta .t { color: #616061; margin-left: 3px; }
+  .s-head { font-size: 11px; font-weight: 800; margin: 3px 0 5px; }
+  .s-att { border-left: 3px solid; padding: 3px 0 3px 7px; margin-top: 4px; font-size: 8.6px; line-height: 1.35; }
+  .s-att b { font-weight: 700; }
+  .s-btns { display: flex; gap: 5px; margin-top: 6px; }
+  .s-btn { font-size: 8.4px; font-weight: 700; padding: 3px 8px; border-radius: 4px; border: 1px solid #c9c9c9; background: #fff; }
+  .s-btn.go { background: #007a5a; border-color: #007a5a; color: #fff; }
+  .s-btn.no { color: #e01e5a; border-color: #e8a9bd; }
+  .s-text { font-size: 8.8px; line-height: 1.35; }
+
+  /* Rows, cards, flows */
+  .row { display: flex; align-items: center; gap: 10px; }
+  .card { border-radius: 22px; background: #fff; border: 1px solid var(--line); padding: 14px 16px; }
+  .card.soft { background: #f7f7f9; border-color: transparent; }
+  .chip { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+  .chip svg, .chip img { width: 18px; height: 18px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .s-ava svg { width: 15px; height: 15px; }
+  .s-file { display: flex; align-items: center; gap: 7px; border: 1px solid #dddddd; border-radius: 7px; padding: 5px 8px; margin-top: 6px; font-size: 8.2px; line-height: 1.3; color: #616061; }
+  .s-file b { color: #1d1c1d; font-weight: 700; }
+  .s-file i { width: 20px; height: 24px; flex: none; border-radius: 4px; background: #e01e5a; color: #fff; font-style: normal; font-size: 5.6px; font-weight: 800; display: grid; place-items: center; }
+  .s-react { margin-top: 6px; }
+  .s-react span { display: inline-flex; align-items: center; gap: 3px; border: 1px solid #c9def5; background: #eef5fc; border-radius: 10px; padding: 1px 7px; font-size: 8.6px; margin-right: 4px; }
+  .mention { color: #1264a3; background: #e8f5fa; border-radius: 3px; padding: 0 2px; }
+</style>
+</head>
+<body>
+
+<!-- ═════════ 1 · COVER ═════════ -->
+<section class="page">
+  <div class="brand">{{ASTERISK}}UIPL Docs</div>
+  <div class="center" style="position:absolute;left:0;right:0;top:86px">
+    <h1 class="hero">Run the company<br>on Slack.</h1>
+    <p class="lead" style="margin-top:16px">Reports, approvals, attendance and AI in one place, wired into our own platform.</p>
+    <div class="pills" style="margin-top:18px">
+      <span class="pill grey">20–25 people · one workspace · one platform</span>
+      <span class="pill blue">Company plan · Nov 2026</span>
+    </div>
+  </div>
+
+  <!-- logo circles either side of the phone, as in the reference -->
+  <div class="orb" style="left:-46px;top:486px;width:150px;height:150px;background:#e9fbf0">{{WA}}</div>
+  <div class="orb" style="left:110px;top:476px;width:142px;height:142px;background:#eef7f1">{{SHEETS}}</div>
+  <div class="orb" style="left:548px;top:476px;width:142px;height:142px;background:#111">{{OPENAI_WHITE}}</div>
+  <div class="orb" style="left:700px;top:486px;width:150px;height:150px;background:#0b1035"><img src="../../frontend/public/logo.png" alt=""></div>
+
+  <div class="phone" style="left:271px;top:318px">
+    <div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="s-top"># uipl-updates <span>Slack</span></div>
+      <div class="s-body">
+        <div class="s-msg"><div class="s-ava"><img src="../../frontend/public/logo.png" alt=""></div><div>
+          <div class="s-meta"><b>UIPL Docs</b><span class="app">APP</span><span class="t">9:45 PM</span></div>
+          <div class="s-head">Today's Report · Friday, 20 November 2026</div>
+          <div class="s-att" style="border-color:var(--good)"><b>Site reports (DMR):</b> filled for all 5 sites by the 12:00 cut-off.</div>
+          <div class="s-att" style="border-color:var(--warn)"><b>Today's manpower:</b> actual <b>84</b> · planned <b>90</b> (6 short)</div>
+          <div class="s-att" style="border-color:var(--good)"><b>Tomorrow's plan:</b> added, 92 people across 5 sites.</div>
+          <div class="s-att" style="border-color:var(--bad)"><b>Employee reports:</b> 14 of 24 submitted.</div>
+          <div class="s-att" style="border-color:#1d1c1d"><b>Do first</b><br>1. Call Paramdham: 6 short, slab due Monday.<br>2. Approve PRN-1207, vendor waiting since 3 PM.</div>
+          <div class="s-file"><i>PDF</i><span><b>DMR report</b><br>dmr-ceo-report-2026-11-20.pdf</span></div>
+          <div class="s-file"><i>PDF</i><span><b>Employee report</b><br>employee-report-2026-11-20.pdf</span></div>
+          <div class="s-react"><span>✅ 3</span><span>👀 2</span></div>
+          <div class="s-text" style="color:#1264a3;font-weight:600;margin-top:6px">4 replies · last reply 9:58 PM</div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="center" style="position:absolute;left:0;right:0;top:880px">
+    <h2 class="h2">Up to 25 people. Every update.<br><span class="blue">One place.</span></h2>
+    <p class="small" style="margin-top:14px">What runs on WhatsApp today, how it moves to Slack, attendance from Slack,<br>ChatGPT listening in, and the automations that do the chasing.</p>
+  </div>
+  <div class="pno">01</div>
+</section>
+
+<!-- ═════════ 2 · TODAY ON WHATSAPP ═════════ -->
+<section class="page">
+  <div class="brand">{{ASTERISK}}UIPL Docs</div>
+  <div class="center" style="position:absolute;left:0;right:0;top:96px">
+    <h1 class="h1" style="font-size:44px">1,239 WhatsApp messages a month.<br>288 approvals on personal phones.<br><span class="blue">One shared place instead.</span></h1>
+    <p class="small" style="margin-top:14px">Last 30 days on UIPL Docs (20 Oct – 18 Nov 2026), all sent from one number: +91 98988 92887 “UIPL Connect”.</p>
+  </div>
+
+  <!-- where the 1,239 go -->
+  <div style="position:absolute;left:44px;right:44px;top:296px">
+    <div class="row" style="justify-content:space-between"><h3 class="h3">Where the 1,239 messages go</h3><span class="small">one template message per person, per reminder</span></div>
+    <svg width="706" height="48" viewBox="0 0 706 48" style="display:block;margin-top:12px">{{SPLIT}}</svg>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px">{{SPLIT_LEGEND}}</div>
+  </div>
+
+  <!-- the WhatsApp day as a timeline of circles -->
+  <div style="position:absolute;left:44px;right:44px;top:462px">
+    <div class="row" style="justify-content:space-between;margin-bottom:16px">
+      <div class="row"><div class="chip" style="background:#e9fbf0">{{WA}}</div><h3 class="h3">A working day on WhatsApp</h3></div>
+      <span class="small">Mon–Sat · each stop is a template message sent one number at a time</span>
+    </div>
+    <svg width="706" height="184" viewBox="0 0 706 184" style="display:block">
+      <line x1="60" y1="62" x2="646" y2="62" stroke="#d9d9df" stroke-width="2" stroke-dasharray="4 6"/>
+      <g font-family="Regular, Fill, sans-serif" text-anchor="middle">
+        <circle cx="60" cy="62" r="52" fill="#21b46b"/><text x="60" y="70" font-size="22" fill="#fff">11:00</text>
+        <circle cx="206" cy="62" r="52" fill="#21b46b" opacity=".85"/><text x="206" y="70" font-size="22" fill="#fff">14:00</text>
+        <circle cx="353" cy="62" r="52" fill="#21b46b" opacity=".7"/><text x="353" y="70" font-size="22" fill="#fff">18:00</text>
+        <circle cx="500" cy="62" r="52" fill="#2f6bf2"/><text x="500" y="70" font-size="22" fill="#fff">18:50</text>
+        <circle cx="646" cy="62" r="52" fill="#0f0f10"/><text x="646" y="70" font-size="20" fill="#fff">All day</text>
+        <text x="60" y="142" font-size="12" fill="#0f0f10">Actual manpower</text><text x="60" y="158" font-size="10" fill="#8a8a92">reminder to sites</text>
+        <text x="206" y="142" font-size="12" fill="#0f0f10">Tomorrow's plan</text><text x="206" y="158" font-size="10" fill="#8a8a92">planned manpower</text>
+        <text x="353" y="142" font-size="12" fill="#0f0f10">Site daily report</text><text x="353" y="158" font-size="10" fill="#8a8a92">reminder to sites</text>
+        <text x="500" y="142" font-size="12" fill="#0f0f10">Employee report</text><text x="500" y="158" font-size="10" fill="#8a8a92">reminder to each person</text>
+        <text x="646" y="142" font-size="12" fill="#0f0f10">MRN / PRN</text><text x="646" y="158" font-size="10" fill="#8a8a92">approve · decline</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- what it costs today -->
+  <div style="position:absolute;left:44px;right:44px;top:722px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div class="card soft"><div class="h1" style="font-size:40px">250</div><p class="small" style="margin-top:6px">payment requests (PRN) to approvers' phones</p></div>
+    <div class="card soft"><div class="h1" style="font-size:40px">38</div><p class="small" style="margin-top:6px">material requests (MRN) to approvers' phones</p></div>
+    <div class="card soft"><div class="h1" style="font-size:40px;color:var(--bad)">94</div><p class="small" style="margin-top:6px">report reminders that failed to send, out of 484</p></div>
+    <div class="card soft"><div class="h1" style="font-size:40px">58%</div><p class="small" style="margin-top:6px">of daily reports filed after the 18:50 reminder</p></div>
+  </div>
+  <div style="position:absolute;left:44px;right:44px;top:882px" class="card">
+    <div class="row" style="gap:14px">
+      <div class="chip" style="background:#e9fbf0;width:44px;height:44px">{{WA}}</div>
+      <p class="lead" style="font-size:12px">The platform already does the work: 17 approved templates, 60-second MRN/PRN watchers, Approve/Decline buttons. What's missing is a <span class="blue">shared room</span>: replies live in private chats, failures are silent, and nobody else sees the decision.</p>
+    </div>
+  </div>
+  <div class="pno">02</div>
+</section>
+
+<!-- ═════════ 3 · ONE FLOW ═════════ -->
+<section class="page">
+  <div class="brand">{{ASTERISK}}UIPL Docs</div>
+  <div style="position:absolute;left:44px;top:96px;width:330px">
+    <h1 class="h1">One flow,<br>end to end.</h1>
+    <p class="lead" style="margin-top:14px">UIPL Docs stays the record. Slack becomes the room where people see, discuss and decide. ChatGPT reads the room for the CEO.</p>
+  </div>
+
+  <!-- hub diagram -->
+  <svg style="position:absolute;left:0;top:250px" width="794" height="560" viewBox="0 0 794 560">
+    <g stroke="#d9d9df" stroke-width="2" fill="none">
+      <path d="M397 290 L150 120"/><path d="M397 290 L120 420"/><path d="M397 290 L644 110"/>
+      <path d="M397 290 L670 430"/><path d="M397 290 L397 500"/>
+    </g>
+    <g stroke="#2f6bf2" stroke-width="2.5" fill="none" stroke-dasharray="6 6">
+      <path d="M704 112 C 772 180, 786 320, 716 378"/>
+    </g>
+    <circle cx="397" cy="290" r="112" fill="none" stroke="#c9d8ff" stroke-width="10"/>
+  </svg>
+  <div class="orb" style="left:297px;top:440px;width:200px;height:200px;background:#0b1035"><img src="../../frontend/public/logo.png" alt=""></div>
+  <div class="center" style="position:absolute;left:282px;top:664px;width:230px;background:#fff;padding:6px 10px;border-radius:14px"><div class="h3">UIPL Docs (our ERP)</div><p class="small">DMR, MRN, PRN, reports, attendance, HR, projects</p></div>
+
+  <div class="orb" style="left:90px;top:300px;width:120px;height:120px;background:#eef7f1">{{SHEETS}}</div>
+  <div class="center" style="position:absolute;left:60px;top:428px;width:180px"><div class="h3">Google Sheets</div><p class="small">where sites and staff fill data</p></div>
+
+  <div class="orb" style="left:60px;top:610px;width:120px;height:120px;background:#e9fbf0">{{WA}}</div>
+  <div class="center" style="position:absolute;left:30px;top:738px;width:180px"><div class="h3">WhatsApp</div><p class="small">vendors and site staff only</p></div>
+
+  <div class="orb" style="left:584px;top:300px;width:120px;height:120px;background:#111">{{OPENAI_WHITE}}</div>
+  <div class="center" style="position:absolute;left:554px;top:428px;width:180px"><div class="h3">ChatGPT (CEO)</div><p class="small">reads, summarises, triggers</p></div>
+
+  <div class="orb" style="left:600px;top:610px;width:140px;height:140px;background:#fff;border:1px solid var(--line)">{{SLACK}}</div>
+  <div class="center" style="position:absolute;left:580px;top:758px;width:180px"><div class="h3">Slack</div><p class="small">channels, DMs, buttons, huddles</p></div>
+
+  <div class="orb" style="left:357px;top:742px;width:80px;height:80px;background:#fff3ee">{{MAPS}}</div>
+  <div class="center" style="position:absolute;left:307px;top:828px;width:180px"><div class="h3">Phones (GPS)</div><p class="small">attendance clock-in</p></div>
+
+  <!-- who does what -->
+  <div style="position:absolute;left:44px;right:44px;top:910px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+    <div class="card soft"><div class="row"><div class="chip" style="background:#0b1035"><img src="../../frontend/public/logo.png" alt=""></div><div class="h3">UIPL Docs bot</div></div><p class="small" style="margin-top:8px">Writes the data: approvals, reminders, reports, attendance. Already connected to Slack.</p></div>
+    <div class="card soft"><div class="row"><div class="chip" style="background:#fff">{{SLACK}}</div><div class="h3">Slack</div></div><p class="small" style="margin-top:8px">Where the 20–25 people see it, discuss it in threads and tap the buttons.</p></div>
+    <div class="card soft"><div class="row"><div class="chip" style="background:#111">{{OPENAI_WHITE}}</div><div class="h3">ChatGPT</div></div><p class="small" style="margin-top:8px">Reads channels for the CEO, flags risks, drafts replies. Never writes ERP data.</p></div>
+  </div>
+  <div class="pno">03</div>
+</section>
+
+<!-- ═════════ 4 · WHATSAPP → SLACK ═════════ -->
+<section class="page">
+  <div class="brand">{{ASTERISK}}UIPL Docs</div>
+  <div style="position:absolute;left:44px;top:96px;width:706px">
+    <h1 class="h1">Every WhatsApp ping<br>finds a <span class="blue">home</span>.</h1>
+    <p class="lead" style="margin-top:14px">Same rules, same people, same buttons. Most of it is already built into UIPL Docs and only needs switching on.</p>
+  </div>
+
+  <div style="position:absolute;left:44px;top:280px;width:420px;display:grid;gap:9px">
+    {{MAP_ROWS}}
+  </div>
+
+  <div class="phone" style="left:500px;top:322px">
+    <div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="s-top"># prn-notification <span>Slack</span></div>
+      <div class="s-body">
+        <div class="s-msg"><div class="s-ava"><img src="../../frontend/public/logo.png" alt=""></div><div>
+          <div class="s-meta"><b>UIPL Docs</b><span class="app">APP</span><span class="t">11:18 AM</span></div>
+          <div class="s-text" style="font-weight:700;margin-top:2px">Payment request · PRN-1199</div>
+          <div class="s-att" style="border-color:var(--good)"><b>Project</b> Kalhaar · <b>Amount</b> ₹42,500<br><b>Vendor</b> Sample Supplier</div>
+          <div class="s-text" style="margin-top:5px">✅ <b>Approved</b> by Director · 11:26 AM</div>
+        </div></div>
+        <div class="s-msg"><div class="s-ava"><img src="../../frontend/public/logo.png" alt=""></div><div>
+          <div class="s-meta"><b>UIPL Docs</b><span class="app">APP</span><span class="t">3:02 PM</span></div>
+          <div class="s-text" style="font-weight:700;margin-top:2px">New payment request needs approval · PRN-1207</div>
+          <div class="s-att" style="border-color:var(--blue)">
+            <b>Project</b> Devsharnam<br><b>Vendor</b> Sample Vendor<br><b>Type</b> Advance · <b>Amount</b> ₹1,85,000<br><b>Requested by</b> Accounts
+          </div>
+          <div class="s-btns"><span class="s-btn go">Approve</span><span class="s-btn no">Decline</span><span class="s-btn">Comment</span></div>
+          <div class="s-text" style="color:#1264a3;font-weight:600;margin-top:6px">3 replies · Accounts: paid ✓</div>
+        </div></div>
+        <div class="s-msg"><div class="s-ava" style="background:#e9fbf0">{{WA}}</div><div>
+          <div class="s-meta"><b>Same decision on WhatsApp</b></div>
+          <div class="s-text">A tap in Slack or a reply on WhatsApp updates the same card. The first decision wins.</div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:44px;right:44px;top:900px" class="card soft">
+    <div class="row" style="gap:12px"><span class="tag live">LIVE</span><span class="small">running today</span><span class="tag built" style="margin-left:10px">BUILT</span><span class="small">tested, off until the pilot</span><span class="tag next" style="margin-left:10px">NEXT</span><span class="small">small build</span><span class="tag stays" style="margin-left:10px">STAYS</span><span class="small">kept on WhatsApp</span></div>
+  </div>
+  <div class="pno">04</div>
+</section>
+
+<!-- ═════════ 5 · ATTENDANCE ═════════ -->
+<section class="page">
+  <div class="brand">{{ASTERISK}}UIPL Docs</div>
+  <div class="center" style="position:absolute;left:0;right:0;top:92px">
+    <h1 class="h1">Clock in from <span class="blue">Slack</span>.</h1>
+    <p class="lead" style="margin-top:12px">Slack sends the nudge and shows the result. The location check stays in UIPL Docs,<br>because Slack doesn't share a phone's location.</p>
+  </div>
+
+  <!-- four steps -->
+  <div style="position:absolute;left:44px;right:44px;top:236px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+    <div class="card" style="padding:14px;height:226px">
+      <div class="row" style="justify-content:space-between"><span class="tag next">1 · 09:30</span>{{SLACK_SM}}</div>
+      <div class="s-msg" style="margin-top:10px"><div class="s-ava"><img src="../../frontend/public/logo.png" alt=""></div><div>
+        <div class="s-meta"><b>UIPL Docs</b><span class="app">APP</span></div>
+        <div class="s-text">Good morning, Riya. You haven't clocked in yet.</div>
+        <div class="s-btns"><span class="s-btn go">Clock in</span><span class="s-btn">WFH</span></div>
+      </div></div>
+      <p class="small" style="margin-top:6px">A DM to anyone not clocked in.</p>
+    </div>
+    <div class="card" style="padding:14px;height:226px">
+      <div class="row" style="justify-content:space-between"><span class="tag next">2 · GPS</span><div class="chip" style="width:22px;height:22px;background:#fff3ee">{{MAPS}}</div></div>
+      <svg width="140" height="104" viewBox="0 0 140 104" style="display:block;margin:8px auto 0">
+        <circle cx="70" cy="52" r="48" fill="#e8efff"/><circle cx="70" cy="52" r="30" fill="#c9d8ff"/>
+        <circle cx="70" cy="52" r="7" fill="#2f6bf2"/><circle cx="86" cy="40" r="5" fill="#21b46b" stroke="#fff" stroke-width="2"/>
+      </svg>
+      <p class="small" style="margin-top:4px">The button opens UIPL Docs, which checks the phone is within <b>120 m</b> of the office.</p>
+    </div>
+    <div class="card" style="padding:14px;height:226px">
+      <div class="row" style="justify-content:space-between"><span class="tag next">3 · Done</span>{{SLACK_SM}}</div>
+      <div class="s-msg" style="margin-top:10px"><div class="s-ava"><img src="../../frontend/public/logo.png" alt=""></div><div>
+        <div class="s-meta"><b>UIPL Docs</b><span class="app">APP</span></div>
+        <div class="s-att" style="border-color:var(--good)">Clocked in 09:42 · Office</div>
+      </div></div>
+      <p class="small" style="margin-top:6px">Slack status set to “In office” or “Working remotely”.</p>
+    </div>
+    <div class="card" style="padding:14px;height:226px">
+      <div class="row" style="justify-content:space-between"><span class="tag next">4 · 10:30</span>{{SLACK_SM}}</div>
+      <div class="s-text" style="margin-top:10px;font-weight:700"># attendance</div>
+      <div class="s-att" style="border-color:var(--good)">Present 18</div>
+      <div class="s-att" style="border-color:var(--warn)">Remote 1</div>
+      <div class="s-att" style="border-color:var(--bad)">Not yet 3</div>
+      <p class="small" style="margin-top:6px">One summary for HR each morning.</p>
+    </div>
+  </div>
+
+  <!-- around the day -->
+  <div style="position:absolute;left:44px;right:44px;top:494px;display:grid;grid-template-columns:1.1fr 1fr;gap:14px">
+    <div class="card soft" style="padding:18px 20px">
+      <h3 class="h3">Around the working day</h3>
+      <div style="display:grid;gap:9px;margin-top:12px">
+        <div class="row" style="align-items:flex-start"><span class="dot" style="background:var(--blue);margin-top:5px"></span><span class="lead" style="font-size:11.5px"><b>Work from home:</b> staff allowed to work remotely clock in straight from the Slack button, as the platform does today.</span></div>
+        <div class="row" style="align-items:flex-start"><span class="dot" style="background:var(--blue);margin-top:5px"></span><span class="lead" style="font-size:11.5px"><b>Clock-out:</b> a DM at 18:30 with a Clock out button.</span></div>
+        <div class="row" style="align-items:flex-start"><span class="dot" style="background:var(--blue);margin-top:5px"></span><span class="lead" style="font-size:11.5px"><b>Leave:</b> requests arrive as an approval card for HR; the employee gets the answer by DM.</span></div>
+        <div class="row" style="align-items:flex-start"><span class="dot" style="background:var(--blue);margin-top:5px"></span><span class="lead" style="font-size:11.5px"><b>Corrections:</b> missed punches go to HR as a card instead of a phone call.</span></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="card"><div class="h1" style="font-size:40px">333</div><p class="small" style="margin-top:6px">clock-ins in the last 30 days</p></div>
+      <div class="card"><div class="h1" style="font-size:40px">20</div><p class="small" style="margin-top:6px">people using attendance</p></div>
+      <div class="card"><div class="h1" style="font-size:40px">95%</div><p class="small" style="margin-top:6px">clock-ins from the office</p></div>
+      <div class="card"><div class="h1" style="font-size:40px">46</div><p class="small" style="margin-top:6px">leave requests so far</p></div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:44px;right:44px;top:752px" class="card">
+    <div class="row" style="justify-content:space-between"><h3 class="h3">One person's day in Slack</h3><span class="small">every button opens or updates UIPL Docs</span></div>
+    <svg width="674" height="128" viewBox="0 0 674 128" style="display:block;margin-top:6px">
+      <g font-family="Regular, Fill, sans-serif">
+        <line x1="12" y1="64" x2="662" y2="64" stroke="#f1f1f3" stroke-width="12" stroke-linecap="round"/>
+        <rect x="42" y="58" width="550" height="12" rx="6" fill="#c9d8ff"/>
+        <circle cx="42" cy="64" r="10" fill="#2f6bf2" stroke="#fff" stroke-width="3"/>
+        <text x="30" y="20" font-size="12" fill="#0f0f10">09:30 · Clock in</text><text x="30" y="35" font-size="9.5" fill="#8a8a92">DM with a button</text>
+        <circle cx="103" cy="64" r="10" fill="#ecb22e" stroke="#fff" stroke-width="3"/>
+        <text x="91" y="100" font-size="12" fill="#0f0f10">10:30 · HR summary</text><text x="91" y="115" font-size="9.5" fill="#8a8a92">#attendance</text>
+        <circle cx="290" cy="64" r="10" fill="#21b46b" stroke="#fff" stroke-width="3"/>
+        <text x="290" y="20" font-size="12" fill="#0f0f10" text-anchor="middle">Any time · Leave answer</text><text x="290" y="35" font-size="9.5" fill="#8a8a92" text-anchor="middle">HR decides on a card, you get a DM</text>
+        <circle cx="592" cy="64" r="10" fill="#2f6bf2" stroke="#fff" stroke-width="3"/>
+        <text x="604" y="20" font-size="12" fill="#0f0f10" text-anchor="end">18:30 · Clock out</text><text x="604" y="35" font-size="9.5" fill="#8a8a92" text-anchor="end">DM with a button</text>
+        <circle cx="622" cy="64" r="10" fill="#4a154b" stroke="#fff" stroke-width="3"/>
+        <text x="634" y="100" font-size="12" fill="#0f0f10" text-anchor="end">18:50 · Report reminder</text><text x="634" y="115" font-size="9.5" fill="#8a8a92" text-anchor="end">only if not filed yet</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="center" style="position:absolute;left:0;right:0;top:966px">
+    <div class="pills"><span class="pill grey">Attendance stays in UIPL Docs (hrAttendanceRecords)</span><span class="pill blue">Slack is the doorway</span></div>
+    <p class="small" style="margin-top:14px">Nothing changes for payroll or reports: the same records, the same 120 m office geofence, the same remote-work permission.</p>
+  </div>
+  <div class="pno">05</div>
+</section>
+
+<!-- ═════════ 6 · CHATGPT ═════════ -->
+<section class="page">
+  <div class="brand">{{ASTERISK}}UIPL Docs</div>
+
+  <!-- the listening circle, after the reference's red arcs -->
+  <svg style="position:absolute;left:44px;top:120px;overflow:visible" width="330" height="330" viewBox="0 0 330 330">
+    <g fill="none" stroke="#e5483f" stroke-width="9" stroke-linecap="round">
+      <path d="M62.6 93.3 A 125 125 0 0 0 62.6 236.7"/><path d="M42.4 62.2 A 160 160 0 0 0 42.4 267.8"/>
+      <path d="M267.4 236.7 A 125 125 0 0 0 267.4 93.3"/><path d="M287.6 267.8 A 160 160 0 0 0 287.6 62.2"/>
+    </g>
+  </svg>
+  <div class="orb" style="left:119px;top:195px;width:180px;height:180px;background:#111">{{OPENAI_WHITE}}</div>
+
+  <div style="position:absolute;left:410px;top:150px;width:340px">
+    <h1 class="h1">Let ChatGPT<br><span class="blue">listen</span>.</h1>
+    <p class="lead" style="margin-top:14px">The CEO's ChatGPT Pro connects to Slack and works across the channels the CEO can see.</p>
+    <div style="display:grid;gap:10px;margin-top:18px">
+      <div class="row" style="align-items:flex-start"><span class="tag built" style="flex:none">READ</span><span class="lead" style="font-size:11.5px">Search and summarise messages, threads and channels through the Slack connector.</span></div>
+      <div class="row" style="align-items:flex-start"><span class="tag built" style="flex:none">WATCH</span><span class="lead" style="font-size:11.5px">Event-triggered tasks react to new messages in channels where @ChatGPT is added (Plus and Pro, with Work).</span></div>
+      <div class="row" style="align-items:flex-start"><span class="tag built" style="flex:none">ACT</span><span class="lead" style="font-size:11.5px">Reminders, files and joining channels, when the workspace admin allows it.</span></div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:44px;right:44px;top:500px">
+    <h2 class="h2">Triggers for the CEO</h2>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px">
+      <div class="card"><span class="tag next">WHEN</span><p class="lead" style="font-size:11.5px;margin-top:6px">A payment request of ₹1,00,000 or more lands in #prn-notification</p><span class="tag built" style="margin-top:10px">THEN</span><p class="small" style="margin-top:6px">ChatGPT sums up vendor, project and history in one line and flags it to the CEO.</p></div>
+      <div class="card"><span class="tag next">WHEN</span><p class="lead" style="font-size:11.5px;margin-top:6px">Someone in #site-updates writes about a delay, halt or shortage</p><span class="tag built" style="margin-top:10px">THEN</span><p class="small" style="margin-top:6px">ChatGPT adds it to a running risk list and names who can unblock it.</p></div>
+      <div class="card"><span class="tag next">WHEN</span><p class="lead" style="font-size:11.5px;margin-top:6px">The evening report posts in #uipl-updates</p><span class="tag built" style="margin-top:10px">THEN</span><p class="small" style="margin-top:6px">ChatGPT compares it with the week so far and drafts the CEO's replies.</p></div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:44px;right:44px;top:756px;display:grid;grid-template-columns:1.3fr 1fr;gap:14px">
+    <div class="card" style="padding:14px 16px;align-self:start">
+      <div class="row" style="justify-content:space-between"><span class="small" style="color:#1d1c1d"># uipl-updates · thread</span>{{SLACK_SM}}</div>
+      <div class="s-body" style="padding:10px 0 0">
+        <div class="s-msg"><div class="s-ava" style="background:#4a154b;color:#fff;font-size:7px;font-weight:700">CEO</div><div>
+          <div class="s-meta"><b>CEO</b><span class="t">8:05 PM</span></div>
+          <div class="s-text"><span class="mention">@ChatGPT</span> what's holding up Paramdham this week?</div>
+        </div></div>
+        <div class="s-msg" style="margin-bottom:0"><div class="s-ava" style="background:#111">{{OPENAI_WHITE}}</div><div>
+          <div class="s-meta"><b>ChatGPT</b><span class="app">APP</span><span class="t">8:05 PM</span></div>
+          <div class="s-text">From #site-manpower and #prn-notification:<br>• Short of planned manpower on 4 of 6 days<br>• PRN-1207 advance waiting since 3 PM<br>• Shuttering material still not delivered<br><b>Suggest:</b> approve PRN-1207 and ask Procurement for a delivery date.</div>
+        </div></div>
+      </div>
+    </div>
+    <div class="card soft" style="padding:16px 18px">
+      <h3 class="h3">Good to know</h3>
+      <div style="display:grid;gap:9px;margin-top:10px">
+        <p class="small">• It works through the CEO's own account, so it sees only what the CEO can see in Slack.</p>
+        <p class="small">• ChatGPT reads and drafts; approvals and records stay with the UIPL Docs bot.</p>
+        <p class="small">• Pro's Slack app isn't offered in the EEA, UK or Switzerland; India is fine.</p>
+        <p class="small">• @ChatGPT for the whole team needs ChatGPT Business or Enterprise; Pro covers the CEO.</p>
+      </div>
+    </div>
+  </div>
+  <div class="pno">06</div>
+</section>
+
+<!-- ═════════ 7 · AUTOMATIONS ═════════ -->
+<section class="page">
+  <div class="brand">{{ASTERISK}}UIPL Docs</div>
+  <div style="position:absolute;left:44px;top:96px;width:360px">
+    <h1 class="h1">Triggers that<br>do the <span class="blue">chasing</span>.</h1>
+    <p class="lead" style="margin-top:14px">Four kinds of trigger cover almost everything: a time of day, an event in UIPL Docs, a slash command, an emoji on a message.</p>
+  </div>
+  <!-- waveform beside a Slack circle, after the reference's recording visual -->
+  <svg style="position:absolute;left:430px;top:110px" width="320" height="170" viewBox="0 0 320 170">
+    <g fill="#21b46b">{{WAVE}}</g>
+  </svg>
+  <div class="orb" style="left:552px;top:140px;width:110px;height:110px;background:#fff;border:1px solid var(--line)">{{SLACK}}</div>
+
+  <div style="position:absolute;left:44px;right:44px;top:320px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    {{AUTOMATIONS}}
+  </div>
+  <div style="position:absolute;left:44px;right:44px;top:960px" class="row">
+    <span class="tag live">LIVE</span><span class="small">running</span>
+    <span class="tag built" style="margin-left:12px">BUILT</span><span class="small">ready to switch on</span>
+    <span class="tag next" style="margin-left:12px">NEXT</span><span class="small">small build on the same Slack app</span>
+  </div>
+  <div class="pno">07</div>
+</section>
+
+<!-- ═════════ 8 · MORE + ROLLOUT ═════════ -->
+<section class="page">
+  <div class="brand">{{ASTERISK}}UIPL Docs</div>
+  <div class="center" style="position:absolute;left:0;right:0;top:90px">
+    <h1 class="h1">Maximum efficiency,<br><span class="blue">same workspace</span>.</h1>
+  </div>
+
+  <div style="position:absolute;left:44px;right:44px;top:226px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    {{TOOLS}}
+  </div>
+
+  <!-- channel map -->
+  <div style="position:absolute;left:44px;right:44px;top:542px" class="card soft">
+    <div class="row" style="justify-content:space-between"><h3 class="h3">The channels</h3><span class="small">8 shared channels plus one #site-… per site; the rest is DMs and threads</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">{{CHANNELS}}</div>
+  </div>
+
+  <!-- rollout -->
+  <div style="position:absolute;left:44px;right:44px;top:742px">
+    <h2 class="h2">Four weeks to switch over</h2>
+    <svg width="706" height="40" viewBox="0 0 706 40" style="display:block;margin-top:14px">
+      <line x1="20" y1="20" x2="686" y2="20" stroke="#d9d9df" stroke-width="2"/>
+      <circle cx="20" cy="20" r="11" fill="#21b46b"/><circle cx="242" cy="20" r="11" fill="#2f6bf2"/><circle cx="464" cy="20" r="11" fill="#2f6bf2"/><circle cx="686" cy="20" r="11" fill="#0f0f10"/>
+    </svg>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:6px">
+      <div><div class="h3">Week 1</div><p class="small" style="margin-top:4px">Slack Pro, channels, invite 20–25 people with their UIPL Docs email. CEO report already live.</p></div>
+      <div><div class="h3">Week 2</div><p class="small" style="margin-top:4px">Switch on MRN/PRN cards, report and DMR reminders. WhatsApp runs alongside.</p></div>
+      <div><div class="h3">Week 3</div><p class="small" style="margin-top:4px">Attendance clock-in, leave cards, HR summary. Connect the CEO's ChatGPT and first triggers.</p></div>
+      <div><div class="h3">Week 4</div><p class="small" style="margin-top:4px">Compare numbers, turn off internal WhatsApp reminders; vendors stay on WhatsApp.</p></div>
+    </div>
+  </div>
+  <div style="position:absolute;left:44px;right:44px;top:930px;display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:center" class="card">
+    <div class="row" style="gap:14px"><div class="chip" style="width:44px;height:44px;background:#fff;border:1px solid var(--line)">{{SLACK}}</div><div class="h1" style="font-size:38px;white-space:nowrap">≈ US$181<span style="font-size:14px;color:var(--muted);margin-left:8px;letter-spacing:0">a month</span></div></div>
+    <p class="small">Slack Pro for 25 people at about US$7.25 each a month, billed yearly. Workflows need a paid plan. Confirm the INR price and GST with Slack before buying.</p>
+  </div>
+  <div class="pno">08</div>
+</section>
+
+<!-- ═════════ 9 · CLOSE (black, after the reference footer) ═════════ -->
+<section class="page" style="background:#0f0f10;color:#fff">
+  <div class="center" style="position:absolute;left:0;right:0;top:210px">
+    <div style="display:flex;justify-content:center;align-items:center;gap:22px">
+      <span style="display:inline-block;width:76px;height:76px">{{ASTERISK_WHITE}}</span>
+      <span style="font-size:88px;letter-spacing:-0.04em;line-height:1">UIPL Docs</span>
+    </div>
+    <p style="font-size:15px;margin-top:22px;color:rgba(255,255,255,.75)">on Slack, with ChatGPT listening in.</p>
+    <div class="pills" style="margin-top:28px">
+      <span class="pill" style="background:#2a2a2e;color:rgba(255,255,255,.55);min-width:260px">Approve the four-week pilot</span>
+      <span class="pill" style="background:#fff;color:#0f0f10">Let's start</span>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:84px;right:84px;top:500px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+    <div style="border:1px solid #2e2e33;border-radius:22px;padding:18px"><div class="h3">Decide</div><p style="font-size:10.5px;color:rgba(255,255,255,.65);margin-top:8px;line-height:1.5">Slack Pro for 20–25 people, and the channel list on page 8.</p></div>
+    <div style="border:1px solid #2e2e33;border-radius:22px;padding:18px"><div class="h3">Allow</div><p style="font-size:10.5px;color:rgba(255,255,255,.65);margin-top:8px;line-height:1.5">The ChatGPT app in the workspace, and who can approve MRN and PRN in Slack.</p></div>
+    <div style="border:1px solid #2e2e33;border-radius:22px;padding:18px"><div class="h3">Keep</div><p style="font-size:10.5px;color:rgba(255,255,255,.65);margin-top:8px;line-height:1.5">WhatsApp for vendors and site staff, on today's number and templates.</p></div>
+  </div>
+
+  <div style="position:absolute;left:0;right:0;top:720px;display:flex;justify-content:center;gap:22px">
+    <div class="orb" style="position:relative;width:64px;height:64px;background:#fff">{{SLACK}}</div>
+    <div class="orb" style="position:relative;width:64px;height:64px;background:#0b1035;border:1px solid #2e2e33"><img src="../../frontend/public/logo.png" alt=""></div>
+    <div class="orb" style="position:relative;width:64px;height:64px;background:#fff">{{OPENAI}}</div>
+    <div class="orb" style="position:relative;width:64px;height:64px;background:#fff">{{WA}}</div>
+    <div class="orb" style="position:relative;width:64px;height:64px;background:#fff">{{SHEETS}}</div>
+  </div>
+
+  <div style="position:absolute;left:90px;right:90px;bottom:56px;text-align:center;font-size:11px;color:rgba(255,255,255,.75)">
+    <span style="margin:0 12px">dashboard.nexarrow.eu</span><span style="margin:0 12px">#uipl-updates</span><span style="margin:0 12px">Juniper workspace</span>
+    <p style="font-size:9px;margin-top:14px;color:rgba(255,255,255,.45)">UIPL Docs · Nov 2026 · Figures from UIPL Docs, last 30 days to 20 Nov 2026. Phone screens are illustrations. Slack and ChatGPT features from their help centres; plans and prices can change.</p>
+  </div>
+</section>
+
+</body>
+</html>

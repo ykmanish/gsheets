@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Maritime Intelligence Dossier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=block" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 24mm 16mm 18mm 16mm; }
+  :root {
+    --ink: #172033; --soft: #4a5568; --line: #dfe3ea; --navy: #12305f; --accent: #b3261e;
+    --gold: #c8932b; --tint: #f4f6fa; --green: #1e7a4c; --amber: #b7791f; --red: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; }
+  body { font-family: 'Poppins', sans-serif; color: var(--ink); font-size: 9.6pt; line-height: 1.62; font-weight: 400; }
+  h1, h2, h3, h4 { font-weight: 600; color: var(--navy); margin: 0; line-height: 1.25; }
+  h1 { font-size: 21pt; letter-spacing: -0.3px; }
+  h2 { font-size: 14.5pt; margin: 0 0 8px; }
+  h3 { font-size: 11pt; margin: 16px 0 6px; break-after: avoid; page-break-after: avoid; }
+  h4 { font-size: 9.6pt; margin: 10px 0 4px; color: var(--ink); }
+  p { margin: 0 0 8px; text-align: justify; hyphens: auto; }
+  .muted { color: var(--soft); }
+  .small { font-size: 8.2pt; }
+  .xs { font-size: 7.4pt; }
+  .page-break { break-before: page; }
+  .avoid { break-inside: avoid; }
+  .kicker { font-size: 7.6pt; letter-spacing: 1.6px; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+  .rule { height: 3px; width: 54px; background: var(--gold); border-radius: 2px; margin: 8px 0 14px; }
+
+  /* vessel header band */
+  .vhead { background: var(--navy); color: #fff; border-radius: 10px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; }
+  .vhead h1 { color: #fff; font-size: 20pt; }
+  .vhead .sub { font-size: 8.6pt; opacity: .85; margin-top: 2px; }
+  .vhead .imo { text-align: right; font-size: 8.2pt; opacity: .9; }
+  .vhead .imo b { display: block; font-size: 13pt; font-weight: 600; letter-spacing: .5px; }
+
+  .assess { border-left: 4px solid var(--accent); background: #fbf4f3; padding: 12px 14px 6px; border-radius: 0 8px 8px 0; margin: 6px 0 12px; }
+  .conf { display: inline-block; font-size: 7.6pt; font-weight: 600; letter-spacing: .6px; padding: 2px 10px; border-radius: 20px; color: #fff; margin-right: 6px; text-transform: uppercase; }
+  .conf.high { background: var(--red); } .conf.mod { background: var(--amber); } .conf.low { background: #6b7280; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.3pt; line-height: 1.45; }
+  th { text-align: left; font-weight: 600; color: var(--navy); background: var(--tint); padding: 6px 8px; border-bottom: 1.5px solid var(--navy); }
+  td { padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr { break-inside: avoid; }
+  .facts td:first-child { width: 30%; color: var(--soft); }
+  .sev { font-weight: 600; font-size: 7.4pt; padding: 1px 7px; border-radius: 10px; white-space: nowrap; }
+  .sev.h { background: #fde2e0; color: var(--red); } .sev.m { background: #fdf0d6; color: var(--amber); } .sev.l { background: #e7eef7; color: var(--navy); }
+
+  /* timeline */
+  .tl { position: relative; margin: 6px 0 10px 4px; padding-left: 18px; border-left: 2px solid var(--line); }
+  .tl .ev { position: relative; margin: 0 0 7px; break-inside: avoid; }
+  .tl .ev::before { content: ""; position: absolute; left: -24px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2.5px solid var(--navy); }
+  .tl .ev.s::before { border-color: var(--red); background: var(--red); }
+  .tl .ev.a::before { border-color: var(--amber); }
+  .tl .d { font-weight: 600; color: var(--navy); font-size: 8.4pt; display: inline-block; min-width: 92px; }
+  .tl .t { font-size: 8.6pt; }
+
+  figure { margin: 8px 0 12px; break-inside: avoid; }
+  figure img { max-width: 100%; max-height: 98mm; margin: 0 auto; display: block; border: 1px solid var(--line); border-radius: 6px; }
+  figcaption { font-size: 7.6pt; color: var(--soft); margin-top: 4px; line-height: 1.45; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* entity relationship chart */
+  .er { border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px; background: linear-gradient(180deg, #fbfcfe, #f3f6fb); break-inside: avoid; margin: 8px 0 12px; }
+  .er .row { display: flex; align-items: stretch; gap: 0; }
+  .er .node { flex: 1; background: #fff; border: 1.5px solid var(--navy); border-radius: 8px; padding: 7px 8px; font-size: 7.5pt; line-height: 1.35; min-height: 92px; }
+  .er .node .k { font-size: 6.6pt; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); font-weight: 600; display: block; margin-bottom: 2px; }
+  .er .node b { font-weight: 600; font-size: 8.2pt; color: var(--navy); display: block; margin-bottom: 2px; }
+  .er .node.san { border-color: var(--red); background: #fff6f5; }
+  .er .arrow { width: 20px; display: flex; align-items: center; justify-content: center; color: var(--navy); font-size: 13pt; font-weight: 600; }
+  .er .links { display: flex; gap: 8px; margin-top: 9px; }
+  .er .link { flex: 1; font-size: 7.3pt; border: 1px dashed #9aa6b8; border-radius: 7px; padding: 5px 8px; background: #fff; }
+  .er .link b { color: var(--navy); font-weight: 600; }
+  .legend { font-size: 6.9pt; color: var(--soft); margin-top: 6px; }
+
+  .hyp { border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px 4px; margin: 0 0 8px; break-inside: avoid; }
+  .hyp h4 { margin-top: 0; }
+  .tag { font-size: 7pt; font-weight: 600; padding: 1px 8px; border-radius: 10px; background: var(--tint); color: var(--navy); margin-left: 6px; }
+  .tag.weak { background: #fde2e0; color: var(--red); } .tag.part { background: #fdf0d6; color: var(--amber); }
+
+  .callout { background: var(--tint); border-radius: 8px; padding: 10px 14px 4px; margin: 8px 0 12px; }
+  ol.src { padding-left: 18px; font-size: 7.8pt; line-height: 1.5; }
+  ol.src li { margin-bottom: 3px; word-break: break-word; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 8px 0 14px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; break-inside: avoid; }
+  .card .n { font-weight: 600; color: var(--navy); font-size: 10.5pt; }
+  .card .i { font-size: 7.6pt; color: var(--soft); }
+  .card ul { margin: 6px 0 0; padding-left: 14px; font-size: 7.8pt; line-height: 1.45; }
+</style>
+</head>
+<body>
+
+<!-- ============ ANALYST'S NOTE ============ -->
+<section>
+  <div class="kicker">Before you read</div>
+  <h2>Analyst's note</h2>
+  <div class="rule"></div>
+  <p>This dossier looks at three oil tankers that were handed to me as nothing more than IMO numbers: <b>9384306</b>, <b>9236248</b> and <b>9259197</b>. The brief was simple to state and harder to do well: work out who these ships really are today, what they have been called before, who stands behind them, whether they are sanctioned, and whether their tracking data behaves the way an honest merchant ship's should.</p>
+  <p>Everything here was collected passively. I did not contact the vessels, their owners or their agents, I did not create accounts or pay for commercial AIS feeds, and I did not try to get around any website that refused automated or anonymous access. Where a source blocked me (the Ukrainian GUR "War &amp; Sanctions" portal did, with a bot-check page), I used a reputable aggregator that republishes the same data instead, and I say so wherever it matters. All screenshots were taken on 26 November 2026 and the satellite frames come from the European Space Agency's free Copernicus archive.</p>
+  <p>A word on tone. Shadow-fleet reporting has a habit of treating every gap in a ship's AIS track as proof of wrongdoing. I have tried not to do that. Each vessel section ends with the most reasonable innocent explanations I could think of, and I tested each one against what the evidence actually shows. Some survive in part. Most do not.</p>
+
+  <h3>How the confidence ratings work</h3>
+  <table class="avoid">
+    <tr><th style="width:18%">Rating</th><th>What it means in this report</th></tr>
+    <tr><td><span class="conf high">High</span></td><td>Several independent sources agree (for example a government sanctions notice, a registry record and AIS data), and I could not find credible information pointing the other way.</td></tr>
+    <tr><td><span class="conf mod">Moderate</span></td><td>The judgement is well supported but leans on one main source, on commercial databases that hide key fields behind a paywall, or on press reporting I could not check against a primary record.</td></tr>
+    <tr><td><span class="conf low">Low</span></td><td>Plausible, but based on a single unverified source or on inference. Treated as a lead, not a finding.</td></tr>
+  </table>
+
+  <h3>Sources and tools used</h3>
+  <table class="avoid">
+    <tr><th style="width:26%">Source / tool</th><th style="width:34%">What it gave me</th><th>Limits</th></tr>
+    <tr><td>OpenSanctions</td><td>Consolidated sanctions listings, former names, flags, MMSIs, call signs and narrative descriptions drawn from OFAC, EU, UK, Swiss, Canadian and Ukrainian (GUR) data</td><td>An aggregator. I cross-checked dates against the original notices where I could.</td></tr>
+    <tr><td>VesselFinder (free tier)</td><td>Live AIS identity, last terrestrial position, destination, draught, name/flag history, port-call summaries</td><td>Owner, manager and satellite AIS are paywalled; positions shown are terrestrial only.</td></tr>
+    <tr><td>MagicPort</td><td>Owner and ISM manager names, recent port calls</td><td>Commercial database; ownership fields are self-reported.</td></tr>
+    <tr><td>Copernicus Browser + STAC catalogue</td><td>Sentinel-2 L2A optical imagery, cloud-cover screening of candidate dates</td><td>10 m resolution: ship size can be estimated, a specific ship cannot be named.</td></tr>
+    <tr><td>US Treasury, UK FCDO, Canada Gazette, EUR-Lex</td><td>Primary designation records and dates</td><td>Notices rarely name current managers.</td></tr>
+    <tr><td>Open press</td><td>Context on escorts, dark voyages and the Venezuela blockade</td><td>Treated as reporting, not fact, unless matched elsewhere.</td></tr>
+  </table>
+</section>
+
+<!-- ============ AT A GLANCE ============ -->
+<section>
+  <div class="kicker">Bottom line up front</div>
+  <h2>The three ships at a glance</h2>
+  <div class="rule"></div>
+  <p>All three hulls are older tankers that changed name and flag several times as they aged, and all three now sit on the sanctions lists of the United States, the European Union, the United Kingdom, Switzerland and Ukraine. They are not, however, the same kind of problem. One is a Russian product tanker that has simply come home to the Russian flag. One is an Iranian-trade crude carrier whose tracking identity does not add up. The third has worked for Russia, Iran and Venezuela in turn and tried to slip out of a naval blockade with its transponder switched off.</p>
+
+  <div class="grid3">
+    <div class="card">
+      <div class="n">UNIVERSAL</div>
+      <div class="i">IMO 9384306 · product tanker · 2009 · 50,923 dwt</div>
+      <ul>
+        <li>Ex PRISCO IRINA, ex SCF USSURI (Sovcomflot naming)</li>
+        <li>Now Russian-flagged, owned and managed by North Fleet Ltd</li>
+        <li>Sanctioned by US, EU, CH, UK, UA, CA</li>
+        <li>Last seen on terrestrial AIS 43 days ago off northern Russia</li>
+      </ul>
+      <p class="small" style="margin-top:8px"><span class="conf high">High</span></p>
+    </div>
+    <div class="card">
+      <div class="n">FENGHUANG</div>
+      <div class="i">IMO 9236248 · crude tanker · 2002 · 105,851 dwt</div>
+      <ul>
+        <li>Ex MINERVA ZENIA, BURGUNDY STAR, PHOENIX I</li>
+        <li>Renamed one month after US designation</li>
+        <li>Broadcasting a Mozambique MMSI while records say Cook Islands or Comoros</li>
+        <li>Iranian crude to China; sanctioned by US, UA, EU, CH, UK</li>
+      </ul>
+      <p class="small" style="margin-top:8px"><span class="conf high">High</span></p>
+    </div>
+    <div class="card">
+      <div class="n">THALIA III</div>
+      <div class="i">IMO 9259197 · crude tanker · 2003 · 107,127 dwt</div>
+      <ul>
+        <li>Ex PACIFIC LEO, ADS OSLO, GUNDALA, REDBUD</li>
+        <li>Flag shown as "Unknown" since January 2025</li>
+        <li>Russian, Iranian and Venezuelan cargoes</li>
+        <li>Went dark trying to leave Venezuela, January 2026</li>
+      </ul>
+      <p class="small" style="margin-top:8px"><span class="conf high">High</span></p>
+    </div>
+  </div>
+
+  <h3>Sanctions coverage compared</h3>
+  <table>
+    <tr><th>Authority</th><th>UNIVERSAL</th><th>FENGHUANG</th><th>THALIA III</th></tr>
+    <tr><td>United States (OFAC)</td><td>10 Jan 2025</td><td>24 Feb 2025 (as Alkonost property, E.O. 13846)</td><td>10 Jan 2025</td></tr>
+    <tr><td>European Union</td><td>20 May 2025 (in force 21 May)</td><td>19 Dec 2025</td><td>21 May 2025</td></tr>
+    <tr><td>Switzerland (SECO)</td><td>3 Jun 2025</td><td>13 Jan 2026</td><td>3 Jun 2025</td></tr>
+    <tr><td>United Kingdom</td><td>21 Jul 2025 (RUS2892)</td><td>24 Feb 2026 (RUS3384)</td><td>21 Jul 2025</td></tr>
+    <tr><td>Ukraine</td><td>Master Aug 2025; vessel 13 Dec 2025</td><td>13 Dec 2025</td><td>Vessel 13 Dec 2025; master 21 Feb 2026</td></tr>
+    <tr><td>Canada</td><td>25 Mar 2026</td><td>—</td><td>Nov 2025</td></tr>
+    <tr><td>New Zealand</td><td>—</td><td>—</td><td>30 Oct 2025</td></tr>
+  </table>
+  <p class="xs muted" style="margin-top:6px">Dates as recorded by OpenSanctions (accessed 26 Nov 2026) from the original notices. A dash means I found no listing, not that none exists.</p>
+
+  <h3>What ties them together</h3>
+  <p>None of the three share an owner, a manager or a flag that I could find, so I would not describe them as one network. What they share is a pattern. Each was a perfectly ordinary mainstream tanker for most of its life. Each was sold on in its late teens, given a new name, and moved to a registry with light oversight. Each then started carrying cargo from a sanctioned oil exporter. And in each case the paper identity (flag, MMSI, owner) became less stable just as sanctions pressure arrived. That is the textbook life cycle of a shadow-fleet tanker, and it is the main reason my confidence is high across the board even where specific ownership details remain hidden.</p>
+</section>
+
+<!-- ============ UNIVERSAL ============ -->
+<section class="page-break">
+  <div class="vhead">
+    <div>
+      <div class="kicker" style="color:#ffd27a">Vessel 1 of 3</div>
+      <h1>UNIVERSAL</h1>
+      <div class="sub">Chemical / oil products tanker · built 2009 · LOA 183 m × 32.2 m · GT 29,967</div>
+    </div>
+    <div class="imo">IMO<b>9384306</b>MMSI 273271630 · UAPD7</div>
+  </div>
+
+  <h3 style="margin-top:4px">Intelligence assessment</h3>
+  <div class="assess">
+    <p><span class="conf high">High confidence</span> UNIVERSAL is the former Sovcomflot product tanker SCF USSURI. It was given a neutral name in September 2024, passed through a string of open registries, and is now back under the Russian flag with a Russian owner and manager, North Fleet Ltd. Six governments have sanctioned it for carrying Russian oil above the price cap, and Ukraine has also sanctioned its master. Its recent behaviour fits that profile. Its known calls are at Ust-Luga, Suez, Port Said and, unusually, Manaus in Brazil. It went quiet on terrestrial AIS off northern Russia about six weeks ago while declaring Ust-Luga as its destination. Press reports describe it being escorted by a Russian warship and drifting for long periods at sea. I rate this <b>high</b> because the identity chain (IMO, former names, MMSIs and call signs) agrees across government lists, OpenSanctions, VesselFinder and MagicPort, and because no source I found points to legitimate, non-sanctioned employment. The weaker part is what the ship is doing <i>right now</i>. That rests on a 43-day-old terrestrial fix and on paywalled satellite AIS, so I would put its current activity at <b>moderate</b>.</p>
+  </div>
+
+  <h3>Identity snapshot</h3>
+  <table class="facts">
+    <tr><td>Current name / flag</td><td>UNIVERSAL · Russia (AIS flag and MMSI prefix 273 agree)</td></tr>
+    <tr><td>Former names</td><td>PRISCO IRINA (2009) → SCF USSURI (Aug 2016) → UNIVERSAL (Sep 2024)</td></tr>
+    <tr><td>Flags on record</td><td>Liberia, Cyprus, Barbados, Gabon, Comoros, Russia (current)</td></tr>
+    <tr><td>MMSIs / call signs</td><td>314954000 (Barbados MID 314) / 8P2454 → 273271630 (Russia MID 273) / UAPD7</td></tr>
+    <tr><td>Owner · ISM · commercial manager</td><td>North Fleet Ltd (all three roles, per MagicPort)</td></tr>
+    <tr><td>Earlier affiliations</td><td>Sun Ship Management (UAE), Oil Tankers SCF Mgmt FZCO (UAE), Fornax Ship Management FZCO (UAE), all linked by Ukraine's GUR to PJSC Sovcomflot</td></tr>
+    <tr><td>Last AIS (terrestrial)</td><td>"North Russia", 43 days before capture · course 318.5° · 13.9 kn · draught 8.2 m · destination Ust-Luga, ETA 23 Nov</td></tr>
+    <tr><td>Last port</td><td>Manaus, Brazil · departed 1 Jul 2026 (148 days before capture)</td></tr>
+  </table>
+
+  <h3>Identity timeline</h3>
+  <div class="tl">
+    <div class="ev"><span class="d">Mar 2009</span><span class="t">Delivered as <b>PRISCO IRINA</b>, a mainstream MR product/chemical tanker.</span></div>
+    <div class="ev"><span class="d">Aug 2016</span><span class="t">Renamed <b>SCF USSURI</b>, following Sovcomflot's "SCF" naming. The bow in the VesselFinder photo still reads SCF USSURI.</span></div>
+    <div class="ev a"><span class="d">Sep 2024</span><span class="t">Renamed <b>UNIVERSAL</b> and moved through open registries (Barbados, Gabon, Comoros on record) while managed from the UAE.</span></div>
+    <div class="ev s"><span class="d">10 Jan 2025</span><span class="t">Designated by the <b>US Treasury (OFAC)</b> in the large Russian-energy action.</span></div>
+    <div class="ev s"><span class="d">20–21 May 2025</span><span class="t"><b>EU</b> listing for transporting Russian oil using "irregular and high-risk shipping practices".</span></div>
+    <div class="ev s"><span class="d">3 Jun 2025</span><span class="t"><b>Switzerland</b> mirrors the EU listing.</span></div>
+    <div class="ev s"><span class="d">21 Jul 2025</span><span class="t"><b>United Kingdom</b> designation (RUS2892).</span></div>
+    <div class="ev s"><span class="d">Aug / Dec 2025</span><span class="t"><b>Ukraine</b> sanctions the master (Aug) and the vessel (13 Dec).</span></div>
+    <div class="ev a"><span class="d">2025 (reported)</span><span class="t">Press reports a Russian naval escort through the English Channel and an abandoned voyage towards Cuba, with the ship drifting in the Atlantic.</span></div>
+    <div class="ev s"><span class="d">25 Mar 2026</span><span class="t"><b>Canada</b> adds the vessel.</span></div>
+    <div class="ev a"><span class="d">1 Jul 2026</span><span class="t">Departs <b>Manaus, Brazil</b>, its last recorded port call.</span></div>
+    <div class="ev a"><span class="d">~14 Oct 2026</span><span class="t">Last terrestrial AIS fix in northern Russian waters; destination set to Ust-Luga, ETA 23 Nov.</span></div>
+  </div>
+</section>
+
+<section>
+  <h3>Telemetry anomaly log</h3>
+  <table>
+    <tr><th style="width:4%">#</th><th style="width:30%">Observation</th><th>Why it matters</th><th style="width:11%">Weight</th></tr>
+    <tr><td>1</td><td>Two MMSIs and two call signs on record (Barbados 314… → Russia 273…)</td><td>A legitimate reflag also changes the MMSI, so this alone proves little. Here, though, it follows three other flags in under two years, which is classic flag-hopping.</td><td><span class="sev m">Medium</span></td></tr>
+    <tr><td>2</td><td>Government description says the ship exports Russian oil from the Baltic "including with the AIS disabled"</td><td>This is a direct claim of deliberate AIS switch-off by Ukraine's intelligence directorate, republished by OpenSanctions.</td><td><span class="sev h">High</span></td></tr>
+    <tr><td>3</td><td>Last terrestrial position 43 days old, but the voyage is still "active" with a 23 Nov ETA at Ust-Luga</td><td>A 6-week gap is long even for Arctic waters. The ship has either left terrestrial coverage, stopped transmitting, or is being tracked only by satellite (paywalled).</td><td><span class="sev m">Medium</span></td></tr>
+    <tr><td>4</td><td>Draught 8.2 m on a Baltic-bound leg</td><td>An MR tanker of this size loads to roughly 12–13 m. At 8.2 m it is close to ballast, which fits a ship going <i>to</i> Ust-Luga to load rather than from it.</td><td><span class="sev l">Context</span></td></tr>
+    <tr><td>5</td><td>Last port Manaus, Brazil (ATD 1 Jul 2026), 1,500 km up the Amazon</td><td>An odd port for a Baltic product tanker, though Brazil is a large buyer of Russian diesel. It fits a delivery, but the 148 days since leave a lot unaccounted for.</td><td><span class="sev m">Medium</span></td></tr>
+    <tr><td>6</td><td>2025 calls at Kakinada and Chennai (India); 12-month calls at Ust-Luga, Suez, Port Said</td><td>Baltic loading, Suez transit and Indian discharge is the standard Russian price-cap evasion route.</td><td><span class="sev m">Medium</span></td></tr>
+    <tr><td>7</td><td>Reported naval escort and long Atlantic drift (press)</td><td>Escort by a state warship is unusual for a commercial ship and suggests the cargo or ship is considered strategically protected.</td><td><span class="sev m">Medium</span></td></tr>
+  </table>
+
+  <h3>Evidence</h3>
+  <figure>
+    <img src="shots/e_os_universal.jpg">
+    <figcaption><b>Fig. 1.1</b> OpenSanctions factsheet for IMO 9384306: former names PRISCO IRINA and SCF USSURI, flags Barbados, Comoros and Russia, both MMSIs and call signs, and topics "Sanctioned / Shadow fleet". Captured 26 Nov 2026.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <figure>
+    <img src="shots/e_vf_universal.jpg">
+    <figcaption><b>Fig. 1.2</b> VesselFinder live record: Russian AIS flag, MMSI 273271630, destination Ust-Luga (ETA 23 Nov), draught 8.2 m, position "43 days ago", last port Manaus. Note the bow in the photo still reads SCF USSURI. Captured 26 Nov 2026.</figcaption>
+  </figure>
+  <figure>
+    <img src="shots/e_vf_universal_util.jpg">
+    <figcaption><b>Fig. 1.3</b> VesselFinder 2025 utilisation: two port calls, both in India (Kakinada, Chennai). This is the usual end-market for Baltic-loaded Russian products.</figcaption>
+  </figure>
+
+  <h3>Annotated overhead imagery</h3>
+  <figure>
+    <img src="shots/img_ustluga.png">
+    <figcaption><b>Fig. 1.4</b> Sentinel-2 L2A true colour over the Ust-Luga liquid-bulk berths, 22 Oct 2026 (1.4% cloud). I chose this frame because it was the clearest scene before UNIVERSAL's declared arrival. Using the 4.8 m/pixel ground scale, I measured the berthed hulls at roughly 245 m (A), 255 m (B) and 150 m (C). None matches UNIVERSAL's 183 m length, so this frame most likely shows the terminal <i>without</i> the target. That is a useful negative result: it shows the berth was occupied by larger crude carriers that day. The later, cloud-free frames needed to check the 23 Nov ETA (6 and 24 Nov) were both cloudy.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h3>Entity-relationship chart</h3>
+  <div class="er">
+    <div class="row">
+      <div class="node"><span class="k">Vessel</span><b>IMO 9384306</b>UNIVERSAL<br>ex SCF USSURI<br>ex PRISCO IRINA</div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="k">Registered owner</span><b>North Fleet Ltd</b>Russia<br><span class="muted">per MagicPort</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="k">ISM / commercial manager</span><b>North Fleet Ltd</b>same entity holds all roles</div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="k">Jurisdiction</span><b>Russian Federation</b>flag + owner domicile<br><span class="muted">prev. Barbados, Gabon, Comoros, Cyprus, Liberia</span></div>
+      <div class="arrow">→</div>
+      <div class="node san"><span class="k">Sanctions status</span><b>Sanctioned ×6</b>US · EU · CH · UK · UA · CA<br>master also listed (UA)</div>
+    </div>
+    <div class="links">
+      <div class="link"><b>Earlier managers (UAE):</b> Sun Ship Management · Oil Tankers SCF Mgmt FZCO · Fornax Ship Management FZCO</div>
+      <div class="link"><b>Ultimate link (GUR):</b> PJSC Sovcomflot, Russia's state tanker company (itself sanctioned)</div>
+      <div class="link"><b>Trade pattern:</b> Ust-Luga / Baltic loading → Suez → India; one Brazil (Manaus) delivery</div>
+    </div>
+    <div class="legend">Solid boxes: current chain. Dashed: historical or contextual links. Red: sanctioned.</div>
+  </div>
+
+  <h3>Competing hypotheses</h3>
+  <div class="hyp">
+    <h4>H1 · The AIS gap is a coverage problem, not concealment <span class="tag part">Partly consistent</span></h4>
+    <p>Terrestrial AIS receivers are thin along the Russian Arctic coast, and the free VesselFinder view shows only terrestrial fixes. A ship on the Northern Sea Route or in the Barents Sea can disappear from free maps for weeks without switching anything off. <b>Test:</b> this explains the <i>current</i> 43-day gap reasonably well. It does not explain GUR's specific finding that the ship ran Baltic exports with AIS disabled, since the Baltic is one of the best-covered seas in the world.</p>
+  </div>
+  <div class="hyp">
+    <h4>H2 · The reflag to Russia is a lawful commercial response to sanctions <span class="tag part">Partly consistent</span></h4>
+    <p>Once a ship is designated, most open registries de-flag it, and insurers and banks pull out. A Russian owner moving its ship to the Russian flag is legal and, arguably, more transparent than staying on a flag of convenience. <b>Test:</b> this fits the most recent move. It does not explain the earlier move from Sovcomflot branding to a neutral name and UAE-registered single-ship managers in 2024, which happened <i>before</i> any designation and looks like distancing.</p>
+  </div>
+  <div class="hyp">
+    <h4>H3 · The Manaus call and Atlantic drift were ordinary tramp trading <span class="tag weak">Weakly consistent</span></h4>
+    <p>Brazil legally buys large volumes of Russian diesel, and tankers often drift while waiting for orders. <b>Test:</b> the Brazil leg on its own is plausible. Taken with the reported warship escort, the aborted Cuba voyage and the long unexplained interval since July, it reads more like a ship working for state-linked cargo interests than a normal tramp.</p>
+  </div>
+  <p class="small"><b>Net judgement:</b> the benign explanations account for individual data points, but not for the overall pattern. The sanctioned, shadow-fleet assessment stands at high confidence.</p>
+</section>
+
+<!-- ============ FENGHUANG ============ -->
+<section class="page-break">
+  <div class="vhead">
+    <div>
+      <div class="kicker" style="color:#ffd27a">Vessel 2 of 3</div>
+      <h1>FENGHUANG</h1>
+      <div class="sub">Crude oil tanker (Aframax) · built 2002 · LOA 248 m × 43 m · GT 59,693</div>
+    </div>
+    <div class="imo">IMO<b>9236248</b>AIS MMSI 650000127 · C9NA78</div>
+  </div>
+
+  <h3 style="margin-top:4px">Intelligence assessment</h3>
+  <div class="assess">
+    <p><span class="conf high">High confidence</span> FENGHUANG is the 2002-built Aframax that traded for 18 years as MINERVA ZENIA in a mainstream Greek fleet. It is now an Iran-trade shadow tanker. The US designated it on 24 February 2025 as property of Alkonost Maritime DMCC, a Dubai company sanctioned for moving Iranian oil, and within a month it was renamed FENGHUANG ("phoenix" in Chinese, after its earlier name PHOENIX I). It has since been sanctioned by Ukraine, the EU, Switzerland and the UK. Its identity is now visibly inconsistent. It transmits a Mozambique MMSI (650000127) and Mozambique call sign, while OpenSanctions records a Cook Islands flag and VesselFinder's particulars say Comoros. Three different flag states for one hull at the same time is a strong sign of a fraudulent or lapsed registration. Its recent pattern of no declared destination ("FOR ORDER"), deep laden draught and calls at Huizhou (China) and Pengerang (Malaysia) matches the Iran-to-China supply chain through Malaysian ship-to-ship transfer areas. The identity and sanctions picture is <b>high</b> confidence. Who actually owns the ship today is only <b>moderate</b>, because the registered owner is hidden behind commercial paywalls and the OFAC notice names only the company with an "interest" in the ship.</p>
+  </div>
+
+  <h3>Identity snapshot</h3>
+  <table class="facts">
+    <tr><td>Current name</td><td>FENGHUANG (also listed as PHOENIX I)</td></tr>
+    <tr><td>Former names</td><td>MINERVA ZENIA (2002) → BURGUNDY STAR (Aug 2020) → PHOENIX I (Oct 2020) → FENGHUANG (Mar 2025); TORNESS also on record</td></tr>
+    <tr><td>Flags on record</td><td>Greece, Malta, Liberia, Panama, Cook Islands; Comoros (VF particulars); Mozambique (live AIS)</td></tr>
+    <tr><td>MMSIs / call signs</td><td>518999317 / E5U5298 (Cook Islands) · 650000127 / C9NA78 (Mozambique, live)</td></tr>
+    <tr><td>Interested party</td><td>Alkonost Maritime DMCC, Dubai (OFAC-designated)</td></tr>
+    <tr><td>Commercial chain</td><td>Naftiran Intertrade (NIOC) → Petronix Energy Trading (Hong Kong) → Chinese buyers</td></tr>
+    <tr><td>Last AIS (terrestrial)</td><td>South East Asia, 9 days before capture · 32° · 6.8 kn · draught 12.8 m · destination "FOR ORDER", ETA 2 Dec</td></tr>
+    <tr><td>2025 port calls</td><td>Huizhou (China), Pengerang (Malaysia)</td></tr>
+  </table>
+
+  <h3>Identity timeline</h3>
+  <div class="tl">
+    <div class="ev"><span class="d">Apr 2002</span><span class="t">Delivered as <b>MINERVA ZENIA</b> (Greek-controlled, European flags).</span></div>
+    <div class="ev a"><span class="d">Aug 2020</span><span class="t">Sold at 18 years old and renamed <b>BURGUNDY STAR</b>.</span></div>
+    <div class="ev a"><span class="d">Oct 2020</span><span class="t">Renamed again after only two months: <b>PHOENIX I</b>. Two renames in one quarter is a classic sign of a sale into grey trade.</span></div>
+    <div class="ev a"><span class="d">Apr 2021</span><span class="t">Appears on the advocacy group UANI's list of tankers suspected of carrying Iranian oil.</span></div>
+    <div class="ev a"><span class="d">2022–2024</span><span class="t">Carries Iranian crude bought from Naftiran Intertrade for Petronix Energy Trading (HK). Also linked to Venezuelan trade and a call at Nakhodka (Russia) during the price cap.</span></div>
+    <div class="ev s"><span class="d">24 Feb 2025</span><span class="t"><b>OFAC</b> blocks the ship as property of Alkonost Maritime DMCC (E.O. 13846, Iran).</span></div>
+    <div class="ev a"><span class="d">Mar 2025</span><span class="t">Renamed <b>FENGHUANG</b> within weeks of the designation.</span></div>
+    <div class="ev s"><span class="d">13 Dec 2025</span><span class="t"><b>Ukraine</b> sanctions the vessel.</span></div>
+    <div class="ev s"><span class="d">19 Dec 2025</span><span class="t"><b>EU</b> listing.</span></div>
+    <div class="ev s"><span class="d">13 Jan 2026</span><span class="t"><b>Switzerland</b> mirrors the EU.</span></div>
+    <div class="ev s"><span class="d">24 Feb 2026</span><span class="t"><b>United Kingdom</b> designation (RUS3384).</span></div>
+    <div class="ev a"><span class="d">Nov 2026</span><span class="t">Laden (12.8 m) in South East Asia, destination "FOR ORDER", AIS flag Mozambique.</span></div>
+  </div>
+</section>
+
+<section>
+  <h3>Telemetry anomaly log</h3>
+  <table>
+    <tr><th style="width:4%">#</th><th style="width:30%">Observation</th><th>Why it matters</th><th style="width:11%">Weight</th></tr>
+    <tr><td>1</td><td>Live MMSI 650000127 (MID 650 = Mozambique) while registries show Cook Islands and Comoros</td><td>The first three digits of an MMSI identify the flag state. A Mozambique MMSI on a ship that two databases put on other flags means at least one registration is false or lapsed. I found no public record that Mozambique registered this ship.</td><td><span class="sev h">High</span></td></tr>
+    <tr><td>2</td><td>The MMSI itself is a round, low-entropy number (650 000 127)</td><td>Genuine assignments rarely look this tidy. Self-assigned or "manufactured" MMSIs often do.</td><td><span class="sev m">Medium</span></td></tr>
+    <tr><td>3</td><td>Renamed one month after OFAC designation</td><td>Renaming right after a designation is a well-documented way to shake off compliance screening that relies on ship names.</td><td><span class="sev h">High</span></td></tr>
+    <tr><td>4</td><td>Destination "FOR ORDER" with a 12.8 m laden draught, slow speed (6.8 kn) off South East Asia</td><td>A loaded ship with no declared discharge port, idling near the Malaysian STS hubs, fits floating storage while waiting for a buyer or transfer.</td><td><span class="sev m">Medium</span></td></tr>
+    <tr><td>5</td><td>Last terrestrial fix 9 days old</td><td>Coverage is good in the Singapore Strait area, so a 9-day silence there deserves attention, though the ship may simply be further offshore.</td><td><span class="sev l">Low</span></td></tr>
+    <tr><td>6</td><td>Calls at Pengerang (Malaysia) and Huizhou (China) in 2025</td><td>Pengerang is next to the Eastern OPL anchorage, where Iranian barrels are often relabelled before delivery to Chinese refiners.</td><td><span class="sev m">Medium</span></td></tr>
+  </table>
+
+  <h3>Evidence</h3>
+  <figure>
+    <img src="shots/e_os_fenghuang.jpg">
+    <figcaption><b>Fig. 2.1</b> OpenSanctions factsheet for IMO 9236248: names FENGHUANG and PHOENIX I, former names, Cook Islands flag, MMSI 518999317 and call sign E5U5298. The description (continued on the live page) names Petronix, Naftiran Intertrade and Alkonost Maritime DMCC. Captured 26 Nov 2026.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <figure>
+    <img src="shots/e_vf_fenghuang.jpg">
+    <figcaption><b>Fig. 2.2</b> VesselFinder live record: Mozambique AIS flag and MMSI 650000127, call sign C9NA78, destination FOR ORDER, draught 12.8 m, last fix 9 days old in South East Asia. Lower on the same page, the particulars give the flag as <i>Comoros</i>. The photo shows the hull still in "Minerva" livery.</figcaption>
+  </figure>
+  <figure>
+    <img src="shots/e_vf_fenghuang_util.jpg">
+    <figcaption><b>Fig. 2.3</b> 2025 utilisation: two calls, Huizhou (China) and Pengerang (Malaysia).</figcaption>
+  </figure>
+
+  <h3>Annotated overhead imagery</h3>
+  <figure>
+    <img src="shots/img_pengerang.png">
+    <figcaption><b>Fig. 2.4</b> Sentinel-2 L2A true colour over the Pengerang terminal jetties, Johor, 22 Aug 2026 (2.8% cloud). Hull A (~250 m, at the jetty head) and hull B (~240 m) fall in FENGHUANG's size class (248 m); C is a smaller ~155 m vessel. At 10 m resolution this is a <b>size match only</b>. I am not claiming hull A is FENGHUANG. The frame shows the kind of terminal the ship has used, and that Aframax-sized tankers do berth there.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h3>Entity-relationship chart</h3>
+  <div class="er">
+    <div class="row">
+      <div class="node"><span class="k">Vessel</span><b>IMO 9236248</b>FENGHUANG<br>ex PHOENIX I, BURGUNDY STAR, MINERVA ZENIA</div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="k">Registered owner</span><b>Not publicly resolved</b>OFAC: property in which <b>Alkonost Maritime DMCC</b> has an interest</div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="k">Manager / operator</span><b>Alkonost Maritime DMCC</b>Dubai, UAE<br><span class="muted">(ISM manager paywalled)</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="k">Jurisdiction</span><b>Conflicting</b>AIS: Mozambique<br>OpenSanctions: Cook Islands<br>VF particulars: Comoros</div>
+      <div class="arrow">→</div>
+      <div class="node san"><span class="k">Sanctions status</span><b>Sanctioned ×5</b>US · UA · EU · CH · UK<br>(Alkonost itself OFAC-listed)</div>
+    </div>
+    <div class="links">
+      <div class="link"><b>Cargo source:</b> Naftiran Intertrade Co. (NICO), marketing arm of the sanctioned National Iranian Oil Company</div>
+      <div class="link"><b>Broker / charterer:</b> Petronix Energy Trading Ltd, Hong Kong</div>
+      <div class="link"><b>Discharge:</b> Chinese refiners via Malaysian STS (Pengerang / Eastern OPL) and Huizhou</div>
+    </div>
+    <div class="legend">Solid boxes: current chain. Dashed: commercial links from sanctions narratives. Red: sanctioned.</div>
+  </div>
+
+  <h3>Competing hypotheses</h3>
+  <div class="hyp">
+    <h4>H1 · The flag/MMSI mismatch is just database lag after a genuine re-registration <span class="tag part">Partly consistent</span></h4>
+    <p>Commercial databases update flags at different speeds, and a ship that really did move to Mozambique could still show Comoros or Cook Islands elsewhere for months. <b>Test:</b> lag can explain two sources disagreeing. It is a harder fit for <i>three</i> flags at once, and I found no public record of a Mozambique registration. The Cook Islands registry has said it is removing sanctioned tankers, which would explain why that flag lapsed but not where the ship went legitimately.</p>
+  </div>
+  <div class="hyp">
+    <h4>H2 · "FOR ORDER" and slow steaming are normal tramp practice <span class="tag part">Partly consistent</span></h4>
+    <p>Many legitimate tankers sail "for orders" while the charterer finds a buyer, and slow steaming saves fuel. <b>Test:</b> true in general, but a laden, sanctioned crude carrier waiting near Malaysian transfer anchorages with no stated buyer is exactly how Iranian barrels are moved into China. The behaviour is normal; the context is not.</p>
+  </div>
+  <div class="hyp">
+    <h4>H3 · The renames were part of an ordinary sale chain <span class="tag weak">Weakly consistent</span></h4>
+    <p>Old tankers often change hands and names. <b>Test:</b> the 2020 sale does look like an ordinary end-of-life sale. The March 2025 rename, a few weeks after the OFAC action, does not; its timing points to evading sanctions screening.</p>
+  </div>
+  <p class="small"><b>Net judgement:</b> no benign explanation accounts for the three-flag conflict or the timing of the post-designation rename. Assessment held at high confidence.</p>
+</section>
+
+<!-- ============ THALIA III ============ -->
+<section class="page-break">
+  <div class="vhead">
+    <div>
+      <div class="kicker" style="color:#ffd27a">Vessel 3 of 3</div>
+      <h1>THALIA III</h1>
+      <div class="sub">Crude oil tanker (Aframax) · built 2003 · LOA 246.8 m × 42 m · GT 57,979</div>
+    </div>
+    <div class="imo">IMO<b>9259197</b>MMSI 352002137 · 3E3812</div>
+  </div>
+
+  <h3 style="margin-top:4px">Intelligence assessment</h3>
+  <div class="assess">
+    <p><span class="conf high">High confidence</span> THALIA III is a 2003 Aframax, built as PACIFIC LEO, that has become one of the more versatile shadow-fleet tankers. Sanctions narratives tie it to Russian crude from the Baltic, Black Sea and Pacific (Kozmino) going to China and India, and to Iranian and Venezuelan oil. In early January 2026 it tried to leave Venezuelan waters with AIS switched off to get past the US naval blockade. It turned back, loaded with PDVSA crude, after the US detained the tanker OLINA on 9 January. VesselFinder has shown its flag as "Unknown" since January 2025, the month OFAC designated it, which strongly suggests the Panamanian registration was withdrawn. It is now on the US, EU, Swiss, UK, New Zealand, Canadian and Ukrainian lists, and Ukraine has also sanctioned its master. Confidence in the identity, sanctions status and dark activity is <b>high</b>. Confidence in current ownership is <b>moderate</b>: one press source names Selena Lively Limited as the registered owner at the time of the US action, but I could not confirm the present owner or manager from open records.</p>
+  </div>
+
+  <h3>Identity snapshot</h3>
+  <table class="facts">
+    <tr><td>Current name / flag</td><td>THALIA III · registry record Panama; AIS / VF flag "Unknown" since Jan 2025</td></tr>
+    <tr><td>Former names</td><td>PACIFIC LEO (2003) → ADS OSLO (Apr 2014) → GUNDALA (Oct 2019) → REDBUD (Feb 2022) → THALIA III (Nov 2022)</td></tr>
+    <tr><td>Flags on record</td><td>Panama, Marshall Islands, Liberia; then none confirmed</td></tr>
+    <tr><td>MMSI / call sign</td><td>352002137 / 3E3812 (Panama MID 352)</td></tr>
+    <tr><td>Reported owner</td><td>Selena Lively Limited (press reporting of the Jan 2025 OFAC action; not independently confirmed)</td></tr>
+    <tr><td>2024 utilisation</td><td>17 port calls; average 10.9 kn; Sungai Linggi (Malaysia), Kozmino (Russia); countries China, Russia</td></tr>
+    <tr><td>Cargo origins on record</td><td>Russia (Baltic, Black Sea, Pacific) · Iran · Venezuela (PDVSA)</td></tr>
+  </table>
+
+  <h3>Identity timeline</h3>
+  <div class="tl">
+    <div class="ev"><span class="d">Feb 2003</span><span class="t">Delivered as <b>PACIFIC LEO</b> under the Panama flag. The VesselFinder archive photo shows her in Sydney Harbour.</span></div>
+    <div class="ev"><span class="d">Apr 2014</span><span class="t">Renamed <b>ADS OSLO</b> (Marshall Islands).</span></div>
+    <div class="ev a"><span class="d">Oct 2019</span><span class="t">Renamed <b>GUNDALA</b> with an ownership change at 16 years old.</span></div>
+    <div class="ev a"><span class="d">Feb 2022</span><span class="t">Renamed <b>REDBUD</b> (Liberia) with a new manager, the same month Russia invaded Ukraine.</span></div>
+    <div class="ev a"><span class="d">Nov 2022</span><span class="t">Renamed <b>THALIA III</b>, back to Panama, with a new owner and manager. The timing matches the 5 Dec 2022 price-cap start.</span></div>
+    <div class="ev a"><span class="d">2024</span><span class="t">17 port calls including Kozmino (ESPO crude) and Sungai Linggi (Malaysian STS hub).</span></div>
+    <div class="ev s"><span class="d">10 Jan 2025</span><span class="t"><b>OFAC</b> designation. The flag field goes blank ("Unknown") that same month.</span></div>
+    <div class="ev s"><span class="d">21 May 2025</span><span class="t"><b>EU</b> listing; <b>Switzerland</b> follows on 3 Jun.</span></div>
+    <div class="ev s"><span class="d">21 Jul 2025</span><span class="t"><b>UK</b> designation.</span></div>
+    <div class="ev s"><span class="d">30 Oct 2025</span><span class="t"><b>New Zealand</b>; <b>Canada</b> in Nov 2025.</span></div>
+    <div class="ev s"><span class="d">13 Dec 2025</span><span class="t"><b>Ukraine</b> sanctions the vessel.</span></div>
+    <div class="ev a"><span class="d">Early Jan 2026</span><span class="t">Attempts to leave Venezuelan waters <b>with AIS off</b> to get past the US blockade.</span></div>
+    <div class="ev a"><span class="d">After 9 Jan 2026</span><span class="t">Turns back after the US detains OLINA (IMO 9282479), with MIN HANG and MEROPE; loads PDVSA crude.</span></div>
+    <div class="ev s"><span class="d">21 Feb 2026</span><span class="t"><b>Ukraine</b> sanctions the master.</span></div>
+  </div>
+</section>
+
+<section>
+  <h3>Telemetry anomaly log</h3>
+  <table>
+    <tr><th style="width:4%">#</th><th style="width:30%">Observation</th><th>Why it matters</th><th style="width:11%">Weight</th></tr>
+    <tr><td>1</td><td>Deliberate AIS blackout during an attempted exit from Venezuela, Jan 2026</td><td>This is the clearest dark activity of the three ships: switching off AIS specifically to avoid a naval blockade. It is reported in the sanctions narrative and in press coverage of the blockade.</td><td><span class="sev h">High</span></td></tr>
+    <tr><td>2</td><td>Flag "Unknown" from Jan 2025 while still transmitting a Panama MMSI (352…)</td><td>Panama has announced it is de-flagging sanctioned tankers. A ship still using a Panama MMSI after losing the flag is effectively stateless, and stateless ships can be boarded by any navy.</td><td><span class="sev h">High</span></td></tr>
+    <tr><td>3</td><td>Five names and three flags in 20 years, with three renames between 2019 and 2022</td><td>Name-and-flag churn speeds up exactly as the ship gets old enough to leave mainstream trade.</td><td><span class="sev m">Medium</span></td></tr>
+    <tr><td>4</td><td>Kozmino + Sungai Linggi in the same year</td><td>Kozmino exports ESPO crude, and the waters off Sungai Linggi are a known STS area where cargoes are blended and relabelled for China.</td><td><span class="sev m">Medium</span></td></tr>
+    <tr><td>5</td><td>Reported alternate identity "SKYLYN" (Panama / Guyana) in one open source</td><td>If true, this would be identity laundering. It rests on a single source I could not corroborate, so it is logged as a lead only.</td><td><span class="sev l">Low</span></td></tr>
+  </table>
+
+  <h3>Evidence</h3>
+  <figure>
+    <img src="shots/e_os_thalia.jpg">
+    <figcaption><b>Fig. 3.1</b> OpenSanctions factsheet for IMO 9259197: topics include "Export control-linked", "Sanctioned" and "Shadow fleet"; former names, Panama flag, MMSI 352002137, call sign 3E3812. Captured 26 Nov 2026.</figcaption>
+  </figure>
+  <figure>
+    <img src="shots/e_vf_thalia_head.jpg">
+    <figcaption><b>Fig. 3.2</b> VesselFinder headline: "currently sailing under the flag of Unknown", with EU, UK and US sanctions flagged.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="two">
+    <figure>
+      <img src="shots/e_vf_thalia_util.jpg">
+      <figcaption><b>Fig. 3.3</b> 2024 utilisation: 17 calls, including Sungai Linggi and Kozmino Oil Terminal.</figcaption>
+    </figure>
+    <figure>
+      <img src="shots/e_vf_thalia_hist.jpg">
+      <figcaption><b>Fig. 3.4</b> Name and flag history, 2002–2025. The flag field is blank from Jan 2025.</figcaption>
+    </figure>
+  </div>
+
+  <h3>Annotated overhead imagery</h3>
+  <figure>
+    <img src="shots/img_jose.png">
+    <figcaption><b>Fig. 3.5</b> Sentinel-2 L2A true colour over the approaches to José (Puerto José) crude terminal, Anzoátegui, Venezuela, 8 Jan 2026 (7.8% cloud). This is the day before OLINA was detained, in the window when THALIA III was reportedly trying to leave dark. A hull is underway to the north-east with a clear wake (A), a vessel sits at the offshore mooring area (B), and two more ships wait in the outer roads (C). At 18.5 m/pixel each hull is 10–15 pixels long, which fits large tankers but cannot identify them. What the frame does show is that tankers were moving at José at the height of the blockade, even though few were visible on AIS.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h3>Entity-relationship chart</h3>
+  <div class="er">
+    <div class="row">
+      <div class="node"><span class="k">Vessel</span><b>IMO 9259197</b>THALIA III<br>ex REDBUD, GUNDALA, ADS OSLO, PACIFIC LEO</div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="k">Registered owner</span><b>Selena Lively Ltd</b><span class="muted">reported (Jan 2025); current owner unconfirmed</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="k">Manager</span><b>Not publicly resolved</b>VF shows manager changes Nov 2022 and Dec 2024 (names paywalled)</div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="k">Jurisdiction</span><b>Effectively stateless</b>registry record Panama; flag "Unknown" since Jan 2025</div>
+      <div class="arrow">→</div>
+      <div class="node san"><span class="k">Sanctions status</span><b>Sanctioned ×7</b>US · EU · CH · UK · NZ · CA · UA<br>master also listed (UA)</div>
+    </div>
+    <div class="links">
+      <div class="link"><b>Russia:</b> Baltic, Black Sea and Kozmino crude to China and India</div>
+      <div class="link"><b>Iran / Venezuela:</b> PDVSA loading at José, Jan 2026; Iranian cargoes on record</div>
+      <div class="link"><b>Associated ships (Jan 2026):</b> OLINA (IMO 9282479, detained), MIN HANG, MEROPE</div>
+    </div>
+    <div class="legend">Solid boxes: current chain. Dashed: trade and incident links. Red: sanctioned.</div>
+  </div>
+
+  <h3>Competing hypotheses</h3>
+  <div class="hyp">
+    <h4>H1 · "Unknown" flag is a database gap, not a lost registration <span class="tag part">Partly consistent</span></h4>
+    <p>Free AIS sites sometimes blank fields when a ship re-registers and its new flag has not been processed. <b>Test:</b> a gap of nearly two years is far too long for processing lag, and it starts in the same month as the OFAC designation. Panama's announced policy of cancelling registrations of designated ships is the simpler explanation.</p>
+  </div>
+  <div class="hyp">
+    <h4>H2 · Loading at José was licensed trade <span class="tag weak">Weakly consistent</span></h4>
+    <p>Some companies have operated in Venezuela under specific US licences, so a tanker at José is not automatically illicit. <b>Test:</b> licences of that kind cover named, non-sanctioned operators. A ship that is itself OFAC-designated and tried to leave with its AIS off is not behaving like a licensed carrier.</p>
+  </div>
+  <div class="hyp">
+    <h4>H3 · Malaysian calls were routine bunkering and crew changes <span class="tag part">Partly consistent</span></h4>
+    <p>Sungai Linggi and nearby anchorages are busy, legitimate bunkering and crew-change areas used by thousands of ships. <b>Test:</b> entirely possible for any single call. Combined with Kozmino loadings and the China discharge pattern, an STS-transfer role is more likely.</p>
+  </div>
+  <p class="small"><b>Net judgement:</b> the January 2026 dark-exit attempt has no benign explanation that survives the facts. Assessment held at high confidence.</p>
+</section>
+
+<!-- ============ LIMITS + SOURCES ============ -->
+<section class="page-break">
+  <div class="kicker">Closing</div>
+  <h2>Limitations, gaps and what I would do next</h2>
+  <div class="rule"></div>
+  <p><b>Ownership is the weak spot.</b> For all three ships, the registered owner and ISM manager fields that would close the loop sit behind commercial paywalls (VesselFinder, Equasis requires an account, Lloyd's List Intelligence is subscription-only). I avoided treating the earlier student draft I was shown as a source. Where it named managers I could not verify (for example a manager for THALIA III and a second MMSI under the GUNDALA name), I have left them out rather than repeat them.</p>
+  <p><b>Imagery can measure, not identify.</b> Sentinel-2's 10 m pixels are enough to tell a 180 m product tanker from a 250 m Aframax, and that is how I used them. Naming a specific ship would need sub-metre commercial imagery or a matching AIS fix at the moment of capture. Cloud cover in the Baltic in November also ruled out checking UNIVERSAL's declared 23 Nov arrival at Ust-Luga.</p>
+  <p><b>AIS here is terrestrial only.</b> Free views show only terrestrial AIS, so the "days ago" figures overstate genuine silence in remote seas, especially for UNIVERSAL in the Arctic. A satellite-AIS subscription would settle whether these are blackouts or coverage gaps.</p>
+  <p><b>Next passive steps, if time allowed:</b> (1) a free Equasis account to pull the ISM manager and P&amp;I history for each IMO; (2) Sentinel-1 radar frames, which see through cloud, over Ust-Luga for 20–25 Nov; (3) the Global Fishing Watch public map, to check for AIS gaps and encounters; (4) corporate registry searches for North Fleet Ltd (Russia), Alkonost Maritime DMCC (DMCC registry) and Selena Lively Ltd.</p>
+
+  <h3>Sources (all accessed 26 November 2026)</h3>
+  <ol class="src">
+    <li>OpenSanctions entity pages: Universal, NK-ECA3JRcqRzYXZawMqa97PQ · FENGHUANG, NK-amJVBa3UaRVWooVoCM8TiV · Thalia III, NK-kyZ8ckcgKeHcCZs55qXS8f. https://www.opensanctions.org/entities/…</li>
+    <li>VesselFinder vessel details: https://www.vesselfinder.com/vessels/details/9384306 · /9236248 · /9259197</li>
+    <li>MagicPort vessel profile for IMO 9384306 (owner, ISM and commercial manager; port calls).</li>
+    <li>U.S. Department of the Treasury, OFAC press releases on Russian energy sanctions (10 Jan 2025) and Iran oil network designations (24 Feb 2025); OFAC Sanctions List Search.</li>
+    <li>UK FCDO, UK Sanctions List entries RUS2892 (UNIVERSAL) and RUS3384 (FENGHUANG).</li>
+    <li>Council of the EU, Regulation (EU) 833/2014 Annex XLII ship listings via EUR-Lex.</li>
+    <li>Swiss SECO sanctions listings; Canada Gazette, Special Economic Measures (Russia) Regulations amendments; New Zealand Russia Sanctions Register.</li>
+    <li>Ukraine GUR "War &amp; Sanctions" shadow-fleet data, as republished by OpenSanctions (direct site access blocked by bot check).</li>
+    <li>Copernicus Data Space Ecosystem: Copernicus Browser and STAC catalogue, Sentinel-2 L2A scenes of 22 Oct 2026 (Ust-Luga), 22 Aug 2026 (Pengerang) and 8 Jan 2026 (José).</li>
+    <li>The Maritime Executive and The Insider, reporting on a Russian naval escort of UNIVERSAL through the English Channel; vesseltracker.com news on the abandoned Cuba voyage.</li>
+    <li>United Against Nuclear Iran (UANI), tanker tracker list (FENGHUANG/PHOENIX I).</li>
+    <li>Press reporting on the US blockade of Venezuela and the detention of OLINA (IMO 9282479), January 2026.</li>
+  </ol>
+
+  <div class="callout avoid">
+    <h4 style="margin-top:0">Declaration</h4>
+    <p class="small">I confirm that this dossier is my own work, prepared using passive open-source methods only. No vessel, company or individual was contacted, no access controls were bypassed, and no paid or restricted data was used. Screenshots are reproduced for academic assessment, with credit to their sources.</p>
+    <p class="small" style="margin-top:10px"><b>Manishkumar Yadav</b> · Enrolment No. 250104002031 · MBA in Cyber Security Management, Semester 3 · NFSU Gandhinagar</p>
+  </div>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,52 @@
+PAGE 1
+SRISHTI  MEENA
+srishtimeenaoffical25@gmail.com  |  +91 91167 98518  |  linkedin.com/in/srishtimeena
+SUMMARY
+ISO/IEC  27001:2022  Lead  Auditor  trained (CQI  and  IRCA  certified  PR373),  with  internship  experience  reviewing  IT
+Service Management processes against ITIL 4, PinkVERIFY and ISO/IEC 20000. Built an ISMS GRC platform that carries
+a finding from the ISO control where it was raised through risk rating, corrective action and SLA tracking to verified
+closure.
+CORE  SKILLS
+Governance, Risk & Compliance:  ISO/IEC 27001:2022, ISO/IEC 20000-1:2018, NIST Cybersecurity Framework (CSF),
+Identity & Access Management (IAM), Business Continuity Management (BCM), ISMS internal audit, risk assessment
+and treatment, control evaluation, non conformity and corrective action (CAPA) tracking
+IT Service Management:  ITIL 4 practices, PinkVERIFY process requirements, Incident Management, Service Level
+Management, IT Asset Management, Release & Deployment, Service Catalog, Monitoring & Alerting, SLA tracking
+IT Audit & Assurance:  Process documentation review, gap analysis, evidence and work paper preparation, audit
+observation reporting, remediation ownership tracking and closure verification
+Security & Technical:  Network security fundamentals, TCP/IP, Wireshark, Nmap, network traffic analysis, digital
+forensics fundamentals, applied cryptography basics, static and dynamic malware analysis
+Communication & Delivery:  Technical writing and documentation, risk communication, requirement analysis and
+stakeholder discussions, analytical problem solving, teamwork, multitasking to deadlines
+EXPERIENCE
+Cyber Security Compliance Intern  |  Tectona Software Solutions Pvt. Ltd.  Ahmedabad  |  Jun 2026 – Jul 2026
+• Reviewed, validated and enhanced ITSM process documentation across six process areas, covering Service Level,
+IT Asset, Incident, Monitoring & Alerting, Release & Deployment and Service Catalog Management.
+• Cross verified process documentation against ITIL 4 best practices, PinkVERIFY requirements and ISO/IEC
+20000 guidelines, identifying documentation gaps and recommending targeted process improvements.
+• Studied ITIL 4 practices and PinkVERIFY certification criteria to assess process maturity and readiness, building a
+working understanding of how service management controls are evidenced during assessment.
+• Participated in requirement analysis sessions and team discussions, converting discussion outcomes into
+structured written process documentation suitable for audit review.
+• Gained direct exposure to information security, ISO related compliance activities, audit requirements and
+remediation processes, observing that identifying a finding is only one part of the cycle and that tracking its risk,
+corrective action, ownership and final remediation matters equally. This insight directly shaped the ISMS GRC
+platform built subsequently.
+PROJECTS
+ISMS GRC Platform  |  ISO 27001 Internal Audit, Risk and Remediation Management
+• Built a centralised ISMS GRC platform that manages ISO 27001 internal audit, compliance findings, risk
+management and IT remediation from a single dashboard, replacing scattered tracking across spreadsheets and
+email.
+• Connected the full compliance lifecycle in one traceable chain: ISO control assessment → finding → risk →
+corrective action → ITSM ticket → SLA tracking → final resolution.
+• Delivered end to end traceability , so that instead of stopping at identifying a compliance issue, every issue can be
+traced from the ISO control where it was raised all the way to the actual remediation and its formal closure.
+• Modelled risk rating, corrective action ownership and SLA based due dates against each finding, so overdue
+remediation is visible to management before it escalates into a repeat audit observation.
+CERTIFICATIONS
+• CQI & IRCA Certified PR373: ISO/IEC 27001:2022 Lead Auditor Training  |  Bureau Veritas  |  June 2026
+Covered ISMS implementation, risk assessment, compliance evaluation, audit planning and audit reporting.
+• Certified Information Systems Security Professional (CISSP) Course  |  INE  |  In Progress
+EDUCATION
+MBA Cyber Security Management | National Forensic Sciences University | Gandhinagar | CGPI 8.50 | 2025 – Present
+Bachelor of Computer Applications (BCA) | University of Rajasthan | Jaipur | 80.7% | 2022 – 2025

@@ -1,0 +1,123 @@
+You are setting up "MRN Vendor Outreach" from scratch on this account. This has two parts: (1) verify the approach works right now, (2) create an hourly scheduled task that runs it going forward. It needs a Gmail connector (already connected) and no other setup — it reads the MRN sheet via a public CSV export URL, not any private credential. Work autonomously; don't ask the user anything except tool-permission prompts.
+
+GOAL: for every new MRN (Material Request Note), find real vendors online who could supply the requested materials, and create PERSONALIZED DRAFT emails to them in Gmail requesting a quotation. DRAFTS ONLY — never send, never use any "send" tool.
+
+============================================================
+HOW TO READ THE MRN SHEET (no credentials needed)
+============================================================
+The MRN sheet is shared "anyone with the link can view", so it's readable via Google's CSV export endpoint with a plain HTTP fetch — no Google auth, no service account, no MCP connector required:
+
+  https://docs.google.com/spreadsheets/d/1E2ggJmYVK26DPrKFTI0KyMV_R6HktQaxnvglGw3SjWA/gviz/tq?tqx=out:csv&sheet=MRN%20Form
+
+Fetch it with curl (via Bash), not WebFetch — WebFetch summarizes content through a model and isn't reliable for exact structured data:
+  curl -s -L "https://docs.google.com/spreadsheets/d/1E2ggJmYVK26DPrKFTI0KyMV_R6HktQaxnvglGw3SjWA/gviz/tq?tqx=out:csv&sheet=MRN%20Form" -o /tmp/mrn.csv
+
+Then parse it into rows with this exact Node script (CSV needs a real parser here, not naive comma-splitting, because `Material Requirement` cells contain embedded commas and newlines inside quoted fields). Save this to a temp .js file and run it with `node <file> /tmp/mrn.csv`:
+
+  const fs = require('fs');
+  const text = fs.readFileSync(process.argv[2], 'utf8');
+  function parseCSV(str) {
+    const rows = []; let row = []; let field = ''; let inQuotes = false;
+    for (let i = 0; i < str.length; i++) {
+      const c = str[i];
+      if (inQuotes) {
+        if (c === '"') { if (str[i+1] === '"') { field += '"'; i++; } else { inQuotes = false; } }
+        else field += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ',') { row.push(field); field=''; }
+        else if (c === '\r') {}
+        else if (c === '\n') { row.push(field); rows.push(row); row=[]; field=''; }
+        else field += c;
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+  const rows = parseCSV(text);
+  const headers = rows[0];
+  const idx = name => headers.findIndex(h => h.trim().toLowerCase() === name.toLowerCase());
+  const col = { mrnNo: idx('MRN No'), timestamp: idx('Timestamp'), project: headers.findIndex(h => h.trim().toUpperCase().startsWith('PROJECT NAME')), reqDate: idx('Material Request Date'), byWhen: idx('By when Material is Required'), material: idx('Material Requirement'), issuedBy: headers.findIndex(h => h.trim().toLowerCase().startsWith('issued by')), category: headers.findIndex(h => ['category','catagory'].includes(h.trim().toLowerCase())) };
+  const records = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const mrnNo = (r[col.mrnNo] || '').trim();
+    const material = (r[col.material] || '').trim();
+    if (!mrnNo && !material) continue;
+    records.push({
+      rowNumber: i + 1,
+      mrnNo: mrnNo || ('MRN' + String(i).padStart(2, '0')),
+      timestamp: (r[col.timestamp] || '').trim(),
+      project: (r[col.project] || '').trim(),
+      materialRequestDate: (r[col.reqDate] || '').trim(),
+      requiredDate: (r[col.byWhen] || '').trim(),
+      materialRequirement: material,
+      issuedBy: (r[col.issuedBy] || '').trim(),
+      category: (r[col.category] || '').trim(),
+    });
+  }
+  console.log(JSON.stringify({ totalRecords: records.length, maxRowNumber: rows.length, records }, null, 2));
+
+This prints all MRN records as JSON. Verify it works by running it once now and confirming you get real rows back (hundreds of records, most recent ones with real project names and material lists).
+
+============================================================
+PART 1 — VERIFY, RIGHT NOW
+============================================================
+Run the fetch + parse above. Confirm it returns real data. Do NOT process any MRNs yet in this verification pass — this is just to confirm the read path works before scheduling.
+
+============================================================
+PART 2 — CREATE THE HOURLY SCHEDULED TASK
+============================================================
+Create a scheduled task:
+- taskId: "mrn-vendor-outreach"
+- title: "MRN Vendor Outreach"
+- description: "Finds new MRNs, sources vendors online, drafts personalized quotation-request emails in Gmail"
+- cronExpression: "0 * * * *"
+- prompt: the text below, verbatim
+
+------------------------------------------------------------
+SCHEDULED TASK PROMPT (paste exactly as the task's prompt):
+
+You are processing new Material Request Notes (MRNs) for raga/UIPL, an interiors & construction company based in Ahmedabad, Gujarat, India. This is an unattended hourly run: work autonomously, do not ask the user anything.
+
+GOAL: for every MRN raised since the last run, find real vendors online who could supply the requested materials, and create PERSONALIZED DRAFT emails to them in Gmail requesting a quotation. DRAFTS ONLY — never send, never use any "send" tool.
+
+STEP 1 — Load tools
+ToolSearch "gmail create draft" to find this account's connected Gmail draft tool (name includes a connector-specific ID, e.g. mcp__<uuid>__create_draft). Retry once if not found. Also load WebSearch and WebFetch via ToolSearch if not already available.
+
+STEP 2 — Read state
+Read the state file at the path "~/.raga-mrn-outreach-state.json" (in this account's home directory — resolve ~ via $HOME). If it doesn't exist, treat lastProcessedRow as null (first run — see Step 3).
+
+STEP 3 — Fetch and parse the MRN sheet
+Fetch: curl -s -L "https://docs.google.com/spreadsheets/d/1E2ggJmYVK26DPrKFTI0KyMV_R6HktQaxnvglGw3SjWA/gviz/tq?tqx=out:csv&sheet=MRN%20Form" -o /tmp/mrn.csv
+Parse it with the exact Node CSV-parsing script from the setup instructions (write it to a temp .js file, run `node <file> /tmp/mrn.csv`) to get {totalRecords, maxRowNumber, records}.
+
+If lastProcessedRow is null (first run ever): do NOT process the historical backlog. Just write {"lastProcessedRow": maxRowNumber, "updatedAt": "<now>"} to ~/.raga-mrn-outreach-state.json and stop — this run only establishes the starting point, exactly like a human clicking "mark all as read."
+
+Otherwise: newRecords = records where rowNumber > lastProcessedRow. If empty, nothing to do — stop, no state update needed.
+
+If more than 5 new records, only process the oldest 5 (sort by rowNumber ascending) this run — leave the rest for next hour. Only advance lastProcessedRow to the highest rowNumber you actually finished processing.
+
+STEP 4 — For each MRN to process
+Skip any record where materialRequirement is empty or obviously placeholder/test content (e.g. "TEST", gibberish with no real material) — note as skipped, don't search for it.
+
+For each real MRN:
+  a. Read materialRequirement (often a bullet list), category (e.g. "I - Civil", "A - Customised Furniture" — the letter prefix is a department code, the text after it is the real category), and project (site name).
+  b. WebSearch for vendors/suppliers of that material/category based in or serving Ahmedabad, Gujarat, India (the company's base — all project sites are in/around Ahmedabad). Use 1-3 targeted searches. Check IndiaMART, TradeIndia, JustDial, vendor websites, Google Business listings.
+  c. Identify up to 10 candidate vendors that plausibly supply the material, and find a real, working email for each (contact page, marketplace listing) — use WebFetch to confirm. ONLY keep vendors with an actual found email; never invent one. Aim for 5-10; fewer is fine for niche/local items, zero is a legitimate outcome — note it.
+  d. For each vendor with a real email, create ONE Gmail draft via the tool found in Step 1:
+     - to: [vendor's email]
+     - subject: "Quotation Request — <short material/category description> for <project> (Ref: <mrnNo>)"
+     - body (plain text, personalized): briefly introduce UIPL as an interiors/construction company in Ahmedabad; state the material requirement (reproduce the bullet list clearly); mention the project/site and required-by date if present; ask for quotation, available quantity, and lead time; close politely. End with exactly:
+         Procurement Team
+         UIPL
+     - Do not mention internal fields (row number, issuedBy, internal status).
+
+STEP 5 — Update state
+Write the new lastProcessedRow to ~/.raga-mrn-outreach-state.json as {"lastProcessedRow": N, "updatedAt": "<ISO timestamp now>"}. Only advance past MRNs actually finished.
+
+STEP 6 — Done
+Brief internal summary only. Don't message the user unless something failed outright (Gmail tool unavailable, sheet fetch failed) — note briefly, don't retry indefinitely.
+------------------------------------------------------------
+
+After creating the task, run it once manually so a human is present to approve the Gmail / web-search tool permissions interactively — otherwise the first automatic hourly firing may stall on an approval prompt. Its first run will just establish the starting point (per Step 3's first-run rule) and won't draft anything yet — that's expected.

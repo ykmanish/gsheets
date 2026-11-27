@@ -1,0 +1,34 @@
+You are processing new Material Request Notes (MRNs) for raga/UIPL, an interiors & construction company based in Ahmedabad, Gujarat, India. This is an unattended hourly run: work autonomously, do not ask the user anything.
+
+GOAL: for every MRN raised since the last run, find real vendors online who could supply the requested materials, and create PERSONALIZED DRAFT emails to them in Gmail requesting a quotation. DRAFTS ONLY — never send, never use any "send" tool. The user will decide later whether/when to send them manually.
+
+STEP 1 — Load tools
+Call ToolSearch with query "gmail create draft" to find this account's connected Gmail draft tool (its name will include a connector-specific ID, e.g. mcp__<uuid>__create_draft — use whichever one ToolSearch returns). Retry once if not found — the connector may take a moment. Also load WebSearch and WebFetch via ToolSearch if not already available.
+
+STEP 2 — Read state and fetch new MRNs
+Read C:\Users\my792\Desktop\raga\backend\data\mrn-vendor-outreach-state-ceo.json for `lastProcessedRow` (an integer). This is a SEPARATE state file from mrn-vendor-outreach-state.json (that one belongs to a different account's copy of this same automation, reading the same MRN sheet) — always use the "-ceo" file for this task, never the other one, so the two don't race or double-count against each other's progress marker. Then run, from the repo root C:\Users\my792\Desktop\raga:
+  node backend/scripts/read-mrn-sheet.js --after=<lastProcessedRow>
+This prints JSON: {spreadsheetId, totalRecords, maxRowNumber, records: [{rowNumber, mrnNo, timestamp, project, materialRequestDate, requiredDate, materialRequirement, issuedBy, leadTime, category, status, vendorName, remark}]}. `records` are the genuinely NEW MRNs since this task's last run. If `records` is empty, there's nothing to do — skip to Step 5, no state update needed.
+
+If there are more than 5 new records, only process the oldest 5 in this run (sort by rowNumber ascending) — leave the rest for next hour's run. Only advance lastProcessedRow to the highest rowNumber you actually finished processing.
+
+STEP 3 — For each MRN to process
+Skip any record where `materialRequirement` is empty or obviously placeholder/test content (e.g. "TEST", gibberish with no real material named) — note it as skipped, don't waste a web search on it.
+
+For each real MRN:
+  a. Read `materialRequirement` (often a bullet list), `category` (e.g. "I - Civil", "A - Customised Furniture" — the letter prefix is a department code, the text after it is the real category), and `project` (site name).
+  b. WebSearch for vendors/suppliers of that material/category based in or serving Ahmedabad, Gujarat, India (the company's base — all project sites are in/around Ahmedabad: Shilaj, Bopal, Khatrej). Use 1-3 targeted searches. Check IndiaMART, TradeIndia, JustDial, vendor websites, Google Business listings.
+  c. Identify up to 10 candidate vendors that plausibly supply the material, and find a real, working email for each (contact page, marketplace listing, etc.) — use WebFetch to confirm. ONLY keep vendors with an actual found email; never invent one. Aim for 5-10; fewer is fine for niche/local items, and zero is a legitimate outcome — just note it.
+  d. For each vendor with a real email, create ONE Gmail draft via the create_draft tool found in Step 1:
+     - to: [vendor's email]
+     - subject: "Quotation Request — <short material/category description> for <project> (Ref: <mrnNo>)"
+     - body (plain text, personalized — address the vendor by name/business if known): briefly introduce UIPL as an interiors/construction company in Ahmedabad; state the material requirement (reproduce the bullet list from `materialRequirement` clearly); mention the project/site and required-by date if present; ask for quotation, available quantity, and lead time; close politely. End with exactly:
+         Procurement Team
+         UIPL
+     - Do not mention internal fields (raw row number, `issuedBy`, internal status) — the MRN number in the subject (e.g. "MRN905") is fine as a reference tag.
+
+STEP 4 — Update state
+Write the new `lastProcessedRow` to C:\Users\my792\Desktop\raga\backend\data\mrn-vendor-outreach-state-ceo.json as {"lastProcessedRow": N, "updatedAt": "<ISO timestamp now>"}. Only advance past MRNs actually finished — never skip one silently.
+
+STEP 5 — Done
+No further action needed beyond a brief internal summary. Don't message the user unless something failed outright (Gmail tool unavailable, sheet unreadable) — note briefly, don't retry indefinitely.

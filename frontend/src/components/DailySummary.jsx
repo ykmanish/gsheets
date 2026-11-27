@@ -609,10 +609,10 @@ function SummaryCard({ darkMode, card, onOpen }) {
       type="button"
       onClick={() => !card.unavailable && onOpen(card.id)}
       disabled={card.unavailable}
-      className={`group flex min-h-[124px] w-full flex-col justify-between rounded-[22px] p-4 text-left transition disabled:cursor-not-allowed ${
+      className={`group flex min-h-[124px] w-full flex-col justify-between rounded-[22px] border-0 p-4 text-left shadow-none transition-colors disabled:cursor-not-allowed ${
         darkMode
-          ? "bg-white/[0.045] hover:bg-white/[0.075] disabled:hover:bg-white/[0.045]"
-          : "bg-white hover:-translate-y-0.5 disabled:hover:translate-y-0"
+          ? "bg-white/[0.05] hover:bg-white/[0.08] disabled:hover:bg-white/[0.05]"
+          : "bg-[#f5f5f3] hover:bg-[#eeeeeb] disabled:hover:bg-[#f5f5f3]"
       }`}
     >
       {/* Title sits beside the icon so the card is identifiable from the header

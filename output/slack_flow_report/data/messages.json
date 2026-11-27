@@ -1,0 +1,595 @@
+{
+  "team": {
+    "clockIn": {
+      "text": "Good morning team! Please mark your attendance for Tue, 24 Nov.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":sunrise: *Good morning team!* Please mark your attendance for *Tue, 24 Nov*."
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "attendance_clock_in",
+          "elements": [
+            {
+              "type": "button",
+              "style": "primary",
+              "text": {
+                "type": "plain_text",
+                "text": "Clock in"
+              },
+              "url": "http://localhost:3000/profile?attendance=clock-in",
+              "action_id": "link:attendance-clock-in"
+            }
+          ]
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "Opens the dashboard and clocks you in (allow location if you're at the office)."
+            }
+          ]
+        }
+      ]
+    },
+    "report": {
+      "text": "Time to fill today's daily report (Tue, 24 Nov).",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":memo: *Time to fill today's daily report* (Tue, 24 Nov)."
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "report_reminder",
+          "elements": [
+            {
+              "type": "button",
+              "style": "primary",
+              "text": {
+                "type": "plain_text",
+                "text": "Fill today's report"
+              },
+              "url": "http://localhost:3000/employee-daily-report",
+              "action_id": "link:report"
+            }
+          ]
+        }
+      ]
+    },
+    "clockOut": {
+      "text": "It's time to clock out (Tue, 24 Nov).",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":alarm_clock: *It's time to clock out.* Please file today's report, then clock out before you leave. (Tue, 24 Nov)"
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "attendance_clock_out",
+          "elements": [
+            {
+              "type": "button",
+              "style": "primary",
+              "text": {
+                "type": "plain_text",
+                "text": "Clock out"
+              },
+              "url": "http://localhost:3000/profile?attendance=clock-out",
+              "action_id": "link:attendance-clock-out"
+            },
+            {
+              "type": "button",
+              "text": {
+                "type": "plain_text",
+                "text": "Fill today's report"
+              },
+              "url": "http://localhost:3000/employee-daily-report",
+              "action_id": "link:report-before-clock-out"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "personal": {
+    "recap": {
+      "text": "On Mon, 23 Nov some things were missed: no clock-out, no daily report.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":clipboard: *Hi Manish, a few things were missed on Mon, 23 Nov*\n• You didn't clock out (you clocked in at 10:38 AM).\n• Your daily report wasn't filed. Speak to HR if it needs adding."
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "attendance_adjustment",
+          "elements": [
+            {
+              "type": "button",
+              "style": "primary",
+              "text": {
+                "type": "plain_text",
+                "text": "Request adjustment for Mon, 23 Nov"
+              },
+              "url": "http://localhost:3000/hr/attendance?adjust=2026-11-23",
+              "action_id": "link:attendance-adjustment"
+            }
+          ]
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "The button opens the dashboard with that day filled in; add the right times and a reason, and HR will review it. Today's (Tue, 24 Nov) reminders follow as usual."
+            }
+          ]
+        }
+      ]
+    },
+    "clockInDue": {
+      "text": "You haven't clocked in yet today (Tue, 24 Nov).",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":wave: Hi Manish, you haven't clocked in yet today (*Tue, 24 Nov*)."
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "attendance_clock_in",
+          "elements": [
+            {
+              "type": "button",
+              "style": "primary",
+              "text": {
+                "type": "plain_text",
+                "text": "Clock in"
+              },
+              "url": "http://localhost:3000/profile?attendance=clock-in",
+              "action_id": "link:attendance-clock-in"
+            }
+          ]
+        }
+      ]
+    },
+    "clockedIn": {
+      "text": "You clocked in at 10:38 AM.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":white_check_mark: *You clocked in at 10:38 AM* · Tue, 24 Nov"
+          }
+        }
+      ]
+    },
+    "reportDue": {
+      "text": "Your daily report for Tue, 24 Nov isn't in yet.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":memo: Hi Manish, your daily report for *Tue, 24 Nov* isn't in yet."
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "report_reminder",
+          "elements": [
+            {
+              "type": "button",
+              "style": "primary",
+              "text": {
+                "type": "plain_text",
+                "text": "Fill today's report"
+              },
+              "url": "http://localhost:3000/employee-daily-report",
+              "action_id": "link:report"
+            }
+          ]
+        }
+      ]
+    },
+    "ownReport": {
+      "text": "Your daily report: 1 task today, 0 planned for tomorrow.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":white_check_mark: *Your daily report* · Tue, 24 Nov"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "Accounts · filed 2:18 PM"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Today's work (1)*\n\n*1.* Office · Account work · Completed · Self\nManaged accounting and payment-related operations, and updated hardware accounts.."
+          }
+        }
+      ]
+    },
+    "clockOutDue1": {
+      "text": "It's time to clock out.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":alarm_clock: *It's time to clock out*, Manish. You clocked in at *10:38 AM*."
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":memo: Your daily report isn't in yet; file it first, then clock out."
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "attendance_clock_out",
+          "elements": [
+            {
+              "type": "button",
+              "text": {
+                "type": "plain_text",
+                "text": "Clock out"
+              },
+              "url": "http://localhost:3000/profile?attendance=clock-out",
+              "action_id": "link:attendance-clock-out"
+            },
+            {
+              "type": "button",
+              "style": "primary",
+              "text": {
+                "type": "plain_text",
+                "text": "Fill today's report"
+              },
+              "url": "http://localhost:3000/employee-daily-report",
+              "action_id": "link:report-before-clock-out"
+            }
+          ]
+        }
+      ]
+    },
+    "clockOutDue3": {
+      "text": "Reminder 3: you're still clocked in.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":alarm_clock: *Reminder 3:* you're still clocked in, Manish. You clocked in at *10:38 AM*."
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "attendance_clock_out",
+          "elements": [
+            {
+              "type": "button",
+              "style": "primary",
+              "text": {
+                "type": "plain_text",
+                "text": "Clock out"
+              },
+              "url": "http://localhost:3000/profile?attendance=clock-out",
+              "action_id": "link:attendance-clock-out"
+            }
+          ]
+        }
+      ]
+    },
+    "clockedOut": {
+      "text": "You clocked out at 6:50 PM.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":white_check_mark: *You clocked out at 6:50 PM* · in at 9:04 AM, worked 9h 46m."
+          }
+        }
+      ]
+    }
+  },
+  "hr": {
+    "clockIn": {
+      "text": "Attendance Tue, 24 Nov: 16 clocked in, 10 not yet.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":busts_in_silhouette: *Attendance · Tue, 24 Nov*  (HR view)"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Clocked in (16)*\n:white_check_mark: Vasa — 9:45 AM\n:white_check_mark: Dipak Patel — 9:45 AM (remote)\n:white_check_mark: Dhwani Singh — 9:48 AM\n:white_check_mark: Umesh Mistry — 10:02 AM\n:white_check_mark: Vishal Patel — 10:06 AM\n:white_check_mark: Neelam Verma — 10:07 AM\n:white_check_mark: Kanan Soni — 10:08 AM\n:white_check_mark: Rajan Patel — 10:10 AM\n:white_check_mark: Kamil Dave — 10:12 AM\n:white_check_mark: Miti — 10:13 AM\n:white_check_mark: Manish Yadav — 10:38 AM\n:white_check_mark: Krupali Lathia — 10:44 AM\n:white_check_mark: Vipul Shah — 11:09 AM\n:white_check_mark: Devang Shah — 11:09 AM\n:white_check_mark: Chirag Gajjar — 11:10 AM\n:white_check_mark: Nishi Mehta — 11:20 AM"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Not clocked in yet (10)*\nJay Panchal, Jay Suthar, Prakash Lohar, Arshi Odedra, Iqbal Patel, Milind Chaurasiya, Sanjay Sharma, Jash Thakkar, Nayna Leva, Chahat"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "Updates live as people clock in."
+            }
+          ]
+        }
+      ]
+    },
+    "report": {
+      "text": "Daily reports Tue, 24 Nov: 1 filed, 19 not yet.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":memo: *Daily reports · Tue, 24 Nov*  (HR view)"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Filed (1)*\n:white_check_mark: Devang Shah — 2:18 PM"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Not filed yet (19)*\nMiti, Dhwani Singh, Dipak Patel, Milind Chaurasiya, Krupali Lathia, Chirag Gajjar, Sanjay Sharma, Rajan Patel, Jash Thakkar, Kamil Dave, Kanan Soni, Nayna Leva, Nishi Mehta, Manish Yadav, Vipul Shah, Vasa, Vishal Patel, Umesh Mistry, Chahat"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "Each report is posted in this thread once it's filed."
+            }
+          ]
+        }
+      ]
+    },
+    "reportReply": {
+      "text": "Devang Shah's daily report: 1 task today, 0 planned for tomorrow.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Devang Shah's daily report* · Tue, 24 Nov"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "Accounts · filed 2:18 PM"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Today's work (1)*\n\n*1.* Office · Account work · Completed · Self\nManaged accounting and payment-related operations, and updated hardware accounts.."
+          }
+        }
+      ]
+    },
+    "clockOut": {
+      "text": "Clock-out Tue, 24 Nov: 0 out, 16 still in.",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":alarm_clock: *Clock-out · Tue, 24 Nov*  (HR view)"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Still clocked in (16)*\n:hourglass_flowing_sand: Vasa — in since 9:45 AM\n:hourglass_flowing_sand: Dipak Patel — in since 9:45 AM\n:hourglass_flowing_sand: Dhwani Singh — in since 9:48 AM\n:hourglass_flowing_sand: Umesh Mistry — in since 10:02 AM\n:hourglass_flowing_sand: Vishal Patel — in since 10:06 AM\n:hourglass_flowing_sand: Neelam Verma — in since 10:07 AM\n:hourglass_flowing_sand: Kanan Soni — in since 10:08 AM\n:hourglass_flowing_sand: Rajan Patel — in since 10:10 AM\n:hourglass_flowing_sand: Kamil Dave — in since 10:12 AM\n:hourglass_flowing_sand: Miti — in since 10:13 AM\n:hourglass_flowing_sand: Manish Yadav — in since 10:38 AM\n:hourglass_flowing_sand: Krupali Lathia — in since 10:44 AM\n:hourglass_flowing_sand: Vipul Shah — in since 11:09 AM\n:hourglass_flowing_sand: Devang Shah — in since 11:09 AM\n:hourglass_flowing_sand: Chirag Gajjar — in since 11:10 AM\n:hourglass_flowing_sand: Nishi Mehta — in since 11:20 AM"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Clocked out (0)*\n_Nobody yet_"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "Updates live. Everyone still clocked in is reminded privately every few minutes."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "leave": {
+    "card": {
+      "text": "Leave request from Sanjay Sharma: Mon, 30 Nov",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":palm_tree: *Leave request* from *Sanjay Sharma*"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*Dates*\nMon, 30 Nov"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Days*\n1 day (1 paid, 0 unpaid)"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Type*\nCasual Leave"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Department*\nDesign"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Reason*\nFamily function in the village."
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "leave_review",
+          "elements": [
+            {
+              "type": "button",
+              "style": "primary",
+              "text": {
+                "type": "plain_text",
+                "text": "Approve"
+              },
+              "action_id": "leave:approved",
+              "value": "{\"id\":\"6b0573ffafc2cc1cefadc6f7\"}"
+            },
+            {
+              "type": "button",
+              "style": "danger",
+              "text": {
+                "type": "plain_text",
+                "text": "Decline"
+              },
+              "action_id": "leave:declined",
+              "value": "{\"id\":\"6b0573ffafc2cc1cefadc6f7\"}"
+            },
+            {
+              "type": "button",
+              "text": {
+                "type": "plain_text",
+                "text": "Open in dashboard"
+              },
+              "url": "http://localhost:3000/hr/leave",
+              "action_id": "link:leave"
+            }
+          ]
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": ":hourglass_flowing_sand: Waiting for HR · applied 10:17 AM Mon, 23 Nov"
+            }
+          ]
+        }
+      ]
+    },
+    "decided": {
+      "text": "Leave request from Sanjay Sharma: Mon, 30 Nov",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":palm_tree: *Leave request* from *Sanjay Sharma*"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*Dates*\nMon, 30 Nov"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Days*\n1 day (1 paid, 0 unpaid)"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Type*\nCasual Leave"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Department*\nDesign"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*Reason*\nFamily function in the village."
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": ":white_check_mark: *Approved* by Neelam Verma — Approved. Enjoy the function!"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

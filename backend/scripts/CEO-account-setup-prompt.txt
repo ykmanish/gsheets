@@ -1,0 +1,57 @@
+RAGA — SETUP PROMPT FOR A SECOND ACCOUNT (e.g. the CEO's)
+============================================================
+
+PREREQUISITES
+--------------
+1. Open Claude Code under the other account, pointed at this same project
+   folder: C:\Users\my792\Desktop\raga
+   (or a clone of it with the same .mcp.json + RAGA_MONGODB_READONLY_URI env
+   var, so the raga-mongo MCP connector works there too).
+2. Connect the raga-mongo MCP connector on that account.
+3. Connect a Gmail connector on that account (needed for MRN Vendor Outreach
+   only — Daily Digest doesn't need Gmail).
+
+Once both are connected, paste everything between the lines below into that
+session as one message.
+
+------------------------------------------------------------
+PASTE THIS INTO THE OTHER ACCOUNT'S SESSION:
+
+Read backend/scripts/daily-digest-template.html in this repo and publish it
+as a new Claude Artifact (no `url` param — creates a fresh one under this
+account), title "Daily Digest", favicon 📋. Note the resulting URL, then read
+backend/scripts/daily-digest-task-prompt.txt, replace every <ARTIFACT_URL> in
+it with that URL, and create a scheduled task: taskId "raga-daily-digest",
+title "Raga Daily Digest", cronExpression "0 20 * * *", using that filled-in
+text as the prompt.
+
+Then read backend/scripts/mrn-vendor-outreach-task-prompt-ceo.txt verbatim
+and create a second scheduled task: taskId "mrn-vendor-outreach", title "MRN
+Vendor Outreach", cronExpression "0 * * * *", using that file's exact content
+as the prompt (no placeholders to fill in — it's already complete).
+
+------------------------------------------------------------
+
+AFTER SETUP
+-----------
+- Click "Run now" on both new scheduled tasks once, so someone is present to
+  approve the raga-mongo / Gmail / web-search tool permissions interactively.
+  Otherwise the first automatic firing may just stall on an approval prompt.
+
+IMPORTANT CAVEAT — read before enabling both accounts' MRN task
+-----------------------------------------------------------------
+With BOTH accounts' "MRN Vendor Outreach" task enabled, every new MRN will
+get vendor-quotation drafts created TWICE — once in the original account's
+Gmail, once in the CEO's — since each account independently searches for
+vendors and drafts outreach for the same MRN. The separate state file
+(mrn-vendor-outreach-state-ceo.json vs mrn-vendor-outreach-state.json) only
+prevents the two tasks from racing over the same progress counter; it does
+NOT prevent this duplication.
+
+If you don't want duplicate vendor outreach, keep only ONE account's MRN
+task enabled and treat the other as a manual "Run now" backup. To disable
+a task, ask Claude in that account's session to call update_scheduled_task
+with {taskId: "mrn-vendor-outreach", enabled: false}.
+
+The Daily Digest task has no such issue — both copies are read-only and
+safe to run in parallel.

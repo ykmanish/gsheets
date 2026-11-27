@@ -1,0 +1,3 @@
+Read backend/scripts/daily-digest-template.html in this repo and publish it as a new Claude Artifact (no `url` param — creates a fresh one under this account), title "Daily Digest", favicon 📋. Note the resulting URL, then read backend/scripts/daily-digest-task-prompt.txt, replace every <ARTIFACT_URL> in it with that URL, and create a scheduled task: taskId "raga-daily-digest", title "Raga Daily Digest", cronExpression "0 20 * * *", using that filled-in text as the prompt.
+
+Then read backend/scripts/mrn-vendor-outreach-task-prompt-ceo.txt verbatim and create a second scheduled task: taskId "mrn-vendor-outreach", title "MRN Vendor Outreach", cronExpression "0 * * * *", using that file's exact content as the prompt (no placeholders to fill in — it's already complete).

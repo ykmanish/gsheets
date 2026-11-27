@@ -1,0 +1,46 @@
+Pune, India  |  +91 7972587822  |  ymanishkumar9790@gmail.com  |  github.com/ykmanish  |  linkedin.com/in/ykmanish
+Software engineer with 2+ years of experience and an ongoing MBA in Cybersecurity Management. Hands-on project experience with access controls, authentication, audit logging and data protection. Independently built a 42-module ERP covering HR, Finance and Operations, and worked with design, backend and QA teams to deliver client dashboards and resolve application issues.
+Access &amp; Application Security: RBAC, 2FA, OAuth2, JWT, AES encryption, audit logging, secure API design, secure coding.
+Cloud &amp; DevOps: AWS (EC2, S3, CodePipeline), Docker, GitHub Actions, CI/CD, Linux, automated backups.
+Programming &amp; APIs: JavaScript, TypeScript, Python, SQL, Node.js, Express.js, REST APIs, microservices, Socket.IO.
+Frontend &amp; UI: React.js, Next.js, Redux Toolkit, Tailwind CSS, HTML5, CSS3, responsive design, Figma.
+Databases: MongoDB, PostgreSQL, MySQL, Firebase, SQLite3.
+Tools &amp; Delivery: Git, Postman, Jira, Confluence, Agile/Scrum, code reviews, root-cause analysis, team coordination.
+Jr. Software Development Engineer | Quantafile, Pune (Remote)
+Jun 2023 - Jul 2025
+&#8226;
+Investigated issues across application interfaces, API responses and Redux state, working with developers and QA to identify root causes and resolve defects.
+&#8226;
+Worked with design and backend teams on 5+ client dashboards, translating Figma designs into working features and coordinating release handoffs with QA within Agile sprint cycles.
+&#8226;
+Contributed to 10+ production React modules and a shared component library adopted across three projects, reducing reported UI bugs by approximately 20%.
+&#8226;
+Built a shared data-fetching layer with lazy loading and memoization, improving page load times by approximately 25% and standardising how the team handled API responses.
+&#8226;
+Followed Git branching, pull request and code review workflows, and supported CI/CD pipelines using Docker and GitHub Actions to keep releases moving across client projects.
+SMB ERP Portal | Independent Full-Stack Project - GitHub
+Oct 2025 - Mar 2026
+Next.js | TypeScript | Node.js | Express.js | MongoDB | Docker | AWS EC2 | GitHub Actions | Gemini
+&#8226;
+Independently built and deployed a 42-module ERP covering HR, Finance and Operations, including business workflows, database design, REST APIs, the application interface and cloud infrastructure.
+&#8226;
+Implemented role-based access control (RBAC), Google Authenticator 2FA and activity audit logs to manage user permissions, strengthen sign-in security and record system actions.
+&#8226;
+Configured automated OneDrive backups and event notifications, and automated builds and deployments using GitHub Actions, AWS CodePipeline, Docker and EC2.
+&#8226;
+Built a Gemini-powered assistant for employee HR queries and summaries of attendance, expenses and operational activity, connecting technical features to day-to-day business needs.
+Goodish | Social Productivity Platform - GitHub
+Jan 2026 - Mar 2026
+Next.js | Express.js | MongoDB | Socket.IO | JWT | AES Encryption | Gemini
+&#8226;
+Implemented JWT-based session management, AES encryption for chat and secure API integration in a platform with individual and group messaging, task tracking, rewards and file sharing.
+&#8226;
+Improved interface performance using React Hooks, Context API, lazy loading and reusable components while managing authentication and API integration across the application.
+MBA in Cybersecurity Management | National Forensic Sciences University, Gujarat
+Aug 2025 - Present
+B.E. Electronics &amp; Communication | Zeal College of Engineering, Pune | CGPA: 7.55
+Aug 2019 - Jun 2023
+Foundations of Cybersecurity | Google | Aug 2023 | View Certificate
+Full Stack Web Development MERN | Almabetter | May 2023 | View Certificate
+Co-authored: Surveillance Robot using Optical Communication | IJIRCCE | Mar 2023 | View Paper
+Chess | Technical Reading | Open Source | Music

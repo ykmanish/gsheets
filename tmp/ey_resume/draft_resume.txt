@@ -1,0 +1,30 @@
+SRISHTI MEENA
+srishtimeenaoffical25@gmail.com  |  +91 91167 98518
+linkedin.com/in/srishtimeena
+SUMMARY
+MBA student in Cyber Security Management with internship experience reviewing IT service management processes, identifying gaps and preparing process documentation for audit review. Completed ISO/IEC 27001:2022 Lead Auditor training and built an ISMS GRC platform linking audit findings, risks and corrective actions. Seeking an Associate Consultant role in Cyber Security at EY.
+EDUCATION
+MBA in Cyber Security Management
+National Forensic Sciences University, Gandhinagar | 2025 - Present | CGPI: 8.50
+Bachelor of Computer Applications
+University of Rajasthan, Jaipur | 2022 - 2025 | 80.7%
+INTERNSHIP EXPERIENCE
+Cyber Security Compliance Intern
+Tectona Software Solutions Pvt. Ltd., Ahmedabad | Jun 2026 - Jul 2026
+Reviewed and improved documentation for six ITSM processes: Service Level, IT Asset, Incident, Monitoring and Alerting, Release and Deployment, and Service Catalog Management.
+Compared process documentation with ITIL 4 practices, PinkVERIFY requirements and ISO/IEC 20000 guidance to identify gaps and recommend improvements.
+Participated in requirements discussions and turned team inputs into structured process documentation for audit review.
+PROJECT
+ISMS Governance, Risk and Compliance (GRC) Platform
+Built a platform to manage ISO 27001 internal audit findings, risks and corrective actions through a central dashboard.
+Linked control assessments to findings, risk ratings, action owners, ITSM tickets and closure records, making each issue traceable through remediation.
+Added SLA-based due dates and overdue-action tracking to help review pending corrective actions and follow up on closure.
+RELEVANT SKILLS
+IT audit and risk: Process reviews, gap analysis, evidence and work paper preparation, risk assessment and treatment, control evaluation, audit observation reporting and corrective-action tracking.
+Standards and frameworks: ISO/IEC 27001:2022, ISO/IEC 20000-1:2018, ITIL 4, PinkVERIFY requirements and NIST Cybersecurity Framework.
+Security foundations: Identity and Access Management (IAM), Business Continuity Management (BCM), network security, TCP/IP, Wireshark and Nmap.
+Communication: Technical writing, requirements analysis, stakeholder discussions and teamwork.
+TRAINING AND PROFESSIONAL DEVELOPMENT
+ISO/IEC 27001:2022 Lead Auditor Training
+Bureau Veritas | CQI and IRCA certified course PR373 | Jun 2026
+CISSP course: INE | In progress

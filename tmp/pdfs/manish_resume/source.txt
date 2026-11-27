@@ -1,0 +1,61 @@
+PAGE 1
+Manishkumar Yadav 
+Pune, India  |  +91 7972587822  |  ymanishkumar9790@gmail.com  |  github.com/ykmanish  |  linkedin.com/in/ykmanish 
+SUMMARY 
+Software Engineer with 2.6 years of experience in full-stack web development, building responsive UIs with React and Next.js and REST APIs 
+with Node.js and Express.js. Independently designed and shipped a 42-module ERP platform on AWS covering HR, Finance, and Operations, 
+handling everything from UI components to cloud deployment. Currently pursuing an MBA in Cybersecurity Management, bringing a strong 
+focus on authentication, access control, and secure API design. 
+SKILLS 
+Languages: JavaScript(ES6+), Python, SQL 
+Backend: Node.js, Express.js, REST API Design, Microservices, Socket.IO, TypeScript 
+Frontend & UI: React.js, Next.js, Redux Toolkit, Tailwind CSS, HTML5, CSS3, Responsive Design, Figma 
+Cloud & DevOps: AWS (EC2, S3, CodePipeline), Docker, GitHub Actions, CI/CD Pipelines, Linux 
+Databases: MongoDB, PostgreSQL, MySQL, Firebase, SQLite3 
+Security: RBAC, 2FA, AES Encryption, OAuth2, JWT Auth, Audit Logging, Secure Coding 
+Tools & Methods: Git, Postman, Jira, Agile/Scrum, Confluence 
+WORK EXPERIENCE 
+Jr. Software Development Engineer | Quantafile, Pune (Remote) Jun 2023 - Jul 2025 
+• Contributed to 10+ React.js modules in production and helped build a shared component library using Redux Toolkit and Tailwind CSS to 
+fix recurring UI inconsistencies, which reduced UI bug reports by ~20% and was adopted across 3 concurrent projects. 
+• Identified that REST API calls were slow and inconsistent across the codebase, so built a shared async data-fetching layer with lazy 
+loading and memoization. Page load time improved by ~25% and the team had a single consistent pattern to follow going forward. 
+• Worked with designers and backend developers to turn Figma designs into working UI for 5+ client dashboards, involved from design 
+handoff to final delivery and shipping features within Agile sprint cycles. 
+• Followed and maintained Git workflows including branching, pull requests, and code reviews, and also helped keep the CI/CD pipelines 
+running smoothly using Docker and GitHub Actions. 
+• Investigated and resolved issues across the React UI, API responses, and Redux state layer, collaborating with the team to diagnose root 
+causes quickly and maintain sprint momentum. 
+• Coordinated between design, backend, and QA teams during feature releases to make sure handoffs were clear and nothing got blocked, 
+which helped keep deliveries on track across multiple client projects. 
+PROJECTS 
+SMB ERP Portal | Independent Full-Stack Project - View on GitHub Oct 2025 - Mar 2026 
+Next.js · TypeScript · Node.js · Express.js · MongoDB · Docker · AWS EC2 · GitHub Actions, Gemini 
+• Built a complete business management platform with 42 modules across HR (leave requests, offer letters, salary slips), Finance (invoicing, 
+expense tracking), and Operations, designed the full system end-to-end including database schema, REST APIs, React UI, and cloud 
+infrastructure. 
+• Implemented role-based access control (RBAC) so each user only accesses what they are permitted to, along with full activity audit 
+logging, Google Authenticator 2FA, Discord webhook notifications for key events, and automated OneDrive backups. 
+• Set up a fully automated CI/CD pipeline using GitHub Actions, AWS CodePipeline, Docker, and EC2 where every code push to main gets 
+built, containerised, and deployed to production without any manual steps needed. 
+• Built an in-app AI assistant called Krixa powered by Google Gemini enabling employees to query HR and Finance data (leave balances, 
+payslips, and offer letters) in plain language, significantly reducing routine HR query volume. 
+• Integrated a conversational analytics feature using Gemini so managers can ask questions about team attendance, expense trends, and 
+operational activity in plain English and get summarised insights, removing the need to pull manual reports for day-to-day decisions. 
+Goodish | Social Productivity Platform - View on GitHub Jan 2026 - Mar 2026 
+Next.js · Express.js · MongoDB · Socket.IO · JWT · AES Encryption, Gemini 
+• Community platform where users complete daily tasks, earn points, and redeem them as rewards. Includes 1:1 and group chat with AES 
+end-to-end encryption, /split for shared expense tracking with running balances, activity feeds, likes, comments, and file uploads. 
+• Integrated Google Gemini to send a daily positive quote and surface an interesting historical event from that day, delivered as a morning 
+feed card to keep users engaged and give the platform a bit of personality beyond just task tracking. 
+• Optimised frontend performance using React Hooks, Context API, lazy loading, and reusable components, while also owning JWT-based 
+session management and secure API integration to ensure a consistent and secure user experience end to end. 
+EDUCATION 
+MBA in Cybersecurity Management  |  National Forensic Sciences University, Gujarat Aug 2025 - Pursuing 
+B.E. Electronics & Communication  | Zeal College of Engineering, Pune | CGPA: 7.55  Aug 2019 – Jun 2023 
+CERTIFICATIONS & PUBLICATIONS 
+Foundations of Cybersecurity, Google (Aug 2023) - View Certificate 
+Full Stack Web Development MERN, Almabetter (May 2023) - View Certificate 
+Co-authored: “Surveillance Robot using Optical Communication”, IJIRCCE (Mar 2023) - View Paper 
+HOBBIES 
+Chess  |  Technical Reading  |  Open Source  |  Music 

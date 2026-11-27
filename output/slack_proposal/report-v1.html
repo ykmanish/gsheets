@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Slack for Reporting &amp; Approvals — UIPL Docs</title>
+<style>
+  @font-face { font-family: "Bahn"; src: url("file:///C:/Windows/Fonts/bahnschrift.ttf"); font-weight: 300 700; }
+  @page { size: 210mm 297mm; margin: 0; }
+  :root {
+    --stone: #e8e5e0;
+    --stone-2: #f2f0ec;
+    --taupe: #bcb6ae;
+    --taupe-2: #d3cec7;
+    --taupe-3: #a7a198;
+    --ink: #1b1b19;
+    --ink-soft: #3b3834;
+    --muted: #6d675f;
+    --line: rgba(27, 27, 25, 0.16);
+    --s-blue: #36c5f0;
+    --s-green: #2eb67d;
+    --s-yellow: #ecb22e;
+    --s-red: #e01e5a;
+    --aubergine: #4a154b;
+    --wa: #25d366;
+    --sheets: #34a853;
+    --mint: #4be8c3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--stone); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); font-size: 11px; line-height: 1.5; }
+  .display { font-family: "Bahn", "Bahnschrift", sans-serif; }
+
+  .page { position: relative; width: 794px; height: 1123px; overflow: hidden; background: var(--stone); page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+
+  /* Footer, as in the reference: hairline, "Page" left, number right */
+  .foot { position: absolute; left: 44px; right: 44px; bottom: 30px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); }
+  .foot b { font-family: "Bahn"; font-weight: 400; color: var(--ink); }
+
+  .tag { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: var(--stone); font-family: "Bahn"; font-size: 11px; font-weight: 500; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 13px; border-radius: 999px; background: var(--ink); color: var(--stone); font-size: 9.5px; font-weight: 600; letter-spacing: 0.01em; }
+  .pill.light { background: rgba(255,255,255,0.55); color: var(--ink); border: 1px solid var(--line); }
+  .eyebrow { font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+  /* ── Section header band used on pages 2–6 ── */
+  .band { position: absolute; left: 34px; right: 34px; top: 34px; height: 168px; border-radius: 26px; background: linear-gradient(160deg, #c3bdb5, #b1aba2); padding: 26px 30px; }
+  .band .row { display: flex; align-items: center; gap: 12px; }
+  .band h1 { font-family: "Bahn"; font-weight: 300; font-size: 40px; line-height: 1.02; letter-spacing: -0.01em; margin-top: 18px; }
+  .band .sub { position: absolute; right: 30px; bottom: 26px; width: 230px; font-size: 10.5px; color: var(--ink-soft); text-align: right; }
+
+  /* ── Additions that fill each page ── */
+  .numstrip { position: absolute; left: 44px; right: 44px; top: 1000px; display: grid; grid-template-columns: 1.1fr repeat(4, 1fr); border-top: 1px solid var(--line); padding-top: 14px; }
+  .numstrip .lbl { font-size: 9px; color: var(--muted); line-height: 1.4; padding-right: 12px; }
+  .numstrip .n { font-family: "Bahn"; font-weight: 300; font-size: 26px; line-height: 1; }
+  .numstrip .l { font-size: 8.8px; color: var(--ink-soft); margin-top: 5px; }
+  .numstrip > div + div { padding-left: 14px; border-left: 1px solid var(--line); }
+
+  .day { margin-top: 22px; border-radius: 20px; background: #fff; border: 1px solid var(--line); padding: 16px 20px 18px; }
+  .day .hd { display: flex; justify-content: space-between; align-items: baseline; }
+  .day .hd span { font-size: 9px; color: var(--muted); }
+  .rail { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); margin-top: 16px; }
+  .rail::before { content: ""; position: absolute; left: 6px; right: 6px; top: 6px; height: 1px; background: rgba(27,27,25,.25); }
+  .stop { position: relative; padding-right: 10px; }
+  .stop i { display: block; width: 13px; height: 13px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(27,27,25,.2); }
+  .stop b { display: block; font-family: "Bahn"; font-weight: 400; font-size: 17px; margin-top: 8px; line-height: 1; }
+  .stop span { display: block; font-size: 9.2px; color: var(--ink-soft); margin-top: 4px; line-height: 1.35; }
+
+  .ways { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; }
+  .way { border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; }
+  .way .count { margin-top: auto !important; }
+  .way .bub:last-of-type { margin-bottom: 12px; }
+  .sources { position: absolute; left: 44px; right: 44px; bottom: 64px; font-size: 8.5px; color: var(--muted); line-height: 1.5; display: flex; gap: 14px; align-items: center; }
+  .sources img, .sources svg { width: 16px; height: 16px; }
+  .way.wa { background: var(--stone-2); border: 1px solid var(--line); }
+  .way.sl { background: #fff; border: 1px solid var(--line); }
+  .way .hd { display: flex; align-items: center; gap: 8px; font-family: "Bahn"; font-size: 13px; font-weight: 500; }
+  .way .hd svg { width: 18px; height: 18px; }
+  .bub { margin-top: 7px; font-size: 9.3px; padding: 6px 10px; border-radius: 10px 10px 10px 3px; max-width: 92%; color: #1b1b19; }
+  .wa .bub { background: #dcf8c6; }
+  .wa .bub.call { background: #fff; border: 1px dashed rgba(27,27,25,.3); }
+  .sl .bub { background: #f4ede4; border-left: 3px solid var(--s-red); border-radius: 6px; }
+  .sl .bub.ok { border-left-color: #007a5a; background: #e6f4ef; }
+  .way .count { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 9px; color: var(--muted); }
+  .way .count b { font-family: "Bahn"; font-weight: 500; color: var(--ink); font-size: 11px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+  .tile { border-radius: 18px; padding: 14px 16px; background: var(--stone-2); border: 1px solid var(--line); }
+  .tile .t { font-family: "Bahn"; font-weight: 300; font-size: 22px; line-height: 1; }
+  .tile b { display: block; font-family: "Bahn"; font-weight: 500; font-size: 12px; margin-top: 8px; }
+  .tile span { display: block; font-size: 9.2px; color: var(--ink-soft); margin-top: 3px; }
+  .risk td:first-child { width: 24%; }
+  .band .corner { position: absolute; right: 30px; top: 26px; display: flex; gap: 8px; align-items: center; }
+
+  .content { position: absolute; left: 44px; right: 44px; top: 228px; bottom: 64px; }
+  h2 { font-family: "Bahn"; font-weight: 400; font-size: 17px; letter-spacing: -0.005em; }
+  h3 { font-family: "Bahn"; font-weight: 500; font-size: 13px; }
+  p.lead { font-size: 12px; color: var(--ink-soft); max-width: 560px; }
+
+  /* ── Cover ── */
+  .cover-panel { position: absolute; left: 34px; top: 34px; }
+  .cover-inner { position: absolute; left: 34px; top: 34px; width: 726px; height: 640px; padding: 30px 32px; }
+  .cover-inner .top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .cover-inner .top .label { font-size: 12px; line-height: 1.35; color: var(--ink); margin-left: 14px; }
+  .bigstat { text-align: right; }
+  .bigstat .n { font-family: "Bahn"; font-weight: 300; font-size: 44px; line-height: 1; letter-spacing: -0.02em; }
+  .bigstat .n small { font-size: 26px; }
+  .bigstat .rule { height: 1px; background: rgba(27,27,25,.35); margin: 10px 0 6px auto; width: 210px; }
+  .bigstat .cap { font-size: 9px; color: var(--ink-soft); width: 210px; margin-left: auto; text-align: left; }
+  .cover-title { position: absolute; left: 120px; top: 205px; font-family: "Bahn"; font-weight: 300; font-size: 56px; line-height: 1.04; letter-spacing: -0.015em; }
+  .ring { position: absolute; left: 470px; top: 172px; width: 92px; height: 92px; border-radius: 50%; border: 1.2px solid rgba(27,27,25,.55); }
+  .ring-text { position: absolute; left: 494px; top: 212px; font-size: 8px; letter-spacing: 0.12em; color: var(--ink-soft); white-space: nowrap; }
+  .cover-meta { position: absolute; right: 32px; top: 382px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .chain { position: absolute; left: 32px; bottom: 30px; display: flex; align-items: center; gap: 10px; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 8px; border-radius: 999px; background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.7); font-size: 10px; font-weight: 600; }
+  .chip svg, .chip img { width: 18px; height: 18px; }
+  .arrow { color: var(--ink-soft); font-size: 13px; }
+  .cover-cols { position: absolute; left: 70px; right: 70px; top: 760px; display: grid; grid-template-columns: 1fr 1fr; gap: 70px; }
+  .cover-cols h2 { font-size: 18px; line-height: 1.2; margin-bottom: 14px; }
+  .cover-cols p { font-size: 10.5px; color: var(--ink-soft); }
+  .cover-cols .k { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .cover-cols .k span { font-size: 9px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--stone-2); }
+
+  /* ── Flow diagram ── */
+  .flow { display: grid; grid-template-columns: 1fr 22px 1fr 22px 1fr 22px 1fr; align-items: stretch; margin-top: 16px; }
+  .node { background: var(--stone-2); border: 1px solid var(--line); border-radius: 18px; padding: 13px 13px 12px; }
+  .node .ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: #fff; border: 1px solid var(--line); margin-bottom: 9px; }
+  .node .ico svg, .node .ico img { width: 18px; height: 18px; }
+  .node b { display: block; font-family: "Bahn"; font-weight: 500; font-size: 12px; margin-bottom: 3px; }
+  .node span { font-size: 9.2px; color: var(--muted); line-height: 1.4; display: block; }
+  .node.dark { background: var(--ink); color: var(--stone); border-color: var(--ink); }
+  .node.dark span { color: rgba(232,229,224,.7); }
+  .flow .to { display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+
+  /* ── Module cards ── */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; }
+  .card { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 18px 18px 16px; overflow: hidden; }
+  .card .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; }
+  .card .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .card h3 { font-size: 14px; }
+  .card .num { font-family: "Bahn"; font-weight: 300; font-size: 30px; line-height: 1; letter-spacing: -0.02em; }
+  .card .unit { font-size: 8.5px; color: var(--muted); text-align: right; }
+  .card p { font-size: 9.8px; color: var(--ink-soft); margin-top: 6px; }
+  .card .facts { margin-top: 10px; display: grid; gap: 4px; }
+  .card .facts div { display: flex; justify-content: space-between; font-size: 9.3px; border-top: 1px dashed var(--line); padding-top: 4px; }
+  .card .facts div span:last-child { font-weight: 600; }
+  .strip { margin-top: 14px; border-radius: 16px; background: var(--taupe-2); padding: 12px 16px; font-size: 9.8px; color: var(--ink-soft); }
+  .strip b { color: var(--ink); }
+
+  /* ── Stats row ── */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .stats > div { padding: 16px 14px 14px 0; }
+  .stats > div + div { border-left: 1px solid var(--line); padding-left: 16px; }
+  .stats .n { font-family: "Bahn"; font-weight: 300; font-size: 40px; line-height: 1; letter-spacing: -0.02em; }
+  .stats .l { font-size: 9.5px; color: var(--ink-soft); margin-top: 8px; line-height: 1.35; }
+
+  .issues { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 26px; margin-top: 22px; }
+  .issue { display: grid; grid-template-columns: 30px 1fr; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .issue .no { font-family: "Bahn"; font-size: 20px; font-weight: 300; color: var(--muted); line-height: 1; }
+  .issue h3 { font-size: 13px; margin-bottom: 3px; }
+  .issue p { font-size: 9.8px; color: var(--ink-soft); }
+  .issue .manual { display: inline-block; margin-top: 6px; font-size: 8.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--taupe-2); }
+
+  /* ── Slack page ── */
+  .arch { display: grid; grid-template-columns: 1fr 26px 1.25fr 26px 1.25fr; align-items: center; margin-top: 4px; }
+  .arch .to { text-align: center; color: var(--muted); font-size: 14px; }
+  .twocol { display: grid; grid-template-columns: 0.95fr 1.05fr; gap: 22px; margin-top: 20px; }
+  .channels { display: grid; gap: 8px; }
+  .chan { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px 10px 14px; position: relative; overflow: hidden; }
+  .chan .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+  .chan .name { font-family: "Bahn"; font-weight: 500; font-size: 12.5px; }
+  .chan .when { float: right; font-size: 8.5px; color: var(--muted); margin-top: 2px; }
+  .chan p { font-size: 9.2px; color: var(--ink-soft); margin-top: 2px; }
+
+  .slack { background: #fff; border-radius: 14px; border: 1px solid #dddddd; overflow: hidden; font-family: "Segoe UI", sans-serif; }
+  .slack .topbar { background: var(--aubergine); color: #fff; padding: 7px 12px; font-size: 10px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+  .slack .topbar span { font-weight: 400; opacity: .7; font-size: 8.5px; }
+  .msg { display: grid; grid-template-columns: 30px 1fr; gap: 9px; padding: 10px 12px 11px; }
+  .msg + .msg { border-top: 1px solid #eeeeee; }
+  .avatar { width: 30px; height: 30px; border-radius: 7px; background: #13201c; display: grid; place-items: center; }
+  .avatar img { width: 20px; height: 20px; }
+  .meta { font-size: 10px; display: flex; gap: 6px; align-items: center; }
+  .meta b { font-weight: 800; }
+  .meta .app { font-size: 7px; font-weight: 700; background: #e8e8e8; color: #616061; padding: 1px 4px; border-radius: 3px; }
+  .meta .t { color: #616061; font-size: 8.5px; }
+  .msg .txt { font-size: 10px; margin-top: 2px; color: #1d1c1d; }
+  .att { border-left: 3px solid; padding: 4px 0 4px 9px; margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+  .att div { font-size: 9px; color: #1d1c1d; }
+  .att div i { display: block; font-style: normal; font-weight: 700; font-size: 8.3px; color: #616061; }
+  .btns { display: flex; gap: 6px; margin-top: 8px; }
+  .btn { font-size: 9px; font-weight: 700; padding: 4px 10px; border-radius: 5px; border: 1px solid #c9c9c9; color: #1d1c1d; background: #fff; }
+  .btn.go { background: #007a5a; border-color: #007a5a; color: #fff; }
+  .btn.no { color: #e01e5a; border-color: #e8a9bd; }
+  .thread { font-size: 8.8px; color: #1264a3; font-weight: 600; margin-top: 7px; }
+  .illus { font-size: 8px; color: var(--muted); margin-top: 6px; text-align: right; }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 9.6px; }
+  th { white-space: nowrap; text-align: left; font-weight: 600; font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: 0 10px 8px 0; border-bottom: 1px solid rgba(27,27,25,.35); }
+  td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--ink-soft); }
+  td:first-child { font-family: "Bahn"; font-weight: 500; font-size: 11px; color: var(--ink); width: 21%; }
+  td.slack-col { color: var(--ink); }
+  td .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  td.save { font-family: "Bahn"; font-weight: 400; font-size: 11px; color: var(--ink); white-space: nowrap; text-align: right; padding-right: 0; }
+
+  .calc { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; margin-top: 20px; }
+  .calc .box { border-radius: 22px; padding: 20px 22px; }
+  .calc .math { background: #fff; border: 1px solid var(--line); }
+  .calc .math div { display: flex; justify-content: space-between; font-size: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); color: var(--ink-soft); }
+  .calc .math div b { font-family: "Bahn"; font-weight: 500; color: var(--ink); font-size: 11.5px; }
+  .calc .total { background: var(--ink); color: var(--stone); display: flex; flex-direction: column; justify-content: space-between; }
+  .calc .total .n { font-family: "Bahn"; font-weight: 300; font-size: 64px; line-height: 0.95; letter-spacing: -0.03em; }
+  .calc .total .n small { font-size: 22px; letter-spacing: 0; }
+  .calc .total p { font-size: 9.6px; color: rgba(232,229,224,.75); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+  .kpi { border: 1px solid var(--line); border-radius: 16px; padding: 11px 12px; background: var(--stone-2); }
+  .kpi b { display: block; font-family: "Bahn"; font-weight: 500; font-size: 11.5px; }
+  .kpi span { font-size: 9px; color: var(--muted); }
+
+  /* ── Rollout ── */
+  .timeline { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 4px; }
+  .phase { border-radius: 20px; background: #fff; border: 1px solid var(--line); padding: 16px 16px 14px; }
+  .phase .w { display: flex; justify-content: space-between; align-items: center; }
+  .phase .w .pill { height: 22px; font-size: 8.5px; padding: 0 10px; }
+  .phase h3 { font-size: 14px; margin: 10px 0 6px; }
+  .phase ul { list-style: none; display: grid; gap: 5px; }
+  .phase li { font-size: 9.6px; color: var(--ink-soft); padding-left: 12px; position: relative; }
+  .phase li::before { content: ""; position: absolute; left: 0; top: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--taupe-3); }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .soft { border-radius: 20px; background: var(--taupe-2); padding: 16px 18px; }
+  .soft h3 { margin-bottom: 8px; }
+  .soft .line { display: flex; justify-content: space-between; gap: 10px; font-size: 9.8px; padding: 5px 0; border-bottom: 1px solid rgba(27,27,25,.12); color: var(--ink-soft); }
+  .soft .line b { color: var(--ink); font-weight: 600; text-align: right; }
+  .soft .note { font-size: 8.5px; color: var(--muted); margin-top: 8px; }
+  .decision { margin-top: 16px; border-radius: 24px; background: var(--ink); color: var(--stone); padding: 22px 26px; display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: center; }
+  .decision h2 { font-size: 22px; font-weight: 300; line-height: 1.15; }
+  .decision p { font-size: 10px; color: rgba(232,229,224,.72); margin-top: 6px; }
+  .decision .logos { display: flex; gap: 10px; align-items: center; }
+  .decision .logos .lg { width: 44px; height: 44px; border-radius: 12px; background: #fff; display: grid; place-items: center; }
+  .decision .logos .lg svg, .decision .logos .lg img { width: 26px; height: 26px; }
+</style>
+</head>
+<body>
+
+<!-- ═════════════ PAGE 1 · COVER ═════════════ -->
+<section class="page">
+  <svg class="cover-panel" width="726" height="700" viewBox="0 0 726 700" aria-hidden="true">
+    <defs>
+      <linearGradient id="taupe" x1="0" y1="0" x2="0.35" y2="1">
+        <stop offset="0" stop-color="#c6c0b8"/>
+        <stop offset="1" stop-color="#aea79e"/>
+      </linearGradient>
+    </defs>
+    <!-- Rounded panel with the reference's centre tab dropping below it -->
+    <path fill="url(#taupe)" d="M30 0 H696 Q726 0 726 30 V610 Q726 640 696 640 H456 Q438 640 438 658 C438 690 404 700 363 700 C322 700 288 690 288 658 Q288 640 270 640 H30 Q0 640 0 610 V30 Q0 0 30 0 Z"/>
+    <g fill="none" stroke="#ece9e4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M350 660 L363 671 L376 660"/>
+      <path d="M350 670 L363 681 L376 670"/>
+    </g>
+  </svg>
+
+  <div class="cover-inner">
+    <div class="top">
+      <div style="display:flex;align-items:flex-start">
+        <span class="tag" style="width:34px;height:34px;border-radius:9px"><img src="../../frontend/public/logo.png" alt="" style="width:20px;height:20px"></span>
+        <div class="label">Internal proposal<br>UIPL Docs · reporting<br>&amp; approvals</div>
+      </div>
+      <div class="bigstat">
+        <div class="n">288<small>/mo.</small></div>
+        <div class="rule"></div>
+        <div class="cap">MRN + PRN approval requests sent to individual WhatsApp numbers in the last 30 days</div>
+      </div>
+    </div>
+
+    <div class="ring"></div>
+    <div class="ring-text">– ONE PLACE. EVERY UPDATE.</div>
+
+    <h1 class="cover-title">Reports,<br>Manpower &amp;<br>Approvals,<br>on Slack</h1>
+
+    <div class="cover-meta">
+      <span class="tag">v1</span>
+      <span class="pill">Date: 19 Nov 2026</span>
+      <span class="pill light">Prepared for: CEO</span>
+    </div>
+
+    <div class="chain">
+      <span class="chip">{{SHEETS_ICON}}Google Sheets</span><span class="arrow">→</span>
+      <span class="chip"><img src="../../frontend/public/logo.png" alt="">UIPL Docs</span><span class="arrow">→</span>
+      <span class="chip">{{SLACK_ICON}}Slack</span>
+      <span class="arrow" style="margin-left:6px;opacity:.6">instead of</span>
+      <span class="chip" style="opacity:.75">{{WA_ICON}}WhatsApp</span>
+    </div>
+  </div>
+
+  <div class="cover-cols">
+    <div>
+      <h2 class="display">What we have:</h2>
+      <p>UIPL Docs already captures employee daily reports, site manpower (today's actual and tomorrow's plan), and MRN and PRN requests. But the conversation around that work — reminders, approvals, follow-ups — happens on WhatsApp, one phone at a time.</p>
+      <div class="k"><span>Employee reports</span><span>DMR · manpower</span><span>MRN</span><span>PRN</span><span>WhatsApp reminders</span></div>
+    </div>
+    <div>
+      <h2 class="display">What we propose:</h2>
+      <p>Make Slack the shared room where those updates land, get discussed and get approved. UIPL Docs stays the record behind it; WhatsApp stays only for vendors and site staff who are not on Slack.</p>
+      <div class="k"><span>Channels per flow</span><span>One-tap approvals</span><span>DM reminders</span><span>Searchable history</span></div>
+    </div>
+  </div>
+
+  <div class="numstrip">
+    <div class="lbl">Last 30 days on UIPL Docs<br>20 Oct – 18 Nov 2026</div>
+    <div><div class="n">249</div><div class="l">daily reports filed</div></div>
+    <div><div class="n">5,346</div><div class="l">manpower rows logged</div></div>
+    <div><div class="n">288</div><div class="l">MRN + PRN approvals</div></div>
+    <div><div class="n">1,239</div><div class="l">WhatsApp messages sent</div></div>
+  </div>
+
+  <div class="foot"><span>Page</span><b>1</b></div>
+</section>
+
+<!-- ═════════════ PAGE 2 · CURRENT SYSTEM ═════════════ -->
+<section class="page">
+  <div class="band">
+    <div class="row"><span class="tag">01</span><span class="eyebrow" style="color:var(--ink-soft)">The current system</span></div>
+    <h1>How work is reported<br>and approved today</h1>
+    <div class="corner"><span class="pill">Last 30 days · 20 Oct – 18 Nov</span></div>
+    <div class="sub">Every number on these pages is read from the live UIPL Docs database and logs.</div>
+  </div>
+
+  <div class="content">
+    <h2>The path every update takes</h2>
+    <div class="flow">
+      <div class="node"><div class="ico">{{SHEETS_ICON}}</div><b>Google Sheets</b><span>Per-employee report sheets, the DMR sheet, MRN and PRN sheets.</span></div>
+      <div class="to">→</div>
+      <div class="node dark"><div class="ico" style="background:#13201c;border-color:#13201c"><img src="../../frontend/public/logo.png" alt=""></div><b>UIPL Docs</b><span>Dashboards, scheduled reminders, and watchers that check MRN/PRN sheets every 60 seconds.</span></div>
+      <div class="to">→</div>
+      <div class="node"><div class="ico">{{WA_ICON}}</div><b>WhatsApp</b><span>Meta-approved template messages, sent one number at a time.</span></div>
+      <div class="to">→</div>
+      <div class="node"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#1b1b19" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1.2-3.6 4-5.2 7-5.2s5.8 1.6 7 5.2"/></svg></div><b>People</b><span>Reply on their phone, then call, forward and chase the rest.</span></div>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="bar" style="background:var(--s-blue)"></div>
+        <div class="head"><h3>Employee Daily Report</h3><div><div class="num">249</div><div class="unit">reports</div></div></div>
+        <p>Each employee files today's work, its status and tomorrow's plan.</p>
+        <div class="facts">
+          <div><span>People reporting</span><span>19</span></div>
+          <div><span>Tasks logged · still open</span><span>736 · 191</span></div>
+          <div><span>Items planned for tomorrow</span><span>97</span></div>
+          <div><span>WhatsApp reminder</span><span>18:50, Mon–Sat</span></div>
+        </div>
+      </div>
+      <div class="card"><div class="bar" style="background:var(--s-green)"></div>
+        <div class="head"><h3>Project DMR · Manpower</h3><div><div class="num">5,346</div><div class="unit">manpower rows</div></div></div>
+        <p>Sites record actual manpower, tomorrow's planned manpower and the site report.</p>
+        <div class="facts">
+          <div><span>Daily snapshots</span><span>22 days</span></div>
+          <div><span>Actual manpower reminder</span><span>11:00</span></div>
+          <div><span>Tomorrow's plan reminder</span><span>14:00</span></div>
+          <div><span>Site report reminder · sent in 30 days</span><span>18:00 · 176</span></div>
+        </div>
+      </div>
+      <div class="card"><div class="bar" style="background:var(--s-yellow)"></div>
+        <div class="head"><h3>MRN · Material requests</h3><div><div class="num">38</div><div class="unit">approval requests</div></div></div>
+        <p>A new MRN row sends a WhatsApp action request to each approver. Their reply approves, declines or comments, and the platform then messages the people concerned.</p>
+        <div class="facts"><div><span>Messages per decision</span><span>request + outcome</span></div></div>
+      </div>
+      <div class="card"><div class="bar" style="background:var(--s-red)"></div>
+        <div class="head"><h3>PRN · Payment requests</h3><div><div class="num">250</div><div class="unit">approval requests</div></div></div>
+        <p>Payment requests (vendor, type, amount) follow the same WhatsApp approve / decline / comment loop — over eight a day.</p>
+        <div class="facts"><div><span>Messages per decision</span><span>request + outcome</span></div></div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="hd"><h2>A working day on WhatsApp</h2><span>Mon–Sat · each stop is a template message to individual numbers</span></div>
+      <div class="rail">
+        <div class="stop"><i style="background:var(--s-green)"></i><b>11:00</b><span>Actual manpower reminder to sites</span></div>
+        <div class="stop"><i style="background:var(--s-green)"></i><b>14:00</b><span>Tomorrow's planned manpower reminder</span></div>
+        <div class="stop"><i style="background:var(--s-green)"></i><b>18:00</b><span>Site daily report reminder</span></div>
+        <div class="stop"><i style="background:var(--s-blue)"></i><b>18:50</b><span>Employee daily report reminder to each person</span></div>
+        <div class="stop"><i style="background:linear-gradient(90deg,var(--s-yellow) 50%,var(--s-red) 50%)"></i><b>All day</b><span>MRN / PRN requests, checked every 60 seconds</span></div>
+      </div>
+    </div>
+
+    <div class="strip"><b>Also inside UIPL Docs:</b> Loop team chat, in-app notifications (360 in 30 days), the activity log, and executive questions on daily reports such as <i>“CEO decision required”</i> and <i>“critical client approvals pending”</i>.</div>
+  </div>
+
+  <div class="foot"><span>Page</span><b>2</b></div>
+</section>
+
+<!-- ═════════════ PAGE 3 · FRICTION ═════════════ -->
+<section class="page">
+  <div class="band">
+    <div class="row"><span class="tag">02</span><span class="eyebrow" style="color:var(--ink-soft)">Where time leaks</span></div>
+    <h1>Captured by the system,<br>chased by hand</h1>
+    <div class="corner">{{WA_BADGE}}</div>
+    <div class="sub">The platform automates the record; people still carry the conversation on their phones.</div>
+  </div>
+
+  <div class="content">
+    <div class="stats">
+      <div><div class="n">1,239</div><div class="l">WhatsApp messages sent by the platform in 30 days</div></div>
+      <div><div class="n">94</div><div class="l">employee-report reminder sends that failed (of 484 attempted)</div></div>
+      <div><div class="n">58%</div><div class="l">of daily reports filed after the 18:50 reminder (145 of 249)</div></div>
+      <div><div class="n">288</div><div class="l">approval requests landing on individual phones</div></div>
+    </div>
+
+    <div class="issues">
+      <div class="issue"><div class="no">01</div><div><h3>Reports are chased one by one</h3><p>Reminders go out as private messages. Who is still pending is visible only on the admin dashboard, so managers message or call each person.</p><span class="manual">Manual: chasing late reports</span></div></div>
+      <div class="issue"><div class="no">02</div><div><h3>Manpower plans travel by forward</h3><p>Today's actual and tomorrow's planned manpower sit in the DMR. Site leads, procurement and management hear about them through calls and forwarded screenshots.</p><span class="manual">Manual: compiling &amp; sharing</span></div></div>
+      <div class="issue"><div class="no">03</div><div><h3>Approvals live in private chats</h3><p>Each MRN or PRN request reaches approvers separately. Quotations, comments and the decision end up spread across 1:1 threads.</p><span class="manual">Manual: forwarding context</span></div></div>
+      <div class="issue"><div class="no">04</div><div><h3>Outcomes need more messages</h3><p>After a decision, the requester and the concerned people get yet another message each. Accounts and site learn the status second-hand.</p><span class="manual">Manual: “is it approved?”</span></div></div>
+      <div class="issue"><div class="no">05</div><div><h3>Failures are silent</h3><p>94 reminder sends failed this month. Nobody sees a failed WhatsApp send unless they open the reminder log, so the fallback is a phone call.</p><span class="manual">Manual: noticing gaps</span></div></div>
+      <div class="issue"><div class="no">06</div><div><h3>Every new alert needs Meta's approval</h3><p>Business-initiated WhatsApp messages must use pre-approved templates, billed per message. Decisions sit in personal chats with no shared, searchable history.</p><span class="manual">Manual: searching old chats</span></div></div>
+    </div>
+
+    <h2 style="margin-top:24px">One payment request, two ways</h2>
+    <div class="ways" style="margin-top:12px">
+      <div class="way wa">
+        <div class="hd">{{WA_ICON}}Today on WhatsApp</div>
+        <div class="bub">PRN-1207 · Vendor · ₹1,85,000 → sent to each approver's phone</div>
+        <div class="bub">Approver replies “Approve” in their own chat</div>
+        <div class="bub">Outcome message → requester, and again → each concerned person</div>
+        <div class="bub call">Call or forward when someone missed the message</div>
+        <div class="count"><b>Messages:</b> one per approver + one per concerned person + follow-ups</div>
+      </div>
+      <div class="way sl">
+        <div class="hd">{{SLACK_ICON}}On Slack</div>
+        <div class="bub">#prn-approvals · PRN-1207 · Vendor · ₹1,85,000 · Approve / Decline</div>
+        <div class="bub ok">Approver taps Approve — the same card now reads “Approved”</div>
+        <div class="bub ok">Requester and accounts are already in the channel; questions go in the thread</div>
+        <div class="count"><b>Messages:</b> one card, updated in place</div>
+      </div>
+    </div>
+    <div class="illus">Illustrative PRN; the flow matches the platform's current approve / decline / comment steps.</div>
+  </div>
+
+  <div class="foot"><span>Page</span><b>3</b></div>
+</section>
+
+<!-- ═════════════ PAGE 4 · SLACK DESIGN ═════════════ -->
+<section class="page">
+  <div class="band">
+    <div class="row"><span class="tag">03</span><span class="eyebrow" style="color:var(--ink-soft)">How Slack fits</span></div>
+    <h1>One room per flow,<br>fed by UIPL Docs</h1>
+    <div class="corner"><span class="chip" style="height:36px;padding:0 14px 0 10px">{{SLACK_ICON}}Slack</span></div>
+    <div class="sub">Nothing is re-entered. The platform posts what it already knows; people act where they already are.</div>
+  </div>
+
+  <div class="content">
+    <div class="arch">
+      <div class="node"><div class="ico">{{SHEETS_ICON}}</div><b>Sheets</b><span>Unchanged: where data is filled in.</span></div>
+      <div class="to">→</div>
+      <div class="node dark"><div class="ico" style="background:#13201c;border-color:#13201c"><img src="../../frontend/public/logo.png" alt=""></div><b>UIPL Docs — the record</b><span>Same dashboards, schedules and approval rules. Slack becomes one more delivery channel.</span></div>
+      <div class="to">→</div>
+      <div class="node" style="background:#fff"><div class="ico">{{SLACK_ICON}}</div><b>Slack — the conversation</b><span>Channels, DM reminders, approve buttons, threads. WhatsApp kept for vendors and site staff only.</span></div>
+    </div>
+
+    <div class="twocol">
+      <div>
+        <h2 style="margin-bottom:10px">Proposed channels</h2>
+        <div class="channels">
+          <div class="chan"><div class="bar" style="background:var(--s-blue)"></div><span class="when">19:00 daily</span><div class="name"># daily-reports</div><p>Who has filed, who is pending, open blockers and tomorrow's plan. Pending people get a Slack DM at 18:50.</p></div>
+          <div class="chan"><div class="bar" style="background:var(--s-green)"></div><span class="when">11:00 · 14:00 · 18:00</span><div class="name"># site-manpower</div><p>Actual vs planned manpower per site, tomorrow's plan, and site-report status. One post per site, no forwards.</p></div>
+          <div class="chan"><div class="bar" style="background:var(--s-yellow)"></div><span class="when">on every new MRN</span><div class="name"># mrn-approvals</div><p>Request card with materials, date and quotation. Approve / Decline / Comment; the card updates itself.</p></div>
+          <div class="chan"><div class="bar" style="background:var(--s-red)"></div><span class="when">on every new PRN</span><div class="name"># prn-approvals</div><p>Vendor, payment type and amount. Accounts sees the decision the moment it is made.</p></div>
+          <div class="chan"><div class="bar" style="background:var(--aubergine)"></div><span class="when">daily</span><div class="name"># ceo-desk</div><p>“CEO decision required” and “critical approvals pending” answers, already collected in daily reports.</p></div>
+        </div>
+      </div>
+      <div>
+        <h2 style="margin-bottom:10px">What the team would see</h2>
+        <div class="slack">
+          <div class="topbar"># mrn-approvals <span>Slack</span></div>
+          <div class="msg">
+            <div class="avatar"><img src="../../frontend/public/logo.png" alt=""></div>
+            <div>
+              <div class="meta"><b>UIPL Docs</b><span class="app">APP</span><span class="t">10:42 AM</span></div>
+              <div class="txt">New material request needs approval</div>
+              <div class="att" style="border-color:var(--s-yellow)">
+                <div><i>MRN</i>MRN-0418</div><div><i>Project</i>Kalhaar</div>
+                <div><i>Materials</i>Cement 50 bags, TMT 12 mm 2 t</div><div><i>Needed by</i>22 Nov</div>
+              </div>
+              <div class="btns"><span class="btn go">Approve</span><span class="btn no">Decline</span><span class="btn">Comment</span></div>
+              <div class="thread">2 replies · Accounts: PO raised ✓</div>
+            </div>
+          </div>
+        </div>
+        <div class="slack" style="margin-top:10px">
+          <div class="topbar"># daily-reports <span>Slack</span></div>
+          <div class="msg">
+            <div class="avatar"><img src="../../frontend/public/logo.png" alt=""></div>
+            <div>
+              <div class="meta"><b>UIPL Docs</b><span class="app">APP</span><span class="t">7:00 PM</span></div>
+              <div class="txt"><b>Daily reports · Tue 18 Nov</b> — 17 of 19 filed</div>
+              <div class="att" style="border-color:var(--s-blue)">
+                <div><i>Pending</i>2 (reminded by DM at 18:50)</div><div><i>Open blockers</i>6</div>
+                <div><i>Tomorrow's plan</i>9 items</div><div><i>CEO decisions</i>1 flagged</div>
+              </div>
+              <div class="btns"><span class="btn">Open dashboard</span><span class="btn">View blockers</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="illus">Illustrative messages; layout follows Slack's message format.</div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:20px">The CEO's day on Slack</h2>
+    <div class="tiles">
+      <div class="tile"><div class="t">11:00 · 14:00</div><b># site-manpower</b><span>Which sites are short today, and tomorrow's planned manpower, without asking anyone.</span></div>
+      <div class="tile"><div class="t">All day</div><b># mrn · # prn approvals</b><span>Approve material and payment requests from the phone, with the quotation in the card.</span></div>
+      <div class="tile"><div class="t">19:00</div><b># daily-reports · # ceo-desk</b><span>Who filed, open blockers, and the decisions waiting on you, in one read.</span></div>
+    </div>
+  </div>
+
+  <div class="foot"><span>Page</span><b>4</b></div>
+</section>
+
+<!-- ═════════════ PAGE 5 · EFFICIENCY ═════════════ -->
+<section class="page">
+  <div class="band">
+    <div class="row"><span class="tag">04</span><span class="eyebrow" style="color:var(--ink-soft)">Manual work removed</span></div>
+    <h1>Less chasing,<br>faster decisions</h1>
+    <div class="corner"><span class="pill">Efficiency</span></div>
+    <div class="sub">What stops being a person's job once updates land in a shared channel.</div>
+  </div>
+
+  <div class="content">
+    <table>
+      <thead><tr><th>Activity</th><th>Today</th><th>With Slack</th><th style="text-align:right">Saved / month*</th></tr></thead>
+      <tbody>
+        <tr><td><span class="dot" style="background:var(--s-yellow)"></span>MRN / PRN approvals</td><td>Request on each approver's phone; context forwarded by hand; status asked for by calls.</td><td class="slack-col">One card per request in a channel, approved in one tap, with quotation and comments in the thread.</td><td class="save">≈ 14.4 h</td></tr>
+        <tr><td><span class="dot" style="background:var(--s-green)"></span>Manpower plan</td><td>Today's and tomorrow's manpower compiled and forwarded to site, procurement and management.</td><td class="slack-col">Posted per site at 11:00, 14:00 and 18:00 automatically. Nobody compiles it.</td><td class="save">≈ 7.3 h</td></tr>
+        <tr><td><span class="dot" style="background:var(--s-blue)"></span>Chasing reports</td><td>Private reminder, then manual chasing of the 58% filed after the reminder.</td><td class="slack-col">DM reminder plus a 19:00 pending list in #daily-reports. The list does the chasing.</td><td class="save">≈ 4.8 h</td></tr>
+        <tr><td><span class="dot" style="background:var(--s-red)"></span>Telling people the outcome</td><td>Separate notification message to each concerned person.</td><td class="slack-col">The card updates in place; everyone in the channel already sees it.</td><td class="save">built in</td></tr>
+        <tr><td><span class="dot" style="background:var(--aubergine)"></span>Finding past decisions</td><td>Scroll personal WhatsApp chats.</td><td class="slack-col">Search Slack for “MRN-0418” and get the request, decision and discussion.</td><td class="save">built in</td></tr>
+        <tr><td><span class="dot" style="background:var(--taupe-3)"></span>Adding a new alert</td><td>Draft a template, wait for Meta's approval, pay per message.</td><td class="slack-col">Post to a channel the same day, with no template approval or per-message charge.</td><td class="save">built in</td></tr>
+      </tbody>
+    </table>
+
+    <div class="calc">
+      <div class="box math">
+        <h3 style="margin-bottom:6px">How the estimate is built*</h3>
+        <div><span>288 approvals × 3 min of forwarding and status calls</span><b>14.4 h</b></div>
+        <div><span>145 late reports × 2 min of chasing each</span><b>4.8 h</b></div>
+        <div><span>22 working days × 20 min compiling the manpower plan</span><b>7.3 h</b></div>
+        <div style="border-bottom:0"><span>Counts are real (last 30 days); minutes per task are our assumptions</span><b>26.5 h</b></div>
+      </div>
+      <div class="box total">
+        <div class="eyebrow" style="color:rgba(232,229,224,.6)">Estimated time back</div>
+        <div class="n">≈26<small> h/month</small></div>
+        <p>Roughly three working days of coordination a month, before counting faster approvals and fewer missed reminders.</p>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><b>Approval turnaround</b><span>Request → decision time, MRN and PRN</span></div>
+      <div class="kpi"><b>Reports by 19:00</b><span>Share filed before the digest posts</span></div>
+      <div class="kpi"><b>Failed reminders</b><span>From 94 a month toward zero</span></div>
+      <div class="kpi"><b>WhatsApp volume</b><span>Down from 1,239 messages a month</span></div>
+    </div>
+
+    <h2 style="margin-top:22px">Beyond the hours</h2>
+    <div class="tiles">
+      <div class="tile"><b style="margin-top:0">Decisions don't wait on one phone</b><span>A request is visible to every approver at once, so the first available approver can act.</span></div>
+      <div class="tile"><b style="margin-top:0">Accounts and site stay in step</b><span>Payment and material decisions are seen the moment they are made, not second-hand.</span></div>
+      <div class="tile"><b style="margin-top:0">The history stays with the company</b><span>Decisions live in company channels, not personal phones; new joiners can read back.</span></div>
+    </div>
+  </div>
+
+  <div class="foot"><span>* Estimate — adjust the minutes to what the team actually spends.</span><b>5</b></div>
+</section>
+
+<!-- ═════════════ PAGE 6 · ROLLOUT ═════════════ -->
+<section class="page">
+  <div class="band">
+    <div class="row"><span class="tag">05</span><span class="eyebrow" style="color:var(--ink-soft)">Rollout &amp; decision</span></div>
+    <h1>A 30-day pilot,<br>then decide</h1>
+    <div class="corner"><span class="pill">4 weeks</span></div>
+    <div class="sub">The reminder, digest and approval logic already exists in UIPL Docs. Slack is a new delivery channel, not a new system.</div>
+  </div>
+
+  <div class="content">
+    <div class="timeline">
+      <div class="phase"><div class="w"><span class="pill">Week 1</span><span class="eyebrow">Set up</span></div><h3>Workspace &amp; read-only posts</h3><ul><li>Slack workspace on the Free plan, five channels</li><li>Invite office team, PMs, accounts</li><li>UIPL Docs posts the daily-report digest and manpower updates</li></ul></div>
+      <div class="phase"><div class="w"><span class="pill">Weeks 2–3</span><span class="eyebrow">Act</span></div><h3>Approvals &amp; reminders</h3><ul><li>MRN / PRN cards with Approve · Decline · Comment</li><li>Reminders move to Slack DMs</li><li>WhatsApp keeps running in parallel as a fallback</li></ul></div>
+      <div class="phase"><div class="w"><span class="pill">Week 4</span><span class="eyebrow">Measure</span></div><h3>Review &amp; switch</h3><ul><li>Compare turnaround, late reports and failed reminders</li><li>Turn off internal WhatsApp reminders</li><li>Keep WhatsApp for vendors and site staff</li></ul></div>
+    </div>
+
+    <div class="grid3">
+      <div class="soft">
+        <h3>Cost</h3>
+        <div class="line"><span>Pilot · Slack Free</span><b>₹0 · 90-day history, 10 integrations</b></div>
+        <div class="line"><span>After pilot · Slack Pro</span><b>≈ US$7.25 / user / month, billed yearly</b></div>
+        <div class="line"><span>For 20 users on Pro</span><b>≈ US$145 / month</b></div>
+        <div class="line" style="border-bottom:0"><span>Build effort</span><b>Reuses existing reminder &amp; approval logic</b></div>
+        <div class="note">Slack's USD list price; confirm the INR price and GST on Slack's India pricing page before budgeting.</div>
+      </div>
+      <div class="soft">
+        <h3>What stays the same</h3>
+        <div class="line"><span>Data entry</span><b>Google Sheets &amp; UIPL Docs, unchanged</b></div>
+        <div class="line"><span>Approval rules &amp; approvers</span><b>Defined in UIPL Docs, as today</b></div>
+        <div class="line"><span>Vendors &amp; site staff</span><b>Still reached on WhatsApp</b></div>
+        <div class="line" style="border-bottom:0"><span>Loop (in-app chat)</span><b>Kept during pilot, reviewed after</b></div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:20px;margin-bottom:6px">Risks, and how we handle them</h2>
+    <table class="risk">
+      <tbody>
+        <tr><td>Not everyone is on Slack</td><td>Site staff and vendors keep getting WhatsApp messages; Slack is for the office team, PMs, accounts and management.</td></tr>
+        <tr><td>Two places to look</td><td>During the pilot WhatsApp is a fallback only; once the numbers hold, internal WhatsApp reminders are switched off.</td></tr>
+        <tr><td>Free plan keeps 90 days</td><td>UIPL Docs keeps the full record either way; move to Pro only if the pilot proves its value.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="decision">
+      <div>
+        <div class="eyebrow" style="color:rgba(232,229,224,.55)">Decision needed</div>
+        <h2 class="display">Approve a 30-day Slack pilot on the Free plan,<br>starting with Projects and Accounts.</h2>
+        <p>Success = faster MRN/PRN decisions, reports in before 19:00, and no failed reminders.</p>
+      </div>
+      <div class="logos">
+        <div class="lg"><img src="../../frontend/public/logo.png" alt="UIPL Docs"></div>
+        <div class="lg">{{SLACK_ICON}}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sources">
+    <span><img src="../../frontend/public/logo.png" alt=""></span>
+    <span><b style="color:var(--ink)">Sources.</b> Usage figures: UIPL Docs database, reminder logs and activity log, 20 Oct – 18 Nov 2026. Reminder times: current platform settings. Slack plans: Slack's published price list (USD). Time savings: estimate with the stated assumptions.</span>
+  </div>
+
+  <div class="foot"><span>Page</span><b>6</b></div>
+</section>
+
+</body>
+</html>

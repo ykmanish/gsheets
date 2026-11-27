@@ -1,0 +1,57 @@
+You are refreshing a daily "Raga Daily Digest" Artifact — a Google-console-style status page (Poppins display font, Roboto body font, Google's own blue/ink/muted palette, flat bordered card layout with NO drop shadows) for raga (an interiors/construction operations company): Attendance, Manpower (DMR), Delayed tasks, and Stock by site — in that order. This is an unattended scheduled run: do not ask the user anything, just complete it. Work silently and efficiently.
+
+THE ARTIFACT TO UPDATE (do not create a new one):
+<ARTIFACT_URL>
+
+STEP 1 — Load tools
+Call ToolSearch with query "select:mcp__raga-mongo__aggregate,mcp__raga-mongo__find,mcp__raga-mongo__count" to load the MongoDB tools (retry once if the raga-mongo server hasn't connected yet). All raga-mongo calls use connectionId "preconfigured", database "sheets".
+
+STEP 2 — Compute today's date and time
+IMPORTANT: this machine's Git-Bash `date` has no tzdata, so any `TZ=` prefix silently falls back to UTC instead of converting — do NOT prefix `date` with TZ. The system clock is already IST. Run exactly:
+  date +"%Y-%m-%d | %-d %B %Y | %-d %b | %-I:%M %p"
+→ `today` (YYYY-MM-DD, for queries), long display date ("15 September 2026"), time ("8:03 PM" — append " IST"). Sanity-check the hour against the ~8 PM firing time; if wildly off, note it in your summary rather than publish a wrong timestamp.
+
+STEP 3 — Query every section (raga-mongo, database "sheets")
+
+A) Attendance — `hrAttendanceRecords`, field `date` is a STRING; also `users`:
+   find(`hrAttendanceRecords`, {"date":today}, projection {employeeName:1, userId:1, status:1, workMode:1}) → today's records.
+   find(`users`, {"blacklisted":{"$ne":true},"isSuperAdmin":{"$ne":true}}, projection {displayName:1}) → the "active roster" names.
+   presentNames = the list of `employeeName` from today's records (ground truth) — tag each with "remote" if workMode=="remote", "done" if status=="completed", no tag for the default office/checked-in case. presentCount = presentNames.length. officeCheckedInCount = count where status=="checked-in" && workMode=="office". remoteCheckedInCount = count where status=="checked-in" && workMode=="remote". completedCount = count where status=="completed".
+   Reconciliation (do this every time, it's normal for a few present people to fall outside the "active roster" query — not a bug): totalRoster = set union, by name, of (active roster names) and (presentNames). absentNames = active roster names NOT in presentNames (by name match). noRecordCount = absentNames.length. This must always satisfy presentCount + noRecordCount == totalRoster — never show inconsistent numbers.
+
+B) Project DMR (Manpower) — `dmrDailySnapshots`, field `date` is a STRING (one doc per linked spreadsheet/site-group):
+   aggregate: [{"$match":{"date":today}},{"$group":{"_id":null,"planned":{"$sum":"$totals.planned"},"actual":{"$sum":"$totals.actual"},"filled":{"$sum":"$totals.filled"},"records":{"$sum":"$totals.records"},"siteCount":{"$sum":1}}}]
+   `planned`/`actual` = headcounts (drive the "Manpower" headline metric as "{planned} / {actual}"). `filled`/`records` = row-fill counts (drive the Manpower panel's "Rows filled (actual)" line + bar-fill width). Normal to be low/zero early in the day — represent honestly, never as a broken zero.
+   Per-site: aggregate [{"$match":{"date":today}},{"$unwind":"$siteBreakdown"},{"$group":{"_id":"$siteBreakdown.label","planned":{"$sum":"$siteBreakdown.planned"},"actual":{"$sum":"$siteBreakdown.actual"},"records":{"$sum":"$siteBreakdown.records"},"filled":{"$sum":"$siteBreakdown.filled"}}},{"$sort":{"actual":-1}}] → `dmrBySite` (name, trades=filled, totalTrades=records, planned, actual). sitesReportingCount = count of sites where actual>0.
+
+C) Stock by site — `stockDailySnapshots` (one doc per date, unique on `date`), fallback `stockSiteSnapshots`:
+   find({"date": today}) projection {date:1, "sites.name":1, "sites.summary":1}. If none, find({}) sorted {date:-1} limit 1, same projection (note its date). If still nothing, aggregate over `stockSiteSnapshots` grouping by siteName.
+   `sites[]` → `stockBySite` table (Site, Items tracked, Qty on hand, Low stock), sorted by low stock descending. totalLowStock + sitesWithLowStock + totalSiteCount for the headline metric.
+
+D) Delayed tasks — `projectDashboard` (single doc, `_id:"default"`, tasks under `config.projects[].phases[].tasks[]`):
+   aggregate: [{"$project":{"projects":"$config.projects"}},{"$unwind":"$projects"},{"$unwind":"$projects.phases"},{"$unwind":"$projects.phases.tasks"},{"$project":{"projectName":"$projects.name","phaseName":"$projects.phases.name","title":"$projects.phases.tasks.title","status":"$projects.phases.tasks.status","dueDate":"$projects.phases.tasks.dueDate","priority":"$projects.phases.tasks.priority","startDate":"$projects.phases.tasks.startDate"}},{"$facet":{"delayed":[{"$match":{"status":{"$ne":"done"},"dueDate":{"$ne":"","$lt":today}}},{"$sort":{"dueDate":1}}],"startingToday":[{"$match":{"startDate":today}},{"$count":"count"}]}}]
+   Task status vocabulary is "todo"/"in_progress"/"done" (not DMR's). Group `delayed` by projectName → `delayedByProject` = [{name, tasks:[{phase, title, due, days, priority}]}], oldest-due-first within each project, projects ordered by task count descending (worst first). delayedTotal/delayedProjectCount from this. startingTodayCount = startingToday[0]?.count || 0.
+
+E) Employee report — `employeeDailyReports`, field `reportDate` is a STRING:
+   count({"reportDate": today}) → submittedCount. Denominator = totalRoster from step A.
+
+STEP 4 — Update the artifact
+Call Artifact action "read" with url "<ARTIFACT_URL>" first (required — do not skip). Save the HTML to your scratchpad directory and edit ONLY the dynamic parts, keeping every CSS rule, class name, and overall structure exactly as-is — including that NO element has a box-shadow anymore (cards are flat, defined only by their 1px border) — and keeping the section order: app bar → headline metric row → "Today at a glance" panel row → "Attendance — who's in" chips → "No record yet" chips → "Manpower by site" table → "Delayed tasks, by project" pills → "Delayed task detail" table → "Stock on hand, by site" table → footer. Do not restructure the HTML, do not touch the <title> tag or any <style> block, do not reintroduce box-shadow anywhere:
+
+  - #digest-time → "{long display date}, {time} IST" (e.g. "15 September 2026, 8:03 PM IST").
+  - #attention-badge → one short phrase capturing the single most urgent thing today, e.g. "{delayedTotal} tasks overdue · manpower {planned}/{actual}" or if manpower looks fine, something else notable — keep it under ~10 words.
+  - Headline metric row: #m-delayed = delayedTotal, #m-delayed-sub = "across {delayedProjectCount} projects" (or "No delayed tasks"). #m-manpower = "{planned} / {actual}", #m-manpower-sub = "{sitesReportingCount} of {siteCount} sites reporting". #m-stock = totalLowStock, #m-stock-sub = "across {sitesWithLowStock} of {totalSiteCount} sites".
+  - Attendance panel: #p-marked = "{presentCount} / {totalRoster}", #p-office = officeCheckedInCount, #p-remote = remoteCheckedInCount, #p-completed = completedCount, #p-norecord = noRecordCount.
+  - Manpower panel: #p-rowsfilled = "{filled} / {records}", #p-sitestracked = siteCount, #p-planned = planned, #p-actual = actual, #p-barfill style width = filled/records*100 + "%".
+  - Employee Report panel: #p-submitted = "{submittedCount} / {totalRoster}", #p-startingtoday = "{startingTodayCount} task(s)" (or "0 tasks").
+  - #present-chips → rebuild from presentNames, one `<span class="chip">Name</span>` each (or with `<span class="tag">(remote)</span>` / `(done)` appended per the existing script's pattern).
+  - #absent-chips → rebuild from absentNames, one `<span class="chip absent">Name</span>` each (plain text, no × icon). Also update the "No record yet" section's count text (sibling `<span class="count">`) to "{noRecordCount} employees".
+  - #dmr-body (Manpower by site table, appears right after the attendance chips, before Delayed tasks) → rebuild from `dmrBySite` (Site, "{trades}/{totalTrades}", Planned, Actual — Actual badge gets class "zero" when actual>0, unstyled/critical when 0 — preserve the existing qty-badge class logic).
+  - #delay-pills and #delay-body → rebuild together from `delayedByProject` exactly as the existing script does (pill per project with count + "oldest Nd overdue", first pill gets class "active"; group-row per project in the table, then one row per task with phase-tag, due date, days-badge, priority pill). If empty: clear #delay-pills, and set #delay-body to a single `<tr><td colspan="4" class="no-delay">No delayed tasks — every project is on schedule.</td></tr>`.
+  - #stock-body → rebuild from `stockBySite` (Site, Items tracked, Qty on hand, Low stock badge — "zero" class when 0). Update #stock-caption text if the snapshot date isn't today.
+  - Footer stays as-is.
+
+Then call Artifact action "publish" with the same file_path and url "<ARTIFACT_URL>" to update in place. Do not pass title/favicon/icon.
+
+STEP 5 — Done
+No further action needed. Don't message the user unless the publish itself failed — note briefly if raga-mongo was unreachable or publish errored, but don't retry indefinitely.

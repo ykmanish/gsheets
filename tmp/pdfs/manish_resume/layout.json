@@ -1,0 +1,278 @@
+[
+  {
+    "text": "Pune, India  |  +91 7972587822  |  ymanishkumar9790@gmail.com  |  github.com/ykmanish  |  linkedin.com/in/ykmanish",
+    "top": 39,
+    "bottom": 49.2,
+    "size": 8.3
+  },
+  {
+    "text": "Software engineer with 2+ years of experience and an ongoing MBA in Cybersecurity Management. Hands-on project experience with access controls, authentication, audit logging and data protection. Independently built a 42-module ERP covering HR, Finance and Operations, and worked with design, backend and QA teams to deliver client dashboards and resolve application issues.",
+    "top": 71.5,
+    "bottom": 105.7,
+    "size": 9.3
+  },
+  {
+    "text": "Access &amp; Application Security: RBAC, 2FA, OAuth2, JWT, AES encryption, audit logging, secure API design, secure coding.",
+    "top": 128.0,
+    "bottom": 139.4,
+    "size": 9.3
+  },
+  {
+    "text": "Cloud &amp; DevOps: AWS (EC2, S3, CodePipeline), Docker, GitHub Actions, CI/CD, Linux, automated backups.",
+    "top": 141.20000000000002,
+    "bottom": 152.60000000000002,
+    "size": 9.3
+  },
+  {
+    "text": "Programming &amp; APIs: JavaScript, TypeScript, Python, SQL, Node.js, Express.js, REST APIs, microservices, Socket.IO.",
+    "top": 154.40000000000003,
+    "bottom": 165.80000000000004,
+    "size": 9.3
+  },
+  {
+    "text": "Frontend &amp; UI: React.js, Next.js, Redux Toolkit, Tailwind CSS, HTML5, CSS3, responsive design, Figma.",
+    "top": 167.60000000000005,
+    "bottom": 179.00000000000006,
+    "size": 9.3
+  },
+  {
+    "text": "Databases: MongoDB, PostgreSQL, MySQL, Firebase, SQLite3.",
+    "top": 180.80000000000007,
+    "bottom": 192.20000000000007,
+    "size": 9.3
+  },
+  {
+    "text": "Tools &amp; Delivery: Git, Postman, Jira, Confluence, Agile/Scrum, code reviews, root-cause analysis, team coordination.",
+    "top": 194.00000000000009,
+    "bottom": 205.4000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "Jr. Software Development Engineer | Quantafile, Pune (Remote)",
+    "top": 229.50000000000009,
+    "bottom": 241.00000000000009,
+    "size": 9.5
+  },
+  {
+    "text": "Jun 2023 - Jul 2025",
+    "top": 229.50000000000009,
+    "bottom": 240.9000000000001,
+    "size": 8.5
+  },
+  {
+    "text": "&#8226;",
+    "top": 244.3000000000001,
+    "bottom": 255.7000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "Investigated issues across application interfaces, API responses and Redux state, working with developers and QA to identify root causes and resolve defects.",
+    "top": 244.3000000000001,
+    "bottom": 267.1000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "&#8226;",
+    "top": 269.30000000000007,
+    "bottom": 280.70000000000005,
+    "size": 9.3
+  },
+  {
+    "text": "Worked with design and backend teams on 5+ client dashboards, translating Figma designs into working features and coordinating release handoffs with QA within Agile sprint cycles.",
+    "top": 269.30000000000007,
+    "bottom": 292.1000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "&#8226;",
+    "top": 294.30000000000007,
+    "bottom": 305.70000000000005,
+    "size": 9.3
+  },
+  {
+    "text": "Contributed to 10+ production React modules and a shared component library adopted across three projects, reducing reported UI bugs by approximately 20%.",
+    "top": 294.30000000000007,
+    "bottom": 317.1000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "&#8226;",
+    "top": 319.30000000000007,
+    "bottom": 330.70000000000005,
+    "size": 9.3
+  },
+  {
+    "text": "Built a shared data-fetching layer with lazy loading and memoization, improving page load times by approximately 25% and standardising how the team handled API responses.",
+    "top": 319.30000000000007,
+    "bottom": 342.1000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "&#8226;",
+    "top": 344.30000000000007,
+    "bottom": 355.70000000000005,
+    "size": 9.3
+  },
+  {
+    "text": "Followed Git branching, pull request and code review workflows, and supported CI/CD pipelines using Docker and GitHub Actions to keep releases moving across client projects.",
+    "top": 344.30000000000007,
+    "bottom": 367.1000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "SMB ERP Portal | Independent Full-Stack Project - GitHub",
+    "top": 391.6000000000001,
+    "bottom": 403.1000000000001,
+    "size": 9.5
+  },
+  {
+    "text": "Oct 2025 - Mar 2026",
+    "top": 391.6000000000001,
+    "bottom": 403.00000000000006,
+    "size": 8.5
+  },
+  {
+    "text": "Next.js | TypeScript | Node.js | Express.js | MongoDB | Docker | AWS EC2 | GitHub Actions | Gemini",
+    "top": 406.4000000000001,
+    "bottom": 416.6000000000001,
+    "size": 8.1
+  },
+  {
+    "text": "&#8226;",
+    "top": 419.6000000000001,
+    "bottom": 431.00000000000006,
+    "size": 9.3
+  },
+  {
+    "text": "Independently built and deployed a 42-module ERP covering HR, Finance and Operations, including business workflows, database design, REST APIs, the application interface and cloud infrastructure.",
+    "top": 419.6000000000001,
+    "bottom": 442.4000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "&#8226;",
+    "top": 444.6000000000001,
+    "bottom": 456.00000000000006,
+    "size": 9.3
+  },
+  {
+    "text": "Implemented role-based access control (RBAC), Google Authenticator 2FA and activity audit logs to manage user permissions, strengthen sign-in security and record system actions.",
+    "top": 444.6000000000001,
+    "bottom": 467.4000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "&#8226;",
+    "top": 469.6000000000001,
+    "bottom": 481.00000000000006,
+    "size": 9.3
+  },
+  {
+    "text": "Configured automated OneDrive backups and event notifications, and automated builds and deployments using GitHub Actions, AWS CodePipeline, Docker and EC2.",
+    "top": 469.6000000000001,
+    "bottom": 492.4000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "&#8226;",
+    "top": 494.6000000000001,
+    "bottom": 506.00000000000006,
+    "size": 9.3
+  },
+  {
+    "text": "Built a Gemini-powered assistant for employee HR queries and summaries of attendance, expenses and operational activity, connecting technical features to day-to-day business needs.",
+    "top": 494.6000000000001,
+    "bottom": 517.4000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "Goodish | Social Productivity Platform - GitHub",
+    "top": 523.6000000000001,
+    "bottom": 535.1000000000001,
+    "size": 9.5
+  },
+  {
+    "text": "Jan 2026 - Mar 2026",
+    "top": 523.6000000000001,
+    "bottom": 535.0000000000001,
+    "size": 8.5
+  },
+  {
+    "text": "Next.js | Express.js | MongoDB | Socket.IO | JWT | AES Encryption | Gemini",
+    "top": 538.4000000000001,
+    "bottom": 548.6000000000001,
+    "size": 8.1
+  },
+  {
+    "text": "&#8226;",
+    "top": 551.6000000000001,
+    "bottom": 563.0000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "Implemented JWT-based session management, AES encryption for chat and secure API integration in a platform with individual and group messaging, task tracking, rewards and file sharing.",
+    "top": 551.6000000000001,
+    "bottom": 574.4000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "&#8226;",
+    "top": 576.6000000000001,
+    "bottom": 588.0000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "Improved interface performance using React Hooks, Context API, lazy loading and reusable components while managing authentication and API integration across the application.",
+    "top": 576.6000000000001,
+    "bottom": 599.4000000000001,
+    "size": 9.3
+  },
+  {
+    "text": "MBA in Cybersecurity Management | National Forensic Sciences University, Gujarat",
+    "top": 623.9000000000002,
+    "bottom": 635.4000000000002,
+    "size": 9.5
+  },
+  {
+    "text": "Aug 2025 - Present",
+    "top": 623.9000000000002,
+    "bottom": 635.3000000000002,
+    "size": 8.5
+  },
+  {
+    "text": "B.E. Electronics &amp; Communication | Zeal College of Engineering, Pune | CGPA: 7.55",
+    "top": 638.7000000000002,
+    "bottom": 650.2000000000002,
+    "size": 9.5
+  },
+  {
+    "text": "Aug 2019 - Jun 2023",
+    "top": 638.7000000000002,
+    "bottom": 650.1000000000001,
+    "size": 8.5
+  },
+  {
+    "text": "Foundations of Cybersecurity | Google | Aug 2023 | View Certificate",
+    "top": 675.8000000000002,
+    "bottom": 686.6000000000001,
+    "size": 8.8
+  },
+  {
+    "text": "Full Stack Web Development MERN | Almabetter | May 2023 | View Certificate",
+    "top": 688.1000000000001,
+    "bottom": 698.9000000000001,
+    "size": 8.8
+  },
+  {
+    "text": "Co-authored: Surveillance Robot using Optical Communication | IJIRCCE | Mar 2023 | View Paper",
+    "top": 700.4000000000001,
+    "bottom": 711.2,
+    "size": 8.8
+  },
+  {
+    "text": "Chess | Technical Reading | Open Source | Music",
+    "top": 735.0000000000001,
+    "bottom": 746.0000000000001,
+    "size": 9
+  }
+]

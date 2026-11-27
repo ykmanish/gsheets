@@ -6571,6 +6571,33 @@ app.patch("/hr/attendance/manual", async (req, res) => {
   }
 });
 
+// An adjustment can only fill in a day that has happened and that the person wasn't on
+// approved full-day leave. A request mistyped with next month's dates was once approved and
+// created attendance for days the person was on leave.
+async function assertAttendanceAdjustableDates(db, userId, dates = []) {
+  const today = attendanceDateKey();
+  const future = [...new Set(dates.filter((date) => date > today))];
+  if (future.length) {
+    const error = new Error(`Attendance can't be adjusted for a future date (${future.join(", ")}). Check the date.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!dates.length) return;
+  const sorted = [...dates].sort();
+  const leaves = await db.collection("hrLeaveRequests").find({
+    userId: new ObjectId(String(userId)),
+    status: "approved",
+    startDate: { $lte: sorted[sorted.length - 1] },
+    endDate: { $gte: sorted[0] },
+  }).toArray();
+  const onLeave = [...new Set(dates.filter((date) => leaves.some((leave) => !/half/i.test(String(leave.leaveType || "")) && leave.startDate <= date && date <= leave.endDate)))];
+  if (onLeave.length) {
+    const error = new Error(`On approved leave on ${onLeave.join(", ")}. Cancel the leave first if they actually worked that day.`);
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
 async function applyAttendanceTimeAdjustment(db, actor = {}, body = {}) {
   if (!ObjectId.isValid(String(body?.userId || ""))) {
     const error = new Error("Employee is required");
@@ -6585,6 +6612,7 @@ async function applyAttendanceTimeAdjustment(db, actor = {}, body = {}) {
     throw error;
   }
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.date || "")) ? String(body.date) : attendanceDateKey();
+  await assertAttendanceAdjustableDates(db, userId, [date]);
   const clockInAt = attendanceIstDateTime(date, body?.clockInTime, "clock in time");
   const isToday = date === attendanceDateKey();
   const hasClockOut = !isToday && String(body?.clockOutTime || "").trim();
@@ -6693,6 +6721,7 @@ app.post("/hr/attendance/adjustment-requests", async (req, res) => {
     const targetUser = await db.collection("users").findOne({ _id: userId });
     if (!targetUser) return res.status(404).json({ error: "Employee not found" });
     const items = normalizeAttendanceAdjustmentRequestItems(req.body?.items || []);
+    await assertAttendanceAdjustableDates(db, userId, items.map((item) => item.date));
     const now = new Date();
     const doc = {
       userId,
@@ -6725,6 +6754,8 @@ app.patch("/hr/attendance/adjustment-requests/:id/validate", async (req, res) =>
     if (!request) return res.status(404).json({ error: "Adjustment request not found" });
     if (request.status !== "pending") return res.status(409).json({ error: "This request is already reviewed" });
     const items = normalizeAttendanceAdjustmentRequestItems(request.items || []);
+    // Check every row first, so a bad row can't leave the request half applied.
+    await assertAttendanceAdjustableDates(db, request.userId, items.map((item) => item.date));
     const applied = [];
     for (const item of items) {
       applied.push(await applyAttendanceTimeAdjustment(db, req.authUser, {

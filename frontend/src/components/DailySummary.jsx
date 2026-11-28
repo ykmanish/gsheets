@@ -1042,11 +1042,10 @@ export default function DailySummary({ darkMode }) {
           renderItem={(tone) => (
             <div
               key={tone}
-              style={{ backgroundColor: darkMode ? toneOf(tone)[2] : toneOf(tone)[0] }}
-              className="flex min-h-[172px] flex-col justify-between rounded-[24px] p-5 opacity-70"
+              className={`flex min-h-[150px] flex-col justify-between rounded-[24px] p-4 sm:min-h-[168px] sm:p-5 ${darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]"}`}
             >
-              <span className={`h-6 w-6 rounded-md ${darkMode ? "bg-white/10" : "bg-white/60"}`} />
-              <span className={`h-10 w-20 rounded-lg ${darkMode ? "bg-white/10" : "bg-white/60"}`} />
+              <span className="h-10 w-10 rounded-[13px] opacity-80" style={{ backgroundColor: darkMode ? toneOf(tone)[2] : toneOf(tone)[0] }} />
+              <span className={`h-10 w-20 rounded-lg ${darkMode ? "bg-white/10" : "bg-white/70"}`} />
             </div>
           )}
         />

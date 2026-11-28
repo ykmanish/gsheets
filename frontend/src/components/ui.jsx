@@ -9,7 +9,6 @@
 import { Children, createElement, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ArrowUpRight,
   CalendarDays,
   Check,
   ChevronDown,
@@ -1179,24 +1178,37 @@ export function PageHeader({ darkMode, badge, badgeIcon, badgeTone = "mint", tit
 export function StatTile({ darkMode, icon, tone = "mint", value, label, hint, onClick, size = "md", className = "" }) {
   const Tag = onClick ? "button" : "div";
   const t = toneOf(tone);
-  const lg = size === "lg";
-  return (
-    <Tag type={onClick ? "button" : undefined} onClick={onClick} style={{ backgroundColor: darkMode ? t[2] : t[0] }} className={cx("group flex min-w-0 flex-col justify-between text-left transition-transform", lg ? "min-h-[160px] rounded-[24px] p-4 sm:min-h-[172px] sm:p-5" : "min-h-[118px] rounded-[20px] p-4", onClick && "hover:-translate-y-0.5 active:scale-[0.99]", className)}>
-      {(icon || (lg && onClick)) && (
-        <span className="flex items-start justify-between gap-2">
-          {icon ? <span style={{ color: darkMode ? t[3] : t[1] }}>{isValidElement(icon) ? icon : createElement(icon, { className: lg ? "h-6 w-6" : "h-5 w-5", strokeWidth: 1.8 })}</span> : <span />}
-          {/* An arrow on big clickable tiles says "opens details". */}
-          {lg && onClick && (
-            <span className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5", darkMode ? "bg-white/10 text-white/85" : "bg-white/75 text-[#141414]")}>
-              <ArrowUpRight className="h-[18px] w-[18px]" strokeWidth={2} />
+  const renderedIcon = (cls) => (isValidElement(icon) ? icon : createElement(icon, { className: cls, strokeWidth: 1.8 }));
+
+  // size "lg" is the dashboard tile: a neutral grey card, the tone only on the icon tile,
+  // the label beside it, a chevron when it opens something, then a big bold value and a hint.
+  if (size === "lg") {
+    return (
+      <Tag type={onClick ? "button" : undefined} onClick={onClick} className={cx("group flex min-h-[150px] min-w-0 flex-col justify-between rounded-[24px] p-4 text-left transition-[transform,background-color] sm:min-h-[168px] sm:p-5", darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]", onClick && (darkMode ? "hover:-translate-y-0.5 hover:bg-white/[0.07] active:scale-[0.99]" : "hover:-translate-y-0.5 hover:bg-[#efefec] active:scale-[0.99]"), className)}>
+        <span className="flex min-w-0 items-center gap-3">
+          {icon && (
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px]" style={{ backgroundColor: darkMode ? t[2] : t[0], color: darkMode ? t[3] : t[1] }}>
+              {renderedIcon("h-5 w-5")}
             </span>
           )}
+          {label && <span className={cx("min-w-0 flex-1 truncate text-[14.5px] sm:text-[16px]", darkMode ? "text-white/75" : "text-[#3d3d3b]")}>{label}</span>}
+          {onClick && <ChevronRight className={cx("h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5", darkMode ? "text-white/40" : "text-[#a3a3a0]")} />}
         </span>
-      )}
-      <span className={cx("block", lg ? "mt-5" : "mt-4")}>
-        <span className={cx("block truncate leading-none tracking-[-0.03em] tabular-nums", lg ? "small force-bold text-[38px] sm:text-[46px]" : "text-[28px]", darkMode ? "text-white" : "text-[#141414]")}>{value}</span>
-        {label && <span className={cx("block", lg ? "small force-bold mt-3 text-[15px] tracking-[-0.01em] sm:text-[17px]" : "mt-2 text-[12.5px]", darkMode ? (lg ? "text-white/85" : "text-white/55") : lg ? "text-[#2a2a28]" : "text-[#6b6b6b]")}>{label}</span>}
-        {hint && <span className={cx("block", lg ? "mt-1 text-[13px]" : "mt-0.5 text-[11.5px]", darkMode ? "text-white/45" : "text-[#8a8a88]")}>{hint}</span>}
+        <span className="mt-5 block">
+          <span className={cx("small force-bold block truncate text-[36px] leading-none tracking-[-0.03em] tabular-nums sm:text-[42px]", darkMode ? "text-white" : "text-[#141414]")}>{value}</span>
+          {hint && <span className={cx("mt-2 block truncate text-[13px] sm:text-[14px]", darkMode ? "text-white/50" : "text-[#6b6b6b]")}>{hint}</span>}
+        </span>
+      </Tag>
+    );
+  }
+
+  return (
+    <Tag type={onClick ? "button" : undefined} onClick={onClick} style={{ backgroundColor: darkMode ? t[2] : t[0] }} className={cx("flex min-h-[118px] min-w-0 flex-col justify-between rounded-[20px] p-4 text-left transition-transform", onClick && "hover:-translate-y-0.5 active:scale-[0.99]", className)}>
+      {icon && <span style={{ color: darkMode ? t[3] : t[1] }}>{renderedIcon("h-5 w-5")}</span>}
+      <span className="mt-4 block">
+        <span className={cx("block truncate text-[28px] leading-none tracking-[-0.03em] tabular-nums", darkMode ? "text-white" : "text-[#141414]")}>{value}</span>
+        {label && <span className={cx("mt-2 block text-[12.5px]", darkMode ? "text-white/55" : "text-[#6b6b6b]")}>{label}</span>}
+        {hint && <span className={cx("mt-0.5 block text-[11.5px]", darkMode ? "text-white/40" : "text-[#9a9a98]")}>{hint}</span>}
       </span>
     </Tag>
   );

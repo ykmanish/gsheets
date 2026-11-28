@@ -10,14 +10,15 @@ import {
   AlertTriangle,
   BarChart3,
 } from "lucide-react";
+import { EmptyState, StatTile } from "../ui";
 
 const STAGE_COLS = ["Design", "Approval", "Selection", "Procurement", "Execution", "Audit"];
 const STATUS_COLORS = {
-  Done: { bg: "bg-emerald-500", text: "text-emerald-500", light: "bg-emerald-500/10", label: "Done" },
-  "In Progress": { bg: "bg-blue-500", text: "text-blue-500", light: "bg-blue-500/10", label: "In Progress" },
-  Started: { bg: "bg-cyan-500", text: "text-cyan-500", light: "bg-cyan-500/10", label: "Started" },
-  Pending: { bg: "bg-red-500", text: "text-red-500", light: "bg-red-500/10", label: "Pending" },
-  "On Hold": { bg: "bg-amber-500", text: "text-amber-500", light: "bg-amber-500/10", label: "On Hold" },
+  Done: { bg: "bg-[#7fbf8e]", text: "text-[#2f7a4f]", light: "bg-[#e4f1e6]", label: "Done" },
+  "In Progress": { bg: "bg-[#78a9e3]", text: "text-[#2f6fc0]", light: "bg-[#e3eefb]", label: "In Progress" },
+  Started: { bg: "bg-[#9b87e6]", text: "text-[#6b4fd1]", light: "bg-[#ece8fb]", label: "Started" },
+  Pending: { bg: "bg-[#e88a98]", text: "text-[#c0394b]", light: "bg-[#fbe4e6]", label: "Pending" },
+  "On Hold": { bg: "bg-[#e2b84a]", text: "text-[#8a6200]", light: "bg-[#fbf0d4]", label: "On Hold" },
 };
 const STATUS_ORDER = ["Done", "In Progress", "Started", "Pending", "On Hold"];
 
@@ -69,7 +70,7 @@ function parseRows(sheets) {
 function StatusBadge({ value, darkMode }) {
   const s = (value || "").trim();
   const cfg = STATUS_COLORS[s];
-  if (!cfg) return <div className={`h-3 w-3 rounded-full mx-auto ${darkMode ? "bg-white/[0.06]" : "bg-black/[0.06]"}`} title="No data" />;
+  if (!cfg) return <div className={`h-3 w-3 rounded-full mx-auto ${darkMode ? "bg-white/[0.06]" : "bg-[#ebebe8]"}`} title="No data" />;
   return (
     <div className={`h-3 w-3 rounded-full mx-auto ${cfg.bg}`} title={cfg.label} />
   );
@@ -90,23 +91,23 @@ function StageDonut({ title, data, darkMode }) {
     .join(", ");
 
   return (
-    <div className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-      <h3 className={`text-sm font-medium ${darkMode ? "text-white" : "text-black"}`}>{title}</h3>
+    <div className={`rounded-[20px] p-5 ${darkMode ? "bg-[#15171c] border border-white/10" : "bg-white border border-[#ececec]"}`}>
+      <h3 className={`text-[15px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{title}</h3>
       <div className="flex items-center gap-5 mt-4">
         <div
           className="w-24 h-24 rounded-full relative flex-shrink-0"
-          style={{ background: data.some((d) => d.value > 0) ? `conic-gradient(${gradient})` : (darkMode ? "#222" : "#eee") }}
+          style={{ background: data.some((d) => d.value > 0) ? `conic-gradient(${gradient})` : (darkMode ? "rgba(255,255,255,0.08)" : "#f0f0ee") }}
         >
-          <div className={`absolute inset-5 rounded-full flex flex-col items-center justify-center ${darkMode ? "bg-[#121317] text-white" : "bg-white text-black"}`}>
-            <span className="text-lg font-bold leading-none">{total}</span>
+          <div className={`absolute inset-5 rounded-full flex flex-col items-center justify-center ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}>
+            <span className="text-[18px] leading-none tabular-nums">{total}</span>
           </div>
         </div>
         <div className="space-y-1.5 min-w-0">
           {data.filter((d) => d.value > 0).map((d) => (
             <div key={d.label} className="flex items-center gap-2 min-w-0">
               <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
-              <span className={`text-xs truncate flex-1 ${darkMode ? "text-white/65" : "text-black/55"}`}>{d.label}</span>
-              <span className={`text-xs tabular-nums ${darkMode ? "text-white/45" : "text-black/40"}`}>{d.value}</span>
+              <span className={`text-xs truncate flex-1 ${darkMode ? "text-white/65" : "text-[#3d3d3b]"}`}>{d.label}</span>
+              <span className={`text-xs tabular-nums ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{d.value}</span>
             </div>
           ))}
         </div>
@@ -118,14 +119,14 @@ function StageDonut({ title, data, darkMode }) {
 /* ─── Horizontal bar chart ─── */
 function HorizontalBars({ title, subtitle, data, color, darkMode }) {
   const max = Math.max(...data.map((d) => d.value), 1);
-  const muted = darkMode ? "text-white/50" : "text-black/50";
-  const headerText = darkMode ? "text-white" : "text-black";
-  const border = darkMode ? "border-white/5" : "border-black/5";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
+  const headerText = darkMode ? "text-white" : "text-[#141414]";
+  const border = darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]";
 
   return (
-    <div className={`rounded-[24px] border overflow-hidden ${darkMode ? "bg-white/[0.035] border-white/10" : "bg-white border-black/5"}`}>
+    <div className={`rounded-[20px] border overflow-hidden ${darkMode ? "bg-[#15171c] border-white/10" : "bg-white border-[#ececec]"}`}>
       <div className={`px-5 py-4 border-b ${border}`}>
-        <h3 className={`text-sm font-medium ${headerText}`}>{title}</h3>
+        <h3 className={`text-[15px] tracking-[-0.01em] ${headerText}`}>{title}</h3>
         {subtitle && <p className={`text-xs mt-0.5 ${muted}`}>{subtitle}</p>}
       </div>
       <div className="px-5 py-4 space-y-2.5">
@@ -133,7 +134,7 @@ function HorizontalBars({ title, subtitle, data, color, darkMode }) {
           <div key={d.label} className="flex items-center gap-3">
             <span className={`text-xs w-28 truncate ${headerText}`}>{d.label}</span>
             <div className="flex-1">
-              <div className={`h-2.5 rounded-full overflow-hidden ${darkMode ? "bg-white/[0.06]" : "bg-black/[0.04]"}`}>
+              <div className={`h-2.5 rounded-full overflow-hidden ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${Math.max(4, (d.value / max) * 100)}%`, background: color }}
@@ -151,8 +152,8 @@ function HorizontalBars({ title, subtitle, data, color, darkMode }) {
 
 /* ─── Stage pipeline chart ─── */
 function StagePipeline({ tasks, darkMode }) {
-  const headerText = darkMode ? "text-white" : "text-black";
-  const muted = darkMode ? "text-white/50" : "text-black/50";
+  const headerText = darkMode ? "text-white" : "text-[#141414]";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
 
   const stageStats = STAGE_COLS.map((stage) => {
     const key = stage.toLowerCase();
@@ -168,9 +169,9 @@ function StagePipeline({ tasks, darkMode }) {
   });
 
   return (
-    <div className={`rounded-[24px] border overflow-hidden ${darkMode ? "bg-white/[0.035] border-white/10" : "bg-white border-black/5"}`}>
-      <div className={`px-5 py-4 border-b ${darkMode ? "border-white/5" : "border-black/5"}`}>
-        <h3 className={`text-sm font-medium ${headerText}`}>Workflow Stage Pipeline</h3>
+    <div className={`rounded-[20px] border overflow-hidden ${darkMode ? "bg-[#15171c] border-white/10" : "bg-white border-[#ececec]"}`}>
+      <div className={`px-5 py-4 border-b ${darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]"}`}>
+        <h3 className={`text-[15px] tracking-[-0.01em] ${headerText}`}>Workflow Stage Pipeline</h3>
         <p className={`text-xs mt-0.5 ${muted}`}>Progress across all 6 workflow stages</p>
       </div>
       <div className="px-5 py-5 space-y-4">
@@ -182,23 +183,23 @@ function StagePipeline({ tasks, darkMode }) {
           return (
             <div key={s.stage}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className={`text-xs font-medium ${headerText}`}>{s.stage}</span>
+                <span className={`text-xs ${headerText}`}>{s.stage}</span>
                 <span className={`text-xs tabular-nums ${muted}`}>
                   {s.done} done · {s.inProgress} in progress · {s.pending} pending
                 </span>
               </div>
-              <div className={`h-4 rounded-full overflow-hidden flex ${darkMode ? "bg-white/[0.06]" : "bg-black/[0.04]"}`}>
-                {doneP > 0 && <div className="h-full bg-emerald-500 transition-all" style={{ width: `${doneP}%` }} />}
-                {inProgP > 0 && <div className="h-full bg-blue-500 transition-all" style={{ width: `${inProgP}%` }} />}
-                {pendingP > 0 && <div className="h-full bg-red-500/70 transition-all" style={{ width: `${pendingP}%` }} />}
+              <div className={`h-4 rounded-full overflow-hidden flex ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
+                {doneP > 0 && <div className="h-full bg-[#7fbf8e] transition-all" style={{ width: `${doneP}%` }} />}
+                {inProgP > 0 && <div className="h-full bg-[#78a9e3] transition-all" style={{ width: `${inProgP}%` }} />}
+                {pendingP > 0 && <div className="h-full bg-[#e88a98] transition-all" style={{ width: `${pendingP}%` }} />}
               </div>
             </div>
           );
         })}
         <div className="flex items-center gap-5 pt-2">
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /><span className={`text-xs ${muted}`}>Done</span></div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /><span className={`text-xs ${muted}`}>In Progress</span></div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500/70" /><span className={`text-xs ${muted}`}>Pending</span></div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#7fbf8e]" /><span className={`text-xs ${muted}`}>Done</span></div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#78a9e3]" /><span className={`text-xs ${muted}`}>In Progress</span></div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#e88a98]" /><span className={`text-xs ${muted}`}>Pending</span></div>
         </div>
       </div>
     </div>
@@ -207,9 +208,9 @@ function StagePipeline({ tasks, darkMode }) {
 
 /* ─── Overview ─── */
 function OverviewDashboard({ tasks, categories, agencies, supervisors, darkMode }) {
-  const panel = darkMode ? "bg-[#111318] border-white/5" : "bg-white border-black/5";
-  const muted = darkMode ? "text-white/50" : "text-black/50";
-  const headerText = darkMode ? "text-white" : "text-black";
+  const panel = darkMode ? "bg-[#15171c] border-white/[0.06]" : "bg-white border-[#f0f0ee]";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
+  const headerText = darkMode ? "text-white" : "text-[#141414]";
 
   // Overall status counts
   const overallStatus = useMemo(() => {
@@ -225,10 +226,10 @@ function OverviewDashboard({ tasks, categories, agencies, supervisors, darkMode 
   }, [tasks]);
 
   const statusDonutData = [
-    { label: "Done", value: overallStatus.Done, color: "#22c55e" },
-    { label: "In Progress", value: overallStatus["In Progress"] + overallStatus.Started, color: "#3b82f6" },
-    { label: "Pending", value: overallStatus.Pending, color: "#ef4444" },
-    { label: "On Hold", value: overallStatus["On Hold"], color: "#f59e0b" },
+    { label: "Done", value: overallStatus.Done, color: "#7fbf8e" },
+    { label: "In Progress", value: overallStatus["In Progress"] + overallStatus.Started, color: "#78a9e3" },
+    { label: "Pending", value: overallStatus.Pending, color: "#e88a98" },
+    { label: "On Hold", value: overallStatus["On Hold"], color: "#e2b84a" },
   ];
 
   // Category task counts
@@ -283,25 +284,15 @@ function OverviewDashboard({ tasks, categories, agencies, supervisors, darkMode 
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
       {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         {[
-          { label: "Total Tasks", value: tasks.length, icon: Hammer, color: "text-blue-400" },
-          { label: "Trade Categories", value: categories.length, icon: Layers, color: "text-amber-400" },
-          { label: "Active Agencies", value: agencies.length, icon: UserCircle2, color: "text-purple-400" },
-          { label: "Scheduled Tasks", value: tasksWithDates, icon: CalendarDays, color: "text-cyan-400" },
-          { label: "Overall Progress", value: `${overallPct}%`, icon: BarChart3, color: "text-emerald-400" },
+          { label: "Total tasks", value: tasks.length, icon: Hammer, tone: "sky" },
+          { label: "Trade categories", value: categories.length, icon: Layers, tone: "amber" },
+          { label: "Active agencies", value: agencies.length, icon: UserCircle2, tone: "lavender" },
+          { label: "Scheduled tasks", value: tasksWithDates, icon: CalendarDays, tone: "peach" },
+          { label: "Overall progress", value: `${overallPct}%`, icon: BarChart3, tone: "mint" },
         ].map((m) => (
-          <div key={m.label} className={`rounded-3xl border p-5 ${panel}`}>
-            <div className="flex items-center gap-3">
-              <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${darkMode ? "bg-white/5" : "bg-black/[0.04]"} ${m.color}`}>
-                <m.icon className="h-5 w-5" />
-              </span>
-              <div>
-                <p className={`text-[11px] uppercase tracking-wider ${muted}`}>{m.label}</p>
-                <h3 className={`text-xl font-bold ${headerText}`}>{m.value}</h3>
-              </div>
-            </div>
-          </div>
+          <StatTile key={m.label} darkMode={darkMode} icon={m.icon} tone={m.tone} value={m.value} label={m.label} />
         ))}
       </div>
 
@@ -315,16 +306,16 @@ function OverviewDashboard({ tasks, categories, agencies, supervisors, darkMode 
           title="Completion by Category"
           subtitle="% of stages marked Done per trade"
           data={categoryCompletion}
-          color="linear-gradient(90deg, #22c55e, #16a34a)"
+          color="#7fbf8e"
           darkMode={darkMode}
         />
       </div>
 
       {/* Category + Agency + Floor */}
       <div className="grid xl:grid-cols-3 gap-4">
-        <HorizontalBars title="Tasks per Category" data={categoryStats} color="#3b82f6" darkMode={darkMode} />
-        <HorizontalBars title="Tasks per Agency" data={agencyStats} color="#a855f7" darkMode={darkMode} />
-        <HorizontalBars title="Tasks per Floor" data={floorStats} color="#f59e0b" darkMode={darkMode} />
+        <HorizontalBars title="Tasks per Category" data={categoryStats} color="#78a9e3" darkMode={darkMode} />
+        <HorizontalBars title="Tasks per Agency" data={agencyStats} color="#9b87e6" darkMode={darkMode} />
+        <HorizontalBars title="Tasks per Floor" data={floorStats} color="#e2b84a" darkMode={darkMode} />
       </div>
     </div>
   );
@@ -332,9 +323,9 @@ function OverviewDashboard({ tasks, categories, agencies, supervisors, darkMode 
 
 /* ─── Per-tab detail table ─── */
 function TabDetailView({ tasks, darkMode, searchQuery }) {
-  const muted = darkMode ? "text-white/50" : "text-black/50";
-  const headerText = darkMode ? "text-white" : "text-black";
-  const border = darkMode ? "border-white/5" : "border-black/5";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
+  const headerText = darkMode ? "text-white" : "text-[#141414]";
+  const border = darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]";
 
   const filtered = useMemo(() => {
     if (!searchQuery) return tasks;
@@ -350,28 +341,28 @@ function TabDetailView({ tasks, darkMode, searchQuery }) {
   }, [tasks, searchQuery]);
 
   if (tasks.length === 0) {
-    return <div className={`flex-1 flex items-center justify-center ${muted}`}><p>This tab has no data rows.</p></div>;
+    return <div className="flex-1 overflow-y-auto p-4 sm:p-6"><EmptyState darkMode={darkMode} icon={Layers} title="Nothing here yet" text="This tab has no data rows." /></div>;
   }
 
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className={`border-b ${border} sticky top-0 z-10 ${darkMode ? "bg-[#111318]" : "bg-white"}`}>
+          <thead className={`border-b ${border} sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
             <tr>
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>#</th>
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>Floor</th>
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>Room / Area</th>
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>Activity</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>#</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>Floor</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>Room / Area</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>Activity</th>
               {STAGE_COLS.map((s) => (
-                <th key={s} className={`px-3 py-3.5 font-medium text-center ${muted}`} title={s}>{s.slice(0, 3)}</th>
+                <th key={s} className={`px-3 py-3.5 text-center text-[12px] font-normal ${muted}`} title={s}>{s.slice(0, 3)}</th>
               ))}
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>Supervisor</th>
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>Agency</th>
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>Start</th>
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>End</th>
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>Days</th>
-              <th className={`px-4 py-3.5 font-medium ${muted}`}>Remarks</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>Supervisor</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>Agency</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>Start</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>End</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>Days</th>
+              <th className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>Remarks</th>
             </tr>
           </thead>
           <tbody className={`divide-y ${border}`}>
@@ -379,24 +370,24 @@ function TabDetailView({ tasks, darkMode, searchQuery }) {
               <tr><td colSpan={17} className={`px-5 py-12 text-center ${muted}`}>No tasks match your search.</td></tr>
             ) : (
               filtered.map((t, idx) => (
-                <tr key={idx} className={`transition-colors ${darkMode ? "hover:bg-white/[0.02]" : "hover:bg-black/[0.015]"}`}>
+                <tr key={idx} className={`transition-colors ${darkMode ? "hover:bg-white/[0.02]" : "hover:bg-[#fafaf9]"}`}>
                   <td className={`px-4 py-3 ${muted}`}>{idx + 1}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${darkMode ? "bg-white/[0.06] text-white/80" : "bg-black/[0.04] text-black/70"}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs ${darkMode ? "bg-white/[0.06] text-white/80" : "bg-[#f4f4f2] text-[#3d3d3b]"}`}>
                       {t.floor || "—"}
                     </span>
                   </td>
-                  <td className={`px-4 py-3 font-medium ${headerText}`}>{t.room || "—"}</td>
+                  <td className={`px-4 py-3 ${headerText}`}>{t.room || "—"}</td>
                   <td className="px-4 py-3">{t.activity}</td>
                   {STAGE_COLS.map((s) => (
                     <td key={s} className="px-3 py-3 text-center">
                       <StatusBadge value={t[s.toLowerCase()]} darkMode={darkMode} />
                     </td>
                   ))}
-                  <td className={`px-4 py-3 text-sm ${darkMode ? "text-white/70" : "text-black/60"}`}>{t.supervisor || "—"}</td>
+                  <td className={`px-4 py-3 text-sm ${darkMode ? "text-white/70" : "text-[#3d3d3b]"}`}>{t.supervisor || "—"}</td>
                   <td className="px-4 py-3">
                     {t.agency ? (
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${darkMode ? "bg-purple-500/10 text-purple-400" : "bg-purple-500/10 text-purple-700"}`}>{t.agency}</span>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-[rgba(167,139,250,0.14)] text-[#c9b9fb]" : "bg-[#ece8fb] text-[#6b4fd1]"}`}>{t.agency}</span>
                     ) : (
                       <span className={`text-xs ${muted}`}>—</span>
                     )}

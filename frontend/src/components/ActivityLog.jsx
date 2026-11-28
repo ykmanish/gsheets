@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { DateRangePicker, SelectMenu } from "./ui";
+import { Button, Chip, DateRangePicker, Drawer, EmptyState, IconTile, Notice, PageHeader, SelectMenu, Tabs } from "./ui";
 
 const PAGE_SIZE_OPTIONS = [
   { value: "25", label: "25 per page" },
@@ -73,11 +73,7 @@ export default function ActivityLog({ darkMode }) {
   const [filtersClosing, setFiltersClosing] = useState(false);
   const page = filters.page;
 
-  const panel = darkMode ? "bg-white/[0.03] border border-white/10" : "bg-white/80 border border-black/5";
-  const muted = darkMode ? "text-white/50" : "text-black/45";
-  const chip = darkMode
-    ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/10"
-    : "border-black/10 bg-white text-black/60 hover:bg-black/[0.04]";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
 
   // Any filter change invalidates the page number, so patch both together.
   const patchFilters = useCallback((patch) => {
@@ -245,76 +241,83 @@ export default function ActivityLog({ darkMode }) {
   function getCategoryMeta(log) {
     const category = log.category || "system";
     const map = {
-      auth: { label: "Auth", Icon: Lock, color: darkMode ? "text-sky-300 bg-sky-500/10" : "text-sky-700 bg-sky-50" },
-      admin: { label: "Admin", Icon: UserCog, color: darkMode ? "text-violet-300 bg-violet-500/10" : "text-violet-700 bg-violet-50" },
-      document: { label: "Document", Icon: FileText, color: darkMode ? "text-[#d8f36a] bg-[#d8f36a]/10" : "text-green-700 bg-green-50" },
-      automation: { label: "Automation", Icon: Bot, color: darkMode ? "text-cyan-300 bg-cyan-500/10" : "text-cyan-700 bg-cyan-50" },
-      notification: { label: "Notification", Icon: Bell, color: darkMode ? "text-amber-300 bg-amber-500/10" : "text-amber-700 bg-amber-50" },
-      report: { label: "Report", Icon: Shield, color: darkMode ? "text-fuchsia-300 bg-fuchsia-500/10" : "text-fuchsia-700 bg-fuchsia-50" },
-      whatsapp: { label: "WhatsApp", Icon: MessageCircleMore, color: darkMode ? "text-emerald-300 bg-emerald-500/10" : "text-emerald-700 bg-emerald-50" },
-      system: { label: "System", Icon: Settings, color: darkMode ? "text-white/60 bg-white/5" : "text-black/55 bg-black/5" },
+      auth: { label: "Auth", Icon: Lock, tone: "sky" },
+      admin: { label: "Admin", Icon: UserCog, tone: "lavender" },
+      document: { label: "Document", Icon: FileText, tone: "mint" },
+      automation: { label: "Automation", Icon: Bot, tone: "peach" },
+      notification: { label: "Notification", Icon: Bell, tone: "amber" },
+      report: { label: "Report", Icon: Shield, tone: "rose" },
+      whatsapp: { label: "WhatsApp", Icon: MessageCircleMore, tone: "mint" },
+      system: { label: "System", Icon: Settings, tone: "neutral" },
     };
     return map[category] || map.system;
   }
 
+  const ink = darkMode ? "text-white" : "text-[#141414]";
+  const fieldLabel = `mb-2 mt-6 block text-[12.5px] first:mt-0 ${muted}`;
+  const pageButton = (active) => `h-9 min-w-9 rounded-full px-2.5 text-[12.5px] tabular-nums transition ${
+    active
+      ? darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white"
+      : darkMode ? "text-white/70 hover:bg-white/[0.07]" : "text-[#3d3d3b] hover:bg-[#f4f4f2]"
+  }`;
+
   return (
-    <div className="flex-1 min-h-0 overflow-hidden px-4 py-4 newq sm:px-6 lg:px-8 lg:py-8" style={{ background: darkMode ? "linear-gradient(180deg,#111318,#0c0d10)" : "linear-gradient(180deg,#f7f6f2,#f3f1ea)" }}>
+    <div className={`flex-1 min-h-0 overflow-hidden px-4 py-5 newq sm:px-6 lg:px-8 lg:py-8 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}>
       <div className="mx-auto flex h-full w-full max-w-[1680px] flex-col">
-        <div className={`mb-4 flex flex-shrink-0 flex-col gap-2 rounded-[22px] p-2.5 sm:flex-row sm:items-center ${panel}`}>
-          <div className="relative min-w-0 flex-1">
-            <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-            <input
-              value={searchDraft}
-              onChange={(event) => setSearchDraft(event.target.value)}
-              placeholder="Search action, target, user, path or IP..."
-              className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
-            />
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setFiltersOpen(true)}
-              className={`flex h-11 items-center gap-2 rounded-2xl border px-4 text-sm font-medium transition ${
-                activeFilterCount > 0
-                  ? darkMode
-                    ? "border-[#d8f36a]/40 bg-[#d8f36a]/15 text-[#d8f36a]"
-                    : "border-[#69c832] bg-[#eafbdc] text-[#4b9b16]"
-                  : chip
-              }`}
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              Filters
-              {activeFilterCount > 0 && (
-                <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#4b9b16] text-white"}`}>
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => patchFilters({ sort: filters.sort === "newest" ? "oldest" : "newest" })}
-              className={`flex h-11 items-center gap-2 rounded-2xl border px-3 text-sm font-medium transition ${chip}`}
-              title="Toggle date sort order"
-            >
-              {filters.sort === "newest" ? (
-                <ArrowDownWideNarrow className="h-4 w-4" />
-              ) : (
-                <ArrowUpNarrowWide className="h-4 w-4" />
-              )}
-              <span className="hidden lg:inline">{filters.sort === "newest" ? "Newest" : "Oldest"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void loadLogs(true)}
-              disabled={refreshing}
-              aria-label="Refresh activity log"
-              className={`flex h-11 w-11 items-center justify-center rounded-2xl border transition disabled:opacity-60 ${chip}`}
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            </button>
-          </div>
+        <PageHeader
+          darkMode={darkMode}
+          className="flex-shrink-0"
+          badge="Audit trail"
+          badgeIcon={Activity}
+          badgeTone="sky"
+          title="Activity log"
+          subtitle="who did what, and when"
+          actions={(
+            <>
+              <Button
+                darkMode={darkMode}
+                variant={activeFilterCount > 0 ? "accent" : "secondary"}
+                icon={SlidersHorizontal}
+                onClick={() => setFiltersOpen(true)}
+              >
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#141414] px-1 text-[11px] text-white">{activeFilterCount}</span>
+                )}
+              </Button>
+              <Button
+                darkMode={darkMode}
+                variant="secondary"
+                icon={filters.sort === "newest" ? ArrowDownWideNarrow : ArrowUpNarrowWide}
+                onClick={() => patchFilters({ sort: filters.sort === "newest" ? "oldest" : "newest" })}
+                title="Toggle date sort order"
+              >
+                <span className="hidden lg:inline">{filters.sort === "newest" ? "Newest" : "Oldest"}</span>
+              </Button>
+              <button
+                type="button"
+                onClick={() => void loadLogs(true)}
+                disabled={refreshing}
+                aria-label="Refresh activity log"
+                className={`grid h-9 w-9 place-items-center rounded-full border transition disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04] hover:bg-white/10" : "border-[#e6e6e3] bg-white hover:bg-[#f6f6f4]"}`}
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              </button>
+            </>
+          )}
+        />
+
+        <div className="relative mb-4 mt-6 flex-shrink-0">
+          <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+          <input
+            value={searchDraft}
+            onChange={(event) => setSearchDraft(event.target.value)}
+            placeholder="Search action, target, user, path or IP..."
+            className={`h-11 w-full rounded-full border pl-11 pr-4 text-[13.5px] outline-none transition ${darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:ring-[3px] focus:ring-white/10" : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"}`}
+          />
         </div>
-        <div className={`min-h-0 flex-1 overflow-hidden rounded-[30px] ${panel}`}>
+
+        <div className={`min-h-0 flex-1 overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
           {loading ? (
             <div className="flex h-full items-center justify-center py-20">
               <Loader2 className={`h-7 w-7 animate-spin ${muted}`} />
@@ -324,14 +327,14 @@ export default function ActivityLog({ darkMode }) {
               <div className="min-h-0 flex-1 overflow-auto">
                 <table className="w-full min-w-[920px] text-left">
                   <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                    <tr className={darkMode ? "border-b border-white/10" : "border-b border-black/5"}>
+                    <tr className={darkMode ? "border-b border-white/10" : "border-b border-[#f0f0ee]"}>
                       {["Date", "User", "Action", "Target", "Status", "Details"].map((header) => (
-                        <th key={header} className={`px-5 py-4 text-[11px] uppercase tracking-[0.18em] font-medium ${muted}`}>
+                        <th key={header} className={`px-5 py-3.5 text-[12px] font-normal ${muted}`}>
                           {header === "Date" ? (
                             <button
                               type="button"
                               onClick={() => patchFilters({ sort: filters.sort === "newest" ? "oldest" : "newest" })}
-                              className={`flex items-center gap-1.5 uppercase tracking-[0.18em] transition ${darkMode ? "hover:text-white" : "hover:text-black"}`}
+                              className={`flex items-center gap-1.5 transition ${darkMode ? "hover:text-white" : "hover:text-[#141414]"}`}
                               title="Toggle date sort order"
                             >
                               Date
@@ -351,65 +354,53 @@ export default function ActivityLog({ darkMode }) {
                   <tbody>
                     {logs.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="px-5 py-16 text-center">
-                          <Activity className={`mx-auto mb-4 h-10 w-10 ${muted}`} />
-                          <p className={`text-lg ${darkMode ? "text-white" : "text-black"}`}>
-                            {activeFilterCount > 0 ? "No activity matches these filters" : "No activity yet"}
-                          </p>
-                          {activeFilterCount > 0 && (
-                            <button
-                              type="button"
-                              onClick={resetFilters}
-                              className={`mt-4 rounded-full border px-4 py-2 text-sm transition ${chip}`}
-                            >
-                              Clear filters
-                            </button>
-                          )}
+                        <td colSpan="6" className="p-5">
+                          <EmptyState
+                            darkMode={darkMode}
+                            icon={Activity}
+                            tone="sky"
+                            title={activeFilterCount > 0 ? "No activity matches these filters" : "No activity yet"}
+                            action={activeFilterCount > 0 ? <Button darkMode={darkMode} variant="secondary" size="sm" icon={RotateCcw} onClick={resetFilters}>Clear filters</Button> : null}
+                          />
                         </td>
                       </tr>
                     ) : logs.map((log) => {
                       const category = getCategoryMeta(log);
-                      const CategoryIcon = category.Icon;
                       const targetLabel = getTargetLabel(log);
                       return (
-                      <tr key={log.id} className={darkMode ? "border-b border-white/5" : "border-b border-black/5"}>
-                        <td className={`px-5 py-4 text-sm whitespace-nowrap ${muted}`}>
+                      <tr key={log.id} className={`border-b transition-colors ${darkMode ? "border-white/[0.06] hover:bg-white/[0.02]" : "border-[#f0f0ee] hover:bg-[#fafaf9]"}`}>
+                        <td className={`whitespace-nowrap px-5 py-3.5 text-[13px] ${ink}`}>
                           {formatDate(log.createdAt)}
-                          <span className="mt-0.5 block text-xs">{formatTime(log.createdAt)}</span>
+                          <span className={`mt-0.5 block text-[12px] ${muted}`}>{formatTime(log.createdAt)}</span>
                         </td>
-                        <td className="px-5 py-4">
-                          <p className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>{log.displayName || log.username || "System"}</p>
-                          <p className={`mt-1 text-xs ${muted}`}>{log.roleName || log.username || "System"}</p>
+                        <td className="px-5 py-3.5">
+                          <p className={`text-[13.5px] ${ink}`}>{log.displayName || log.username || "System"}</p>
+                          <p className={`mt-0.5 text-[12px] ${muted}`}>{log.roleName || log.username || "System"}</p>
                         </td>
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-2">
-                            <span className={`flex h-8 w-8 items-center justify-center rounded-full ${category.color}`}>
-                              <CategoryIcon className="h-4 w-4" />
-                            </span>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <IconTile icon={category.Icon} tone={category.tone} darkMode={darkMode} size="xs" />
                             <div>
-                              <p className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>{log.action}</p>
-                              <p className={`mt-0.5 text-[11px] ${muted}`}>{category.label}</p>
+                              <p className={`text-[13.5px] ${ink}`}>{log.action}</p>
+                              <p className={`mt-0.5 text-[12px] ${muted}`}>{category.label}</p>
                             </div>
                           </div>
                         </td>
-                        <td className={`px-5 py-4 text-sm ${muted}`} title={targetLabel}>{truncateTarget(targetLabel)}</td>
-                        <td className="px-5 py-4">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
-                            log.status === "failed" ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-500"
-                          }`}>
-                            {log.status === "failed" ? <XCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                            {log.status}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <button
-                            onClick={() => setDetailLog(log)}
-                            className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
-                              darkMode ? "bg-white/5 text-white/70 hover:bg-white/10" : "bg-black/[0.04] text-black/60 hover:bg-black/[0.07]"
-                            }`}
+                        <td className={`px-5 py-3.5 text-[13px] ${muted}`} title={targetLabel}>{truncateTarget(targetLabel)}</td>
+                        <td className="px-5 py-3.5">
+                          <Chip
+                            darkMode={darkMode}
+                            tone={log.status === "failed" ? "rose" : "mint"}
+                            icon={log.status === "failed" ? XCircle : CheckCircle2}
+                            className="h-6 px-2.5 text-[12px]"
                           >
+                            {log.status}
+                          </Chip>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <Button darkMode={darkMode} variant="soft" size="sm" onClick={() => setDetailLog(log)} className="h-7 px-3 text-[12px]">
                             Detail
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                       );
@@ -419,34 +410,30 @@ export default function ActivityLog({ darkMode }) {
               </div>
 
               {meta && meta.total > 0 && (
-                <div className={`flex flex-shrink-0 flex-col gap-3 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "border-white/10" : "border-black/5"}`}>
-                  <p className={`text-xs ${muted}`}>
+                <div className={`flex flex-shrink-0 flex-col gap-3 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+                  <p className={`text-[12.5px] ${muted}`}>
                     {meta.showingAll
                       ? `All ${meta.total} ${meta.total === 1 ? "entry" : "entries"} on one page`
                       : `Page ${meta.page} of ${meta.pageCount} - ${meta.rangeFrom}-${meta.rangeTo} of ${meta.total}`}
                     {meta.total !== meta.retained ? ` (filtered from ${meta.retained})` : ""}
                   </p>
                   {!meta.showingAll && meta.pageCount > 1 && (
-                    <div className="flex items-center gap-1.5">
+                    <div className={`flex items-center gap-0.5 rounded-full p-1 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
                       <button
                         type="button"
                         onClick={() => goToPage(meta.page - 1)}
                         disabled={meta.page <= 1}
                         aria-label="Previous page"
-                        className={`flex h-9 w-9 items-center justify-center rounded-xl border transition disabled:opacity-40 ${chip}`}
+                        className={`grid h-9 w-9 place-items-center rounded-full transition disabled:opacity-40 ${pageButton(false)}`}
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </button>
                       {pageWindow[0] > 1 && (
                         <>
-                          <button
-                            type="button"
-                            onClick={() => goToPage(1)}
-                            className={`h-9 min-w-9 rounded-xl border px-2 text-xs font-semibold transition ${chip}`}
-                          >
+                          <button type="button" onClick={() => goToPage(1)} className={pageButton(false)}>
                             1
                           </button>
-                          {pageWindow[0] > 2 && <span className={`px-1 text-xs ${muted}`}>...</span>}
+                          {pageWindow[0] > 2 && <span className={`px-1 text-[12px] ${muted}`}>...</span>}
                         </>
                       )}
                       {pageWindow.map((pageNumber) => (
@@ -455,13 +442,7 @@ export default function ActivityLog({ darkMode }) {
                           type="button"
                           onClick={() => goToPage(pageNumber)}
                           aria-current={pageNumber === meta.page ? "page" : undefined}
-                          className={`h-9 min-w-9 rounded-xl border px-2 text-xs font-semibold transition ${
-                            pageNumber === meta.page
-                              ? darkMode
-                                ? "border-[#d8f36a] bg-[#d8f36a] text-black"
-                                : "border-[#171714] bg-[#171714] text-white"
-                              : chip
-                          }`}
+                          className={pageButton(pageNumber === meta.page)}
                         >
                           {pageNumber}
                         </button>
@@ -469,13 +450,9 @@ export default function ActivityLog({ darkMode }) {
                       {pageWindow[pageWindow.length - 1] < meta.pageCount && (
                         <>
                           {pageWindow[pageWindow.length - 1] < meta.pageCount - 1 && (
-                            <span className={`px-1 text-xs ${muted}`}>...</span>
+                            <span className={`px-1 text-[12px] ${muted}`}>...</span>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => goToPage(meta.pageCount)}
-                            className={`h-9 min-w-9 rounded-xl border px-2 text-xs font-semibold transition ${chip}`}
-                          >
+                          <button type="button" onClick={() => goToPage(meta.pageCount)} className={pageButton(false)}>
                             {meta.pageCount}
                           </button>
                         </>
@@ -485,7 +462,7 @@ export default function ActivityLog({ darkMode }) {
                         onClick={() => goToPage(Math.min(meta.pageCount, meta.page + 1))}
                         disabled={meta.page >= meta.pageCount}
                         aria-label="Next page"
-                        className={`flex h-9 w-9 items-center justify-center rounded-xl border transition disabled:opacity-40 ${chip}`}
+                        className={`grid h-9 w-9 place-items-center rounded-full transition disabled:opacity-40 ${pageButton(false)}`}
                       >
                         <ChevronRight className="h-4 w-4" />
                       </button>
@@ -498,162 +475,123 @@ export default function ActivityLog({ darkMode }) {
         </div>
       </div>
 
-      {filtersOpen && (
-        <div
-          className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] ${filtersClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeFilters();
-          }}
-        >
-          <div
-            className={`absolute right-0 top-0 flex h-full w-full max-w-[420px] flex-col shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${filtersClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Activity log filters"
-          >
-            <div className={`flex h-14 flex-shrink-0 items-center justify-between border-b px-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal className="h-4 w-4" />
-                <span className="text-sm font-semibold">Filters and sorting</span>
-              </div>
-              <button
-                type="button"
-                onClick={closeFilters}
-                aria-label="Close filters"
-                className={`flex h-9 w-9 items-center justify-center rounded-full ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}
-              >
-                <X className={`h-5 w-5 ${muted}`} />
-              </button>
-            </div>
+      <Drawer
+        open={filtersOpen && !filtersClosing}
+        onClose={closeFilters}
+        darkMode={darkMode}
+        title="Filters and sorting"
+        subtitle={meta
+          ? meta.total === 0
+            ? "No entries match these filters"
+            : `${meta.total} of ${meta.retained} ${meta.retained === 1 ? "entry" : "entries"} match`
+          : "Loading..."}
+        icon={SlidersHorizontal}
+        tone="sky"
+        width={440}
+        footer={(
+          <>
+            <Button darkMode={darkMode} variant="secondary" size="lg" icon={RotateCcw} onClick={resetFilters} disabled={activeFilterCount === 0} className="flex-1">
+              Clear all
+            </Button>
+            <Button darkMode={darkMode} variant="primary" size="lg" onClick={closeFilters} className="flex-1">
+              Done
+            </Button>
+          </>
+        )}
+      >
+        <span className={fieldLabel}>User</span>
+        <SelectMenu
+          darkMode={darkMode}
+          value={filters.userId}
+          options={userOptions}
+          onChange={(userId) => patchFilters({ userId })}
+          searchable
+          searchPlaceholder="Search user..."
+          placeholder="All users"
+        />
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-              <p className={`text-xs ${muted}`}>
-                {meta
-                  ? meta.total === 0
-                    ? "No entries match these filters"
-                    : `${meta.total} of ${meta.retained} ${meta.retained === 1 ? "entry" : "entries"} match`
-                  : "Loading..."}
-              </p>
+        <span className={fieldLabel}>Date range</span>
+        <DateRangePicker
+          darkMode={darkMode}
+          from={filters.from}
+          to={filters.to}
+          onChange={(range) => patchFilters(range)}
+          placeholder="All dates"
+        />
+        {(filters.from || filters.to) && (
+          <Button darkMode={darkMode} variant="ghost" size="sm" icon={X} onClick={() => patchFilters({ from: "", to: "" })} className="mt-2">
+            Clear date range
+          </Button>
+        )}
 
-              <p className={`mt-5 mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] ${muted}`}>User</p>
-              <SelectMenu
-                darkMode={darkMode}
-                value={filters.userId}
-                options={userOptions}
-                onChange={(userId) => patchFilters({ userId })}
-                searchable
-                searchPlaceholder="Search user..."
-                placeholder="All users"
-              />
+        <span className={fieldLabel}>Category</span>
+        <SelectMenu
+          darkMode={darkMode}
+          value={filters.category}
+          options={categoryOptions}
+          onChange={(category) => patchFilters({ category })}
+          placeholder="All categories"
+        />
 
-              <p className={`mt-5 mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] ${muted}`}>Date range</p>
-              <DateRangePicker
-                darkMode={darkMode}
-                from={filters.from}
-                to={filters.to}
-                onChange={(range) => patchFilters(range)}
-                placeholder="All dates"
-              />
-              {(filters.from || filters.to) && (
-                <button
-                  type="button"
-                  onClick={() => patchFilters({ from: "", to: "" })}
-                  className={`mt-2 px-1 text-xs underline ${muted}`}
-                >
-                  Clear date range
-                </button>
-              )}
+        <span className={fieldLabel}>Status</span>
+        <SelectMenu
+          darkMode={darkMode}
+          value={filters.status}
+          options={statusOptions}
+          onChange={(status) => patchFilters({ status })}
+          placeholder="All statuses"
+        />
 
-              <p className={`mt-5 mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] ${muted}`}>Category</p>
-              <SelectMenu
-                darkMode={darkMode}
-                value={filters.category}
-                options={categoryOptions}
-                onChange={(category) => patchFilters({ category })}
-                placeholder="All categories"
-              />
+        <span className={fieldLabel}>Sort by date</span>
+        <Tabs
+          darkMode={darkMode}
+          className="!flex w-full [&>button]:flex-1 [&>button]:justify-center"
+          items={[
+            { id: "newest", label: "Newest first" },
+            { id: "oldest", label: "Oldest first" },
+          ]}
+          value={filters.sort}
+          onChange={(sort) => patchFilters({ sort })}
+        />
 
-              <p className={`mt-5 mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] ${muted}`}>Status</p>
-              <SelectMenu
-                darkMode={darkMode}
-                value={filters.status}
-                options={statusOptions}
-                onChange={(status) => patchFilters({ status })}
-                placeholder="All statuses"
-              />
+        <span className={fieldLabel}>Rows per page</span>
+        <SelectMenu
+          darkMode={darkMode}
+          value={filters.pageSize}
+          options={PAGE_SIZE_OPTIONS}
+          onChange={(pageSize) => patchFilters({ pageSize })}
+        />
 
-              <p className={`mt-5 mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] ${muted}`}>Sort by date</p>
-              <div className={`flex rounded-2xl p-1 ${darkMode ? "bg-white/[0.05]" : "bg-black/[0.04]"}`}>
-                {[
-                  { id: "newest", label: "Newest first" },
-                  { id: "oldest", label: "Oldest first" },
-                ].map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => patchFilters({ sort: option.id })}
-                    className={`h-10 flex-1 rounded-xl text-xs font-semibold transition ${filters.sort === option.id ? (darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white") : darkMode ? "text-white/60 hover:text-white" : "text-black/55 hover:text-black"}`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-
-              <p className={`mt-5 mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] ${muted}`}>Rows per page</p>
-              <SelectMenu
-                darkMode={darkMode}
-                value={filters.pageSize}
-                options={PAGE_SIZE_OPTIONS}
-                onChange={(pageSize) => patchFilters({ pageSize })}
-              />
-
-              {meta?.earliestDate && meta?.latestDate && (
-                <p className={`mt-5 px-1 text-[11px] leading-4 ${muted}`}>
-                  The log keeps the latest {meta.retentionLimit} entries, currently spanning {meta.earliestDate} to{" "}
-                  {meta.latestDate}.
-                </p>
-              )}
-            </div>
-
-            <div className={`flex flex-shrink-0 items-center gap-2 border-t px-5 py-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <button
-                type="button"
-                onClick={resetFilters}
-                disabled={activeFilterCount === 0}
-                className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border text-sm font-medium transition disabled:opacity-40 ${chip}`}
-              >
-                <RotateCcw className="h-4 w-4" />
-                Clear all
-              </button>
-              <button
-                type="button"
-                onClick={closeFilters}
-                className="h-11 flex-1 rounded-2xl bg-[#4b9b16] text-sm font-semibold text-white transition hover:bg-[#3f8412]"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        {meta?.earliestDate && meta?.latestDate && (
+          <Notice tone="neutral" darkMode={darkMode} className="mt-6">
+            The log keeps the latest {meta.retentionLimit} entries, currently spanning {meta.earliestDate} to{" "}
+            {meta.latestDate}.
+          </Notice>
+        )}
+      </Drawer>
 
       {detailLog && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-2xl rounded-[28px] border p-6 ${darkMode ? "border-white/10 bg-[#121317]" : "border-black/5 bg-white"}`}>
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <p className={`mb-2 text-[11px] uppercase tracking-[0.28em] ${muted}`}>Activity details</p>
-                <h3 className={`text-2xl small font-semibold ${darkMode ? "text-white" : "text-black"}`}>{detailLog.action}</h3>
+        <div className="ui-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-black/35 p-4">
+          <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop w-full max-w-2xl rounded-[24px] border p-6 newq ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <IconTile icon={getCategoryMeta(detailLog).Icon} tone={getCategoryMeta(detailLog).tone} darkMode={darkMode} size="sm" />
+                <div className="min-w-0">
+                  <h3 className={`text-[17px] leading-tight ${ink}`}>{detailLog.action}</h3>
+                  <p className={`mt-1 text-[12.5px] ${muted}`}>Activity details</p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => setDetailLog(null)}
-                className={`flex h-10 w-10 items-center justify-center rounded-full ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}
+                aria-label="Close"
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
               >
-                <X className={`h-5 w-5 ${muted}`} />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               {[
                 ["Exact time", formatDateTime(detailLog.createdAt)],
                 ["User", `${detailLog.displayName || detailLog.username || "System"} (${detailLog.roleName || "System"})`],
@@ -664,16 +602,16 @@ export default function ActivityLog({ darkMode }) {
                 ["IP address", detailLog.ip || "N/A"],
                 ["MAC address", detailLog.macAddress || "N/A"],
               ].map(([label, value]) => (
-                <div key={label} className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-black/[0.025]"}`}>
-                  <p className={`text-[11px] uppercase tracking-[0.18em] ${muted}`}>{label}</p>
-                  <p className={`mt-2 break-words text-sm ${darkMode ? "text-white/80" : "text-black/70"}`}>{value}</p>
+                <div key={label} className={`rounded-[14px] px-4 py-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
+                  <p className={`text-[12px] ${muted}`}>{label}</p>
+                  <p className={`mt-1 break-words text-[13.5px] ${ink}`}>{value}</p>
                 </div>
               ))}
             </div>
 
-            <div className={`mt-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-black/[0.025]"}`}>
-              <p className={`text-[11px] uppercase tracking-[0.18em] ${muted}`}>User agent and details</p>
-              <p className={`mt-2 break-words text-sm ${darkMode ? "text-white/80" : "text-black/70"}`}>
+            <div className={`mt-2 rounded-[14px] px-4 py-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
+              <p className={`text-[12px] ${muted}`}>User agent and details</p>
+              <p className={`mt-1 break-words text-[13px] ${darkMode ? "text-white/80" : "text-[#3d3d3b]"}`}>
                 {detailLog.details?.userAgent || "N/A"}
               </p>
             </div>

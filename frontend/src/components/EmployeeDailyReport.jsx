@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, BellRing, CalendarCheck, Check, CheckCircle2, ChevronDown, Clock3, Copy, Download, Eye, FileText, Heart, LogIn, Loader2, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Settings2, Sparkles, Star, Trash2, X } from "lucide-react";
+import { Activity, AlertTriangle, Ban, BellRing, Building2, CalendarCheck, Check, CheckCircle2, ChevronDown, ClipboardList, Clock3, Copy, Download, Eye, FileText, Heart, Inbox, LogIn, Loader2, Maximize2, Minimize2, PauseCircle, Plus, RefreshCw, Repeat2, Search, Settings2, Sheet, Sparkles, Star, Trash2, Users, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth, useAuth } from "./AuthProvider";
-import { ConfirmModal, DateRangePicker, MultiSelect, SelectMenu, useClickOutside } from "./ui";
+import { Button, Chip, ConfirmModal, DateRangePicker, EmptyState, FeatureCard, IconTile, MultiSelect, PageHeader, SelectMenu, StatTile, Toggle, cx, toneOf, useClickOutside } from "./ui";
 import UserAvatar from "./UserAvatar";
 
 const employeeReportTestDateKey = "employee-report-test-date";
@@ -325,14 +325,14 @@ function ReminderTimeWheel({ value, onChange, darkMode }) {
   };
 
   return (
-    <div className={`mt-2 overflow-hidden rounded-[28px] border p-4  ${darkMode ? "border-white/10 bg-white/[0.045]" : "border-black/10 bg-white"}`}>
-      <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/40" : "text-black/42"}`}>Pick time</p>
+    <div className={`mt-2 overflow-hidden rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+      <p className={`text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>Pick time</p>
       <div className="mt-3 grid grid-cols-2 items-center gap-3">
         {columns.map((column, index) => {
           const previous = (column.value - 1 + column.max) % column.max;
           const next = (column.value + 1) % column.max;
           return (
-            <div key={column.key} className={`grid grid-cols-[1fr_auto] items-center gap-2 ${index === 0 ? "border-r pr-3 " : ""}${index === 0 ? darkMode ? "border-white/10" : "border-black/10" : ""}`}>
+            <div key={column.key} className={`grid grid-cols-[1fr_auto] items-center gap-2 ${index === 0 ? "border-r pr-3 " : ""}${index === 0 ? darkMode ? "border-white/10" : "border-[#f0f0ee]" : ""}`}>
               <div
                 role="spinbutton"
                 tabIndex={0}
@@ -351,36 +351,36 @@ function ReminderTimeWheel({ value, onChange, darkMode }) {
                     onChange(shiftReminderTime(value, column.key, 1));
                   }
                 }}
-                className={`relative overflow-hidden rounded-2xl outline-none transition focus:ring-4 ${darkMode ? "bg-black/15 focus:ring-white/10" : "bg-[#fafbf8] focus:ring-emerald-500/10"}`}
+                className={`relative overflow-hidden rounded-[16px] outline-none transition focus:ring-[3px] ${darkMode ? "bg-white/[0.05] focus:ring-white/10" : "bg-[#f4f4f2] focus:ring-black/[0.05]"}`}
               >
                 <button
                   type="button"
                   onClick={() => onChange(shiftReminderTime(value, column.key, -1))}
-                  className={`block h-9 w-full text-center text-xl font-black transition hover:scale-105 ${darkMode ? "text-white/20 hover:text-white/45" : "text-black/12 hover:text-black/35"}`}
+                  className={`block h-9 w-full text-center text-xl tabular-nums transition ${darkMode ? "text-white/25 hover:text-white/50" : "text-[#c4c4c1] hover:text-[#8a8a8a]"}`}
                   aria-label={`Decrease ${column.label}`}
                 >
                   {padTimePart(previous)}
                 </button>
-                <div className={`mx-auto grid h-12 w-full place-items-center border-y text-3xl font-black ${darkMode ? "border-white/10 text-white" : "border-black/10 text-[#222]"}`}>
+                <div className={`mx-auto grid h-12 w-full place-items-center border-y text-3xl tabular-nums tracking-[-0.02em] ${darkMode ? "border-white/10 text-white" : "border-[#e8e8e6] text-[#141414]"}`}>
                   {padTimePart(column.value)}
                 </div>
                 <button
                   type="button"
                   onClick={() => onChange(shiftReminderTime(value, column.key, 1))}
-                  className={`block h-9 w-full text-center text-xl font-black transition hover:scale-105 ${darkMode ? "text-white/20 hover:text-white/45" : "text-black/12 hover:text-black/35"}`}
+                  className={`block h-9 w-full text-center text-xl tabular-nums transition ${darkMode ? "text-white/25 hover:text-white/50" : "text-[#c4c4c1] hover:text-[#8a8a8a]"}`}
                   aria-label={`Increase ${column.label}`}
                 >
                   {padTimePart(next)}
                 </button>
               </div>
-              <span className={`text-xs font-bold ${darkMode ? "text-white/45" : "text-black/45"}`}>{column.label}</span>
+              <span className={`text-xs ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{column.label}</span>
             </div>
           );
         })}
       </div>
-      <div className={`mt-4 flex items-center justify-between rounded-2xl px-4 py-3 ${darkMode ? "bg-white/[0.055]" : "bg-[#f5f7f2]"}`}>
-        <span className={`text-xs font-bold ${darkMode ? "text-white/45" : "text-black/45"}`}>Selected</span>
-        <span className="font-black">{formatReminderTime(hour, minute)} IST</span>
+      <div className={`mt-4 flex items-center justify-between rounded-[14px] px-4 py-3 ${darkMode ? "bg-[#cff07a]/15" : "bg-[#eef8cc]"}`}>
+        <span className={`text-xs ${darkMode ? "text-white/55" : "text-[#4d6b12]"}`}>Selected</span>
+        <span className="tabular-nums">{formatReminderTime(hour, minute)} IST</span>
       </div>
     </div>
   );
@@ -418,16 +418,16 @@ function TaskDurationField({ row, onChange, darkMode }) {
   const label = totalMinutes
     ? `${Math.floor(totalMinutes / 60)}h${totalMinutes % 60 ? ` ${totalMinutes % 60}m` : ""}`
     : "--";
-  const inputClass = `h-11 w-full rounded-xl border px-3 text-center text-sm font-black tabular-nums outline-none transition focus:ring-4 ${darkMode ? "border-white/10 bg-[#0f151c] text-white placeholder:text-white/25 focus:border-[#d8f36a]/25 focus:ring-[#d8f36a]/10" : "border-black/10 bg-[#fbfcf9] text-black placeholder:text-black/30 focus:border-[#8bd85b]/40 focus:ring-[#8bd85b]/15"}`;
+  const inputClass = `h-10 w-full rounded-full border px-3 text-center text-sm tabular-nums outline-none transition focus:ring-[3px] ${darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/25 focus:ring-white/10" : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-black/[0.05]"}`;
 
   return (
-    <div className={`rounded-2xl border px-3 py-2 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
-      <div className={`mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>
+    <div className={`rounded-[16px] border px-3 py-2.5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+      <div className={`mb-2 flex items-center gap-2 text-[12px] ${darkMode ? "text-white/50" : "text-[#8a8a8a]"}`}>
         <Clock3 className="h-3.5 w-3.5" /> Duration
       </div>
       <div className="grid grid-cols-[1fr_1fr_92px] items-end gap-2">
         <label className="min-w-0">
-          <span className={`mb-1 block text-[10px] font-bold ${darkMode ? "text-white/40" : "text-black/40"}`}>Hours</span>
+          <span className={`mb-1 block text-[11px] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>Hours</span>
           <input
             inputMode="numeric"
             pattern="[0-9]*"
@@ -438,7 +438,7 @@ function TaskDurationField({ row, onChange, darkMode }) {
           />
         </label>
         <label className="min-w-0">
-          <span className={`mb-1 block text-[10px] font-bold ${darkMode ? "text-white/40" : "text-black/40"}`}>Minutes</span>
+          <span className={`mb-1 block text-[11px] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>Minutes</span>
           <input
             inputMode="numeric"
             pattern="[0-9]*"
@@ -448,10 +448,10 @@ function TaskDurationField({ row, onChange, darkMode }) {
             className={inputClass}
           />
         </label>
-        <div className={`grid h-16 place-items-center rounded-xl border text-center ${totalMinutes ? darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a]/12 text-[#d8f36a]" : "border-[#8bd85b]/30 bg-[#eafbdc] text-[#34780d]" : darkMode ? "border-white/10 bg-[#0f151c] text-white/25" : "border-black/10 bg-[#fbfcf9] text-black/30"}`}>
+        <div className={`grid h-16 place-items-center rounded-[14px] text-center ${totalMinutes ? darkMode ? "bg-[#cff07a]/15 text-[#d8f39a]" : "bg-[#eef8cc] text-[#4d6b12]" : darkMode ? "bg-white/[0.05] text-white/30" : "bg-[#f4f4f2] text-[#a3a3a0]"}`}>
           <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.12em]">Total</p>
-            <p className="mt-0.5 text-lg font-black tabular-nums">{label}</p>
+            <p className="text-[11px] opacity-80">Total</p>
+            <p className="mt-0.5 text-lg tabular-nums tracking-[-0.02em]">{label}</p>
           </div>
         </div>
       </div>
@@ -480,56 +480,124 @@ function ThreeDotLoader({ className = "" }) {
   );
 }
 
+// Grey pill field and soft textarea, as in the kit's fieldClass.
+function pillInputClass(darkMode) {
+  return darkMode
+    ? "h-11 w-full rounded-full border border-transparent bg-white/[0.06] px-4 text-sm text-white outline-none transition placeholder:text-white/35 hover:bg-white/[0.09] focus:ring-[3px] focus:ring-white/10"
+    : "h-11 w-full rounded-full border border-transparent bg-[#f4f4f2] px-4 text-sm text-[#141414] outline-none transition placeholder:text-[#a3a3a0] hover:bg-[#efefec] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]";
+}
+
+function areaInputClass(darkMode) {
+  return darkMode
+    ? "w-full rounded-[16px] border border-transparent bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:ring-[3px] focus:ring-white/10"
+    : "w-full rounded-[16px] border border-transparent bg-[#f4f4f2] px-4 py-3 text-sm text-[#141414] outline-none transition placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]";
+}
+
+// Header row for the drawers and modals this page builds: icon tile, two lines, round close.
+function DrawerHeader({ darkMode, icon, tone = "mint", title, subtitle, onClose, closeLabel = "Close", children }) {
+  return (
+    <div className={cx("flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4 sm:px-6", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+      <div className="flex min-w-0 items-center gap-3">
+        <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+        <div className="min-w-0">
+          <p className="truncate text-[16px] tracking-[-0.01em]">{title}</p>
+          {subtitle && <p className={cx("truncate text-[12.5px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{subtitle}</p>}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {children}
+        {onClose && (
+          <button type="button" onClick={onClose} aria-label={closeLabel} className={cx("grid h-9 w-9 place-items-center rounded-full transition", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// A small label / value tile for drawer side panels.
+function SideFact({ darkMode, label, children, tone }) {
+  const t = tone ? toneOf(tone) : null;
+  return (
+    <div className="rounded-[16px] p-4" style={t ? { backgroundColor: darkMode ? t[2] : t[0] } : undefined}>
+      <p className={cx("text-[12px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{label}</p>
+      <div className="mt-1 text-[14px]">{children}</div>
+    </div>
+  );
+}
+
 function taskStatusMeta(status, darkMode = false) {
   const value = String(status || "").toLowerCase();
   if (value.includes("complete")) return {
     Icon: CheckCircle2,
-    selected: darkMode ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100" : "border-emerald-200 bg-emerald-50 text-emerald-700",
-    option: darkMode ? "text-emerald-100 hover:bg-emerald-400/10" : "text-emerald-700 hover:bg-emerald-50",
-    active: "bg-emerald-500 text-white",
-    dot: "bg-emerald-500",
+    tone: "mint",
+    selected: darkMode ? "border-transparent bg-emerald-400/[0.12] text-[#a7e8bf]" : "border-transparent bg-[#e4f1e6] text-[#2f7a4f]",
+    option: darkMode ? "text-[#a7e8bf] hover:bg-emerald-400/10" : "text-[#2f7a4f] hover:bg-[#e4f1e6]",
+    active: "bg-[#2f7a4f] text-white",
+    dot: "bg-[#2f7a4f]",
+    fg: darkMode ? "#a7e8bf" : "#2f7a4f",
+    bg: darkMode ? "rgba(52, 211, 153, 0.12)" : "#e4f1e6",
   };
   if (value.includes("halt")) return {
     Icon: PauseCircle,
-    selected: darkMode ? "border-amber-400/20 bg-amber-400/10 text-amber-100" : "border-amber-200 bg-amber-50 text-amber-700",
-    option: darkMode ? "text-amber-100 hover:bg-amber-400/10" : "text-amber-700 hover:bg-amber-50",
-    active: "bg-amber-500 text-white",
-    dot: "bg-amber-500",
+    tone: "amber",
+    selected: darkMode ? "border-transparent bg-amber-400/[0.13] text-[#f5d27a]" : "border-transparent bg-[#fbf0d4] text-[#8a6200]",
+    option: darkMode ? "text-[#f5d27a] hover:bg-amber-400/10" : "text-[#8a6200] hover:bg-[#fbf0d4]",
+    active: "bg-[#8a6200] text-white",
+    dot: "bg-[#c99a1e]",
+    fg: darkMode ? "#f5d27a" : "#8a6200",
+    bg: darkMode ? "rgba(251, 191, 36, 0.13)" : "#fbf0d4",
   };
   if (value.includes("suspend")) return {
     Icon: AlertTriangle,
-    selected: darkMode ? "border-orange-400/20 bg-orange-400/10 text-orange-100" : "border-orange-200 bg-orange-50 text-orange-700",
-    option: darkMode ? "text-orange-100 hover:bg-orange-400/10" : "text-orange-700 hover:bg-orange-50",
-    active: "bg-orange-500 text-white",
-    dot: "bg-orange-500",
+    tone: "peach",
+    selected: darkMode ? "border-transparent bg-orange-400/[0.13] text-[#f9bf9b]" : "border-transparent bg-[#fbe5dc] text-[#c2562b]",
+    option: darkMode ? "text-[#f9bf9b] hover:bg-orange-400/10" : "text-[#c2562b] hover:bg-[#fbe5dc]",
+    active: "bg-[#c2562b] text-white",
+    dot: "bg-[#c2562b]",
+    fg: darkMode ? "#f9bf9b" : "#c2562b",
+    bg: darkMode ? "rgba(251, 146, 60, 0.13)" : "#fbe5dc",
   };
   if (value.includes("cancel")) return {
     Icon: Ban,
-    selected: darkMode ? "border-red-400/20 bg-red-400/10 text-red-100" : "border-red-200 bg-red-50 text-red-700",
-    option: darkMode ? "text-red-100 hover:bg-red-400/10" : "text-red-700 hover:bg-red-50",
-    active: "bg-red-500 text-white",
-    dot: "bg-red-500",
+    tone: "rose",
+    selected: darkMode ? "border-transparent bg-rose-400/[0.13] text-[#f7aab5]" : "border-transparent bg-[#fbe4e6] text-[#c0394b]",
+    option: darkMode ? "text-[#f7aab5] hover:bg-rose-400/10" : "text-[#c0394b] hover:bg-[#fbe4e6]",
+    active: "bg-[#c0394b] text-white",
+    dot: "bg-[#c0394b]",
+    fg: darkMode ? "#f7aab5" : "#c0394b",
+    bg: darkMode ? "rgba(251, 113, 133, 0.13)" : "#fbe4e6",
   };
   return {
     Icon: Clock3,
-    selected: darkMode ? "border-sky-400/20 bg-sky-400/10 text-sky-100" : "border-sky-200 bg-sky-50 text-sky-700",
-    option: darkMode ? "text-sky-100 hover:bg-sky-400/10" : "text-sky-700 hover:bg-sky-50",
-    active: "bg-[#171714] text-white",
-    dot: "bg-sky-500",
+    tone: "sky",
+    selected: darkMode ? "border-transparent bg-sky-400/[0.13] text-[#a9cbf7]" : "border-transparent bg-[#e3eefb] text-[#2f6fc0]",
+    option: darkMode ? "text-[#a9cbf7] hover:bg-sky-400/10" : "text-[#2f6fc0] hover:bg-[#e3eefb]",
+    active: "bg-[#141414] text-white",
+    dot: "bg-[#2f6fc0]",
+    fg: darkMode ? "#a9cbf7" : "#2f6fc0",
+    bg: darkMode ? "rgba(56, 189, 248, 0.13)" : "#e3eefb",
   };
 }
 
 // Site, category and status pickers: "Most used" first, then the rest, then "Other".
 function SearchableSelect({ darkMode, value, onChange, options = [], popularOptions = [], placeholder, allowOther = true, variant = "default" }) {
   const popularKeys = new Set(popularOptions.map((option) => String(option.value || option).toLowerCase()));
-  const iconFor = (option) => (variant === "status" ? taskStatusMeta(option, darkMode)?.Icon : undefined);
+  // Task status options are colour-coded: green done, blue in progress, amber halt, orange suspended, red cancelled.
+  const statusLook = (option) => {
+    if (variant !== "status") return {};
+    const meta = taskStatusMeta(option, darkMode);
+    return { icon: <meta.Icon className="h-4 w-4 shrink-0" style={{ color: meta.fg }} />, color: meta.fg };
+  };
   const popular = options.filter((option) => popularKeys.has(option.toLowerCase()));
   const regular = options.filter((option) => !popularKeys.has(option.toLowerCase()));
   const items = [
-    ...popular.map((option) => ({ value: option, label: option, icon: iconFor(option), group: "Most used", badge: "Most used" })),
-    ...regular.map((option) => ({ value: option, label: option, icon: iconFor(option), group: popular.length ? "All" : undefined })),
+    ...popular.map((option) => ({ value: option, label: option, ...statusLook(option), group: "Most used", badge: "Most used" })),
+    ...regular.map((option) => ({ value: option, label: option, ...statusLook(option), group: popular.length ? "All" : undefined })),
     ...(allowOther ? [{ value: "__other", label: "Other", group: " " }] : []),
   ];
+  const chosenStatus = variant === "status" && value && value !== "__other" ? taskStatusMeta(value, darkMode) : null;
   return (
     <SelectMenu
       darkMode={darkMode}
@@ -540,6 +608,7 @@ function SearchableSelect({ darkMode, value, onChange, options = [], popularOpti
       searchable
       groupLabels
       size="lg"
+      triggerStyle={chosenStatus ? { backgroundColor: chosenStatus.bg, color: chosenStatus.fg } : undefined}
     />
   );
 }
@@ -567,7 +636,7 @@ function MultiChoiceSelect({ darkMode, values = [], onChange, options = [], popu
 
 function taskNumberTone(index, darkMode = false) {
   void index;
-  return darkMode ? "bg-[#89ed3f] text-black shadow-[#89ed3f]/15" : "bg-[#89ed3f] text-black shadow-[#89ed3f]/20";
+  return darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white";
 }
 
 function taskRowValue(row, field) {
@@ -624,6 +693,7 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
   const [expandedIndex, setExpandedIndex] = useState(0);
   const [refiningIndex, setRefiningIndex] = useState(null);
   const [teamPickerIndex, setTeamPickerIndex] = useState(null);
+  const taskListRef = useRef(null);
   const activeExpandedIndex = Math.min(expandedIndex, Math.max(0, rows.length - 1));
   const teamPickerRow = teamPickerIndex !== null ? rows[teamPickerIndex] : null;
   const selectedTeamUsers = new Set(teamPickerRow?.collaboratorUserIds || []);
@@ -657,6 +727,8 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
   function addRow() {
     setExpandedIndex(rows.length);
     onRowsChange([...rows, showStatus ? createEmptyTaskRow() : createEmptyWaitingRow()]);
+    // Scroll the new task to the top of the view, so it can be filled straight away on a phone.
+    window.setTimeout(() => taskListRef.current?.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   }
   function duplicateRow(index) {
     const source = rows[index] || {};
@@ -696,8 +768,11 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
     onRowsChange(nextRows, { action: "remove", removedRow, index });
   }
 
-  const summaryPill = darkMode ? "bg-white/[0.055] text-white/80" : "bg-white text-black/70";
-  const summaryMuted = darkMode ? "text-white/40" : "text-black/40";
+  const summaryPill = darkMode ? "bg-white/[0.05] text-white/85" : "bg-white text-[#141414]";
+  const summaryMuted = darkMode ? "text-white/40" : "text-[#9a9a98]";
+  const fieldLabel = `mb-2 text-[12px] ${darkMode ? "text-white/50" : "text-[#8a8a8a]"}`;
+  const rowIconButton = `grid h-10 w-10 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f4f4f2] text-[#5f5f5c] hover:bg-[#ebebe8]"}`;
+  const rowDangerButton = `grid h-10 w-10 place-items-center rounded-full transition ${darkMode ? "bg-rose-400/[0.12] text-[#f7aab5] hover:bg-rose-400/20" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"}`;
   const expandedGridClass = showStatus && showInvolvement
     ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
     : showStatus || showInvolvement
@@ -707,18 +782,18 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
   return (
     <div className="md:col-span-2">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <label className={`block text-xs font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/60" : "text-black/55"}`}>{title}</label>
+        <label className={`block text-[15px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{title}</label>
         {rows.some((row) => row.collaborationTask && row.collaborationSourceName) && (
           <div className="flex flex-wrap justify-end gap-2">
             {uniqueClean(rows.filter((row) => row.collaborationTask && row.collaborationSourceName).map((row) => row.collaborationSourceName)).map((sourceName) => (
-              <span key={sourceName} className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.08em] shadow-sm ${darkMode ? "bg-[#89ed3f] text-black shadow-[#89ed3f]/15" : "bg-[#89ed3f] text-black shadow-[#89ed3f]/20"}`}>
+              <Chip key={sourceName} tone="lime" darkMode={darkMode} icon={Users}>
                 Collaboration from {sourceName}
-              </span>
+              </Chip>
             ))}
           </div>
         )}
       </div>
-      <div className="space-y-3">
+      <div ref={taskListRef} className="space-y-3">
         {rows.map((row, index) => {
           const collapsed = rows.length > 1 && activeExpandedIndex !== index;
           return (
@@ -728,7 +803,7 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
               tabIndex={collapsed ? 0 : undefined}
               onClick={() => { if (collapsed) setExpandedIndex(index); }}
               onKeyDown={(event) => { if (collapsed && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setExpandedIndex(index); } }}
-              className={`relative rounded-[22px] p-3 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? "cursor-pointer hover:-translate-y-0.5" : ""} ${darkMode ? "border-white/10 bg-[#1c1f24]" : "border-black/10 bg-[#f8f7f3]"}`}
+              className={`relative rounded-[20px] border p-3 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? darkMode ? "cursor-pointer border-white/10 bg-white/[0.03] hover:bg-white/[0.05]" : "cursor-pointer border-transparent bg-[#f7f7f5] hover:bg-[#f2f2ef]" : darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
             >
               {collapsed ? (
                 <div className={`grid items-center gap-3 ${expandedGridClass} animate-[mrn-drawer-in_260ms_cubic-bezier(0.22,1,0.36,1)]`}>
@@ -741,44 +816,44 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                     const statusMeta = label === "Task status" && value ? taskStatusMeta(value, darkMode) : null;
                     const StatusIcon = statusMeta?.Icon;
                     return (
-                    <div key={label} className={`min-w-0 rounded-2xl  px-4 py-3 ${statusMeta ? statusMeta.selected : `border-transparent ${summaryPill}`}`}>
-                      <p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${summaryMuted}`}>{label}</p>
-                      <p className="mt-1 flex items-center gap-2 truncate text-sm font-semibold">
+                    <div key={label} className={`min-w-0 rounded-[14px] px-4 py-2.5 ${statusMeta ? statusMeta.selected : summaryPill}`}>
+                      <p className={`text-[11.5px] ${statusMeta ? "opacity-70" : summaryMuted}`}>{label}</p>
+                      <p className="mt-0.5 flex items-center gap-2 truncate text-[13.5px]">
                         {StatusIcon ? <StatusIcon className="h-4 w-4 shrink-0" /> : null}
                         <span className="truncate">{value || "Not selected"}</span>
                       </p>
                     </div>
                     );
                   })}
-                  <div className="flex items-center justify-end gap-3">
-                    <span className={`inline-flex h-12 min-w-11 items-center justify-center rounded-2xl px-4 text-sm font-black shadow-lg ${taskNumberTone(index, darkMode)}`}>
+                  <div className="flex items-center justify-end gap-2">
+                    <span className={`inline-flex h-10 min-w-11 items-center justify-center rounded-full px-4 text-[13px] ${taskNumberTone(index, darkMode)}`}>
                       Task {index + 1}
                     </span>
-                    <button type="button" onClick={(event) => { event.stopPropagation(); duplicateRow(index); }} className={`grid h-12 w-12 place-items-center rounded-xl transition ${darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/55 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} title="Duplicate task"><Copy className="h-4 w-4" /></button>
-                    <button type="button" onClick={(event) => { event.stopPropagation(); removeRow(index); }} className={`grid h-12 w-12 place-items-center rounded-xl ${darkMode ? "bg-red-500/10 text-red-300 hover:bg-red-500/15" : "bg-red-50 text-red-600 hover:bg-red-100"}`}><Trash2 className="h-4 w-4" /></button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); duplicateRow(index); }} className={rowIconButton} title="Duplicate task"><Copy className="h-4 w-4" /></button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); removeRow(index); }} className={rowDangerButton}><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
               ) : (
                 <div className={`grid gap-3 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${expandedGridClass}`}>
                   <div className="order-1">
-                    <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Site</p>
+                    <p className={fieldLabel}>Site</p>
                     <SearchableSelect darkMode={darkMode} value={row.site} onChange={(value) => updateRow(index, { site: value })} options={sites} popularOptions={popularSites} placeholder="Choose site" allowOther />
                     {row.site === "__other" && (
-                      <input required value={row.siteOther || ""} onChange={(event) => updateRow(index, { siteOther: event.target.value })} placeholder="Enter site" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                      <input required value={row.siteOther || ""} onChange={(event) => updateRow(index, { siteOther: event.target.value })} placeholder="Enter site" className={`mt-2 ${pillInputClass(darkMode)}`} />
                     )}
                     {required && index === 0 && !row.site && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
                   </div>
                   {showStatus && (
                     <div className="order-4">
-                      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Task status</p>
+                      <p className={fieldLabel}>Task status</p>
                       <SearchableSelect darkMode={darkMode} value={row.status} onChange={(value) => updateRow(index, { status: value })} options={statuses.filter((status) => status !== "Other")} placeholder="Choose task status" allowOther variant="status" />
-                      {row.status === "__other" && <input required={required} value={row.statusOther || ""} onChange={(event) => updateRow(index, { statusOther: event.target.value })} placeholder="Enter task status" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />}
+                      {row.status === "__other" && <input required={required} value={row.statusOther || ""} onChange={(event) => updateRow(index, { statusOther: event.target.value })} placeholder="Enter task status" className={`mt-2 ${pillInputClass(darkMode)}`} />}
                       {required && index === 0 && !row.status && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
                     </div>
                   )}
                   {showInvolvement && (
                     <div className="order-3">
-                      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Involvement</p>
+                      <p className={fieldLabel}>Involvement</p>
                       <MultiChoiceSelect darkMode={darkMode} values={involvementValuesFromRow(row)} onChange={(values) => {
                         const hadTeam = hasTeamInvolvement(row);
                         const hasTeam = values.some((value) => value.toLowerCase() === "team");
@@ -794,28 +869,34 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                           value={row.involvementOther || ""}
                           onChange={(event) => updateRow(index, { involvementOther: event.target.value })}
                           placeholder="Enter involvement"
-                          className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none transition focus:ring-2 ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35 focus:ring-[#d8f36a]/20" : "border-black/10 bg-white text-black placeholder:text-black/35 focus:ring-black/10"}`}
+                          className={`mt-2 ${pillInputClass(darkMode)}`}
                         />
                       )}
                       {required && index === 0 && !involvementText(row) && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
                     </div>
                   )}
                   <div className="order-2">
-                    <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Category</p>
+                    <p className={fieldLabel}>Category</p>
                     <SearchableSelect darkMode={darkMode} value={row.category} onChange={(value) => updateRow(index, { category: value })} options={categories.filter((category) => category !== "Other")} popularOptions={popularCategories} placeholder="Choose category" allowOther />
                     {row.category === "__other" && (
-                      <input required={required && index === 0} value={row.categoryOther || ""} onChange={(event) => updateRow(index, { categoryOther: event.target.value })} placeholder="Enter category" className={`mt-2 h-12 w-full rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                      <input required={required && index === 0} value={row.categoryOther || ""} onChange={(event) => updateRow(index, { categoryOther: event.target.value })} placeholder="Enter category" className={`mt-2 ${pillInputClass(darkMode)}`} />
                     )}
                     {required && index === 0 && !row.category && <input tabIndex={-1} autoComplete="off" className="pointer-events-none absolute h-px w-px opacity-0" required value="" onChange={() => {}} />}
                   </div>
                   <div className="order-6 lg:col-span-full">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Description</p>
+                      <p className={`text-[12px] ${darkMode ? "text-white/50" : "text-[#8a8a8a]"}`}>Description</p>
+                      {/* Full colour even before there is text to refine: violet tint while waiting, a bright gradient once it can run. */}
                       <button
                         type="button"
                         disabled={refiningIndex !== null || !row.description.trim()}
                         onClick={() => refineRowDescription(index)}
-                        className={`ml-auto inline-flex h-9 min-w-[132px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-xs font-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black hover:bg-[#cdea5e]" : "bg-[#e8f6ee] text-[#15734d] hover:bg-[#dcfacb]"}`}
+                        title={row.description.trim() ? "Rewrite this description clearly" : "Type a description first, then refine it"}
+                        className={`ml-auto inline-flex h-8 min-w-[132px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[12.5px] transition active:scale-[0.98] disabled:cursor-not-allowed ${
+                          row.description.trim() || refiningIndex === index
+                            ? "bg-[linear-gradient(135deg,#7c5cff_0%,#a855f7_100%)] text-white shadow-[0_6px_16px_rgba(124,92,255,0.32)] hover:brightness-110"
+                            : darkMode ? "bg-[#7c5cff]/25 text-[#d9ceff]" : "bg-[#e6defe] text-[#5b3fd6]"
+                        }`}
                       >
                         {refiningIndex === index ? (
                           <>
@@ -831,29 +912,29 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                       </button>
                     </div>
                     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-                      <textarea required={required && index === 0} value={row.description} onChange={(event) => updateRow(index, { description: event.target.value })} rows={2} placeholder="Describe this task..." className={`min-h-20 w-full rounded-2xl border px-4 py-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
+                      <textarea required={required && index === 0} value={row.description} onChange={(event) => updateRow(index, { description: event.target.value })} rows={2} placeholder="Describe this task..." className={`min-h-20 ${areaInputClass(darkMode)}`} />
                       <TaskDurationField row={row} onChange={(patch) => updateRow(index, patch)} darkMode={darkMode} />
                     </div>
                   </div>
                   <div className="order-5 flex flex-col lg:self-start">
-                    <p className="mb-2 select-none text-[10px] font-semibold uppercase tracking-[0.12em] opacity-0">Actions</p>
-                    <div className="flex h-12 items-center justify-end gap-3">
+                    <p className="mb-2 hidden select-none text-[12px] opacity-0 lg:block">Actions</p>
+                    <div className="flex h-12 items-center justify-end gap-2">
                       {showStatus && (
                         <button
                           type="button"
                           onClick={() => updateRow(index, { recurring: !row.recurring })}
-                          className={`inline-flex h-12 items-center gap-2 rounded-2xl px-3 text-xs font-bold transition-all duration-200 ${row.recurring ? darkMode ? "bg-emerald-300 text-black " : "bg-emerald-100 text-emerald-800 " : darkMode ? "bg-white/10 text-white/60 hover:bg-white/15" : "bg-white text-black/55 hover:bg-[#eafbdc]"}`}
+                          className={`inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-[12.5px] transition-all duration-200 ${row.recurring ? darkMode ? "bg-emerald-400/[0.14] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]" : darkMode ? "bg-white/[0.06] text-white/60 hover:bg-white/10" : "bg-[#f4f4f2] text-[#5f5f5c] hover:bg-[#ebebe8]"}`}
                           title="Repeat this task tomorrow until turned off"
                         >
                           <Repeat2 className={`h-4 w-4 ${row.recurring ? "animate-pulse" : ""}`} />
                           Recurring
                         </button>
                       )}
-                      <span className={`inline-flex h-12 min-w-11 items-center justify-center rounded-2xl px-4 text-sm font-black shadow-lg ${taskNumberTone(index, darkMode)}`}>
+                      <span className={`inline-flex h-10 min-w-11 items-center justify-center rounded-full px-4 text-[13px] ${taskNumberTone(index, darkMode)}`}>
                         Task {index + 1}
                       </span>
-                      <button type="button" onClick={() => duplicateRow(index)} className={`grid h-12 w-12 place-items-center rounded-xl transition ${darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/55 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} title="Duplicate task"><Copy className="h-4 w-4" /></button>
-                      <button type="button" onClick={() => removeRow(index)} className={`grid h-12 w-12 place-items-center rounded-xl ${darkMode ? "bg-red-500/10 text-red-300 hover:bg-red-500/15" : "bg-red-50 text-red-600 hover:bg-red-100"}`}><Trash2 className="h-4 w-4" /></button>
+                      <button type="button" onClick={() => duplicateRow(index)} className={rowIconButton} title="Duplicate task"><Copy className="h-4 w-4" /></button>
+                      <button type="button" onClick={() => removeRow(index)} className={rowDangerButton}><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
                 </div>
@@ -863,20 +944,12 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
         })}
       </div>
       <div className="mt-3 flex justify-center">
-        <button type="button" onClick={addRow} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold ${darkMode ? "bg-[#89ed3f] text-black hover:bg-[#7dde35]" : "bg-[#171714] text-white"}`}><Plus className="h-4 w-4" /> Add task</button>
+        <Button darkMode={darkMode} variant={darkMode ? "accent" : "primary"} icon={Plus} onClick={addRow}>Add task</Button>
       </div>
       {teamPickerIndex !== null && teamPickerRow && (
-        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/35 p-4" onClick={() => setTeamPickerIndex(null)}>
-          <div onClick={(event) => event.stopPropagation()} className={`flex max-h-[82vh] w-full max-w-xl flex-col overflow-hidden rounded-[26px] border shadow-2xl ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
-            <div className={`flex items-center justify-between gap-3 border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div>
-                <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Optional</p>
-                <h3 className="text-xl font-black">Choose team users</h3>
-              </div>
-              <button type="button" onClick={() => setTeamPickerIndex(null)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/[0.04] hover:bg-black/[0.08]"}`}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+        <div className="ui-backdrop fixed inset-0 z-[100] grid place-items-center bg-black/35 p-4" onClick={() => setTeamPickerIndex(null)}>
+          <div onClick={(event) => event.stopPropagation()} style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop flex max-h-[82vh] w-full max-w-xl flex-col overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
+            <DrawerHeader darkMode={darkMode} icon={Users} tone="lavender" title="Choose team users" subtitle="Optional" onClose={() => setTeamPickerIndex(null)} />
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <div className="grid gap-2 sm:grid-cols-2">
                 {collaborationUsers.map((teamUser) => (
@@ -884,23 +957,23 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
                     key={teamUser.userId}
                     type="button"
                     onClick={() => toggleTeamUser(teamUser.userId)}
-                    className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${selectedTeamUsers.has(teamUser.userId) ? darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#145b39]/10 text-[#145b39]" : darkMode ? "bg-white/[0.035] hover:bg-white/10" : "bg-black/[0.025] hover:bg-black/[0.05]"}`}
+                    className={`flex items-center gap-3 rounded-[14px] px-3 py-3 text-left transition ${selectedTeamUsers.has(teamUser.userId) ? darkMode ? "bg-[#cff07a]/15 text-white" : "bg-[#eef8cc] text-[#141414]" : darkMode ? "bg-white/[0.035] hover:bg-white/[0.07]" : "bg-[#f7f7f5] hover:bg-[#f0f0ee]"}`}
                   >
-                    <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg border ${selectedTeamUsers.has(teamUser.userId) ? "border-[#145b39] bg-[#145b39] text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
-                      {selectedTeamUsers.has(teamUser.userId) && <Check className="h-4 w-4" />}
+                    <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border ${selectedTeamUsers.has(teamUser.userId) ? darkMode ? "border-[#cff07a] bg-[#cff07a] text-[#141414]" : "border-[#141414] bg-[#141414] text-white" : darkMode ? "border-white/20" : "border-[#cfcfcb] bg-white"}`}>
+                      {selectedTeamUsers.has(teamUser.userId) && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-bold">{teamUser.employeeName}</span>
-                      <span className="block truncate text-xs opacity-55">{teamUser.department || "No department"}</span>
+                      <span className="block truncate text-[13.5px]">{teamUser.employeeName}</span>
+                      <span className={`block truncate text-xs ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{teamUser.department || "No department"}</span>
                     </span>
                   </button>
                 ))}
-                {!collaborationUsers.length && <p className="col-span-full px-3 py-8 text-center text-sm opacity-55">No users available.</p>}
+                {!collaborationUsers.length && <p className={`col-span-full px-3 py-8 text-center text-sm ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>No users available.</p>}
               </div>
             </div>
-            <div className={`flex items-center justify-between gap-3 border-t p-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <button type="button" onClick={() => setTeamPickerIndex(null)} className={`h-11 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/[0.05] hover:bg-black/[0.08]"}`}>Skip</button>
-              <button type="button" onClick={() => setTeamPickerIndex(null)} className="h-11 rounded-full bg-[#89ed3f] px-6 text-sm font-black text-black hover:bg-[#7dde35]">Done</button>
+            <div className={`flex items-center justify-between gap-3 border-t px-5 py-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+              <Button darkMode={darkMode} variant="secondary" onClick={() => setTeamPickerIndex(null)}>Skip</Button>
+              <Button darkMode={darkMode} variant={darkMode ? "accent" : "primary"} onClick={() => setTeamPickerIndex(null)}>Done</Button>
             </div>
           </div>
         </div>
@@ -911,58 +984,63 @@ function TaskRowsEditor({ title, rows, categories, sites = [], statuses = [], in
 
 function TaskItemsDisplay({ title, items = [], fallback, darkMode, showStatus = false, showInvolvement = false }) {
   const visibleItems = Array.isArray(items) ? items.filter((item) => item.category || item.description) : [];
+  const label = `text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`;
   return (
-    <div className={`rounded-[22px] p-3 sm:p-5 md:col-span-2 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
-      <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>{title}</p>
+    <div className={`rounded-[20px] border p-4 sm:p-5 md:col-span-2 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+      <div className="flex items-center gap-2.5">
+        <IconTile icon={showStatus ? ClipboardList : Clock3} tone={showStatus ? "mint" : "amber"} darkMode={darkMode} size="xs" />
+        <p className="text-[15px] tracking-[-0.01em]">{title}</p>
+        {visibleItems.length > 0 && <span className={`text-[12.5px] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{visibleItems.length}</span>}
+      </div>
       {visibleItems.length ? (
         <div className="mt-3">
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-2 md:hidden">
             {visibleItems.map((item, index) => (
-              <article key={`mobile-${item.category}-${index}`} className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
+              <article key={`mobile-${item.category}-${index}`} className={`rounded-[14px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Site</p><p className="mt-1 font-semibold break-words">{item.site || "-"}</p></div>
-                  <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Category</p><p className="mt-1 font-semibold break-words">{item.category || "-"}</p></div>
-                  {showInvolvement && <div><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Involvement</p><p className="mt-1 font-semibold break-words">{item.involvement || "-"}</p></div>}
-                  {showStatus && <div className="col-span-2"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Status</p><p className="mt-1 font-semibold">{item.status || "-"}</p></div>}
-                  {taskTimeLabel(item) && <div className="col-span-2"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Duration</p><p className="mt-1 font-semibold">{taskTimeLabel(item)}</p></div>}
-                  <div className="col-span-2 border-t border-black/[0.06] pt-3 dark:border-white/10"><p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/40" : "text-black/40"}`}>Description</p><p className="mt-2 whitespace-pre-wrap break-words leading-6">{item.description || "-"}</p></div>
+                  <div><p className={label}>Site</p><p className="mt-1 break-words">{item.site || "-"}</p></div>
+                  <div><p className={label}>Category</p><p className="mt-1 break-words">{item.category || "-"}</p></div>
+                  {showInvolvement && <div><p className={label}>Involvement</p><p className="mt-1 break-words">{item.involvement || "-"}</p></div>}
+                  {showStatus && <div className="col-span-2"><p className={label}>Status</p><p className="mt-1">{item.status ? <Chip tone={taskStatusMeta(item.status).tone} darkMode={darkMode}>{item.status}</Chip> : "-"}</p></div>}
+                  {taskTimeLabel(item) && <div className="col-span-2"><p className={label}>Duration</p><p className="mt-1 tabular-nums">{taskTimeLabel(item)}</p></div>}
+                  <div className={`col-span-2 border-t pt-3 ${darkMode ? "border-white/10" : "border-[#ececea]"}`}><p className={label}>Description</p><p className="mt-2 whitespace-pre-wrap break-words leading-6">{item.description || "-"}</p></div>
                 </div>
               </article>
             ))}
           </div>
-          <table className="hidden w-full table-fixed border-separate border-spacing-y-2 text-left text-sm md:table">
-            <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
-              <tr>
-                <th className="w-16 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em]">Sr No:</th>
-                <th className="w-40 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Site</th>
-                <th className="w-48 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Task Category</th>
-                {showStatus && <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Status</th>}
-                {showInvolvement && <th className="w-36 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Involvement</th>}
-                <th className="w-32 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Duration</th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em]">Description</th>
+          <table className="hidden w-full table-fixed text-left text-sm md:table">
+            <thead className={darkMode ? "text-white/45" : "text-[#8a8a8a]"}>
+              <tr className={`border-b ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+                <th className="w-14 px-3 py-2.5 text-[12px] font-normal">No.</th>
+                <th className="w-40 px-3 py-2.5 text-[12px] font-normal">Site</th>
+                <th className="w-48 px-3 py-2.5 text-[12px] font-normal">Task category</th>
+                {showStatus && <th className="w-36 px-3 py-2.5 text-[12px] font-normal">Status</th>}
+                {showInvolvement && <th className="w-36 px-3 py-2.5 text-[12px] font-normal">Involvement</th>}
+                <th className="w-28 px-3 py-2.5 text-[12px] font-normal">Duration</th>
+                <th className="px-3 py-2.5 text-[12px] font-normal">Description</th>
               </tr>
             </thead>
             <tbody>
               {visibleItems.map((item, index) => (
-                <tr key={`${item.category}-${index}`} className={darkMode ? "bg-white/[0.045]" : "bg-white"}>
-                  <td className="rounded-l-2xl px-4 py-3 font-semibold">{index + 1}</td>
-                  <td className="px-4 py-3 font-medium">{item.site || "-"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex max-w-[160px] whitespace-normal rounded-full px-3 py-1 text-xs font-semibold leading-4 ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#e8f5eb] text-[#145b39]"}`}>
+                <tr key={`${item.category}-${index}`} className={`border-b align-top last:border-b-0 ${darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]"}`}>
+                  <td className={`px-3 py-3 tabular-nums ${darkMode ? "text-white/45" : "text-[#9a9a98]"}`}>{String(index + 1).padStart(2, "0")}</td>
+                  <td className="px-3 py-3">{item.site || "-"}</td>
+                  <td className="px-3 py-3">
+                    <span className={`inline-flex max-w-[170px] whitespace-normal rounded-full px-3 py-1 text-[12px] leading-4 ${darkMode ? "bg-white/[0.07] text-white/80" : "bg-[#f4f4f2] text-[#3d3d3b]"}`}>
                       {item.category || "-"}
                     </span>
                   </td>
-                  {showStatus && <td className="px-4 py-3">{item.status || "-"}</td>}
-                  {showInvolvement && <td className="px-4 py-3">{item.involvement || "-"}</td>}
-                  <td className="px-4 py-3 font-semibold">{taskTimeLabel(item) || "-"}</td>
-                  <td className="whitespace-pre-wrap break-words rounded-r-2xl px-5 py-3 leading-6">{item.description || "-"}</td>
+                  {showStatus && <td className="px-3 py-3">{item.status ? <Chip tone={taskStatusMeta(item.status).tone} darkMode={darkMode} className="h-6 px-2.5 text-[12px]">{item.status}</Chip> : "-"}</td>}
+                  {showInvolvement && <td className="px-3 py-3">{item.involvement || "-"}</td>}
+                  <td className="px-3 py-3 tabular-nums">{taskTimeLabel(item) || "-"}</td>
+                  <td className={`whitespace-pre-wrap break-words px-3 py-3 leading-6 ${darkMode ? "text-white/80" : "text-[#3d3d3b]"}`}>{item.description || "-"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       ) : (
-        <p className="mt-3 whitespace-pre-wrap text-base leading-7">{fallback || "-"}</p>
+        <p className={`mt-3 whitespace-pre-wrap text-[14px] leading-7 ${darkMode ? "text-white/70" : "text-[#3d3d3b]"}`}>{fallback || "-"}</p>
       )}
     </div>
   );
@@ -976,34 +1054,35 @@ function reportStatusSummary(report) {
   return statuses[0] || report?.taskStatus || "-";
 }
 
-function reportStatusClass(status, darkMode) {
+// Pastel chip tone for a report's overall status.
+function reportStatusTone(status) {
   const value = String(status || "").toLowerCase();
-  if (value === "mixed") return darkMode ? "bg-sky-400/15 text-sky-200" : "bg-sky-50 text-sky-700";
-  if (value.includes("complete")) return "bg-emerald-50 text-emerald-700";
-  if (value.includes("halt") || value.includes("suspend") || value.includes("cancel")) return "bg-red-50 text-red-700";
-  if (!status || status === "-") return darkMode ? "bg-white/10 text-white/55" : "bg-slate-100 text-slate-500";
-  return darkMode ? "bg-amber-500/10 text-amber-200" : "bg-amber-50 text-amber-700";
+  if (value === "mixed") return "sky";
+  if (value.includes("complete")) return "mint";
+  if (value.includes("halt") || value.includes("suspend") || value.includes("cancel")) return "rose";
+  if (!status || status === "-") return "neutral";
+  return "amber";
 }
 
 function EmployeeReportTable({ title, headers, rows, darkMode }) {
   return (
-    <section className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}>
-      <div className="flex items-center justify-between gap-3 p-4">
-        <h4 className="text-lg font-semibold">{title}</h4>
-        <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/10 text-white/55" : "bg-black/[0.04] text-black/55"}`}>{rows.length} rows</span>
+    <section className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+      <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
+        <h4 className="text-[15px] tracking-[-0.01em]">{title}</h4>
+        <Chip darkMode={darkMode} className="h-6 px-2.5 text-[12px]">{rows.length} rows</Chip>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto px-2 pb-2">
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className={darkMode ? "bg-white/[0.05] text-white/50" : "bg-black/[0.035] text-black/50"}>
-            <tr>{headers.map((header) => <th key={header} className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em]">{header}</th>)}</tr>
+          <thead className={darkMode ? "text-white/45" : "text-[#8a8a8a]"}>
+            <tr>{headers.map((header) => <th key={header} className="px-3 py-2.5 text-[12px] font-normal">{header}</th>)}</tr>
           </thead>
           <tbody>
             {rows.map((row, index) => (
-              <tr key={index} className={`border-t ${darkMode ? "border-white/10" : "border-black/5"}`}>
-                {row.map((cell, cellIndex) => <td key={cellIndex} className="px-4 py-3">{cell}</td>)}
+              <tr key={index} className={`border-t ${darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]"}`}>
+                {row.map((cell, cellIndex) => <td key={cellIndex} className="px-3 py-3 leading-6">{cell}</td>)}
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={headers.length} className="px-4 py-8 text-center opacity-55">No data for this range.</td></tr>}
+            {!rows.length && <tr><td colSpan={headers.length} className={`px-3 py-8 text-center ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>No data for this range.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1098,38 +1177,35 @@ function SubmissionCelebrationModal({ darkMode, celebration, onClose, canClockOu
   const saving = celebration.status === "saving";
   const firstName = String(celebration.name || "there").trim().split(/\s+/)[0];
   return (
-    <div className="fixed inset-0 z-[90] grid place-items-center bg-[#10231c]/55 p-4 animate-[mrn-backdrop-in_280ms_ease-out]">
-      <section className={`relative w-full max-w-md overflow-hidden rounded-[30px] border p-7 text-center shadow-[0_30px_100px_rgba(0,0,0,0.3)] animate-[mrn-drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#171a20] text-white" : "border-white/70 bg-white text-[#171714]"}`}>
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-100/70 to-transparent" />
-        <Sparkles className="absolute left-8 top-9 h-5 w-5 animate-bounce text-amber-400 [animation-duration:2.2s]" />
-        <Heart className="absolute right-9 top-14 h-5 w-5 animate-bounce text-rose-400 [animation-delay:300ms] [animation-duration:2.5s]" />
-        <Star className="absolute right-16 top-7 h-4 w-4 animate-pulse text-sky-400" />
-        <div className="relative mx-auto grid h-28 w-28 place-items-center">
-          <span className={`absolute inset-1 rounded-full border-2 border-dashed ${saving ? "animate-spin border-emerald-400/60 [animation-duration:5s]" : "border-emerald-300"}`} />
-          <span className={`absolute inset-4 rounded-full ${saving ? "animate-pulse bg-emerald-100" : "bg-emerald-500"}`} />
-          {saving ? <FileText className="relative h-9 w-9 animate-bounce text-emerald-700 [animation-duration:1.8s]" /> : <Check className="relative h-10 w-10 text-white" />}
-          {/* {!saving && <span className="absolute -bottom-1 text-lg">✦</span>} */}
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/35 p-4 animate-[mrn-backdrop-in_280ms_ease-out]">
+      <section style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`relative w-full max-w-md overflow-hidden rounded-[24px] border p-7 text-center animate-[mrn-drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
+        <Sparkles className="absolute left-8 top-9 h-5 w-5 animate-bounce text-[#c99a1e] [animation-duration:2.2s]" strokeWidth={1.8} />
+        <Heart className="absolute right-9 top-14 h-5 w-5 animate-bounce text-[#c0394b] [animation-delay:300ms] [animation-duration:2.5s]" strokeWidth={1.8} />
+        <Star className="absolute right-16 top-7 h-4 w-4 animate-pulse text-[#2f6fc0]" strokeWidth={1.8} />
+        <div className="relative mx-auto grid h-24 w-24 place-items-center">
+          <span className={`absolute inset-0 rounded-[28px] ${saving ? "animate-pulse" : ""} ${darkMode ? "bg-emerald-400/[0.12]" : "bg-[#e4f1e6]"}`} />
+          {saving ? <FileText className={`relative h-9 w-9 animate-bounce [animation-duration:1.8s] ${darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]"}`} strokeWidth={1.8} /> : <Check className={`relative h-10 w-10 ${darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]"}`} strokeWidth={2} />}
         </div>
 
-        <div className="relative mt-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-600">{saving ? "Saving your day" : "Daily report submitted"}</p>
-          <h3 className="mt-3 text-3xl small font-bold leading-tight">{saving ? `One moment, ${firstName}` : `Beautiful work, ${firstName}.`}</h3>
-          <p className={`mx-auto mt-3 max-w-sm text-sm leading-6 ${darkMode ? "text-white/60" : "text-black/55"}`}>
+        <div className="relative mt-5">
+          <Chip tone="mint" darkMode={darkMode}>{saving ? "Saving your day" : "Daily report submitted"}</Chip>
+          <h3 className="mt-4 text-[26px] leading-tight tracking-[-0.02em]">{saving ? `One moment, ${firstName}` : `Beautiful work, ${firstName}.`}</h3>
+          <p className={`mx-auto mt-3 max-w-sm text-sm leading-6 ${darkMode ? "text-white/55" : "text-[#7a7a78]"}`}>
             {saving ? "Your update is being placed safely into today’s report." : celebration.message}
           </p>
           {!saving && celebration.quote && (
-            <blockquote className={`mt-5 text-center border-emerald-400 px-4  text-sm  leading-6 ${darkMode ? "text-white/70" : "text-black/65"}`}>
+            <blockquote className={`mt-5 rounded-[16px] px-4 py-3 text-center text-sm leading-6 ${darkMode ? "bg-white/[0.04] text-white/70" : "bg-[#f7f7f5] text-[#3d3d3b]"}`}>
               “{celebration.quote}”
             </blockquote>
           )}
           {!saving && (
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
               {canClockOut && (
-                <button type="button" onClick={onClockOut} disabled={clockingOut} className="h-11 rounded-full bg-red-50 px-8 text-sm font-bold text-red-600 transition hover:bg-red-100 active:scale-[0.98] disabled:opacity-55">
+                <Button darkMode={darkMode} variant="secondary" size="lg" onClick={onClockOut} disabled={clockingOut} className={darkMode ? "text-[#f7aab5]" : "text-[#c0394b]"}>
                   {clockingOut ? "Clocking out..." : "Clock out"}
-                </button>
+                </Button>
               )}
-              <button type="button" onClick={onClose} className="h-11 rounded-full bg-[#89ed3f] px-8 text-sm font-bold text-black transition hover:bg-[#7dde35] active:scale-[0.98]">Done</button>
+              <Button darkMode={darkMode} variant={darkMode ? "accent" : "primary"} size="lg" onClick={onClose}>Done</Button>
             </div>
           )}
         </div>
@@ -1155,39 +1231,41 @@ function heatmapMonthGroups(days = []) {
 }
 
 function Heatmap({ darkMode, rows = [], title }) {
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const subtle = darkMode ? "text-white/65" : "text-black/55";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   const year = rows[0]?.days?.[0]?.date?.slice(0, 4) || new Date().getFullYear();
   const totalFilled = rows.reduce((sum, row) => sum + row.days.filter((day) => day.submitted).length, 0);
-  const emptyCell = darkMode ? "border-white/5 bg-white/10" : "border-emerald-900/[0.08] bg-[#f4f8f5]";
+  const emptyCell = darkMode ? "bg-white/[0.08]" : "bg-[#efefec]";
+  const filledCell = darkMode ? "bg-[#a7e8bf]" : "bg-[#2f7a4f]";
   return (
-    <section className={`rounded-[26px] border p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#1f2528] text-white" : "border-black/[0.06] bg-white text-[#171714] shadow-sm"}`}>
+    <section className={`rounded-[20px] border p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
       <div className="mb-5 flex items-start justify-between gap-3">
-        <div>
-          <p className={`text-[10px] font-semibold ${muted}`}>Number of submissions</p>
-          <h3 className="mt-1 text-3xl font-semibold leading-none">{totalFilled.toLocaleString()}</h3>
-          <p className={`mt-2 text-sm ${subtle}`}>{title}</p>
+        <div className="flex items-start gap-3">
+          <IconTile icon={Activity} tone="mint" darkMode={darkMode} />
+          <div>
+            <p className="text-[28px] leading-none tracking-[-0.03em] tabular-nums">{totalFilled.toLocaleString()}</p>
+            <p className={`mt-1.5 text-[12.5px] ${muted}`}>Submissions · {title}</p>
+          </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <div className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/10 text-white/75" : "bg-emerald-50 text-emerald-700"}`}>{year}</div>
-          <div className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/10 text-white/65" : "bg-violet-50 text-violet-700"}`}>Current year</div>
+          <Chip tone="mint" darkMode={darkMode}>{year}</Chip>
+          <Chip tone="lavender" darkMode={darkMode}>Current year</Chip>
         </div>
       </div>
-      <div className={`overflow-x-auto rounded-[22px] border p-4 ${darkMode ? "border-white/10 bg-black/10" : "border-black/[0.04] bg-[#fbfcfb]"}`}>
+      <div className={`overflow-x-auto rounded-[16px] p-4 ${darkMode ? "bg-white/[0.03]" : "bg-[#f7f7f5]"}`}>
         <div className="min-w-max space-y-5">
           {rows.map((row) => (
             <div key={row.userId} className="grid grid-cols-[96px_1fr] items-center gap-4">
-              <p className="sticky left-0 z-10 truncate rounded-2xl py-2 pr-3 text-sm font-semibold backdrop-blur-sm">{row.employeeName}</p>
+              <p className="sticky left-0 z-10 truncate py-2 pr-3 text-[13px]">{row.employeeName}</p>
               <div className="flex min-w-max gap-5">
                 {heatmapMonthGroups(row.days).map((month) => (
                   <div key={month.key} className="shrink-0">
-                    <p className={`mb-3 text-center text-[11px] font-medium ${subtle}`}>{month.label}</p>
+                    <p className={`mb-3 text-center text-[11px] ${muted}`}>{month.label}</p>
                     <div className="grid grid-flow-col grid-rows-7 gap-1">
                       {month.days.map((day) => (
                         <span
                           key={day.date}
                           title={`${day.date}: ${day.submitted ? "filled" : "not filled"}`}
-                          className={`h-3.5 w-3.5 rounded-[4px] border -[inset_0_1px_0_rgba(255,255,255,0.35)] transition hover:scale-110 ${day.submitted ? "border-emerald-500 bg-emerald-500" : emptyCell}`}
+                          className={`h-3.5 w-3.5 rounded-[4px] transition hover:scale-110 ${day.submitted ? filledCell : emptyCell}`}
                         />
                       ))}
                     </div>
@@ -1201,10 +1279,10 @@ function Heatmap({ darkMode, rows = [], title }) {
       </div>
       <div className={`mt-5 flex items-center justify-end gap-2 text-xs ${muted}`}>
         <span>Less</span>
-        <span className={`h-3.5 w-3.5 rounded-[4px] border ${emptyCell}`} />
-        <span className="h-3.5 w-3.5 rounded-[3px] bg-emerald-100" />
-        <span className="h-3.5 w-3.5 rounded-[3px] bg-emerald-300" />
-        <span className="h-3.5 w-3.5 rounded-[3px] bg-emerald-500" />
+        <span className={`h-3.5 w-3.5 rounded-[4px] ${emptyCell}`} />
+        <span className={`h-3.5 w-3.5 rounded-[4px] ${darkMode ? "bg-[#a7e8bf]/30" : "bg-[#cfe6d4]"}`} />
+        <span className={`h-3.5 w-3.5 rounded-[4px] ${darkMode ? "bg-[#a7e8bf]/60" : "bg-[#7fb48f]"}`} />
+        <span className={`h-3.5 w-3.5 rounded-[4px] ${filledCell}`} />
         <span>More</span>
       </div>
     </section>
@@ -1326,9 +1404,16 @@ export default function EmployeeDailyReport({ darkMode }) {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [closeDetailDrawer, detail]);
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const panel = darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe7e4] bg-white";
-  const softPanel = darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const panel = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white";
+  // Drawer chrome shared by every panel this page opens.
+  const drawerBody = darkMode ? "bg-[#121317]" : "bg-white";
+  const drawerSurface = darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]";
+  const drawerBorder = darkMode ? "border-white/10" : "border-[#f0f0ee]";
+  const sectionCard = `rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`;
+  const softTile = darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]";
+  const eyebrow = `text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`;
+  const primaryVariant = darkMode ? "accent" : "primary";
   const initialLoading = loading && !data;
   const isClockedInToday = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt);
   const isClockedOutToday = Boolean(todayAttendance?.clockOutAt);
@@ -2232,214 +2317,247 @@ export default function EmployeeDailyReport({ darkMode }) {
     return result;
   }, { total: 0, submitted: 0, pending: 0 });
   return (
-    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}>
-      <section className={`relative z-20 mb-5 overflow-visible rounded-[30px] border p-6 sm:p-8 ${darkMode ? "border-white/10 bg-[#202328]" : "border-[#dfe7e4] bg-white/95"}`}>
-          {!darkMode && (
-            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[30px]">
-              <div className="absolute inset-0 bg-[linear-gradient(rgba(17,17,17,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(17,17,17,0.035)_1px,transparent_1px)] bg-[size:72px_72px]" />
-              <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white via-white/80 to-transparent" />
-              <span className="absolute -left-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#eef3f2]" />
-              <span className="absolute -right-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#eef3f2]" />
-            </div>
-          )}
-          <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-[#dfe7e4] bg-[#e8f6ee] text-[#0f6b49]"}`}>
-                  <CalendarCheck className="h-4 w-4" /> Employee Daily Report
-                </span>
-                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-[#eadb8f] bg-[#fff4a8] text-[#5b4b00]"}`}>
-                  {initialLoading ? <ThreeDotLoader /> : data?.profile?.department || "Department not set"}
-                </span>
-                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-[#efaccb] bg-[#f7bdd7] text-[#6f123b]"}`}>
-                  <CalendarCheck className="h-3.5 w-3.5" /> {initialLoading ? <ThreeDotLoader /> : reportExempt ? "Report exempt" : data?.todaySubmitted ? "Today filled" : "Today pending"}
-                </span>
-              </div>
-              <h1 className={`mt-5 max-w-4xl text-4xl small font-black  leading-[0.96] tracking-tight sm:text-4xl ${darkMode ? "text-white" : "text-[#161616]"}`}>Daily work reports, made simple.</h1>
-              <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>Submit today&apos;s work progress, review previous entries, and track reporting consistency in one clean workspace.</p>
-            </div>
-            <div className="flex flex-col gap-3 lg:items-end">
+    <main className={`flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}>
+      <div className="relative z-20">
+        <PageHeader
+          darkMode={darkMode}
+          badge="Daily report"
+          badgeIcon={CalendarCheck}
+          badgeTone="mint"
+          title="Daily work reports"
+          subtitle="filed in a minute, every day"
+          description="Submit today's work progress, review previous entries and track reporting consistency in one place."
+          actions={(
+            <>
               <button
                 type="button"
                 onClick={clockButtonIsClockOut ? clockOutFromReportModal : clockInFromReportHero}
                 disabled={clockButtonDisabled}
-                className={`flex h-14 min-w-[178px] items-center justify-center gap-2 rounded-full px-8 text-base font-bold shadow-none transition active:scale-[0.98] disabled:cursor-not-allowed ${
+                className={"inline-flex h-11 min-w-[150px] items-center justify-center gap-2 rounded-full px-6 text-sm transition-[background-color,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 " + (
                   clockButtonIsClockOut
-                    ? "bg-red-500 text-white hover:bg-red-600 disabled:bg-red-50 disabled:text-red-300"
+                    ? darkMode ? "bg-rose-400/[0.14] text-[#f7aab5] hover:bg-rose-400/20" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"
                     : isClockedInToday
-                      ? "bg-[#eef8f3] text-[#7db99d] shadow-none"
-                      : "bg-[#00c853] text-white hover:bg-[#00b84d]"
-                }`}
+                      ? darkMode ? "bg-emerald-400/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"
+                      : "bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a]"
+                )}
               >
-                {(attendanceClockingIn || attendanceClockingOut) ? <Loader2 className="h-5 w-5 animate-spin" /> : isClockedInToday && !clockButtonIsClockOut ? <CheckCircle2 className="h-5 w-5" /> : <LogIn className={`h-5 w-5 ${clockButtonIsClockOut ? "rotate-180" : ""}`} />}
+                {(attendanceClockingIn || attendanceClockingOut) ? <Loader2 className="h-4 w-4 animate-spin" /> : isClockedInToday && !clockButtonIsClockOut ? <CheckCircle2 className="h-4 w-4" /> : <LogIn className={`h-4 w-4 ${clockButtonIsClockOut ? "rotate-180" : ""}`} />}
                 {initialLoading
                   ? <ThreeDotLoader />
                   : clockButtonIsClockOut
                     ? isClockedOutToday ? "Clocked out" : "Clock out"
                     : isClockedInToday ? "Clocked in" : "Clock in"}
               </button>
-              <div className="flex flex-wrap gap-3 lg:justify-end">
-                {!reportExempt && (
-                  <button
-                    disabled={initialLoading || !data?.profile?.sheetLinked}
-                    onClick={openForm}
-                    className={`flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-[#d8f36a]/20 bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}
-                  >
-                    {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
-                    {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Edit today's report" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
-                  </button>
-                )}
-                <div ref={heroActionRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setHeroActionOpen((value) => !value)}
-                    disabled={initialLoading}
-                    className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "border-white/10 bg-white/10 text-white hover:bg-white/15" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
-                  >
-                    <Settings2 className="h-4 w-4" />
-                    Actions
-                    <ChevronDown className={`h-4 w-4 transition-transform ${heroActionOpen ? "rotate-180" : ""}`} />
-                  </button>
-                  {heroActionOpen && (
-                    <div className={`absolute right-0 top-[calc(100%+10px)] z-[80] w-[286px] overflow-hidden rounded-[22px] border p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-                      {[
+              {!reportExempt && (
+                <Button
+                  darkMode={darkMode}
+                  variant="primary"
+                  size="lg"
+                  disabled={initialLoading || !data?.profile?.sheetLinked}
+                  onClick={openForm}
+                >
+                  {data?.todaySubmitted ? <CheckCircle2 className="h-4 w-4" /> : initialLoading ? null : <Plus className="h-4 w-4" />}
+                  {initialLoading ? <ThreeDotLoader /> : data?.todaySubmitted ? "Edit today's report" : data?.profile?.sheetLinked ? "Fill today's report" : "Link sheet first"}
+                </Button>
+              )}
+              <div ref={heroActionRef} className="relative">
+                <Button
+                  darkMode={darkMode}
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => setHeroActionOpen((value) => !value)}
+                  disabled={initialLoading}
+                  icon={Settings2}
+                >
+                  Actions
+                  <ChevronDown className={`h-4 w-4 transition-transform ${heroActionOpen ? "rotate-180" : ""}`} />
+                </Button>
+                {heroActionOpen && (
+                  <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop absolute right-0 top-[calc(100%+8px)] z-[80] w-[290px] overflow-hidden rounded-[18px] border p-1.5 ${darkMode ? "border-white/10 bg-[#17181c]" : "border-[#ececec] bg-white"}`}>
+                    {[
+                      {
+                        label: data?.profile?.sheetLinked ? "Sheet settings" : "Link sheet",
+                        icon: FileText,
+                        disabled: initialLoading,
+                        onClick: () => setSheetOpen(true),
+                      },
+                      ...(data?.isAdmin ? [{
+                        label: "Today status",
+                        icon: CalendarCheck,
+                        onClick: () => setTodayStatusOpen(true),
+                      }] : [{
+                        label: "My activity",
+                        icon: CalendarCheck,
+                        onClick: () => setHeatmapOpen(true),
+                      }]),
+                      {
+                        label: refreshingToday ? "Refreshing today..." : "Refresh today",
+                        icon: RefreshCw,
+                        disabled: refreshingToday || !data?.profile?.sheetLinked,
+                        onClick: refreshTodayReport,
+                        spin: refreshingToday,
+                      },
+                      ...(data?.isAdmin ? [
                         {
-                          label: data?.profile?.sheetLinked ? "Sheet settings" : "Link sheet",
+                          label: "Generate report",
                           icon: FileText,
-                          disabled: initialLoading,
-                          onClick: () => setSheetOpen(true),
+                          onClick: () => setReportOpen(true),
                         },
-                        ...(data?.isAdmin ? [{
-                          label: "Today status",
-                          icon: CalendarCheck,
-                          onClick: () => setTodayStatusOpen(true),
-                        }] : [{
-                          label: "My activity",
-                          icon: CalendarCheck,
-                          onClick: () => setHeatmapOpen(true),
-                        }]),
                         {
-                          label: refreshingToday ? "Refreshing today..." : "Refresh today",
-                          icon: RefreshCw,
-                          disabled: refreshingToday || !data?.profile?.sheetLinked,
-                          onClick: refreshTodayReport,
-                          spin: refreshingToday,
+                          label: "Reminder schedule",
+                          icon: BellRing,
+                          onClick: openReminderSchedule,
+                          danger: true,
                         },
-                        ...(data?.isAdmin ? [
-                          {
-                            label: "Generate report",
-                            icon: FileText,
-                            onClick: () => setReportOpen(true),
-                          },
-                          {
-                            label: "Reminder schedule",
-                            icon: BellRing,
-                            onClick: openReminderSchedule,
-                            danger: true,
-                          },
-                          {
-                            label: "Management questions",
-                            icon: Sparkles,
-                            onClick: openQuestionSettings,
-                          },
-                        ] : []),
-                      ].map((item) => {
-                        const Icon = item.icon;
-                        return (
-                          <button
-                            key={item.label}
-                            type="button"
-                            disabled={item.disabled}
-                            onClick={() => {
-                              if (item.disabled) return;
-                              setHeroActionOpen(false);
-                              item.onClick?.();
-                            }}
-                            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "text-white hover:bg-white/[0.08]" : "hover:bg-[#f3f5f9] text-slate-800"}`}
-                          >
-                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${item.danger ? darkMode ? "bg-red-500/15 text-red-300" : "bg-red-50 text-red-600" : darkMode ? "bg-white/[0.08] text-white/75" : "bg-[#eef7f4] text-[#17643f]"}`}>
-                              <Icon className={`h-4 w-4 ${item.spin ? "animate-spin" : ""}`} />
+                        {
+                          label: "Management questions",
+                          icon: Sparkles,
+                          onClick: openQuestionSettings,
+                        },
+                      ] : []),
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      const tone = item.danger ? "rose"
+                        : item.label.includes("Sheet") || item.label.includes("Link") ? "mint"
+                          : item.label.includes("status") || item.label.includes("activity") ? "sky"
+                            : item.label.includes("Refresh") ? "neutral"
+                              : item.label.includes("Generate") ? "peach"
+                                : "lavender";
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          disabled={item.disabled}
+                          onClick={() => {
+                            if (item.disabled) return;
+                            setHeroActionOpen(false);
+                            item.onClick?.();
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-[12px] px-2.5 py-2 text-left text-[13px] transition disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "text-white hover:bg-white/[0.06]" : "text-[#141414] hover:bg-[#f6f6f4]"}`}
+                        >
+                          <IconTile icon={<Icon className={`h-4 w-4 ${item.spin ? "animate-spin" : ""}`} strokeWidth={1.8} />} tone={tone} darkMode={darkMode} size="sm" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block">{item.label}</span>
+                            <span className={`mt-0.5 block text-[12px] ${muted}`}>
+                              {item.label.includes("Sheet") || item.label.includes("Link") ? "Workbook connection"
+                                : item.label.includes("status") || item.label.includes("activity") ? "Submission tracking"
+                                  : item.label.includes("Refresh") || item.label.includes("Refreshing") ? "Sync latest sheet data"
+                                    : item.label.includes("Generate") ? "Download and preview PDF"
+                                      : item.label.includes("Reminder") ? "WhatsApp reminder timing"
+                                        : "Assigned management prompts"}
                             </span>
-                            <span className="min-w-0 flex-1">
-                              <span className={`block font-semibold ${item.danger ? "text-red-600 dark:text-red-300" : ""}`}>{item.label}</span>
-                              <span className={`mt-0.5 block text-xs ${muted}`}>
-                                {item.label.includes("Sheet") || item.label.includes("Link") ? "Workbook connection"
-                                  : item.label.includes("status") || item.label.includes("activity") ? "Submission tracking"
-                                    : item.label.includes("Refresh") || item.label.includes("Refreshing") ? "Sync latest sheet data"
-                                      : item.label.includes("Generate") ? "Download and preview PDF"
-                                        : item.label.includes("Reminder") ? "WhatsApp reminder timing"
-                                          : "Assigned management prompts"}
-                              </span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-          {initialLoading ? (
-            <div className={`mt-5 flex min-h-[92px] items-center justify-center rounded-[24px] border p-3 ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-black/10 bg-white/65"}`}>
-              <ThreeDotLoader className={darkMode ? "text-white/60" : "text-black/55"} />
-            </div>
-          ) : null}
-       </section>
+            </>
+          )}
+        />
+      </div>
 
-      <section className={`mt-5 overflow-hidden rounded-[28px] border ${panel}`}>
-        <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-2xl small font-semibold">{data?.isAdmin ? "Submitted employee reports" : "My filled reports"}</h2>
-            <p className={`mt-1 text-sm ${muted}`}>Today can be updated; previous dates are read-only.</p>
+      <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          darkMode={darkMode}
+          icon={CalendarCheck}
+          tone={reportExempt ? "neutral" : data?.todaySubmitted ? "mint" : "peach"}
+          value={initialLoading ? <ThreeDotLoader /> : reportExempt ? "Exempt" : data?.todaySubmitted ? "Filled" : "Pending"}
+          label="Today's report"
+          hint={currentReportDate}
+        />
+        {data?.isAdmin ? (
+          <StatTile
+            darkMode={darkMode}
+            icon={Users}
+            tone="sky"
+            value={initialLoading ? <ThreeDotLoader /> : `${todayStatusCounts.submitted}/${todayStatusCounts.total}`}
+            label="Submitted today"
+            hint={`${todayStatusCounts.pending} not submitted`}
+          />
+        ) : (
+          <StatTile
+            darkMode={darkMode}
+            icon={LogIn}
+            tone="sky"
+            value={initialLoading ? <ThreeDotLoader /> : isClockedOutToday ? "Out" : isClockedInToday ? "In" : "Not yet"}
+            label="Attendance today"
+          />
+        )}
+        <StatTile
+          darkMode={darkMode}
+          icon={ClipboardList}
+          tone="lavender"
+          value={loading ? <ThreeDotLoader /> : reports.length}
+          label={data?.isAdmin ? "Reports in this view" : "My reports in view"}
+          hint={rangeLabel(dateFrom, dateTo)}
+        />
+        <StatTile
+          darkMode={darkMode}
+          icon={Building2}
+          tone="amber"
+          value={initialLoading ? <ThreeDotLoader /> : <span className="block truncate text-[22px]">{data?.profile?.department || "Not set"}</span>}
+          label="Department"
+        />
+      </div>
+
+      <section className={`mt-6 rounded-[20px] border ${panel}`}>
+        <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <IconTile icon={ClipboardList} tone="mint" darkMode={darkMode} />
+            <div>
+              <h2 className="text-[17px] tracking-[-0.01em]">{data?.isAdmin ? "Submitted employee reports" : "My filled reports"}</h2>
+              <p className={`mt-0.5 text-[13px] ${muted}`}>Today can be updated; previous dates are read-only.</p>
+            </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {data?.isAdmin && (
               <div className="relative">
                 <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-                <input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void load(); }} placeholder="Search employee, site, task..." className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none sm:w-72 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`} />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void load(); }} placeholder="Search employee, site, task..." className={`${pillInputClass(darkMode)} h-10 pl-11 sm:w-72`} />
               </div>
             )}
             <EmployeeDateRangePicker darkMode={darkMode} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} onApply={load} />
-            <button onClick={load} className={`h-11 rounded-2xl px-4 text-sm font-semibold ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}>Apply</button>
+            <Button darkMode={darkMode} variant="soft" onClick={load} className="h-10">Apply</Button>
           </div>
         </div>
         <div className="overflow-x-auto px-3 pb-4">
-          <table className="w-full min-w-[900px] border-separate border-spacing-y-3 text-left text-sm">
-            <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
+          <table className="w-full min-w-[900px] border-separate border-spacing-y-1.5 text-left text-sm">
+            <thead className={muted}>
               <tr>
-                {["Sl No:", "Employee", "Time filled", "Department", "Status", "Actions"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}
+                {["No.", "Employee", "Time filled", "Department", "Status", "Actions"].map((header) => <th key={header} className="px-4 py-2 text-[12px] font-normal">{header}</th>)}
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={6} className={`px-5 py-10 text-center ${muted}`}>Loading reports...</td></tr>}
+              {loading && <tr><td colSpan={6} className={`px-5 py-10 text-center ${muted}`}><ThreeDotLoader /></td></tr>}
               {!loading && reports.map((report, index) => {
                 const statusSummary = reportStatusSummary(report);
                 return (
-                  <tr key={report.id} className={darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]"}>
-                    <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
-                    <td className="px-5 py-4">
+                  <tr key={report.id} className={`transition-colors ${darkMode ? "bg-white/[0.03] hover:bg-white/[0.05]" : "bg-[#f7f7f5] hover:bg-[#f2f2ef]"}`}>
+                    <td className={`rounded-l-[14px] px-4 py-3 tabular-nums ${muted}`}>{String(index + 1).padStart(2, "0")}</td>
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <UserAvatar user={reportAvatarUser(report)} name={report.employeeName} className="h-10 w-10" />
+                        <UserAvatar user={reportAvatarUser(report)} name={report.employeeName} className="h-9 w-9" />
                         <div>
-                          <p className="font-semibold">{report.employeeName}</p>
+                          <p className="text-[13.5px]">{report.employeeName}</p>
                           <p className={`text-xs ${muted}`}>{report.reportDate || "-"}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4">{displayDateTime(report.submittedAt)}</td>
-                    <td className="px-5 py-4">{report.department}</td>
-                    <td className="px-5 py-4">
-                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${reportStatusClass(statusSummary, darkMode)}`}>{statusSummary}</span>
+                    <td className={`px-4 py-3 ${darkMode ? "text-white/75" : "text-[#3d3d3b]"}`}>{displayDateTime(report.submittedAt)}</td>
+                    <td className={`px-4 py-3 ${darkMode ? "text-white/75" : "text-[#3d3d3b]"}`}>{report.department}</td>
+                    <td className="px-4 py-3">
+                      <Chip tone={reportStatusTone(statusSummary)} darkMode={darkMode} className="h-6 px-2.5 text-[12px]">{statusSummary}</Chip>
                     </td>
-                    <td className="rounded-r-2xl px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { setDetailClosing(false); setDetailExpanded(false); setDetail(report); }} className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-blue-600  hover:bg-blue-50"}`} title="View detail"><Eye className="h-4 w-4" /></button>
+                    <td className="rounded-r-[14px] px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => { setDetailClosing(false); setDetailExpanded(false); setDetail(report); }} className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition ${darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.12]" : "bg-white text-[#141414] hover:bg-[#ebebe8]"}`} title="View detail"><Eye className="h-4 w-4" /></button>
                         <button
                           type="button"
                           onClick={() => deleteEmployeeReport(report)}
                           disabled={deletingReportId === report.id}
-                          className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-red-500/10 text-red-300 hover:bg-red-500/15" : "bg-white text-red-600 hover:bg-red-50"}`}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-rose-400/[0.12] text-[#f7aab5] hover:bg-rose-400/20" : "bg-white text-[#c0394b] hover:bg-[#fbe4e6]"}`}
                           title="Delete report"
                         >
                           <Trash2 className={`h-4 w-4 ${deletingReportId === report.id ? "animate-pulse" : ""}`} />
@@ -2449,104 +2567,95 @@ export default function EmployeeDailyReport({ darkMode }) {
                   </tr>
                 );
               })}
-              {!loading && !reports.length && <tr><td colSpan={6} className={`px-5 py-10 text-center ${muted}`}>No reports found.</td></tr>}
+              {!loading && !reports.length && (
+                <tr><td colSpan={6} className="px-1 py-2"><EmptyState darkMode={darkMode} icon={Inbox} title="No reports found" text="Try another date range or search." /></td></tr>
+              )}
             </tbody>
           </table>
         </div>
       </section>
 
       {reminderOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setReminderOpen(false); }}>
-          <form onSubmit={saveReminderSchedule} className={`employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <span><b>Employee daily report</b> · Reminder schedule</span>
-              <button type="button" onClick={() => setReminderOpen(false)} className="font-semibold text-[#4b9b16]">Close</button>
-            </div>
-            <div className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-              <section className={`overflow-hidden rounded-[30px]  ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
-                
-
+        <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setReminderOpen(false); }}>
+          <form onSubmit={saveReminderSchedule} className={`employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerBorder} ${drawerSurface}`}>
+            <DrawerHeader darkMode={darkMode} icon={BellRing} tone="rose" title="Reminder schedule" subtitle="Employee daily report" onClose={() => setReminderOpen(false)} />
+            <div className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 ${drawerBody}`}>
+              <section className={sectionCard}>
                 <div className="p-5 sm:p-6">
                   <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
                     <div>
-                      <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Schedule</p>
-                      <h4 className="mt-2 text-xl font-black">Send every day at selected time</h4>
-                      <p className={`mt-2 text-sm leading-6 ${muted}`}>
+                      <p className="text-[22px] leading-[1.15] tracking-[-0.02em]">Send every day</p>
+                      <p className={`text-[22px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>at the selected time</p>
+                      <p className={`mt-3 text-sm leading-6 ${muted}`}>
                         Runs in IST and skips Sunday. Automatic reminders are sent only to employees who have not submitted for the day.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setReminderSettings((current) => ({ ...current, enabled: !current.enabled }))}
-                      className={`flex h-12 w-24 items-center justify-between rounded-full px-2 text-sm font-bold transition ${reminderSettings.enabled ? "bg-[#10a66b] text-white" : darkMode ? "bg-white/10 text-white/55" : "bg-black/10 text-black/55"}`}
-                    >
-                      <span className={`h-8 w-8 rounded-full bg-white transition ${reminderSettings.enabled ? "translate-x-0" : "opacity-70"}`} />
-                      <span className="pr-2">{reminderSettings.enabled ? "On" : "Off"}</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-[13px] ${muted}`}>{reminderSettings.enabled ? "On" : "Off"}</span>
+                      <Toggle
+                        darkMode={darkMode}
+                        checked={reminderSettings.enabled}
+                        label="Automatic reminders"
+                        onChange={() => setReminderSettings((current) => ({ ...current, enabled: !current.enabled }))}
+                      />
+                    </div>
                   </div>
 
                   <div className="mt-6 grid gap-4 lg:grid-cols-2">
                     <div className="block">
-                      <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Reminder time</span>
+                      <span className={eyebrow}>Reminder time</span>
                       <ReminderTimeWheel
                         value={reminderSettings.time}
                         onChange={(time) => setReminderSettings((current) => ({ ...current, time }))}
                         darkMode={darkMode}
                       />
                     </div>
-                    <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f5f7f2]"}`}>
-                      <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Current setup</p>
-                      <p className="mt-2 text-sm font-bold">{reminderSettings.enabled ? `Daily at ${reminderSettings.time} IST` : "Automatic reminders are off"}</p>
-                      <p className={`mt-2 text-xs leading-5 ${muted}`}>Saved schedule is handled by the server cron, not the open page.</p>
+                    <div className="mt-6 flex flex-col gap-3">
+                      <div className={`rounded-[20px] p-4 ${darkMode ? "bg-rose-400/[0.10]" : "bg-[#fbe4e6]"}`}>
+                        <BellRing className={`h-5 w-5 ${darkMode ? "text-[#f7aab5]" : "text-[#c0394b]"}`} strokeWidth={1.8} />
+                        <p className="mt-4 text-[15px]">{reminderSettings.enabled ? `Daily at ${reminderSettings.time} IST` : "Automatic reminders are off"}</p>
+                        <p className={`mt-1 text-[12.5px] leading-5 ${darkMode ? "text-white/55" : "text-[#6b6b6b]"}`}>Saved schedule is handled by the server cron, not the open page.</p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </section>
             </div>
-            <div className={`flex shrink-0 flex-col-reverse gap-3 border-t p-4 sm:flex-row sm:justify-end ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
-              <button type="button" onClick={() => setReminderOpen(false)} className={`h-12 rounded-3xl px-5 text-sm font-semibold ${darkMode ? "bg-white/10 text-white" : "bg-white text-black ring-1 ring-black/10"}`}>Cancel</button>
-              <button
-                type="button"
-                onClick={checkReminderStatus}
-                disabled={checkingReminder}
-                className={`inline-flex h-12 items-center justify-center gap-2 rounded-3xl px-5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-white/10 text-white" : "bg-[#e8f6ee] text-[#0f6b49]"}`}
-              >
+            <div className={`flex shrink-0 flex-col-reverse gap-2 border-t px-5 py-4 sm:flex-row sm:justify-end sm:px-6 ${drawerBorder}`}>
+              <Button darkMode={darkMode} variant="secondary" onClick={() => setReminderOpen(false)}>Cancel</Button>
+              <Button darkMode={darkMode} variant="soft" onClick={checkReminderStatus} disabled={checkingReminder}>
                 <BellRing className={`h-4 w-4 ${checkingReminder ? "animate-pulse" : ""}`} />
                 {checkingReminder ? "Sending..." : "Send now"}
-              </button>
-              <button type="submit" disabled={reminderSaving} className={`inline-flex h-12 items-center justify-center rounded-3xl px-6 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white shadow-[0_16px_30px_rgba(16,166,107,0.22)]"}`}>
+              </Button>
+              <Button darkMode={darkMode} variant={primaryVariant} type="submit" disabled={reminderSaving}>
                 {reminderSaving ? "Saving..." : "Save schedule"}
-              </button>
+              </Button>
             </div>
           </form>
         </div>
       )}
 
       {sheetOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheetOpen(false); }}>
-          <div className={`employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}><span><b>Employee daily report</b> · Sheet settings</span><button onClick={() => setSheetOpen(false)} className="font-semibold text-[#4b9b16]">Close</button></div>
-            <div className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-            <div className={`rounded-2xl  p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
-              <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">GOOGLE SHEETS</span>
-              <h3 className="mt-4 text-2xl small text-black dark:text-white font-bold">Connect report workspace</h3>
-              <p className={`mt-2 text-sm ${muted}`}>Link the sheet used to save and read employee daily reports.</p>
-              <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${muted}`}>Linked Google Sheet</p>
-              <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheetOpen(false); }}>
+          <div className={`employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerBorder} ${drawerSurface}`}>
+            <DrawerHeader darkMode={darkMode} icon={Sheet} tone="mint" title="Sheet settings" subtitle="Employee daily report" onClose={() => setSheetOpen(false)} />
+            <div className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 ${drawerBody}`}>
+            <div className={`${sectionCard} p-5 sm:p-6`}>
+              <Chip tone="mint" darkMode={darkMode} icon={Sheet}>Google Sheets</Chip>
+              <h3 className="mt-4 text-[22px] leading-[1.15] tracking-[-0.02em]">Connect report workspace</h3>
+              <p className={`text-[22px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>one sheet per employee</p>
+              <p className={`mt-3 text-sm ${muted}`}>Link the sheet used to save and read employee daily reports.</p>
+              <p className={`mt-5 ${eyebrow}`}>Linked Google Sheet</p>
+              <div className="mt-2 flex flex-col gap-2 lg:flex-row lg:items-center">
                 <input
                   value={sheetInput}
                   onChange={(event) => setSheetInput(event.target.value)}
                   placeholder="Paste your daily report Google Sheet link"
-                  className={`h-12 min-w-0 flex-1 rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-black/20 text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+                  className={`${pillInputClass(darkMode)} min-w-0 flex-1`}
                 />
-                <button
-                  type="button"
-                  onClick={saveSheetLink}
-                  disabled={sheetSaving || !sheetInput.trim()}
-                  className="h-12 rounded-full bg-[#89ed3f] px-6 text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-50"
-                >
+                <Button darkMode={darkMode} variant={primaryVariant} size="lg" onClick={saveSheetLink} disabled={sheetSaving || !sheetInput.trim()}>
                   {sheetSaving ? "Linking..." : data?.profile?.sheetLinked ? "Update sheet" : "Link sheet"}
-                </button>
+                </Button>
               </div>
               <p className={`mt-3 text-xs ${muted}`}>Reports are saved into this sheet and dashboard data is read back from it.</p>
             </div>
@@ -2556,28 +2665,32 @@ export default function EmployeeDailyReport({ darkMode }) {
       )}
 
       {todayStatusOpen && data?.isAdmin && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setTodayStatusOpen(false); }}>
-          <div className={`employee-report-shell employee-status-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}><span><b>Today&apos;s status</b> · {data?.today || todayInput()}</span><button onClick={() => setTodayStatusOpen(false)} className="font-semibold text-[#4b9b16]">Close</button></div>
-            <div className={`min-h-0 flex-1 overflow-auto p-5 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-            <div className={`rounded-[26px] p-4 sm:p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setTodayStatusOpen(false); }}>
+          <div className={`employee-report-shell employee-status-shell absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerBorder} ${drawerSurface}`}>
+            <DrawerHeader darkMode={darkMode} icon={CalendarCheck} tone="sky" title="Today's status" subtitle={data?.today || todayInput()} onClose={() => setTodayStatusOpen(false)} />
+            <div className={`min-h-0 flex-1 overflow-auto p-5 sm:p-6 ${drawerBody}`}>
+              <div className="grid grid-cols-3 gap-3">
+                <StatTile darkMode={darkMode} icon={Users} tone="neutral" value={todayStatusCounts.total} label="Employees" />
+                <StatTile darkMode={darkMode} icon={CheckCircle2} tone="mint" value={todayStatusCounts.submitted} label="Submitted" />
+                <StatTile darkMode={darkMode} icon={Clock3} tone="peach" value={todayStatusCounts.pending} label="Not submitted" />
+              </div>
+            <div className={`mt-4 ${sectionCard} p-4 sm:p-5`}>
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#4b9b16]">Employee attendance</p>
-                  <h3 className="mt-1 small text-2xl font-bold">Today&apos;s submission status</h3>
-                  <p className={`mt-1 text-sm ${muted}`}>{todayStatusCounts.submitted} submitted · {todayStatusCounts.pending} not submitted · {todayStatusCounts.total} total</p>
+                  <h3 className="text-[17px] tracking-[-0.01em]">Today&apos;s submission status</h3>
+                  <p className={`mt-0.5 text-[13px] ${muted}`}>{todayStatusCounts.submitted} submitted · {todayStatusCounts.pending} not submitted · {todayStatusCounts.total} total</p>
                 </div>
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
                   <div className="relative">
                     <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
                     <input
                       value={todayStatusSearch}
                       onChange={(event) => setTodayStatusSearch(event.target.value)}
                       placeholder="Search employee or department..."
-                      className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none lg:w-72 ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-[#f8faf7] text-black placeholder:text-black/35"}`}
+                      className={`${pillInputClass(darkMode)} h-10 pl-11 lg:w-72`}
                     />
                   </div>
-                  <div className={`flex rounded-2xl p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f1f4ef]"}`}>
+                  <div className={`inline-flex rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
                     {[
                       ["all", "All", todayStatusCounts.total],
                       ["submitted", "Submitted", todayStatusCounts.submitted],
@@ -2587,37 +2700,37 @@ export default function EmployeeDailyReport({ darkMode }) {
                         key={value}
                         type="button"
                         onClick={() => setTodayStatusFilter(value)}
-                        className={`h-9 rounded-xl px-3 text-xs  transition ${todayStatusFilter === value ? "bg-[#89ed3f] text-black shadow-sm" : darkMode ? "text-white/60 hover:bg-white/10" : "text-black/55 hover:bg-white"}`}
+                        className={`inline-flex h-8 items-center rounded-full px-3.5 text-[13px] transition ${todayStatusFilter === value ? darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#141414] shadow-[0_1px_4px_rgba(0,0,0,0.08)]" : darkMode ? "text-white/55 hover:text-white" : "text-[#8a8a8a] hover:text-[#141414]"}`}
                       >
-                        {label} <span className="ml-1 opacity-60">{count}</span>
+                        {label} <span className="ml-1.5 opacity-60">{count}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
-              <div className="mt-5 overflow-auto">
-                <table className="w-full min-w-[760px] border-separate border-spacing-y-3 text-left text-sm">
-                  <thead className={darkMode ? "text-white/55" : "text-slate-500"}>
-                    <tr>{["Sl No:", "Employee", "Department", "Time filled", "Status"].map((header) => <th key={header} className="px-5 py-3 text-xs font-semibold">{header}</th>)}</tr>
+              <div className="mt-4 overflow-auto">
+                <table className="w-full min-w-[760px] border-separate border-spacing-y-1.5 text-left text-sm">
+                  <thead className={muted}>
+                    <tr>{["No.", "Employee", "Department", "Time filled", "Status"].map((header) => <th key={header} className="px-4 py-2 text-[12px] font-normal">{header}</th>)}</tr>
                   </thead>
                   <tbody>
                     {filteredTodayStatus.map((item, index) => (
-                      <tr key={item.userId} className={darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]"}>
-                        <td className="rounded-l-2xl px-5 py-4 font-semibold">{index + 1}</td>
-                        <td className="px-5 py-4">
+                      <tr key={item.userId} className={darkMode ? "bg-white/[0.03]" : "bg-[#f7f7f5]"}>
+                        <td className={`rounded-l-[14px] px-4 py-3 tabular-nums ${muted}`}>{String(index + 1).padStart(2, "0")}</td>
+                        <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <UserAvatar user={item} name={item.employeeName} className="h-10 w-10" />
-                            <p className="font-semibold">{item.employeeName}</p>
+                            <UserAvatar user={item} name={item.employeeName} className="h-9 w-9" />
+                            <p className="text-[13.5px]">{item.employeeName}</p>
                           </div>
                         </td>
-                        <td className="px-5 py-4">{item.department || "-"}</td>
-                        <td className="px-5 py-4">{item.submitted ? displayDateTime(item.submittedAt) : "-"}</td>
-                        <td className="rounded-r-2xl px-5 py-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${item.submitted ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{item.submitted ? "Submitted" : "Not submitted"}</span>
+                        <td className={`px-4 py-3 ${darkMode ? "text-white/75" : "text-[#3d3d3b]"}`}>{item.department || "-"}</td>
+                        <td className={`px-4 py-3 ${darkMode ? "text-white/75" : "text-[#3d3d3b]"}`}>{item.submitted ? displayDateTime(item.submittedAt) : "-"}</td>
+                        <td className="rounded-r-[14px] px-4 py-3">
+                          <Chip tone={item.submitted ? "mint" : "rose"} darkMode={darkMode} className="h-6 px-2.5 text-[12px]">{item.submitted ? "Submitted" : "Not submitted"}</Chip>
                         </td>
                       </tr>
                     ))}
-                    {!filteredTodayStatus.length && <tr><td colSpan={5} className={`px-5 py-10 text-center ${muted}`}>No employees match this filter.</td></tr>}
+                    {!filteredTodayStatus.length && <tr><td colSpan={5} className="px-1 py-2"><EmptyState darkMode={darkMode} icon={Users} title="No employees match this filter" /></td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -2628,22 +2741,20 @@ export default function EmployeeDailyReport({ darkMode }) {
       )}
 
       {formOpen && (
-        <div className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] ${formClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeFormDrawer(); }}>
-          <form onSubmit={submitReport} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${formExpanded ? "employee-report-shell-expanded" : ""} ${formClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <span><b>Daily work progress</b> · {currentReportDate}</span>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setFormExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={formExpanded ? "Restore drawer size" : "Expand report to full screen"}>
-                  {formExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                  <span className="hidden sm:inline">{formExpanded ? "Restore" : "Expand"}</span>
-                </button>
-                <button type="button" onClick={closeFormDrawer} className="px-1 font-semibold text-[#4b9b16]">Close</button>
-              </div>
-            </div>
+        <div className={`fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] ${formClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeFormDrawer(); }}>
+          <form onSubmit={submitReport} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] ${formExpanded ? "employee-report-shell-expanded" : ""} ${formClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${drawerBorder} ${drawerSurface}`}>
+            <DrawerHeader darkMode={darkMode} icon={ClipboardList} tone="mint" title="Daily work progress" subtitle={currentReportDate} onClose={closeFormDrawer}>
+              {/* On a phone the header is too narrow; the chip sits in the status row under it instead. */}
+              <span className="hidden sm:block"><Chip tone="lime" darkMode={darkMode} icon={CheckCircle2}>Editable today</Chip></span>
+              <button type="button" onClick={() => setFormExpanded((current) => !current)} className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-white/[0.06] text-white/75 hover:bg-white/10" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8]"}`} aria-label={formExpanded ? "Restore drawer size" : "Expand report to full screen"}>
+                {formExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">{formExpanded ? "Restore" : "Expand"}</span>
+              </button>
+            </DrawerHeader>
 
             {dateOverride ? (
-              <div className="flex shrink-0 items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className={`flex shrink-0 items-start gap-2 border-b px-5 py-2.5 text-xs sm:px-6 ${darkMode ? "border-white/10 bg-amber-400/[0.08] text-amber-100" : "border-[#f0f0ee] bg-[#fbf3dc] text-[#4a3a1c]"}`}>
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#b07d00]" />
                 <span>
                   Date override active from the page link: this report will be filed for{" "}
                   <b>{dateOverride}</b>, not today. Remove{" "}
@@ -2651,8 +2762,8 @@ export default function EmployeeDailyReport({ darkMode }) {
                 </span>
               </div>
             ) : clockMismatch ? (
-              <div className="flex shrink-0 items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className={`flex shrink-0 items-start gap-2 border-b px-5 py-2.5 text-xs sm:px-6 ${darkMode ? "border-white/10 bg-amber-400/[0.08] text-amber-100" : "border-[#f0f0ee] bg-[#fbf3dc] text-[#4a3a1c]"}`}>
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#b07d00]" />
                 <span>
                   This device&apos;s date is <b>{deviceToday}</b>, but the server date is{" "}
                   <b>{data?.today}</b>. Your report will be filed for <b>{data?.today}</b>. Please
@@ -2662,130 +2773,124 @@ export default function EmployeeDailyReport({ darkMode }) {
             ) : null}
 
             <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[270px_minmax(0,1fr)]">
-              <aside className={`flex min-h-0 flex-col overflow-hidden border-b md:border-b-0  ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
-                <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                  <div>
-                    <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">DAILY REPORT</span>
-                  </div>
-                  <div className="mt-8 space-y-3">
-                    <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Department</p><p className="mt-1 text-sm font-bold">{data?.profile?.department || "Required once"}</p></div>
-                    <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Status</p><p className="mt-1 text-sm font-bold text-[#4b9b16]">{data?.todaySubmitted ? "Already filled" : "Ready to submit"}</p></div>
-                    <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Draft</p><p className="mt-1 text-sm font-bold">{lastDraftSavedAt ? `Saved ${formatDraftTime(lastDraftSavedAt)}` : "Autosave ready"}</p></div>
-                    <div className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
+              {/* The side panel is for wide screens; on a phone it would pin half the screen. */}
+              <aside className={`hidden min-h-0 flex-col overflow-hidden md:flex md:border-r ${drawerBorder} ${drawerSurface}`}>
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  <Chip tone="mint" darkMode={darkMode} icon={CalendarCheck}>Daily report</Chip>
+                  <div className="mt-5 space-y-2.5">
+                    <SideFact darkMode={darkMode} label="Department" tone="neutral">{data?.profile?.department || "Required once"}</SideFact>
+                    <SideFact darkMode={darkMode} label="Status" tone={data?.todaySubmitted ? "mint" : "lime"}>{data?.todaySubmitted ? "Already filled" : "Ready to submit"}</SideFact>
+                    <SideFact darkMode={darkMode} label="Draft" tone="neutral">{lastDraftSavedAt ? `Saved ${formatDraftTime(lastDraftSavedAt)}` : "Autosave ready"}</SideFact>
+                    <div className={`rounded-[16px] p-4 ${darkMode ? "bg-white/[0.07]" : "bg-[#f4f4f2]"}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Saved options</p>
-                          <p className={`mt-1 text-sm font-bold ${hasCustomPreferences ? "" : darkMode ? "text-white/55" : "text-black/50"}`}>
+                          <p className={eyebrow}>Saved options</p>
+                          <p className={`mt-1 text-[14px] ${hasCustomPreferences ? "" : muted}`}>
                             {hasCustomPreferences ? `${customPrefs.sites.length} sites · ${customPrefs.categories.length} categories` : "No saved options"}
                           </p>
                         </div>
                         {hasCustomPreferences && (
-                          <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-wide ${customPrefs.useCustomOnly ? "bg-[#89ed3f] text-black" : darkMode ? "bg-white/10 text-white/55" : "bg-white text-black/45"}`}>
+                          <Chip tone={customPrefs.useCustomOnly ? "lime" : "outline"} darkMode={darkMode} className="h-6 px-2.5 text-[11.5px]">
                             {customPrefs.useCustomOnly ? "Mine" : "All"}
-                          </span>
+                          </Chip>
                         )}
                       </div>
                       {hasCustomPreferences && (
                         <div className="mt-3 space-y-2">
                           {sidebarSitesPreview.length > 0 && (
                             <div className="flex flex-wrap gap-1.5">
-                              {sidebarSitesPreview.map((site) => <span key={site} className={`rounded-full px-2 py-1 text-[10px] font-semibold ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-black/60"}`}>{site}</span>)}
-                              {customPrefs.sites.length > sidebarSitesPreview.length && <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${darkMode ? "bg-white/10 text-white/45" : "bg-white text-black/40"}`}>+{customPrefs.sites.length - sidebarSitesPreview.length}</span>}
+                              {sidebarSitesPreview.map((site) => <span key={site} className={`rounded-full px-2.5 py-1 text-[11px] ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-[#3d3d3b]"}`}>{site}</span>)}
+                              {customPrefs.sites.length > sidebarSitesPreview.length && <span className={`rounded-full px-2.5 py-1 text-[11px] ${darkMode ? "bg-white/10 text-white/45" : "bg-white text-[#8a8a8a]"}`}>+{customPrefs.sites.length - sidebarSitesPreview.length}</span>}
                             </div>
                           )}
                           {sidebarCategoriesPreview.length > 0 && (
                             <div className="flex flex-wrap gap-1.5">
-                              {sidebarCategoriesPreview.map((category) => <span key={category} className={`rounded-full px-2 py-1 text-[10px] font-semibold ${darkMode ? "bg-[#89ed3f]/15 text-[#b7ff82]" : "bg-[#eafbdc] text-[#4b9b16]"}`}>{category}</span>)}
-                              {customPrefs.categories.length > sidebarCategoriesPreview.length && <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${darkMode ? "bg-white/10 text-white/45" : "bg-white text-black/40"}`}>+{customPrefs.categories.length - sidebarCategoriesPreview.length}</span>}
+                              {sidebarCategoriesPreview.map((category) => <span key={category} className={`rounded-full px-2.5 py-1 text-[11px] ${darkMode ? "bg-[#cff07a]/15 text-[#d8f39a]" : "bg-[#eef8cc] text-[#4d6b12]"}`}>{category}</span>)}
+                              {customPrefs.categories.length > sidebarCategoriesPreview.length && <span className={`rounded-full px-2.5 py-1 text-[11px] ${darkMode ? "bg-white/10 text-white/45" : "bg-white text-[#8a8a8a]"}`}>+{customPrefs.categories.length - sidebarCategoriesPreview.length}</span>}
                             </div>
                           )}
                         </div>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => setCustomOptionsOpen(true)}
-                        className={`mt-3 h-9 w-full rounded-full text-xs font-bold transition ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-black/65 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
-                      >
+                      <Button darkMode={darkMode} variant="secondary" size="sm" onClick={() => setCustomOptionsOpen(true)} className="mt-3 w-full">
                         {hasCustomPreferences ? "Manage options" : "Add options"}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
-                <div className={`flex shrink-0 gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-                  <button type="button" onClick={closeFormDrawer} className={`h-11 flex-1 rounded-full border text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
-                  <button disabled={submitting} className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">{submitting && editingReport ? "Saving..." : editingReport ? "Update" : "Submit"}</button>
+                <div className={`flex shrink-0 gap-2 border-t p-4 ${drawerBorder}`}>
+                  <Button darkMode={darkMode} variant="secondary" size="lg" onClick={closeFormDrawer} className="flex-1 px-0">Cancel</Button>
+                  <Button darkMode={darkMode} variant={primaryVariant} size="lg" type="submit" disabled={submitting} className="flex-1 px-0">{submitting && editingReport ? "Saving..." : editingReport ? "Update" : "Submit"}</Button>
                 </div>
               </aside>
 
-              <div className={`min-h-0 overflow-y-auto p-5 pb-24 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-                <div className={`rounded-3xl  p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
-                <div className="mb-6 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Task entry</p>
-                    <h4 className={`mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-black"}`}>Fill today&apos;s report</h4>
-                    <p className={`mt-1 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{lastDraftSavedAt ? `Draft autosaved at ${formatDraftTime(lastDraftSavedAt)}` : "Draft autosaves as you type"}</p>
-                  </div>
-                  <span className="rounded-md bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold text-[#4b9b16]">EDITABLE TODAY</span>
+              <div className={`min-h-0 overflow-y-auto p-4 pb-8 sm:p-6 md:pb-24 ${drawerBody}`}>
+                <div>
+                <div className="mb-4 flex flex-wrap items-center gap-2 md:hidden">
+                  <Chip tone={data?.todaySubmitted ? "mint" : "lime"} darkMode={darkMode} icon={CheckCircle2}>{data?.todaySubmitted ? "Already filled" : "Ready to submit"}</Chip>
+                  <Chip tone="lime" darkMode={darkMode} className="sm:hidden">Editable today</Chip>
+                  <Chip tone="neutral" darkMode={darkMode}>{lastDraftSavedAt ? `Saved ${formatDraftTime(lastDraftSavedAt)}` : "Autosave on"}</Chip>
+                  <Button darkMode={darkMode} variant="secondary" size="sm" onClick={() => setCustomOptionsOpen(true)} className="ml-auto">
+                    {hasCustomPreferences ? "My options" : "Add options"}
+                  </Button>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-5 md:grid-cols-2">
                   {!data?.profile?.department && (
                     <div className="md:col-span-2">
-                      <label className={`mb-2 block text-xs font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/60" : "text-black/55"}`}>Department</label>
+                      <label className={`mb-2 block ${eyebrow}`}>Department</label>
                       <SearchableSelect darkMode={darkMode} value={form.department} onChange={(value) => setForm((current) => ({ ...current, department: value }))} options={options.departments} placeholder="Choose department" />
-                      {form.department === "__other" && <input required value={form.departmentOther || ""} onChange={(event) => setForm((current) => ({ ...current, departmentOther: event.target.value }))} placeholder="Enter department" className={`mt-2 h-12 w-full rounded-2xl border px-4 outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />}
+                      {form.department === "__other" && <input required value={form.departmentOther || ""} onChange={(event) => setForm((current) => ({ ...current, departmentOther: event.target.value }))} placeholder="Enter department" className={`mt-2 ${pillInputClass(darkMode)}`} />}
                     </div>
                   )}
                   <div className={`md:col-span-2 overflow-hidden transition-[max-height,opacity,transform,margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${customOptionsVisible ? "max-h-[720px] opacity-100" : "max-h-0 -translate-y-2 opacity-0 pointer-events-none"}`}>
-                  <div className={`rounded-[22px] p-4 ${darkMode ? "border-white/10 bg-[#1c1f24]" : "border-black/10 bg-[#f8f7f3]"}`}>
+                  <div className={`${sectionCard} p-4`}>
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <p className={`text-xs font-bold uppercase tracking-[0.12em] ${darkMode ? "text-white/70" : "text-black/55"}`}>My saved task options</p>
-                        <p className={`mt-1 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Save your own sites/categories. <br/>Turn on custom-only to show only your saved list in dropdowns.</p>
+                      <div className="flex items-start gap-3">
+                        <IconTile icon={Settings2} tone="lavender" darkMode={darkMode} size="sm" />
+                        <div>
+                          <p className="text-[15px]">My saved task options</p>
+                          <p className={`mt-0.5 text-[12.5px] ${muted}`}>Save your own sites and categories. Turn on custom-only to show only your saved list in dropdowns.</p>
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {hasCustomPreferences && (
-                          <button
-                            type="button"
-                            onClick={() => setCustomOptionsOpen(false)}
-                            className={`h-10 rounded-full px-4 text-sm font-bold transition ${darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
-                          >
+                          <Button darkMode={darkMode} variant="secondary" onClick={() => setCustomOptionsOpen(false)}>
                             Done
-                          </button>
+                          </Button>
                         )}
                         <button
                           type="button"
                           onClick={() => saveCustomPreferences({ ...customPrefs, useCustomOnly: !customPrefs.useCustomOnly })}
-                          className={`h-10 rounded-full px-4 text-sm font-bold transition ${customPrefs.useCustomOnly ? "bg-[#89ed3f] text-black" : darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/60"}`}
+                          className={`h-9 rounded-full px-4 text-[13px] transition ${customPrefs.useCustomOnly ? "bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a]" : darkMode ? "border border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
                         >
                           {customPrefs.useCustomOnly ? "Using my options" : "Use all options"}
                         </button>
-                        <button type="button" onClick={clearCustomOptions} className={`h-10 rounded-full px-4 text-sm font-bold transition ${darkMode ? "border border-white/10 bg-white/[0.04] text-white/70 hover:bg-red-500/10 hover:text-red-200" : "border border-black/10 bg-white text-black/55 hover:bg-red-50 hover:text-red-600"}`}>
+                        <button type="button" onClick={clearCustomOptions} className={`h-9 rounded-full px-4 text-[13px] transition ${darkMode ? "text-white/70 hover:bg-rose-400/10 hover:text-[#f7aab5]" : "text-[#5f5f5c] hover:bg-[#fbe4e6] hover:text-[#c0394b]"}`}>
                           Clear options
                         </button>
                       </div>
                     </div>
-                    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
                       <div>
-                        <label className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Custom sites</label>
+                        <label className={`mb-2 block ${eyebrow}`}>Custom sites</label>
                         <div className="flex gap-2">
-                          <input value={customSiteInput} onChange={(event) => setCustomSiteInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("site"); } }} placeholder="Add site name" className={`h-11 min-w-0 flex-1 rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
-                          <button type="button" onClick={() => addCustomOption("site")} className={`h-11 rounded-2xl px-4 text-sm font-bold ${darkMode ? "bg-[#89ed3f] text-black" : "bg-black text-white"}`}>Save</button>
+                          <input value={customSiteInput} onChange={(event) => setCustomSiteInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("site"); } }} placeholder="Add site name" className={`${pillInputClass(darkMode)} min-w-0 flex-1`} />
+                          <Button darkMode={darkMode} variant={primaryVariant} onClick={() => addCustomOption("site")} className="h-11">Save</Button>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {customPrefs.sites.map((site) => <button key={site} type="button" onClick={() => removeCustomOption("site", site)} className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/10 text-white/70 hover:bg-red-500/10 hover:text-red-200" : "bg-white text-black/70 hover:bg-red-50 hover:text-red-600"}`}>{site} ×</button>)}
-                          {!customPrefs.sites.length && <span className={`text-xs ${darkMode ? "text-white/35" : "text-black/40"}`}>No custom sites saved yet.</span>}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {customPrefs.sites.map((site) => <button key={site} type="button" onClick={() => removeCustomOption("site", site)} className={`inline-flex h-7 items-center gap-1 rounded-full px-3 text-[12px] transition ${darkMode ? "bg-white/10 text-white/75 hover:bg-rose-400/10 hover:text-[#f7aab5]" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#fbe4e6] hover:text-[#c0394b]"}`}>{site} <X className="h-3 w-3 opacity-60" /></button>)}
+                          {!customPrefs.sites.length && <span className={`text-xs ${muted}`}>No custom sites saved yet.</span>}
                         </div>
                       </div>
                       <div>
-                        <label className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] ${darkMode ? "text-white/50" : "text-black/45"}`}>Custom categories</label>
+                        <label className={`mb-2 block ${eyebrow}`}>Custom categories</label>
                         <div className="flex gap-2">
-                          <input value={customCategoryInput} onChange={(event) => setCustomCategoryInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("category"); } }} placeholder="Add category name" className={`h-11 min-w-0 flex-1 rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} />
-                          <button type="button" onClick={() => addCustomOption("category")} className={`h-11 rounded-2xl px-4 text-sm font-bold ${darkMode ? "bg-[#89ed3f] text-black" : "bg-black text-white"}`}>Save</button>
+                          <input value={customCategoryInput} onChange={(event) => setCustomCategoryInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomOption("category"); } }} placeholder="Add category name" className={`${pillInputClass(darkMode)} min-w-0 flex-1`} />
+                          <Button darkMode={darkMode} variant={primaryVariant} onClick={() => addCustomOption("category")} className="h-11">Save</Button>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {customPrefs.categories.map((category) => <button key={category} type="button" onClick={() => removeCustomOption("category", category)} className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/10 text-white/70 hover:bg-red-500/10 hover:text-red-200" : "bg-white text-black/70 hover:bg-red-50 hover:text-red-600"}`}>{category} ×</button>)}
-                          {!customPrefs.categories.length && <span className={`text-xs ${darkMode ? "text-white/35" : "text-black/40"}`}>No custom categories saved yet.</span>}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {customPrefs.categories.map((category) => <button key={category} type="button" onClick={() => removeCustomOption("category", category)} className={`inline-flex h-7 items-center gap-1 rounded-full px-3 text-[12px] transition ${darkMode ? "bg-white/10 text-white/75 hover:bg-rose-400/10 hover:text-[#f7aab5]" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#fbe4e6] hover:text-[#c0394b]"}`}>{category} <X className="h-3 w-3 opacity-60" /></button>)}
+                          {!customPrefs.categories.length && <span className={`text-xs ${muted}`}>No custom categories saved yet.</span>}
                         </div>
                       </div>
                     </div>
@@ -2793,28 +2898,31 @@ export default function EmployeeDailyReport({ darkMode }) {
                   </div>
                   {plannedWorkItems.length > 0 && (
                     <div className="md:col-span-2">
-                      <div className={`overflow-hidden rounded-[22px] transition ${darkMode ? "bg-[#d8f36a]/10" : "bg-[#f4fee9]"}`}>
+                      <div className={`overflow-hidden rounded-[20px] transition ${darkMode ? "bg-[#cff07a]/[0.10]" : "bg-[#eef8cc]"}`}>
                         <button
                           type="button"
                           onClick={() => setPlannedWorkOpen((current) => !current)}
-                          className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
+                          className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left"
                         >
-                          <span className="min-w-0">
-                            <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-[#4b9b16]">Today&apos;s planned work</span>
-                            <span className={`mt-1 block truncate text-sm font-bold ${darkMode ? "text-white" : "text-black"}`}>
-                              {plannedWorkItems.length} item{plannedWorkItems.length === 1 ? "" : "s"} from {formatShortDate(plannedWorkSourceDate)}
+                          <span className="flex min-w-0 items-center gap-3">
+                            <CalendarCheck className={`h-5 w-5 shrink-0 ${darkMode ? "text-[#d8f39a]" : "text-[#4d6b12]"}`} strokeWidth={1.8} />
+                            <span className="min-w-0">
+                              <span className="block text-[14px]">Today&apos;s planned work</span>
+                              <span className={`block truncate text-[12.5px] ${darkMode ? "text-white/60" : "text-[#3d4a1a]"}`}>
+                                {plannedWorkItems.length} item{plannedWorkItems.length === 1 ? "" : "s"} from {formatShortDate(plannedWorkSourceDate)}
+                              </span>
                             </span>
                           </span>
                           <span className="flex shrink-0 items-center gap-2">
-                            <span className={`hidden rounded-full px-3 py-1 text-xs font-bold sm:inline-flex ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-black/55"}`}>
+                            <span className={`hidden h-7 items-center rounded-full px-3 text-[12px] sm:inline-flex ${darkMode ? "bg-white/10 text-white/75" : "bg-white/70 text-[#3d4a1a]"}`}>
                               Import to today
                             </span>
-                            <ChevronDown className={`h-5 w-5 text-[#4b9b16] transition-transform duration-300 ${plannedWorkOpen ? "rotate-180" : ""}`} />
+                            <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${darkMode ? "text-[#d8f39a]" : "text-[#4d6b12]"} ${plannedWorkOpen ? "rotate-180" : ""}`} />
                           </span>
                         </button>
                         <div className={`grid transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${plannedWorkOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                           <div className="min-h-0 overflow-hidden">
-                            <div className={`border-t p-4 ${darkMode ? "border-white/10" : "border-[#d9f8c8]"}`}>
+                            <div className={`border-t p-4 ${darkMode ? "border-white/10" : "border-[#dfeeb0]"}`}>
                               <div className="space-y-2">
                                 {plannedWorkItems.map((item) => {
                                   const selected = Boolean(plannedWorkSelection[item.plannedKey]);
@@ -2823,37 +2931,38 @@ export default function EmployeeDailyReport({ darkMode }) {
                                       key={item.plannedKey}
                                       type="button"
                                       onClick={() => togglePlannedWorkItem(item.plannedKey)}
-                                      className={`flex w-full items-start gap-3 rounded-2xl p-3 text-left transition ${selected ? darkMode ? "bg-[#d8f36a]/18" : "bg-white" : darkMode ? "bg-white/[0.04] hover:bg-white/[0.07]" : "bg-white/60 hover:bg-white"}`}
+                                      className={`flex w-full items-start gap-3 rounded-[14px] p-3 text-left transition ${selected ? darkMode ? "bg-white/[0.10]" : "bg-white" : darkMode ? "bg-white/[0.04] hover:bg-white/[0.07]" : "bg-white/55 hover:bg-white"}`}
                                     >
-                                      <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${selected ? "border-[#4b9b16] bg-[#89ed3f] text-black" : darkMode ? "border-white/20 bg-white/5" : "border-black/15 bg-white"}`}>
-                                        {selected && <Check className="h-3.5 w-3.5" />}
+                                      <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border transition ${selected ? darkMode ? "border-[#cff07a] bg-[#cff07a] text-[#141414]" : "border-[#141414] bg-[#141414] text-white" : darkMode ? "border-white/20 bg-white/5" : "border-[#cfcfcb] bg-white"}`}>
+                                        {selected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
                                       </span>
                                       <span className="min-w-0 flex-1">
-                                        <span className="flex flex-wrap items-center gap-2">
-                                          <span className="font-bold">{item.site}</span>
-                                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/60" : "bg-[#eef4ea] text-black/55"}`}>{item.category}</span>
-                                          {item.involvement && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/60" : "bg-[#eef4ea] text-black/55"}`}>{item.involvement}</span>}
+                                        <span className="flex flex-wrap items-center gap-1.5">
+                                          <span className="text-[13.5px]">{item.site}</span>
+                                          <span className={`rounded-full px-2.5 py-0.5 text-[11.5px] ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}>{item.category}</span>
+                                          {item.involvement && <span className={`rounded-full px-2.5 py-0.5 text-[11.5px] ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}>{item.involvement}</span>}
                                         </span>
-                                        <span className={`mt-1 block text-sm leading-5 ${darkMode ? "text-white/65" : "text-black/60"}`}>{item.description}</span>
+                                        <span className={`mt-1 block text-[13px] leading-5 ${darkMode ? "text-white/65" : "text-[#5f5f5c]"}`}>{item.description}</span>
                                       </span>
                                     </button>
                                   );
                                 })}
                               </div>
                               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <button
-                                  type="button"
+                                <Button
+                                  darkMode={darkMode}
+                                  variant="secondary"
+                                  size="sm"
                                   onClick={() => {
                                     const allSelected = plannedWorkItems.every((item) => plannedWorkSelection[item.plannedKey]);
                                     setPlannedWorkSelection(allSelected ? {} : plannedWorkItems.reduce((result, item) => ({ ...result, [item.plannedKey]: true }), {}));
                                   }}
-                                  className={`h-10 rounded-full px-4 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
                                 >
                                   {plannedWorkItems.every((item) => plannedWorkSelection[item.plannedKey]) ? "Clear selection" : "Select all"}
-                                </button>
+                                </Button>
                                 <div className="flex gap-2">
-                                  <button type="button" onClick={discardPlannedWorkForToday} className={`h-10 rounded-full px-4 text-xs font-bold transition ${darkMode ? "bg-red-500/10 text-red-200 hover:bg-red-500/15" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>Discard for today</button>
-                                  <button type="button" onClick={importSelectedPlannedWork} disabled={!selectedPlannedWorkCount} className="h-10 rounded-full bg-[#89ed3f] px-4 text-xs font-black text-black transition hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-50">Import selected {selectedPlannedWorkCount ? `(${selectedPlannedWorkCount})` : ""}</button>
+                                  <button type="button" onClick={discardPlannedWorkForToday} className={`h-8 rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-rose-400/[0.12] text-[#f7aab5] hover:bg-rose-400/20" : "bg-white text-[#c0394b] hover:bg-[#fbe4e6]"}`}>Discard for today</button>
+                                  <Button darkMode={darkMode} variant={primaryVariant} size="sm" onClick={importSelectedPlannedWork} disabled={!selectedPlannedWorkCount}>Import selected {selectedPlannedWorkCount ? `(${selectedPlannedWorkCount})` : ""}</Button>
                                 </div>
                               </div>
                             </div>
@@ -2903,23 +3012,33 @@ export default function EmployeeDailyReport({ darkMode }) {
                     onRefineDescription={refineDescription}
                     darkMode={darkMode}
                   />
-                  <div className="md:col-span-2"><label className={`mb-2 block text-xs font-semibold uppercase tracking-[0.12em] ${darkMode ? "text-white/60" : "text-black/55"}`}>Note</label><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} rows={3} placeholder="Any extra note..." className={`w-full rounded-2xl border px-4 py-3 outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black"}`} /></div>
+                  <div className="md:col-span-2"><label className={`mb-2 block text-[15px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>Note</label><textarea value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} rows={3} placeholder="Any extra note..." className={areaInputClass(darkMode)} /></div>
                 </div>
                 </div>
               </div>
             </div>
+            {/* Phone: Cancel / Submit stay in a slim bar at the bottom while the form scrolls above. */}
+            <div className={`flex shrink-0 gap-2 border-t px-4 pt-3 md:hidden ${drawerBorder} ${drawerSurface}`} style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+              <Button darkMode={darkMode} variant="secondary" size="lg" onClick={closeFormDrawer} className="flex-1 px-0">Cancel</Button>
+              <Button darkMode={darkMode} variant={primaryVariant} size="lg" type="submit" disabled={submitting} className="flex-[1.4] px-0">{submitting && editingReport ? "Saving..." : editingReport ? "Update" : "Submit"}</Button>
+            </div>
           </form>
           {draftChoiceOpen && (
             <div className="absolute inset-0 z-[60] grid place-items-center bg-black/20 p-4">
-              <div className={`w-full max-w-md rounded-[28px] p-5 shadow-2xl ${darkMode ? "bg-[#181a20] text-white" : "bg-white text-black"}`} onMouseDown={(event) => event.stopPropagation()}>
-                <span className="rounded-md bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#4b9b16]">Draft detected</span>
-                <h3 className="mt-4 text-2xl small text-black dark:text-white font-bold">Continue your saved report?</h3>
-                <p className={`mt-2 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
+              <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop w-full max-w-md rounded-[24px] border p-6 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`} onMouseDown={(event) => event.stopPropagation()}>
+                <div className="flex items-start gap-3.5">
+                  <IconTile icon={FileText} tone="lime" darkMode={darkMode} />
+                  <div className="min-w-0">
+                    <p className={eyebrow}>Draft detected</p>
+                    <h3 className="mt-0.5 text-[18px] tracking-[-0.01em]">Continue your saved report?</h3>
+                  </div>
+                </div>
+                <p className={`mt-3 text-[13.5px] leading-6 ${darkMode ? "text-white/55" : "text-[#6f6f6c]"}`}>
                   A local draft was saved{pendingDraft?.savedAt ? ` at ${formatDraftTime(pendingDraft.savedAt)}` : ""}. Continue from it or start a fresh report for today.
                 </p>
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  <button type="button" onClick={continueDraft} className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-bold text-black">Continue draft</button>
-                  <button type="button" onClick={startFreshDraft} className={`h-11 flex-1 rounded-full border text-sm font-bold ${darkMode ? "border-white/15 text-white" : "border-black/15 text-black"}`}>Start new</button>
+                  <Button darkMode={darkMode} variant={primaryVariant} size="lg" onClick={continueDraft} className="flex-1">Continue draft</Button>
+                  <Button darkMode={darkMode} variant="secondary" size="lg" onClick={startFreshDraft} className="flex-1">Start new</Button>
                 </div>
               </div>
             </div>
@@ -2928,154 +3047,154 @@ export default function EmployeeDailyReport({ darkMode }) {
       )}
 
       {pendingCollaborationTask && (
-        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/35 p-4">
-          <div className={`w-full max-w-lg rounded-[28px] p-5 shadow-2xl ${darkMode ? "bg-[#181a20] text-white" : "bg-white text-black"}`} onMouseDown={(event) => event.stopPropagation()}>
-            <span className="rounded-md bg-[#89ed3f] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black">Collaboration task</span>
-            <div className="mt-4 flex items-start justify-between gap-3">
-              <h3 className="text-2xl font-black">You have been added to a team task</h3>
+        <div className="ui-backdrop fixed inset-0 z-[80] grid place-items-center bg-black/35 p-4">
+          <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop w-full max-w-lg rounded-[24px] border p-6 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`} onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <Chip tone="lime" darkMode={darkMode} icon={Users}>Collaboration task</Chip>
               {pendingCollaborationTasks.length > 1 && (
-                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-black/[0.05] text-black/60"}`}>
+                <Chip darkMode={darkMode} className="tabular-nums">
                   {Math.min(activeCollaborationInviteIndex + 1, pendingCollaborationTasks.length)} / {pendingCollaborationTasks.length}
-                </span>
+                </Chip>
               )}
             </div>
-            <p className={`mt-2 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
+            <h3 className="mt-4 text-[22px] leading-[1.15] tracking-[-0.02em]">You have been added</h3>
+            <p className={`text-[22px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>to a team task</p>
+            <p className={`mt-3 text-[13.5px] leading-6 ${darkMode ? "text-white/55" : "text-[#6f6f6c]"}`}>
               {pendingCollaborationTask.collaborationSourceName || "A team member"} added you to this task. Accept it to add it to your report, or reject it to skip.
             </p>
             {pendingCollaborationTasks.length > 1 && (
-              <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+              <div className="mt-4 flex gap-1.5 overflow-x-auto pb-1">
                 {pendingCollaborationTasks.map((task, index) => (
                   <button
                     key={task.inviteId || index}
                     type="button"
                     onClick={() => setActiveCollaborationInviteIndex(index)}
-                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${index === activeCollaborationInviteIndex ? "bg-[#89ed3f] text-black" : darkMode ? "bg-white/10 text-white/65 hover:bg-white/15" : "bg-black/[0.05] text-black/60 hover:bg-black/[0.08]"}`}
+                    className={`h-8 shrink-0 rounded-full px-3.5 text-[12.5px] transition ${index === activeCollaborationInviteIndex ? darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white" : darkMode ? "bg-white/[0.07] text-white/65 hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#5f5f5c] hover:bg-[#ebebe8]"}`}
                   >
                     Task {index + 1}
                   </button>
                 ))}
               </div>
             )}
-            <div className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f8f7f3]"}`}>
+            <div className={`mt-4 rounded-[16px] p-4 ${softTile}`}>
               <div className="grid gap-3 text-sm sm:grid-cols-2">
-                <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Site</p><p className="mt-1 font-bold">{pendingCollaborationTask.site || "-"}</p></div>
-                <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Category</p><p className="mt-1 font-bold">{pendingCollaborationTask.category || "-"}</p></div>
-                <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Status</p><p className="mt-1 font-bold">{pendingCollaborationTask.status || "In Progress"}</p></div>
-                <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Involvement</p><p className="mt-1 font-bold">{pendingCollaborationTask.involvement || "Team"}</p></div>
-                <div className="sm:col-span-2"><p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-45">Description</p><p className="mt-2 whitespace-pre-wrap leading-6">{pendingCollaborationTask.description || "-"}</p></div>
+                <div><p className={eyebrow}>Site</p><p className="mt-1">{pendingCollaborationTask.site || "-"}</p></div>
+                <div><p className={eyebrow}>Category</p><p className="mt-1">{pendingCollaborationTask.category || "-"}</p></div>
+                <div><p className={eyebrow}>Status</p><p className="mt-1">{pendingCollaborationTask.status || "In Progress"}</p></div>
+                <div><p className={eyebrow}>Involvement</p><p className="mt-1">{pendingCollaborationTask.involvement || "Team"}</p></div>
+                <div className="sm:col-span-2"><p className={eyebrow}>Description</p><p className="mt-1.5 whitespace-pre-wrap leading-6">{pendingCollaborationTask.description || "-"}</p></div>
               </div>
             </div>
             {pendingCollaborationTasks.length > 1 && (
               <div className="mt-4 flex justify-between gap-2">
-                <button
-                  type="button"
+                <Button
+                  darkMode={darkMode}
+                  variant="soft"
+                  size="sm"
                   disabled={activeCollaborationInviteIndex <= 0}
                   onClick={() => setActiveCollaborationInviteIndex((index) => Math.max(0, index - 1))}
-                  className={`h-9 rounded-full px-4 text-xs font-bold disabled:opacity-40 ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/[0.05] hover:bg-black/[0.08]"}`}
                 >
                   Previous
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  darkMode={darkMode}
+                  variant="soft"
+                  size="sm"
                   disabled={activeCollaborationInviteIndex >= pendingCollaborationTasks.length - 1}
                   onClick={() => setActiveCollaborationInviteIndex((index) => Math.min(pendingCollaborationTasks.length - 1, index + 1))}
-                  className={`h-9 rounded-full px-4 text-xs font-bold disabled:opacity-40 ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/[0.05] hover:bg-black/[0.08]"}`}
                 >
                   Next
-                </button>
+                </Button>
               </div>
             )}
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-              <button
-                type="button"
+              <Button
+                darkMode={darkMode}
+                variant="secondary"
+                size="lg"
                 disabled={Boolean(collaborationResponding)}
                 onClick={() => respondToCollaborationTask(pendingCollaborationTask, "rejected")}
-                className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-full border text-sm font-bold disabled:opacity-60 ${darkMode ? "border-white/15 text-white hover:bg-white/10" : "border-black/15 text-black hover:bg-black/[0.04]"}`}
+                className="flex-1"
               >
                 {collaborationResponding === `${pendingCollaborationTask.inviteId}:rejected` && <Loader2 className="h-4 w-4 animate-spin" />}
                 Reject
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                darkMode={darkMode}
+                variant={primaryVariant}
+                size="lg"
                 disabled={Boolean(collaborationResponding)}
                 onClick={() => respondToCollaborationTask(pendingCollaborationTask, "accepted")}
-                className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#89ed3f] text-sm font-black text-black transition hover:bg-[#7dde35] disabled:opacity-60"
+                className="flex-1"
               >
                 {collaborationResponding === `${pendingCollaborationTask.inviteId}:accepted` && <Loader2 className="h-4 w-4 animate-spin" />}
                 Accept task
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
 
       {questionSettingsOpen && data?.isAdmin && (
-        <div className="fixed inset-0 z-[55] bg-black/45 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setQuestionSettingsOpen(false); }}>
-          <form onSubmit={saveQuestionSettings} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <span><b>Employee daily report</b> · Management questions</span>
-              <button type="button" onClick={() => setQuestionSettingsOpen(false)} className="px-1 font-semibold text-[#4b9b16]">Close</button>
-            </div>
+        <div className="fixed inset-0 z-[55] bg-black/20 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setQuestionSettingsOpen(false); }}>
+          <form onSubmit={saveQuestionSettings} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerBorder} ${drawerSurface}`}>
+            <DrawerHeader darkMode={darkMode} icon={Sparkles} tone="lavender" title="Management questions" subtitle="Employee daily report" onClose={() => setQuestionSettingsOpen(false)} />
 
             <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[270px_minmax(0,1fr)]">
-              <aside className={`flex min-h-0 flex-col overflow-hidden border-b md:border-b-0 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
-                <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                  <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">SUPER ADMIN</span>
-                  <h3 className="mt-5 text-2xl font-bold leading-tight">Assign management questions</h3>
-                  <p className={`mt-3 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
+              <aside className={`flex min-h-0 flex-col overflow-hidden border-b md:border-b-0 md:border-r ${drawerBorder} ${drawerSurface}`}>
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  <Chip tone="lavender" darkMode={darkMode} icon={Settings2}>Super admin</Chip>
+                  <h3 className="mt-4 text-[20px] leading-[1.15] tracking-[-0.02em]">Assign management questions</h3>
+                  <p className={`mt-2 text-[13px] leading-6 ${muted}`}>
                     Choose which employees must answer each question after submitting their daily report.
                   </p>
-                  <div className={`mt-6 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Questions</p>
-                    <p className="mt-1 text-3xl font-bold text-[#0f9f6e]">{questionSettingsDraft.length}</p>
-                  </div>
-                  <div className={`mt-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Employees</p>
-                    <p className="mt-1 text-xl font-bold">{questionSettingsUsers.length}</p>
+                  <div className="mt-5 grid grid-cols-2 gap-2.5 md:grid-cols-1">
+                    <StatTile darkMode={darkMode} icon={Sparkles} tone="lavender" value={questionSettingsDraft.length} label="Questions" className="min-h-[104px]" />
+                    <StatTile darkMode={darkMode} icon={Users} tone="sky" value={questionSettingsUsers.length} label="Employees" className="min-h-[104px]" />
                   </div>
                 </div>
-                <div className={`flex shrink-0 flex-col gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-                  <button type="button" onClick={addQuestionDraft} className={`h-11 rounded-full border text-sm font-bold ${darkMode ? "border-white/15 bg-white/10" : "border-black/10 bg-white"}`}>
-                    <Plus className="mr-2 inline h-4 w-4" /> Add question
-                  </button>
-                  <button disabled={questionSettingsSaving || questionSettingsLoading} className="h-11 rounded-full bg-[#89ed3f] text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">
+                <div className={`flex shrink-0 flex-col gap-2 border-t p-4 ${drawerBorder}`}>
+                  <Button darkMode={darkMode} variant="secondary" size="lg" icon={Plus} onClick={addQuestionDraft}>
+                    Add question
+                  </Button>
+                  <Button darkMode={darkMode} variant={primaryVariant} size="lg" type="submit" disabled={questionSettingsSaving || questionSettingsLoading}>
                     {questionSettingsSaving ? "Saving..." : "Save setup"}
-                  </button>
+                  </Button>
                 </div>
               </aside>
 
-              <div className={`min-h-0 overflow-y-auto p-5 pb-24 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-                <section className={`rounded-3xl p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
+              <div className={`min-h-0 overflow-y-auto p-5 pb-24 sm:p-6 ${drawerBody}`}>
+                <section>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Question control</p>
-                      <h4 className={`mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-black"}`}>Management answer setup</h4>
-                      <p className={`mt-1 text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>Enabled questions are compulsory only for the selected employees.</p>
+                      <h4 className="text-[22px] leading-[1.15] tracking-[-0.02em]">Management answer setup</h4>
+                      <p className={`text-[22px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>who answers what</p>
+                      <p className={`mt-2 text-[13px] ${muted}`}>Enabled questions are compulsory only for the selected employees.</p>
                     </div>
-                    <button type="button" onClick={addQuestionDraft} className="h-11 rounded-full bg-black px-5 text-sm font-bold text-white">
-                      <Plus className="mr-2 inline h-4 w-4" /> Add question
-                    </button>
+                    <Button darkMode={darkMode} variant="primary" icon={Plus} onClick={addQuestionDraft}>
+                      Add question
+                    </Button>
                   </div>
 
                   {questionSettingsLoading ? (
-                    <div className={`mt-6 grid min-h-[260px] place-items-center rounded-[24px] ${darkMode ? "bg-white/[0.04]" : "bg-[#f8f7f3]"}`}><ThreeDotLoader /></div>
+                    <div className={`mt-6 grid min-h-[260px] place-items-center rounded-[20px] ${softTile}`}><ThreeDotLoader /></div>
                   ) : (
-                    <div className="mt-6 space-y-4">
+                    <div className="mt-6 space-y-3">
                       {questionSettingsDraft.map((question, index) => (
-                        <div key={question.id} className={`rounded-[26px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f8f7f3]"}`}>
+                        <div key={question.id} className={`${sectionCard} p-4`}>
                           <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
-                            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0f9f6e] text-sm font-black text-white">{index + 1}</div>
+                            <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] text-[13px] tabular-nums ${darkMode ? "bg-[#a78bfa]/15 text-[#c9b9fb]" : "bg-[#ece8fb] text-[#6b4fd1]"}`}>{String(index + 1).padStart(2, "0")}</div>
                             <div className="min-w-0 flex-1">
-                              <label className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Question</label>
+                              <label className={`mb-2 block ${eyebrow}`}>Question</label>
                               <input
                                 value={question.label}
                                 onChange={(event) => updateQuestionDraft(question.id, { label: event.target.value })}
                                 placeholder="Type management question"
-                                className={`h-12 w-full rounded-2xl border px-4 text-sm outline-none transition focus:border-[#0f9f6e] focus:ring-4 focus:ring-[#0f9f6e]/10 ${darkMode ? "border-white/10 bg-black/15 text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+                                className={pillInputClass(darkMode)}
                               />
                             </div>
                             <div className="w-full xl:w-[340px]">
-                              <label className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Assign employees</label>
+                              <label className={`mb-2 block ${eyebrow}`}>Assign employees</label>
                               <EmployeeUserMultiSelect
                                 darkMode={darkMode}
                                 users={questionSettingsUsers}
@@ -3083,15 +3202,15 @@ export default function EmployeeDailyReport({ darkMode }) {
                                 onChange={(ids) => updateQuestionDraft(question.id, { assignedUserIds: ids })}
                               />
                             </div>
-                            <div className="flex shrink-0 items-center gap-2 pt-6">
-                              <button
-                                type="button"
-                                onClick={() => updateQuestionDraft(question.id, { enabled: question.enabled === false })}
-                                className={`h-11 rounded-full px-4 text-sm font-bold transition ${question.enabled !== false ? "bg-[#0fba7a] text-white" : darkMode ? "bg-white/10 text-white/55" : "bg-white text-black/50"}`}
-                              >
-                                {question.enabled !== false ? "On" : "Off"}
-                              </button>
-                              <button type="button" onClick={() => removeQuestionDraft(question.id)} className={`grid h-11 w-11 place-items-center rounded-full transition ${darkMode ? "bg-red-500/10 text-red-200" : "bg-red-50 text-red-600"}`}>
+                            <div className="flex shrink-0 items-center gap-2.5 xl:pt-8">
+                              <span className={`text-[12.5px] ${muted}`}>{question.enabled !== false ? "On" : "Off"}</span>
+                              <Toggle
+                                darkMode={darkMode}
+                                checked={question.enabled !== false}
+                                label="Question enabled"
+                                onChange={() => updateQuestionDraft(question.id, { enabled: question.enabled === false })}
+                              />
+                              <button type="button" onClick={() => removeQuestionDraft(question.id)} aria-label="Remove question" className={`grid h-10 w-10 place-items-center rounded-full transition ${darkMode ? "bg-rose-400/[0.12] text-[#f7aab5] hover:bg-rose-400/20" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"}`}>
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
@@ -3099,7 +3218,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                         </div>
                       ))}
                       {!questionSettingsDraft.length && (
-                        <div className={`grid min-h-[220px] place-items-center rounded-[24px] ${darkMode ? "bg-white/[0.04] text-white/45" : "bg-[#f8f7f3] text-black/45"}`}>No management questions yet.</div>
+                        <EmptyState darkMode={darkMode} icon={Sparkles} tone="lavender" title="No management questions yet" text="Add a question and choose who answers it." />
                       )}
                     </div>
                   )}
@@ -3111,50 +3230,45 @@ export default function EmployeeDailyReport({ darkMode }) {
       )}
 
       {executiveOpen && (
-        <div className="fixed inset-0 z-[55] bg-black/45 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]">
-          <form onSubmit={saveExecutiveAnswers} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <span><b>Management follow-up</b> · {data?.today || todayInput()}</span>
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700">Required</span>
-            </div>
+        <div className="fixed inset-0 z-[55] bg-black/20 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]">
+          <form onSubmit={saveExecutiveAnswers} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerBorder} ${drawerSurface}`}>
+            <DrawerHeader darkMode={darkMode} icon={Sparkles} tone="amber" title="Management follow-up" subtitle={data?.today || todayInput()}>
+              <Chip tone="amber" darkMode={darkMode}>Required</Chip>
+            </DrawerHeader>
 
             <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[270px_minmax(0,1fr)]">
-              <aside className={`flex min-h-0 flex-col overflow-hidden border-b md:border-b-0 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
-                <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                  <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">CEO INPUTS</span>
-                  <h3 className="mt-5 text-2xl font-bold leading-tight">Complete today&apos;s management questions</h3>
-                  <p className={`mt-3 text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>
+              <aside className={`flex min-h-0 flex-col overflow-hidden border-b md:border-b-0 md:border-r ${drawerBorder} ${drawerSurface}`}>
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  <Chip tone="lime" darkMode={darkMode} icon={Sparkles}>CEO inputs</Chip>
+                  <h3 className="mt-4 text-[20px] leading-[1.15] tracking-[-0.02em]">Complete today&apos;s management questions</h3>
+                  <p className={`mt-2 text-[13px] leading-6 ${muted}`}>
                     These answers are used for the executive employee report and tomorrow risk analysis.
                   </p>
-                  <div className={`mt-6 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-black/40"}`}>Assigned questions</p>
-                    <p className="mt-1 text-3xl font-bold text-[#0f9f6e]">{executiveQuestions.length}</p>
-                  </div>
-                  <div className={`mt-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#fff7df]"}`}>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/45" : "text-amber-700"}`}>Must complete</p>
-                    <p className={`mt-1 text-sm font-semibold ${darkMode ? "text-white/70" : "text-black/65"}`}>All fields are required before closing this step.</p>
+                  <div className="mt-5 space-y-2.5">
+                    <StatTile darkMode={darkMode} icon={ClipboardList} tone="mint" value={executiveQuestions.length} label="Assigned questions" className="min-h-[104px]" />
+                    <SideFact darkMode={darkMode} label="Must complete" tone="amber">All fields are required before closing this step.</SideFact>
                   </div>
                 </div>
-                <div className={`flex shrink-0 gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-                  <button disabled={executiveSaving} className="h-11 flex-1 rounded-full bg-[#89ed3f] text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">
+                <div className={`flex shrink-0 gap-2 border-t p-4 ${drawerBorder}`}>
+                  <Button darkMode={darkMode} variant={primaryVariant} size="lg" type="submit" disabled={executiveSaving} className="flex-1">
                     {executiveSaving ? "Saving..." : "Save answers"}
-                  </button>
+                  </Button>
                 </div>
               </aside>
 
-              <div className={`min-h-0 overflow-y-auto p-5 pb-24 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-                <section className={`rounded-3xl p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Additional report data</p>
-                  <h4 className={`mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-black"}`}>Management questions</h4>
-                  <p className={`mt-1 text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>Answer briefly but clearly. Mention names, dates, blockers, and ownership wherever applicable.</p>
-                  <div className="mt-6 grid gap-4">
+              <div className={`min-h-0 overflow-y-auto p-5 pb-24 sm:p-6 ${drawerBody}`}>
+                <section>
+                  <h4 className="text-[22px] leading-[1.15] tracking-[-0.02em]">Management questions</h4>
+                  <p className={`text-[22px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>brief but clear</p>
+                  <p className={`mt-2 text-[13px] ${muted}`}>Mention names, dates, blockers and ownership wherever applicable.</p>
+                  <div className="mt-6 grid gap-3">
                     {executiveQuestions.map((question, index) => (
-                      <label key={question.id} className={`block rounded-[24px] p-4 transition ${darkMode ? "bg-white/[0.055]" : "bg-[#f8f7f3]"}`}>
+                      <label key={question.id} className={`block ${sectionCard} p-4 transition`}>
                         <span className="flex items-start gap-3">
-                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#0f9f6e] text-xs font-black text-white">{index + 1}</span>
+                          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-[12px] tabular-nums ${darkMode ? "bg-emerald-400/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>{String(index + 1).padStart(2, "0")}</span>
                           <span>
-                            <span className={`block text-sm font-bold ${darkMode ? "text-white" : "text-black"}`}>{question.label}</span>
-                            <span className={`mt-1 block text-xs ${darkMode ? "text-white/40" : "text-black/42"}`}>Required for executive analysis</span>
+                            <span className="block text-[14px]">{question.label}</span>
+                            <span className={`mt-0.5 block text-[12px] ${muted}`}>Required for executive analysis</span>
                           </span>
                         </span>
                         <textarea
@@ -3163,7 +3277,7 @@ export default function EmployeeDailyReport({ darkMode }) {
                           onChange={(event) => setExecutiveAnswers((current) => ({ ...current, [question.id]: event.target.value }))}
                           rows={3}
                           placeholder="Type the update here..."
-                          className={`mt-3 w-full resize-y rounded-2xl border px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#0f9f6e] focus:ring-4 focus:ring-[#0f9f6e]/10 ${darkMode ? "border-white/10 bg-black/15 text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+                          className={`mt-3 resize-y leading-6 ${areaInputClass(darkMode)}`}
                         />
                       </label>
                     ))}
@@ -3176,65 +3290,56 @@ export default function EmployeeDailyReport({ darkMode }) {
       )}
 
       {reportOpen && data?.isAdmin && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setReportOpen(false); }}>
-          <div className={`employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#101216] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}><span><b>Employee daily report</b> · Generate report</span><button onClick={() => setReportOpen(false)} className="font-semibold text-[#4b9b16]">Close</button></div>
+        <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setReportOpen(false); }}>
+          <div className={`employee-report-shell absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerBorder} ${drawerSurface}`}>
+            <DrawerHeader darkMode={darkMode} icon={FileText} tone="peach" title="Generate report" subtitle="Employee daily report" onClose={() => setReportOpen(false)} />
 
-            <div className={`min-h-0 flex-1 overflow-y-auto p-5 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
+            <div className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 ${drawerBody}`}>
 
-            <div className={`mb-4 shrink-0 rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/[0.08] bg-white"}`}>
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-                <div>
-                  {/* <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${muted}`}>Report range</p> */}
-                  {/* <h4 className="mt-2 text-2xl font-semibold">Generate employee work summary</h4> */}
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <EmployeeUserMultiSelect darkMode={darkMode} users={reportUsers} selectedIds={reportUserIds} onChange={setReportUserIds} />
-                  <EmployeeDateRangePicker darkMode={darkMode} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo} />
-                  <button onClick={generateEmployeeReport} disabled={reportLoading} className="h-11 rounded-full bg-[#89ed3f] px-5 text-sm font-bold text-black hover:bg-[#7dde35] disabled:opacity-60">{reportLoading ? "Generating..." : "Generate"}</button>
-                  <button onClick={() => downloadEmployeeReportPdf()} disabled={Boolean(reportDownloading)} className={`flex h-11 items-center justify-center gap-2 rounded-full border px-5 text-sm font-bold transition disabled:opacity-60 ${darkMode ? "border-white/15 bg-white/10 text-white hover:bg-white/15" : "border-black/10 bg-white text-black hover:bg-[#eef7df]"}`}>
-                    <Download className="h-4 w-4" /> {reportDownloading === "range" ? "Preparing..." : "Download range PDF"}
-                  </button>
-                  <button onClick={() => { const today = todayInput(); void downloadEmployeeReportPdf({ from: today, to: today, mode: "today" }); }} disabled={Boolean(reportDownloading)} className="flex h-11 items-center justify-center gap-2 rounded-full bg-red-600 px-5 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-60">
-                    <FileText className="h-4 w-4" /> {reportDownloading === "today" ? "Preparing..." : "Today PDF"}
-                  </button>
+            <div className={`mb-4 shrink-0 rounded-[20px] p-3 ${softTile}`}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <EmployeeUserMultiSelect darkMode={darkMode} users={reportUsers} selectedIds={reportUserIds} onChange={setReportUserIds} />
+                <EmployeeDateRangePicker darkMode={darkMode} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo} />
+                <div className="flex flex-wrap gap-2 sm:ml-auto">
+                  <Button darkMode={darkMode} variant={primaryVariant} onClick={generateEmployeeReport} disabled={reportLoading} className="h-10">{reportLoading ? "Generating..." : "Generate"}</Button>
+                  <Button darkMode={darkMode} variant="secondary" icon={Download} onClick={() => downloadEmployeeReportPdf()} disabled={Boolean(reportDownloading)} className="h-10">
+                    {reportDownloading === "range" ? "Preparing..." : "Range PDF"}
+                  </Button>
+                  <Button darkMode={darkMode} variant="secondary" icon={FileText} onClick={() => { const today = todayInput(); void downloadEmployeeReportPdf({ from: today, to: today, mode: "today" }); }} disabled={Boolean(reportDownloading)} className={`h-10 ${darkMode ? "text-[#f7aab5]" : "text-[#c0394b]"}`}>
+                    {reportDownloading === "today" ? "Preparing..." : "Today PDF"}
+                  </Button>
                 </div>
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
               {!reportData ? (
-                <div className={`grid min-h-[360px] place-items-center rounded-[28px] border ${darkMode ? "border-white/10 bg-[#171a20] text-white/55" : "border-black/10 bg-white text-black/55"}`}>
-                  Choose daily, weekly, monthly, or a custom date range, then click Generate.
-                </div>
+                <EmptyState darkMode={darkMode} icon={FileText} tone="peach" title="No report generated yet" text="Choose employees and a date range, then click Generate." className="min-h-[360px]" />
               ) : (
                 <div className="space-y-4">
-                  <section className={`rounded-[28px] border p-5 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
+                  <section className={`${sectionCard} p-5`}>
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${muted}`}>{reportData.range.from} to {reportData.range.to}</p>
-                        <h4 className="mt-2 text-2xl font-semibold">Employee submissions</h4>
-                        <p className={`mt-1 text-sm ${muted}`}>{reportData.selectedUserIds?.length ? `${reportData.selectedUserIds.length} selected employee${reportData.selectedUserIds.length === 1 ? "" : "s"}` : "All employees"}</p>
+                        <p className={eyebrow}>{reportData.range.from} to {reportData.range.to}</p>
+                        <h4 className="mt-1 text-[22px] leading-[1.15] tracking-[-0.02em]">Employee submissions</h4>
+                        <p className={`text-[22px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{reportData.selectedUserIds?.length ? `${reportData.selectedUserIds.length} selected employee${reportData.selectedUserIds.length === 1 ? "" : "s"}` : "All employees"}</p>
                       </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#eef7df] text-[#17643f]"}`}>Generated</span>
+                      <Chip tone="mint" darkMode={darkMode} icon={CheckCircle2}>Generated</Chip>
                     </div>
-                    <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                    <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
                       {[
-                        ["Submissions", reportData.summary.responses],
-                        ["Employees", reportData.summary.employees],
-                        ["Not submitted", reportData.summary.notSubmitted || 0],
-                        ["Departments", reportData.summary.departments],
-                        ["Questions", reportData.summary.questions],
-                      ].map(([label, value]) => (
-                        <div key={label} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
-                          <p className={`text-xs ${muted}`}>{label}</p>
-                          <p className="mt-2 text-2xl font-semibold">{value}</p>
-                        </div>
+                        ["Submissions", reportData.summary.responses, ClipboardList, "mint"],
+                        ["Employees", reportData.summary.employees, Users, "sky"],
+                        ["Not submitted", reportData.summary.notSubmitted || 0, Clock3, "rose"],
+                        ["Departments", reportData.summary.departments, Building2, "amber"],
+                        ["Questions", reportData.summary.questions, Sparkles, "lavender"],
+                      ].map(([label, value, Icon, tone]) => (
+                        <StatTile key={label} darkMode={darkMode} icon={Icon} tone={tone} value={value} label={label} />
                       ))}
                     </div>
                     {(reportData.notSubmitted || []).some((group) => group.count > 0) && (
-                      <div className={`mt-5 rounded-[22px] p-4 ${darkMode ? "bg-red-500/10" : "bg-red-50"}`}>
-                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-red-600">Not submitted</p>
+                      <div className={`mt-5 rounded-[16px] p-4 ${darkMode ? "bg-rose-400/[0.08]" : "bg-[#fbe4e6]"}`}>
+                        <p className={`text-[12.5px] ${darkMode ? "text-[#f7aab5]" : "text-[#c0394b]"}`}>Not submitted</p>
                         <ul className="mt-2 space-y-1.5 text-sm leading-5">
                           {(reportData.notSubmitted || []).filter((group) => group.count > 0).slice(0, 4).map((group) => (
                             <li key={group.date}>• {group.date}: {(group.employees || []).map((employee) => employee.displayName || employee.username).filter(Boolean).join(", ")}</li>
@@ -3244,15 +3349,15 @@ export default function EmployeeDailyReport({ darkMode }) {
                     )}
                     <div className="mt-5 grid gap-3 lg:grid-cols-2">
                       {(reportData.employeeReports || []).slice(0, 8).map((report, index) => (
-                        <div key={report.id || `${report.userId}-${report.reportDate}-${index}`} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
+                        <div key={report.id || `${report.userId}-${report.reportDate}-${index}`} className={`rounded-[16px] p-4 ${softTile}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="text-base font-bold">{index + 1}. {report.employeeName || "Employee"}</p>
-                              <p className={`mt-1 text-xs ${muted}`}>{report.department || "No department"} | {report.reportDate}</p>
+                              <p className="text-[15px]"><span className={`mr-1.5 tabular-nums ${muted}`}>{String(index + 1).padStart(2, "0")}</span>{report.employeeName || "Employee"}</p>
+                              <p className={`mt-0.5 text-xs ${muted}`}>{report.department || "No department"} · {report.reportDate}</p>
                             </div>
-                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${report.tomorrowPlanTick ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
+                            <Chip tone={report.tomorrowPlanTick ? "mint" : "amber"} darkMode={darkMode} className="h-6 px-2.5 text-[11.5px]">
                               {report.tomorrowPlanTick ? "Plan confirmed" : "Plan pending"}
-                            </span>
+                            </Chip>
                           </div>
                           <div className="mt-4 space-y-3">
                             {[
@@ -3260,8 +3365,8 @@ export default function EmployeeDailyReport({ darkMode }) {
                               ["Waiting / follow-up", report.waitingTaskItems || []],
                             ].map(([label, items]) => items.length ? (
                               <div key={label}>
-                                <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${muted}`}>{label}</p>
-                                <ul className="mt-2 space-y-1.5 text-sm leading-5">
+                                <p className={eyebrow}>{label}</p>
+                                <ul className="mt-1.5 space-y-1.5 text-sm leading-5">
                                   {items.slice(0, 3).map((item, itemIndex) => (
                                     <li key={itemIndex}>• {[item.site, item.category].filter(Boolean).join(" - ")}{item.description ? `: ${item.description}` : ""}</li>
                                   ))}
@@ -3271,10 +3376,10 @@ export default function EmployeeDailyReport({ darkMode }) {
                             ) : null)}
                             {(report.managementAnswers || []).length ? (
                               <div>
-                                <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${muted}`}>Management answers</p>
-                                <ul className="mt-2 space-y-1.5 text-sm leading-5">
+                                <p className={eyebrow}>Management answers</p>
+                                <ul className="mt-1.5 space-y-1.5 text-sm leading-5">
                                   {(report.managementAnswers || []).slice(0, 3).map((answer, answerIndex) => (
-                                    <li key={answer.id || answerIndex}>• <b>{answer.label}</b>: {answer.answer}</li>
+                                    <li key={answer.id || answerIndex}>• <span className={darkMode ? "text-white" : "text-[#141414]"}>{answer.label}</span>: <span className={darkMode ? "text-white/70" : "text-[#5f5f5c]"}>{answer.answer}</span></li>
                                   ))}
                                   {report.managementAnswers.length > 3 && <li className={muted}>• +{report.managementAnswers.length - 3} more</li>}
                                 </ul>
@@ -3285,52 +3390,45 @@ export default function EmployeeDailyReport({ darkMode }) {
                       ))}
                     </div>
                     {!(reportData.employeeReports || []).length && (
-                      <div className={`mt-5 rounded-[22px] p-6 text-center text-sm ${darkMode ? "bg-white/[0.055] text-white/50" : "bg-[#f7f5ef] text-black/50"}`}>
-                        No employee submissions found for this range.
-                      </div>
+                      <EmptyState darkMode={darkMode} icon={Inbox} title="No employee submissions" text="Nothing was submitted in this range." className="mt-5" />
                     )}
                     {reportData.analysis ? <>
                     <div className="mt-5 grid gap-3 lg:grid-cols-2">
                       {[
-                        ["CEO operating status", reportData.analysis?.overallStatus],
-                        ["Most at risk today", reportData.analysis?.projectMostAtRiskTomorrow],
-                      ].map(([label, value]) => (
-                        <div key={label} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
-                          <p className={`text-xs font-bold uppercase tracking-[0.14em] ${muted}`}>{label}</p>
-                          <p className="mt-2 text-sm leading-6">{value || "No analysis available."}</p>
-                        </div>
+                        ["CEO operating status", reportData.analysis?.overallStatus, Activity, "sky"],
+                        ["Most at risk today", reportData.analysis?.projectMostAtRiskTomorrow, AlertTriangle, "rose"],
+                      ].map(([label, value, Icon, tone]) => (
+                        <FeatureCard key={label} darkMode={darkMode} icon={Icon} tone={tone} title={label} text={value || "No analysis available."} />
                       ))}
                     </div>
-                    <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                       {[
-                        ["Project most at risk", reportData.analysis?.ceoFocus?.projectRisk],
-                        ["Payment focus", reportData.analysis?.ceoFocus?.paymentFocus],
-                        ["CEO decision", reportData.analysis?.ceoFocus?.ceoDecision],
-                        ["Must finish today", reportData.analysis?.ceoFocus?.todayMustFinish],
-                      ].map(([label, value]) => (
-                        <div key={label} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
-                          <p className={`text-xs font-bold uppercase tracking-[0.14em] ${muted}`}>{label}</p>
-                          <p className="mt-2 text-sm leading-6">{value || "No update submitted."}</p>
-                        </div>
+                        ["Project most at risk", reportData.analysis?.ceoFocus?.projectRisk, AlertTriangle, "peach"],
+                        ["Payment focus", reportData.analysis?.ceoFocus?.paymentFocus, Building2, "amber"],
+                        ["CEO decision", reportData.analysis?.ceoFocus?.ceoDecision, Sparkles, "lavender"],
+                        ["Must finish today", reportData.analysis?.ceoFocus?.todayMustFinish, CheckCircle2, "mint"],
+                      ].map(([label, value, Icon, tone]) => (
+                        <FeatureCard key={label} darkMode={darkMode} icon={Icon} tone={tone} title={label} text={value || "No update submitted."} />
                       ))}
                     </div>
                     </> : null}
                   </section>
 
                   {reportData.analysis && (reportData.analysis?.projectCards || []).length ? (
-                    <section className={`rounded-[28px] border p-5 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-                      <div className="flex items-center justify-between gap-3">
+                    <section className={`${sectionCard} p-5`}>
+                      <div className="flex items-center gap-3">
+                        <IconTile icon={Building2} tone="peach" darkMode={darkMode} size="sm" />
                         <div>
-                          <p className={`text-xs font-bold uppercase tracking-[0.16em] ${muted}`}>Projects</p>
-                          <h4 className="mt-1 text-xl font-semibold">Project risk dashboard</h4>
+                          <h4 className="text-[17px] tracking-[-0.01em]">Project risk dashboard</h4>
+                          <p className={`text-[12.5px] ${muted}`}>Projects</p>
                         </div>
                       </div>
                       <div className="mt-4 grid gap-3 lg:grid-cols-3">
                         {(reportData.analysis?.projectCards || []).map((project, index) => (
-                          <div key={`${project.name || "project"}-${index}`} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
+                          <div key={`${project.name || "project"}-${index}`} className={`rounded-[16px] p-4 ${softTile}`}>
                             <div className="flex items-start justify-between gap-3">
-                              <h5 className="text-base font-bold">{project.name || "Project needs clarification"}</h5>
-                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-black/60"}`}>{project.progress || project.status || "Update"}</span>
+                              <h5 className="text-[15px]">{project.name || "Project needs clarification"}</h5>
+                              <Chip darkMode={darkMode} tone="outline" className="h-6 shrink-0 px-2.5 text-[11.5px]">{project.progress || project.status || "Update"}</Chip>
                             </div>
                             {[project.status, project.criticalPending && `Pending: ${project.criticalPending}`, project.owner && `Owner: ${project.owner}`, project.target && `Target: ${project.target}`, project.summary, project.nextAction && `Next: ${project.nextAction}`, project.source && `Source: ${project.source}`].filter(Boolean).map((line, lineIndex) => (
                               <p key={lineIndex} className={`mt-2 text-sm leading-5 ${lineIndex === 0 ? "" : muted}`}>{line}</p>
@@ -3406,57 +3504,60 @@ export default function EmployeeDailyReport({ darkMode }) {
       )}
 
       {detail && (
-        <div className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] ${detailClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetailDrawer(); }}>
-          <div className={`employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${detailExpanded ? "employee-report-shell-expanded" : ""} ${detailClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#101216] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <span><b>{detail.reportDate === data?.today && detail.userId === data?.currentUserId ? "Editable report detail" : "Read-only report detail"}</b> · {detail.reportDate}</span>
-              <div className="flex items-center gap-2">
-                {detail.reportDate === data?.today && detail.userId === data?.currentUserId && (
-                  <button type="button" onClick={() => { closeDetailDrawer(); window.setTimeout(openForm, 300); }} className="flex h-8 items-center rounded-full bg-[#89ed3f] px-3 text-xs font-bold text-black">Edit report</button>
-                )}
-                <button onClick={() => setDetailExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={detailExpanded ? "Restore drawer size" : "Expand report to full screen"}>{detailExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}<span className="hidden sm:inline">{detailExpanded ? "Restore" : "Expand"}</span></button>
-                <button onClick={closeDetailDrawer} className="px-1 font-semibold text-[#4b9b16]">Close</button>
-              </div>
-            </div>
+        <div className={`fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] ${detailClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetailDrawer(); }}>
+          <div className={`employee-report-shell absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] ${detailExpanded ? "employee-report-shell-expanded" : ""} ${detailClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${drawerBorder} ${drawerSurface}`}>
+            <DrawerHeader
+              darkMode={darkMode}
+              icon={Eye}
+              tone="sky"
+              title={detail.reportDate === data?.today && detail.userId === data?.currentUserId ? "Editable report detail" : "Read-only report detail"}
+              subtitle={`${detail.employeeName || "Employee"} · ${detail.reportDate}`}
+              onClose={closeDetailDrawer}
+            >
+              {detail.reportDate === data?.today && detail.userId === data?.currentUserId && (
+                <Button darkMode={darkMode} variant={primaryVariant} size="sm" onClick={() => { closeDetailDrawer(); window.setTimeout(openForm, 300); }}>Edit report</Button>
+              )}
+              <button type="button" onClick={() => setDetailExpanded((current) => !current)} className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-white/[0.06] text-white/75 hover:bg-white/10" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8]"}`} aria-label={detailExpanded ? "Restore drawer size" : "Expand report to full screen"}>{detailExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}<span className="hidden sm:inline">{detailExpanded ? "Restore" : "Expand"}</span></button>
+            </DrawerHeader>
 
             <div className={`${detailExpanded ? "grid md:grid-cols-[270px_minmax(0,1fr)]" : "block"} min-h-0 flex-1 overflow-hidden`}>
-              {detailExpanded && <aside className={`hidden min-h-0 flex-col border-b p-6 md:flex md:border-b-0 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
+              {detailExpanded && <aside className={`hidden min-h-0 flex-col border-b p-5 md:flex md:border-b-0 md:border-r ${drawerBorder} ${drawerSurface}`}>
                 <div>
-                  <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px]  text-[#4b9b16]">SUBMITTED BY</span>
-                  <h4 className="mt-4 text-2xl font-bold small text-black dark:text-white leading-tight">{detail.employeeName || "Employee"}</h4>
-                  <p className={`mt-2 text-xs ${darkMode ? "text-white/50" : "text-black/50"}`}>{displayDateTime(detail.submittedAt)}</p>
+                  <Chip tone="sky" darkMode={darkMode} icon={Users}>Submitted by</Chip>
+                  <h4 className="mt-4 text-[20px] leading-tight tracking-[-0.02em]">{detail.employeeName || "Employee"}</h4>
+                  <p className={`mt-1 text-xs ${muted}`}>{displayDateTime(detail.submittedAt)}</p>
                 </div>
-                <div className="mt-8 space-y-3">
-                  {[["Department", detail.department || "-"], ["Status", detail.taskStatus || "-"]].map(([label, value]) => <div key={label} className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}><p className={`text-[10px] font-bold uppercase tracking-wide ${darkMode ? "text-white/40" : "text-black/40"}`}>{label}</p><p className="mt-1 text-sm font-bold">{value}</p></div>)}
+                <div className="mt-6 space-y-2.5">
+                  {[["Department", detail.department || "-"], ["Status", detail.taskStatus || "-"]].map(([label, value]) => <SideFact key={label} darkMode={darkMode} label={label} tone="neutral">{value}</SideFact>)}
                 </div>
-                <button onClick={closeDetailDrawer} className={`mt-auto h-11 rounded-full border text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Close</button>
+                <Button darkMode={darkMode} variant="secondary" size="lg" onClick={closeDetailDrawer} className="mt-auto">Close</Button>
               </aside>}
 
-              <div className={`h-full min-h-0 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}><div className={`rounded-3xl p-4 sm:p-6 ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/[0.08] bg-white"}`}>
+              <div className={`h-full min-h-0 overflow-y-auto p-4 sm:p-6 ${drawerBody}`}><div>
                 <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div>
-                    <p className={`text-xs uppercase tracking-[0.18em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Work progress</p>
-                    <h4 className="mt-2 text-2xl small font-semibold">Daily report summary</h4>
+                    <h4 className="text-[22px] leading-[1.15] tracking-[-0.02em]">Daily report summary</h4>
+                    <p className={`text-[22px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>work progress</p>
                   </div>
                   <div className="flex flex-wrap gap-2 xl:justify-end">
                     {[
                       ["Task Type", detail.taskType],
                     ].map(([label, value]) => (
-                      <span key={label} className={`inline-flex items-center gap-2 rounded-full  px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/[0.06] text-white/75" : "border-black/10 bg-[#f7f5ef] text-black/70"}`}>
-                        <span className={darkMode ? "text-white/40" : "text-black/45"}>{label}</span>
-                        <span className="max-w-[180px] truncate text-sm text-current">{value || "-"}</span>
-                      </span>
+                      <Chip key={label} darkMode={darkMode} tone="outline">
+                        <span className={muted}>{label}</span>
+                        <span className="max-w-[180px] truncate">{value || "-"}</span>
+                      </Chip>
                     ))}
-                    <span className={`inline-flex items-center rounded-full px-3 py-2 text-xs font-semibold ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#eef7df] text-[#17643f]"}`}>Read-only</span>
+                    <Chip tone="lime" darkMode={darkMode}>Read-only</Chip>
                   </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <TaskItemsDisplay title="Task description" items={detail.taskItems} fallback={detail.taskDescription} darkMode={darkMode} showStatus showInvolvement />
                   <TaskItemsDisplay title="Waiting / tomorrow plan" items={detail.waitingTaskItems} fallback={detail.waitingTaskDescription} darkMode={darkMode} showInvolvement />
-                  <div className={`rounded-[22px] p-5 md:col-span-2 ${darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]"}`}>
-                    <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>Note</p>
-                    <p className="mt-3 whitespace-pre-wrap text-base leading-7">{detail.note || "-"}</p>
+                  <div className={`rounded-[20px] p-5 md:col-span-2 ${softTile}`}>
+                    <p className={eyebrow}>Note</p>
+                    <p className="mt-2 whitespace-pre-wrap text-[14px] leading-7">{detail.note || "-"}</p>
                   </div>
                 </div>
               </div></div>
@@ -3466,14 +3567,15 @@ export default function EmployeeDailyReport({ darkMode }) {
       )}
 
       {heatmapOpen && !data?.isAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#171714]/60 p-4 backdrop-blur-md">
-          <div className={`w-full max-w-6xl rounded-[30px] p-5 shadow-2xl ${darkMode ? "bg-[#1f2528] text-white" : "bg-[#eef2f5] text-[#171714]"}`}>
-            <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="ui-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[2px]">
+          <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop w-full max-w-6xl rounded-[24px] border p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
+            <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Activity heatmap</p>
-                <h3 className="mt-2 text-2xl font-semibold">Your submission activity</h3>
+                <Chip tone="mint" darkMode={darkMode} icon={Activity}>Activity heatmap</Chip>
+                <h3 className="mt-3 text-[22px] leading-[1.15] tracking-[-0.02em]">Your submission activity</h3>
+                <p className={`text-[22px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>day by day this year</p>
               </div>
-              <button onClick={() => setHeatmapOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "bg-white/10" : "bg-white"}`}><X className="h-4 w-4" /></button>
+              <button onClick={() => setHeatmapOpen(false)} aria-label="Close" className={`grid h-9 w-9 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}><X className="h-4 w-4" /></button>
             </div>
             <Heatmap darkMode={darkMode} rows={data?.heatmap || []} title="Your submission activity" />
           </div>

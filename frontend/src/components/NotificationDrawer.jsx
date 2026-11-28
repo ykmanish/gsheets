@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, Check, Loader2, MailOpen, Trash2, X } from "lucide-react";
+import { Bell, Check, Loader2, MailOpen, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { ConfirmModal } from "./ui";
+import { Button, Chip, ConfirmModal, Drawer, EmptyState } from "./ui";
 
 export default function NotificationDrawer({ open, onClose, darkMode }) {
   const [notifications, setNotifications] = useState([]);
@@ -11,7 +11,7 @@ export default function NotificationDrawer({ open, onClose, darkMode }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const muted = darkMode ? "text-white/50" : "text-black/45";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   const unread = useMemo(() => notifications.filter((item) => !item.readAt).length, [notifications]);
   const allSelected = notifications.length > 0 && selected.length === notifications.length;
   const notifyChanged = useCallback(() => {
@@ -92,81 +92,90 @@ export default function NotificationDrawer({ open, onClose, darkMode }) {
     }
   };
 
+  const severityTone = (severity) => (severity === "error" ? "rose" : severity === "warning" ? "amber" : "sky");
+
   return (
     <>
-      <div className={`fixed inset-0 z-50 bg-black/35 transition-opacity duration-300 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`} onClick={onClose} />
-      <aside
-        className={`fixed right-0 top-0 z-50 h-dvh w-full max-w-md transform overflow-hidden border-l shadow-2xl transition-transform duration-300 ease-out ${
-          open ? "translate-x-0" : "translate-x-full"
-        } ${darkMode ? "bg-[#101216] border-white/10 text-white" : "bg-white border-black/10 text-black"}`}
-      >
-        <div className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/5"}`}>
-          <div>
-            <p className={`text-[11px] uppercase tracking-[0.28em] ${muted}`}>Action inbox</p>
-            <h3 className="mt-1 text-xl">Notifications</h3>
+      <Drawer
+        open={open}
+        onClose={onClose}
+        darkMode={darkMode}
+        icon={Bell}
+        tone="sky"
+        title="Notifications"
+        subtitle={unread ? `${unread} unread · action inbox` : "Action inbox"}
+        width={460}
+        notice={
+          <div className={`flex flex-wrap items-center gap-2 border-b px-6 py-3 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+            <Button darkMode={darkMode} variant="soft" size="sm" onClick={() => setSelected(allSelected ? [] : notifications.map((item) => item.id))}>
+              {allSelected ? "Clear selected" : "Select all"}
+            </Button>
+            <Button darkMode={darkMode} variant="soft" size="sm" icon={MailOpen} onClick={markSelectedRead} disabled={selected.length === 0}>
+              Read
+            </Button>
+            <Button darkMode={darkMode} variant="soft" size="sm" icon={Trash2} onClick={() => setDeleteConfirm(true)} disabled={selected.length === 0} className={darkMode ? "" : "!text-[#c0394b]"}>
+              Delete
+            </Button>
+            <Button darkMode={darkMode} variant="secondary" size="sm" icon={Check} onClick={markAllRead} disabled={unread === 0} className="ml-auto">
+              All read
+            </Button>
           </div>
-          <button onClick={onClose} className={`h-10 w-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}>
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 px-5 py-4">
-          <button
-            onClick={() => setSelected(allSelected ? [] : notifications.map((item) => item.id))}
-            className={`rounded-full px-4 py-2 text-sm ${darkMode ? "bg-white/5 text-white" : "bg-black/[0.04] text-black"}`}
-          >
-            {allSelected ? "Clear selected" : "Select all"}
-          </button>
-          <button onClick={markSelectedRead} disabled={selected.length === 0} className="rounded-full px-4 py-2 text-sm bg-blue-500/10 text-blue-500 disabled:opacity-40">
-            Read
-          </button>
-          <button onClick={() => setDeleteConfirm(true)} disabled={selected.length === 0} className="rounded-full px-4 py-2 text-sm bg-red-500/10 text-red-500 disabled:opacity-40">
-            Delete
-          </button>
-          <button onClick={markAllRead} disabled={unread === 0} className="ml-auto rounded-full px-4 py-2 text-sm bg-green-500/10 text-green-500 disabled:opacity-40">
-            All read
-          </button>
-        </div>
-
-        <div className="h-[calc(100dvh-137px)] overflow-y-auto px-4 pb-5">
-          {loading ? (
-            <div className="flex justify-center py-16"><Loader2 className={`h-7 w-7 animate-spin ${muted}`} /></div>
-          ) : notifications.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <Bell className={`mb-4 h-10 w-10 ${muted}`} />
-              <p className={muted}>No notifications yet.</p>
-            </div>
-          ) : notifications.map((notification) => {
-            const checked = selected.includes(notification.id);
-            return (
-              <article key={notification.id} className={`mb-3 rounded-2xl border p-4 ${darkMode ? "bg-white/[0.03] border-white/10" : "bg-black/[0.02] border-black/5"}`}>
-                <div className="flex items-start gap-3">
-                  <button
-                    onClick={() => toggleSelected(notification.id)}
-                    className={`mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border ${
-                      checked ? "bg-black text-white border-black dark:bg-[#d8f36a] dark:text-black dark:border-[#d8f36a]" : darkMode ? "border-white/20" : "border-black/15"
-                    }`}
-                  >
-                    {checked && <Check className="h-3.5 w-3.5" />}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      {!notification.readAt && <span className="h-2 w-2 rounded-full bg-blue-500" />}
-                      <h4 className={`truncate text-sm font-medium ${darkMode ? "text-white" : "text-black"}`}>{notification.title || "Untitled notification"}</h4>
-                    </div>
-                    <p className={`mt-2 line-clamp-3 text-sm leading-6 ${muted}`}>{notification.message || "No message provided."}</p>
-                    <div className={`mt-3 flex flex-wrap gap-2 text-xs ${muted}`}>
-                      <span>{notification.automationName || "System"}</span>
-                      <span>{new Date(notification.createdAt).toLocaleString()}</span>
-                      <span>{notification.readAt ? "Read" : "Unread"}</span>
+        }
+      >
+        {loading ? (
+          <div className="flex justify-center py-16"><Loader2 className={`h-6 w-6 animate-spin ${muted}`} /></div>
+        ) : notifications.length === 0 ? (
+          <EmptyState darkMode={darkMode} icon={Bell} tone="sky" title="No notifications yet" text="Automation alerts and reminders will show up here." />
+        ) : (
+          <div className="space-y-2">
+            {notifications.map((notification) => {
+              const checked = selected.includes(notification.id);
+              return (
+                <article
+                  key={notification.id}
+                  className={`rounded-[16px] border p-4 transition-colors ${
+                    checked
+                      ? darkMode ? "border-white/20 bg-white/[0.06]" : "border-[#d9d9d6] bg-white"
+                      : darkMode ? "border-transparent bg-white/[0.04]" : "border-transparent bg-[#f7f7f5]"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleSelected(notification.id)}
+                      aria-label={checked ? "Unselect notification" : "Select notification"}
+                      className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${
+                        checked
+                          ? darkMode ? "border-[#cff07a] bg-[#cff07a] text-[#141414]" : "border-[#141414] bg-[#141414] text-white"
+                          : darkMode ? "border-white/25" : "border-[#cfcfcb] bg-white"
+                      }`}
+                    >
+                      {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        {!notification.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-[#2f6fc0]" />}
+                        <h4 className={`truncate text-[13.5px] ${darkMode ? "text-white" : "text-[#141414]"}`}>{notification.title || "Untitled notification"}</h4>
+                      </div>
+                      <p className={`mt-1.5 line-clamp-3 text-[13px] leading-5 ${darkMode ? "text-white/60" : "text-[#5f5f5c]"}`}>{notification.message || "No message provided."}</p>
+                      <div className={`mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] ${muted}`}>
+                        {notification.severity && notification.severity !== "info" && (
+                          <Chip tone={severityTone(notification.severity)} darkMode={darkMode} className="h-6 px-2.5 text-[11.5px]">{notification.severity}</Chip>
+                        )}
+                        <span>{notification.automationName || "System"}</span>
+                        <span>·</span>
+                        <span>{new Date(notification.createdAt).toLocaleString()}</span>
+                        <span>·</span>
+                        <span>{notification.readAt ? "Read" : "Unread"}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </aside>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </Drawer>
       <ConfirmModal
         darkMode={darkMode}
         open={deleteConfirm}

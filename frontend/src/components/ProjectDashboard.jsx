@@ -55,7 +55,7 @@ import toast from "react-hot-toast";
 import { API_URL, useAuth } from "./AuthProvider";
 import MrnDetailDrawer from "./MrnDetailDrawer";
 import UserAvatar from "./UserAvatar";
-import { ConfirmModal, DatePicker, SelectMenu } from "./ui";
+import { Chip, ConfirmModal, DatePicker, EmptyState, IconTile, PageHeader, SectionTitle, SelectMenu, StatTile } from "./ui";
 
 const STATUS_OPTIONS = [
   { value: "todo", label: "Not started", color: "slate" },
@@ -88,11 +88,11 @@ const DOC_CATEGORIES = [
 ];
 
 const STAT_TONES = {
-  green: "bg-[#eafbdc] text-[#3f7d16] dark:bg-[#17361e] dark:text-[#a9f27c]",
-  teal: "bg-[#e2faf6] text-[#137d6b] dark:bg-[#123936] dark:text-[#7de8d6]",
-  blue: "bg-[#edf2ff] text-[#2d55a1] dark:bg-[#172544] dark:text-[#9ebaff]",
-  amber: "bg-[#fff2cc] text-[#805b11] dark:bg-[#3b2d0d] dark:text-[#ffd872]",
-  rose: "bg-[#ffe2e7] text-[#9c2d43] dark:bg-[#431822] dark:text-[#ff9aaa]",
+  green: "bg-[#f4f4f2] text-[#2f7a4f] dark:bg-[rgba(74,222,128,0.12)] dark:text-[#a7e8bf]",
+  teal: "bg-[#e3eefb] text-[#2f6fc0] dark:bg-[rgba(96,165,250,0.13)] dark:text-[#a9cbf7]",
+  blue: "bg-[#ebebe8] text-[#6b4fd1] dark:bg-[rgba(167,139,250,0.14)] dark:text-[#c9b9fb]",
+  amber: "bg-[#fbf0d4] text-[#8a6200] dark:bg-[rgba(251,191,36,0.13)] dark:text-[#f5d27a]",
+  rose: "bg-[#fbe4e6] text-[#c0394b] dark:bg-[rgba(251,113,133,0.13)] dark:text-[#f7aab5]",
 };
 
 async function api(path, options = {}) {
@@ -289,21 +289,21 @@ function cn(...classes) {
 function Button({ children, variant = "default", className = "", ...props }) {
   const variants = {
     default:
-      "border border-[#d9ddd6] bg-white text-[#20231f] hover:bg-[#f6f7f4] dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/10",
+      "border border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4] dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/10",
     primary:
-      "border border-[#20231f] bg-[#20231f] text-white hover:bg-[#30342e] dark:!border-[#d8f36a] dark:!bg-[#d8f36a] dark:!text-[#11150f] dark:hover:!bg-[#cdea5e]",
+      "border border-[#141414] bg-[#141414] text-white hover:bg-black dark:!border-[#cff07a] dark:!bg-[#cff07a] dark:!text-[#141414] dark:hover:!bg-[#c4e96a]",
     accent:
-      "border border-[#71c94e] bg-[#78d455] text-[#13200e] hover:bg-[#6bc248]",
+      "border border-[#cff07a] bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a]",
     ghost:
-      "border border-transparent text-[#60655d] hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.06]",
+      "border border-transparent text-[#3d3d3b] hover:bg-[#f4f4f2] dark:text-white/70 dark:hover:bg-white/10",
     danger:
-      "border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300",
+      "border border-[#fbe4e6] bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da] dark:border-transparent dark:bg-[rgba(251,113,133,0.13)] dark:text-[#f7aab5]",
   };
   return (
     <button
       type="button"
       className={cn(
-        "inline-flex h-8 items-center justify-center gap-2 rounded-full px-2.5 text-[11px] font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-45",
+        "inline-flex h-9 items-center justify-center gap-2 rounded-full px-4 text-[13px] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45",
         variants[variant],
         className,
       )}
@@ -321,7 +321,7 @@ function IconButton({ label, className = "", children, ...props }) {
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#63685f] transition hover:bg-black/[0.05] hover:text-black dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white",
+        "inline-flex h-9 w-9 items-center justify-center rounded-full text-[#5f5f5c] transition hover:bg-[#f4f4f2] hover:text-[#141414] dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white",
         className,
       )}
       {...props}
@@ -333,22 +333,22 @@ function IconButton({ label, className = "", children, ...props }) {
 
 function Avatar({ name, user, index = 0, size = "md", className = "" }) {
   const colors = [
-    "bg-[#2e8b70]",
-    "bg-[#637dd8]",
-    "bg-[#b06f9f]",
-    "bg-[#c47a45]",
-    "bg-[#77883c]",
+    "bg-[#f4f4f2] !text-[#2f7a4f]",
+    "bg-[#ebebe8] !text-[#6b4fd1]",
+    "bg-[#fbe5dc] !text-[#c2562b]",
+    "bg-[#e3eefb] !text-[#2f6fc0]",
+    "bg-[#eef8cc] !text-[#4d6b12]",
   ];
   const sizes =
     size === "sm"
       ? "h-6 w-6 text-[9px]"
       : size === "lg"
         ? "h-11 w-11 text-sm"
-        : "h-8 w-8 text-[10px]";
+        : "h-8 w-8 text-[11px]";
   if (user?.avatarUrl || user?.avatarPreset || user?.gender) {
-    return <UserAvatar user={user} name={name} className={cn("ring-2 ring-white dark:ring-[#171915]", sizes, className)} />;
+    return <UserAvatar user={user} name={name} className={cn("ring-2 ring-white dark:ring-[#15171c]", sizes, className)} />;
   }
-  return <span title={name} className={cn("inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white dark:ring-[#171915]", colors[(String(name || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) || index) % colors.length], sizes, className)}>{initials(name)}</span>;
+  return <span title={name} className={cn("inline-flex shrink-0 items-center justify-center rounded-full text-white ring-2 ring-white dark:ring-[#15171c]", colors[(String(name || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) || index) % colors.length], sizes, className)}>{initials(name)}</span>;
 }
 
 function AvatarStack({ names = [], people = [], limit = 4 }) {
@@ -359,7 +359,7 @@ function AvatarStack({ names = [], people = [], limit = 4 }) {
         <Avatar key={`${person.id || person.name}-${index}`} name={person.name || person.displayName || person.username} user={person.id ? person : undefined} index={index} />
       ))}
       {items.length > limit && (
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#eceee9] text-[10px] font-bold text-[#5f645c] ring-2 ring-white dark:bg-white/10 dark:text-white/70 dark:ring-[#171915]">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#f4f4f2] text-[11px] text-[#5f5f5c] ring-2 ring-white dark:bg-white/10 dark:text-white/70 dark:ring-[#15171c]">
           +{items.length - limit}
         </span>
       )}
@@ -403,12 +403,12 @@ function ProgressBar({ value = 0, className = "" }) {
   return (
     <span
       className={cn(
-        "block h-4 overflow-hidden rounded-full bg-[#e8ebe5] dark:bg-white/10",
+        "block h-2 overflow-hidden rounded-full bg-[#f0f0ee] dark:bg-white/10",
         className,
       )}
     >
       <span
-        className="block h-full rounded-full bg-[#72cf50] transition-all"
+        className="block h-full rounded-full bg-[#141414] transition-all dark:bg-[#cff07a]"
         style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
       />
     </span>
@@ -417,31 +417,25 @@ function ProgressBar({ value = 0, className = "" }) {
 
 function StatusPill({ status, count, compact = false }) {
   const styles = {
-    todo: "bg-[#eef0ec] text-[#51564e] dark:bg-white/10 dark:text-white/65",
+    todo: "bg-[#f4f4f2] text-[#3d3d3b] dark:bg-white/[0.07] dark:text-white/75",
     in_progress:
-      "bg-[#fff0c9] text-[#8a6312] dark:bg-amber-400/15 dark:text-amber-200",
+      "bg-[#fbf0d4] text-[#8a6200] dark:bg-[rgba(251,191,36,0.13)] dark:text-[#f5d27a]",
     blocked:
-      "bg-[#ffe2e4] text-[#a93b47] dark:bg-rose-400/15 dark:text-rose-200",
-    done: "bg-[#dff6d7] text-[#367b25] dark:bg-green-400/15 dark:text-green-200",
+      "bg-[#fbe4e6] text-[#c0394b] dark:bg-[rgba(251,113,133,0.13)] dark:text-[#f7aab5]",
+    done: "bg-[#f4f4f2] text-[#2f7a4f] dark:bg-[rgba(74,222,128,0.12)] dark:text-[#a7e8bf]",
   };
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full font-semibold",
-        compact ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-xs",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full",
+        compact ? "h-6 px-2.5 text-[11.5px]" : "h-7 px-3 text-[12.5px]",
         styles[status] || styles.todo,
       )}
     >
       <span
         className={cn(
-          "h-2 w-2 rounded-full border-2",
-          status === "done"
-            ? "border-[#63bd43] bg-[#63bd43]"
-            : status === "blocked"
-              ? "border-[#d95b67]"
-              : status === "in_progress"
-                ? "border-[#d8a62e]"
-                : "border-[#8c9288]",
+          "h-1.5 w-1.5 rounded-full bg-current",
+          status === "todo" && "opacity-50",
         )}
       />
       {statusLabel(status)}
@@ -454,15 +448,15 @@ function StatusPill({ status, count, compact = false }) {
 
 function PriorityPill({ priority = "medium" }) {
   const styles = {
-    low: "bg-[#eef1ec] text-[#5f675b]",
-    medium: "bg-[#fff2cc] text-[#836115]",
-    high: "bg-[#ffe2d2] text-[#9b4a25]",
-    critical: "bg-[#ffe0e4] text-[#a63644]",
+    low: "bg-[#f4f4f2] text-[#3d3d3b]",
+    medium: "bg-[#e3eefb] text-[#2f6fc0]",
+    high: "bg-[#fbe5dc] text-[#c2562b]",
+    critical: "bg-[#fbe4e6] text-[#c0394b]",
   };
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold capitalize dark:bg-white/10 dark:text-white/70",
+        "inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[11.5px] capitalize dark:bg-white/[0.07] dark:text-white/75",
         styles[priority] || styles.medium,
       )}
     >
@@ -475,12 +469,12 @@ function PriorityPill({ priority = "medium" }) {
 function Field({ label, icon: Icon, hint, children, className = "" }) {
   return (
     <div className={cn("block", className)}>
-      <span className="mb-1.5 flex items-center justify-between gap-2 text-xs font-medium text-[#666c63] dark:text-white/50">
+      <span className="mb-1.5 flex items-center justify-between gap-2 text-[12.5px] text-[#7a7a77] dark:text-white/50">
         <span className="flex items-center gap-1.5">
           {Icon && <Icon className="h-3.5 w-3.5" />}
           {label}
         </span>
-        {hint && <span className="text-[10px] opacity-70">{hint}</span>}
+        {hint && <span className="text-[11px] text-[#9a9a98] dark:text-white/35">{hint}</span>}
       </span>
       {children}
     </div>
@@ -488,9 +482,9 @@ function Field({ label, icon: Icon, hint, children, className = "" }) {
 }
 
 const inputClass =
-  "h-10 w-full rounded-lg border border-[#dfe3dc] bg-white px-3 text-sm text-[#20231f] outline-none transition placeholder:text-[#a4a9a1] focus:border-[#9acb87] focus:ring-2 focus:ring-[#72cf50]/10 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-white/25";
+  "h-10 w-full rounded-full border border-transparent bg-[#f4f4f2] px-4 text-[13.5px] text-[#141414] outline-none transition placeholder:text-[#9a9a98] focus:border-[#e6e6e3] focus:bg-white focus:ring-4 focus:ring-black/[0.03] dark:bg-white/[0.06] dark:text-white dark:placeholder:text-white/30 dark:focus:border-white/15 dark:focus:bg-white/[0.08]";
 const textAreaClass =
-  "w-full resize-none rounded-lg border border-[#dfe3dc] bg-white px-3 py-2.5 text-sm leading-6 text-[#20231f] outline-none transition placeholder:text-[#a4a9a1] focus:border-[#9acb87] focus:ring-2 focus:ring-[#72cf50]/10 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-white/25";
+  "w-full resize-none rounded-[16px] border border-transparent bg-[#f4f4f2] px-4 py-3 text-[13.5px] leading-6 text-[#141414] outline-none transition placeholder:text-[#9a9a98] focus:border-[#e6e6e3] focus:bg-white focus:ring-4 focus:ring-black/[0.03] dark:bg-white/[0.06] dark:text-white dark:placeholder:text-white/30 dark:focus:border-white/15 dark:focus:bg-white/[0.08]";
 
 function NativeSelect({
   darkMode,
@@ -557,11 +551,11 @@ function AssigneePicker({
           setOpen((current) => !current);
         }}
         className={cn(
-          "flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-60",
+          "flex min-h-11 w-full items-center justify-between gap-3 rounded-[22px] px-4 py-1.5 text-left text-[13.5px] transition disabled:cursor-not-allowed disabled:opacity-60",
           darkMode
-            ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10"
-            : "border-black/10 bg-white text-black hover:bg-black/[0.03]",
-          open && (darkMode ? "ring-2 ring-[#d8f36a]/25" : "ring-2 ring-black/10"),
+            ? "bg-white/[0.06] text-white hover:bg-white/[0.09]"
+            : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]",
+          open && (darkMode ? "bg-white/[0.08] ring-1 ring-white/15" : "bg-white ring-1 ring-[#e6e6e3]"),
         )}
       >
         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -570,8 +564,8 @@ function AssigneePicker({
               <span
                 key={person.id}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full py-1 pl-1 pr-2 text-xs",
-                  darkMode ? "bg-white/10" : "bg-black/[0.04]",
+                  "inline-flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2.5 text-[12.5px]",
+                  darkMode ? "bg-white/10" : "bg-white ring-1 ring-[#ececec]",
                 )}
               >
                 <Avatar
@@ -584,7 +578,7 @@ function AssigneePicker({
               </span>
             ))
           ) : (
-            <span className={darkMode ? "text-white/35" : "text-black/35"}>
+            <span className={darkMode ? "text-white/35" : "text-[#9a9a98]"}>
               Assign people
             </span>
           )}
@@ -594,14 +588,14 @@ function AssigneePicker({
       {open && (
         <div
           className={cn(
-            "absolute left-0 right-0 top-[calc(100%+8px)] z-[90] max-h-64 overflow-y-auto rounded-2xl border p-2 shadow-xl",
-            darkMode ? "border-white/10 bg-[#181a20]" : "border-black/5 bg-white",
+            "absolute left-0 right-0 top-[calc(100%+8px)] z-[90] max-h-64 overflow-y-auto rounded-[18px] border p-2 shadow-[0_18px_50px_rgba(0,0,0,0.12)]",
+            darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white",
           )}
         >
           <div
             className={cn(
-              "sticky top-0 z-10 mb-2 rounded-xl border px-3 py-2",
-              darkMode ? "border-white/10 bg-[#181a20]" : "border-black/10 bg-white",
+              "sticky top-0 z-10 mb-2 rounded-full px-3 py-1",
+              darkMode ? "bg-[#1c1e24]" : "bg-[#f4f4f2]",
             )}
           >
             <div className="flex items-center gap-2">
@@ -637,23 +631,23 @@ function AssigneePicker({
                   )
                 }
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-xl border border-transparent px-3 py-2.5 text-left text-sm transition",
+                  "flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2 text-left text-[13.5px] transition",
                   darkMode
-                    ? "text-white/70 hover:bg-white/[0.08]"
-                    : "text-black/65 hover:bg-black/[0.04]",
+                    ? "text-white/70 hover:bg-white/[0.07]"
+                    : "text-[#3d3d3b] hover:bg-[#f7f7f5]",
                   active &&
                     (darkMode
-                      ? "border-[#d8f36a]/25 text-white"
-                      : "border-[#dfe3dc] bg-[#f7f9f5] text-black"),
+                      ? "bg-white/[0.06] text-white"
+                      : "bg-[#f7f7f5] text-[#141414]"),
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-4 w-4 items-center justify-center rounded border",
+                    "flex h-4 w-4 items-center justify-center rounded-[5px] border",
                     active
                       ? darkMode
-                        ? "border-[#d8f36a] bg-[#d8f36a] text-black"
-                        : "border-[#5fbe48] bg-[#5fbe48] text-white"
+                        ? "border-[#cff07a] bg-[#cff07a] text-black"
+                        : "border-[#141414] bg-[#141414] text-white"
                       : darkMode
                         ? "border-white/20"
                         : "border-black/20",
@@ -668,7 +662,7 @@ function AssigneePicker({
                   size="sm"
                 />
                 <span className="min-w-0">
-                  <span className="block truncate font-medium">
+                  <span className="block truncate">
                     {person.displayName || person.username}
                   </span>
                   <span className={cn("block truncate text-[11px]", active ? "opacity-70" : darkMode ? "text-white/45" : "text-black/45")}>
@@ -707,7 +701,7 @@ function SlideOver({
   return (
     <div
       className={cn(
-        "project-drawer-backdrop fixed inset-0 z-[80] flex justify-end bg-[#11150f]/20 backdrop-blur-[1px]",
+        "project-drawer-backdrop fixed inset-0 z-[80] flex justify-end bg-black/20 backdrop-blur-[2px]",
         closing && "is-closing",
       )}
       onMouseDown={(event) => {
@@ -719,28 +713,30 @@ function SlideOver({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "project-drawer-panel flex h-full w-full flex-col border-l border-[#dfe3dc] bg-[#fbfcfa] text-[#20231f] dark:border-white/10 dark:bg-[#141713] dark:text-white",
+          "project-drawer-panel flex h-full w-full flex-col overflow-hidden border-l border-[#ececec] bg-white text-[#141414] shadow-[0_24px_70px_rgba(0,0,0,0.16)] sm:m-2.5 sm:h-[calc(100%-20px)] sm:rounded-[24px] sm:border dark:border-white/10 dark:bg-[#121317] dark:text-white",
           closing && "is-closing",
           width,
         )}
       >
-        <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[#e4e7e1] bg-white px-5 dark:border-white/10 dark:bg-[#171a16]">
-          <div className="flex min-w-0 items-center gap-2 text-xs text-[#737970] dark:text-white/45">
-            {eyebrow && <span className="truncate">{eyebrow}</span>}
-            {eyebrow && <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-            <span className="truncate font-medium text-[#30342e] dark:text-white/75">
-              {title}
+        <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-[#f0f0ee] px-6 py-3.5 dark:border-white/10">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#ebebe8] text-[#6b4fd1] dark:bg-[rgba(167,139,250,0.14)] dark:text-[#c9b9fb]">
+              <FolderKanban className="h-4 w-4" strokeWidth={1.8} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[16px] tracking-[-0.01em] text-[#141414] dark:text-white">
+                {title}
+              </span>
+              {eyebrow && <span className="block truncate text-[12.5px] text-[#8a8a8a] dark:text-white/45">{eyebrow}</span>}
             </span>
           </div>
-          <div className="flex items-center gap-0.5">
-            <IconButton label="Close" onClick={requestClose}>
-              <X className="h-4 w-4" />
-            </IconButton>
-          </div>
+          <button type="button" aria-label="Close" title="Close" onClick={requestClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8] dark:bg-white/[0.06] dark:text-white/75 dark:hover:bg-white/10">
+            <X className="h-4 w-4" />
+          </button>
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
         {footer && (
-          <footer className="shrink-0 border-t border-[#e4e7e1] bg-white px-5 py-3 dark:border-white/10 dark:bg-[#171a16]">
+          <footer className="shrink-0 border-t border-[#f0f0ee] px-6 py-4 dark:border-white/10">
             {footer}
           </footer>
         )}
@@ -749,10 +745,36 @@ function SlideOver({
   );
 }
 
+const VIEW_TILE_TONES = {
+  mint: "bg-[#e4f1e6] text-[#2f7a4f] dark:bg-[rgba(74,222,128,0.12)] dark:text-[#a7e8bf]",
+  lavender: "bg-[#ece8fb] text-[#6b4fd1] dark:bg-[rgba(167,139,250,0.14)] dark:text-[#c9b9fb]",
+  peach: "bg-[#fbe5dc] text-[#c2562b] dark:bg-[rgba(251,146,60,0.13)] dark:text-[#f9bf9b]",
+  sky: "bg-[#e3eefb] text-[#2f6fc0] dark:bg-[rgba(96,165,250,0.13)] dark:text-[#a9cbf7]",
+  amber: "bg-[#fbf0d4] text-[#8a6200] dark:bg-[rgba(251,191,36,0.13)] dark:text-[#f5d27a]",
+  lime: "bg-[#eef8cc] text-[#4d6b12] dark:bg-[rgba(207,240,122,0.14)] dark:text-[#d8f39a]",
+};
+
+// Workspace view heading: pastel icon tile, black title line, grey line under it.
+function ViewHeading({ icon: Icon, tone = "mint", title, subtitle }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3.5">
+      {Icon && (
+        <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-[14px]", VIEW_TILE_TONES[tone] || VIEW_TILE_TONES.mint)}>
+          <Icon className="h-5 w-5" strokeWidth={1.8} />
+        </span>
+      )}
+      <div className="min-w-0">
+        <h2 className="truncate text-[20px] leading-tight tracking-[-0.02em] text-[#141414] dark:text-white">{title}</h2>
+        {subtitle && <p className="truncate text-[13px] text-[#8a8a8a] dark:text-white/45">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
 function PropertyRow({ icon: Icon, label, children }) {
   return (
     <div className="grid min-h-10 grid-cols-[112px_minmax(0,1fr)] items-center gap-3">
-      <span className="flex items-center gap-2 text-xs text-[#777d74] dark:text-white/45">
+      <span className="flex items-center gap-2 text-[12.5px] text-[#8a8a8a] dark:text-white/45">
         <Icon className="h-3.5 w-3.5" />
         {label}
       </span>
@@ -766,12 +788,12 @@ function LoadingView({ darkMode }) {
     <div
       className={cn(
         "flex min-h-0 flex-1 items-center justify-center",
-        darkMode ? "bg-[#10120f] text-white" : "bg-[#f4f5f2] text-[#20231f]",
+        darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]",
       )}
     >
-      <div className="flex items-center gap-3 rounded-2xl border border-[#dfe3dc] bg-white px-5 py-4 dark:border-white/10 dark:bg-white/[0.04]">
-        <Loader2 className="h-5 w-5 animate-spin text-[#61b642]" />
-        <span className="text-sm font-medium">
+      <div className="flex items-center gap-3 rounded-full bg-[#f4f4f2] px-5 py-3 dark:bg-white/[0.06]">
+        <Loader2 className="h-4 w-4 animate-spin text-[#8a8a8a]" />
+        <span className="text-[13.5px]">
           Loading project workspace...
         </span>
       </div>
@@ -781,25 +803,21 @@ function LoadingView({ darkMode }) {
 
 function DetailBadge({ icon: Icon, label, children, className = "" }) {
   return (
-    <div className={cn("rounded-2xl p-4", className)}>
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
-          {label}
-        </p>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/55 text-current dark:bg-white/10">
-          <Icon className="h-4 w-4" />
-        </span>
-      </div>
-      <div className="mt-2 text-base font-bold">{children}</div>
+    <div className={cn("rounded-[20px] p-4", className)}>
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-white/60 text-current dark:bg-white/10">
+        <Icon className="h-4 w-4" strokeWidth={1.8} />
+      </span>
+      <div className="mt-3 text-[16px] tracking-[-0.01em] text-[#141414] dark:text-white">{children}</div>
+      <p className="mt-0.5 text-[12px] opacity-75">{label}</p>
     </div>
   );
 }
 
 function DetailSection({ title, icon: Icon, children }) {
   return (
-    <section className="rounded-2xl border border-zinc-100 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-        {Icon && <Icon className="h-4 w-4 text-[#6c7468]" />}
+    <section className="rounded-[20px] border border-[#ececec] bg-white p-5 dark:border-white/10 dark:bg-[#15171c]">
+      <div className="mb-3 flex items-center gap-2.5 text-[14.5px] text-[#141414] dark:text-white">
+        {Icon && <span className="grid h-7 w-7 place-items-center rounded-[9px] bg-[#f4f4f2] text-[#3d3d3b] dark:bg-white/[0.07] dark:text-white/75"><Icon className="h-3.5 w-3.5" strokeWidth={1.8} /></span>}
         {title}
       </div>
       {children}
@@ -832,11 +850,11 @@ function TaskDetailView({
   const [activeTab, setActiveTab] = useState("progress");
   return (
     <div className="px-6 pb-8 pt-6 sm:px-7">
-      <p className="text-sm text-[#7a8077] dark:text-white/45">
-        in list <span className="border-b border-[#aeb4aa] text-[#30352f] dark:border-white/30 dark:text-white/75">{phase?.name || "Unassigned"}</span>
+      <p className="text-sm text-[#5f5f5c] dark:text-white/45">
+        in list <span className="border-b border-[#c9c9c6] text-[#141414] dark:border-white/30 dark:text-white/75">{phase?.name || "Unassigned"}</span>
       </p>
       <div className="mt-3 flex items-start justify-between gap-4">
-        <h2 className="max-w-[520px] min-w-0 text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-[#101426] dark:text-white">
+        <h2 className="max-w-[520px] min-w-0 text-4xl leading-[1.05] tracking-[-0.04em] text-[#141414] dark:text-white">
           {task.title || "Untitled task"}
         </h2>
         <div className="flex shrink-0 items-center gap-2 pt-1">
@@ -849,13 +867,13 @@ function TaskDetailView({
         </div>
       </div>
 
-      <div className="mt-6 space-y-4 border-b border-[#e5e8e2] pb-5 dark:border-white/10">
+      <div className="mt-6 space-y-4 border-b border-[#e6e6e3] pb-5 dark:border-white/10">
         <PropertyRow icon={Circle} label="Status">
           <div className="flex flex-wrap items-center gap-4">
             <StatusPill status={task.status || "todo"} compact />
-            <span className="inline-flex items-center gap-1.5 text-base font-semibold text-[#20231f] dark:text-white">
-              <CalendarDays className="h-4 w-4 text-[#777d74] dark:text-white/45" />
-              <span className="text-xs font-medium text-[#777d74] dark:text-white/45">Due date</span>
+            <span className="inline-flex items-center gap-1.5 text-base text-[#141414] dark:text-white">
+              <CalendarDays className="h-4 w-4 text-[#5f5f5c] dark:text-white/45" />
+              <span className="text-xs text-[#5f5f5c] dark:text-white/45">Due date</span>
               {formatDate(task.dueDate, "No date")}
             </span>
           </div>
@@ -864,29 +882,29 @@ function TaskDetailView({
           {assignees.length ? (
             <div className="flex flex-wrap items-center gap-2">
               {assignees.map((person, index) => (
-                <span key={person.id} className="inline-flex items-center gap-2 rounded-full bg-[#f2f5f1] py-1 pl-1 pr-3 text-sm font-medium dark:bg-white/[0.06]">
+                <span key={person.id} className="inline-flex items-center gap-2 rounded-full bg-[#f7f7f5] py-1 pl-1 pr-3 text-sm dark:bg-white/[0.06]">
                   <Avatar name={person.displayName || person.username} user={person} index={index} size="sm" />
                   {person.displayName || person.username}
                 </span>
               ))}
             </div>
           ) : (
-            <span className="text-sm text-[#858b82]">No assignees added</span>
+            <span className="text-sm text-[#8a8a8a]">No assignees added</span>
           )}
         </PropertyRow>
         <PropertyRow icon={Tag} label="Label">
           <div className="flex flex-wrap gap-2">
             <PriorityPill priority={task.priority || "medium"} />
-            <span className="inline-flex rounded-full bg-[#f4f5f2] px-3 py-1 text-xs font-semibold text-[#4f554c] dark:bg-white/[0.06] dark:text-white/65">{phase?.name || "No phase"}</span>
+            <span className="inline-flex rounded-full bg-[#f7f7f5] px-3 py-1 text-xs text-[#3d3d3b] dark:bg-white/[0.06] dark:text-white/65">{phase?.name || "No phase"}</span>
           </div>
         </PropertyRow>
       </div>
 
       <section className="mt-6">
         <div className="mb-3 flex items-center gap-2">
-          <h3 className="text-lg font-semibold">Description</h3>
+          <h3 className="text-lg">Description</h3>
         </div>
-        <p className="whitespace-pre-wrap text-sm leading-6 text-[#4f554c] dark:text-white/65">
+        <p className="whitespace-pre-wrap text-sm leading-6 text-[#3d3d3b] dark:text-white/65">
           {task.description || "No description added."}
         </p>
       </section>
@@ -895,12 +913,12 @@ function TaskDetailView({
         <section className="mt-6">
           <div className="space-y-2">
             {blockedBy.length > 0 && (
-              <div className="rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">
+              <div className="rounded-[14px] bg-[#fbe4e6] px-3 py-2.5 text-sm text-[#c0394b] dark:bg-rose-400/10 dark:text-rose-200">
                 Blocked by {blockedBy.map((item) => item.title || "Untitled task").join(", ")}. This clears automatically when the blocking task is done.
               </div>
             )}
             {dependencyWarnings.length > 0 && (
-              <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-700 dark:bg-amber-400/10 dark:text-amber-100">
+              <div className="rounded-[14px] bg-[#fbf0d4] px-3 py-2.5 text-sm text-[#8a6200] dark:bg-amber-400/10 dark:text-amber-100">
                 Warning: this task is due before {dependencyWarnings.map((item) => item.title || "a dependency").join(", ")}.
               </div>
             )}
@@ -908,48 +926,48 @@ function TaskDetailView({
         </section>
       )}
 
-      <div className="mt-7 flex gap-8 border-b border-[#e1e5de] dark:border-white/10">
+      <div className="mt-7 flex gap-8 border-b border-[#e6e6e3] dark:border-white/10">
         {[
           ["progress", "Progress"],
           ["file", `File ${attachments.length || ""}`],
           ["comments", `Comments ${(task.comments || []).length || ""}`],
         ].map(([value, label]) => (
-          <button type="button" key={value} onClick={() => setActiveTab(value)} className={cn("border-b-2 px-1 pb-3 text-sm transition", activeTab === value ? "border-[#1683ff] font-semibold text-[#20231f] dark:border-[#7cb7ff] dark:text-white" : "border-transparent text-[#7c8278] hover:text-[#20231f] dark:text-white/45 dark:hover:text-white/75")}>
+          <button type="button" key={value} onClick={() => setActiveTab(value)} className={cn("border-b-2 px-1 pb-3 text-sm transition", activeTab === value ? "border-[#141414] text-[#141414] dark:border-[#cff07a] dark:text-white" : "border-transparent text-[#8a8a8a] hover:text-[#141414] dark:text-white/45 dark:hover:text-white/75")}>
             {label}
           </button>
         ))}
       </div>
 
       {activeTab === "comments" && <section className="pt-5">
-        <h4 className="text-lg font-semibold">Comment</h4>
+        <h4 className="text-lg">Comment</h4>
         <div className="mt-4 space-y-4">
           {(task.comments || []).map((item, index) => (
             <div key={item.id || index} className="flex items-start gap-3">
               <Avatar name={item.authorName || "User"} index={index} size="sm" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">{item.authorName || "User"}</span>
-                  <span className="text-xs text-[#8b9088]">
+                  <span className="text-sm">{item.authorName || "User"}</span>
+                  <span className="text-xs text-[#8a8a8a]">
                     {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ""}
                   </span>
                 </div>
-                <p className="mt-1 rounded-xl bg-[#f5f6f8] px-3 py-2 text-sm leading-6 text-[#4f554c] dark:bg-white/[0.05] dark:text-white/65">{item.text}</p>
+                <p className="mt-1 rounded-[14px] bg-[#f7f7f5] px-3 py-2 text-sm leading-6 text-[#3d3d3b] dark:bg-white/[0.05] dark:text-white/65">{item.text}</p>
               </div>
             </div>
           ))}
           {!(task.comments || []).length && (
-            <p className="rounded-xl bg-[#f5f6f8] px-4 py-4 text-sm text-[#858b82] dark:bg-white/[0.04]">No comments yet.</p>
+            <p className="rounded-[14px] bg-[#f7f7f5] px-4 py-4 text-sm text-[#8a8a8a] dark:bg-white/[0.04]">No comments yet.</p>
           )}
         </div>
-        <div className="mt-5 rounded-full bg-[#f5f6f8] px-4 py-3 text-sm text-[#a1a6a0] dark:bg-white/[0.05]">
+        <div className="mt-5 rounded-full bg-[#f7f7f5] px-4 py-3 text-sm text-[#b0b0ae] dark:bg-white/[0.05]">
           Comment here ...
         </div>
       </section>}
 
       {activeTab === "progress" && <section className="pt-5">
         <div className="mt-6 flex items-center justify-between gap-3">
-          <span className="text-sm font-medium text-[#5f665b] dark:text-white/55">Progress {doneSubtasks}/{subtasks.length}</span>
-          <span className="text-xs text-[#858b82]">{progress}%</span>
+          <span className="text-sm text-[#3d3d3b] dark:text-white/55">Progress {doneSubtasks}/{subtasks.length}</span>
+          <span className="text-xs text-[#8a8a8a]">{progress}%</span>
         </div>
         <ProgressBar value={progress} className="mt-3" />
         <div className="mt-4 space-y-3">
@@ -957,41 +975,41 @@ function TaskDetailView({
             const subtaskStatus = item.done ? "done" : item.status || "todo";
             const subtaskDueDate = item.dueDate || item.deadline || item.date || "";
             return (
-            <div key={item.id} className="rounded-xl border border-[#e0e4dd] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]">
+            <div key={item.id} className="rounded-[14px] border border-[#e6e6e3] bg-white p-3 dark:border-white/10 dark:bg-[#15171c]">
               <div className="flex flex-wrap items-center gap-3">
-                <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", item.done ? "border-[#6877f4] bg-[#6877f4] text-white" : "border-[#a9afa5]")}>
+                <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", item.done ? "border-[#6b4fd1] bg-[#6b4fd1] text-white" : "border-[#c9c9c6]")}>
                   {item.done && <Check className="h-3 w-3" />}
                 </span>
-                <span className={cn("min-w-[160px] flex-1 truncate text-sm font-medium", item.done && "text-[#8a8f87] line-through")}>{item.title || "Untitled subtask"}</span>
+                <span className={cn("min-w-[160px] flex-1 truncate text-sm ", item.done && "text-[#8a8a8a] line-through")}>{item.title || "Untitled subtask"}</span>
                 <div className="ml-auto flex shrink-0 items-center gap-3">
                   <StatusPill status={subtaskStatus} compact />
-                  <span className="text-sm font-semibold text-[#20231f] dark:text-white">
+                  <span className="text-sm text-[#141414] dark:text-white">
                     {formatDate(subtaskDueDate, "No deadline")}
                   </span>
                 </div>
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-[#5f665b] dark:text-white/55">
+              <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-[#3d3d3b] dark:text-white/55">
                 {item.description || "No description added."}
               </p>
             </div>
             );
           })}
-          {!subtasks.length && <div className="rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">No subtasks added.</div>}
+          {!subtasks.length && <div className="rounded-[12px] border border-dashed border-[#e6e6e3] px-4 py-6 text-center text-xs text-[#8a8a8a] dark:border-white/10">No subtasks added.</div>}
         </div>
       </section>}
 
       {activeTab === "file" && <section className="pt-5">
-        <div className="mb-3 flex items-center justify-between gap-3 text-xs font-medium text-[#72786f] dark:text-white/50">
+        <div className="mb-3 flex items-center justify-between gap-3 text-xs text-[#5f5f5c] dark:text-white/50">
           <span className="flex items-center gap-2"><Paperclip className="h-3.5 w-3.5" />Attachment ({attachments.length})</span>
-          {attachments.length > 1 && <button type="button" className="inline-flex items-center gap-1 text-[#4b5fb8]"><Download className="h-3.5 w-3.5" />Download all</button>}
+          {attachments.length > 1 && <button type="button" className="inline-flex items-center gap-1 text-[#6b4fd1]"><Download className="h-3.5 w-3.5" />Download all</button>}
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {attachments.length ? attachments.map((doc) => (
-            <a key={doc.id || doc.driveFileId || doc.url} href={doc.url} target="_blank" rel="noreferrer" className="group flex min-w-0 items-center gap-2 rounded-lg border border-[#dfe3dc] bg-white p-2.5 hover:border-[#b8c4b3] dark:border-white/10 dark:bg-white/[0.03]">
-              <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded-md bg-rose-50 text-rose-500 dark:bg-rose-400/10"><FileText className="h-4 w-4" /></span>
-              <span className="min-w-0"><span className="block truncate text-xs font-semibold">{doc.name || "File"}</span><span className="mt-0.5 block truncate text-[10px] text-[#858b82]">{doc.category || "Document"} · Open</span></span>
+            <a key={doc.id || doc.driveFileId || doc.url} href={doc.url} target="_blank" rel="noreferrer" className="group flex min-w-0 items-center gap-2 rounded-[12px] border border-[#e6e6e3] bg-white p-2.5 hover:border-[#c9c9c6] dark:border-white/10 dark:bg-[#15171c]">
+              <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded-md bg-[#fbe4e6] text-[#c0394b] dark:bg-rose-400/10"><FileText className="h-4 w-4" /></span>
+              <span className="min-w-0"><span className="block truncate text-xs">{doc.name || "File"}</span><span className="mt-0.5 block truncate text-[11px] text-[#8a8a8a]">{doc.category || "Document"} · Open</span></span>
             </a>
-          )) : <div className="col-span-full rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">No files attached.</div>}
+          )) : <div className="col-span-full rounded-[12px] border border-dashed border-[#e6e6e3] px-4 py-6 text-center text-xs text-[#8a8a8a] dark:border-white/10">No files attached.</div>}
         </div>
       </section>}
 
@@ -1000,24 +1018,24 @@ function TaskDetailView({
           <DetailSection title={`Dependencies (${dependencies.length})`} icon={Link2}>
             <div className="space-y-2">
               {dependencyItems.map((item) => (
-                <div key={item.id} className={cn("flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm dark:bg-white/[0.05]", item.status === "done" ? "bg-[#f5f7f2]" : "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-200")}>
+                <div key={item.id} className={cn("flex items-center gap-2 rounded-[14px] px-3 py-2.5 text-sm dark:bg-white/[0.05]", item.status === "done" ? "bg-[#f7f7f5]" : "bg-[#fbe4e6] text-[#c0394b] dark:bg-rose-400/10 dark:text-rose-200")}>
                   <StatusPill status={item.status || "todo"} compact />
-                  <span className="min-w-0 flex-1 truncate font-medium">{item.title || "Untitled task"}</span>
+                  <span className="min-w-0 flex-1 truncate">{item.title || "Untitled task"}</span>
                 </div>
               ))}
-              {!dependencies.length && <p className="text-sm text-[#858b82]">No dependencies linked.</p>}
+              {!dependencies.length && <p className="text-sm text-[#8a8a8a]">No dependencies linked.</p>}
             </div>
           </DetailSection>
           <DetailSection title="Activity" icon={Clock3}>
             <div className="space-y-3 text-sm">
               <div className="flex gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-[#72cf50]" />
+                <span className="mt-1 h-2 w-2 rounded-full bg-[#2f7a4f]" />
                 <p>Task is currently <b>{statusLabel(task.status || "todo").toLowerCase()}</b>.</p>
               </div>
               {(task.comments || []).length ? (
-                <p className="text-[#6f766c] dark:text-white/55">{(task.comments || []).length} comment{(task.comments || []).length === 1 ? "" : "s"} added.</p>
+                <p className="text-[#5f5f5c] dark:text-white/55">{(task.comments || []).length} comment{(task.comments || []).length === 1 ? "" : "s"} added.</p>
               ) : (
-                <p className="text-[#858b82]">No comments yet.</p>
+                <p className="text-[#8a8a8a]">No comments yet.</p>
               )}
             </div>
           </DetailSection>
@@ -1035,11 +1053,11 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
   const [activeTab, setActiveTab] = useState("tasks");
   return (
     <div className="px-6 pb-8 pt-6 sm:px-7">
-      <p className="text-sm text-[#7a8077] dark:text-white/45">
-        in project <span className="border-b border-[#aeb4aa] text-[#30352f] dark:border-white/30 dark:text-white/75">Project schedule</span>
+      <p className="text-sm text-[#5f5f5c] dark:text-white/45">
+        in project <span className="border-b border-[#c9c9c6] text-[#141414] dark:border-white/30 dark:text-white/75">Project schedule</span>
       </p>
       <div className="mt-3 flex items-start justify-between gap-4">
-        <h2 className="max-w-[520px] min-w-0 text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-[#101426] dark:text-white">
+        <h2 className="max-w-[520px] min-w-0 text-4xl leading-[1.05] tracking-[-0.04em] text-[#141414] dark:text-white">
           {phase.name || "Untitled phase"}
         </h2>
         <div className="flex shrink-0 items-center gap-2 pt-1">
@@ -1052,32 +1070,32 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
         </div>
       </div>
 
-      <div className="mt-6 space-y-4 border-b border-[#e5e8e2] pb-5 dark:border-white/10">
+      <div className="mt-6 space-y-4 border-b border-[#e6e6e3] pb-5 dark:border-white/10">
         <PropertyRow icon={Sparkles} label="Progress">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold">{progress}% complete</span>
-            <span className="text-xs text-[#737970] dark:text-white/50">{done} of {scheduledTasks.length} tasks done</span>
+            <span className="text-sm">{progress}% complete</span>
+            <span className="text-xs text-[#5f5f5c] dark:text-white/50">{done} of {scheduledTasks.length} tasks done</span>
           </div>
         </PropertyRow>
         <PropertyRow icon={CalendarDays} label="Dates">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <span className="inline-flex items-center gap-1.5 text-base font-semibold text-[#20231f] dark:text-white">
-              <span className="text-xs font-medium text-[#777d74] dark:text-white/45">Start date</span>
+            <span className="inline-flex items-center gap-1.5 text-base text-[#141414] dark:text-white">
+              <span className="text-xs text-[#5f5f5c] dark:text-white/45">Start date</span>
               {formatDate(phase.startDate, "No start date")}
             </span>
-            <span className="inline-flex items-center gap-1.5 text-base font-semibold text-[#20231f] dark:text-white">
-              <span className="text-xs font-medium text-[#777d74] dark:text-white/45">Target date</span>
+            <span className="inline-flex items-center gap-1.5 text-base text-[#141414] dark:text-white">
+              <span className="text-xs text-[#5f5f5c] dark:text-white/45">Target date</span>
               {formatDate(phase.dueDate, "No target date")}
             </span>
           </div>
         </PropertyRow>
         <PropertyRow icon={Tag} label="Tags">
           <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-400/15 dark:text-violet-100">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-[#ece8fb] px-2.5 py-1 text-xs text-[#6b4fd1] dark:bg-violet-400/15 dark:text-violet-100">
               <Layers3 className="h-3.5 w-3.5" />
               Phase
             </span>
-            <span className={cn("inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold", blocked ? "bg-rose-100 text-rose-700 dark:bg-rose-400/15 dark:text-rose-100" : "bg-[#eafbdc] text-[#3f7d16] dark:bg-green-400/15 dark:text-green-100")}>
+            <span className={cn("inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs ", blocked ? "bg-[#fbe4e6] text-[#c0394b] dark:bg-rose-400/15 dark:text-rose-100" : "bg-[#e4f1e6] text-[#2f7a4f] dark:bg-green-400/15 dark:text-green-100")}>
               <AlertCircle className="h-3.5 w-3.5" />
               {blocked ? `${blocked} blocked` : "On track"}
             </span>
@@ -1087,14 +1105,14 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
 
       <section className="mt-6">
         <div className="mb-3 flex items-center gap-2">
-          <h3 className="text-lg font-semibold">Description</h3>
+          <h3 className="text-lg">Description</h3>
         </div>
-        <p className="whitespace-pre-wrap text-sm leading-6 text-[#4f554c] dark:text-white/65">
+        <p className="whitespace-pre-wrap text-sm leading-6 text-[#3d3d3b] dark:text-white/65">
           {phase.description || "No description added for this phase."}
         </p>
       </section>
 
-      <div className="mt-7 flex gap-8 border-b border-[#e1e5de] dark:border-white/10">
+      <div className="mt-7 flex gap-8 border-b border-[#e6e6e3] dark:border-white/10">
         {[
           ["progress", "Progress"],
           ["tasks", `Tasks ${scheduledTasks.length || ""}`],
@@ -1107,8 +1125,8 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
             className={cn(
               "border-b-2 px-1 pb-3 text-sm transition",
               activeTab === value
-                ? "border-[#1683ff] font-semibold text-[#20231f] dark:border-[#7cb7ff] dark:text-white"
-                : "border-transparent text-[#7c8278] hover:text-[#20231f] dark:text-white/45 dark:hover:text-white/75",
+                ? "border-[#141414] text-[#141414] dark:border-[#cff07a] dark:text-white"
+                : "border-transparent text-[#8a8a8a] hover:text-[#141414] dark:text-white/45 dark:hover:text-white/75",
             )}
           >
             {label}
@@ -1118,21 +1136,21 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
 
       {activeTab === "progress" && (
         <section className="pt-5">
-          <div className="rounded-2xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="rounded-[20px] border border-[#ececec] bg-white p-4 dark:border-white/10 dark:bg-[#15171c]">
             <div className="flex items-center justify-between text-sm">
-              <span className="font-semibold">Phase progress</span>
-              <span className="text-[#737970] dark:text-white/50">{done} of {scheduledTasks.length} done</span>
+              <span className="">Phase progress</span>
+              <span className="text-[#5f5f5c] dark:text-white/50">{done} of {scheduledTasks.length} done</span>
             </div>
             <ProgressBar value={progress} className="mt-3" />
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl bg-[#f5f6f3] p-4 text-sm dark:bg-white/[0.04]">
-              <span className="text-xs font-medium uppercase text-[#858b82]">Completed</span>
-              <p className="mt-2 text-2xl font-semibold">{done}</p>
+            <div className="rounded-[14px] bg-[#f7f7f5] p-4 text-sm dark:bg-white/[0.04]">
+              <span className="text-xs text-[#8a8a8a]">Completed</span>
+              <p className="mt-2 text-2xl">{done}</p>
             </div>
-            <div className="rounded-xl bg-[#f5f6f3] p-4 text-sm dark:bg-white/[0.04]">
-              <span className="text-xs font-medium uppercase text-[#858b82]">Blocked</span>
-              <p className="mt-2 text-2xl font-semibold">{blocked}</p>
+            <div className="rounded-[14px] bg-[#f7f7f5] p-4 text-sm dark:bg-white/[0.04]">
+              <span className="text-xs text-[#8a8a8a]">Blocked</span>
+              <p className="mt-2 text-2xl">{blocked}</p>
             </div>
           </div>
         </section>
@@ -1141,13 +1159,13 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
       {activeTab === "tasks" && (
       <section className="pt-5">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h4 className="text-lg font-semibold">Tasks in this phase</h4>
-          <span className="flex items-center gap-2 text-sm text-[#5f665b] dark:text-white/55">
-            <span className="relative grid h-5 w-5 place-items-center rounded-full border-2 border-[#e1e5de] after:absolute after:inset-0 after:rounded-full after:border-2 after:border-l-[#6e7bff] after:border-t-[#6e7bff] after:border-transparent" />
+          <h4 className="text-lg">Tasks in this phase</h4>
+          <span className="flex items-center gap-2 text-sm text-[#3d3d3b] dark:text-white/55">
+            <span className="relative grid h-5 w-5 place-items-center rounded-full border-2 border-[#e6e6e3] after:absolute after:inset-0 after:rounded-full after:border-2 after:border-l-[#6e7bff] after:border-t-[#6e7bff] after:border-transparent" />
             {done}/{scheduledTasks.length}
           </span>
         </div>
-        <div className="overflow-hidden rounded-xl border border-[#e0e4dd] dark:border-white/10">
+        <div className="overflow-hidden rounded-[14px] border border-[#e6e6e3] dark:border-white/10">
           {scheduledTasks.map((task, index) => {
             const assignees = users.filter((person) => (task.assigneeIds || []).includes(person.id));
             return (
@@ -1155,16 +1173,16 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
                 type="button"
                 key={task.id}
                 onClick={() => onOpenTask?.(task)}
-                className="grid w-full gap-3 border-b border-[#e7eae4] bg-white px-3 py-3 text-left transition last:border-b-0 hover:bg-[#f7f8f5] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+                className="grid w-full gap-3 border-b border-[#e6e6e3] bg-white px-3 py-3 text-left transition last:border-b-0 hover:bg-[#f7f7f5] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center dark:border-white/10 dark:bg-[#15171c] dark:hover:bg-white/[0.06]"
               >
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
                     <StatusPill status={task.status || "todo"} compact />
-                    <span className="truncate text-sm font-semibold">
+                    <span className="truncate text-sm">
                       {task.title || "Untitled task"}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-[#858b82]">
+                  <p className="mt-1 text-xs text-[#8a8a8a]">
                     Due {formatDate(task.dueDate, "not set")}
                   </p>
                 </div>
@@ -1173,7 +1191,7 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
             );
           })}
           {!scheduledTasks.length && (
-            <p className="p-7 text-center text-xs text-[#858b82]">
+            <p className="p-7 text-center text-xs text-[#8a8a8a]">
               No tasks in this phase yet.
             </p>
           )}
@@ -1183,18 +1201,18 @@ function PhaseDetailView({ phase, tasks, users, editable, onEdit, onOpenTask }) 
 
       {activeTab === "activity" && (
         <section className="pt-5">
-          <h4 className="text-lg font-semibold">Activities</h4>
-          <div className="mt-4 space-y-3 rounded-2xl border border-[#e0e4dd] bg-white p-4 text-sm dark:border-white/10 dark:bg-white/[0.03]">
+          <h4 className="text-lg">Activities</h4>
+          <div className="mt-4 space-y-3 rounded-[20px] border border-[#ececec] bg-white p-4 text-sm dark:border-white/10 dark:bg-[#15171c]">
             <div className="flex gap-3">
-              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#72cf50]" />
+              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#2f7a4f]" />
               <p>{done} task{done === 1 ? "" : "s"} completed in this phase.</p>
             </div>
             <div className="flex gap-3">
-              <span className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", blocked ? "bg-rose-500" : "bg-[#d8ddd4]")} />
+              <span className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", blocked ? "bg-rose-500" : "bg-[#ebebe8]")} />
               <p>{blocked ? `${blocked} task${blocked === 1 ? "" : "s"} blocked.` : "No blocked tasks."}</p>
             </div>
             <div className="flex gap-3">
-              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#1683ff]" />
+              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#2f6fc0]" />
               <p>{scheduledTasks.length} total task{scheduledTasks.length === 1 ? "" : "s"} linked to this phase.</p>
             </div>
           </div>
@@ -1386,8 +1404,8 @@ function TaskDrawer({
             className={cn(
               "mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition disabled:cursor-default",
               task.status === "done"
-                ? "border-[#65bf45] bg-[#65bf45] text-white"
-                : "border-[#a9afa5] text-transparent hover:border-[#65bf45]",
+                ? "border-[#2f7a4f] bg-[#2f7a4f] text-white"
+                : "border-[#c9c9c6] text-transparent hover:border-[#2f7a4f]",
             )}
           >
             <Check className="h-3.5 w-3.5" />
@@ -1398,11 +1416,11 @@ function TaskDrawer({
             value={task.title || ""}
             onChange={(event) => onChange({ title: event.target.value })}
             placeholder="Task title"
-            className="min-h-[66px] w-full resize-none border-0 bg-transparent p-0 text-2xl font-semibold leading-tight tracking-[-0.02em] outline-none placeholder:text-[#a6aaa3] read-only:cursor-default dark:text-white"
+            className="min-h-[66px] w-full resize-none border-0 bg-transparent p-0 text-2xl leading-tight tracking-[-0.02em] outline-none placeholder:text-[#b0b0ae] read-only:cursor-default dark:text-white"
           />
         </div>
 
-        <div className="mt-5 space-y-1 border-y border-[#e6e9e3] py-3 dark:border-white/10">
+        <div className="mt-5 space-y-1 border-y border-[#e6e6e3] py-3 dark:border-white/10">
           <PropertyRow icon={Circle} label="Status">
             <NativeSelect
               darkMode={darkMode}
@@ -1466,7 +1484,7 @@ function TaskDrawer({
         </div>
 
         <section className="mt-5">
-          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-[#72786f] dark:text-white/50">
+          <div className="mb-2 flex items-center gap-2 text-xs text-[#5f5f5c] dark:text-white/50">
             <FileText className="h-3.5 w-3.5" />
             Description
           </div>
@@ -1478,21 +1496,21 @@ function TaskDrawer({
             placeholder="Describe the outcome, context, blockers, and completion criteria..."
             className={cn(
               textAreaClass,
-              "read-only:cursor-default read-only:bg-[#f4f5f2] dark:read-only:bg-white/[0.025]",
+              "read-only:cursor-default read-only:bg-[#f7f7f5] dark:read-only:bg-white/[0.025]",
             )}
           />
         </section>
 
         <section className="mt-6">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-xs font-medium text-[#72786f] dark:text-white/50">
+            <span className="flex items-center gap-2 text-xs text-[#5f5f5c] dark:text-white/50">
               <Paperclip className="h-3.5 w-3.5" />
               Attachments ({attachments.length})
             </span>
             {attachments.length > 1 && (
               <button
                 type="button"
-                className="text-xs font-semibold text-[#527d42]"
+                className="text-xs text-[#2f7a4f]"
               >
                 <Download className="mr-1 inline h-3.5 w-3.5" />
                 Download all
@@ -1506,16 +1524,16 @@ function TaskDrawer({
                 href={doc.url}
                 target="_blank"
                 rel="noreferrer"
-                className="group flex min-w-0 items-center gap-2 rounded-lg border border-[#dfe3dc] bg-white p-2.5 hover:border-[#b8c4b3] dark:border-white/10 dark:bg-white/[0.03]"
+                className="group flex min-w-0 items-center gap-2 rounded-[12px] border border-[#e6e6e3] bg-white p-2.5 hover:border-[#c9c9c6] dark:border-white/10 dark:bg-[#15171c]"
               >
-                <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded-md bg-rose-50 text-rose-500 dark:bg-rose-400/10">
+                <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded-md bg-[#fbe4e6] text-[#c0394b] dark:bg-rose-400/10">
                   <FileText className="h-4 w-4" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-xs font-semibold">
+                  <span className="block truncate text-xs">
                     {doc.name}
                   </span>
-                  <span className="mt-0.5 block truncate text-[10px] text-[#858b82]">
+                  <span className="mt-0.5 block truncate text-[11px] text-[#8a8a8a]">
                     {doc.category || "Document"} · Open
                   </span>
                 </span>
@@ -1539,7 +1557,7 @@ function TaskDrawer({
                   })
                 }
                 renderTrigger={() => (
-                  <span className="flex min-h-[58px] items-center justify-center rounded-lg border border-dashed border-[#ccd2c8] text-[#7d837a] hover:bg-[#f4f6f2] dark:border-white/15 dark:hover:bg-white/[0.04]">
+                  <span className="flex min-h-[58px] items-center justify-center rounded-[12px] border border-dashed border-[#c9c9c6] text-[#8a8a8a] hover:bg-[#f7f7f5] dark:border-white/15 dark:hover:bg-white/[0.04]">
                     <Plus className="h-4 w-4" />
                   </span>
                 )}
@@ -1548,7 +1566,7 @@ function TaskDrawer({
           </div>
         </section>
 
-        <div className="mt-7 flex gap-6 border-b border-[#e1e5de] dark:border-white/10">
+        <div className="mt-7 flex gap-6 border-b border-[#e6e6e3] dark:border-white/10">
           {[
             ["subtasks", "Subtasks", subtasks.length],
             ["details", "Dependencies", dependencies.length],
@@ -1562,18 +1580,18 @@ function TaskDrawer({
               className={cn(
                 "flex items-center gap-2 border-b-2 px-1 pb-3 text-sm transition",
                 tab === value
-                  ? "border-[#20231f] font-semibold text-[#20231f] dark:border-white dark:text-white"
-                  : "border-transparent text-[#7c8278] dark:text-white/45",
+                  ? "border-[#20231f]  text-[#141414] dark:border-white dark:text-white"
+                  : "border-transparent text-[#8a8a8a] dark:text-white/45",
               )}
             >
               <span>{label}</span>
               {count > 0 && (
                 <span
                   className={cn(
-                    "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-none",
+                    "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px]  leading-none",
                     tab === value
-                      ? "bg-[#20231f] text-white dark:bg-white dark:text-[#20231f]"
-                      : "bg-[#eef2eb] text-[#64705f] dark:bg-white/10 dark:text-white/70",
+                      ? "bg-[#15171c] text-white dark:bg-white dark:text-[#141414]"
+                      : "bg-[#f4f4f2] text-[#5f5f5c] dark:bg-white/10 dark:text-white/70",
                   )}
                 >
                   {count}
@@ -1587,12 +1605,12 @@ function TaskDrawer({
           <section className="pt-5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h4 className="text-sm font-semibold">Subtasks</h4>
-                <p className="mt-0.5 text-xs text-[#858b82]">
+                <h4 className="text-sm">Subtasks</h4>
+                <p className="mt-0.5 text-xs text-[#8a8a8a]">
                   {doneSubtasks} of {subtasks.length} done
                 </p>
               </div>
-              <span className="text-xs text-[#858b82]">
+              <span className="text-xs text-[#8a8a8a]">
                 {subtasks.length ? Math.round((doneSubtasks / subtasks.length) * 100) : 0}%
               </span>
             </div>
@@ -1608,7 +1626,7 @@ function TaskDrawer({
                     Add new subtask
                   </Button>
                 ) : (
-                  <div className="animate-[subtask-card-in_260ms_ease-out] rounded-2xl border border-[#dfe3dc] bg-[#fbfcf8] p-3 dark:border-white/10 dark:bg-white/[0.045]">
+                  <div className="animate-[subtask-card-in_260ms_ease-out] rounded-[20px] border border-[#e6e6e3] bg-[#fcfcfb] p-3 dark:border-white/10 dark:bg-white/[0.045]">
                     <div className="grid gap-3">
                       <input
                         autoFocus
@@ -1621,14 +1639,14 @@ function TaskDrawer({
                           }
                         }}
                         placeholder="Subtask name"
-                        className={cn(inputClass, "h-11 rounded-xl")}
+                        className={cn(inputClass, "h-11 rounded-[14px]")}
                       />
                       <textarea
                         rows={2}
                         value={subtaskDraft.description}
                         onChange={(event) => updateSubtaskDraft({ description: event.target.value })}
                         placeholder="Description"
-                        className={cn(textAreaClass, "min-h-[64px] rounded-xl text-xs")}
+                        className={cn(textAreaClass, "min-h-[64px] rounded-[14px] text-xs")}
                       />
                       <div className="grid gap-2 sm:grid-cols-2">
                         <DatePicker
@@ -1682,12 +1700,12 @@ function TaskDrawer({
                       {(subtaskDraft.dependencyIds || []).length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {selectedProjectDependencies(subtaskDraft.dependencyIds || [], projectDependencyOptions(allTasks, task.id, "new-subtask")).map((dependency) => (
-                            <span key={dependency.value} className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#eef3e9] px-2 py-1 text-[10px] font-semibold text-[#527d42] dark:bg-white/[0.06] dark:text-white/70">
+                            <span key={dependency.value} className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#f4f4f2] px-2 py-1 text-[11px] text-[#2f7a4f] dark:bg-white/[0.06] dark:text-white/70">
                               <span className="truncate">{dependency.type === "subtask" ? "Subtask" : "Task"}: {dependency.label}</span>
                               <button
                                 type="button"
                                 onClick={() => updateSubtaskDraft({ dependencyIds: (subtaskDraft.dependencyIds || []).filter((id) => id !== dependency.value) })}
-                                className="text-[#7b8178] hover:text-[#20231f] dark:hover:text-white"
+                                className="text-[#5f5f5c] hover:text-[#141414] dark:hover:text-white"
                               >
                                 <X className="h-3 w-3" />
                               </button>
@@ -1719,7 +1737,7 @@ function TaskDrawer({
               {subtasks.map((item) => (
                 <div
                   key={item.id}
-                  className="animate-[subtask-card-in_260ms_ease-out] rounded-xl border border-[#e0e4dd] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                  className="animate-[subtask-card-in_260ms_ease-out] rounded-[14px] border border-[#e6e6e3] bg-white p-3 dark:border-white/10 dark:bg-[#15171c]"
                 >
                   <div className="flex items-center gap-3">
                     <button
@@ -1729,8 +1747,8 @@ function TaskDrawer({
                       className={cn(
                         "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition disabled:cursor-default",
                         item.done
-                          ? "border-[#65bf45] bg-[#65bf45] text-white"
-                          : "border-[#a9afa5] text-transparent hover:border-[#65bf45]",
+                          ? "border-[#2f7a4f] bg-[#2f7a4f] text-white"
+                          : "border-[#c9c9c6] text-transparent hover:border-[#2f7a4f]",
                       )}
                     >
                       <Check className="h-3 w-3" />
@@ -1743,8 +1761,8 @@ function TaskDrawer({
                       }
                       placeholder="Subtask title"
                       className={cn(
-                        "min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none read-only:cursor-default",
-                        item.done && "text-[#8a8f87] line-through",
+                        "min-w-0 flex-1 bg-transparent text-sm  outline-none read-only:cursor-default",
+                        item.done && "text-[#8a8a8a] line-through",
                       )}
                     />
                     {isEditing && (
@@ -1766,7 +1784,7 @@ function TaskDrawer({
                     placeholder="Subtask description"
                     className={cn(
                       textAreaClass,
-                      "mt-3 min-h-[58px] rounded-xl text-xs read-only:cursor-default read-only:bg-[#f4f5f2] dark:read-only:bg-white/[0.025]",
+                      "mt-3 min-h-[58px] rounded-[14px] text-xs read-only:cursor-default read-only:bg-[#f7f7f5] dark:read-only:bg-white/[0.025]",
                     )}
                   />
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1825,13 +1843,13 @@ function TaskDrawer({
                   {(item.dependencyIds || []).length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {selectedProjectDependencies(item.dependencyIds || [], projectDependencyOptions(allTasks, task.id, item.id)).map((dependency) => (
-                        <span key={dependency.value} className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#eef3e9] px-2 py-1 text-[10px] font-semibold text-[#527d42] dark:bg-white/[0.06]">
+                        <span key={dependency.value} className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#f4f4f2] px-2 py-1 text-[11px] text-[#2f7a4f] dark:bg-white/[0.06]">
                           <span className="truncate">{dependency.type === "subtask" ? "Subtask" : "Task"}: {dependency.label}</span>
                           {isEditing && (
                             <button
                               type="button"
                               onClick={() => updateSubtask(item.id, { dependencyIds: (item.dependencyIds || []).filter((id) => id !== dependency.value) })}
-                              className="text-[#7b8178] hover:text-[#20231f]"
+                              className="text-[#5f5f5c] hover:text-[#141414]"
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -1843,7 +1861,7 @@ function TaskDrawer({
                 </div>
               ))}
               {!subtasks.length && (
-                <div className="rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">
+                <div className="rounded-[12px] border border-dashed border-[#e6e6e3] px-4 py-6 text-center text-xs text-[#8a8a8a] dark:border-white/10">
                   No subtasks yet. Break this task into smaller steps here.
                 </div>
               )}
@@ -1854,18 +1872,18 @@ function TaskDrawer({
         {tab === "details" && (
           <section className="pt-5">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold">Dependencies</h4>
-              <span className="text-xs text-[#858b82]">
+              <h4 className="text-sm">Dependencies</h4>
+              <span className="text-xs text-[#8a8a8a]">
                 {dependencies.length} linked
               </span>
             </div>
             {(task.blockedBy || []).length > 0 && (
-              <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">
+              <div className="mt-3 rounded-[14px] bg-[#fbe4e6] px-3 py-2 text-xs text-[#c0394b] dark:bg-rose-400/10 dark:text-rose-200">
                 Blocked by {(task.blockedBy || []).map((item) => item.title || "Untitled task").join(", ")} until completed.
               </div>
             )}
             {(task.dependencyWarnings || []).length > 0 && (
-              <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-100">
+              <div className="mt-3 rounded-[14px] bg-[#fbf0d4] px-3 py-2 text-xs text-[#8a6200] dark:bg-amber-400/10 dark:text-amber-100">
                 Due date warning: this task is scheduled before a dependency finishes.
               </div>
             )}
@@ -1905,14 +1923,14 @@ function TaskDrawer({
                 return (
                 <div
                   key={dependency.value}
-                  className="flex items-center gap-3 rounded-lg border border-[#e0e4dd] bg-white px-3 py-3 dark:border-white/10 dark:bg-white/[0.03]"
+                  className="flex items-center gap-3 rounded-[12px] border border-[#e6e6e3] bg-white px-3 py-3 dark:border-white/10 dark:bg-[#15171c]"
                 >
                   <span
                     className={cn(
                       "flex h-5 w-5 items-center justify-center rounded-full border",
                       done
-                        ? "border-[#65bf45] bg-[#65bf45] text-white"
-                        : "border-[#a9afa5]",
+                        ? "border-[#2f7a4f] bg-[#2f7a4f] text-white"
+                        : "border-[#c9c9c6]",
                     )}
                   >
                     {done && <Check className="h-3 w-3" />}
@@ -1920,7 +1938,7 @@ function TaskDrawer({
                   <span
                     className={cn(
                       "min-w-0 flex-1 truncate text-sm",
-                      done && "text-[#8a8f87] line-through",
+                      done && "text-[#8a8a8a] line-through",
                     )}
                   >
                     {dependency.type === "subtask" ? `Subtask: ${dependency.label}` : dependency.label}
@@ -1944,7 +1962,7 @@ function TaskDrawer({
                 );
               })}
               {!dependencies.length && (
-                <div className="rounded-lg border border-dashed border-[#d7dcd3] px-4 py-6 text-center text-xs text-[#858b82] dark:border-white/10">
+                <div className="rounded-[12px] border border-dashed border-[#e6e6e3] px-4 py-6 text-center text-xs text-[#8a8a8a] dark:border-white/10">
                   No dependencies linked to this task.
                 </div>
               )}
@@ -1958,25 +1976,25 @@ function TaskDrawer({
               {(task.comments || []).map((item, index) => (
                 <div key={item.id || index} className="flex items-start gap-3">
                   <Avatar name={item.authorName || "User"} index={index} />
-                  <div className="min-w-0 flex-1 rounded-lg bg-[#f1f3ef] px-3 py-2.5 dark:bg-white/[0.05]">
+                  <div className="min-w-0 flex-1 rounded-[12px] bg-[#f4f4f2] px-3 py-2.5 dark:bg-white/[0.05]">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold">
+                      <span className="text-xs">
                         {item.authorName || "User"}
                       </span>
-                      <span className="text-[10px] text-[#8b9088]">
+                      <span className="text-[11px] text-[#8a8a8a]">
                         {item.createdAt
                           ? new Date(item.createdAt).toLocaleDateString()
                           : ""}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm leading-5 text-[#555b52] dark:text-white/65">
+                    <p className="mt-1 text-sm leading-5 text-[#3d3d3b] dark:text-white/65">
                       {item.text}
                     </p>
                   </div>
                 </div>
               ))}
               {!(task.comments || []).length && (
-                <p className="py-4 text-center text-xs text-[#858b82]">
+                <p className="py-4 text-center text-xs text-[#8a8a8a]">
                   No comments yet.
                 </p>
               )}
@@ -2006,12 +2024,12 @@ function TaskDrawer({
           <section className="pt-5">
             <div className="space-y-4">
               <div className="flex gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-[#72cf50]" />
+                <span className="mt-1 h-2 w-2 rounded-full bg-[#2f7a4f]" />
                 <div>
-                  <p className="text-sm font-medium">
+                  <p className="text-sm">
                     Task is currently {statusLabel(task.status).toLowerCase()}
                   </p>
-                  <p className="mt-1 text-xs text-[#858b82]">
+                  <p className="mt-1 text-xs text-[#8a8a8a]">
                     Latest workspace state
                   </p>
                 </div>
@@ -2025,10 +2043,10 @@ function TaskDrawer({
                     size="sm"
                   />
                   <div>
-                    <p className="text-sm font-medium">
+                    <p className="text-sm">
                       {person.displayName || person.username} is assigned
                     </p>
-                    <p className="mt-1 text-xs text-[#858b82]">
+                    <p className="mt-1 text-xs text-[#8a8a8a]">
                       Project member
                     </p>
                   </div>
@@ -2109,13 +2127,13 @@ function PhaseDrawer({
         />
       ) : (
       <div className="px-6 pb-8 pt-6 sm:px-7">
-        <p className="text-xs font-medium text-[#777d74]">Delivery milestone</p>
+        <p className="text-xs text-[#5f5f5c]">Delivery milestone</p>
         <input
           readOnly={!isEditing}
           value={phase.name || ""}
           onChange={(event) => onChange({ name: event.target.value })}
           placeholder="Phase name"
-          className="mt-2 w-full border-0 bg-transparent p-0 text-2xl font-semibold outline-none placeholder:text-[#a6aaa3] read-only:cursor-default dark:text-white"
+          className="mt-2 w-full border-0 bg-transparent p-0 text-2xl outline-none placeholder:text-[#b0b0ae] read-only:cursor-default dark:text-white"
         />
         <div className="mt-6 grid grid-cols-2 gap-3">
           <Field label="Start date" icon={CalendarDays}>
@@ -2146,19 +2164,19 @@ function PhaseDrawer({
             placeholder="What must be achieved in this phase?"
             className={cn(
               textAreaClass,
-              "read-only:cursor-default read-only:bg-[#f4f5f2] dark:read-only:bg-white/[0.025]",
+              "read-only:cursor-default read-only:bg-[#f7f7f5] dark:read-only:bg-white/[0.025]",
             )}
           />
         </Field>
         {!phase.__isNew && (
           <>
-            <section className="mt-7 rounded-xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <section className="mt-7 rounded-[14px] border border-[#e6e6e3] bg-white p-4 dark:border-white/10 dark:bg-[#15171c]">
               <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-xs text-[#777d74]">Phase progress</p>
-                  <p className="mt-1 text-2xl font-semibold">{progress}%</p>
+                  <p className="text-xs text-[#5f5f5c]">Phase progress</p>
+                  <p className="mt-1 text-2xl">{progress}%</p>
                 </div>
-                <p className="text-xs text-[#777d74]">
+                <p className="text-xs text-[#5f5f5c]">
                   {done} of {scheduledTasks.length} tasks done
                 </p>
               </div>
@@ -2166,7 +2184,7 @@ function PhaseDrawer({
             </section>
             <section className="mt-6">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold">Tasks in this phase</h4>
+                <h4 className="text-sm">Tasks in this phase</h4>
                 {isEditing && (
                   <Button onClick={onAddTask}>
                     <Plus className="h-4 w-4" />
@@ -2174,7 +2192,7 @@ function PhaseDrawer({
                   </Button>
                 )}
               </div>
-              <div className="mt-3 divide-y divide-[#e4e7e1] overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:divide-white/10 dark:border-white/10 dark:bg-white/[0.03]">
+              <div className="mt-3 divide-y divide-[#e6e6e3] overflow-hidden rounded-[14px] border border-[#e6e6e3] bg-white dark:divide-white/10 dark:border-white/10 dark:bg-[#15171c]">
                 {scheduledTasks.map((task, index) => {
                   const assignees = users.filter((person) =>
                     (task.assigneeIds || []).includes(person.id),
@@ -2188,19 +2206,19 @@ function PhaseDrawer({
                         className={cn(
                           "h-2.5 w-2.5 rounded-full",
                           task.status === "done"
-                            ? "bg-[#65bf45]"
+                            ? "bg-[#2f7a4f]"
                             : task.status === "blocked"
                               ? "bg-rose-500"
                               : task.status === "in_progress"
                                 ? "bg-amber-400"
-                                : "border-2 border-[#9ba096]",
+                                : "border-2 border-[#c9c9c6]",
                         )}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
+                        <span className="block truncate text-sm">
                           {task.title}
                         </span>
-                        <span className="mt-0.5 block text-[11px] text-[#858b82]">
+                        <span className="mt-0.5 block text-[11px] text-[#8a8a8a]">
                           {formatDate(task.dueDate)}
                         </span>
                       </span>
@@ -2209,7 +2227,7 @@ function PhaseDrawer({
                   );
                 })}
                 {!tasks.length && (
-                  <p className="p-7 text-center text-xs text-[#858b82]">
+                  <p className="p-7 text-center text-xs text-[#8a8a8a]">
                     No tasks in this phase yet.
                   </p>
                 )}
@@ -2269,7 +2287,7 @@ function ProjectEditor({
       }
     >
       <div className="grid min-h-full sm:grid-cols-[160px_minmax(0,1fr)]">
-        <nav className="border-b border-[#e3e7e0] bg-[#f2f4f0] p-3 sm:border-b-0 sm:border-r dark:border-white/10 dark:bg-white/[0.025]">
+        <nav className="border-b border-[#e6e6e3] bg-[#f4f4f2] p-3 sm:border-b-0 sm:border-r dark:border-white/10 dark:bg-white/[0.025]">
           {[
             ["details", LayoutDashboard, "Details"],
             ["delivery", CalendarDays, "Delivery"],
@@ -2280,10 +2298,10 @@ function ProjectEditor({
               type="button"
               onClick={() => setSection(value)}
               className={cn(
-                "mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium",
+                "mb-1 flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-sm ",
                 section === value
-                  ? "bg-white text-[#20231f] dark:bg-white/10 dark:text-white"
-                  : "text-[#686e65] hover:bg-white/60 dark:text-white/45 dark:hover:bg-white/[0.05]",
+                  ? "bg-white text-[#141414] dark:bg-white/10 dark:text-white"
+                  : "text-[#5f5f5c] hover:bg-white/60 dark:text-white/45 dark:hover:bg-white/[0.05]",
               )}
             >
               <Icon className="h-4 w-4" />
@@ -2294,8 +2312,8 @@ function ProjectEditor({
         <div className="p-5 sm:p-6">
           {section === "details" && (
             <div>
-              <h3 className="text-xl font-semibold">Project identity</h3>
-              <p className="mt-1 text-sm text-[#777d74]">
+              <h3 className="text-xl">Project identity</h3>
+              <p className="mt-1 text-sm text-[#5f5f5c]">
                 Core information shown across the portfolio and workspace.
               </p>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -2383,8 +2401,8 @@ function ProjectEditor({
           )}
           {section === "delivery" && (
             <div>
-              <h3 className="text-xl font-semibold">Delivery setup</h3>
-              <p className="mt-1 text-sm text-[#777d74]">
+              <h3 className="text-xl">Delivery setup</h3>
+              <p className="mt-1 text-sm text-[#5f5f5c]">
                 Dates, priority, and health used by reports and project views.
               </p>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -2438,8 +2456,8 @@ function ProjectEditor({
           )}
           {section === "workspace" && (
             <div>
-              <h3 className="text-xl font-semibold">Connected workspace</h3>
-              <p className="mt-1 text-sm text-[#777d74]">
+              <h3 className="text-xl">Connected workspace</h3>
+              <p className="mt-1 text-sm text-[#5f5f5c]">
                 Link Drive and define alternate names used in imported reports.
               </p>
               <div className="mt-6 space-y-4">
@@ -2468,29 +2486,29 @@ function ProjectEditor({
                     className={inputClass}
                   />
                 </Field>
-                <div className="rounded-xl border border-[#dfe3dc] bg-[#f5f7f3] p-4 dark:border-white/10 dark:bg-white/[0.03]">
-                  <p className="text-sm font-semibold">Workspace summary</p>
+                <div className="rounded-[14px] border border-[#e6e6e3] bg-[#f7f7f5] p-4 dark:border-white/10 dark:bg-[#15171c]">
+                  <p className="text-sm">Workspace summary</p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-lg bg-white px-2 py-3 dark:bg-white/[0.05]">
-                      <p className="text-lg font-semibold">
+                    <div className="rounded-[12px] bg-white px-2 py-3 dark:bg-white/[0.05]">
+                      <p className="text-lg">
                         {(project.phases || []).length}
                       </p>
-                      <p className="text-[10px] text-[#858b82]">Phases</p>
+                      <p className="text-[11px] text-[#8a8a8a]">Phases</p>
                     </div>
-                    <div className="rounded-lg bg-white px-2 py-3 dark:bg-white/[0.05]">
-                      <p className="text-lg font-semibold">
+                    <div className="rounded-[12px] bg-white px-2 py-3 dark:bg-white/[0.05]">
+                      <p className="text-lg">
                         {(project.tasks || []).length +
                           (project.phases || []).flatMap(
                             (phase) => phase.tasks || [],
                           ).length}
                       </p>
-                      <p className="text-[10px] text-[#858b82]">Tasks</p>
+                      <p className="text-[11px] text-[#8a8a8a]">Tasks</p>
                     </div>
-                    <div className="rounded-lg bg-white px-2 py-3 dark:bg-white/[0.05]">
-                      <p className="text-lg font-semibold">
+                    <div className="rounded-[12px] bg-white px-2 py-3 dark:bg-white/[0.05]">
+                      <p className="text-lg">
                         {(project.projectDocuments || []).length}
                       </p>
-                      <p className="text-[10px] text-[#858b82]">Files</p>
+                      <p className="text-[11px] text-[#8a8a8a]">Files</p>
                     </div>
                   </div>
                 </div>
@@ -2539,10 +2557,10 @@ function FileDrawer({
       }
     >
       <div className="px-6 py-6">
-        <h3 className="text-xl font-semibold">
+        <h3 className="text-xl">
           {editing ? "Update file details" : "Connect a document"}
         </h3>
-        <p className="mt-1 text-sm leading-6 text-[#737970]">
+        <p className="mt-1 text-sm leading-6 text-[#5f5f5c]">
           {editing
             ? "Edit the project file name, category, or link."
             : "Paste a document link or upload a file to the project's connected Google Drive folder."}
@@ -2575,32 +2593,32 @@ function FileDrawer({
         </div>
         {!editing && (
           <>
-            <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-[#93988f]">
-              <span className="h-px flex-1 bg-[#e1e5de]" />
+            <div className="my-6 flex items-center gap-3 text-[11px] text-[#8a8a8a]">
+              <span className="h-px flex-1 bg-[#ebebe8]" />
               or upload
-              <span className="h-px flex-1 bg-[#e1e5de]" />
+              <span className="h-px flex-1 bg-[#ebebe8]" />
             </div>
             <label
               className={cn(
-                "flex min-h-36 flex-col items-center justify-center rounded-2xl border border-dashed p-5 text-center transition",
+                "flex min-h-36 flex-col items-center justify-center rounded-[20px] border border-dashed p-5 text-center transition",
                 canUpload
-                  ? "cursor-pointer border-[#a9c99c] bg-[#f2f9ef] hover:bg-[#edf7e9] dark:border-green-400/30 dark:bg-green-400/[0.05]"
-                  : "cursor-not-allowed border-[#d5d9d2] bg-[#f5f6f4] text-[#a0a59d] dark:border-white/10 dark:bg-white/[0.02]",
+                  ? "cursor-pointer border-[#a7e8bf] bg-[#e4f1e6] hover:bg-[#e4f1e6] dark:border-green-400/30 dark:bg-green-400/[0.05]"
+                  : "cursor-not-allowed border-[#c9c9c6] bg-[#f7f7f5] text-[#b0b0ae] dark:border-white/10 dark:bg-white/[0.02]",
               )}
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-white/10">
+              <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white dark:bg-white/10">
                 {uploading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <Upload className="h-5 w-5" />
                 )}
               </span>
-              <span className="mt-3 text-sm font-semibold">
+              <span className="mt-3 text-sm">
                 {uploading
                   ? "Uploading to Drive..."
                   : "Choose a file to upload"}
               </span>
-              <span className="mt-1 text-xs text-[#858b82]">
+              <span className="mt-1 text-xs text-[#8a8a8a]">
                 PDF, image, spreadsheet, or supporting document
               </span>
               <input
@@ -2611,7 +2629,7 @@ function FileDrawer({
               />
             </label>
             {!canUpload && (
-              <p className="mt-3 flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">
+              <p className="mt-3 flex gap-2 rounded-[12px] bg-[#fbf0d4] px-3 py-2.5 text-xs leading-5 text-[#8a6200] dark:bg-amber-400/10 dark:text-amber-200">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 Connect a Drive folder in project settings before uploading
                 files.
@@ -2641,17 +2659,17 @@ function TeamDrawer({ project, tasks, users, onClose }) {
       }
     >
       <div className="px-6 py-6">
-        <div className="rounded-2xl border border-zinc-100 bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
+        <div className="rounded-[20px] border border-[#ececec] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7d837a] dark:text-white/45">
+              <p className="text-xs text-[#8a8a8a] dark:text-white/45">
                 Total team
               </p>
-              <h3 className="mt-1 text-2xl font-bold small">
+              <h3 className="mt-1 text-2xl small">
                 {members.length} {members.length === 1 ? "member" : "members"}
               </h3>
             </div>
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#dff6d7] text-[#367b25] dark:bg-[#d8f36a]/12 dark:text-[#d8f36a]">
+            <span className="flex h-12 w-12 items-center justify-center rounded-[20px] bg-[#e4f1e6] text-[#2f7a4f] dark:bg-[#cff07a]/12 dark:text-[#cff07a]">
               <Users className="h-5 w-5" />
             </span>
           </div>
@@ -2661,30 +2679,30 @@ function TeamDrawer({ project, tasks, users, onClose }) {
           {members.map((member, index) => (
             <div
               key={member.id}
-              className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.035]"
+              className="flex items-center gap-3 rounded-[20px] border border-[#ececec] bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.035]"
             >
               <Avatar name={member.name} user={member} index={index} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{member.name}</p>
-                <p className="mt-0.5 truncate text-xs text-[#7d837a] dark:text-white/45">
+                <p className="truncate text-sm">{member.name}</p>
+                <p className="mt-0.5 truncate text-xs text-[#8a8a8a] dark:text-white/45">
                   {member.username || member.role}
                 </p>
               </div>
               <div className="text-right">
-                <span className="rounded-full bg-[#eef1ec] px-2.5 py-1 text-[11px] font-semibold text-[#5f675b] dark:bg-white/10 dark:text-white/70">
+                <span className="rounded-full bg-[#f4f4f2] px-2.5 py-1 text-[11px] text-[#3d3d3b] dark:bg-white/10 dark:text-white/70">
                   {member.role}
                 </span>
-                <p className="mt-1 text-[10px] text-[#8a9087]">
+                <p className="mt-1 text-[11px] text-[#8a8a8a]">
                   {member.taskCount} tasks
                 </p>
               </div>
             </div>
           ))}
           {!members.length && (
-            <div className="rounded-2xl border border-dashed border-[#d7dcd3] px-4 py-10 text-center dark:border-white/10">
-              <UserRound className="mx-auto h-7 w-7 text-[#9ca199]" />
-              <p className="mt-3 text-sm font-semibold">No team members yet</p>
-              <p className="mt-1 text-xs text-[#858b82]">
+            <div className="rounded-[20px] border border-dashed border-[#e6e6e3] px-4 py-10 text-center dark:border-white/10">
+              <UserRound className="mx-auto h-7 w-7 text-[#b0b0ae]" />
+              <p className="mt-3 text-sm">No team members yet</p>
+              <p className="mt-1 text-xs text-[#8a8a8a]">
                 Assign people to tasks or set a project manager.
               </p>
             </div>
@@ -2764,14 +2782,14 @@ function ProjectAccessDrawer({
       }
     >
       <div className="space-y-5 px-6 py-6">
-        <section className="rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
+        <section className="rounded-[20px] border-[#e6e6e3] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
           <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#80ed99] text-[#000000]">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#a7e8bf] text-[#000000]">
               <ShieldCheck className="h-5 w-5" />
             </span>
             <div>
-              <h3 className="text-sm font-bold">Allowed people only</h3>
-              <p className="mt-1 text-xs leading-5 text-[#747a71] dark:text-white/50">
+              <h3 className="text-sm">Allowed people only</h3>
+              <p className="mt-1 text-xs leading-5 text-[#5f5f5c] dark:text-white/50">
                 Task assignees automatically get access to their task and phase context. Use this panel to delegate broader project, phase, or task permissions.
               </p>
             </div>
@@ -2779,8 +2797,8 @@ function ProjectAccessDrawer({
         </section>
 
         {canManage && (
-          <section className="rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
-            <h3 className="text-sm font-bold">Add access</h3>
+          <section className="rounded-[20px] border-[#e6e6e3] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
+            <h3 className="text-sm">Add access</h3>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <NativeSelect
                 value={form.userId}
@@ -2845,12 +2863,12 @@ function ProjectAccessDrawer({
           {draft.map((entry, index) => {
             const person = userMap.get(entry.userId);
             return (
-              <div key={entry.id} className="rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
+              <div key={entry.id} className="rounded-[20px] border-[#e6e6e3] bg-white p-4 dark:border-white/10 dark:bg-white/[0.035]">
                 <div className="flex items-start gap-3">
                   <Avatar name={person?.displayName || person?.username || "User"} user={person} index={index} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold">{person?.displayName || person?.username || entry.userId}</p>
-                    <p className="mt-1 text-xs text-[#747a71] dark:text-white/50">
+                    <p className="truncate text-sm">{person?.displayName || person?.username || entry.userId}</p>
+                    <p className="mt-1 text-xs text-[#5f5f5c] dark:text-white/50">
                       {entry.permission} access · {entry.scope} · {scopeLabel(entry)}
                     </p>
                     {canManage && (
@@ -2876,10 +2894,10 @@ function ProjectAccessDrawer({
             );
           })}
           {!draft.length && (
-            <div className="rounded-2xl border border-dashed border-[#d7dcd3] px-4 py-10 text-center dark:border-white/10">
-              <ShieldCheck className="mx-auto h-7 w-7 text-[#9ca199]" />
-              <p className="mt-3 text-sm font-semibold">No delegated access yet</p>
-              <p className="mt-1 text-xs text-[#858b82]">Task assignees still receive task-level access automatically.</p>
+            <div className="rounded-[20px] border border-dashed border-[#e6e6e3] px-4 py-10 text-center dark:border-white/10">
+              <ShieldCheck className="mx-auto h-7 w-7 text-[#b0b0ae]" />
+              <p className="mt-3 text-sm">No delegated access yet</p>
+              <p className="mt-1 text-xs text-[#8a8a8a]">Task assignees still receive task-level access automatically.</p>
             </div>
           )}
         </section>
@@ -2931,9 +2949,9 @@ function collectDelayedTasks(projects, today) {
 }
 
 function delayTone(daysLate) {
-  if (daysLate >= 8) return "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300";
-  if (daysLate >= 4) return "bg-orange-50 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300";
-  return "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300";
+  if (daysLate >= 8) return "bg-[#fbe4e6] text-[#c0394b] dark:bg-rose-400/10 dark:text-rose-300";
+  if (daysLate >= 4) return "bg-[#fbe5dc] text-[#c2562b] dark:bg-orange-400/10 dark:text-orange-300";
+  return "bg-[#fbf0d4] text-[#8a6200] dark:bg-amber-400/10 dark:text-amber-300";
 }
 
 function DelayedTasksDrawer({ projects, users, onClose, onOpenProject }) {
@@ -2964,25 +2982,25 @@ function DelayedTasksDrawer({ projects, users, onClose, onOpenProject }) {
       width="max-w-[640px]"
     >
       <div className="px-6 pb-8 pt-6 sm:px-7">
-        <section className="rounded-xl bg-white p-4 dark:bg-white/[0.03]">
+        <section className="rounded-[14px] bg-white p-4 dark:bg-white/[0.03]">
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-xs text-[#777d74]">Past their due date</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums">
+              <p className="text-xs text-[#5f5f5c]">Past their due date</p>
+              <p className="mt-1 text-2xl tabular-nums">
                 {delayed.length}
               </p>
             </div>
-            <p className="text-xs text-[#777d74]">
+            <p className="text-xs text-[#5f5f5c]">
               across {groups.length} {groups.length === 1 ? "project" : "projects"}
             </p>
           </div>
         </section>
 
         {!delayed.length ? (
-          <div className="mt-6 rounded-xl bg-white px-6 py-12 text-center dark:bg-white/[0.03]">
-            <CheckCircle2 className="mx-auto h-7 w-7 text-[#65984f]" />
-            <p className="mt-3 text-sm font-semibold">Everything is on schedule</p>
-            <p className="mt-1 text-xs text-[#858b82]">
+          <div className="mt-6 rounded-[14px] bg-white px-6 py-12 text-center dark:bg-white/[0.03]">
+            <CheckCircle2 className="mx-auto h-7 w-7 text-[#2f7a4f]" />
+            <p className="mt-3 text-sm">Everything is on schedule</p>
+            <p className="mt-1 text-xs text-[#8a8a8a]">
               No task has slipped past its due date.
             </p>
           </div>
@@ -2990,9 +3008,9 @@ function DelayedTasksDrawer({ projects, users, onClose, onOpenProject }) {
           groups.map((group) => (
             <section key={group.project.id} className="mt-6">
               <div className="flex items-center justify-between gap-3">
-                <h4 className="min-w-0 truncate text-sm font-semibold">
+                <h4 className="min-w-0 truncate text-sm">
                   {group.project.name}
-                  <span className="ml-2 text-xs font-normal text-[#858b82]">
+                  <span className="ml-2 text-xs font-normal text-[#8a8a8a]">
                     {group.rows.length} {group.rows.length === 1 ? "task" : "tasks"}
                   </span>
                 </h4>
@@ -3003,7 +3021,7 @@ function DelayedTasksDrawer({ projects, users, onClose, onOpenProject }) {
                   </Button>
                 )}
               </div>
-              <div className="mt-3 divide-y divide-[#eff1ed] overflow-hidden rounded-xl bg-white dark:divide-white/[0.06] dark:bg-white/[0.03]">
+              <div className="mt-3 divide-y divide-[#f0f0ee] overflow-hidden rounded-[14px] bg-white dark:divide-white/[0.06] dark:bg-white/[0.03]">
                 {group.rows.map((row) => {
                   const assignees = users.filter((person) =>
                     (row.task.assigneeIds || []).includes(person.id),
@@ -3020,21 +3038,21 @@ function DelayedTasksDrawer({ projects, users, onClose, onOpenProject }) {
                             ? "bg-rose-500"
                             : row.task.status === "in_progress"
                               ? "bg-amber-400"
-                              : "border-2 border-[#9ba096]",
+                              : "border-2 border-[#c9c9c6]",
                         )}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
+                        <span className="block truncate text-sm">
                           {row.task.title || "Untitled task"}
                         </span>
-                        <span className="mt-0.5 block truncate text-[11px] text-[#858b82]">
+                        <span className="mt-0.5 block truncate text-[11px] text-[#8a8a8a]">
                           {row.task.phaseName ? `${row.task.phaseName} · ` : ""}
                           Due {formatDate(row.due)}
                         </span>
                       </span>
                       <span
                         className={cn(
-                          "shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold tabular-nums",
+                          "shrink-0 rounded-full px-2 py-1 text-[11px]  tabular-nums",
                           delayTone(row.daysLate),
                         )}
                       >
@@ -3086,135 +3104,96 @@ function PortfolioView({
     [projects, delayedToday],
   );
 
+  const healthTone = (health) => (health === "red" ? "rose" : health === "yellow" ? "amber" : "mint");
+  const projectTones = ["mint", "lavender", "peach", "sky"];
+  const healthLabel = (health) => HEALTH_OPTIONS.find((item) => item.value === health)?.label || "On track";
+
   return (
     <div
       className={cn(
         "min-h-0 flex-1 overflow-y-auto",
-        darkMode ? "bg-[#10120f] text-white" : "bg-[#f4f5f2] text-[#20231f]",
+        darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]",
       )}
     >
-      <div className="mx-auto w-full max-w-[1680px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-        <header className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#65984f]">
-              <Sparkles className="h-3.5 w-3.5" />
-              PROJECT CONTROL
-            </div>
-            <h1 className="mt-2 text-3xl font-semibold small tracking-[-0.035em] sm:text-4xl">
-              Projects, clearly organized.
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm text-[#71776e] dark:text-white/45">
-              Plan delivery, manage tasks, coordinate people, and keep every
-              project file in one focused workspace.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[220px] flex-1 sm:flex-none">
-              <Search className="absolute left-3 top-1/2 rounded-xl h-4 w-4 -translate-y-1/2 text-[#858b82]" />
-              <input
-                value={search}
-                onChange={(event) => onSearch(event.target.value)}
-                placeholder="Search projects"
-                className={cn(inputClass, "pl-9 h-12 rounded-xl sm:w-[270px]")}
-              />
-            </div>
-            <Button onClick={onRefresh} disabled={refreshing}>
-              <RefreshCw
-                className={cn("h-4 w-4", refreshing && "animate-spin")}
-              />
-              Refresh
-            </Button>
-            {isSuperAdmin && (
-              <Button variant="primary" onClick={onCreate}>
-                <Plus className="h-4 w-4" />
-                New project
-              </Button>
-            )}
-          </div>
-        </header>
-
-        <section className="mt-7 grid grid-cols-2 overflow-hidden rounded-xl  border-[#dfe3dc] bg-white xl:grid-cols-4 dark:border-white/10 dark:bg-white/[0.03]">
-          {[
-            [FolderKanban, "Active projects", projects.length, null],
-            [ListChecks, "Open tasks", Math.max(0, totalTasks - completed), null],
-            [
-              AlertCircle,
-              "Delayed tasks",
-              delayedCount,
-              delayedCount ? () => setDelayedOpen(true) : null,
-            ],
-            [BarChart3, "Portfolio progress", `${progress}%`, null],
-          ].map(([Icon, label, value, action], index) => (
-            <div
-              key={label}
-              className={cn(
-                "flex items-center gap-4 px-5 py-4",
-                index > 0 && "border-t border-[#e6e9e3]",
-                index % 2 === 1 && "border-l",
-                index > 1 && "border-t",
-                index === 1 && "border-t-0",
-                index === 2 && "border-l-0 xl:border-l xl:border-t-0",
-                index === 3 && "xl:border-t-0",
-                "dark:border-white/10",
-              )}
-            >
-              <span
-                className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-lg",
-                  action
-                    ? "bg-rose-50 text-rose-600 dark:bg-rose-400/10 dark:text-rose-300"
-                    : "bg-[#f0f3ed] text-[#5e6759] dark:bg-white/[0.06] dark:text-white/60",
-                )}
-              >
-                <Icon className="h-4.5 w-4.5" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xl font-semibold tabular-nums">{value}</p>
-                <p className="text-xs text-[#777d74] dark:text-white/45">
-                  {label}
-                </p>
+      <div className="mx-auto w-full max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <PageHeader
+          darkMode={darkMode}
+          badge="Project control"
+          badgeIcon={FolderKanban}
+          badgeTone="lavender"
+          title="Projects"
+          subtitle="every phase, task and file in one place"
+          description="Plan delivery, manage tasks, coordinate people and keep every project file in one focused workspace."
+          actions={
+            <>
+              <div className="relative min-w-[220px] flex-1 sm:flex-none">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a9a98] dark:text-white/35" />
+                <input
+                  value={search}
+                  onChange={(event) => onSearch(event.target.value)}
+                  placeholder="Search projects"
+                  className={cn(inputClass, "pl-10 sm:w-[260px]")}
+                />
               </div>
-              {action && (
-                <button
-                  type="button"
-                  onClick={action}
-                  className="ml-auto shrink-0 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-semibold text-[#5e6759] underline-offset-2 transition hover:bg-black/[0.04] hover:underline dark:text-white/60 dark:hover:bg-white/[0.06]"
-                >
-                  See all
-                </button>
+              <Button onClick={onRefresh} disabled={refreshing}>
+                <RefreshCw
+                  className={cn("h-4 w-4", refreshing && "animate-spin")}
+                />
+                Refresh
+              </Button>
+              {isSuperAdmin && (
+                <Button variant="primary" onClick={onCreate}>
+                  <Plus className="h-4 w-4" />
+                  New project
+                </Button>
               )}
-            </div>
-          ))}
+            </>
+          }
+        />
+
+        <section className="mt-8 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <StatTile darkMode={darkMode} icon={FolderKanban} tone="mint" value={projects.length} label="Active projects" />
+          <StatTile darkMode={darkMode} icon={ListChecks} tone="lavender" value={Math.max(0, totalTasks - completed)} label="Open tasks" />
+          <StatTile
+            darkMode={darkMode}
+            icon={AlertCircle}
+            tone={delayedCount ? "rose" : "peach"}
+            value={delayedCount}
+            label="Delayed tasks"
+            hint={delayedCount ? "Tap to see all" : "Nothing late"}
+            onClick={delayedCount ? () => setDelayedOpen(true) : undefined}
+          />
+          <StatTile darkMode={darkMode} icon={BarChart3} tone="sky" value={`${progress}%`} label="Portfolio progress" />
         </section>
 
-        <section className="mt-7">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Project portfolio</h2>
-              <p className="mt-0.5 text-xs text-[#7b8178]">
-                {projects.length} visible{" "}
-                {projects.length === 1 ? "project" : "projects"}
-              </p>
-            </div>
-            <div className="flex rounded-xl  border-[#dfe3dc] bg-white p-1 dark:border-white/10 dark:bg-white/[0.03]">
+        <section className="mt-10">
+          <div className="flex items-end justify-between gap-3">
+            <SectionTitle
+              darkMode={darkMode}
+              title="Project portfolio"
+              subtitle={`${projects.length} visible ${projects.length === 1 ? "project" : "projects"}`}
+            />
+            <div className="flex rounded-full bg-[#f4f4f2] p-1 dark:bg-white/[0.06]">
               <IconButton
                 label="Grid view"
-                className={
+                className={cn(
+                  "!h-8 !w-8",
                   layout === "grid"
-                    ? "bg-[#eef1ec] text-black dark:bg-white/10 dark:text-white"
-                    : ""
-                }
+                    ? "!bg-white !text-[#141414] dark:!bg-white/15 dark:!text-white"
+                    : "",
+                )}
                 onClick={() => onLayout("grid")}
               >
                 <Grid2X2 className="h-4 w-4" />
               </IconButton>
               <IconButton
                 label="List view"
-                className={
+                className={cn(
+                  "!h-8 !w-8",
                   layout === "list"
-                    ? "bg-[#eef1ec] text-black dark:bg-white/10 dark:text-white"
-                    : ""
-                }
+                    ? "!bg-white !text-[#141414] dark:!bg-white/15 dark:!text-white"
+                    : "",
+                )}
                 onClick={() => onLayout("list")}
               >
                 <List className="h-4 w-4" />
@@ -3223,17 +3202,16 @@ function PortfolioView({
           </div>
 
           {!projects.length ? (
-            <div className="mt-4 rounded-xl  border-dashed border-[#cfd5cc] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-white/[0.02]">
-              <FolderKanban className="mx-auto h-8 w-8 text-[#969c93]" />
-              <h3 className="mt-3 text-base font-semibold">
-                No projects found
-              </h3>
-              <p className="mt-1 text-sm text-[#7b8178]">
-                Try another search or create a new project.
-              </p>
-            </div>
+            <EmptyState
+              darkMode={darkMode}
+              className="mt-5"
+              icon={FolderKanban}
+              tone="lavender"
+              title="No projects found"
+              text="Try another search or create a new project."
+            />
           ) : layout === "grid" ? (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {projects.map((project, projectIndex) => {
                 const tasks = project.manualTasks || [];
                 const members = projectTeamMembers(project, tasks, users);
@@ -3243,73 +3221,48 @@ function PortfolioView({
                     key={project.id}
                     type="button"
                     onClick={() => onOpen(project)}
-                    className="group rounded-2xl  border-[#dfe3dc] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-[#b8c4b3] dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20"
+                    className="group relative flex flex-col rounded-[20px] border border-[#ececec] bg-white p-5 text-left transition-colors hover:bg-[#fcfcfb] dark:border-white/10 dark:bg-[#15171c] dark:hover:bg-[#191b21]"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span
-                          className={cn(
-                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white",
-                            projectIndex % 3 === 0
-                              ? "bg-[#348a70]"
-                              : projectIndex % 3 === 1
-                                ? "bg-[#687ac6]"
-                                : "bg-[#9b704f]",
-                          )}
-                        >
-                          {initials(project.name)}
-                        </span>
-                        <div className="min-w-0">
-                          <h3 className="truncate text-sm font-semibold">
-                            {project.name}
-                          </h3>
-                          <p className="mt-0.5 truncate text-xs text-[#7e847b]">
-                            {project.client ||
-                              project.location ||
-                              "Project workspace"}
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronRight className="mt-2 h-4 w-4 text-[#9aa097] transition group-hover:translate-x-0.5 group-hover:text-black" />
-                    </div>
-                    <div className="mt-4 flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-1 text-[10px] font-semibold",
-                          project.health === "red"
-                            ? "bg-rose-50 text-rose-600"
-                            : project.health === "yellow"
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-green-50 text-green-700",
-                        )}
-                      >
-                        {HEALTH_OPTIONS.find(
-                          (item) => item.value === project.health,
-                        )?.label || "On track"}
-                      </span>
+                    <span className="absolute right-5 top-4 text-[12px] tabular-nums text-[#b0b0ae] dark:text-white/35">
+                      {String(projectIndex + 1).padStart(2, "0")}
+                    </span>
+                    <IconTile
+                      darkMode={darkMode}
+                      tone={projectTones[projectIndex % projectTones.length]}
+                      icon={<span className="text-[13px] tracking-[-0.01em]">{initials(project.name)}</span>}
+                    />
+                    <h3 className="mt-4 truncate pr-8 text-[15px] tracking-[-0.01em] text-[#141414] dark:text-white">
+                      {project.name}
+                    </h3>
+                    <p className="mt-0.5 truncate text-[13px] text-[#8a8a8a] dark:text-white/45">
+                      {project.client ||
+                        project.location ||
+                        "Project workspace"}
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                      <Chip darkMode={darkMode} tone={healthTone(project.health)} className="!h-6 !px-2.5 !text-[11.5px]">
+                        {healthLabel(project.health)}
+                      </Chip>
                       {project.code && (
-                        <span className="rounded-full bg-[#f1f3ef] px-2 py-1 text-[10px] text-[#686e65] dark:bg-white/[0.06] dark:text-white/55">
+                        <Chip darkMode={darkMode} tone="outline" className="!h-6 !px-2.5 !text-[11.5px]">
                           {project.code}
-                        </span>
+                        </Chip>
                       )}
-                      <span className="ml-auto text-[10px] text-[#858b82]">
-                        {formatRelativeDate(project.targetDate)}
-                      </span>
                     </div>
                     <div className="mt-5">
-                      <div className="mb-2 flex items-center justify-between text-xs">
-                        <span className="text-[#777d74]">Progress</span>
-                        <span className="font-semibold">
+                      <div className="mb-2 flex items-center justify-between text-[12.5px]">
+                        <span className="text-[#8a8a8a] dark:text-white/45">Progress</span>
+                        <span className="tabular-nums text-[#141414] dark:text-white">
                           {projectProgress}%
                         </span>
                       </div>
                       <ProgressBar value={projectProgress} />
                     </div>
-                    <div className="mt-5 flex items-center justify-between border-t border-[#eceeea] pt-3 dark:border-white/10">
+                    <div className="mt-5 flex items-center justify-between gap-3 border-t border-[#f0f0ee] pt-4 dark:border-white/10">
                       <AvatarStack people={members} />
-                      <div className="flex items-center gap-3 text-[11px] text-[#7d837a]">
-                        <span>{project.metrics?.totalTasks || 0} tasks</span>
-                        <span>{project.metrics?.documents || 0} files</span>
+                      <div className="flex flex-col items-end text-[11.5px] text-[#8a8a8a] dark:text-white/45">
+                        <span>{project.metrics?.totalTasks || 0} tasks · {project.metrics?.documents || 0} files</span>
+                        <span>{formatRelativeDate(project.targetDate)}</span>
                       </div>
                     </div>
                   </button>
@@ -3317,8 +3270,8 @@ function PortfolioView({
               })}
             </div>
           ) : (
-            <div className="mt-4 overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
-              <div className="hidden grid-cols-[minmax(240px,1.5fr)_160px_140px_180px_120px_40px] gap-4 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">
+            <div className="mt-5">
+              <div className="hidden grid-cols-[minmax(240px,1.5fr)_160px_140px_180px_120px_40px] gap-4 border-b border-[#f0f0ee] px-4 pb-3 text-[12px] text-[#8a8a8a] md:grid dark:border-white/10 dark:text-white/45">
                 <span>Project</span>
                 <span>Manager</span>
                 <span>Health</span>
@@ -3331,47 +3284,45 @@ function PortfolioView({
                   key={project.id}
                   type="button"
                   onClick={() => onOpen(project)}
-                  className="grid w-full gap-3 border-b border-[#eceeea] px-4 py-3 text-left last:border-0 hover:bg-[#f8f9f6] md:grid-cols-[minmax(240px,1.5fr)_160px_140px_180px_120px_40px] md:items-center dark:border-white/10 dark:hover:bg-white/[0.03]"
+                  className="grid w-full gap-3 border-b border-[#f0f0ee] px-4 py-3.5 text-left transition-colors hover:bg-[#f7f7f5] md:grid-cols-[minmax(240px,1.5fr)_160px_140px_180px_120px_40px] md:items-center dark:border-white/10 dark:hover:bg-white/[0.03]"
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white",
-                        index % 2 ? "bg-[#687ac6]" : "bg-[#348a70]",
-                      )}
-                    >
-                      {initials(project.name)}
-                    </span>
+                    <IconTile
+                      darkMode={darkMode}
+                      size="sm"
+                      tone={projectTones[index % projectTones.length]}
+                      icon={<span className="text-[11px]">{initials(project.name)}</span>}
+                    />
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold">
+                      <span className="block truncate text-[14px] text-[#141414] dark:text-white">
                         {project.name}
                       </span>
-                      <span className="block truncate text-[11px] text-[#858b82]">
+                      <span className="block truncate text-[12px] text-[#8a8a8a] dark:text-white/45">
                         {project.client || project.location || project.code}
                       </span>
                     </span>
                   </span>
-                  <span className="text-xs text-[#686e65] dark:text-white/55">
+                  <span className="text-[13px] text-[#5f5f5c] dark:text-white/55">
                     {project.manager || "Unassigned"}
                   </span>
-                  <span className="text-xs capitalize">
-                    {HEALTH_OPTIONS.find(
-                      (item) => item.value === project.health,
-                    )?.label || "On track"}
+                  <span>
+                    <Chip darkMode={darkMode} tone={healthTone(project.health)} className="!h-6 !px-2.5 !text-[11.5px]">
+                      {healthLabel(project.health)}
+                    </Chip>
                   </span>
                   <span className="flex items-center gap-3">
                     <ProgressBar
                       value={project.metrics?.progress || 0}
                       className="flex-1"
                     />
-                    <span className="w-8 text-xs font-semibold">
+                    <span className="w-9 text-[12.5px] tabular-nums">
                       {project.metrics?.progress || 0}%
                     </span>
                   </span>
-                  <span className="text-xs text-[#686e65] dark:text-white/55">
+                  <span className="text-[13px] text-[#5f5f5c] dark:text-white/55">
                     {formatDate(project.targetDate)}
                   </span>
-                  <ChevronRight className="h-4 w-4 text-[#969c93]" />
+                  <ChevronRight className="h-4 w-4 text-[#b0b0ae] dark:text-white/35" />
                 </button>
               ))}
             </div>
@@ -3408,45 +3359,45 @@ const WORKSPACE_NAV = [
 function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenTeam, navItems = WORKSPACE_NAV, unreadCounts = {} }) {
   const members = projectTeamMembers(project, tasks, users);
   return (
-    <aside className="hidden min-h-0 w-[220px] shrink-0 flex-col overflow-hidden border-[#e0e4dd] bg-[#f0f2ee] px-3 py-3 md:flex dark:border-white/10 dark:bg-[#121511]">
+    <aside className="hidden min-h-0 w-[228px] shrink-0 flex-col overflow-hidden border-r border-[#f0f0ee] bg-white px-3 py-4 md:flex dark:border-white/10 dark:bg-[#121317]">
       <div className="shrink-0 px-2">
         <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#348a70] text-xs font-bold text-white">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[#ebebe8] text-[12px] text-[#6b4fd1] dark:bg-[rgba(167,139,250,0.14)] dark:text-[#c9b9fb]">
             {initials(project.name)}
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-sm small font-semibold">{project.name}</h2>
-            <p className="truncate text-[10px] text-[#7b8178]">
+            <h2 className="truncate text-[14px] tracking-[-0.01em] text-[#141414] dark:text-white">{project.name}</h2>
+            <p className="truncate text-[12px] text-[#8a8a8a] dark:text-white/45">
               {project.code || "Project workspace"}
             </p>
           </div>
         </div>
       </div>
-      <nav className="scrollbar-hide mt-4 min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pb-3">
+      <nav className="scrollbar-hide mt-5 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-3">
         {navItems.map(({ value, label, icon: Icon }) => (
           <button
             key={value}
             type="button"
             onClick={() => onView(value)}
             className={cn(
-              "flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm transition",
+              "flex h-10 w-full items-center gap-2.5 rounded-full px-3.5 text-left text-[13.5px] transition",
               view === value
-                ? "bg-white font-semibold text-[#20231f] dark:bg-white/10 dark:text-white"
-                : "text-[#62685f] hover:bg-white/60 dark:text-white/45 dark:hover:bg-white/[0.05]",
+                ? "bg-[#141414] text-white dark:bg-[#cff07a] dark:text-[#141414]"
+                : "text-[#5f5f5c] hover:bg-[#f4f4f2] hover:text-[#141414] dark:text-white/55 dark:hover:bg-white/[0.06] dark:hover:text-white",
             )}
           >
             <Icon className="h-4 w-4" />
             <span className="flex-1">{label}</span>
             {value === "tasks" && (
-              <span className="text-[10px] text-[#8a9087]">{tasks.length}</span>
+              <span className="text-[11.5px] tabular-nums opacity-60">{tasks.length}</span>
             )}
             {value === "files" && (
-              <span className="text-[10px] text-[#8a9087]">
+              <span className="text-[11.5px] tabular-nums opacity-60">
                 {documents.length}
               </span>
             )}
             {value === "chat" && unreadCounts.chat > 0 && (
-              <span className={cn("grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-bold text-white", unreadCounts.chatMentions > 0 ? "bg-[#65bf45]" : "bg-[#2f7cff]")}>
+              <span className={cn("grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] text-white", unreadCounts.chatMentions > 0 ? "bg-[#2f7a4f]" : "bg-[#2f6fc0]")}>
                 {unreadCounts.chatMentions > 0 ? "@" : unreadCounts.chat > 99 ? "99+" : unreadCounts.chat}
               </span>
             )}
@@ -3456,16 +3407,16 @@ function WorkspaceRail({ project, view, onView, tasks, documents, users, onOpenT
       <button
         type="button"
         onClick={onOpenTeam}
-        className="mt-3 w-full shrink-0 rounded-2xl border border-[#dce0d8] px-0 pb-3 pt-4 text-left transition hover:bg-white/45 dark:border-white/10 dark:hover:bg-white/[0.04]"
+        className="mt-3 w-full shrink-0 rounded-[20px] bg-[#f7f7f5] px-0 pb-3.5 pt-3.5 text-left transition hover:bg-[#f1f1ee] dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
       >
-        <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#949a91]">
+        <p className="px-4 text-[13px] text-[#141414] dark:text-white">
           Project team
         </p>
-        <div className="mt-2 flex items-center justify-between gap-3 px-3">
+        <div className="mt-2.5 flex items-center justify-between gap-3 px-4">
           <AvatarStack people={members} />
-          <UserPlus className="h-4 w-4 text-[#8a9087]" />
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-[#3d3d3b] dark:bg-white/10 dark:text-white/75"><UserPlus className="h-3.5 w-3.5" /></span>
         </div>
-        <p className="mt-1.5 px-3 text-[11px] text-[#7d837a]">
+        <p className="mt-2 px-4 text-[12px] text-[#8a8a8a] dark:text-white/45">
           {members.length || 0} active members
         </p>
       </button>
@@ -3496,27 +3447,29 @@ function OverviewView({
       ),
     )
     .slice(0, 6);
+  const healthValue = HEALTH_OPTIONS.find((item) => item.value === project.health)?.label || "On track";
+  const healthClass = project.health === "red" ? STAT_TONES.rose : project.health === "yellow" ? STAT_TONES.amber : STAT_TONES.green;
   return (
-    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
-      <section className="rounded-2xl  border-[#dfe3dc] bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div>
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6 lg:p-8">
+      <section>
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[#e8f6e3] px-2.5 py-1 text-[10px] font-semibold text-[#3e7c2d]">
-                {HEALTH_OPTIONS.find((item) => item.value === project.health)
-                  ?.label || "On track"}
+              <span className={cn("inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px]", healthClass)}>
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={1.9} />
+                {healthValue}
               </span>
               <PriorityPill priority={project.priority} />
             </div>
-            <h2 className="mt-3 text-3xl small font-semibold tracking-[-0.025em]">
+            <h2 className="mt-3 text-[30px] leading-[1.08] tracking-[-0.02em] text-[#141414] sm:text-[34px] dark:text-white">
               {project.name}
             </h2>
-            <p className="mt-1 text-sm text-[#72786f]">
+            <p className="text-[22px] leading-[1.15] tracking-[-0.02em] text-[#9a9a98] dark:text-white/40">
               {project.client || "Client not set"}
               {project.location ? ` · ${project.location}` : ""}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               [Sparkles, "Progress", `${progress}%`, STAT_TONES.green],
               [CheckCircle2, "Tasks done", `${done}/${tasks.length}`, STAT_TONES.blue],
@@ -3526,33 +3479,32 @@ function OverviewView({
               <div
                 key={label}
                 className={cn(
-                  "min-w-[118px] rounded-[22px] px-4 py-3",
+                  "flex min-h-[112px] min-w-[132px] flex-col justify-between rounded-[20px] p-4",
                   badgeClass,
                 )}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
-                    {label}
-                  </p>
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/55 text-current dark:bg-white/10">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                </div>
-                <p className="mt-1 text-lg font-bold tabular-nums">{value}</p>
+                <Icon className="h-5 w-5" strokeWidth={1.8} />
+                <span className="mt-3 block">
+                  <span className="block text-[22px] leading-none tracking-[-0.03em] tabular-nums text-[#141414] dark:text-white">{value}</span>
+                  <span className="mt-1.5 block text-[12.5px] text-[#6b6b6b] dark:text-white/55">{label}</span>
+                </span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_360px]">
-        <section className="rounded-2xl  border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
-          <header className="flex items-center justify-between border-b border-[#e5e8e2] px-4 py-3 dark:border-white/10">
-            <div>
-              <h3 className="text-sm font-semibold">Recent work</h3>
-              <p className="mt-0.5 text-[11px] text-[#858b82]">
-                Latest tasks across the project
-              </p>
+      <div className="mt-8 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_380px]">
+        <section className="rounded-[20px] border border-[#ececec] bg-white dark:border-white/10 dark:bg-[#15171c]">
+          <header className="flex items-center justify-between gap-3 px-5 pt-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#f4f4f2] text-[#2f7a4f] dark:bg-[rgba(74,222,128,0.12)] dark:text-[#a7e8bf]"><ListChecks className="h-4 w-4" strokeWidth={1.8} /></span>
+              <div className="min-w-0">
+                <h3 className="text-[15px] text-[#141414] dark:text-white">Recent work</h3>
+                <p className="text-[12.5px] text-[#8a8a8a] dark:text-white/45">
+                  Latest tasks across the project
+                </p>
+              </div>
             </div>
             {isSuperAdmin && (
               <Button onClick={onAddTask}>
@@ -3561,7 +3513,7 @@ function OverviewView({
               </Button>
             )}
           </header>
-          <div className="divide-y divide-[#e9ebe7] dark:divide-white/10">
+          <div className="px-2 pb-2 pt-3">
             {recent.map((task, index) => {
               const assignees = users.filter((person) =>
                 (task.assigneeIds || []).includes(person.id),
@@ -3571,17 +3523,17 @@ function OverviewView({
                   key={task.id}
                   type="button"
                   onClick={() => onOpenTask(task)}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_110px_90px] items-center gap-3 px-4 py-3 text-left hover:bg-[#f8f9f6] dark:hover:bg-white/[0.025]"
+                  className="grid w-full grid-cols-[minmax(0,1fr)_110px_90px] items-center gap-3 rounded-[14px] border-b border-[#f0f0ee] px-3 py-3 text-left last:border-0 hover:bg-[#f7f7f5] dark:border-white/[0.06] dark:hover:bg-white/[0.03]"
                 >
                   <span className="flex min-w-0 items-center gap-3">
                     <span
                       className={cn(
-                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px]",
                         task.status === "done"
-                          ? "bg-[#dcf5d4] text-[#4d9d36]"
+                          ? STAT_TONES.green
                           : task.status === "blocked"
-                            ? "bg-rose-50 text-rose-500"
-                            : "bg-[#eef0ec] text-[#747a71]",
+                            ? STAT_TONES.rose
+                            : "bg-[#f4f4f2] text-[#8a8a8a] dark:bg-white/[0.07] dark:text-white/55",
                       )}
                     >
                       {task.status === "done" ? (
@@ -3591,37 +3543,41 @@ function OverviewView({
                       )}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">
+                      <span className="block truncate text-[13.5px] text-[#141414] dark:text-white">
                         {task.title || "Untitled task"}
                       </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-[#858b82]">
+                      <span className="mt-0.5 block truncate text-[12px] text-[#8a8a8a] dark:text-white/45">
                         {phases.find((phase) => phase.id === task.phaseId)
                           ?.name || "No phase"}
                       </span>
                     </span>
                   </span>
                   <AvatarStack people={assignees} limit={3} key={index} />
-                  <span className="text-right text-[11px] text-[#777d74]">
+                  <span className="text-right text-[12px] text-[#8a8a8a] dark:text-white/45">
                     {formatDate(task.dueDate, "No date")}
                   </span>
                 </button>
               );
             })}
             {!recent.length && (
-              <p className="px-5 py-12 text-center text-xs text-[#858b82]">
-                No project tasks yet.
-              </p>
+              <div className="m-3 flex flex-col items-center rounded-[20px] bg-[#f7f7f5] px-6 py-12 text-center dark:bg-white/[0.03]">
+                <span className="grid h-14 w-14 place-items-center rounded-[18px] bg-[#f4f4f2] text-[#3d3d3b] dark:bg-white/[0.07] dark:text-white/75"><ListChecks className="h-6 w-6" strokeWidth={1.8} /></span>
+                <p className="mt-4 text-[14px] text-[#141414] dark:text-white">No project tasks yet</p>
+              </div>
             )}
           </div>
         </section>
-        <section className="rounded-2xl  border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
-          <header className="border-b border-[#e5e8e2] px-4 py-3 dark:border-white/10">
-            <h3 className="text-sm font-semibold">Delivery phases</h3>
-            <p className="mt-0.5 text-[11px] text-[#858b82]">
-              Milestone progress
-            </p>
+        <section className="rounded-[20px] border border-[#ececec] bg-white dark:border-white/10 dark:bg-[#15171c]">
+          <header className="flex items-center gap-3 px-5 pt-5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#ebebe8] text-[#6b4fd1] dark:bg-[rgba(167,139,250,0.14)] dark:text-[#c9b9fb]"><Layers3 className="h-4 w-4" strokeWidth={1.8} /></span>
+            <div>
+              <h3 className="text-[15px] text-[#141414] dark:text-white">Delivery phases</h3>
+              <p className="text-[12.5px] text-[#8a8a8a] dark:text-white/45">
+                Milestone progress
+              </p>
+            </div>
           </header>
-          <div className="space-y-1 p-2">
+          <div className="space-y-1 p-2 pt-3">
             {phases.map((phase, index) => {
               const phaseTasks = tasks.filter(
                 (task) => task.phaseId === phase.id,
@@ -3637,18 +3593,18 @@ function OverviewView({
                   key={phase.id}
                   type="button"
                   onClick={() => onOpenPhase(phase)}
-                  className="w-full rounded-lg p-3 text-left hover:bg-[#f6f8f4] dark:hover:bg-white/[0.03]"
+                  className="w-full rounded-[14px] px-3 py-3 text-left hover:bg-[#f7f7f5] dark:hover:bg-white/[0.03]"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#eef6eb] text-[10px] font-bold text-[#568443]">
-                        {index + 1}
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span className="text-[12px] tabular-nums text-[#b0b0ae] dark:text-white/35">
+                        {String(index + 1).padStart(2, "0")}
                       </span>
-                      <span className="truncate text-xs font-semibold">
+                      <span className="truncate text-[13.5px] text-[#141414] dark:text-white">
                         {phase.name}
                       </span>
                     </span>
-                    <span className="text-[10px] text-[#858b82]">
+                    <span className="text-[12px] tabular-nums text-[#8a8a8a] dark:text-white/45">
                       {phaseProgress}%
                     </span>
                   </div>
@@ -3657,18 +3613,16 @@ function OverviewView({
               );
             })}
             {!phases.length && (
-              <p className="p-6 text-center text-xs text-[#858b82]">
+              <p className="m-1 rounded-[14px] bg-[#f7f7f5] p-6 text-center text-[13px] text-[#8a8a8a] dark:bg-white/[0.03] dark:text-white/45">
                 No phases yet.
               </p>
             )}
           </div>
-          <div className="border-t border-[#e5e8e2] px-4 py-3 text-[11px] text-[#777d74] dark:border-white/10">
-            <div className="flex justify-between">
-              <span>Connected files</span>
-              <strong className="text-[#30342e] dark:text-white">
-                {documents.length}
-              </strong>
-            </div>
+          <div className="mx-5 mb-5 flex items-center justify-between rounded-full bg-[#f4f4f2] px-4 py-2.5 text-[12.5px] text-[#5f5f5c] dark:bg-white/[0.05] dark:text-white/55">
+            <span className="flex items-center gap-2"><Paperclip className="h-3.5 w-3.5" />Connected files</span>
+            <span className="tabular-nums text-[#141414] dark:text-white">
+              {documents.length}
+            </span>
           </div>
         </section>
       </div>
@@ -3700,33 +3654,27 @@ function TasksView({
     return matchesQuery && matchesPriority && matchesAssignee;
   }));
   return (
-    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">All tasks</h2>
-          <p className="mt-0.5 text-xs text-[#7b8178]">
-            Filter, scan, and update every project task.
-          </p>
-        </div>
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <SectionTitle darkMode={darkMode} title="All tasks" subtitle="filter, scan and update" />
         {isSuperAdmin && (
           <Button
             variant="primary"
-            className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
             onClick={() => onAddTask()}
           >
-            <Plus className="h-3 w-3" />
+            <Plus className="h-4 w-4" />
             New task
           </Button>
         )}
       </div>
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div className="mt-6 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#878d84]" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a9a98] dark:text-white/35" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Filter tasks..."
-            className={cn(inputClass, "pl-9")}
+            className={cn(inputClass, "pl-10")}
           />
         </div>
         <div className="min-w-[180px]">
@@ -3755,8 +3703,8 @@ function TasksView({
           />
         </div>
       </div>
-      <section className="mt-4 overflow-x-auto rounded-2xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="hidden w-full min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] gap-3 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">
+      <section className="mt-5 overflow-x-auto">
+        <div className="hidden w-full min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] gap-3 border-b border-[#f0f0ee] px-4 pb-3 text-[12px] text-[#8a8a8a] md:grid dark:border-white/10 dark:text-white/45">
           <span>Task</span>
           <span>Phase</span>
           <span>Assigned to</span>
@@ -3784,14 +3732,8 @@ function TasksView({
               type="button"
               onClick={() => onOpenTask(task)}
               className={cn(
-                "grid w-full min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] items-start gap-3 border-b px-4 py-5 text-left text-sm last:border-0 transition-colors",
-                rowTone === "delayed"
-                  ? "border-red-100 bg-red-50/70 hover:bg-red-50 dark:border-red-400/20 dark:bg-red-500/[0.11] dark:hover:bg-red-500/[0.16]"
-                  : rowTone === "done"
-                    ? "border-emerald-100 bg-emerald-50/70 hover:bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-500/[0.10] dark:hover:bg-emerald-500/[0.15]"
-                    : rowTone === "progress"
-                      ? "border-blue-100 bg-blue-50/70 hover:bg-blue-50 dark:border-blue-400/20 dark:bg-blue-500/[0.10] dark:hover:bg-blue-500/[0.15]"
-                      : "border-[#eceeea] bg-white hover:bg-[#fafbf9] dark:border-white/10 dark:bg-transparent dark:hover:bg-white/[0.025]",
+                "grid w-full min-w-[940px] grid-cols-[340px_145px_150px_150px_120px] items-start gap-3 border-b border-[#f0f0ee] px-4 py-4 text-left text-[13.5px] transition-colors hover:bg-[#f7f7f5] dark:border-white/[0.06] dark:hover:bg-white/[0.03]",
+                rowTone === "delayed" && "bg-[#f7f7f5] dark:bg-[rgba(251,113,133,0.06)]",
               )}
             >
               <span className="flex min-w-0 items-start gap-3">
@@ -3799,36 +3741,30 @@ function TasksView({
                   className={cn(
                     "mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2",
                     task.status === "done"
-                      ? "border-[#62bd43] bg-[#62bd43]"
+                      ? "border-[#2f7a4f] bg-[#2f7a4f] dark:border-[#a7e8bf] dark:bg-[#a7e8bf]"
                       : task.status === "blocked"
-                        ? "border-rose-500"
+                        ? "border-[#c0394b]"
                         : task.status === "in_progress"
-                          ? "border-amber-400"
+                          ? "border-[#d9a514]"
                           : rowTone === "delayed"
-                            ? "border-red-400 bg-red-100 dark:border-red-300 dark:bg-red-400/20"
-                            : "border-[#a5aaa1]",
+                            ? "border-[#c0394b] bg-[#fbe4e6] dark:bg-[rgba(251,113,133,0.13)]"
+                            : "border-[#c9c9c6] dark:border-white/25",
                   )}
                 />
                 <span className="flex min-h-[40px] min-w-0 flex-col">
                   <span
                     className={cn(
-                      "block truncate font-medium",
-                      rowTone === "delayed" && "text-red-950 dark:text-red-50",
-                      rowTone === "done" && "text-emerald-950 dark:text-emerald-50",
-                      rowTone === "progress" && "text-blue-950 dark:text-blue-50",
+                      "block truncate text-[#141414] dark:text-white",
                     )}
                   >
                     {task.title || "Untitled task"}
                   </span>
                   <span
                     className={cn(
-                      "mt-0.5 block h-4 max-w-[260px] truncate text-[11px] leading-4 text-[#858b82]",
-                      rowTone === "delayed" && "text-red-700/70 dark:text-red-100/70",
-                      rowTone === "done" && "text-emerald-700/70 dark:text-emerald-100/70",
-                      rowTone === "progress" && "text-blue-700/70 dark:text-blue-100/70",
+                      "mt-0.5 block h-4 max-w-[260px] truncate text-[12px] leading-4 text-[#8a8a8a] dark:text-white/45",
                       !task.description && !isBlockedByDependency && !hasDependencyWarning && "invisible",
-                      isBlockedByDependency && "font-semibold text-rose-500",
-                      hasDependencyWarning && !isBlockedByDependency && "font-semibold text-amber-600",
+                      isBlockedByDependency && "!text-[#c0394b] dark:!text-[#f7aab5]",
+                      hasDependencyWarning && !isBlockedByDependency && "!text-[#8a6200] dark:!text-[#f5d27a]",
                     )}
                   >
                     {isBlockedByDependency
@@ -3841,11 +3777,7 @@ function TasksView({
               </span>
               <span
                 className={cn(
-                  "truncate pt-0.5 text-xs",
-                  rowTone === "delayed" && "font-semibold text-red-700 dark:text-red-100",
-                  rowTone === "done" && "font-semibold text-emerald-700 dark:text-emerald-100",
-                  rowTone === "progress" && "font-semibold text-blue-700 dark:text-blue-100",
-                  rowTone === "neutral" && "text-[#6e746b] dark:text-white/50",
+                  "truncate pt-0.5 text-[12.5px] text-[#5f5f5c] dark:text-white/55",
                 )}
               >
                 {phases.find((phase) => phase.id === task.phaseId)?.name ||
@@ -3858,17 +3790,14 @@ function TasksView({
                   <span className="invisible block h-8 w-8">Unassigned</span>
                 )}
               </span>
-              <span className="flex min-w-0 flex-col gap-1">
+              <span className="flex min-w-0 flex-col items-start gap-1">
                 <StatusPill status={isBlockedByDependency ? "blocked" : task.status || "todo"} compact />
                 <PriorityPill priority={task.priority} />
               </span>
               <span
                 className={cn(
-                  "pt-0.5 text-xs",
-                  rowTone === "delayed" && "font-semibold text-red-600 dark:text-red-100",
-                  rowTone === "done" && "font-semibold text-emerald-700 dark:text-emerald-100",
-                  rowTone === "progress" && "font-semibold text-blue-700 dark:text-blue-100",
-                  rowTone === "neutral" && "text-[#747a71] dark:text-white/55",
+                  "pt-0.5 text-[12.5px]",
+                  rowTone === "delayed" ? "text-[#c0394b] dark:text-[#f7aab5]" : "text-[#5f5f5c] dark:text-white/55",
                 )}
               >
                 {formatDate(task.dueDate, "No date")}
@@ -3877,13 +3806,14 @@ function TasksView({
           );
         })}
         {!filtered.length && (
-          <div className="px-6 py-16 text-center">
-            <ListChecks className="mx-auto h-7 w-7 text-[#9ca199]" />
-            <h3 className="mt-3 text-sm font-semibold">No matching tasks</h3>
-            <p className="mt-1 text-xs text-[#858b82]">
-              Adjust the filters or create a new task.
-            </p>
-          </div>
+          <EmptyState
+            darkMode={darkMode}
+            className="mt-4"
+            icon={ListChecks}
+            tone="lavender"
+            title="No matching tasks"
+            text="Adjust the filters or create a new task."
+          />
         )}
       </section>
     </div>
@@ -4070,23 +4000,26 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
   const taskRows = rows.filter((row) => row.type !== "phase");
 
   return (
-    <div className="fixed inset-0 z-50 flex h-screen w-screen flex-col bg-[#f7f8f5] p-3 text-[#20231f] dark:bg-[#090c0a] dark:text-white sm:p-4">
+    <div className="fixed inset-0 z-50 flex h-screen w-screen flex-col bg-[#f7f7f5] p-3 text-[#141414] dark:bg-[#121317] dark:text-white sm:p-4">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 dark:border dark:border-white/10 dark:bg-[#141915]">
-          <div>
-            <h2 className="text-xl font-semibold">Gantt View</h2>
-            <p className="mt-0.5 text-xs text-[#7b8178] dark:text-white/55">
-              Full project schedule with phase rows, task timelines, progress and overlapping work.
-            </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-[#ececec] bg-white px-5 py-4 dark:border-white/10 dark:bg-[#15171c]">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#e3eefb] text-[#2f6fc0] dark:bg-[rgba(96,165,250,0.13)] dark:text-[#a9cbf7]"><BarChart3 className="h-5 w-5" strokeWidth={1.8} /></span>
+            <div className="min-w-0">
+              <h2 className="text-[18px] tracking-[-0.01em]">Gantt view</h2>
+              <p className="text-[12.5px] text-[#8a8a8a] dark:text-white/45">
+                Full project schedule with phase rows, task timelines, progress and overlapping work.
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#fff2cc] px-3 py-1 text-xs font-semibold text-[#805b11]">
+            <span className="inline-flex h-7 items-center rounded-full bg-[#fbf0d4] px-3 text-[12.5px] text-[#8a6200] dark:bg-[rgba(251,191,36,0.13)] dark:text-[#f5d27a]">
               {overlapCount} overlapping task{overlapCount === 1 ? "" : "s"}
             </span>
-            <span className="rounded-full bg-[#eaf4ff] px-3 py-1 text-xs font-semibold text-[#1268b3]">
+            <span className="inline-flex h-7 items-center rounded-full bg-[#e3eefb] px-3 text-[12.5px] text-[#2f6fc0] dark:bg-[rgba(96,165,250,0.13)] dark:text-[#a9cbf7]">
               {formatDate(bounds.startDate.toISOString().slice(0, 10))} - {formatDate(bounds.endDate.toISOString().slice(0, 10))}
             </span>
-            <div className="flex rounded-full bg-[#f1f3ef] p-1 dark:bg-white/[0.08]">
+            <div className="flex rounded-full bg-[#f4f4f2] p-1 dark:bg-white/[0.08]">
               {[
                 ["day", "Date"],
                 ["week", "Week"],
@@ -4097,8 +4030,8 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                   type="button"
                   onClick={() => setScale(value)}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-semibold transition",
-                    scale === value ? "bg-white text-[#20231f] shadow-sm dark:bg-white dark:text-[#11150f]" : "text-[#697066] hover:text-[#20231f] dark:text-white/60 dark:hover:text-white",
+                    "h-7 rounded-full px-3.5 text-[12.5px] transition",
+                    scale === value ? "bg-white text-[#141414] dark:bg-[#cff07a] dark:text-[#141414]" : "text-[#5f5f5c] hover:text-[#141414] dark:text-white/60 dark:hover:text-white",
                   )}
                 >
                   {label}
@@ -4109,28 +4042,28 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
               {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               PDF
             </Button>
-            <IconButton label="Close Gantt" onClick={onClose} className="bg-[#f1f3ef] hover:bg-[#e7ebe4] dark:bg-white/[0.10] dark:text-white/80 dark:hover:bg-white/[0.16]">
+            <IconButton label="Close Gantt" onClick={onClose} className="bg-[#f4f4f2] hover:bg-[#ebebe8] dark:bg-white/[0.06] dark:text-white/80 dark:hover:bg-white/10">
               <X className="h-4 w-4" />
             </IconButton>
           </div>
         </div>
 
-        <section className="mt-3 min-h-0 flex-1 overflow-auto rounded-xl bg-white dark:border dark:border-white/10 dark:bg-[#111611]">
+        <section className="mt-3 min-h-0 flex-1 overflow-auto rounded-[20px] border border-[#ececec] bg-white dark:border-white/10 dark:bg-[#121317]">
           <div className="min-w-[1438px]" style={{ width: sideColumnsWidth + timelineMinWidth }}>
-            <div className="sticky top-0 z-20 grid border-b border-[#eef1eb] bg-white dark:border-white/10 dark:bg-[#151b16]" style={{ gridTemplateColumns: ganttColumns }}>
-              <div className="sticky left-0 z-30 bg-white px-4 py-3 dark:bg-[#151b16]">
-                <h3 className="text-sm font-bold">Task list</h3>
-                <p className="mt-0.5 text-[11px] text-[#858b82] dark:text-white/50">{taskRows.length} scheduled task{taskRows.length === 1 ? "" : "s"}</p>
+            <div className="sticky top-0 z-20 grid border-b border-[#f0f0ee] bg-white dark:border-white/10 dark:bg-[#15171c]" style={{ gridTemplateColumns: ganttColumns }}>
+              <div className="sticky left-0 z-30 bg-white px-4 py-3 dark:bg-[#15171c]">
+                <h3 className="text-[14px]">Task list</h3>
+                <p className="mt-0.5 text-[11px] text-[#8a8a8a] dark:text-white/50">{taskRows.length} scheduled task{taskRows.length === 1 ? "" : "s"}</p>
               </div>
-              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[10px] font-bold uppercase tracking-wide text-[#5270a8] dark:bg-[#151b16] dark:text-blue-200" style={{ left: 260 }}>Start</div>
-              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[10px] font-bold uppercase tracking-wide text-[#8a6515] dark:bg-[#151b16] dark:text-amber-200" style={{ left: 372 }}>End</div>
-              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[10px] font-bold uppercase tracking-wide text-[#5f665c] dark:bg-[#151b16] dark:text-white/55" style={{ left: 484 }}>Duration</div>
+              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[11px] text-[#2f6fc0] dark:bg-[#15171c] dark:text-blue-200" style={{ left: 260 }}>Start</div>
+              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[11px] text-[#8a6200] dark:bg-[#15171c] dark:text-amber-200" style={{ left: 372 }}>End</div>
+              <div className="sticky z-30 flex items-center justify-center bg-white px-2 py-3 text-[11px] text-[#3d3d3b] dark:bg-[#15171c] dark:text-white/55" style={{ left: 484 }}>Duration</div>
               <div className="relative" style={{ minWidth: timelineMinWidth }}>
-                <div className="relative h-7 border-b border-[#edf0ea] dark:border-white/10">
+                <div className="relative h-7 border-b border-[#f0f0ee] dark:border-white/10">
                   {monthBands.map((band) => (
                     <span
                       key={band.key}
-                      className="absolute top-2 text-center text-[10px] font-bold text-[#72786f] dark:text-white/45"
+                      className="absolute top-2 text-center text-[11px] text-[#5f5f5c] dark:text-white/45"
                       style={{ left: `${(band.start / Math.max(1, timelineUnits.length)) * 100}%`, width: `${((band.end - band.start + 1) / Math.max(1, timelineUnits.length)) * 100}%` }}
                     >
                       {band.key}
@@ -4140,7 +4073,7 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                 <div className="relative h-8">
                   {timelineUnits.map((unit, index) => {
                     return (
-                    <span key={unit.key} className="absolute top-2 -translate-x-1/2 whitespace-nowrap text-[10px] text-[#20231f] dark:text-white/75" style={{ left: `${((index + 0.5) / Math.max(1, timelineUnits.length)) * 100}%` }}>
+                    <span key={unit.key} className="absolute top-2 -translate-x-1/2 whitespace-nowrap text-[11px] text-[#141414] dark:text-white/75" style={{ left: `${((index + 0.5) / Math.max(1, timelineUnits.length)) * 100}%` }}>
                       {unit.label}
                     </span>
                     );
@@ -4155,34 +4088,34 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
               const isDelayed = row.type === "task" && row.status !== "done" && row.dueDate && row.dueDate < todayKey;
               const badgeLabel = isDelayed ? "Delayed" : statusMeta[row.status]?.label || statusLabel(row.status);
               const badgeClass = isDelayed
-                ? "bg-[#ffe2e7] text-[#a72f45]"
+                ? "bg-[#fbe4e6] text-[#c0394b]"
                 : row.status === "done"
-                  ? "bg-[#e4f8eb] text-[#268a55]"
+                  ? "bg-[#e4f1e6] text-[#2f7a4f]"
                   : row.status === "blocked"
-                    ? "bg-[#ffe2e7] text-[#a72f45]"
+                    ? "bg-[#fbe4e6] text-[#c0394b]"
                     : row.status === "in_progress"
-                      ? "bg-[#fff2cc] text-[#805b11]"
-                      : "bg-[#edf2ff] text-[#2f61c9]";
+                      ? "bg-[#fbf0d4] text-[#8a6200]"
+                      : "bg-[#e3eefb] text-[#2f6fc0]";
               const color = row.type === "phase" ? "#2f6df6" : row.type === "subtask" ? "#14b8a6" : row.status === "done" ? "#42c989" : row.status === "blocked" ? "#f25f6c" : row.priority === "critical" ? "#8f5cf7" : row.priority === "high" ? "#ffad42" : "#37c6c0";
               return (
                 <button
                   key={`${row.type}-${row.id}`}
                   type="button"
                   onClick={() => row.type === "phase" ? onOpenPhase?.(row.source) : onOpenTask?.(row.source)}
-                  className="grid border-b border-[#eef1eb] text-left hover:bg-[#fafbf8] dark:border-white/10 dark:hover:bg-white/[0.045]"
+                  className="grid border-b border-[#f0f0ee] text-left hover:bg-[#fcfcfb] dark:border-white/10 dark:hover:bg-white/[0.045]"
                   style={{ gridTemplateColumns: ganttColumns }}
                 >
-                  <div className="sticky left-0 z-10 flex min-w-0 items-center bg-white px-4 py-2.5 dark:bg-[#151b16]">
+                  <div className="sticky left-0 z-10 flex min-w-0 items-center bg-white px-4 py-2.5 dark:bg-[#15171c]">
                     {row.type === "phase" ? (
-                      <div className="flex items-center gap-2 text-sm font-bold text-[#2f6df6]">
-                        <span className="h-3 w-3 rounded-full bg-[#2f6df6]" />
+                      <div className="flex items-center gap-2 text-sm text-[#2f6fc0]">
+                        <span className="h-3 w-3 rounded-full bg-[#2f6fc0]" />
                         <span className="truncate">{row.title}</span>
                       </div>
                     ) : (
                       <div className={cn("flex min-w-0 items-start gap-2", row.type === "subtask" ? "pl-10" : "pl-5")}>
                         <span className={cn("mt-1.5 shrink-0 rounded-full", row.type === "subtask" ? "h-2.5 w-2.5" : "h-3 w-3")} style={{ backgroundColor: color }} />
                         <span className="min-w-0">
-                          <span className={cn("block truncate font-bold dark:text-white/95", row.type === "subtask" ? "text-xs" : "text-sm")}>{row.title}</span>
+                          <span className={cn("block truncate  dark:text-white/95", row.type === "subtask" ? "text-xs" : "text-sm")}>{row.title}</span>
                           <span className={cn("mt-1 inline-flex rounded-full px-2.5 py-1 text-xs leading-none", badgeClass)}>
                               {row.type === "subtask" ? "Subtask · " : ""}{badgeLabel}{overlapping ? ` · ${overlapping} overlap${overlapping === 1 ? "" : "s"}` : ""}
                           </span>
@@ -4190,14 +4123,14 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                       </div>
                     )}
                   </div>
-                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#151b16]" style={{ left: 260 }}>
-                    <span className={cn("whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-bold leading-none", row.type === "phase" ? "bg-[#dbe7ff] text-[#1e55d8]" : "bg-[#c8f1ec] text-[#00796f]")}>{formatDate(row.startDate)}</span>
+                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#15171c]" style={{ left: 260 }}>
+                    <span className={cn("whitespace-nowrap rounded-full px-3 py-1.5 text-sm  leading-none", row.type === "phase" ? "bg-[#e3eefb] text-[#2f6fc0]" : "bg-[#e4f1e6] text-[#2f7a4f]")}>{formatDate(row.startDate)}</span>
                   </div>
-                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#151b16]" style={{ left: 372 }}>
-                    <span className={cn("whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-bold leading-none", row.status === "done" ? "bg-[#c9f0d8] text-[#1d7d48]" : row.status === "blocked" ? "bg-[#ffd2da] text-[#a72f45]" : "bg-[#ffe7a8] text-[#8a5b00]")}>{formatDate(row.dueDate)}</span>
+                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#15171c]" style={{ left: 372 }}>
+                    <span className={cn("whitespace-nowrap rounded-full px-3 py-1.5 text-sm  leading-none", row.status === "done" ? "bg-[#e4f1e6] text-[#2f7a4f]" : row.status === "blocked" ? "bg-[#fbe4e6] text-[#c0394b]" : "bg-[#fbf0d4] text-[#8a6200]")}>{formatDate(row.dueDate)}</span>
                   </div>
-                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#151b16]" style={{ left: 484 }}>
-                    <span className="whitespace-nowrap rounded-full bg-[#e2e7dc] px-3 py-1.5 text-sm font-bold leading-none text-[#465044] dark:bg-white/15 dark:text-white/80">{row.duration}d</span>
+                  <div className="sticky z-10 flex items-center justify-center bg-white px-1.5 dark:bg-[#15171c]" style={{ left: 484 }}>
+                    <span className="whitespace-nowrap rounded-full bg-[#ebebe8] px-3 py-1.5 text-sm leading-none text-[#3d3d3b] dark:bg-white/15 dark:text-white/80">{row.duration}d</span>
                   </div>
                   <div className="relative px-0 py-0" style={{ minWidth: timelineMinWidth }}>
                     <div className="absolute inset-0">
@@ -4207,8 +4140,8 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
                           className={cn(
                             "absolute top-0 h-full border-l",
                             scale !== "day" || index % 7 === 0
-                              ? "border-[#e4e8e1] bg-[#fafbf8] dark:border-white/[0.08] dark:bg-white/[0.045]"
-                              : "border-[#f1f3ef] dark:border-white/[0.055] dark:bg-transparent",
+                              ? "border-[#e6e6e3] bg-[#fcfcfb] dark:border-white/[0.08] dark:bg-white/[0.045]"
+                              : "border-[#f0f0ee] dark:border-white/[0.055] dark:bg-transparent",
                           )}
                           style={{ left: `${(index / Math.max(1, timelineUnits.length)) * 100}%`, width: `${100 / Math.max(1, timelineUnits.length)}%` }}
                         />
@@ -4232,7 +4165,7 @@ function GanttView({ project, phases = [], tasks = [], users = [], onOpenTask, o
               );
             })}
             {!rows.length && (
-              <div className="px-6 py-16 text-center text-sm text-[#858b82]">
+              <div className="m-4 rounded-[20px] bg-[#f7f7f5] px-6 py-16 text-center text-[13px] text-[#8a8a8a] dark:bg-white/[0.03] dark:text-white/50">
                 Add start dates or deadlines to phases and tasks to build the Gantt chart.
               </div>
             )}
@@ -4252,12 +4185,12 @@ function PhasesView({
   onAddTask,
 }) {
   return (
-    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Project timeline</h2>
-          <p className="mt-0.5 text-xs text-[#7b8178]">
-            Phases, deadlines, and task completion.
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6 lg:p-8">
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[22px] leading-[1.15] tracking-[-0.02em] text-[#141414] dark:text-white">Project timeline</h2>
+          <p className="text-[22px] leading-[1.15] tracking-[-0.02em] text-[#9a9a98] dark:text-white/40">
+            phases, deadlines and completion
           </p>
         </div>
         {isSuperAdmin && (
@@ -4267,8 +4200,8 @@ function PhasesView({
           </Button>
         )}
       </div>
-      <section className="mt-5 overflow-hidden rounded-xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="hidden grid-cols-[56px_minmax(240px,1.5fr)_160px_130px_180px_100px] gap-4 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">
+      <section className="mt-6">
+        <div className="hidden grid-cols-[56px_minmax(240px,1.5fr)_160px_130px_180px_100px] gap-4 border-b border-[#f0f0ee] px-4 pb-3 text-[12px] text-[#8a8a8a] md:grid dark:border-white/10 dark:text-white/45">
           <span>#</span>
           <span>Phase</span>
           <span>Delivery</span>
@@ -4290,49 +4223,49 @@ function PhasesView({
           return (
             <div
               key={phase.id}
-              className="grid gap-3 border-b border-[#e9ebe7] px-4 py-4 last:border-0 md:grid-cols-[56px_minmax(240px,1.5fr)_160px_130px_180px_100px] md:items-center dark:border-white/10"
+              className="grid gap-3 border-b border-[#f0f0ee] px-4 py-4 transition-colors hover:bg-[#f7f7f5] md:grid-cols-[56px_minmax(240px,1.5fr)_160px_130px_180px_100px] md:items-center dark:border-white/[0.06] dark:hover:bg-white/[0.03]"
             >
               <button
                 type="button"
                 onClick={() => onOpenPhase(phase)}
                 className="contents text-left"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ecf5e8] text-xs font-bold text-[#568443]">
+                <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#ece8fb] text-[12px] text-[#6b4fd1] dark:bg-[rgba(167,139,250,0.14)] dark:text-[#c9b9fb]">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">
+                  <span className="block truncate text-[14px] text-[#141414] dark:text-white">
                     {phase.name || "Untitled phase"}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-[#858b82]">
+                  <span className="mt-0.5 block truncate text-[12.5px] text-[#8a8a8a] dark:text-white/45">
                     {phase.description || "No description added"}
                   </span>
                 </span>
                 <span>
-                  <span className="block text-[10px] text-[#858b82]">
+                  <span className="block text-[11.5px] text-[#8a8a8a] dark:text-white/45">
                     Target date
                   </span>
-                  <span className="mt-0.5 block text-xs font-medium">
+                  <span className="mt-0.5 block text-[13px]">
                     {formatDate(phase.dueDate)}
                   </span>
                 </span>
                 <span>
-                  <span className="text-sm font-semibold">
+                  <span className="text-sm">
                     {done}/{phaseTasks.length}
                   </span>
                   <span
                     className={cn(
-                      "ml-2 text-[10px]",
-                      blocked ? "text-rose-500" : "text-[#858b82]",
+                      "ml-2 text-[11.5px]",
+                      blocked ? "text-[#c0394b] dark:text-[#f7aab5]" : "text-[#8a8a8a] dark:text-white/45",
                     )}
                   >
                     {blocked ? `${blocked} blocked` : "complete"}
                   </span>
                 </span>
                 <span>
-                  <span className="flex justify-between text-[10px]">
-                    <span>{progress}%</span>
-                    <span className="text-[#858b82]">
+                  <span className="flex justify-between text-[11.5px]">
+                    <span className="tabular-nums">{progress}%</span>
+                    <span className="text-[#8a8a8a] dark:text-white/45">
                       {phaseTasks.length ? "active" : "not started"}
                     </span>
                   </span>
@@ -4351,9 +4284,11 @@ function PhasesView({
           );
         })}
         {!phases.length && (
-          <p className="px-6 py-14 text-center text-sm text-[#858b82]">
-            No phases created yet.
-          </p>
+          <div className="mt-4 flex flex-col items-center rounded-[20px] bg-[#f7f7f5] px-6 py-12 text-center dark:bg-white/[0.03]">
+            <span className="grid h-14 w-14 place-items-center rounded-[18px] bg-[#ece8fb] text-[#6b4fd1] dark:bg-[rgba(167,139,250,0.14)] dark:text-[#c9b9fb]"><Layers3 className="h-6 w-6" strokeWidth={1.8} /></span>
+            <p className="mt-4 text-[15px] text-[#141414] dark:text-white">No phases yet</p>
+            <p className="mt-1 text-[13px] text-[#8a8a8a] dark:text-white/50">Phases group the work into delivery steps.</p>
+          </div>
         )}
       </section>
     </div>
@@ -4555,7 +4490,7 @@ function inDateRange(value, start, end) {
 function MiniBarChart({ rows = [], color = "#6f55d8" }) {
   if (!rows.length) {
     return (
-      <div className="grid h-28 place-items-center rounded-2xl bg-[#f5f6f3] text-center text-xs text-[#858b82] dark:bg-white/[0.05] dark:text-white/45">
+      <div className="grid h-28 place-items-center rounded-[20px] bg-[#f7f7f5] text-center text-xs text-[#8a8a8a] dark:bg-white/[0.05] dark:text-white/45">
         No chart data in this range.
       </div>
     );
@@ -4565,13 +4500,13 @@ function MiniBarChart({ rows = [], color = "#6f55d8" }) {
     <div className="flex h-28 items-end gap-2">
       {rows.map((row, index) => (
         <div key={`${row.label || "bar"}-${index}`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-          <div className="flex h-24 w-full items-end rounded-full bg-[#eef0ec] px-1 dark:bg-white/10">
+          <div className="flex h-24 w-full items-end rounded-full bg-[#f4f4f2] px-1 dark:bg-white/10">
             <span
               className="block w-full rounded-full"
               style={{ height: `${Math.max(8, ((Number(row.value) || 0) / max) * 100)}%`, background: color }}
             />
           </div>
-          <span className="max-w-full truncate text-[10px] text-[#858b82]">{row.label}</span>
+          <span className="max-w-full truncate text-[11px] text-[#8a8a8a]">{row.label}</span>
         </div>
       ))}
     </div>
@@ -4589,7 +4524,7 @@ function ReportDonut({ value, size = 150, stroke = 18, color = "#39c6d8", track 
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={track} strokeWidth={stroke} />
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${dash} ${circumference - dash}`} />
       </svg>
-      <div className="absolute text-center">{children || <span className="text-2xl font-bold">{safe}%</span>}</div>
+      <div className="absolute text-center">{children || <span className="text-2xl">{safe}%</span>}</div>
     </div>
   );
 }
@@ -4602,10 +4537,10 @@ function ReportBars({ rows = [] }) {
       {rows.map((row, index) => (
         <div key={`${row.label}-${index}`}>
           <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="font-semibold text-[#30342e] dark:text-white">{row.label}</span>
-            <span className="text-[#777d74] dark:text-white/50">{row.value}</span>
+            <span className="text-[#141414] dark:text-white">{row.label}</span>
+            <span className="text-[#5f5f5c] dark:text-white/50">{row.value}</span>
           </div>
-          <div className="h-3 overflow-hidden rounded-full bg-[#eef0ec] dark:bg-white/10">
+          <div className="h-3 overflow-hidden rounded-full bg-[#f4f4f2] dark:bg-white/10">
             <span className="block h-full rounded-full" style={{ width: `${Math.max(5, ((Number(row.value) || 0) / max) * 100)}%`, background: row.color || colors[index % colors.length] }} />
           </div>
         </div>
@@ -4721,10 +4656,10 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
       blocked: assigned.filter((task) => task.status === "blocked").length,
     };
   }).filter((row) => row.total).sort((a, b) => b.total - a.total).slice(0, 4);
-  const muted = darkMode ? "text-white/50" : "text-[#777d74]";
+  const muted = darkMode ? "text-white/50" : "text-[#5f5f5c]";
   const card = darkMode ? "bg-[#1b1e24]" : "bg-white";
   const soft = darkMode ? "bg-white/[0.05]" : "bg-[#f6f6f4]";
-  const reportCard = `rounded-[22px] p-5 shadow-[0_10px_30px_rgba(18,24,18,0.05)] ${card}`;
+  const reportCard = `rounded-[20px] border p-5 ${darkMode ? "border-white/10" : "border-[#ececec]"} ${card}`;
 
   const TaskLine = ({ task }) => {
     const phaseName = phases.find((phase) => phase.id === task.phaseId)?.name || "No phase";
@@ -4733,10 +4668,10 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
       ? task.completedAt || task.doneAt || task.updatedAt || task.dueDate
       : task.dueDate || task.startDate || task.updatedAt;
     return (
-      <div className={`rounded-xl p-3 ${soft}`}>
+      <div className={`rounded-[14px] p-3 ${soft}`}>
         <div className="flex flex-wrap items-center gap-2">
           <StatusPill status={task.status || "todo"} compact />
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{task.title || "Untitled task"}</span>
+          <span className="min-w-0 flex-1 truncate text-sm">{task.title || "Untitled task"}</span>
           <span className={`text-xs ${muted}`}>{formatDate(displayDate, "No date")}</span>
         </div>
         <p className={`mt-2 text-xs leading-5 ${muted}`}>
@@ -4755,48 +4690,57 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
       role="presentation"
     >
       <aside
-        className={`mrn-detail-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${expanded ? "mrn-detail-shell-expanded" : ""} ${closing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}
+        className={`mrn-detail-shell absolute flex flex-col overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.16)] ${expanded ? "mrn-detail-shell-expanded" : ""} ${closing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}
         role="dialog"
         aria-modal="true"
         aria-label={`${project.name} project report`}
       >
-        <header className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-          <span><b>{project.code || project.name}</b> - Project report</span>
+        <header className={`flex min-h-16 shrink-0 items-center justify-between gap-3 border-b px-6 py-3 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] ${darkMode ? "bg-[rgba(96,165,250,0.13)] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]"}`}>
+              <BarChart3 className="h-4 w-4" strokeWidth={1.8} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[16px] tracking-[-0.01em]">Project report</span>
+              <span className={`block truncate text-[12.5px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{project.code || project.name}</span>
+            </span>
+          </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => loadReportData(true)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f7ef] text-[#3f7d16] hover:bg-[#eafbdc]"}`}>
+            <button type="button" onClick={() => loadReportData(true)} className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] transition ${darkMode ? "bg-white/[0.06] text-white/80 hover:bg-white/10" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
               <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
               Refresh
             </button>
-            <button onClick={() => setExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#eafbdc] text-[#3f7d16] hover:bg-[#ddf8c9]"}`}>
+            <button type="button" onClick={() => setExpanded((current) => !current)} className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] transition ${darkMode ? "bg-white/[0.06] text-white/80 hover:bg-white/10" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
               {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
               {expanded ? "Restore" : "Expand"}
             </button>
-            <button onClick={requestClose} className="px-1 font-semibold text-[#3f7d16]">Close</button>
+            <button type="button" onClick={requestClose} aria-label="Close" title="Close" className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] text-white/80 hover:bg-white/10" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8]"}`}>
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </header>
 
         <div className="grid min-h-0 flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0 md:border-r ${darkMode ? "border-white/10" : "border-black/10"}`}>
-            <div className="flex gap-2">
-              <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#3f7d16]">PROJECT</span>
-              <span className="rounded bg-black/5 px-2 py-1 text-[10px] font-bold dark:bg-white/10">REPORT</span>
-            </div>
-            <p className={`mt-4 text-xs ${muted}`}>Date range</p>
-            <h2 className="mt-1 text-2xl font-bold">{project.name}</h2>
-            <p className={`mt-2 text-xs leading-5 ${muted}`}>{formatDate(startDate)} to {formatDate(endDate)}</p>
+          <aside className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0 md:border-r ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+            <span className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] ${darkMode ? "bg-[rgba(74,222,128,0.12)] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>
+              <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.9} />
+              Date range
+            </span>
+            <h2 className="mt-3 text-[24px] leading-[1.1] tracking-[-0.02em]">{project.name}</h2>
+            <p className={`text-[15px] leading-6 tracking-[-0.01em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{formatDate(startDate)} to {formatDate(endDate)}</p>
             <div className="mt-5 space-y-3">
               <label className="block">
-                <span className={`mb-1.5 block text-[11px] font-semibold ${muted}`}>Start date</span>
+                <span className={`mb-1.5 block text-[11px]  ${muted}`}>Start date</span>
                 <DatePicker darkMode={darkMode} value={startDate} onChange={setStartDate} placeholder="Start date" />
               </label>
               <label className="block">
-                <span className={`mb-1.5 block text-[11px] font-semibold ${muted}`}>End date</span>
+                <span className={`mb-1.5 block text-[11px]  ${muted}`}>End date</span>
                 <DatePicker darkMode={darkMode} value={endDate} onChange={setEndDate} placeholder="End date" />
               </label>
             </div>
-            <div className={`mt-5 rounded-2xl p-4 ${soft}`}>
+            <div className={`mt-5 rounded-[20px] p-4 ${soft}`}>
               <p className={`text-xs ${muted}`}>Overall efficiency</p>
-              <p className="mt-1 text-4xl font-bold tabular-nums">{taskProgress}%</p>
+              <p className="mt-1 text-4xl tabular-nums">{taskProgress}%</p>
               <ProgressBar value={taskProgress} className="mt-3 !h-2" />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -4806,28 +4750,28 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                 ["Blocked", overallBlockedTasks],
                 ["MRN", rangedMrns.length],
               ].map(([label, value]) => (
-                <div key={label} className={`rounded-xl p-3 ${soft}`}>
+                <div key={label} className={`rounded-[14px] p-3 ${soft}`}>
                   <p className={`text-[11px] ${muted}`}>{label}</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+                  <p className="mt-1 text-2xl tabular-nums">{value}</p>
                 </div>
               ))}
             </div>
           </aside>
 
-          <main className="min-h-0 overflow-y-auto bg-[#f4f5f2] p-5 dark:bg-[#101216]">
+          <main className={`min-h-0 overflow-y-auto p-5 ${darkMode ? "bg-[#121317]" : "bg-[#f7f7f5]"}`}>
             {loading ? (
-              <div className={`rounded-2xl px-6 py-16 text-center ${card}`}>
-                <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" />
+              <div className={`rounded-[20px] px-6 py-16 text-center ${card}`}>
+                <Loader2 className={`mx-auto h-6 w-6 animate-spin ${muted}`} />
                 <p className={`mt-3 text-sm ${muted}`}>Preparing project report...</p>
               </div>
             ) : (
               <>
-                {error && <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-700 dark:bg-amber-400/10 dark:text-amber-100">{error}</p>}
+                {error && <p className="mb-4 rounded-[14px] bg-[#fbf0d4] px-4 py-3 text-xs text-[#8a6200] dark:bg-amber-400/10 dark:text-amber-100">{error}</p>}
                 <section className={reportCard}>
                   <div className="grid gap-6 xl:grid-cols-[1fr_300px] xl:items-center">
                     <div>
-                      <p className={`text-xs ${muted}`}>Pipeline: <b className="text-[#171714] dark:text-white">Project Work</b> | Range: <b className="text-[#171714] dark:text-white">{formatDate(startDate)} - {formatDate(endDate)}</b></p>
-                      <h3 className="mt-2 text-2xl font-bold">Task report</h3>
+                      <h3 className="text-[22px] leading-[1.15] tracking-[-0.02em]">Task report</h3>
+                      <p className={`text-[22px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{formatDate(startDate)} to {formatDate(endDate)}</p>
                       <div className="mt-6 max-w-xl">
                         <ReportBars rows={[
                           { label: "Completed", value: doneTasks, color: "#35c759" },
@@ -4837,12 +4781,12 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                         ]} />
                       </div>
                     </div>
-                    <div className="flex items-center gap-5 rounded-[20px] bg-[#f8f8f6] p-4 dark:bg-white/[0.04]">
+                    <div className="flex items-center gap-5 rounded-[20px] bg-[#f7f7f5] p-4 dark:bg-white/[0.04]">
                       <ReportDonut value={taskProgress} color="#35c759" track={darkMode ? "rgba(255,255,255,.1)" : "#e9ebe7"}>
-                        <span className="text-2xl font-bold">{taskProgress}%</span>
+                        <span className="text-2xl">{taskProgress}%</span>
                       </ReportDonut>
                       <div>
-                        <p className="text-xl font-bold">{overallDoneTasks}/{tasks.length}</p>
+                        <p className="text-xl">{overallDoneTasks}/{tasks.length}</p>
                         <p className={`mt-1 text-xs leading-5 ${muted}`}>overall project tasks done</p>
                       </div>
                     </div>
@@ -4851,17 +4795,17 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
 
                 <div className="mt-5 grid gap-5 xl:grid-cols-2">
                   <section className={reportCard}>
-                    <h3 className="text-lg font-bold">Completed in Range</h3>
+                    <h3 className="text-[16px] tracking-[-0.01em]">Completed in range</h3>
                     <div className="mt-4 space-y-3">
                       {completedTasks.slice(0, 6).map((task) => <TaskLine key={task.id} task={task} />)}
-                      {!completedTasks.length && <p className={`rounded-xl p-4 text-sm ${soft} ${muted}`}>No tasks completed in this date range.</p>}
+                      {!completedTasks.length && <p className={`rounded-[14px] p-4 text-sm ${soft} ${muted}`}>No tasks completed in this date range.</p>}
                     </div>
                   </section>
                   <section className={reportCard}>
-                    <h3 className="text-lg font-bold">Delayed / Blocked</h3>
+                    <h3 className="text-[16px] tracking-[-0.01em]">Delayed or blocked</h3>
                     <div className="mt-4 space-y-3">
                       {delayedBlockedTasks.slice(0, 6).map((task) => <TaskLine key={task.id} task={task} />)}
-                      {!delayedBlockedTasks.length && <p className={`rounded-xl p-4 text-sm ${soft} ${muted}`}>No delayed or blocked tasks in this date range.</p>}
+                      {!delayedBlockedTasks.length && <p className={`rounded-[14px] p-4 text-sm ${soft} ${muted}`}>No delayed or blocked tasks in this date range.</p>}
                     </div>
                   </section>
                 </div>
@@ -4869,65 +4813,65 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                 <section className={`mt-5 ${reportCard}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-lg font-bold">Phase Delay and Completion</h3>
+                      <h3 className="text-[16px] tracking-[-0.01em]">Phase delay and completion</h3>
                       <p className={`mt-1 text-xs ${muted}`}>Delayed phases show the reason from blocked/delayed tasks or passed target dates.</p>
                     </div>
-                    <span className="text-2xl font-bold">{delayedPhases.length}</span>
+                    <span className="text-2xl">{delayedPhases.length}</span>
                   </div>
                   <div className="mt-4 grid gap-3 lg:grid-cols-2">
                     {phaseRows.map((row) => (
                       <div key={row.id} className={`rounded-[18px] p-4 ${soft}`}>
                         <div className="mb-2 flex items-center justify-between gap-3">
-                          <span className="truncate text-sm font-bold">{row.label}</span>
-                          <span className="text-xs font-semibold">{row.value}%</span>
+                          <span className="truncate text-sm">{row.label}</span>
+                          <span className="text-xs">{row.value}%</span>
                         </div>
                         <ProgressBar value={row.value} className="!h-2" />
-                        <p className={`mt-2 text-xs ${row.reason === "On track" ? muted : "text-amber-700 dark:text-amber-200"}`}>{row.reason}</p>
+                        <p className={`mt-2 text-xs ${row.reason === "On track" ? muted : "text-[#8a6200] dark:text-amber-200"}`}>{row.reason}</p>
                       </div>
                     ))}
-                    {!phaseRows.length && <p className={`rounded-xl p-4 text-sm ${soft} ${muted}`}>No phase activity in this date range.</p>}
+                    {!phaseRows.length && <p className={`rounded-[14px] p-4 text-sm ${soft} ${muted}`}>No phase activity in this date range.</p>}
                   </div>
                 </section>
 
                 <div className="mt-5 grid gap-5 xl:grid-cols-2">
                   <section className={reportCard}>
-                    <h3 className="text-lg font-bold">Manpower</h3>
+                    <h3 className="text-[16px] tracking-[-0.01em]">Manpower</h3>
                     <p className={`mt-1 text-xs ${muted}`}>
                       {hasManpowerData ? "Overall planned vs actual manpower" : "No manpower submitted in this range"}
                     </p>
                     <div className="mt-5 flex items-center gap-5">
                       <ReportDonut value={manpowerPct} color="#44c7d8" track={darkMode ? "rgba(255,255,255,.1)" : "#e9ebe7"}>
-                        <span className="text-2xl font-bold">{manpowerPct}%</span>
+                        <span className="text-2xl">{manpowerPct}%</span>
                       </ReportDonut>
                       <div className="min-w-0 flex-1 space-y-3">
                         <div>
                           <div className="mb-1 flex justify-between text-xs">
                             <span className={muted}>Actual</span>
-                            <span className="font-bold">{actualManpower}</span>
+                            <span className="">{actualManpower}</span>
                           </div>
                           <ProgressBar value={plannedManpower ? Math.min(100, Math.round((actualManpower / plannedManpower) * 100)) : actualManpower ? 100 : 0} className="!h-2" />
                         </div>
                         <div className={`grid grid-cols-2 gap-2 text-center`}>
-                          <div className={`rounded-xl p-3 ${soft}`}>
+                          <div className={`rounded-[14px] p-3 ${soft}`}>
                             <p className={`text-[11px] ${muted}`}>Planned</p>
-                            <p className="mt-1 text-xl font-bold">{plannedManpower}</p>
+                            <p className="mt-1 text-xl">{plannedManpower}</p>
                           </div>
-                          <div className={`rounded-xl p-3 ${soft}`}>
+                          <div className={`rounded-[14px] p-3 ${soft}`}>
                             <p className={`text-[11px] ${muted}`}>Actual</p>
-                            <p className="mt-1 text-xl font-bold">{actualManpower}</p>
+                            <p className="mt-1 text-xl">{actualManpower}</p>
                           </div>
                         </div>
                       </div>
                     </div>
                   </section>
                   <section className={reportCard}>
-                    <h3 className="text-lg font-bold">MRN Received</h3>
+                    <h3 className="text-[16px] tracking-[-0.01em]">MRNs received</h3>
                     <div className="mt-5 flex items-center gap-5">
                       <ReportDonut value={rangedMrns.length ? Math.round((deliveredMrns / rangedMrns.length) * 100) : 0} color="#ffad1f" track={darkMode ? "rgba(255,255,255,.1)" : "#e9ebe7"}>
-                        <span className="text-2xl font-bold">{rangedMrns.length ? Math.round((deliveredMrns / rangedMrns.length) * 100) : 0}%</span>
+                        <span className="text-2xl">{rangedMrns.length ? Math.round((deliveredMrns / rangedMrns.length) * 100) : 0}%</span>
                       </ReportDonut>
                       <div>
-                        <p className="text-lg font-bold">{deliveredMrns}/{rangedMrns.length}</p>
+                        <p className="text-lg">{deliveredMrns}/{rangedMrns.length}</p>
                         <p className={`text-xs ${muted}`}>delivered or received</p>
                       </div>
                     </div>
@@ -4938,10 +4882,10 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                 <section className={`mt-5 ${reportCard}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-lg font-bold">Team Output</h3>
+                      <h3 className="text-[16px] tracking-[-0.01em]">Team output</h3>
                       <p className={`mt-1 text-xs ${muted}`}>Assigned task output in the selected range.</p>
                     </div>
-                    <span className="text-2xl font-bold">{assigneeRows.length}</span>
+                    <span className="text-2xl">{assigneeRows.length}</span>
                   </div>
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {assigneeRows.map(({ person, total, done, delayed, blocked }, index) => (
@@ -4949,14 +4893,14 @@ function ProjectReportDrawer({ darkMode, project, tasks = [], phases = [], users
                           <div className="flex items-center gap-3">
                           <Avatar name={person.displayName || person.username} user={person} index={index} />
                           <div className="min-w-0 flex-1">
-                            <div className="flex justify-between text-xs"><span className="truncate font-semibold">{person.displayName || person.username}</span><span className="font-bold">{done}/{total}</span></div>
+                            <div className="flex justify-between text-xs"><span className="truncate">{person.displayName || person.username}</span><span className="">{done}/{total}</span></div>
                             <ProgressBar value={total ? Math.round((done / total) * 100) : 0} className="mt-2 !h-2" />
                             <p className={`mt-2 text-[11px] ${muted}`}>{delayed} delayed · {blocked} blocked</p>
                           </div>
                           </div>
                         </div>
                       ))}
-                      {!assigneeRows.length && <p className={`rounded-xl p-4 text-sm ${soft} ${muted}`}>No assigned task output in this range.</p>}
+                      {!assigneeRows.length && <p className={`rounded-[14px] p-4 text-sm ${soft} ${muted}`}>No assigned task output in this range.</p>}
                   </div>
                 </section>
               </>
@@ -5016,14 +4960,9 @@ function ProjectManpowerView({ darkMode, project }) {
   const progress = manpowerProgress(planned || planForToday, actual);
 
   return (
-    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl  font-semibold">Project Manpower</h2>
-          <p className="mt-0.5 text-xs text-[#7b8178]">
-            DMR manpower, today plan, and tomorrow plan for {project.name}.
-          </p>
-        </div>
+        <ViewHeading icon={Users} tone="peach" title="Manpower" subtitle={`DMR manpower, today plan and tomorrow plan for ${project.name}`} />
         <Button onClick={() => loadDmr(true)}>
           <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
           Refresh
@@ -5031,15 +4970,15 @@ function ProjectManpowerView({ darkMode, project }) {
       </div>
 
       {loading ? (
-        <div className="mt-5 rounded-2xl border border-[#dfe3dc] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-white/[0.03]">
-          <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" />
-          <p className="mt-3 text-sm text-[#7b8178]">Loading project manpower...</p>
+        <div className="mt-5 rounded-[20px] border border-[#ececec] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-[#15171c]">
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#2f7a4f]" />
+          <p className="mt-3 text-sm text-[#5f5f5c]">Loading project manpower...</p>
         </div>
       ) : error ? (
-        <div className="mt-5 rounded-2xl border border-[#dfe3dc] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-white/[0.03]">
-          <AlertCircle className="mx-auto h-7 w-7 text-amber-500" />
-          <h3 className="mt-3 text-sm font-semibold">DMR records unavailable</h3>
-          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#858b82]">{error}</p>
+        <div className="mt-5 rounded-[20px] border border-[#ececec] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-[#15171c]">
+          <AlertCircle className="mx-auto h-7 w-7 text-[#8a6200]" />
+          <h3 className="mt-3 text-sm">DMR records unavailable</h3>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#8a8a8a]">{error}</p>
         </div>
       ) : (
         <>
@@ -5050,22 +4989,22 @@ function ProjectManpowerView({ darkMode, project }) {
               ["Tomorrow plan", planForTomorrow, STAT_TONES.blue],
               ["Overall progress", `${progress}%`, STAT_TONES.amber],
             ].map(([label, value, className]) => (
-              <div key={label} className={cn("rounded-2xl p-4", className)}>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">{label}</p>
-                <p className="mt-1 text-2xl small font-bold tabular-nums">{value}</p>
+              <div key={label} className={cn("rounded-[20px] p-4", className)}>
+                <p className="text-[11px] opacity-70">{label}</p>
+                <p className="mt-1 text-2xl small tabular-nums">{value}</p>
               </div>
             ))}
           </div>
 
-          <section className="mt-5 rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+          <section className="mt-5 rounded-[20px] border-[#e6e6e3] bg-white p-4 dark:border-white/10 dark:bg-[#15171c]">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-semibold">Overall progress</h3>
-                <p className="mt-0.5 text-[11px] text-[#858b82]">
+                <h3 className="text-sm">Overall progress</h3>
+                <p className="mt-0.5 text-[11px] text-[#8a8a8a]">
                   {actual} actual against {planned || planForToday} planned manpower
                 </p>
               </div>
-              <span className="text-lg small font-bold tabular-nums">{progress}%</span>
+              <span className="text-lg small tabular-nums">{progress}%</span>
             </div>
             <ProgressBar value={progress} className="mt-3" />
           </section>
@@ -5088,20 +5027,20 @@ function PlanPanel({ title, date, rows, showActual = false }) {
     !showActual
       ? ""
       : manpowerNumber(actualValue) >= manpowerNumber(plannedValue)
-        ? "text-emerald-600"
-        : "text-red-600";
+        ? "text-[#2f7a4f]"
+        : "text-[#c0394b]";
   return (
-    <section className="overflow-hidden rounded-2xl  border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
-      <header className="flex items-center justify-between gap-3 border-b border-[#e5e8e2] px-4 py-3 dark:border-white/10">
+    <section className="overflow-hidden rounded-[20px] border-[#e6e6e3] bg-white dark:border-white/10 dark:bg-[#15171c]">
+      <header className="flex items-center justify-between gap-3 border-b border-[#e6e6e3] px-4 py-3 dark:border-white/10">
         <div>
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <p className="mt-0.5 text-[11px]  text-[#858b82]">{formatDate(date)} · {rows.length} item{rows.length === 1 ? "" : "s"}</p>
+          <h3 className="text-sm">{title}</h3>
+          <p className="mt-0.5 text-[11px] text-[#8a8a8a]">{formatDate(date)} · {rows.length} item{rows.length === 1 ? "" : "s"}</p>
         </div>
-        <span className="rounded-xl small bg-[#eafbdc] px-4 py-2 text-sm font-bold text-[#3f7d16]">
+        <span className="rounded-[14px] small bg-[#e4f1e6] px-4 py-2 text-sm text-[#2f7a4f]">
           {showActual ? (
             <>
               <span className="text-2xl leading-none tabular-nums">{total}</span>
-              <span className="mx-1 text-[#7b8178]">/</span>
+              <span className="mx-1 text-[#5f5f5c]">/</span>
               <span className={`text-2xl leading-none tabular-nums ${actualClass(actual, total)}`}>{actual}</span>
             </>
           ) : <span className="text-2xl leading-none tabular-nums">{total}</span>} <span className="align-middle text-xs">manpower</span>
@@ -5109,17 +5048,17 @@ function PlanPanel({ title, date, rows, showActual = false }) {
       </header>
       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {rows.map((row) => (
-          <div key={row.id} className="rounded-2xl  border-zinc-100 bg-[#fbfcf9] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+          <div key={row.id} className="rounded-[20px] border-[#ececec] bg-[#fcfcfb] p-4 dark:border-white/10 dark:bg-white/[0.035]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-base  font-semibold">{row.trade}</p>
-                {row.submittedBy && <p className="mt-1  text-[10px] text-[#92988f]">By {row.submittedBy}</p>}
+                <p className="text-base">{row.trade}</p>
+                {row.submittedBy && <p className="mt-1 text-[11px] text-[#8a8a8a]">By {row.submittedBy}</p>}
               </div>
-              <span className="shrink-0 text-2xl small font-bold leading-none tabular-nums">
+              <span className="shrink-0 text-2xl small leading-none tabular-nums">
                 {showActual ? (
                   <>
                     <span>{row.plannedManpower}</span>
-                    <span className="mx-1 text-[#7b8178]">/</span>
+                    <span className="mx-1 text-[#5f5f5c]">/</span>
                     <span className={actualClass(row.actualManpower, row.plannedManpower)}>
                       {row.actualManpower}
                     </span>
@@ -5127,11 +5066,11 @@ function PlanPanel({ title, date, rows, showActual = false }) {
                 ) : row.plannedManpower}
               </span>
             </div>
-            {row.work && <p className="mt-3 whitespace-pre-wrap break-words text-xs leading-5 text-[#6f756c] dark:text-white/50">{row.work}</p>}
+            {row.work && <p className="mt-3 whitespace-pre-wrap break-words text-xs leading-5 text-[#5f5f5c] dark:text-white/50">{row.work}</p>}
           </div>
         ))}
         {!rows.length && (
-          <p className="py-12 text-center text-sm text-[#858b82] sm:col-span-2 xl:col-span-3 2xl:col-span-4">No plan rows found for this site.</p>
+          <p className="py-12 text-center text-sm text-[#8a8a8a] sm:col-span-2 xl:col-span-3 2xl:col-span-4">No plan rows found for this site.</p>
         )}
       </div>
     </section>
@@ -5172,14 +5111,14 @@ function monthLabel(date) {
 }
 
 function calendarTone(type, status = "") {
-  if (/blocked/i.test(status)) return "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-200";
-  if (/done|delivered|closed|complete/i.test(status)) return "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200";
+  if (/blocked/i.test(status)) return "bg-[#fbe4e6] text-[#c0394b] dark:bg-rose-400/10 dark:text-rose-200";
+  if (/done|delivered|closed|complete/i.test(status)) return "bg-[#e4f1e6] text-[#2f7a4f] dark:bg-emerald-400/10 dark:text-emerald-200";
   const tones = {
-    phase: "bg-[#effbe9] text-[#3f7d16] dark:bg-green-400/10 dark:text-green-200",
-    task: "bg-[#fff6df] text-[#8a6312] dark:bg-amber-400/10 dark:text-amber-200",
-    subtask: "bg-[#f0f4ff] text-[#3159a5] dark:bg-blue-400/10 dark:text-blue-200",
-    mrn: "bg-[#fff0f2] text-[#9b3445] dark:bg-rose-400/10 dark:text-rose-200",
-    project: "bg-white text-[#4c5349] dark:bg-white/[0.06] dark:text-white/75",
+    phase: "bg-[#e4f1e6] text-[#2f7a4f] dark:bg-green-400/10 dark:text-green-200",
+    task: "bg-[#fbf0d4] text-[#8a6200] dark:bg-amber-400/10 dark:text-amber-200",
+    subtask: "bg-[#e3eefb] text-[#2f6fc0] dark:bg-blue-400/10 dark:text-blue-200",
+    mrn: "bg-[#fbe4e6] text-[#c0394b] dark:bg-rose-400/10 dark:text-rose-200",
+    project: "bg-white text-[#3d3d3b] dark:bg-white/[0.06] dark:text-white/75",
   };
   return tones[type] || tones.project;
 }
@@ -5284,15 +5223,12 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
       className={cn(
         "mx-auto w-full max-w-[1600px] transform-gpu p-4 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] sm:p-6",
         fullscreenMounted &&
-          "fixed inset-0 z-[70] max-w-none origin-center overflow-y-auto bg-[#f7f8f5] p-3 shadow-[0_24px_90px_rgba(15,23,42,0.18)] dark:bg-[#11130f] sm:p-4",
+          "fixed inset-0 z-[70] max-w-none origin-center overflow-y-auto bg-[#f7f7f5] p-3 shadow-[0_24px_90px_rgba(15,23,42,0.18)] dark:bg-[#121317] sm:p-4",
         fullscreenMounted && (expanded ? "translate-y-0 scale-100 opacity-100" : "translate-y-3 scale-[0.97] opacity-0"),
       )}
     >
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-semibold"><CalendarDays className="h-5 w-5 text-[#4b9b16]" />Calendar</h2>
-          <p className="mt-0.5 text-xs text-[#7b8178]">Project, phase, task, subtask and MRN dates for {project.name}.</p>
-        </div>
+        <ViewHeading icon={CalendarDays} tone="sky" title="Calendar" subtitle={`Project, phase, task, subtask and MRN dates for ${project.name}`} />
         <div className="flex items-center gap-2">
           <Button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>Previous</Button>
           <Button onClick={() => setCursor(new Date())}>Today</Button>
@@ -5304,10 +5240,10 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
       </div>
 
       <div className={cn(compactCalendar ? "mt-3" : "mt-5", "transition-[margin] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]")}>
-        <section className="overflow-hidden rounded-2xl border border-[#dfe3dc] bg-white transition-shadow duration-500 dark:border-white/10 dark:bg-white/[0.03]">
-          <header className={cn("flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e7e1] px-4 transition-[padding] duration-500 dark:border-white/10", compactCalendar ? "py-2" : "py-3")}>
-            <h3 className="text-sm font-bold">{monthLabel(cursor)}</h3>
-            <div className="flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#71776e] dark:text-white/45">
+        <section className="overflow-hidden rounded-[20px] border border-[#ececec] bg-white transition-shadow duration-500 dark:border-white/10 dark:bg-[#15171c]">
+          <header className={cn("flex flex-wrap items-center justify-between gap-3 border-b border-[#e6e6e3] px-4 transition-[padding] duration-500 dark:border-white/10", compactCalendar ? "py-2" : "py-3")}>
+            <h3 className="text-sm">{monthLabel(cursor)}</h3>
+            <div className="flex flex-wrap gap-2 text-[11px] text-[#5f5f5c] dark:text-white/45">
               {["Phase", "Task", "Subtask", "MRN"].map((label) => (
                 <span key={label} className="inline-flex items-center gap-1.5">
                   <span className={cn("h-2.5 w-2.5 rounded-full", label === "Phase" ? "bg-green-400" : label === "Task" ? "bg-amber-400" : label === "Subtask" ? "bg-blue-400" : "bg-rose-400")} />
@@ -5316,7 +5252,7 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
               ))}
             </div>
           </header>
-          <div className="grid grid-cols-7 border-b border-[#e4e7e1] bg-[#f7f8f5] text-center text-[10px] font-bold uppercase tracking-[0.12em] text-[#858b82] dark:border-white/10 dark:bg-white/[0.025]">
+          <div className="grid grid-cols-7 border-b border-[#e6e6e3] bg-[#f7f7f5] text-center text-[11px] text-[#8a8a8a] dark:border-white/10 dark:bg-white/[0.025]">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day} className={cn("transition-[padding] duration-500", compactCalendar ? "py-2" : "py-3")}>{day}</span>)}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-7">
@@ -5330,9 +5266,9 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
               const opensLeft = day.getDay() >= 4;
               const opensUp = Math.floor((day - firstCell) / 86400000) >= 28;
               return (
-                <div key={key} className={cn(compactCalendar ? "h-[118px] p-1.5" : "min-h-[150px] p-2", "relative border-b border-r border-[#eef0eb] transition-[height,min-height,padding,background-color] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] last:border-r-0 dark:border-white/10", muted && "bg-[#fafbf8] text-[#a1a79e] dark:bg-white/[0.015]")}>
+                <div key={key} className={cn(compactCalendar ? "h-[118px] p-1.5" : "min-h-[150px] p-2", "relative border-b border-r border-[#f0f0ee] transition-[height,min-height,padding,background-color] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] last:border-r-0 dark:border-white/10", muted && "bg-[#fcfcfb] text-[#b0b0ae] dark:bg-white/[0.015]")}>
                   <div className="flex items-center justify-between">
-                    <span className={cn("grid place-items-center rounded-full text-xs font-bold transition-[width,height] duration-500", compactCalendar ? "h-5 w-5" : "h-7 w-7", key === todayKey ? "bg-[#20231f] text-white dark:bg-[#d8f36a] dark:text-[#11150f]" : "")}>{day.getDate()}</span>
+                    <span className={cn("grid place-items-center rounded-full text-xs  transition-[width,height] duration-500", compactCalendar ? "h-5 w-5" : "h-7 w-7", key === todayKey ? "bg-[#15171c] text-white dark:bg-[#cff07a] dark:text-[#141414]" : "")}>{day.getDate()}</span>
                     {hiddenCount > 0 && (
                       <button
                         type="button"
@@ -5340,7 +5276,7 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
                           event.stopPropagation();
                           setCalendarPopover(popoverOpen ? null : { date: key, events: dayEvents });
                         }}
-                        className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold transition", popoverOpen ? "bg-[#20231f] text-white" : "bg-[#eef0ec] text-[#5f665b] hover:bg-[#dfe4da]")}
+                        className={cn("rounded-full px-2 py-0.5 text-[11px]  transition", popoverOpen ? "bg-[#15171c] text-white" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8]")}
                       >
                         +{hiddenCount}
                       </button>
@@ -5348,8 +5284,8 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
                   </div>
                   <div className={cn(compactCalendar ? "mt-1 space-y-1" : "mt-2 space-y-1.5", "transition-[margin] duration-500")}>
                     {dayEvents.slice(0, visibleCount).map((event) => (
-                      <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("block w-full rounded-lg px-2 text-left text-[11px] leading-4 transition duration-200 hover:-translate-y-0.5", compactCalendar ? "py-1" : "py-1.5", calendarTone(event.type, event.status))}>
-                        <span className="block truncate font-bold">{event.title}</span>
+                      <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("block w-full rounded-[12px] px-2 text-left text-[11px] leading-4 transition duration-200 hover:-translate-y-0.5", compactCalendar ? "py-1" : "py-1.5", calendarTone(event.type, event.status))}>
+                        <span className="block truncate">{event.title}</span>
                         {event.meta && <span className="block truncate opacity-70">{event.meta}</span>}
                       </button>
                     ))}
@@ -5357,29 +5293,29 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
                   {popoverOpen && (
                     <div
                       className={cn(
-                        "absolute z-30 w-[min(520px,calc(100vw-32px))] rounded-[24px] bg-white p-4 text-[#171714] shadow-[0_22px_70px_rgba(15,23,42,0.24)] ring-1 ring-black/5 dark:bg-[#1b1e24] dark:text-white dark:ring-white/10",
+                        "absolute z-30 w-[min(520px,calc(100vw-32px))] rounded-[24px] bg-white p-4 text-[#141414] shadow-[0_22px_70px_rgba(15,23,42,0.24)] ring-1 ring-black/5 dark:bg-[#1b1e24] dark:text-white dark:ring-white/10",
                         opensLeft ? "right-2" : "left-2",
                         opensUp ? "bottom-9" : "top-9",
                       )}
                     >
-                      <div className="flex items-start justify-between gap-3 border-b border-[#e8ebe5] pb-3 dark:border-white/10">
+                      <div className="flex items-start justify-between gap-3 border-b border-[#e6e6e3] pb-3 dark:border-white/10">
                         <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#7b8178]">{formatDate(key)}</p>
-                          <h4 className="mt-1 text-base font-bold">{dayEvents.length} calendar item{dayEvents.length === 1 ? "" : "s"}</h4>
+                          <p className="text-[11px] text-[#5f5f5c]">{formatDate(key)}</p>
+                          <h4 className="mt-1 text-base">{dayEvents.length} calendar item{dayEvents.length === 1 ? "" : "s"}</h4>
                         </div>
-                        <button type="button" onClick={() => setCalendarPopover(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f0f2ee] text-[#5f665b] hover:bg-[#e2e6de] dark:bg-white/10 dark:text-white/70">
+                        <button type="button" onClick={() => setCalendarPopover(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8] dark:bg-white/10 dark:text-white/70">
                           <X className="h-4 w-4" />
                         </button>
                       </div>
                       <div className="mt-3 grid max-h-[380px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
                         {dayEvents.map((event) => (
-                          <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("group min-h-[86px] w-full rounded-2xl px-3 py-2.5 text-left text-xs transition hover:-translate-y-0.5 hover:shadow-sm", calendarTone(event.type, event.status))}>
+                          <button key={event.id} type="button" onClick={() => openEvent(event)} className={cn("group min-h-[86px] w-full rounded-[20px] px-3 py-2.5 text-left text-xs transition hover:-translate-y-0.5 hover:shadow-sm", calendarTone(event.type, event.status))}>
                             <div className="flex items-start gap-2">
                               <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-current" />
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-bold">{event.title}</span>
+                                <span className="block truncate text-sm">{event.title}</span>
                                 {event.meta && <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 opacity-75">{event.meta}</span>}
-                                <span className="mt-1 inline-flex rounded-full bg-white/55 px-2 py-0.5 text-[10px] font-bold capitalize text-current dark:bg-black/15">{event.type}</span>
+                                <span className="mt-1 inline-flex rounded-full bg-white/55 px-2 py-0.5 text-[11px] capitalize text-current dark:bg-black/15">{event.type}</span>
                               </span>
                             </div>
                           </button>
@@ -5393,7 +5329,7 @@ function ProjectCalendarView({ project, phases, tasks, onOpenTask, onOpenPhase, 
           </div>
         </section>
       </div>
-      {mrnError && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-700">{mrnError}</p>}
+      {mrnError && <p className="mt-3 rounded-[14px] bg-[#fbf0d4] p-3 text-xs text-[#8a6200]">{mrnError}</p>}
     </div>
   );
 }
@@ -5461,14 +5397,9 @@ function ProjectMrnView({ darkMode, project }) {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Project MRN</h2>
-          <p className="mt-0.5 text-xs text-[#7b8178]">
-            Material request notes linked to {project.name}.
-          </p>
-        </div>
+        <ViewHeading icon={ClipboardList} tone="amber" title="Material requests" subtitle={`MRNs linked to ${project.name}`} />
         <Button onClick={() => loadMrns(true)}>
           <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
           Refresh
@@ -5482,18 +5413,18 @@ function ProjectMrnView({ darkMode, project }) {
           ["Delivered", delivered, STAT_TONES.teal],
           ["Quotation", mrnAmount(totalAmount), STAT_TONES.amber],
         ].map(([label, value, className]) => (
-          <div key={label} className={cn("rounded-2xl p-4", className)}>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
+          <div key={label} className={cn("rounded-[20px] p-4", className)}>
+            <p className="text-[11px] opacity-70">
               {label}
             </p>
-            <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
+            <p className="mt-1 text-xl tabular-nums">{value}</p>
           </div>
         ))}
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#878d84]" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8a8a]" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -5501,28 +5432,28 @@ function ProjectMrnView({ darkMode, project }) {
             className={cn(inputClass, "pl-9")}
           />
         </div>
-        <span className="rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-[#60665d] dark:bg-white/[0.05] dark:text-white/55">
+        <span className="rounded-[20px] bg-white px-3 py-2 text-xs text-[#3d3d3b] dark:bg-white/[0.05] dark:text-white/55">
           {records.length} visible
         </span>
       </div>
 
-      <section className="mt-5 overflow-hidden rounded-2xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
+      <section className="mt-5 overflow-hidden rounded-[20px] border border-[#ececec] bg-white dark:border-white/10 dark:bg-[#15171c]">
         {loading ? (
           <div className="px-6 py-16 text-center">
-            <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" />
-            <p className="mt-3 text-sm text-[#7b8178]">Loading project MRNs...</p>
+            <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#2f7a4f]" />
+            <p className="mt-3 text-sm text-[#5f5f5c]">Loading project MRNs...</p>
           </div>
         ) : error ? (
           <div className="px-6 py-16 text-center">
-            <AlertCircle className="mx-auto h-7 w-7 text-amber-500" />
-            <h3 className="mt-3 text-sm font-semibold">MRN records unavailable</h3>
-            <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#858b82]">
+            <AlertCircle className="mx-auto h-7 w-7 text-[#8a6200]" />
+            <h3 className="mt-3 text-sm">MRN records unavailable</h3>
+            <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#8a8a8a]">
               {error}
             </p>
           </div>
         ) : (
           <>
-            <div className="hidden grid-cols-[120px_140px_minmax(260px,1.4fr)_130px_130px_130px_120px] gap-4 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">
+            <div className="hidden grid-cols-[120px_140px_minmax(260px,1.4fr)_130px_130px_130px_120px] gap-4 border-b border-[#e6e6e3] bg-[#f7f7f5] px-4 py-3 text-[11px] text-[#8a8a8a] md:grid dark:border-white/10 dark:bg-white/[0.025]">
               <span>MRN</span>
               <span>Request date</span>
               <span>Material</span>
@@ -5536,35 +5467,35 @@ function ProjectMrnView({ darkMode, project }) {
                 key={row.id || `${row.mrnNo}-${row.rowNumber}`}
                 type="button"
                 onClick={() => setSelectedMrn(row)}
-                className="group grid w-full cursor-pointer gap-3 border-b border-[#e9ebe7] px-4 py-4 text-left transition last:border-0 hover:bg-[#fafbf8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72cf50]/25 md:grid-cols-[120px_140px_minmax(260px,1.4fr)_130px_130px_130px_120px] md:items-center dark:border-white/10 dark:hover:bg-white/[0.035]"
+                className="group grid w-full cursor-pointer gap-3 border-b border-[#e6e6e3] px-4 py-4 text-left transition last:border-0 hover:bg-[#fcfcfb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141414]/25 md:grid-cols-[120px_140px_minmax(260px,1.4fr)_130px_130px_130px_120px] md:items-center dark:border-white/10 dark:hover:bg-white/[0.035]"
               >
-                <span className="text-sm font-bold text-[#20231f] group-hover:text-[#4b9b16] dark:text-white">
+                <span className="text-sm text-[#141414] group-hover:text-[#2f7a4f] dark:text-white">
                   {row.mrnNo || "-"}
                 </span>
-                <span className="text-xs text-[#6d736a] dark:text-white/50">
+                <span className="text-xs text-[#5f5f5c] dark:text-white/50">
                   {formatDate(row.materialRequestDate || row.date)}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">
+                  <span className="block truncate text-sm">
                     {row.materialRequirement || "Material request"}
                   </span>
-                  <span className="mt-0.5 block truncate text-[11px] text-[#858b82]">
+                  <span className="mt-0.5 block truncate text-[11px] text-[#8a8a8a]">
                     {row.vendorName || row.project || "No vendor added"}
                   </span>
                 </span>
-                <span className="text-xs text-[#6d736a] dark:text-white/50">
+                <span className="text-xs text-[#5f5f5c] dark:text-white/50">
                   {formatDate(row.requiredDate)}
                 </span>
-                <span className="truncate text-xs text-[#6d736a] dark:text-white/50">
+                <span className="truncate text-xs text-[#5f5f5c] dark:text-white/50">
                   {row.issuedBy || "-"}
                 </span>
                 <span>
                   <span
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-2xl px-2.5 py-1.5 text-[11px] font-bold",
+                      "inline-flex items-center gap-1.5 rounded-[20px] px-2.5 py-1.5 text-[11px] ",
                       /delivered|closed|complete/i.test(row.status)
-                        ? "bg-[#dff7f1] text-[#16836b]"
-                        : "bg-[#eafbdc] text-[#4b9b16]",
+                        ? "bg-[#e4f1e6] text-[#2f7a4f]"
+                        : "bg-[#e4f1e6] text-[#2f7a4f]",
                     )}
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -5573,7 +5504,7 @@ function ProjectMrnView({ darkMode, project }) {
                 </span>
                 <span className="flex justify-end">
                   <span
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#f0f2ee] px-3 text-xs font-semibold text-[#4f554c] hover:bg-[#e7eae4] dark:bg-white/[0.06] dark:text-white/65"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-[12px] bg-[#f4f4f2] px-3 text-xs text-[#3d3d3b] hover:bg-[#ebebe8] dark:bg-white/[0.06] dark:text-white/65"
                   >
                     <Eye className="h-3.5 w-3.5" />
                     Detail
@@ -5583,11 +5514,11 @@ function ProjectMrnView({ darkMode, project }) {
             ))}
             {!records.length && (
               <div className="px-6 py-16 text-center">
-                <ClipboardList className="mx-auto h-7 w-7 text-[#9ca199]" />
-                <h3 className="mt-3 text-sm font-semibold">
+                <ClipboardList className="mx-auto h-7 w-7 text-[#b0b0ae]" />
+                <h3 className="mt-3 text-sm">
                   No MRNs linked to this project
                 </h3>
-                <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#858b82]">
+                <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#8a8a8a]">
                   MRNs appear here when their Project / Site value matches{" "}
                   {project.name}
                   {project.code ? ` or ${project.code}` : ""}.
@@ -5648,17 +5579,9 @@ function ProjectStockView({ darkMode, project }) {
   }, [query, sites]);
 
   return (
-    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <PackageSearch className="h-5 w-5 text-[#4b9b16]" />
-            Site stock
-          </h2>
-          <p className="mt-0.5 text-xs text-[#7b8178]">
-            Stock linked to {project.name} from the Projects Stock module.
-          </p>
-        </div>
+        <ViewHeading icon={PackageSearch} tone="lime" title="Site stock" subtitle={`Stock linked to ${project.name} from the Projects Stock module`} />
         <Button onClick={() => loadStock(true)}>
           <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
           Refresh
@@ -5666,9 +5589,9 @@ function ProjectStockView({ darkMode, project }) {
       </div>
 
       {loading ? (
-        <section className="mt-5 rounded-2xl border border-[#dfe3dc] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-white/[0.03]">
-          <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" />
-          <p className="mt-3 text-sm text-[#7b8178]">Loading site stock...</p>
+        <section className="mt-5 rounded-[20px] border border-[#ececec] bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-[#15171c]">
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#2f7a4f]" />
+          <p className="mt-3 text-sm text-[#5f5f5c]">Loading site stock...</p>
         </section>
       ) : (
         <>
@@ -5679,28 +5602,28 @@ function ProjectStockView({ darkMode, project }) {
               ["Quantity", fmtProjectStock(data?.totals?.quantity), STAT_TONES.teal],
               ["Low stock", data?.totals?.lowStock || 0, STAT_TONES.rose],
             ].map(([label, value, className]) => (
-              <div key={label} className={cn("rounded-2xl p-4", className)}>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">{label}</p>
-                <p className="mt-1 text-2xl small font-bold tabular-nums">{value}</p>
+              <div key={label} className={cn("rounded-[20px] p-4", className)}>
+                <p className="text-[11px] opacity-70">{label}</p>
+                <p className="mt-1 text-2xl small tabular-nums">{value}</p>
               </div>
             ))}
           </div>
 
-          <section className="mt-5 rounded-2xl border border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+          <section className="mt-5 rounded-[20px] border border-[#ececec] bg-white p-4 dark:border-white/10 dark:bg-[#15171c]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-sm font-semibold">Stock items</h3>
-                <p className="mt-0.5 text-[11px] text-[#858b82]">{items.length} visible item{items.length === 1 ? "" : "s"}</p>
+                <h3 className="text-sm">Stock items</h3>
+                <p className="mt-0.5 text-[11px] text-[#8a8a8a]">{items.length} visible item{items.length === 1 ? "" : "s"}</p>
               </div>
               <div className="relative min-w-[240px]">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#878d84]" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8a8a]" />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search item, category, sheet..." className={cn(inputClass, "pl-9")} />
               </div>
             </div>
             {sites.length ? (
-              <div className="mt-4 overflow-auto rounded-xl">
+              <div className="mt-4 overflow-auto rounded-[14px]">
                 <table className="w-full min-w-[760px] text-left text-sm">
-                  <thead className="bg-[#f7f8f5] text-[10px] font-bold uppercase tracking-[0.12em] text-[#858b82] dark:bg-white/[0.025]">
+                  <thead className="bg-[#f7f7f5] text-[11px] text-[#8a8a8a] dark:bg-white/[0.025]">
                     <tr>
                       <th className="px-4 py-3">Item</th>
                       <th className="px-4 py-3">Site</th>
@@ -5717,38 +5640,38 @@ function ProjectStockView({ darkMode, project }) {
                       <tr
                         key={`${item.siteName}-${item.sheetName}-${item.rowNumber}-${item.itemName}`}
                         className={cn(
-                          "border-b border-[#e9ebe7] last:border-0 dark:border-white/10",
-                          isFinalSheet && "bg-[#fff8dd] dark:bg-amber-400/10",
+                          "border-b border-[#e6e6e3] last:border-0 dark:border-white/10",
+                          isFinalSheet && "bg-[#fbf0d4] dark:bg-amber-400/10",
                         )}
                       >
-                        <td className="px-4 py-3 font-semibold">{item.itemName}</td>
-                        <td className="px-4 py-3 text-[#6d736a] dark:text-white/50">{item.siteName}</td>
-                        <td className="px-4 py-3 text-[#6d736a] dark:text-white/50">{item.category || "-"}</td>
-                        <td className="px-4 py-3 text-[#6d736a] dark:text-white/50">
+                        <td className="px-4 py-3">{item.itemName}</td>
+                        <td className="px-4 py-3 text-[#5f5f5c] dark:text-white/50">{item.siteName}</td>
+                        <td className="px-4 py-3 text-[#5f5f5c] dark:text-white/50">{item.category || "-"}</td>
+                        <td className="px-4 py-3 text-[#5f5f5c] dark:text-white/50">
                           {isFinalSheet ? (
-                            <span className="rounded-full bg-[#ffe7a3] px-2.5 py-1 text-[11px] font-bold text-[#8a5a00] dark:bg-amber-300/20 dark:text-amber-100">
+                            <span className="rounded-full bg-[#fbf0d4] px-2.5 py-1 text-[11px] text-[#8a6200] dark:bg-amber-300/20 dark:text-amber-100">
                               {item.sheetName || "Final Sheet"}
                             </span>
                           ) : (
                             item.sheetName || "-"
                           )}
                         </td>
-                        <td className={cn("px-4 py-3 text-right font-bold", item.quantity <= Math.max(0, item.reorderMin || 0) ? "text-rose-500" : "text-[#319000]")}>{fmtProjectStock(item.quantity)}</td>
-                        <td className="px-4 py-3 text-[#6d736a] dark:text-white/50">{item.unit || "-"}</td>
+                        <td className={cn("px-4 py-3 text-right ", item.quantity <= Math.max(0, item.reorderMin || 0) ? "text-[#c0394b]" : "text-[#2f7a4f]")}>{fmtProjectStock(item.quantity)}</td>
+                        <td className="px-4 py-3 text-[#5f5f5c] dark:text-white/50">{item.unit || "-"}</td>
                       </tr>
                       );
                     })}
                   </tbody>
                 </table>
                 {!items.length && (
-                  <div className="px-6 py-14 text-center text-sm text-[#858b82]">No stock items match your search.</div>
+                  <div className="px-6 py-14 text-center text-sm text-[#8a8a8a]">No stock items match your search.</div>
                 )}
               </div>
             ) : (
               <div className="px-6 py-16 text-center">
-                <PackageSearch className="mx-auto h-7 w-7 text-[#9ca199]" />
-                <h3 className="mt-3 text-sm font-semibold">No stock linked to this site</h3>
-                <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#858b82]">
+                <PackageSearch className="mx-auto h-7 w-7 text-[#b0b0ae]" />
+                <h3 className="mt-3 text-sm">No stock linked to this site</h3>
+                <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#8a8a8a]">
                   Add a site in the Projects Stock module with a name matching {project.name}
                   {project.code ? ` or ${project.code}` : ""}.
                 </p>
@@ -5785,48 +5708,40 @@ function ProjectActivityView({ project }) {
   const groups = useMemo(() => groupProjectActivity(activity), [activity]);
 
   return (
-    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <Clock3 className="h-5 w-5 text-[#4b9b16]" />
-            Project activity
-          </h2>
-          <p className="mt-0.5 text-xs text-[#7b8178]">
-            Task, phase, access, comment, and file changes for {project.name}.
-          </p>
-        </div>
+        <ViewHeading icon={Clock3} tone="lavender" title="Activity" subtitle={`Task, phase, access, comment and file changes for ${project.name}`} />
         <Button onClick={loadActivity}>
           <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           Refresh
         </Button>
       </div>
-      <section className="mt-5 rounded-2xl  border-[#dfe3dc] bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+      <section className="mt-6">
         <div className="space-y-3">
           {groups.map((group) => (
-            <div key={group.id} className="rounded-2xl bg-[#f7f8f5] p-4 dark:bg-white/[0.04]">
+            <div key={group.id} className="rounded-[20px] bg-[#f7f7f5] p-4 dark:bg-white/[0.04]">
               <div className="flex items-start gap-3">
-                <span className={cn("mt-1 h-3 w-3 shrink-0 rounded-full", group.type === "phase" ? "bg-[#72cf50]" : group.type === "task" ? "bg-amber-400" : group.type === "file" ? "bg-blue-400" : "bg-[#8a9087]")} />
+                <span className={cn("mt-1 h-3 w-3 shrink-0 rounded-full", group.type === "phase" ? "bg-[#2f7a4f]" : group.type === "task" ? "bg-amber-400" : group.type === "file" ? "bg-blue-400" : "bg-[#8a9087]")} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-bold">{group.label}</p>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#697066] dark:bg-white/10 dark:text-white/55">
+                    <p className="text-sm">{group.label}</p>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-[#5f5f5c] dark:bg-white/10 dark:text-white/55">
                       {group.entries.length} change{group.entries.length === 1 ? "" : "s"}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-[#858b82]">
+                  <p className="mt-1 text-xs text-[#8a8a8a]">
                     {group.firstUser || "System"} · {group.timeLabel}
                   </p>
                 </div>
               </div>
-              <div className="mt-3 space-y-2 border-l border-[#dfe3dc] pl-5 dark:border-white/10">
+              <div className="mt-3 space-y-2 border-l border-[#e6e6e3] pl-5 dark:border-white/10">
                 {group.entries.map((entry) => (
-                  <div key={entry.id} className="rounded-xl bg-white px-3 py-2 dark:bg-white/[0.045]">
+                  <div key={entry.id} className="rounded-[14px] bg-white px-3 py-2 dark:bg-white/[0.045]">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold">{entry.action}</span>
-                      {entry.target && entry.target !== group.label && <span className="truncate text-xs text-[#5f665c] dark:text-white/55">{entry.target}</span>}
+                      <span className="text-xs">{entry.action}</span>
+                      {entry.target && entry.target !== group.label && <span className="truncate text-xs text-[#3d3d3b] dark:text-white/55">{entry.target}</span>}
                     </div>
-                    <p className="mt-1 text-[11px] text-[#858b82]">
+                    <p className="mt-1 text-[11px] text-[#8a8a8a]">
                       {entry.userName || "System"} · {entry.createdAt ? new Date(entry.createdAt).toLocaleString("en-IN") : ""}
                     </p>
                   </div>
@@ -5836,9 +5751,9 @@ function ProjectActivityView({ project }) {
           ))}
           {!groups.length && (
             <div className="px-6 py-16 text-center">
-              <Clock3 className="mx-auto h-7 w-7 text-[#9ca199]" />
-              <h3 className="mt-3 text-sm font-semibold">No activity yet</h3>
-              <p className="mt-1 text-xs text-[#858b82]">New project changes will appear here.</p>
+              <Clock3 className="mx-auto h-7 w-7 text-[#b0b0ae]" />
+              <h3 className="mt-3 text-sm">No activity yet</h3>
+              <p className="mt-1 text-xs text-[#8a8a8a]">New project changes will appear here.</p>
             </div>
           )}
         </div>
@@ -6054,8 +5969,8 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
 
   function referenceChipClass(type) {
     return type === "phase"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100 dark:hover:bg-emerald-400/15"
-      : "border-blue-200 bg-blue-50 text-blue-800 hover:border-blue-300 hover:bg-blue-100 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-100 dark:hover:bg-blue-400/15";
+      ? "border-[#e4f1e6] bg-[#e4f1e6] text-[#2f7a4f] hover:border-emerald-300 hover:bg-[#d8eadc] dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100 dark:hover:bg-emerald-400/15"
+      : "border-[#e3eefb] bg-[#e3eefb] text-[#2f6fc0] hover:border-blue-300 hover:bg-[#d6e5f8] dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-100 dark:hover:bg-blue-400/15";
   }
 
   function canModifyMessage(message) {
@@ -6098,7 +6013,7 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
   }
 
   return (
-    <section className="mx-auto flex h-full min-h-0 w-full max-w-[1680px] flex-col overflow-hidden bg-white dark:bg-[#11130f]">
+    <section className="mx-auto flex h-full min-h-0 w-full max-w-[1680px] flex-col overflow-hidden bg-white dark:bg-[#121317]">
       <div ref={scrollRef} onScroll={handleChatScroll} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-6">
         {messages.map((message, index) => {
           const own = isOwnMessage(message);
@@ -6112,7 +6027,7 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
                   <IconButton label="Edit message" className="!h-7 !w-7 rounded-full" onClick={() => startEditMessage(message)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </IconButton>
-                  <IconButton label="Delete for everyone" className="!h-7 !w-7 rounded-full text-rose-500" onClick={() => deleteMessage(message)}>
+                  <IconButton label="Delete for everyone" className="!h-7 !w-7 rounded-full text-[#c0394b]" onClick={() => deleteMessage(message)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </IconButton>
                 </>
@@ -6135,33 +6050,33 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
                 own ? "items-end" : "items-start",
               )}>
                 <div className={cn(
-                  "rounded-2xl px-4 py-3 transition-[background-color,box-shadow] duration-500",
-                  highlightedMessageId === message.id && "ring-2 ring-[#65bf45]/45",
+                  "rounded-[20px] px-4 py-3 transition-[background-color,box-shadow] duration-500",
+                  highlightedMessageId === message.id && "ring-2 ring-[#141414]/45",
                   own
-                    ? "rounded-br-md bg-[#e8f6df] text-[#172312] dark:bg-[#24401d] dark:text-white"
-                    : "rounded-bl-md bg-[#f5f6f3] text-[#20231f] dark:bg-white/[0.07] dark:text-white",
+                    ? "rounded-br-md bg-[#e4f1e6] text-[#141414] dark:bg-[rgba(74,222,128,0.12)] dark:text-white"
+                    : "rounded-bl-md bg-[#f7f7f5] text-[#141414] dark:bg-white/[0.07] dark:text-white",
                 )}>
                   <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-semibold">{own ? "You" : message.userName}</span>
-                    <span className={cn("text-[11px]", own ? "text-[#64755e] dark:text-white/55" : "text-[#8a9087]")}>{chatTime(message.createdAt)}</span>
+                    <span className="">{own ? "You" : message.userName}</span>
+                    <span className={cn("text-[11px]", own ? "text-[#5f5f5c] dark:text-white/55" : "text-[#8a8a8a]")}>{chatTime(message.createdAt)}</span>
                   </div>
                   {message.replyTo && (
                     <button
                       type="button"
                       onClick={() => scrollToMessage(message.replyTo.id)}
                       className={cn(
-                      "mb-2 block w-full rounded-xl px-3 py-2 text-left text-xs transition hover:bg-black/[0.04] dark:hover:bg-white/[0.08]",
+                      "mb-2 block w-full rounded-[14px] px-3 py-2 text-left text-xs transition hover:bg-black/[0.04] dark:hover:bg-white/[0.08]",
                       own
-                        ? "bg-white/55 text-[#42533d] dark:bg-white/10 dark:text-white/70"
-                        : "bg-white text-[#596158] dark:bg-black/15 dark:text-white/65",
+                        ? "bg-white/55 text-[#3d3d3b] dark:bg-white/10 dark:text-white/70"
+                        : "bg-white text-[#3d3d3b] dark:bg-black/15 dark:text-white/65",
                     )}
                     >
-                      <span className="block font-semibold">{message.replyTo.userName}</span>
+                      <span className="block">{message.replyTo.userName}</span>
                       <span className="block truncate">{message.replyTo.text || message.replyTo.attachmentName || "Attachment"}</span>
                     </button>
                   )}
                   {message.deletedAt ? (
-                    <p className="text-sm italic text-[#7b8376] dark:text-white/45">This message was deleted</p>
+                    <p className="text-sm italic text-[#8a8a8a] dark:text-white/45">This message was deleted</p>
                   ) : (
                     <>
                       {message.text && <p className="whitespace-pre-wrap text-sm leading-6">{message.text}</p>}
@@ -6172,7 +6087,7 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
                               key={`${message.id}-${ref.id}`}
                               type="button"
                               onClick={() => openReference(ref)}
-                              className={cn("max-w-full rounded-lg border px-3 py-2 text-left text-xs transition sm:max-w-[260px]", referenceChipClass(ref.type))}
+                              className={cn("max-w-full rounded-[12px] border px-3 py-2 text-left text-xs transition sm:max-w-[260px]", referenceChipClass(ref.type))}
                             >
                               <span className="block truncate">
                                 <b className="capitalize">{ref.type}</b> · {ref.title}
@@ -6184,7 +6099,7 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
                       {!!message.mentions?.length && (
                         <div className="mt-3 flex max-w-full flex-wrap gap-1.5">
                           {message.mentions.map((mention) => (
-                            <span key={`${message.id}-mention-${mention.id}`} className="rounded-full bg-[#e8f1ff] px-2.5 py-1 text-xs font-semibold text-[#2864cc] dark:bg-blue-400/15 dark:text-blue-100">
+                            <span key={`${message.id}-mention-${mention.id}`} className="rounded-full bg-[#e3eefb] px-2.5 py-1 text-xs text-[#2f6fc0] dark:bg-blue-400/15 dark:text-blue-100">
                               @{mention.name}
                             </span>
                           ))}
@@ -6193,12 +6108,12 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
                       {!!message.attachments?.length && (
                         <div className="mt-3 grid max-w-[560px] gap-2 sm:grid-cols-2">
                           {message.attachments.map((file) => (
-                            <div key={file.id} className="overflow-hidden rounded-xl border border-[#dce2d8] bg-white dark:border-white/10 dark:bg-white/[0.03]">
+                            <div key={file.id} className="overflow-hidden rounded-[14px] border border-[#e6e6e3] bg-white dark:border-white/10 dark:bg-[#15171c]">
                               {file.type?.startsWith("image/") ? (
                                 <button
                                   type="button"
                                   onClick={() => setPreviewImage(file)}
-                                  className="block h-44 w-full overflow-hidden bg-[#f1f3ef] text-left dark:bg-white/[0.04]"
+                                  className="block h-44 w-full overflow-hidden bg-[#f4f4f2] text-left dark:bg-white/[0.04]"
                                 >
                                   <img src={file.dataUrl} alt={file.name} className="h-full w-full object-cover" />
                                 </button>
@@ -6212,7 +6127,7 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
                     </>
                   )}
                   {message.editedAt && (
-                    <div className="mt-2 text-right text-[10px] text-[#7b8376] dark:text-white/45">
+                    <div className="mt-2 text-right text-[11px] text-[#8a8a8a] dark:text-white/45">
                       edited {chatTime(message.editedAt)}
                     </div>
                   )}
@@ -6222,32 +6137,32 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
             </article>
           );
         })}
-        {!messages.length && <p className="rounded-xl bg-[#f5f6f3] p-5 text-sm text-[#777d74] dark:bg-white/[0.04]">Start the project conversation here.</p>}
+        {!messages.length && <p className="rounded-[14px] bg-[#f7f7f5] p-5 text-sm text-[#5f5f5c] dark:bg-white/[0.04]">Start the project conversation here.</p>}
         <div ref={bottomRef} className="h-px" />
       </div>
 
-      <footer className="shrink-0 border-t border-[#e1e5de] bg-white p-2 dark:border-white/10 dark:bg-[#11130f]">
-        <div className="relative rounded-2xl bg-white px-3 py-2 dark:bg-white/[0.03]">
+      <footer className="shrink-0 border-t border-[#e6e6e3] bg-white p-2 dark:border-white/10 dark:bg-[#121317]">
+        <div className="relative rounded-[20px] bg-white px-3 py-2 dark:bg-white/[0.03]">
           {(replyTo || editingMessage) && (
             <div className="mb-2 flex flex-col gap-2">
               {replyTo && (
-                <div className="flex items-start justify-between gap-3 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900 dark:bg-blue-400/10 dark:text-blue-100">
+                <div className="flex items-start justify-between gap-3 rounded-[14px] bg-[#e3eefb] px-3 py-2 text-xs text-[#1f3463] dark:bg-blue-400/10 dark:text-blue-100">
                   <div className="min-w-0">
-                    <span className="block font-semibold">Replying to {replyTo.userName}</span>
+                    <span className="block">Replying to {replyTo.userName}</span>
                     <span className="block truncate">{replyTo.text || replyTo.attachments?.[0]?.name || "Attachment"}</span>
                   </div>
-                  <button type="button" onClick={() => setReplyTo(null)} className="shrink-0 text-blue-700 dark:text-blue-100">
+                  <button type="button" onClick={() => setReplyTo(null)} className="shrink-0 text-[#2f6fc0] dark:text-blue-100">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
               )}
               {editingMessage && (
-                <div className="flex items-start justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-400/10 dark:text-amber-100">
+                <div className="flex items-start justify-between gap-3 rounded-[14px] bg-[#fbf0d4] px-3 py-2 text-xs text-[#4a3a1c] dark:bg-amber-400/10 dark:text-amber-100">
                   <div className="min-w-0">
-                    <span className="block font-semibold">Editing message</span>
+                    <span className="block">Editing message</span>
                     <span className="block truncate">{editingMessage.text || editingMessage.attachments?.[0]?.name || "Attachment"}</span>
                   </div>
-                  <button type="button" onClick={() => { setEditingMessage(null); setText(""); }} className="shrink-0 text-amber-700 dark:text-amber-100">
+                  <button type="button" onClick={() => { setEditingMessage(null); setText(""); }} className="shrink-0 text-[#8a6200] dark:text-amber-100">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
@@ -6256,68 +6171,68 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
           )}
           <div className={cn("flex flex-wrap gap-2", (pickedRefs.length || pickedMentions.length || attachments.length) ? "mb-2" : "hidden")}>
             {pickedRefs.map((ref) => (
-              <button key={ref.id} type="button" onClick={() => toggleReference(ref)} className="rounded-full bg-[#eafbdc] px-3 py-1 text-xs font-semibold text-[#3f7d16]">
+              <button key={ref.id} type="button" onClick={() => toggleReference(ref)} className="rounded-full bg-[#e4f1e6] px-3 py-1 text-xs text-[#2f7a4f]">
                 {ref.type}: {ref.title} <X className="ml-1 inline h-3 w-3" />
               </button>
             ))}
             {pickedMentions.map((mention) => (
-              <button key={mention.id} type="button" onClick={() => setPickedMentions((current) => current.filter((item) => item.id !== mention.id))} className="rounded-full bg-[#e8f1ff] px-3 py-1 text-xs font-semibold text-[#2864cc] dark:bg-blue-400/15 dark:text-blue-100">
+              <button key={mention.id} type="button" onClick={() => setPickedMentions((current) => current.filter((item) => item.id !== mention.id))} className="rounded-full bg-[#e3eefb] px-3 py-1 text-xs text-[#2f6fc0] dark:bg-blue-400/15 dark:text-blue-100">
                 @{mention.name} <X className="ml-1 inline h-3 w-3" />
               </button>
             ))}
             {attachments.map((file, index) => (
-              <button key={`${file.name}-${index}`} type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded-full bg-[#f1f3ef] px-3 py-1 text-xs font-semibold text-[#555b52] dark:bg-white/[0.08] dark:text-white/70">
+              <button key={`${file.name}-${index}`} type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded-full bg-[#f4f4f2] px-3 py-1 text-xs text-[#3d3d3b] dark:bg-white/[0.08] dark:text-white/70">
                 {file.name} <X className="ml-1 inline h-3 w-3" />
               </button>
             ))}
           </div>
           {commandOpen && (
-            <div className="absolute bottom-[calc(100%+8px)] left-3 z-10 w-[min(420px,calc(100vw-72px))] rounded-2xl border border-[#e0e5dc] bg-white p-2 shadow-xl dark:border-white/10 dark:bg-[#171a16]">
+            <div className="absolute bottom-[calc(100%+8px)] left-3 z-10 w-[min(420px,calc(100vw-72px))] rounded-[20px] border border-[#ececec] bg-white p-2 shadow-xl dark:border-white/10 dark:bg-[#15171c]">
               {!commandType ? (
                 <div className="grid gap-1">
                   {[
                     ["task", ListChecks, "Task"],
                     ["phase", Layers3, "Phase"],
                   ].map(([value, Icon, label]) => (
-                    <button key={value} type="button" onClick={() => setCommandType(value)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f2f5f1] dark:hover:bg-white/[0.06]">
-                      <Icon className="h-4 w-4 text-[#4d8c2f]" />
+                    <button key={value} type="button" onClick={() => setCommandType(value)} className="flex items-center gap-3 rounded-[14px] px-3 py-2 text-left text-sm hover:bg-[#f7f7f5] dark:hover:bg-white/[0.06]">
+                      <Icon className="h-4 w-4 text-[#2f7a4f]" />
                       {label}
                     </button>
                   ))}
                 </div>
               ) : (
                 <div>
-                  <div className="mb-2 flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#7d8579]">
+                  <div className="mb-2 flex items-center justify-between px-2 text-xs text-[#8a8a8a]">
                     <span>Select {commandType}</span>
-                    <button type="button" onClick={() => setCommandType("")} className="text-[#20231f] dark:text-white">Back</button>
+                    <button type="button" onClick={() => setCommandType("")} className="text-[#141414] dark:text-white">Back</button>
                   </div>
                   <div className="max-h-52 space-y-1 overflow-y-auto">
                     {filteredRefs.map((ref) => (
-                      <button key={ref.id} type="button" onClick={() => toggleReference(ref)} className={cn("flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-[#f2f5f1] dark:hover:bg-white/[0.06]", pickedRefs.some((item) => item.id === ref.id) && "bg-[#f2f5f1] dark:bg-white/[0.06]")}>
+                      <button key={ref.id} type="button" onClick={() => toggleReference(ref)} className={cn("flex w-full items-center justify-between rounded-[12px] px-3 py-2 text-left text-sm hover:bg-[#f7f7f5] dark:hover:bg-white/[0.06]", pickedRefs.some((item) => item.id === ref.id) && "bg-[#f7f7f5] dark:bg-white/[0.06]")}>
                         <span className="min-w-0 truncate">{ref.title}</span>
-                        <span className="ml-3 shrink-0 text-xs text-[#858b82]">{ref.meta}</span>
+                        <span className="ml-3 shrink-0 text-xs text-[#8a8a8a]">{ref.meta}</span>
                       </button>
                     ))}
-                    {!filteredRefs.length && <p className="px-3 py-4 text-center text-xs text-[#858b82]">No {commandType}s found.</p>}
+                    {!filteredRefs.length && <p className="px-3 py-4 text-center text-xs text-[#8a8a8a]">No {commandType}s found.</p>}
                   </div>
                 </div>
               )}
             </div>
           )}
           {mentionOpen && (
-            <div className="absolute bottom-[calc(100%+8px)] left-3 z-10 w-[min(360px,calc(100vw-72px))] rounded-2xl border border-[#e0e5dc] bg-white p-2 shadow-xl dark:border-white/10 dark:bg-[#171a16]">
-              <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#7d8579]">Tag person</div>
+            <div className="absolute bottom-[calc(100%+8px)] left-3 z-10 w-[min(360px,calc(100vw-72px))] rounded-[20px] border border-[#ececec] bg-white p-2 shadow-xl dark:border-white/10 dark:bg-[#15171c]">
+              <div className="mb-2 px-2 text-xs text-[#8a8a8a]">Tag person</div>
               <div className="max-h-52 space-y-1 overflow-y-auto">
                 {filteredMentions.map((member) => (
-                  <button key={member.id} type="button" onClick={() => addMention(member)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f2f5f1] dark:hover:bg-white/[0.06]">
+                  <button key={member.id} type="button" onClick={() => addMention(member)} className="flex w-full items-center gap-3 rounded-[14px] px-3 py-2 text-left text-sm hover:bg-[#f7f7f5] dark:hover:bg-white/[0.06]">
                     <Avatar name={member.name} user={member} size="sm" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{member.name}</span>
-                      <span className="block truncate text-xs text-[#858b82]">{member.role}</span>
+                      <span className="block truncate text-xs text-[#8a8a8a]">{member.role}</span>
                     </span>
                   </button>
                 ))}
-                {!filteredMentions.length && <p className="px-3 py-4 text-center text-xs text-[#858b82]">No people found.</p>}
+                {!filteredMentions.length && <p className="px-3 py-4 text-center text-xs text-[#8a8a8a]">No people found.</p>}
               </div>
             </div>
           )}
@@ -6335,10 +6250,10 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
             }}
             rows={1}
             placeholder='Comment or type "/" for commands'
-            className="max-h-10 min-h-[32px] w-full resize-none border-0 bg-transparent px-1 py-1.5 pr-24 text-sm leading-5 outline-none placeholder:text-[#a0a69e] dark:text-white"
+            className="max-h-10 min-h-[32px] w-full resize-none border-0 bg-transparent px-1 py-1.5 pr-24 text-sm leading-5 outline-none placeholder:text-[#b0b0ae] dark:text-white"
           />
           <div className="absolute bottom-2 right-3 flex items-center gap-2">
-              <label className="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-[#dce1d8] dark:border-white/10">
+              <label className="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-[#e6e6e3] dark:border-white/10">
                 <Paperclip className="h-4 w-4" />
                 <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" onChange={addFiles} className="hidden" />
               </label>
@@ -6364,7 +6279,7 @@ function ProjectChatView({ project, tasks = [], phases = [], users = [], onOpenT
           <img
             src={previewImage.dataUrl}
             alt={previewImage.name}
-            className="max-h-[88vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+            className="max-h-[88vh] max-w-[92vw] rounded-[14px] object-contain shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           />
         </div>
@@ -6437,14 +6352,9 @@ function FilesView({
   onDeleteFile,
 }) {
   return (
-    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[1680px] p-4 sm:p-6 lg:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">Project files</h2>
-          <p className="mt-0.5 text-xs text-[#7b8178]">
-            Documents and links connected to this workspace.
-          </p>
-        </div>
+        <ViewHeading icon={FolderOpen} tone="sky" title="Project files" subtitle="Documents and links connected to this workspace" />
         <div className="flex gap-2">
           {(project.driveFolderId || project.driveFolderLink) && (
             <a
@@ -6470,14 +6380,14 @@ function FilesView({
         </div>
       </div>
       {!(project.driveFolderId || project.driveFolderLink) && (
-        <div className="mt-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+        <div className="mt-4 flex items-center gap-3 rounded-[20px] border border-[#fbf0d4] bg-[#fbf0d4] px-4 py-3 text-xs text-[#8a6200] dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
           <AlertCircle className="h-4 w-4 shrink-0" />
           Connect a Google Drive folder in project settings to enable folder
           sync and uploads.
         </div>
       )}
-      <section className="mt-5 overflow-hidden rounded-2xl border border-[#dfe3dc] bg-white dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="hidden grid-cols-[minmax(280px,1.5fr)_140px_140px_130px_220px] gap-4 border-b border-[#e4e7e1] bg-[#f7f8f5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#858b82] md:grid dark:border-white/10 dark:bg-white/[0.025]">
+      <section className="mt-5 overflow-hidden rounded-[20px] border border-[#ececec] bg-white dark:border-white/10 dark:bg-[#15171c]">
+        <div className="hidden grid-cols-[minmax(280px,1.5fr)_140px_140px_130px_220px] gap-4 border-b border-[#e6e6e3] bg-[#f7f7f5] px-4 py-3 text-[11px] text-[#8a8a8a] md:grid dark:border-white/10 dark:bg-white/[0.025]">
           <span>Name</span>
           <span>Category</span>
           <span>Source</span>
@@ -6487,28 +6397,28 @@ function FilesView({
         {documents.map((doc) => (
           <div
             key={doc.id || doc.driveFileId || doc.url}
-            className="grid gap-3 border-b border-[#e9ebe7] px-4 py-3.5 last:border-0 md:grid-cols-[minmax(280px,1.5fr)_140px_140px_130px_220px] md:items-center dark:border-white/10"
+            className="grid gap-3 border-b border-[#e6e6e3] px-4 py-3.5 last:border-0 md:grid-cols-[minmax(280px,1.5fr)_140px_140px_130px_220px] md:items-center dark:border-white/10"
           >
             <span className="flex min-w-0 items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eef3ff] text-[#5874bd] dark:bg-blue-400/10 dark:text-blue-300">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-[#e3eefb] text-[#2f6fc0] dark:bg-blue-400/10 dark:text-blue-300">
                 <FileText className="h-4 w-4" />
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold">
+                <span className="block truncate text-sm">
                   {doc.name || "Untitled file"}
                 </span>
-                <span className="mt-0.5 block truncate text-[11px] text-[#858b82]">
+                <span className="mt-0.5 block truncate text-[11px] text-[#8a8a8a]">
                   {doc.url || "Drive file"}
                 </span>
               </span>
             </span>
-            <span className="text-xs text-[#6d736a] dark:text-white/50">
+            <span className="text-xs text-[#5f5f5c] dark:text-white/50">
               {doc.category || "General"}
             </span>
-            <span className="text-xs text-[#6d736a] dark:text-white/50">
+            <span className="text-xs text-[#5f5f5c] dark:text-white/50">
               {doc.driveFileId ? "Google Drive" : "Linked file"}
             </span>
-            <span className="text-xs text-[#6d736a] dark:text-white/50">
+            <span className="text-xs text-[#5f5f5c] dark:text-white/50">
               {doc.uploadedAt
                 ? formatDate(String(doc.uploadedAt).slice(0, 10))
                 : "Unknown"}
@@ -6519,7 +6429,7 @@ function FilesView({
                   href={doc.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex h-8 w-fit items-center gap-1.5 rounded-lg bg-[#f0f2ee] px-3 text-xs font-semibold text-[#4f554c] hover:bg-[#e7eae4] dark:bg-white/[0.06] dark:text-white/65"
+                  className="inline-flex h-8 w-fit items-center gap-1.5 rounded-[12px] bg-[#f4f4f2] px-3 text-xs text-[#3d3d3b] hover:bg-[#ebebe8] dark:bg-white/[0.06] dark:text-white/65"
                 >
                   Open
                   <ArrowUpRight className="h-3.5 w-3.5" />
@@ -6529,7 +6439,7 @@ function FilesView({
                 <button
                   type="button"
                   onClick={() => onEditFile(doc)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d9ddd6] px-2.5 text-xs font-semibold text-[#4f554c] hover:bg-[#f6f7f4] dark:border-white/10 dark:text-white/65 dark:hover:bg-white/[0.05]"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-[12px] border border-[#e6e6e3] px-2.5 text-xs text-[#3d3d3b] hover:bg-[#f7f7f5] dark:border-white/10 dark:text-white/65 dark:hover:bg-white/[0.05]"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   Edit
@@ -6539,7 +6449,7 @@ function FilesView({
                 <button
                   type="button"
                   onClick={() => onDeleteFile(doc)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-[12px] border border-[#fbe4e6] bg-[#fbe4e6] px-2.5 text-xs text-[#c0394b] hover:bg-[#f8d6da] dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
@@ -6550,9 +6460,9 @@ function FilesView({
         ))}
         {!documents.length && (
           <div className="px-6 py-16 text-center">
-            <Paperclip className="mx-auto h-7 w-7 text-[#9ca199]" />
-            <h3 className="mt-3 text-sm font-semibold">No files connected</h3>
-            <p className="mt-1 text-xs text-[#858b82]">
+            <Paperclip className="mx-auto h-7 w-7 text-[#b0b0ae]" />
+            <h3 className="mt-3 text-sm">No files connected</h3>
+            <p className="mt-1 text-xs text-[#8a8a8a]">
               Add a link or upload the first project document.
             </p>
           </div>
@@ -7172,7 +7082,7 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
     <div
       className={cn(
         "flex min-h-0 flex-1 overflow-hidden",
-        darkMode ? "bg-[#11130f] text-white" : "bg-[#f7f8f5] text-[#20231f]",
+        darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]",
       )}
     >
       <WorkspaceRail
@@ -7187,86 +7097,82 @@ export default function ProjectDashboard({ darkMode, projectId = null }) {
         unreadCounts={{ chat: chatUnread, chatMentions: chatMentionUnread }}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[#e0e4dd] bg-white px-3 sm:px-4 dark:border-white/10 dark:bg-[#171a16]">
-          <div className="flex min-w-0 items-center gap-2">
-            <IconButton label="Back to projects" onClick={closeProject}>
+        <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-[#f0f0ee] px-3 py-3 sm:px-6 dark:border-white/10">
+          <div className="flex min-w-0 items-center gap-3">
+            <button type="button" aria-label="Back to projects" title="Back to projects" onClick={closeProject} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f4f4f2] text-[#3d3d3b] transition hover:bg-[#ebebe8] dark:bg-white/[0.06] dark:text-white/75 dark:hover:bg-white/10">
               <ArrowLeft className="h-4 w-4" />
-            </IconButton>
-            <div className="hidden h-5 w-px bg-[#e0e4dd] sm:block dark:bg-white/10" />
+            </button>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-base text-[#777d74] dark:text-white/45">
-                <span className="hidden sm:inline">Projects</span>
-                <ChevronRight className="hidden h-4 w-4 sm:block" />
-                <span className="truncate font-semibold text-[#30342e] dark:text-white/80">
-                  {selectedProject.name}
-                </span>
-              </div>
+              <p className="hidden text-[12px] text-[#8a8a8a] sm:block dark:text-white/45">Projects</p>
+              <p className="truncate text-[17px] leading-tight tracking-[-0.01em] text-[#141414] dark:text-white">
+                {selectedProject.name}
+              </p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton label="Refresh project" onClick={() => load(true)}>
+            <IconButton label="Refresh project" onClick={() => load(true)} className="bg-[#f4f4f2] dark:bg-white/[0.06]">
               <RefreshCw
                 className={cn("h-4 w-4", refreshing && "animate-spin")}
               />
             </IconButton>
             <Button
-              className="!h-8 !rounded-full !border-0 !bg-[#11a36a] !px-3 !text-[11px] !font-semibold !text-white shadow-sm hover:!bg-[#0b8f5a] dark:!bg-[#17c77f] dark:!text-[#07110c] dark:hover:!bg-[#48dc9d]"
+              className="!px-3.5"
               onClick={() => setWorkspaceView("gantt")}
             >
-              <BarChart3 className="h-3 w-3" />
-              <span className="hidden sm:inline">Gantt View</span>
+              <BarChart3 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Gantt view</span>
               <span className="sm:hidden">Gantt</span>
             </Button>
             <Button
-              className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
+              className="!px-3.5"
               onClick={() => setProjectReportOpen(true)}
             >
-              <BarChart3 className="h-3 w-3" />
+              <BarChart3 className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Project report</span>
             </Button>
             <Button
-              className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
+              className="!px-3.5"
               onClick={openAccessDrawer}
             >
-              <ShieldCheck className="h-3 w-3" />
+              <ShieldCheck className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Access</span>
             </Button>
             <Button
-              className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
+              className="!px-3.5"
               onClick={() => setWorkspaceView("activity")}
             >
-              <Clock3 className="h-3 w-3" />
+              <Clock3 className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Activity</span>
             </Button>
             {canEditSelectedProject && (
               <Button
                 variant="primary"
-                className="!h-8 !rounded-full !px-2.5 !text-[11px] !font-semibold shadow-sm"
+                className="!px-3.5"
                 onClick={() => editProject(selectedProject)}
               >
-                <Pencil className="h-3 w-3" />
+                <Pencil className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Edit project</span>
               </Button>
             )}
           </div>
         </header>
-        <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e0e4dd] bg-white px-3 py-2 md:hidden dark:border-white/10 dark:bg-[#171a16]">
+        <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#f0f0ee] px-3 py-2 md:hidden dark:border-white/10">
           {workspaceNav.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
               type="button"
               onClick={() => setWorkspaceView(value)}
               className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs",
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12.5px]",
                 workspaceView === value
-                  ? "bg-[#20231f] font-semibold text-white dark:bg-[#d8f36a] dark:text-[#11150f]"
-                  : "text-[#676d64] dark:text-white/50",
+                  ? "bg-[#141414] text-white dark:bg-[#cff07a] dark:text-[#141414]"
+                  : "bg-[#f4f4f2] text-[#5f5f5c] dark:bg-white/[0.06] dark:text-white/55",
               )}
             >
               <Icon className="h-3.5 w-3.5" />
               {label}
               {value === "chat" && chatUnread > 0 && (
-                <span className={cn("ml-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[9px] font-bold text-white", chatMentionUnread > 0 ? "bg-[#65bf45]" : "bg-[#2f7cff]")}>
+                <span className={cn("ml-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[9px] text-white", chatMentionUnread > 0 ? "bg-[#2f7a4f]" : "bg-[#2f6fc0]")}>
                   {chatMentionUnread > 0 ? "@" : chatUnread > 99 ? "99+" : chatUnread}
                 </span>
               )}

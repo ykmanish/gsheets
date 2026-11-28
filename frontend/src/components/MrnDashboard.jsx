@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   AlertTriangle,
+  AtSign,
   CalendarDays,
+  Check,
   CheckCircle2,
   Clock3,
   ExternalLink,
@@ -24,6 +26,7 @@ import {
   Save,
   Search,
   Settings,
+  Store,
   Tag,
   Upload,
   UserRound,
@@ -31,7 +34,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { DatePicker } from "./ui";
+import { Badge, Button, Chip, DatePicker, EmptyState, IconTile, Notice, PageHeader, SectionTitle, StatTile, Toggle, cx, fieldClass, toneOf } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -232,45 +235,6 @@ function printMrnDetail(row) {
   printWindow.document.close();
 }
 
-function Metric({
-  darkMode,
-  icon: Icon,
-  label,
-  value,
-  note,
-  tone = "",
-  accent = "bg-[#171714]",
-}) {
-  return (
-    <section
-      className={`rounded-3xl  p-5 transition duration-300 hover:-translate-y-0.5 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.08] bg-white text-[#171714] -[0_8px_30px_rgba(28,40,20,0.04)]"}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <span
-          className={`grid h-11 w-11 place-items-center rounded-full ${tone || `${accent} text-white`}`}
-        >
-          <Icon className="h-4 w-4" />
-        </span>
-        <span
-          className={`rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${darkMode ? "bg-white/[0.08] text-white/60" : "bg-[#f3f5ef] text-black/50"}`}
-        >
-          {note}
-        </span>
-      </div>
-      <div className="mt-5">
-        <p
-          className={`text-xs ${darkMode ? "text-white/55" : "text-black/50"}`}
-        >
-          {label}
-        </p>
-        <p className="mt-1 text-3xl font-bold leading-none tracking-tight">
-          {value}
-        </p>
-      </div>
-    </section>
-  );
-}
-
 function FileButton({ darkMode, href, label }) {
   const validHref = /^https?:\/\//i.test(String(href || "").trim())
     ? String(href).trim()
@@ -278,7 +242,7 @@ function FileButton({ darkMode, href, label }) {
   if (!validHref) {
     return (
       <span
-        className={`flex h-12 items-center justify-center rounded-2xl text-sm ${darkMode ? "bg-white/[0.035] text-white/35" : "bg-white text-black/35"}`}
+        className={cx("flex h-11 items-center justify-center rounded-full text-[13px]", darkMode ? "bg-white/[0.04] text-white/35" : "bg-[#f4f4f2] text-[#a3a3a0]")}
       >
         {label} not added
       </span>
@@ -289,12 +253,40 @@ function FileButton({ darkMode, href, label }) {
       href={validHref}
       target="_blank"
       rel="noreferrer"
-      className={`flex h-12 items-center justify-center gap-2 rounded-2xl text-sm font-medium transition ${darkMode ? "bg-[#d8f36a] text-black hover:bg-[#cdea5e]" : "bg-[#171714] text-white hover:bg-black/80"}`}
+      className={cx("flex h-11 items-center justify-center gap-2 rounded-full text-[13px] transition-colors", darkMode ? "bg-white text-black hover:bg-white/90" : "bg-[#141414] text-white hover:bg-black")}
     >
       {label}
       <ExternalLink className="h-4 w-4" />
     </a>
   );
+}
+
+const MRN_STAGES = ["Requested", "Assigned", "Quoted", "Delivered"];
+
+// Pieces of the detail drawer, matching MrnDetailDrawer.
+function SmallHeading({ darkMode, children, aside }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <h3 className={cx("text-[15px] tracking-[-0.01em]", darkMode ? "text-white" : "text-[#141414]")}>{children}</h3>
+      {aside}
+    </div>
+  );
+}
+
+function ContactRow({ darkMode, icon, tone = "neutral", label, children }) {
+  return (
+    <div className="flex items-center gap-3">
+      <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+      <div className="min-w-0">
+        <p className={cx("text-[12px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{label}</p>
+        <div className="truncate text-[13.5px]">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function FormLabel({ darkMode, children }) {
+  return <span className={cx("mb-1.5 block text-[12.5px]", darkMode ? "text-white/55" : "text-[#8a8a8a]")}>{children}</span>;
 }
 
 function MrnWhatsappAutomationDrawer({ darkMode, onClose }) {
@@ -319,8 +311,8 @@ function MrnWhatsappAutomationDrawer({ darkMode, onClose }) {
       comment: "en",
     },
   });
-  const muted = darkMode ? "text-white/45" : "text-black/48";
-  const panel = darkMode ? "border-white/10 bg-[#181a20]" : "border-black/[0.07] bg-white";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const panel = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white";
   const lastRun = settings.lastRun || null;
   const contactInitials = (value = "") =>
     String(value)
@@ -394,102 +386,93 @@ function MrnWhatsappAutomationDrawer({ darkMode, onClose }) {
     }
   }
 
-  const ContactSection = ({ title, description, field }) => (
-    <section className={`rounded-2xl border p-4 ${panel}`}>
+  const ContactSection = ({ title, description, field, icon, tone }) => (
+    <section className={cx("rounded-[20px] border p-5", panel)}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-bold">{title}</h3>
-          <p className={`mt-1 text-xs leading-5 ${muted}`}>{description}</p>
+        <div className="flex min-w-0 items-start gap-3">
+          <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+          <div className="min-w-0">
+            <h3 className="text-[15px]">{title}</h3>
+            <p className={cx("mt-0.5 text-[12.5px] leading-5", muted)}>{description}</p>
+          </div>
         </div>
-        <span className="rounded-full bg-[#eafbdc] px-3 py-1 text-[11px] font-bold text-[#3f7d16]">{(settings[field] || []).length} selected</span>
+        <Chip tone="lime" darkMode={darkMode} className="shrink-0">{(settings[field] || []).length} selected</Chip>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-2">
         {contacts.map((contact) => {
           const checked = (settings[field] || []).includes(contact.id);
           return (
-            <button key={contact.id} type="button" onClick={() => toggleContact(field, contact.id)} className={`flex items-center gap-3 rounded-xl p-3 text-left transition ${checked ? "bg-[#eafbdc] text-[#2f641b]" : darkMode ? "bg-white/[0.05] hover:bg-white/[0.08]" : "bg-[#f5f6f3] hover:bg-[#eef2ea]"}`}>
-              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold ${checked ? "bg-[#65bf45] text-white" : "bg-white text-[#5f665b]"}`}>{contactInitials(contact.name || contact.phone)}</span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{contact.name || contact.phone}</span><span className="block truncate text-[11px] opacity-70">{contact.phone}</span></span>
-              <span className={`h-5 w-5 rounded-md border ${checked ? "border-[#65bf45] bg-[#65bf45]" : "border-[#b8bfb4]"}`} />
+            <button key={contact.id} type="button" onClick={() => toggleContact(field, contact.id)} className={cx("flex items-center gap-3 rounded-[14px] border p-3 text-left transition-colors", checked ? (darkMode ? "border-[#cff07a]/40 bg-[#cff07a]/10" : "border-[#141414] bg-white") : darkMode ? "border-transparent bg-white/[0.05] hover:bg-white/[0.08]" : "border-transparent bg-[#f7f7f5] hover:bg-[#f1f1ef]")}>
+              <span className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full text-[12px]", checked ? (darkMode ? "bg-[#cff07a] text-black" : "bg-[#141414] text-white") : darkMode ? "bg-white/10 text-white/70" : "bg-white text-[#5f5f5c]")}>{contactInitials(contact.name || contact.phone)}</span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-[13.5px]">{contact.name || contact.phone}</span><span className={cx("block truncate text-[11.5px]", muted)}>{contact.phone}</span></span>
+              <span className={cx("grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border", checked ? (darkMode ? "border-[#cff07a] bg-[#cff07a] text-black" : "border-[#141414] bg-[#141414] text-white") : darkMode ? "border-white/25" : "border-[#cfcfcb] bg-white")}>{checked && <Check className="h-3 w-3" strokeWidth={3} />}</span>
             </button>
           );
         })}
-        {!contacts.length && <p className={`rounded-xl p-4 text-sm ${muted}`}>No WhatsApp contacts found. Add contacts in the WhatsApp module first.</p>}
+        {!contacts.length && <p className={cx("rounded-[14px] p-4 text-[13px] md:col-span-2", darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]", muted)}>No WhatsApp contacts found. Add contacts in the WhatsApp module first.</p>}
       </div>
     </section>
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <aside className={`mrn-detail-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-        <header className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-          <span><b>MRN</b> - WhatsApp automation</span>
+    <div className="newq fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px]" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <aside style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`mrn-detail-shell absolute flex flex-col overflow-hidden border animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
+        <header className={cx("flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={MessageSquare} tone="mint" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h2 className="truncate text-[17px] tracking-[-0.01em]">WhatsApp automation</h2>
+              <p className={cx("truncate text-[12.5px]", muted)}>Who hears about new MRNs and their outcome</p>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
-            <button onClick={saveSettings} disabled={saving || loading} className="flex h-8 items-center gap-1.5 rounded-full bg-[#20231f] px-3 font-semibold text-white transition hover:bg-[#30342e] disabled:opacity-50">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Save</button>
-            <button onClick={onClose} className="px-1 font-semibold text-[#3f7d16]">Close</button>
+            <Button darkMode={darkMode} variant="primary" size="sm" icon={Save} loading={saving} onClick={saveSettings} disabled={saving || loading}>Save</Button>
+            <button type="button" onClick={onClose} aria-label="Close" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}><X className="h-4 w-4" /></button>
           </div>
         </header>
-        <div className="grid min-h-0 flex-1 md:grid-cols-[290px_minmax(0,1fr)]">
-          <aside className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0 md:border-r ${darkMode ? "border-white/10" : "border-black/10"}`}>
-            <div className="flex gap-2"><span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#3f7d16]">WHATSAPP</span><span className="rounded bg-black/5 px-2 py-1 text-[10px] font-bold dark:bg-white/10">MRN</span></div>
-            <h2 className="mt-4 text-2xl font-bold">Automation flow</h2>
-            <p className={`mt-2 text-xs leading-5 ${muted}`}>New MRNs go to approval parties. Approval, decline and comment outcomes go to concern department recipients.</p>
-            <label className={`mt-5 flex items-center justify-between rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f6f3]"}`}><span><span className="block text-sm font-bold">Enable automation</span><span className={`text-[11px] ${muted}`}>Send approved templates automatically</span></span><input type="checkbox" checked={settings.enabled !== false} onChange={(event) => setSettings((current) => ({ ...current, enabled: event.target.checked }))} /></label>
-            <button
-              type="button"
-              onClick={() => sendTest("actionRequest")}
-              disabled={loading || sendingTest || !(settings.approvalContactIds || []).length}
-              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#89ed3f] text-sm font-bold text-black transition hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {sendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
-              Send test
-            </button>
+        <div className="grid min-h-0 flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className={cx("min-h-0 overflow-y-auto border-b p-6 md:border-b-0 md:border-r", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+            <Badge icon={MessageSquare} tone="mint" darkMode={darkMode}>WhatsApp · MRN</Badge>
+            <SectionTitle darkMode={darkMode} className="mt-4" title="Automation flow" subtitle="from request to reply" />
+            <p className={cx("mt-3 text-[13px] leading-5", muted)}>New MRNs go to approval parties. Approval, decline and comment outcomes go to concern department recipients.</p>
+            <div className={cx("mt-5 flex items-center justify-between gap-3 rounded-[16px] p-4", darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]")}>
+              <span><span className="block text-[13.5px]">Enable automation</span><span className={cx("text-[12px]", muted)}>Send approved templates automatically</span></span>
+              <Toggle darkMode={darkMode} label="Enable automation" checked={settings.enabled !== false} onChange={(next) => setSettings((current) => ({ ...current, enabled: next }))} />
+            </div>
+            <Button darkMode={darkMode} variant="primary" className="mt-3 w-full" icon={MessageSquare} loading={sendingTest} onClick={() => sendTest("actionRequest")} disabled={loading || sendingTest || !(settings.approvalContactIds || []).length}>Send test</Button>
             <div className="mt-2 grid grid-cols-3 gap-2">
               {[
-                ["approved", "Approve"],
-                ["declined", "Decline"],
-                ["comment", "Comment"],
-              ].map(([event, label]) => (
+                ["approved", "Approve", "mint"],
+                ["declined", "Decline", "rose"],
+                ["comment", "Comment", "sky"],
+              ].map(([event, label, tone]) => (
                 <button
                   key={event}
                   type="button"
                   onClick={() => sendTest(event)}
                   disabled={loading || sendingTest || !(settings.concernContactIds || []).length}
-                  className={`h-9 rounded-xl text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-45 ${
-                    event === "approved"
-                      ? "bg-[#eafbdc] text-[#3f7d16] hover:bg-[#dff7cc]"
-                      : event === "declined"
-                        ? "bg-[#ffe4e8] text-[#b4233f] hover:bg-[#ffd8df]"
-                        : "bg-[#e9f0ff] text-[#3159a6] hover:bg-[#dee8ff]"
-                  }`}
+                  style={{ backgroundColor: darkMode ? toneOf(tone)[2] : toneOf(tone)[0], color: darkMode ? toneOf(tone)[3] : toneOf(tone)[1] }}
+                  className="h-8 rounded-full text-[12.5px] transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {label}
                 </button>
               ))}
             </div>
-            <div className={`mt-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f6f3]"}`}>
+            <div className={cx("mt-3 rounded-[16px] p-4", darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]")}>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-bold">Last run</span>
-                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                  lastRun?.status === "sent"
-                    ? "bg-[#eafbdc] text-[#3f7d16]"
-                    : lastRun?.status === "failed"
-                      ? "bg-[#ffe4e8] text-[#b4233f]"
-                      : "bg-black/5 text-[#687066] dark:bg-white/10 dark:text-white/70"
-                }`}>
-                  {lastRun?.status || "Not run"}
-                </span>
+                <span className="text-[13.5px]">Last run</span>
+                <Chip darkMode={darkMode} tone={lastRun?.status === "sent" ? "mint" : lastRun?.status === "failed" ? "rose" : "outline"} className="h-6 text-[11.5px]">{lastRun?.status || "Not run"}</Chip>
               </div>
               {lastRun ? (
-                <div className={`mt-3 space-y-1 text-[11px] leading-5 ${muted}`}>
+                <div className={cx("mt-3 space-y-1 text-[12px] leading-5", muted)}>
                   <p>{formatMrnDateTime(lastRun.at).date} {formatMrnDateTime(lastRun.at).time}</p>
                   <p>{lastRun.event || "run"} · {lastRun.sent || 0} sent · {lastRun.failed || 0} failed · {lastRun.recipients || 0} recipients</p>
                   <p className="break-words">MRN: {lastRun.mrnNo || "-"} · Template: {lastRun.templateName || "-"}{lastRun.language ? ` · ${lastRun.language}` : ""}</p>
-                  {lastRun.reason && <p className="text-[#b4233f]">{lastRun.reason}</p>}
+                  {lastRun.reason && <p className="text-[#c0394b]">{lastRun.reason}</p>}
                   {!!lastRun.results?.length && (
                     <div className="mt-2 space-y-1">
                       {lastRun.results.slice(0, 3).map((item, index) => (
-                        <p key={`${item.phone || "recipient"}-${index}`} className={item.status === "sent" ? "text-[#3f7d16]" : "text-[#b4233f]"}>
+                        <p key={`${item.phone || "recipient"}-${index}`} className={item.status === "sent" ? (darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]") : "text-[#c0394b]"}>
                           {item.phone || "Recipient"}: {item.status}{item.reason ? ` - ${item.reason}` : ""}
                         </p>
                       ))}
@@ -497,17 +480,17 @@ function MrnWhatsappAutomationDrawer({ darkMode, onClose }) {
                   )}
                 </div>
               ) : (
-                <p className={`mt-2 text-[11px] ${muted}`}>No send attempt recorded yet.</p>
+                <p className={cx("mt-2 text-[12px]", muted)}>No send attempt recorded yet.</p>
               )}
             </div>
           </aside>
-          <main className={`min-h-0 overflow-y-auto p-5 ${darkMode ? "bg-[#101216]" : "bg-[#f7f8f5]"}`}>
+          <main className={cx("min-h-0 overflow-y-auto p-6", darkMode ? "bg-[#0f1014]" : "bg-[#fafaf9]")}>
             {loading ? (
-              <div className={`rounded-2xl border px-6 py-16 text-center ${panel}`}><Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" /><p className={`mt-3 text-sm ${muted}`}>Loading WhatsApp contacts...</p></div>
+              <div className={cx("rounded-[20px] border px-6 py-16 text-center", panel)}><Loader2 className={cx("mx-auto h-6 w-6 animate-spin", muted)} /><p className={cx("mt-3 text-[13px]", muted)}>Loading WhatsApp contacts...</p></div>
             ) : (
-              <div className="space-y-5">
-                <ContactSection title="Approval / action parties" description="These numbers receive the new MRN action request with approve, decline and comment buttons." field="approvalContactIds" />
-                <ContactSection title="Concern department" description="These numbers receive approval, decline and comment outcomes." field="concernContactIds" />
+              <div className="space-y-4">
+                <ContactSection title="Approval / action parties" description="These numbers receive the new MRN action request with approve, decline and comment buttons." field="approvalContactIds" icon={CheckCircle2} tone="mint" />
+                <ContactSection title="Concern department" description="These numbers receive approval, decline and comment outcomes." field="concernContactIds" icon={UserRound} tone="sky" />
               </div>
             )}
           </main>
@@ -544,7 +527,7 @@ export default function MrnDashboard({ darkMode }) {
   const [mrnHistory, setMrnHistory] = useState([]);
   const [nowMs] = useState(() => Date.now());
 
-  const muted = darkMode ? "text-white/45" : "text-black/48";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
 
   const load = useCallback(
     async (quiet = false) => {
@@ -792,61 +775,30 @@ export default function MrnDashboard({ darkMode }) {
 
   if (loading) {
     return (
-      <main
-        className={`flex min-h-0 flex-1 items-center justify-center px-5 py-10 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f4ef] text-[#171714]"}`}
-      >
-        <div
-          className={`w-full max-w-2xl rounded-[30px] p-7 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.07] bg-white"}`}
-        >
+      <main className={cx("flex min-h-0 flex-1 items-center justify-center px-5 py-10", darkMode ? "text-white" : "text-[#141414]")}>
+        <div className={cx("w-full max-w-xl rounded-[24px] border p-7", darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white")}>
           <div className="flex items-center gap-4">
             <span className="relative flex h-14 w-14 items-center justify-center">
-              <span
-                className={`absolute inset-0 animate-ping rounded-full opacity-20 ${darkMode ? "bg-[#d8f36a]" : "bg-black"}`}
-              />
-              <span
-                className={`absolute inset-1 animate-pulse rounded-full ${darkMode ? "bg-[#d8f36a]/15" : "bg-black/[0.06]"}`}
-              />
-              <span
-                className={`relative flex h-12 w-12 items-center justify-center rounded-full ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}
-              >
-                <FileSpreadsheet className="h-5 w-5" />
-              </span>
+              <span className={cx("absolute inset-0 animate-ping rounded-[18px] opacity-20", darkMode ? "bg-[#cff07a]" : "bg-[#ece8fb]")} />
+              <IconTile icon={FileSpreadsheet} tone="lavender" darkMode={darkMode} size="lg" className="relative" />
             </span>
             <div>
-              <p
-                className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-[#d8f36a]" : "text-[#e76f42]"}`}
-              >
-                MRN workspace
-              </p>
-              <h2 className="mt-2 flex flex-wrap items-center gap-2 text-xl font-semibold">
+              <Badge icon={PackageCheck} tone="lavender" darkMode={darkMode}>MRN workspace</Badge>
+              <h2 className="mt-2 flex flex-wrap items-center gap-2 text-[19px] tracking-[-0.01em]">
                 Opening live material request sheet
-                <span
-                  className="inline-flex items-center gap-1 pt-1"
-                  aria-hidden="true"
-                >
-                  <span
-                    className={`h-1.5 w-1.5 animate-bounce rounded-full ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`}
-                  />
-                  <span
-                    className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:120ms] ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`}
-                  />
-                  <span
-                    className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:240ms] ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`}
-                  />
+                <span className="inline-flex items-center gap-1 pt-1" aria-hidden="true">
+                  <span className={cx("h-1.5 w-1.5 animate-bounce rounded-full", darkMode ? "bg-[#cff07a]" : "bg-[#141414]")} />
+                  <span className={cx("h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:120ms]", darkMode ? "bg-[#cff07a]" : "bg-[#141414]")} />
+                  <span className={cx("h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:240ms]", darkMode ? "bg-[#cff07a]" : "bg-[#141414]")} />
                 </span>
               </h2>
-              <p className={`mt-2 text-sm ${muted}`}>
-                Loading linked MRNs, quotations, and uploaded files from the
-                latest sheet data.
+              <p className={cx("mt-1 text-[13px]", muted)}>
+                Loading linked MRNs, quotations, and uploaded files from the latest sheet data.
               </p>
             </div>
           </div>
-          <div
-            className={`mt-6 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}
-          >
-            <div
-              className={`h-full w-1/3 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`}
-            />
+          <div className={cx("mt-6 h-1.5 overflow-hidden rounded-full", darkMode ? "bg-white/10" : "bg-[#f0f0ee]")}>
+            <div className={cx("h-full w-1/3 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full", darkMode ? "bg-[#cff07a]" : "bg-[#141414]")} />
           </div>
         </div>
       </main>
@@ -861,270 +813,115 @@ export default function MrnDashboard({ darkMode }) {
   const totalMrns = summary.total || 0;
 
   return (
-    <main
-      className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-7 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f7f2] text-[#171714]"}`}
-    >
-      <div
-        className={`mb-5 rounded-3xl  p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.08] bg-white -[0_8px_30px_rgba(28,40,20,0.04)]"}`}
-      >
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#4b9b16]">
-              <FileSpreadsheet className="h-3.5 w-3.5" /> Projects · MRN
-            </span>
-            <h1 className="mt-2 text-3xl font-bold small tracking-tight">
-              Material Request Dashboard
-            </h1>
-            <p className={`mt-2 max-w-2xl text-sm ${muted}`}>
-              Track requests, quotations, owners and delivery progress from one
-              workspace.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              disabled={!canEdit || !settings.linked}
-              onClick={openAddMrn}
-              className="flex h-11 items-center gap-2 rounded-full bg-[#89ed3f] px-5 text-sm font-bold text-black hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Plus className="h-4 w-4" /> Add MRN
-            </button>
-            {canManage && (
-              <button
-                onClick={() => setWhatsappOpen(true)}
-                className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}
-              >
-                <MessageSquare className="h-4 w-4" /> WhatsApp automation
-              </button>
-            )}
-            {canManage && (
-              <button
-                onClick={() => setSettingsOpen(true)}
-                className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}
-              >
-                <Settings className="h-4 w-4" /> Links
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setAllData(null);
-                void load(true);
-              }}
-              className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              />{" "}
-              Refresh
-            </button>
-            
-          </div>
-        </div>
-      </div>
+    <main className={cx("min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8", darkMode ? "text-white" : "text-[#141414]")}>
+      <PageHeader
+        darkMode={darkMode}
+        badge="Projects · MRN"
+        badgeIcon={PackageCheck}
+        badgeTone="lavender"
+        title="Material requests"
+        subtitle="what each site needs, and by when"
+        description="Track requests, quotations, owners and delivery progress from one workspace."
+        actions={<>
+          {canManage && <Button darkMode={darkMode} variant="secondary" icon={MessageSquare} onClick={() => setWhatsappOpen(true)}>WhatsApp automation</Button>}
+          {canManage && <Button darkMode={darkMode} variant="secondary" icon={Settings} onClick={() => setSettingsOpen(true)}>Links</Button>}
+          <Button darkMode={darkMode} variant="secondary" onClick={() => { setAllData(null); void load(true); }}><RefreshCw className={cx("h-4 w-4", refreshing && "animate-spin")} /> Refresh</Button>
+          <Button darkMode={darkMode} variant="primary" icon={Plus} disabled={!canEdit || !settings.linked} onClick={openAddMrn}>Add MRN</Button>
+        </>}
+      />
 
       {!settings.linked && (
-        <div
-          className={`mb-5 rounded-[28px] p-5 ${darkMode ? "bg-amber-400/5 text-amber-100" : "bg-amber-50 text-amber-800"}`}
-        >
-          Link the MRN Google Sheet before viewing or adding MRNs.
-        </div>
+        <Notice tone="amber" darkMode={darkMode} icon={AlertTriangle} className="mt-6">Link the MRN Google Sheet before viewing or adding MRNs.</Notice>
       )}
 
-      <div className="mb-5 grid gap-4 md:grid-cols-4">
-        <Metric
-          darkMode={darkMode}
-          icon={FileSpreadsheet}
-          label="All MRNs"
-          value={totalMrns}
-          note="Full sheet"
-          accent="bg-[#171714]"
-        />
-        <Metric
-          darkMode={darkMode}
-          icon={CalendarDays}
-          label="Open / active"
-          value={summary.open || 0}
-          note="Needs action"
-          tone={
-            darkMode
-              ? "bg-[#89ed3f]/15 text-[#89ed3f]"
-              : "bg-[#eafbdc] text-[#4b9b16]"
-          }
-        />
-        <Metric
-          darkMode={darkMode}
-          icon={Save}
-          label="Delivered / closed"
-          value={summary.delivered || 0}
-          note="Completed"
-          tone={
-            darkMode
-              ? "bg-emerald-400/10 text-emerald-200"
-              : "bg-[#dff7f1] text-[#16836b]"
-          }
-        />
-        <Metric
-          darkMode={darkMode}
-          icon={IndianRupee}
-          label="Quotation amount"
-          value={money(summary.quotationAmount)}
-          note="All records"
-          tone={
-            darkMode
-              ? "bg-amber-400/10 text-amber-200"
-              : "bg-amber-50 text-amber-700"
-          }
-        />
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile darkMode={darkMode} icon={FileSpreadsheet} tone="lavender" value={totalMrns} label="All MRNs" hint="Full sheet" />
+        <StatTile darkMode={darkMode} icon={CalendarDays} tone="sky" value={summary.open || 0} label="Open / active" hint="Needs action" />
+        <StatTile darkMode={darkMode} icon={CheckCircle2} tone="mint" value={summary.delivered || 0} label="Delivered / closed" hint="Completed" />
+        <StatTile darkMode={darkMode} icon={IndianRupee} tone="amber" value={money(summary.quotationAmount)} label="Quotation amount" hint="All records" />
       </div>
 
-      <section
-        className={`rounded-3xl  p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white -[0_8px_30px_rgba(28,40,20,0.04)]"}`}
-      >
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#4b9b16]">
-              Requests
-            </p>
-            <h2 className="mt-1 text-xl small dark:text-white text-black font-bold">
-              MRN records
-            </h2>
-            <p className={`mt-1 text-sm ${muted}`}>
-              {records.length} visible requests
-            </p>
+      <section className={cx("mt-6 rounded-[20px] border p-5", darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white")}>
+        <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <IconTile icon={FileSpreadsheet} tone="peach" darkMode={darkMode} size="sm" />
+            <div>
+              <h2 className="text-[15px]">MRN records</h2>
+              <p className={cx("text-[12.5px]", muted)}>{records.length} visible requests</p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <DatePicker
-              darkMode={darkMode}
-              value={startDate}
-              onChange={setStartDate}
-              placeholder="From date"
-            />
-            <DatePicker
-              darkMode={darkMode}
-              value={endDate}
-              onChange={setEndDate}
-              placeholder="To date"
-            />
-            <label
-              className={`flex h-12 min-w-64 items-center gap-2 rounded-xl border px-4 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#fafbf8] text-black focus-within:border-[#69c832]"}`}
-            >
-              <Search className="h-4 w-4 text-[#4b9b16]" />
+            <DatePicker darkMode={darkMode} value={startDate} onChange={setStartDate} placeholder="From date" />
+            <DatePicker darkMode={darkMode} value={endDate} onChange={setEndDate} placeholder="To date" />
+            <label className={cx(fieldClass(darkMode), "w-full cursor-text sm:w-64")}>
+              <Search className={cx("h-4 w-4 shrink-0", muted)} />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search MRN, project, issued by"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                className="min-w-0 flex-1 bg-transparent outline-none"
               />
             </label>
           </div>
         </div>
 
-        <div
-          className={`overflow-x-auto rounded-xl border ${darkMode ? "border-white/10" : "border-black/[0.08]"}`}
-        >
-          <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
-            <thead
-              className={
-                darkMode
-                  ? "bg-white/[0.035] text-white/50"
-                  : "bg-[#f4f6f1] text-black/50"
-              }
-            >
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] border-collapse text-left text-[13px]">
+            <thead>
               <tr>
-                {[
-                  "MRN",
-                  "Request date",
-                  "Project / Site",
-                  "Required by",
-                  "Issued by",
-                  "Status",
-                  "Action",
-                ].map((header) => (
-                  <th
-                    key={header}
-                    className="border-b border-black/[0.06] px-5 py-3.5 text-[10px] font-bold uppercase tracking-[0.12em]"
-                  >
+                {["MRN", "Request date", "Project / Site", "Required by", "Issued by", "Status", ""].map((header) => (
+                  <th key={header || "action"} className={cx("px-4 pb-2.5 pt-1 text-[12px] font-normal", muted)}>
                     {header}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {records.map((row, index) => (
-                <tr
-                  key={row.id}
-                  className={`group align-middle transition ${darkMode ? "hover:bg-white/[0.04]" : "hover:bg-[#f8fbf5]"} ${index % 2 === 0 ? (darkMode ? "bg-white/[0.015]" : "bg-white") : darkMode ? "bg-white/[0.03]" : "bg-[#fcfcfa]"}`}
-                >
-                  <td
-                    className={`border-t px-5 py-4 font-bold text-[#000000] dark:text-white ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
-                  >
-                    {row.mrnNo || "-"}
-                  </td>
-                  <td
-                    className={`border-t px-5 py-4 ${darkMode ? "border-white/10 text-white/70" : "border-black/[0.06] text-black/70"}`}
-                  >
-                    {row.materialRequestDate || row.date || "-"}
-                  </td>
-                  <td
-                    className={`max-w-[240px] border-t px-5 py-4 font-semibold ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
-                  >
-                    {row.project || "-"}
-                  </td>
-                  <td
-                    className={`border-t px-5 py-4 ${darkMode ? "border-white/10 text-white/70" : "border-black/[0.06] text-black/70"}`}
-                  >
-                    {row.requiredDate || "-"}
-                  </td>
-                  <td
-                    className={`border-t px-5 py-4 ${darkMode ? "border-white/10 text-white/70" : "border-black/[0.06] text-black/70"}`}
-                  >
-                    {row.issuedBy || "-"}
-                  </td>
-                  <td
-                    className={`border-t px-5 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
-                  >
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-2xl px-2.5 py-1.5 text-[11px] font-bold ${/delivered|closed|complete/i.test(row.status) ? "bg-[#dff7f1] text-[#16836b]" : "bg-[#eafbdc] text-[#4b9b16]"}`}
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {row.status || "Open"}
-                    </span>
-                  </td>
-                  <td
-                    className={`border-t px-5 py-4 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
-                  >
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => {
-                          setDrawerClosing(false);
-                          setSelectedMrn(row);
-                        }}
-                        className={`flex h-9 items-center gap-2 rounded-full border px-3.5 text-xs  transition ${darkMode ? "border-white/15 bg-white/5 text-white hover:bg-white/10" : "border-black/12 bg-white text-black hover:border-[#69c832] hover:text-[#4b9b16]"}`}
-                      >
-                        <Eye className="h-4 w-4" />
-                        View detail
-                      </button>
-                      {canEdit && (
-                        <button
-                          onClick={() => openEditMrn(row)}
-                          className={`flex h-9 items-center gap-2 rounded-full px-3.5 text-xs  transition ${darkMode ? "bg-[#89ed3f] text-black hover:bg-[#7dde35]" : "bg-[#89ed3f] text-black hover:bg-[#7dde35]"}`}
+              {records.map((row) => {
+                const done = /delivered|closed|complete/i.test(row.status);
+                const cellMuted = darkMode ? "text-white/65" : "text-[#5f5f5c]";
+                return (
+                  <tr key={row.id} className={cx("group border-t align-middle transition-colors", darkMode ? "border-white/[0.07] hover:bg-white/[0.03]" : "border-[#f0f0ee] hover:bg-[#fafaf9]")}>
+                    <td className="px-4 py-3.5">{row.mrnNo || "-"}</td>
+                    <td className={cx("px-4 py-3.5", cellMuted)}>{row.materialRequestDate || row.date || "-"}</td>
+                    <td className="max-w-[240px] px-4 py-3.5">{row.project || "-"}</td>
+                    <td className={cx("px-4 py-3.5", cellMuted)}>{row.requiredDate || "-"}</td>
+                    <td className={cx("px-4 py-3.5", cellMuted)}>{row.issuedBy || "-"}</td>
+                    <td className="px-4 py-3.5">
+                      <Chip tone={done ? "mint" : "sky"} darkMode={darkMode} className="h-6 text-[11.5px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                        {row.status || "Open"}
+                      </Chip>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          darkMode={darkMode}
+                          variant="soft"
+                          size="sm"
+                          icon={Eye}
+                          onClick={() => {
+                            setDrawerClosing(false);
+                            setSelectedMrn(row);
+                          }}
                         >
-                          <Pencil className="h-4 w-4" />
-                          Edit
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!records.length && (
-                <tr>
-                  <td colSpan={7} className={`px-4 py-10 text-center ${muted}`}>
-                    No MRNs found for this range.
-                  </td>
-                </tr>
-              )}
+                          View detail
+                        </Button>
+                        {canEdit && (
+                          <Button darkMode={darkMode} variant="secondary" size="sm" icon={Pencil} onClick={() => openEditMrn(row)}>
+                            Edit
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          {!records.length && (
+            <EmptyState darkMode={darkMode} icon={PackageCheck} tone="lavender" title="No MRNs found" text="Nothing in this date range. Try a wider range or another search." className="mt-2" />
+          )}
         </div>
       </section>
 
@@ -1161,7 +958,7 @@ export default function MrnDashboard({ darkMode }) {
                 soft: darkMode
                   ? "bg-emerald-400/10 text-emerald-200"
                   : "bg-emerald-50 text-emerald-700",
-                label: "Delivered in time",
+                label: "Delivered in time", tone: "mint",
                 icon: CheckCircle2,
               }
             : isOverdue
@@ -1171,7 +968,7 @@ export default function MrnDashboard({ darkMode }) {
                   soft: darkMode
                     ? "bg-red-400/10 text-red-200"
                     : "bg-red-50 text-red-700",
-                  label: "Delayed",
+                  label: "Delayed", tone: "rose",
                   icon: AlertTriangle,
                 }
               : {
@@ -1180,353 +977,192 @@ export default function MrnDashboard({ darkMode }) {
                   soft: darkMode
                     ? "bg-blue-400/10 text-blue-200"
                     : "bg-blue-50 text-blue-700",
-                  label: "On track",
+                  label: "On track", tone: "sky",
                   icon: Clock3,
                 };
           const ProgressIcon = progressTone.icon;
           const items = materialItems(selectedMrn.materialRequirement);
+          const line = darkMode ? "border-white/10" : "border-[#f0f0ee]";
+          const softPanel = darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]";
+          const doneStages = isDelivered ? 4 : 3;
+
           return (
             <div
-              className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] ${drawerClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
+              className={`newq fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] ${drawerClosing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) closeMrnDrawer();
               }}
               role="presentation"
             >
               <aside
-                className={`mrn-detail-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${mrnDrawerExpanded ? "mrn-detail-shell-expanded" : ""} ${drawerClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}
+                style={{ boxShadow: "var(--ui-shadow-pop)" }}
+                className={`mrn-detail-shell absolute flex flex-col overflow-hidden border ${mrnDrawerExpanded ? "mrn-detail-shell-mrnDrawerExpanded" : ""} ${drawerClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}
                 role="dialog"
                 aria-modal="true"
                 aria-label={`${selectedMrn.mrnNo || "MRN"} details`}
               >
-                <header
-                  className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}
-                >
-                  <span>
-                    <b>{selectedMrn.mrnNo || "MRN"}</b> · Material request
-                    details
-                  </span>
-                  <div className="flex items-center gap-2">
+                <header className={cx("flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-6 py-3.5", line)}>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <IconTile icon={PackageCheck} tone="lavender" darkMode={darkMode} size="sm" />
+                    <div className="min-w-0">
+                      <h2 className="truncate text-[17px] tracking-[-0.01em]">{selectedMrn.mrnNo || "MRN"}</h2>
+                      <p className={cx("truncate text-[12.5px]", muted)}>Material request details</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
                     {canViewMrnHistory && (
-                      <button
-                        onClick={() => openMrnHistory(selectedMrn)}
-                        className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f7ef] text-[#3f7d16] hover:bg-[#eafbdc]"}`}
-                      >
-                        <History className="h-3.5 w-3.5" />
-                        Version History
-                      </button>
+                      <Button darkMode={darkMode} variant="soft" size="sm" icon={History} onClick={() => openMrnHistory(selectedMrn)}>Version history</Button>
                     )}
-                    <button
-                      onClick={() => printMrnDetail(selectedMrn)}
-                      className="flex h-8 items-center gap-1.5 rounded-full bg-red-500 px-3 font-semibold text-white shadow-[0_10px_24px_rgba(239,68,68,0.22)] transition hover:bg-red-600"
-                    >
-                      <FileText className="h-3.5 w-3.5" />
-                      Print PDF
-                    </button>
-                    <button
-                      onClick={() => setMrnDrawerExpanded((current) => !current)}
-                      className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#eafbdc] text-[#3f7d16] hover:bg-[#ddf8c9]"}`}
-                    >
-                      {mrnDrawerExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                    <Button darkMode={darkMode} variant="secondary" size="sm" icon={FileText} onClick={() => printMrnDetail(selectedMrn)}>Print PDF</Button>
+                    <Button darkMode={darkMode} variant="soft" size="sm" icon={mrnDrawerExpanded ? Minimize2 : Maximize2} onClick={() => setMrnDrawerExpanded((current) => !current)}>
                       {mrnDrawerExpanded ? "Restore" : "Expand"}
-                    </button>
-                    <button
-                      onClick={closeMrnDrawer}
-                      className="px-1 font-semibold text-[#3f7d16]"
-                    >
-                      Close
+                    </Button>
+                    <button type="button" onClick={closeMrnDrawer} aria-label="Close" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
                 </header>
 
-                <div className="grid min-h-0 flex-1 md:grid-cols-[270px_minmax(0,1fr)]">
-                  <aside
-                    className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0 md:border-r ${darkMode ? "border-white/10" : "border-black/10"}`}
-                  >
-                    <div className="flex gap-2">
-                      <span className="rounded bg-pink-100 px-2 py-1 text-[10px] font-bold text-pink-800">
-                        MATERIAL
-                      </span>
-                      <span className="rounded bg-black/5 px-2 py-1 text-[10px] font-bold">
-                        REQUEST
-                      </span>
-                    </div>
-                    <p className={`mt-4 text-xs ${muted}`}>
-                      Request #{selectedMrn.mrnNo || "-"}
-                    </p>
-                    <h2 className="mt-1 text-2xl font-bold small dark:text-white text-black">
+                <div className="grid min-h-0 flex-1 md:grid-cols-[290px_minmax(0,1fr)]">
+                  <aside className={cx("min-h-0 overflow-y-auto border-b p-6 md:border-b-0 md:border-r", line)}>
+                    <Badge icon={PackageCheck} tone="peach" darkMode={darkMode}>Material request</Badge>
+                    <p className={cx("mt-4 text-[12.5px]", muted)}>Request #{selectedMrn.mrnNo || "-"}</p>
+                    <h2 className="mt-1 text-[24px] leading-tight tracking-[-0.02em]">
                       {selectedMrn.project || "Project / site not added"}
                     </h2>
-                    <p className={`mt-2 text-xs leading-5 ${muted}`}>
-                      {selectedMrn.remark ||
-                        "Material requirement and purchase tracking"}
+                    <p className={cx("mt-2 text-[13px] leading-5", muted)}>
+                      {selectedMrn.remark || "Material requirement and purchase tracking"}
                     </p>
 
-                    <div className="mt-5 flex gap-2">
-                      {canEdit && (
-                        <button
-                          onClick={() => {
-                            closeMrnDrawer();
-                            window.setTimeout(
-                              () => openEditMrn(selectedMrn),
-                              290,
-                            );
-                          }}
-                          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#89ed3f] text-sm font-semibold text-black"
-                        >
-                          <Pencil className="h-4 w-4" /> Edit MRN
-                        </button>
-                      )}
-                      {/* <button
-                        onClick={closeMrnDrawer}
-                        className={`grid h-11 w-11 place-items-center rounded-full border ${darkMode ? "border-white/15" : "border-black/15"}`}
+                    {canEdit && (
+                      <Button
+                        darkMode={darkMode}
+                        variant="primary"
+                        icon={Pencil}
+                        className="mt-5 w-full"
+                        onClick={() => {
+                          closeMrnDrawer();
+                          window.setTimeout(
+                            () => openEditMrn(selectedMrn),
+                            290,
+                          );
+                        }}
                       >
-                        <X className="h-4 w-4" />
-                      </button> */}
-                    </div>
+                        Edit MRN
+                      </Button>
+                    )}
 
-                    <div
-                      className={`mt-5 rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f5f1]"}`}
-                    >
-                      <p className={`text-xs ${muted}`}>Quotation amount</p>
-                      <div className="mt-1 flex items-end justify-between">
-                        <strong className="text-2xl">
-                          {money(selectedMrn.quotationAmount)}
-                        </strong>
-                        <span
-                          className={`text-xs font-semibold ${progressTone.text}`}
-                        >
-                          {selectedMrn.status || "Open"}
-                        </span>
+                    <div style={{ backgroundColor: darkMode ? toneOf("amber")[2] : toneOf("amber")[0] }} className="mt-5 rounded-[20px] p-4">
+                      <p className={cx("text-[12.5px]", darkMode ? "text-white/55" : "text-[#6b6b6b]")}>Quotation amount</p>
+                      <div className="mt-1.5 flex items-end justify-between gap-2">
+                        <span className="text-[26px] leading-none tracking-[-0.03em] tabular-nums">{money(selectedMrn.quotationAmount)}</span>
+                        <Chip tone={progressTone.tone} darkMode={darkMode} className="h-6 text-[11.5px]">{selectedMrn.status || "Open"}</Chip>
                       </div>
                     </div>
 
-                    <h3
-                      className={`mt-6 border-b pb-3 text-sm font-bold ${darkMode ? "border-white/10" : "border-black/10"}`}
-                    >
-                      Contact Details
-                    </h3>
-                    <div className="mt-4 space-y-4 text-sm">
-                      <div className="flex gap-3">
-                        <span className="grid h-9 w-9 place-items-center rounded-full bg-pink-100 text-xs font-bold text-pink-800">
-                          {(selectedMrn.issuedBy || "MR")
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </span>
-                        <div>
-                          <p className={`text-[11px] ${muted}`}>Issued by</p>
-                          <p className="font-semibold">
-                            {selectedMrn.issuedBy || "-"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-3">
-                        <span
-                          className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/5" : "bg-[#f4f4ef]"}`}
-                        >
-                          @
-                        </span>
-                        <div className="min-w-0">
-                          <p className={`text-[11px] ${muted}`}>
-                            Email Address
-                          </p>
-                          <p className="break-all text-xs font-semibold">
-                            {selectedMrn.emailAddress || "Not added"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-3">
-                        <span
-                          className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/5" : "bg-[#f4f4ef]"}`}
-                        >
-                          <UserRound className="h-4 w-4" />
-                        </span>
-                        <div>
-                          <p className={`text-[11px] ${muted}`}>Assigned to</p>
-                          <p className="font-semibold">
-                            {selectedMrn.assignTo || "Not assigned"}
-                          </p>
-                        </div>
-                      </div>
+                    <div className="mt-6"><SmallHeading darkMode={darkMode}>Contact details</SmallHeading></div>
+                    <div className="mt-3 space-y-3">
+                      <ContactRow darkMode={darkMode} icon={<span className="text-[12px]">{(selectedMrn.issuedBy || "MR").slice(0, 2).toUpperCase()}</span>} tone="rose" label="Issued by">{selectedMrn.issuedBy || "-"}</ContactRow>
+                      <ContactRow darkMode={darkMode} icon={AtSign} label="Email address"><span className="break-all whitespace-normal text-[12.5px]">{selectedMrn.emailAddress || "Not added"}</span></ContactRow>
+                      <ContactRow darkMode={darkMode} icon={UserRound} label="Assigned to">{selectedMrn.assignTo || "Not assigned"}</ContactRow>
                     </div>
-                    <h3
-                      className={`mt-6 border-b pb-3 text-sm font-bold ${darkMode ? "border-white/10" : "border-black/10"}`}
-                    >
-                      Vendor
-                    </h3>
-                    <p className="mt-4 text-sm font-semibold">
-                      {selectedMrn.vendorName || "Not added"}
-                    </p>
-                    <p className={`mt-8 text-[11px] ${muted}`}>
+                    <div className="mt-6"><SmallHeading darkMode={darkMode}>Vendor</SmallHeading></div>
+                    <div className="mt-3"><ContactRow darkMode={darkMode} icon={Store} tone="sky" label="Vendor name">{selectedMrn.vendorName || "Not added"}</ContactRow></div>
+                    <p className={cx("mt-8 text-[12px]", muted)}>
                       Last edited {editedAt.date}
                       {editedAt.time ? ` at ${editedAt.time}` : ""}
                     </p>
                   </aside>
 
                   <section className="min-h-0 overflow-y-auto">
-                    <div
-                      className={`border-b px-5 py-5 ${darkMode ? "border-white/10" : "border-black/10"}`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <div className={cx("border-b px-6 py-5", line)}>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[13.5px]">
                         <p>
-                          Pipeline: <b>Material Request</b>{" "}
-                          <span className={muted}> | </span> Stage:{" "}
-                          <b>{selectedMrn.status || "Open"}</b>
+                          <span className={muted}>Pipeline</span> Material request <span className={muted}>· Stage</span> {selectedMrn.status || "Open"}
                         </p>
-                        <span className={`text-xs ${muted}`}>
-                          {progress}% complete
-                        </span>
+                        <span className={cx("text-[12.5px] tabular-nums", muted)}>{progress}% complete</span>
                       </div>
-                      <div
-                        className={`mt-4 flex h-8 overflow-hidden rounded-full text-[10px] font-semibold ${darkMode ? "bg-white/10" : "bg-[#ecece7]"}`}
-                      >
-                        <span className="grid flex-1 place-items-center bg-[#8fe3df] text-black">
-                          Requested
-                        </span>
-                        <span className="grid flex-1 place-items-center bg-[#9ce8e4] text-black">
-                          Assigned
-                        </span>
-                        <span className="grid flex-1 place-items-center bg-[#a7ebe7] text-black">
-                          Quoted
-                        </span>
-                        <span
-                          className={`grid flex-1 place-items-center ${isDelivered ? "bg-[#80dbd6] text-black" : ""}`}
-                        >
-                          Delivered
-                        </span>
+                      <div className={cx("mt-4 grid grid-cols-4 gap-1 rounded-full p-1 text-[12px]", darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]")}>
+                        {MRN_STAGES.map((stage, index) => (
+                          <span
+                            key={stage}
+                            style={index < doneStages ? { backgroundColor: darkMode ? toneOf("mint")[2] : toneOf("mint")[0], color: darkMode ? toneOf("mint")[3] : toneOf("mint")[1] } : undefined}
+                            className={cx("grid h-7 place-items-center rounded-full", index >= doneStages && muted)}
+                          >
+                            {stage}
+                          </span>
+                        ))}
                       </div>
                       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`grid h-9 w-9 place-items-center rounded-full ${progressTone.soft}`}
-                          >
-                            <ProgressIcon className="h-4 w-4" />
-                          </span>
-                          <div>
-                            <p className={`text-xs ${muted}`}>Current status</p>
-                            <p className="text-sm font-semibold">
-                              {progressTone.label}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/5" : "bg-[#f5f5f1]"}`}
-                          >
-                            <Clock3 className="h-4 w-4" />
-                          </span>
-                          <div>
-                            <p className={`text-xs ${muted}`}>Lead time</p>
-                            <p className="text-sm font-semibold">
-                              {selectedMrn.leadTime || "Not specified"}
-                            </p>
-                          </div>
-                        </div>
+                        <ContactRow darkMode={darkMode} icon={ProgressIcon} tone={progressTone.tone} label="Current status">{progressTone.label}</ContactRow>
+                        <ContactRow darkMode={darkMode} icon={Clock3} label="Lead time">{selectedMrn.leadTime || "Not specified"}</ContactRow>
                       </div>
                     </div>
 
-                    <nav
-                      className={`flex gap-6 overflow-x-auto border-b px-5 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}
-                    >
-                      <span className="border-b-2 border-[#4b9b16] py-4 font-bold text-[#4b9b16]">
-                        Activity
+                    <nav className={cx("flex gap-1 overflow-x-auto border-b px-6 py-3 text-[13px]", line)}>
+                      <span className={cx("inline-flex h-8 items-center rounded-full px-3.5", darkMode ? "bg-white/10 text-white" : "bg-[#141414] text-white")}>Activity</span>
+                      <span className={cx("inline-flex h-8 items-center gap-1.5 rounded-full px-3.5", muted)}>
+                        Materials
+                        <span className={cx("rounded-full px-1.5 text-[11px]", darkMode ? "bg-white/10" : "bg-[#f1f1ef]")}>{items.length}</span>
                       </span>
-                      <span className="py-4">
-                        Materials{" "}
-                        <b className="ml-1 rounded-full bg-black/5 px-1.5">
-                          {items.length}
-                        </b>
-                      </span>
-                      <span className="py-4">Files</span>
-                      <span className="py-4">Notes</span>
+                      <span className={cx("inline-flex h-8 items-center rounded-full px-3.5", muted)}>Files</span>
+                      <span className={cx("inline-flex h-8 items-center rounded-full px-3.5", muted)}>Notes</span>
                     </nav>
 
-                    <div className="space-y-8 p-5">
+                    <div className="space-y-8 p-6">
                       <section>
-                        <h3 className="text-lg font-bold">Latest Activity</h3>
-                        <div className="mt-4 space-y-4 text-sm">
+                        <SmallHeading darkMode={darkMode}>Latest activity</SmallHeading>
+                        <div className="mt-4 space-y-4 text-[13.5px]">
                           <div className="flex gap-3">
-                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#89ed3f]">
-                              <CheckCircle2 className="h-4 w-4 text-black" />
-                            </span>
+                            <IconTile icon={CheckCircle2} tone="mint" darkMode={darkMode} size="xs" />
                             <div className="flex min-w-0 flex-1 justify-between gap-4">
                               <div>
-                                <p className="font-semibold">
-                                  Material request created
-                                </p>
-                                <p className={`mt-1 text-xs ${muted}`}>
-                                  Request was submitted by{" "}
-                                  {selectedMrn.issuedBy || "the project team"}.
+                                <p>Material request created</p>
+                                <p className={cx("mt-0.5 text-[12.5px]", muted)}>
+                                  Request was submitted by {selectedMrn.issuedBy || "the project team"}.
                                 </p>
                               </div>
-                              <span className={`shrink-0 text-xs ${muted}`}>
-                                {requestedAt.date}
-                              </span>
+                              <span className={cx("shrink-0 text-[12px]", muted)}>{requestedAt.date}</span>
                             </div>
                           </div>
                           <div className="flex gap-3">
-                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#8fe3df]">
-                              <Clock3 className="h-4 w-4 text-black" />
-                            </span>
+                            <IconTile icon={Clock3} tone={isOverdue ? "rose" : "sky"} darkMode={darkMode} size="xs" />
                             <div className="flex min-w-0 flex-1 justify-between gap-4">
                               <div>
-                                <p className="font-semibold">
-                                  Status: {selectedMrn.status || "Open"}
-                                </p>
-                                <p className={`mt-1 text-xs ${muted}`}>
+                                <p>Status: {selectedMrn.status || "Open"}</p>
+                                <p className={cx("mt-0.5 text-[12.5px]", muted)}>
                                   {isOverdue
                                     ? "Required date has passed and this request needs attention."
                                     : "The request is progressing within its timeline."}
                                 </p>
                               </div>
-                              <span className={`shrink-0 text-xs ${muted}`}>
-                                {requiredAt.date}
-                              </span>
+                              <span className={cx("shrink-0 text-[12px]", muted)}>{requiredAt.date}</span>
                             </div>
                           </div>
                         </div>
                       </section>
 
                       <section>
-                        <h3 className="text-lg font-bold">Request schedule</h3>
-                        <div
-                          className={`mt-4 grid overflow-hidden rounded-xl border sm:grid-cols-[180px_1fr] ${darkMode ? "border-white/10" : "border-black/10"}`}
-                        >
-                          <div
-                            className={`p-4 ${darkMode ? "bg-white/[0.03]" : "bg-[#fafaf7]"}`}
-                          >
-                            <p className="text-xs font-semibold text-[#4b9b16]">
-                              {requestedAt.day || "Requested"}
-                            </p>
-                            <p className="mt-1 text-lg font-bold">
-                              {requestedAt.date}
-                            </p>
-                            <p className={`mt-3 text-xs ${muted}`}>
-                              Required by
-                              <br />
-                              <b>{requiredAt.date}</b>
-                            </p>
+                        <SmallHeading darkMode={darkMode}>Request schedule</SmallHeading>
+                        <div className={cx("mt-4 grid overflow-hidden rounded-[20px] border sm:grid-cols-[190px_1fr]", darkMode ? "border-white/10" : "border-[#ececec]")}>
+                          <div className={cx("p-5", softPanel)}>
+                            <p className={cx("text-[12.5px]", muted)}>{requestedAt.day || "Requested"}</p>
+                            <p className="mt-1 text-[18px] tracking-[-0.01em]">{requestedAt.date}</p>
+                            <p className={cx("mt-4 text-[12.5px]", muted)}>Required by</p>
+                            <p className="text-[14px]">{requiredAt.date}</p>
                           </div>
-                          <div className="p-4">
-                            <p className="font-semibold">
-                              Material required for{" "}
-                              {selectedMrn.project || "project"}
-                            </p>
+                          <div className="p-5">
+                            <p className="text-[14px]">Material required for {selectedMrn.project || "project"}</p>
                             <div className="mt-3 space-y-2">
                               {items.length ? (
                                 items.map((item, index) => (
-                                  <div
-                                    key={`${item}-${index}`}
-                                    className="flex gap-2 text-sm"
-                                  >
-                                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#69c832]" />
+                                  <div key={`${item}-${index}`} className={cx("flex gap-2.5 rounded-[12px] px-3 py-2 text-[13px]", softPanel)}>
+                                    <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#2f7a4f]" />
                                     {item}
                                   </div>
                                 ))
                               ) : (
-                                <p className={`text-sm ${muted}`}>
-                                  No material items added.
-                                </p>
+                                <p className={cx("text-[13px]", muted)}>No material items added.</p>
                               )}
                             </div>
                           </div>
@@ -1534,48 +1170,22 @@ export default function MrnDashboard({ darkMode }) {
                       </section>
 
                       <section>
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-bold">Quotation</h3>
-                          <span className="text-xs font-semibold text-[#4b9b16]">
-                            {selectedMrn.quotationPhoto
-                              ? "File available"
-                              : "No file"}
-                          </span>
-                        </div>
-                        <div
-                          className={`mt-4 grid gap-4 rounded-xl border p-4 sm:grid-cols-[1fr_auto] ${darkMode ? "border-white/10" : "border-black/10"}`}
-                        >
+                        <SmallHeading darkMode={darkMode} aside={<Chip tone={selectedMrn.quotationPhoto ? "mint" : "neutral"} darkMode={darkMode} className="h-6 text-[11.5px]">{selectedMrn.quotationPhoto ? "File available" : "No file"}</Chip>}>Quotation</SmallHeading>
+                        <div className={cx("mt-4 grid gap-4 rounded-[20px] border p-5 sm:grid-cols-[1fr_auto]", darkMode ? "border-white/10" : "border-[#ececec]")}>
                           <div>
-                            <p className="text-sm font-semibold">
-                              #{selectedMrn.mrnNo || "MRN"} ·{" "}
-                              {selectedMrn.project || "Material request"}
-                            </p>
-                            <p className={`mt-3 text-xs ${muted}`}>Vendor</p>
-                            <p className="text-sm font-semibold">
-                              {selectedMrn.vendorName || "Not added"}
-                            </p>
+                            <p className="text-[14px]">#{selectedMrn.mrnNo || "MRN"} - {selectedMrn.project || "Material request"}</p>
+                            <p className={cx("mt-3 text-[12.5px]", muted)}>Vendor</p>
+                            <p className="text-[14px]">{selectedMrn.vendorName || "Not added"}</p>
                           </div>
-                          <div className="min-w-[150px] sm:border-l sm:pl-5">
-                            <p className={`text-xs ${muted}`}>Amount</p>
-                            <p className="text-xl font-bold">
-                              {money(selectedMrn.quotationAmount)}
-                            </p>
-                            <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800">
-                              {selectedMrn.status || "PENDING"}
-                            </span>
+                          <div className={cx("min-w-[150px] sm:border-l sm:pl-5", line)}>
+                            <p className={cx("text-[12.5px]", muted)}>Amount</p>
+                            <p className="text-[22px] tracking-[-0.02em] tabular-nums">{money(selectedMrn.quotationAmount)}</p>
+                            <Chip tone="amber" darkMode={darkMode} className="mt-2 h-6 text-[11.5px]">{selectedMrn.status || "Pending"}</Chip>
                           </div>
                         </div>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <FileButton
-                            darkMode={darkMode}
-                            href={selectedMrn.mrnPhoto}
-                            label="Open MRN file"
-                          />
-                          <FileButton
-                            darkMode={darkMode}
-                            href={selectedMrn.quotationPhoto}
-                            label="Open quotation file"
-                          />
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <FileButton darkMode={darkMode} href={selectedMrn.mrnPhoto} label="Open MRN file" />
+                          <FileButton darkMode={darkMode} href={selectedMrn.quotationPhoto} label="Open quotation file" />
                         </div>
                       </section>
                     </div>
@@ -1584,87 +1194,69 @@ export default function MrnDashboard({ darkMode }) {
 
                 {historyOpen && (
                   <div
-                    className="absolute inset-0 z-20 flex justify-end bg-black/25 backdrop-blur-[1px]"
+                    className="absolute inset-0 z-20 flex justify-end bg-black/15 backdrop-blur-[1px]"
                     onMouseDown={(event) => {
                       if (event.target === event.currentTarget) setHistoryOpen(false);
                     }}
                   >
                     <section
-                      className={`h-full w-full max-w-[520px] overflow-y-auto border-l p-5 shadow-[-18px_0_60px_rgba(0,0,0,0.18)] animate-[mrn-drawer-in_320ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#fbfcf8] text-[#171714]"}`}
+                      style={{ boxShadow: "var(--ui-shadow-pop)" }}
+                      className={cx("m-2 flex h-[calc(100%-16px)] w-full max-w-[520px] flex-col overflow-hidden rounded-[20px] border animate-[mrn-drawer-in_320ms_cubic-bezier(0.22,1,0.36,1)]", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]")}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${muted}`}>
-                            Super Admin
-                          </p>
-                          <h3 className="mt-2 text-2xl font-bold small">
-                            Version history
-                          </h3>
-                          <p className={`mt-1 text-sm ${muted}`}>
-                            {selectedMrn.mrnNo || "MRN"} · tracked changes from now onward.
-                          </p>
+                      <div className={cx("flex items-center justify-between gap-4 border-b px-5 py-4", line)}>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <IconTile icon={History} tone="lavender" darkMode={darkMode} size="sm" />
+                          <div className="min-w-0">
+                            <h3 className="truncate text-[16px] tracking-[-0.01em]">Version history</h3>
+                            <p className={cx("truncate text-[12.5px]", muted)}>{selectedMrn.mrnNo || "MRN"} - tracked changes from now onward</p>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => setHistoryOpen(false)}
-                          className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-white text-black/55 hover:bg-black/[0.04]"}`}
-                        >
+                        <button type="button" onClick={() => setHistoryOpen(false)} aria-label="Close history" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
                           <X className="h-4 w-4" />
                         </button>
                       </div>
 
-                      <div className="mt-5">
+                      <div className="min-h-0 flex-1 overflow-y-auto p-5">
                         {historyLoading ? (
-                          <div className={`rounded-3xl  p-8 text-center ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
-                            <Loader2 className="mx-auto h-5 w-5 animate-spin text-[#4b9b16]" />
-                            <p className={`mt-3 text-sm ${muted}`}>Loading versions…</p>
+                          <div className={cx("rounded-[20px] p-8 text-center", softPanel)}>
+                            <Loader2 className={cx("mx-auto h-5 w-5 animate-spin", muted)} />
+                            <p className={cx("mt-3 text-[13px]", muted)}>Loading versions...</p>
                           </div>
                         ) : mrnHistory.length ? (
                           <div className="space-y-3">
                             {mrnHistory.map((entry) => (
-                              <article
-                                key={entry.id}
-                                className={`rounded-3xl  p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
-                              >
+                              <article key={entry.id} className={cx("rounded-[18px] border p-4", darkMode ? "border-white/10" : "border-[#ececec]")}>
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
-                                    <span className="inline-flex rounded-full bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#3f7d16]">
-                                      Version {entry.version || "-"}
-                                    </span>
-                                    <h4 className="mt-2 text-sm font-bold">
-                                      {entry.action === "added" ? "MRN created" : "MRN updated"}
-                                    </h4>
-                                    <p className={`mt-1 text-xs ${muted}`}>
-                                      By {entry.actor || "System"} · {entry.createdAt ? new Date(entry.createdAt).toLocaleString("en-IN") : "-"}
+                                    <Chip tone="lavender" darkMode={darkMode} className="h-6 text-[11.5px]">Version {entry.version || "-"}</Chip>
+                                    <h4 className="mt-2 text-[14px]">{entry.action === "added" ? "MRN created" : "MRN updated"}</h4>
+                                    <p className={cx("mt-0.5 text-[12px]", muted)}>
+                                      By {entry.actor || "System"} - {entry.createdAt ? new Date(entry.createdAt).toLocaleString("en-IN") : "-"}
                                     </p>
                                   </div>
-                                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${entry.action === "added" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                                    {entry.action || "changed"}
-                                  </span>
+                                  <Chip tone={entry.action === "added" ? "mint" : "amber"} darkMode={darkMode} className="h-6 text-[11.5px]">{entry.action || "changed"}</Chip>
                                 </div>
 
                                 {entry.changes?.length ? (
                                   <div className="mt-4 space-y-2">
                                     {entry.changes.map((change) => (
-                                      <div
-                                        key={`${entry.id}-${change.key}`}
-                                        className={`rounded-2xl p-3 text-xs ${darkMode ? "bg-black/20" : "bg-[#f5f7f2]"}`}
-                                      >
-                                        <p className="">{change.label}</p>
+                                      <div key={`${entry.id}-${change.key}`} className={cx("rounded-[14px] p-3 text-[12.5px]", softPanel)}>
+                                        <p>{change.label}</p>
                                         <div className="mt-2 grid gap-2 sm:grid-cols-2">
                                           <div>
                                             <span className={muted}>Before</span>
-                                            <p className="mt-1 text-sm break-words">{change.before || "Blank"}</p>
+                                            <p className="mt-0.5 break-words text-[13px]">{change.before || "Blank"}</p>
                                           </div>
                                           <div>
                                             <span className={muted}>After</span>
-                                            <p className="mt-1 text-sm break-words text-green-400">{change.after || "Blank"}</p>
+                                            <p className={cx("mt-0.5 break-words text-[13px]", darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]")}>{change.after || "Blank"}</p>
                                           </div>
                                         </div>
                                       </div>
                                     ))}
                                   </div>
                                 ) : (
-                                  <div className={`mt-4 rounded-2xl p-3 text-xs ${darkMode ? "bg-black/20 text-white/55" : "bg-[#f5f7f2] text-black/55"}`}>
+                                  <div className={cx("mt-4 rounded-[14px] p-3 text-[12.5px]", softPanel, muted)}>
                                     Initial saved version. Future edits will show field-by-field changes here.
                                   </div>
                                 )}
@@ -1672,18 +1264,13 @@ export default function MrnDashboard({ darkMode }) {
                             ))}
                           </div>
                         ) : (
-                          <div className={`rounded-3xl  p-6 ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
-                            <p className="text-sm font-semibold">No stored versions yet.</p>
-                            <p className={`mt-2 text-sm leading-6 ${muted}`}>
-                              History tracking is active now. The next MRN add/edit will create a version entry with changed fields.
-                            </p>
-                            <div className={`mt-4 rounded-2xl p-4 text-xs ${darkMode ? "bg-black/20" : "bg-[#f5f7f2]"}`}>
-                              <p className="">Current snapshot</p>
-                              <p className={`mt-1 ${muted}`}>
-                                {selectedMrn.project || "Project not added"} · {selectedMrn.status || "Open"} · {items.length} material item{items.length === 1 ? "" : "s"}
-                              </p>
-                            </div>
-                          </div>
+                          <EmptyState
+                            darkMode={darkMode}
+                            icon={History}
+                            tone="lavender"
+                            title="No stored versions yet"
+                            text={`History tracking is active now. The next MRN add or edit will create a version entry. Current: ${selectedMrn.project || "Project not added"} - ${selectedMrn.status || "Open"} - ${items.length} material item${items.length === 1 ? "" : "s"}.`}
+                          />
                         )}
                       </div>
                     </section>
@@ -1695,247 +1282,74 @@ export default function MrnDashboard({ darkMode }) {
         })()}
 
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
+        <div className="newq fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 animate-[mrn-backdrop-in_280ms_ease-out]" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
           <div
-            className={`max-h-[92vh] w-full max-w-[620px] overflow-y-auto rounded-[22px] border p-3 shadow-[0_26px_90px_rgba(0,0,0,0.24)] ${darkMode ? "border-white/10 bg-[#101116] text-white" : "border-black/[0.08] bg-[#f5f7f2] text-[#171714]"}`}
+            style={{ boxShadow: "var(--ui-shadow-pop)" }}
+            className={cx("ui-pop max-h-[92vh] w-full max-w-[600px] overflow-y-auto rounded-[24px] border p-6", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]")}
           >
-            <div
-              className={`rounded-2xl  p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/[0.07] bg-white"}`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div
-                  className={`flex items-center gap-2 text-xs font-semibold ${muted}`}
-                >
-                  <FileSpreadsheet className="h-3.5 w-3.5" />
-                  Projects / MRN Links
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSettingsOpen(false)}
-                  className={`grid h-9 w-9 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/65 hover:bg-white/10" : "bg-[#f4f6f1] text-black/55 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
+            <div className="flex items-start justify-between gap-3">
+              <Badge icon={Tag} tone="mint" darkMode={darkMode}>MRN setup</Badge>
+              <button type="button" aria-label="Close" onClick={() => setSettingsOpen(false)} className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <SectionTitle darkMode={darkMode} className="mt-4" title="Link workspace sources" subtitle="the sheet and the upload folder" />
 
-              <div className="mt-6">
-                <p
-                  className={`mb-3 flex items-center gap-2 text-sm font-semibold ${muted}`}
-                >
-                  <span className="grid h-7 w-7 place-items-center rounded-full bg-[#eafbdc] text-[#4b9b16]">
-                    <Tag className="h-3.5 w-3.5" />
-                  </span>
-                  MRN Setup
-                </p>
-                <h3 className="text-2xl font-bold small tracking-tight sm:text-3xl">
-                  Link workspace sources
-                </h3>
-              </div>
+            <div className="mt-6 grid gap-5">
+              <label className="grid gap-2">
+                <span className={cx("flex items-center gap-2.5 text-[13px]", muted)}>
+                  <Image src="/gsheet-icon.png" alt="Google Sheets" width={20} height={20} className="h-5 w-5" />
+                  Google Sheet
+                  <Chip tone={sheetLink.trim() || settings.spreadsheetId ? "mint" : "neutral"} darkMode={darkMode} className="h-6 text-[11.5px]">
+                    {sheetLink.trim() || settings.spreadsheetId ? "Connected" : "Required"}
+                  </Chip>
+                </span>
+                <input
+                  value={sheetLink}
+                  onChange={(event) => setSheetLink(event.target.value)}
+                  placeholder={settings.spreadsheetId || "Paste MRN Google Sheet link or ID"}
+                  className={fieldClass(darkMode, { size: "lg" })}
+                />
+              </label>
 
-              <div className="mt-6 grid gap-4">
-                <label className="grid gap-3">
-                  <span
-                    className={`flex items-center gap-3 text-sm font-medium ${muted}`}
-                  >
-                    <Image
-                      src="/gsheet-icon.png"
-                      alt="Google Sheets"
-                      width={22}
-                      height={22}
-                      className="h-[22px] w-[22px]"
-                    />
-                    Google Sheet
-                    <span
-                      className={`rounded-md px-2 py-1 text-[10px] font-bold ${sheetLink.trim() || settings.spreadsheetId ? "bg-[#eafbdc] text-[#4b9b16]" : darkMode ? "bg-white/[0.06] text-white/55" : "bg-black/[0.04] text-black/55"}`}
-                    >
-                      {sheetLink.trim() || settings.spreadsheetId
-                        ? "Connected"
-                        : "Required"}
-                    </span>
-                  </span>
-                  <input
-                    value={sheetLink}
-                    onChange={(event) => setSheetLink(event.target.value)}
-                    placeholder={
-                      settings.spreadsheetId ||
-                      "Paste MRN Google Sheet link or ID"
-                    }
-                    className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:border-[#89ed3f]/60" : "border-black/10 bg-[#fafbf8] text-black placeholder:text-black/35 focus:border-[#69c832] focus:ring-3 focus:ring-[#89ed3f]/10"}`}
-                  />
-                </label>
-
-                <label className="grid gap-3">
-                  <span
-                    className={`flex items-center gap-3 text-sm font-medium ${muted}`}
-                  >
-                    <Image
-                      src="/drive.svg"
-                      alt="Google Drive"
-                      width={22}
-                      height={22}
-                      className="h-[22px] w-[22px]"
-                    />
-                    Drive folder
-                    <span
-                      className={`rounded-md px-2 py-1 text-[10px] font-bold ${folderLink.trim() || settings.driveFolderId ? "bg-[#eafbdc] text-[#4b9b16]" : darkMode ? "bg-white/[0.06] text-white/55" : "bg-black/[0.04] text-black/55"}`}
-                    >
-                      {folderLink.trim() || settings.driveFolderId
-                        ? "Connected"
-                        : "Shared Drive required"}
-                    </span>
-                  </span>
-                  <input
-                    value={folderLink}
-                    onChange={(event) => setFolderLink(event.target.value)}
-                    placeholder={
-                      settings.driveFolderId ||
-                      "Paste Shared Drive folder link or ID"
-                    }
-                    className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:border-[#89ed3f]/60" : "border-black/10 bg-[#fafbf8] text-black placeholder:text-black/35 focus:border-[#69c832] focus:ring-3 focus:ring-[#89ed3f]/10"}`}
-                  />
-                  <span className={`text-xs ${muted}`}>
-                    Uploads require a folder inside a Google Shared Drive shared
-                    with the service account.
-                  </span>
-                </label>
-              </div>
-
-              <div
-                className={`mt-6 border-t pt-4 ${darkMode ? "border-white/10" : "border-black/[0.08]"}`}
-              >
-                <div className="flex items-start gap-3">
-                  <span
-                    className={`mt-0.5 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-[#89ed3f]/12 text-[#89ed3f]" : "bg-[#eafbdc] text-[#4b9b16]"}`}
-                  >
-                    <UserRound className="h-4 w-4" />
-                  </span>
-                  
-                </div>
-              </div>
-
-              <div className={`mt-5 flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/[0.06] bg-[#fafbf8]"}`}>
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className={`h-5 w-5 shrink-0 ${sheetLink.trim() || settings.spreadsheetId ? "text-[#4b9b16]" : muted}`} />
-                  <div>
-                    <p className="text-sm font-bold">Ready to save</p>
-                    <p className={`mt-0.5 text-xs ${muted}`}>Existing MRNs will stay untouched.</p>
-                  </div>
-                </div>
-                <button
-                  disabled={savingSettings || (!sheetLink.trim() && !folderLink.trim())}
-                  onClick={saveSettings}
-                  className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-[#89ed3f] px-6 text-sm font-bold text-black transition hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:bg-black/10 disabled:text-black/35 dark:disabled:bg-white/10 dark:disabled:text-white/30"
-                >
-                  {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save links
-                </button>
-              </div>
+              <label className="grid gap-2">
+                <span className={cx("flex items-center gap-2.5 text-[13px]", muted)}>
+                  <Image src="/drive.svg" alt="Google Drive" width={20} height={20} className="h-5 w-5" />
+                  Drive folder
+                  <Chip tone={folderLink.trim() || settings.driveFolderId ? "mint" : "neutral"} darkMode={darkMode} className="h-6 text-[11.5px]">
+                    {folderLink.trim() || settings.driveFolderId ? "Connected" : "Shared Drive required"}
+                  </Chip>
+                </span>
+                <input
+                  value={folderLink}
+                  onChange={(event) => setFolderLink(event.target.value)}
+                  placeholder={settings.driveFolderId || "Paste Shared Drive folder link or ID"}
+                  className={fieldClass(darkMode, { size: "lg" })}
+                />
+                <span className={cx("text-[12px]", muted)}>
+                  Uploads require a folder inside a Google Shared Drive shared with the service account.
+                </span>
+              </label>
             </div>
 
-            <div className="hidden">
-              <div
-                className={`rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/[0.07] bg-white"}`}
-              >
-                <p className={`text-sm ${muted}`}>MRN</p>
-                <div className="mt-1 flex items-start justify-between gap-3">
-                  <h4 className="text-xl font-bold tracking-tight">
-                    Link Sources
-                  </h4>
-                  <span className="flex -space-x-2">
-                    <span className="grid h-9 w-9 place-items-center rounded-full border-2 border-white bg-[#eaf8e6]">
-                      <Image
-                        src="/gsheet-icon.png"
-                        alt="Google Sheets"
-                        width={21}
-                        height={21}
-                      />
-                    </span>
-                    <span className="grid h-9 w-9 place-items-center rounded-full border-2 border-white bg-[#eef4ff]">
-                      <Image
-                        src="/drive.svg"
-                        alt="Google Drive"
-                        width={21}
-                        height={21}
-                      />
-                    </span>
-                  </span>
+            <div className={cx("mt-6 flex flex-col gap-4 rounded-[16px] p-4 sm:flex-row sm:items-center sm:justify-between", darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]")}>
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className={cx("h-5 w-5 shrink-0", sheetLink.trim() || settings.spreadsheetId ? "text-[#2f7a4f]" : muted)} />
+                <div>
+                  <p className="text-[13.5px]">Ready to save</p>
+                  <p className={cx("text-[12px]", muted)}>Existing MRNs will stay untouched.</p>
                 </div>
               </div>
-
-              <div
-                className={`rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/[0.07] bg-white"}`}
+              <Button
+                darkMode={darkMode}
+                variant="primary"
+                icon={Save}
+                loading={savingSettings}
+                disabled={savingSettings || (!sheetLink.trim() && !folderLink.trim())}
+                onClick={saveSettings}
               >
-                <p className={`mb-4 text-sm font-semibold ${muted}`}>
-                  Integrations
-                </p>
-                <div
-                  className={`flex items-center gap-3 rounded-xl border p-3 ${darkMode ? "border-white/5 bg-white/[0.045]" : "border-black/[0.05] bg-[#fafbf8]"}`}
-                >
-                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-white">
-                    <Image
-                      src="/gsheet-icon.png"
-                      alt="Google Sheets"
-                      width={25}
-                      height={25}
-                    />
-                  </span>
-                  <div>
-                    <p className="font-semibold">Google Sheets</p>
-                    <p className={`text-xs ${muted}`}>Live MRN table</p>
-                  </div>
-                </div>
-                <div
-                  className={`mt-2 flex items-center gap-3 rounded-xl border p-3 ${darkMode ? "border-white/5 bg-white/[0.045]" : "border-black/[0.05] bg-[#fafbf8]"}`}
-                >
-                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-white">
-                    <Image
-                      src="/drive.svg"
-                      alt="Google Drive"
-                      width={25}
-                      height={25}
-                    />
-                  </span>
-                  <div>
-                    <p className="font-semibold">Google Drive</p>
-                    <p className={`text-xs ${muted}`}>MRN file uploads</p>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                className={`rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/[0.07] bg-white"}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className={`text-sm ${muted}`}>Status</p>
-                    <h4 className="mt-1 text-xl font-semibold">
-                      Ready to save
-                    </h4>
-                  </div>
-                  <CheckCircle2
-                    className={`h-6 w-6 ${sheetLink.trim() || settings.spreadsheetId ? "text-[#4b9b16]" : muted}`}
-                  />
-                </div>
-                <p className={`mt-4 text-sm leading-6 ${muted}`}>
-                  Paste or replace links, then save once. Existing MRNs stay
-                  untouched.
-                </p>
-                <button
-                  disabled={
-                    savingSettings || (!sheetLink.trim() && !folderLink.trim())
-                  }
-                  onClick={saveSettings}
-                  className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#89ed3f] text-sm font-bold text-black transition hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:bg-black/10 disabled:text-black/35 dark:disabled:bg-white/10 dark:disabled:text-white/30"
-                >
-                  {savingSettings ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}{" "}
-                  Save links
-                </button>
-              </div>
+                Save links
+              </Button>
             </div>
           </div>
         </div>
@@ -1947,7 +1361,7 @@ export default function MrnDashboard({ darkMode }) {
 
       {addOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]"
+          className="newq fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setAddOpen(false);
@@ -1956,125 +1370,105 @@ export default function MrnDashboard({ darkMode }) {
           }}
         >
           <div
-            className={`mrn-form-drawer absolute inset-y-0 right-0 flex h-full w-full max-w-[940px] flex-col overflow-hidden border-l shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] sm:inset-y-3 sm:right-3 sm:h-[calc(100%-1.5rem)] sm:w-[min(88vw,940px)] sm:rounded-[28px] sm:border ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.08] bg-white text-[#171714]"}`}
+            style={{ boxShadow: "var(--ui-shadow-pop)" }}
+            className={cx("absolute inset-y-0 right-0 flex h-full w-full max-w-[940px] flex-col overflow-hidden border-l animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] sm:inset-y-2.5 sm:right-2.5 sm:h-[calc(100%-20px)] sm:w-[min(88vw,940px)] sm:rounded-[24px] sm:border", darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]")}
           >
-            <div
-              className={`flex items-center justify-between gap-4 border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/[0.08]"}`}
-            >
-              <div className="flex items-center gap-4">
-                <span
-                  className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "bg-[#89ed3f]/15 text-[#89ed3f]" : "bg-[#eafbdc] text-[#4b9b16]"}`}
-                >
-                  <PackageCheck className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#4b9b16]">
-                    Material request
-                  </p>
-                  <h3 className="text-lg small text-black dark:text-white font-bold">
+            <div className={cx("flex items-center justify-between gap-4 border-b px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+              <div className="flex min-w-0 items-center gap-3">
+                <IconTile icon={PackageCheck} tone="lavender" darkMode={darkMode} size="sm" />
+                <div className="min-w-0">
+                  <h3 className="truncate text-[17px] tracking-[-0.01em]">
                     {editingMrn ? `Edit ${editingMrn.mrnNo}` : "Create new MRN"}
                   </h3>
+                  <p className={cx("truncate text-[12.5px]", muted)}>Material request</p>
                 </div>
               </div>
               <button
+                type="button"
+                aria-label="Close"
                 onClick={() => {
                   setAddOpen(false);
                   setEditingMrn(null);
                 }}
-                className="text-sm font-bold text-[#4b9b16]"
+                className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}
               >
-                Close
+                <X className="h-4 w-4" />
               </button>
             </div>
-            <div
-              className={`min-h-0 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}
-            >
-              <div
-                className={`mb-5 rounded-3xl  p-5 ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-black/[0.08] bg-white"}`}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#4b9b16]">
-                      Request overview
-                    </p>
-                    <p className="mt-1 text-lg font-bold">
-                      {form.projectSite || "New material request"}
-                    </p>
-                    <p className={`mt-1 text-xs ${muted}`}>
-                      {editingMrn
-                        ? "Update the linked MRN sheet record."
-                        : "Complete the details below to submit a new request."}
-                    </p>
-                  </div>
-                  <span
-                    className={`rounded-lg px-3 py-2 text-xs font-bold ${daysBetweenDates(form.materialRequestDate, form.requiredDate) < 0 ? "bg-red-500 text-white" : darkMode ? "bg-[#89ed3f]/15 text-[#89ed3f]" : "bg-[#eafbdc] text-[#4b9b16]"}`}
-                  >
-                    {daysBetweenDates(
-                      form.materialRequestDate,
-                      form.requiredDate,
-                    ) === null
-                      ? "Select dates"
-                      : `${daysBetweenDates(form.materialRequestDate, form.requiredDate)} day${Math.abs(daysBetweenDates(form.materialRequestDate, form.requiredDate)) === 1 ? "" : "s"}`}
-                  </span>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <div className={cx("mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[20px] p-5", darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]")}>
+                <div className="min-w-0">
+                  <p className={cx("text-[12.5px]", muted)}>Request overview</p>
+                  <p className="mt-0.5 text-[18px] tracking-[-0.01em]">
+                    {form.projectSite || "New material request"}
+                  </p>
+                  <p className={cx("mt-0.5 text-[12.5px]", muted)}>
+                    {editingMrn
+                      ? "Update the linked MRN sheet record."
+                      : "Complete the details below to submit a new request."}
+                  </p>
                 </div>
+                <Chip
+                  tone={daysBetweenDates(form.materialRequestDate, form.requiredDate) < 0 ? "rose" : "lime"}
+                  darkMode={darkMode}
+                  icon={CalendarDays}
+                >
+                  {daysBetweenDates(
+                    form.materialRequestDate,
+                    form.requiredDate,
+                  ) === null
+                    ? "Select dates"
+                    : `${daysBetweenDates(form.materialRequestDate, form.requiredDate)} day${Math.abs(daysBetweenDates(form.materialRequestDate, form.requiredDate)) === 1 ? "" : "s"}`}
+                </Chip>
               </div>
-              <div
-                className={`grid gap-4 rounded-3xl  p-5 md:grid-cols-2 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}
-              >
-                <label className="block text-sm font-medium md:col-span-2">
-                  Name of Project & Site Address *
+              <div className="grid gap-x-4 gap-y-5 md:grid-cols-2">
+                <label className="block md:col-span-2">
+                  <FormLabel darkMode={darkMode}>Name of project and site address *</FormLabel>
                   <input
                     value={form.projectSite}
                     onChange={(e) =>
                       setForm({ ...form, projectSite: e.target.value })
                     }
                     placeholder="Example: Kalhaar bungalow, Royal Orchid..."
-                    className={`mt-2 h-14 w-full rounded-3xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={fieldClass(darkMode, { size: "lg" })}
                   />
                 </label>
-                <label className="block text-sm font-medium">
-                  Material Request Date *
-                  <span className="mt-2 block">
-                    <DatePicker
-                      darkMode={darkMode}
-                      value={form.materialRequestDate}
-                      onChange={(value) =>
-                        setForm({ ...form, materialRequestDate: value })
-                      }
-                      placeholder="Request date"
-                    />
-                  </span>
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Material request date *</FormLabel>
+                  <DatePicker
+                    darkMode={darkMode}
+                    size="lg"
+                    value={form.materialRequestDate}
+                    onChange={(value) =>
+                      setForm({ ...form, materialRequestDate: value })
+                    }
+                    placeholder="Request date"
+                  />
                 </label>
-                <label className="block text-sm font-medium">
-                  By when Material is Required *
-                  <span className="mt-2 block">
-                    <DatePicker
-                      darkMode={darkMode}
-                      value={form.requiredDate}
-                      onChange={(value) =>
-                        setForm({ ...form, requiredDate: value })
-                      }
-                      placeholder="Required date"
-                    />
-                  </span>
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>By when material is required *</FormLabel>
+                  <DatePicker
+                    darkMode={darkMode}
+                    size="lg"
+                    value={form.requiredDate}
+                    onChange={(value) =>
+                      setForm({ ...form, requiredDate: value })
+                    }
+                    placeholder="Required date"
+                  />
                 </label>
-                <div
-                  className={`md:col-span-2 rounded-xl border p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/[0.08] bg-[#fafbf8]"}`}
-                >
+                <div className={cx("rounded-[20px] border p-5 md:col-span-2", darkMode ? "border-white/10" : "border-[#ececec]")}>
                   <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold">
-                        Material Requirement *
-                      </p>
-                      <p className={`mt-1 text-xs ${muted}`}>
-                        Add one material item at a time.
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <IconTile icon={PackageCheck} tone="peach" darkMode={darkMode} size="sm" />
+                      <div>
+                        <p className="text-[14px]">Material requirement *</p>
+                        <p className={cx("text-[12.5px]", muted)}>Add one material item at a time.</p>
+                      </div>
                     </div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/[0.08] text-white/60" : "bg-[#f1eee8] text-black/45"}`}
-                    >
+                    <Chip tone="neutral" darkMode={darkMode} className="h-6 text-[11.5px]">
                       {materialItems(form.materialRequirement).length} items
-                    </span>
+                    </Chip>
                   </div>
                   <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                     <input
@@ -2087,29 +1481,26 @@ export default function MrnDashboard({ darkMode }) {
                         }
                       }}
                       placeholder="Example: Bricks - 1 cart"
-                      className={`h-14 min-w-0 flex-1 rounded-2xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-[#f7f5ef] text-black placeholder:text-black/35"}`}
+                      className={cx(fieldClass(darkMode, { size: "lg" }), "flex-1")}
                     />
-                    <button
-                      type="button"
-                      onClick={addMaterialLine}
-                      className="h-14 rounded-xl bg-[#89ed3f] px-5 text-sm font-bold text-black hover:bg-[#7dde35]"
-                    >
+                    <Button darkMode={darkMode} variant="primary" size="lg" icon={Plus} onClick={addMaterialLine}>
                       Add item
-                    </button>
+                    </Button>
                   </div>
                   {materialItems(form.materialRequirement).length > 0 && (
-                    <div className="mt-4 grid gap-2">
+                    <div className="mt-3 grid gap-1.5">
                       {materialItems(form.materialRequirement).map(
                         (item, index) => (
                           <div
                             key={`${item}-${index}`}
-                            className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm ${darkMode ? "bg-black/15 text-white/80" : "bg-[#f7f5ef] text-black/75"}`}
+                            className={cx("flex items-center justify-between gap-3 rounded-[14px] py-2 pl-4 pr-2 text-[13.5px]", darkMode ? "bg-white/[0.04] text-white/85" : "bg-[#f7f7f5] text-[#3d3d3b]")}
                           >
                             <span>{item}</span>
                             <button
                               type="button"
+                              aria-label="Remove item"
                               onClick={() => removeMaterialLine(index)}
-                              className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] text-white/60" : "bg-white text-black/45"}`}
+                              className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] text-white/60 hover:bg-white/10" : "bg-white text-[#8a8a8a] hover:text-[#141414]")}
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -2119,30 +1510,30 @@ export default function MrnDashboard({ darkMode }) {
                     </div>
                   )}
                 </div>
-                <label className="block text-sm font-medium">
-                  Issued by
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Issued by</FormLabel>
                   <input
                     value={form.issuedBy}
                     onChange={(e) =>
                       setForm({ ...form, issuedBy: e.target.value })
                     }
                     placeholder="Example: Atul Mevada"
-                    className={`mt-2 h-14 w-full rounded-2xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={fieldClass(darkMode, { size: "lg" })}
                   />
                 </label>
-                <label className="block text-sm font-medium">
-                  Lead Time
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Lead time</FormLabel>
                   <input
                     value={form.leadTime}
                     onChange={(e) =>
                       setForm({ ...form, leadTime: e.target.value })
                     }
                     placeholder="Example: 1 day"
-                    className={`mt-2 h-14 w-full rounded-2xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={fieldClass(darkMode, { size: "lg" })}
                   />
                 </label>
-                <label className="block text-sm font-medium">
-                  Quotation Amount
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Quotation amount</FormLabel>
                   <input
                     type="number"
                     value={form.quotationAmount}
@@ -2150,11 +1541,11 @@ export default function MrnDashboard({ darkMode }) {
                       setForm({ ...form, quotationAmount: e.target.value })
                     }
                     placeholder="Example: 25000"
-                    className={`mt-2 h-14 w-full rounded-2xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={fieldClass(darkMode, { size: "lg" })}
                   />
                 </label>
-                <label className="block text-sm font-medium">
-                  Email address
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Email address</FormLabel>
                   <input
                     type="email"
                     value={form.emailAddress}
@@ -2162,33 +1553,33 @@ export default function MrnDashboard({ darkMode }) {
                       setForm({ ...form, emailAddress: e.target.value })
                     }
                     placeholder="name@example.com"
-                    className={`mt-2 h-14 w-full rounded-2xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={fieldClass(darkMode, { size: "lg" })}
                   />
                 </label>
-                <label className="block text-sm font-medium">
-                  Assign To
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Assign to</FormLabel>
                   <input
                     value={form.assignTo}
                     onChange={(e) =>
                       setForm({ ...form, assignTo: e.target.value })
                     }
                     placeholder="Example: Vivek"
-                    className={`mt-2 h-14 w-full rounded-2xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={fieldClass(darkMode, { size: "lg" })}
                   />
                 </label>
-                <label className="block text-sm font-medium">
-                  Status
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Status</FormLabel>
                   <input
                     value={form.status}
                     onChange={(e) =>
                       setForm({ ...form, status: e.target.value })
                     }
                     placeholder="Example: Open / Delivered"
-                    className={`mt-2 h-14 w-full rounded-2xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={fieldClass(darkMode, { size: "lg" })}
                   />
                 </label>
-                <label className="block text-sm font-medium">
-                  Krishna PRN Status Updated
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Krishna PRN status updated</FormLabel>
                   <input
                     value={form.krishnaPrnStatusUpdated}
                     onChange={(e) =>
@@ -2198,35 +1589,34 @@ export default function MrnDashboard({ darkMode }) {
                       })
                     }
                     placeholder="Example: Updated / Pending"
-                    className={`mt-2 h-14 w-full rounded-2xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={fieldClass(darkMode, { size: "lg" })}
                   />
                 </label>
-                <label className="block text-sm font-medium">
-                  Vendor Name
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Vendor name</FormLabel>
                   <input
                     value={form.vendorName}
                     onChange={(e) =>
                       setForm({ ...form, vendorName: e.target.value })
                     }
                     placeholder="Example: ABC Traders"
-                    className={`mt-2 h-14 w-full rounded-2xl px-4 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={fieldClass(darkMode, { size: "lg" })}
                   />
                 </label>
-                <label className="block text-sm font-medium">
-                  Invoice Date
-                  <span className="mt-2 block">
-                    <DatePicker
-                      darkMode={darkMode}
-                      value={form.invoiceDate}
-                      onChange={(value) =>
-                        setForm({ ...form, invoiceDate: value })
-                      }
-                      placeholder="Invoice date"
-                    />
-                  </span>
+                <label className="block">
+                  <FormLabel darkMode={darkMode}>Invoice date</FormLabel>
+                  <DatePicker
+                    darkMode={darkMode}
+                    size="lg"
+                    value={form.invoiceDate}
+                    onChange={(value) =>
+                      setForm({ ...form, invoiceDate: value })
+                    }
+                    placeholder="Invoice date"
+                  />
                 </label>
-                <label className="block text-sm font-medium md:col-span-2">
-                  Remark
+                <label className="block md:col-span-2">
+                  <FormLabel darkMode={darkMode}>Remark</FormLabel>
                   <textarea
                     value={form.remark}
                     onChange={(e) =>
@@ -2234,19 +1624,17 @@ export default function MrnDashboard({ darkMode }) {
                     }
                     placeholder="Add any purchase, delivery, or vendor note..."
                     rows={3}
-                    className={`mt-2 w-full rounded-2xl px-4 py-3 outline-none ${darkMode ? "bg-white/[0.055] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/35"}`}
+                    className={cx("w-full rounded-[16px] border px-4 py-3 text-[13.5px] outline-none transition", darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:ring-[3px] focus:ring-white/10" : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]")}
                   />
                 </label>
                 <label
-                  className={`block cursor-pointer rounded-2xl border border-dashed p-5 text-sm font-semibold transition ${darkMode ? "border-white/15 bg-white/[0.03]" : "border-[#9abb85] bg-[#f8fcf5] hover:bg-[#f0fae9]"}`}
+                  className={cx("block cursor-pointer rounded-[20px] border border-dashed p-4 transition-colors", darkMode ? "border-white/15 hover:bg-white/[0.03]" : "border-[#dcdcd8] hover:bg-[#fafaf9]")}
                 >
                   <span className="flex items-center gap-3">
-                    <span className="grid h-10 w-10 place-items-center rounded-full bg-[#eafbdc] text-[#4b9b16]">
-                      <Upload className="h-4 w-4" />
-                    </span>
-                    <span>
-                      <span className="block">Upload MRN file</span>
-                      <span className={`text-xs font-normal ${muted}`}>
+                    <IconTile icon={Upload} tone="sky" darkMode={darkMode} size="md" />
+                    <span className="min-w-0">
+                      <span className="block text-[14px]">Upload MRN file</span>
+                      <span className={cx("block truncate text-[12.5px]", muted)}>
                         {form.mrnPhoto?.name ||
                           (editingMrn?.mrnPhoto
                             ? "Existing file will be kept"
@@ -2266,15 +1654,13 @@ export default function MrnDashboard({ darkMode }) {
                   />
                 </label>
                 <label
-                  className={`block cursor-pointer rounded-2xl border border-dashed p-5 text-sm font-semibold transition ${darkMode ? "border-white/15 bg-white/[0.03]" : "border-[#9abb85] bg-[#f8fcf5] hover:bg-[#f0fae9]"}`}
+                  className={cx("block cursor-pointer rounded-[20px] border border-dashed p-4 transition-colors", darkMode ? "border-white/15 hover:bg-white/[0.03]" : "border-[#dcdcd8] hover:bg-[#fafaf9]")}
                 >
                   <span className="flex items-center gap-3">
-                    <span className="grid h-10 w-10 place-items-center rounded-full bg-[#eafbdc] text-[#4b9b16]">
-                      <FileSpreadsheet className="h-4 w-4" />
-                    </span>
-                    <span>
-                      <span className="block">Upload quotation</span>
-                      <span className={`text-xs font-normal ${muted}`}>
+                    <IconTile icon={FileSpreadsheet} tone="amber" darkMode={darkMode} size="md" />
+                    <span className="min-w-0">
+                      <span className="block text-[14px]">Upload quotation</span>
+                      <span className={cx("block truncate text-[12.5px]", muted)}>
                         {form.quotationPhoto?.name ||
                           (editingMrn?.quotationPhoto
                             ? "Existing file will be kept"
@@ -2295,34 +1681,25 @@ export default function MrnDashboard({ darkMode }) {
                 </label>
               </div>
             </div>
-            <div
-              className={`flex justify-end gap-2 border-t p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}
-            >
-              <button
+            <div className={cx("flex justify-end gap-2 border-t px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+              <Button
+                darkMode={darkMode}
+                variant="secondary"
                 onClick={() => {
                   setAddOpen(false);
                   setEditingMrn(null);
                 }}
-                className={`h-11 rounded-full border px-5 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}
               >
                 Cancel
-              </button>
-              <button
-                disabled={saving}
-                onClick={saveMrn}
-                className="flex h-11 items-center gap-2 rounded-full bg-[#89ed3f] px-6 text-sm font-bold text-black hover:bg-[#7dde35] disabled:opacity-50"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}{" "}
+              </Button>
+              <Button darkMode={darkMode} variant="primary" icon={Save} loading={saving} disabled={saving} onClick={saveMrn}>
                 {editingMrn ? "Update MRN" : "Save MRN"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
+
     </main>
   );
 }

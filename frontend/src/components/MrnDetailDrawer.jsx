@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  AtSign,
   CheckCircle2,
   Clock3,
   ExternalLink,
@@ -11,11 +12,14 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  PackageCheck,
   Pencil,
+  Store,
   UserRound,
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { Badge, Button, Chip, EmptyState, IconTile, cx, toneOf } from "./ui";
 
 function money(value) {
   const amount = Number(String(value || "").replace(/,/g, "")) || 0;
@@ -131,7 +135,7 @@ function FileButton({ darkMode, href, label }) {
   if (!validHref) {
     return (
       <span
-        className={`flex h-12 items-center justify-center rounded-2xl text-sm ${darkMode ? "bg-white/[0.035] text-white/35" : "bg-white text-black/35"}`}
+        className={cx("flex h-11 items-center justify-center rounded-full text-[13px]", darkMode ? "bg-white/[0.04] text-white/35" : "bg-[#f4f4f2] text-[#a3a3a0]")}
       >
         {label} not added
       </span>
@@ -142,11 +146,35 @@ function FileButton({ darkMode, href, label }) {
       href={validHref}
       target="_blank"
       rel="noreferrer"
-      className={`flex h-12 items-center justify-center gap-2 rounded-2xl text-sm font-medium transition ${darkMode ? "bg-[#d8f36a] text-black hover:bg-[#cdea5e]" : "bg-[#171714] text-white hover:bg-black/80"}`}
+      className={cx("flex h-11 items-center justify-center gap-2 rounded-full text-[13px] transition-colors", darkMode ? "bg-white text-black hover:bg-white/90" : "bg-[#141414] text-white hover:bg-black")}
     >
       {label}
       <ExternalLink className="h-4 w-4" />
     </a>
+  );
+}
+
+const MRN_STAGES = ["Requested", "Assigned", "Quoted", "Delivered"];
+
+// Shared look for the detail drawer pieces (also used by MrnDashboard's inline drawer markup).
+function SmallHeading({ darkMode, children, aside }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <h3 className={cx("text-[15px] tracking-[-0.01em]", darkMode ? "text-white" : "text-[#141414]")}>{children}</h3>
+      {aside}
+    </div>
+  );
+}
+
+function ContactRow({ darkMode, icon, tone = "neutral", label, children }) {
+  return (
+    <div className="flex items-center gap-3">
+      <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+      <div className="min-w-0">
+        <p className={cx("text-[12px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{label}</p>
+        <div className="truncate text-[13.5px]">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -165,7 +193,7 @@ export default function MrnDetailDrawer({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const nowMs = useMemo(() => Date.now(), [row?.id, row?.mrnNo]);
-  const muted = darkMode ? "text-white/45" : "text-black/48";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
 
   useEffect(() => {
     setClosing(false);
@@ -230,7 +258,7 @@ export default function MrnDetailDrawer({
         soft: darkMode
           ? "bg-emerald-400/10 text-emerald-200"
           : "bg-emerald-50 text-emerald-700",
-        label: "Delivered in time",
+        label: "Delivered in time", tone: "mint",
         icon: CheckCircle2,
       }
     : isOverdue
@@ -238,315 +266,197 @@ export default function MrnDetailDrawer({
           bar: "bg-red-500",
           text: "text-red-600",
           soft: darkMode ? "bg-red-400/10 text-red-200" : "bg-red-50 text-red-700",
-          label: "Delayed",
+          label: "Delayed", tone: "rose",
           icon: AlertTriangle,
         }
       : {
           bar: "bg-[#27a8f2]",
           text: "text-[#168bd0]",
           soft: darkMode ? "bg-blue-400/10 text-blue-200" : "bg-blue-50 text-blue-700",
-          label: "On track",
+          label: "On track", tone: "sky",
           icon: Clock3,
         };
   const ProgressIcon = progressTone.icon;
   const items = materialItems(row.materialRequirement);
 
+  const line = darkMode ? "border-white/10" : "border-[#f0f0ee]";
+  const softPanel = darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]";
+  const doneStages = isDelivered ? 4 : 3;
+
   return (
     <div
-      className={`fixed inset-0 z-[120] bg-black/40 backdrop-blur-[2px] ${closing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
+      className={`newq fixed inset-0 z-[120] bg-black/20 backdrop-blur-[2px] ${closing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) requestClose();
       }}
       role="presentation"
     >
       <aside
-        className={`mrn-detail-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${expanded ? "mrn-detail-shell-expanded" : ""} ${closing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}
+        style={{ boxShadow: "var(--ui-shadow-pop)" }}
+        className={`mrn-detail-shell absolute flex flex-col overflow-hidden border ${expanded ? "mrn-detail-shell-expanded" : ""} ${closing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}
         role="dialog"
         aria-modal="true"
         aria-label={`${row.mrnNo || "MRN"} details`}
       >
-        <header
-          className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}
-        >
-          <span>
-            <b>{row.mrnNo || "MRN"}</b> - Material request details
-          </span>
-          <div className="flex items-center gap-2">
+        <header className={cx("flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-6 py-3.5", line)}>
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={PackageCheck} tone="lavender" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h2 className="truncate text-[17px] tracking-[-0.01em]">{row.mrnNo || "MRN"}</h2>
+              <p className={cx("truncate text-[12.5px]", muted)}>Material request details</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             {canViewHistory && onLoadHistory && (
-              <button
-                onClick={openHistory}
-                className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f7ef] text-[#3f7d16] hover:bg-[#eafbdc]"}`}
-              >
-                <History className="h-3.5 w-3.5" />
-                Version History
-              </button>
+              <Button darkMode={darkMode} variant="soft" size="sm" icon={History} onClick={openHistory}>Version history</Button>
             )}
-            <button
-              onClick={() => printMrnDetail(row)}
-              className="flex h-8 items-center gap-1.5 rounded-full bg-red-500 px-3 font-semibold text-white shadow-[0_10px_24px_rgba(239,68,68,0.22)] transition hover:bg-red-600"
-            >
-              <FileText className="h-3.5 w-3.5" />
-              Print PDF
-            </button>
-            <button
-              onClick={() => setExpanded((current) => !current)}
-              className={`flex h-8 items-center gap-1.5 rounded-full px-3 font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#eafbdc] text-[#3f7d16] hover:bg-[#ddf8c9]"}`}
-            >
-              {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            <Button darkMode={darkMode} variant="secondary" size="sm" icon={FileText} onClick={() => printMrnDetail(row)}>Print PDF</Button>
+            <Button darkMode={darkMode} variant="soft" size="sm" icon={expanded ? Minimize2 : Maximize2} onClick={() => setExpanded((current) => !current)}>
               {expanded ? "Restore" : "Expand"}
-            </button>
-            <button
-              onClick={requestClose}
-              className="px-1 font-semibold text-[#3f7d16]"
-            >
-              Close
+            </Button>
+            <button type="button" onClick={requestClose} aria-label="Close" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
+              <X className="h-4 w-4" />
             </button>
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 md:grid-cols-[270px_minmax(0,1fr)]">
-          <aside
-            className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0 md:border-r ${darkMode ? "border-white/10" : "border-black/10"}`}
-          >
-            <div className="flex gap-2">
-              <span className="rounded bg-pink-100 px-2 py-1 text-[10px] font-bold text-pink-800">
-                MATERIAL
-              </span>
-              <span className="rounded bg-black/5 px-2 py-1 text-[10px] font-bold">
-                REQUEST
-              </span>
-            </div>
-            <p className={`mt-4 text-xs ${muted}`}>Request #{row.mrnNo || "-"}</p>
-            <h2 className="mt-1 text-2xl font-bold small dark:text-white text-black">
+        <div className="grid min-h-0 flex-1 md:grid-cols-[290px_minmax(0,1fr)]">
+          <aside className={cx("min-h-0 overflow-y-auto border-b p-6 md:border-b-0 md:border-r", line)}>
+            <Badge icon={PackageCheck} tone="peach" darkMode={darkMode}>Material request</Badge>
+            <p className={cx("mt-4 text-[12.5px]", muted)}>Request #{row.mrnNo || "-"}</p>
+            <h2 className="mt-1 text-[24px] leading-tight tracking-[-0.02em]">
               {row.project || "Project / site not added"}
             </h2>
-            <p className={`mt-2 text-xs leading-5 ${muted}`}>
+            <p className={cx("mt-2 text-[13px] leading-5", muted)}>
               {row.remark || "Material requirement and purchase tracking"}
             </p>
 
-            <div className="mt-5 flex gap-2">
-              {canEdit && onEdit && (
-                <button
-                  onClick={() => {
-                    requestClose();
-                    window.setTimeout(() => onEdit(row), 290);
-                  }}
-                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#89ed3f] text-sm font-semibold text-black"
-                >
-                  <Pencil className="h-4 w-4" /> Edit MRN
-                </button>
-              )}
-            </div>
+            {canEdit && onEdit && (
+              <Button
+                darkMode={darkMode}
+                variant="primary"
+                icon={Pencil}
+                className="mt-5 w-full"
+                onClick={() => {
+                  requestClose();
+                  window.setTimeout(() => onEdit(row), 290);
+                }}
+              >
+                Edit MRN
+              </Button>
+            )}
 
-            <div
-              className={`mt-5 rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f5f1]"}`}
-            >
-              <p className={`text-xs ${muted}`}>Quotation amount</p>
-              <div className="mt-1 flex items-end justify-between">
-                <strong className="text-2xl">{money(row.quotationAmount)}</strong>
-                <span className={`text-xs font-semibold ${progressTone.text}`}>
-                  {row.status || "Open"}
-                </span>
+            <div style={{ backgroundColor: darkMode ? toneOf("amber")[2] : toneOf("amber")[0] }} className="mt-5 rounded-[20px] p-4">
+              <p className={cx("text-[12.5px]", darkMode ? "text-white/55" : "text-[#6b6b6b]")}>Quotation amount</p>
+              <div className="mt-1.5 flex items-end justify-between gap-2">
+                <span className="text-[26px] leading-none tracking-[-0.03em] tabular-nums">{money(row.quotationAmount)}</span>
+                <Chip tone={progressTone.tone} darkMode={darkMode} className="h-6 text-[11.5px]">{row.status || "Open"}</Chip>
               </div>
             </div>
 
-            <h3
-              className={`mt-6 border-b pb-3 text-sm font-bold ${darkMode ? "border-white/10" : "border-black/10"}`}
-            >
-              Contact Details
-            </h3>
-            <div className="mt-4 space-y-4 text-sm">
-              <div className="flex gap-3">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-pink-100 text-xs font-bold text-pink-800">
-                  {(row.issuedBy || "MR").slice(0, 2).toUpperCase()}
-                </span>
-                <div>
-                  <p className={`text-[11px] ${muted}`}>Issued by</p>
-                  <p className="font-semibold">{row.issuedBy || "-"}</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <span
-                  className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/5" : "bg-[#f4f4ef]"}`}
-                >
-                  @
-                </span>
-                <div className="min-w-0">
-                  <p className={`text-[11px] ${muted}`}>Email Address</p>
-                  <p className="break-all text-xs font-semibold">
-                    {row.emailAddress || "Not added"}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <span
-                  className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/5" : "bg-[#f4f4ef]"}`}
-                >
-                  <UserRound className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className={`text-[11px] ${muted}`}>Assigned to</p>
-                  <p className="font-semibold">{row.assignTo || "Not assigned"}</p>
-                </div>
-              </div>
+            <div className="mt-6"><SmallHeading darkMode={darkMode}>Contact details</SmallHeading></div>
+            <div className="mt-3 space-y-3">
+              <ContactRow darkMode={darkMode} icon={<span className="text-[12px]">{(row.issuedBy || "MR").slice(0, 2).toUpperCase()}</span>} tone="rose" label="Issued by">{row.issuedBy || "-"}</ContactRow>
+              <ContactRow darkMode={darkMode} icon={AtSign} label="Email address"><span className="break-all whitespace-normal text-[12.5px]">{row.emailAddress || "Not added"}</span></ContactRow>
+              <ContactRow darkMode={darkMode} icon={UserRound} label="Assigned to">{row.assignTo || "Not assigned"}</ContactRow>
             </div>
-            <h3
-              className={`mt-6 border-b pb-3 text-sm font-bold ${darkMode ? "border-white/10" : "border-black/10"}`}
-            >
-              Vendor
-            </h3>
-            <p className="mt-4 text-sm font-semibold">
-              {row.vendorName || "Not added"}
-            </p>
-            <p className={`mt-8 text-[11px] ${muted}`}>
+            <div className="mt-6"><SmallHeading darkMode={darkMode}>Vendor</SmallHeading></div>
+            <div className="mt-3"><ContactRow darkMode={darkMode} icon={Store} tone="sky" label="Vendor name">{row.vendorName || "Not added"}</ContactRow></div>
+            <p className={cx("mt-8 text-[12px]", muted)}>
               Last edited {editedAt.date}
               {editedAt.time ? ` at ${editedAt.time}` : ""}
             </p>
           </aside>
 
           <section className="min-h-0 overflow-y-auto">
-            <div
-              className={`border-b px-5 py-5 ${darkMode ? "border-white/10" : "border-black/10"}`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <div className={cx("border-b px-6 py-5", line)}>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[13.5px]">
                 <p>
-                  Pipeline: <b>Material Request</b>{" "}
-                  <span className={muted}> | </span> Stage:{" "}
-                  <b>{row.status || "Open"}</b>
+                  <span className={muted}>Pipeline</span> Material request <span className={muted}>· Stage</span> {row.status || "Open"}
                 </p>
-                <span className={`text-xs ${muted}`}>{progress}% complete</span>
+                <span className={cx("text-[12.5px] tabular-nums", muted)}>{progress}% complete</span>
               </div>
-              <div
-                className={`mt-4 flex h-8 overflow-hidden rounded-full text-[10px] font-semibold ${darkMode ? "bg-white/10" : "bg-[#ecece7]"}`}
-              >
-                <span className="grid flex-1 place-items-center bg-[#8fe3df] text-black">
-                  Requested
-                </span>
-                <span className="grid flex-1 place-items-center bg-[#9ce8e4] text-black">
-                  Assigned
-                </span>
-                <span className="grid flex-1 place-items-center bg-[#a7ebe7] text-black">
-                  Quoted
-                </span>
-                <span
-                  className={`grid flex-1 place-items-center ${isDelivered ? "bg-[#80dbd6] text-black" : ""}`}
-                >
-                  Delivered
-                </span>
+              <div className={cx("mt-4 grid grid-cols-4 gap-1 rounded-full p-1 text-[12px]", darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]")}>
+                {MRN_STAGES.map((stage, index) => (
+                  <span
+                    key={stage}
+                    style={index < doneStages ? { backgroundColor: darkMode ? toneOf("mint")[2] : toneOf("mint")[0], color: darkMode ? toneOf("mint")[3] : toneOf("mint")[1] } : undefined}
+                    className={cx("grid h-7 place-items-center rounded-full", index >= doneStages && muted)}
+                  >
+                    {stage}
+                  </span>
+                ))}
               </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <div className="flex items-center gap-3">
-                  <span className={`grid h-9 w-9 place-items-center rounded-full ${progressTone.soft}`}>
-                    <ProgressIcon className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className={`text-xs ${muted}`}>Current status</p>
-                    <p className="text-sm font-semibold">{progressTone.label}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/5" : "bg-[#f5f5f1]"}`}
-                  >
-                    <Clock3 className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className={`text-xs ${muted}`}>Lead time</p>
-                    <p className="text-sm font-semibold">
-                      {row.leadTime || "Not specified"}
-                    </p>
-                  </div>
-                </div>
+                <ContactRow darkMode={darkMode} icon={ProgressIcon} tone={progressTone.tone} label="Current status">{progressTone.label}</ContactRow>
+                <ContactRow darkMode={darkMode} icon={Clock3} label="Lead time">{row.leadTime || "Not specified"}</ContactRow>
               </div>
             </div>
 
-            <nav
-              className={`flex gap-6 overflow-x-auto border-b px-5 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}
-            >
-              <span className="border-b-2 border-[#4b9b16] py-4 font-bold text-[#4b9b16]">
-                Activity
+            <nav className={cx("flex gap-1 overflow-x-auto border-b px-6 py-3 text-[13px]", line)}>
+              <span className={cx("inline-flex h-8 items-center rounded-full px-3.5", darkMode ? "bg-white/10 text-white" : "bg-[#141414] text-white")}>Activity</span>
+              <span className={cx("inline-flex h-8 items-center gap-1.5 rounded-full px-3.5", muted)}>
+                Materials
+                <span className={cx("rounded-full px-1.5 text-[11px]", darkMode ? "bg-white/10" : "bg-[#f1f1ef]")}>{items.length}</span>
               </span>
-              <span className="py-4">
-                Materials{" "}
-                <b className="ml-1 rounded-full bg-black/5 px-1.5">
-                  {items.length}
-                </b>
-              </span>
-              <span className="py-4">Files</span>
-              <span className="py-4">Notes</span>
+              <span className={cx("inline-flex h-8 items-center rounded-full px-3.5", muted)}>Files</span>
+              <span className={cx("inline-flex h-8 items-center rounded-full px-3.5", muted)}>Notes</span>
             </nav>
 
-            <div className="space-y-8 p-5">
+            <div className="space-y-8 p-6">
               <section>
-                <h3 className="text-lg font-bold">Latest Activity</h3>
-                <div className="mt-4 space-y-4 text-sm">
+                <SmallHeading darkMode={darkMode}>Latest activity</SmallHeading>
+                <div className="mt-4 space-y-4 text-[13.5px]">
                   <div className="flex gap-3">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#89ed3f]">
-                      <CheckCircle2 className="h-4 w-4 text-black" />
-                    </span>
+                    <IconTile icon={CheckCircle2} tone="mint" darkMode={darkMode} size="xs" />
                     <div className="flex min-w-0 flex-1 justify-between gap-4">
                       <div>
-                        <p className="font-semibold">Material request created</p>
-                        <p className={`mt-1 text-xs ${muted}`}>
+                        <p>Material request created</p>
+                        <p className={cx("mt-0.5 text-[12.5px]", muted)}>
                           Request was submitted by {row.issuedBy || "the project team"}.
                         </p>
                       </div>
-                      <span className={`shrink-0 text-xs ${muted}`}>
-                        {requestedAt.date}
-                      </span>
+                      <span className={cx("shrink-0 text-[12px]", muted)}>{requestedAt.date}</span>
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#8fe3df]">
-                      <Clock3 className="h-4 w-4 text-black" />
-                    </span>
+                    <IconTile icon={Clock3} tone={isOverdue ? "rose" : "sky"} darkMode={darkMode} size="xs" />
                     <div className="flex min-w-0 flex-1 justify-between gap-4">
                       <div>
-                        <p className="font-semibold">Status: {row.status || "Open"}</p>
-                        <p className={`mt-1 text-xs ${muted}`}>
+                        <p>Status: {row.status || "Open"}</p>
+                        <p className={cx("mt-0.5 text-[12.5px]", muted)}>
                           {isOverdue
                             ? "Required date has passed and this request needs attention."
                             : "The request is progressing within its timeline."}
                         </p>
                       </div>
-                      <span className={`shrink-0 text-xs ${muted}`}>
-                        {requiredAt.date}
-                      </span>
+                      <span className={cx("shrink-0 text-[12px]", muted)}>{requiredAt.date}</span>
                     </div>
                   </div>
                 </div>
               </section>
 
               <section>
-                <h3 className="text-lg font-bold">Request schedule</h3>
-                <div
-                  className={`mt-4 grid overflow-hidden rounded-xl border sm:grid-cols-[180px_1fr] ${darkMode ? "border-white/10" : "border-black/10"}`}
-                >
-                  <div className={`p-4 ${darkMode ? "bg-white/[0.03]" : "bg-[#fafaf7]"}`}>
-                    <p className="text-xs font-semibold text-[#4b9b16]">
-                      {requestedAt.day || "Requested"}
-                    </p>
-                    <p className="mt-1 text-lg font-bold">{requestedAt.date}</p>
-                    <p className={`mt-3 text-xs ${muted}`}>
-                      Required by
-                      <br />
-                      <b>{requiredAt.date}</b>
-                    </p>
+                <SmallHeading darkMode={darkMode}>Request schedule</SmallHeading>
+                <div className={cx("mt-4 grid overflow-hidden rounded-[20px] border sm:grid-cols-[190px_1fr]", darkMode ? "border-white/10" : "border-[#ececec]")}>
+                  <div className={cx("p-5", softPanel)}>
+                    <p className={cx("text-[12.5px]", muted)}>{requestedAt.day || "Requested"}</p>
+                    <p className="mt-1 text-[18px] tracking-[-0.01em]">{requestedAt.date}</p>
+                    <p className={cx("mt-4 text-[12.5px]", muted)}>Required by</p>
+                    <p className="text-[14px]">{requiredAt.date}</p>
                   </div>
-                  <div className="p-4">
-                    <p className="font-semibold">
-                      Material required for {row.project || "project"}
-                    </p>
+                  <div className="p-5">
+                    <p className="text-[14px]">Material required for {row.project || "project"}</p>
                     <div className="mt-3 space-y-2">
                       {items.length ? (
                         items.map((item, index) => (
-                          <div key={`${item}-${index}`} className="flex gap-2 text-sm">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#69c832]" />
+                          <div key={`${item}-${index}`} className={cx("flex gap-2.5 rounded-[12px] px-3 py-2 text-[13px]", softPanel)}>
+                            <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#2f7a4f]" />
                             {item}
                           </div>
                         ))
                       ) : (
-                        <p className={`text-sm ${muted}`}>No material items added.</p>
+                        <p className={cx("text-[13px]", muted)}>No material items added.</p>
                       )}
                     </div>
                   </div>
@@ -554,33 +464,20 @@ export default function MrnDetailDrawer({
               </section>
 
               <section>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold">Quotation</h3>
-                  <span className="text-xs font-semibold text-[#4b9b16]">
-                    {row.quotationPhoto ? "File available" : "No file"}
-                  </span>
-                </div>
-                <div
-                  className={`mt-4 grid gap-4 rounded-xl border p-4 sm:grid-cols-[1fr_auto] ${darkMode ? "border-white/10" : "border-black/10"}`}
-                >
+                <SmallHeading darkMode={darkMode} aside={<Chip tone={row.quotationPhoto ? "mint" : "neutral"} darkMode={darkMode} className="h-6 text-[11.5px]">{row.quotationPhoto ? "File available" : "No file"}</Chip>}>Quotation</SmallHeading>
+                <div className={cx("mt-4 grid gap-4 rounded-[20px] border p-5 sm:grid-cols-[1fr_auto]", darkMode ? "border-white/10" : "border-[#ececec]")}>
                   <div>
-                    <p className="text-sm font-semibold">
-                      #{row.mrnNo || "MRN"} - {row.project || "Material request"}
-                    </p>
-                    <p className={`mt-3 text-xs ${muted}`}>Vendor</p>
-                    <p className="text-sm font-semibold">
-                      {row.vendorName || "Not added"}
-                    </p>
+                    <p className="text-[14px]">#{row.mrnNo || "MRN"} - {row.project || "Material request"}</p>
+                    <p className={cx("mt-3 text-[12.5px]", muted)}>Vendor</p>
+                    <p className="text-[14px]">{row.vendorName || "Not added"}</p>
                   </div>
-                  <div className="min-w-[150px] sm:border-l sm:pl-5">
-                    <p className={`text-xs ${muted}`}>Amount</p>
-                    <p className="text-xl font-bold">{money(row.quotationAmount)}</p>
-                    <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800">
-                      {row.status || "PENDING"}
-                    </span>
+                  <div className={cx("min-w-[150px] sm:border-l sm:pl-5", line)}>
+                    <p className={cx("text-[12.5px]", muted)}>Amount</p>
+                    <p className="text-[22px] tracking-[-0.02em] tabular-nums">{money(row.quotationAmount)}</p>
+                    <Chip tone="amber" darkMode={darkMode} className="mt-2 h-6 text-[11.5px]">{row.status || "Pending"}</Chip>
                   </div>
                 </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <FileButton darkMode={darkMode} href={row.mrnPhoto} label="Open MRN file" />
                   <FileButton darkMode={darkMode} href={row.quotationPhoto} label="Open quotation file" />
                 </div>
@@ -591,89 +488,69 @@ export default function MrnDetailDrawer({
 
         {historyOpen && (
           <div
-            className="absolute inset-0 z-20 flex justify-end bg-black/25 backdrop-blur-[1px]"
+            className="absolute inset-0 z-20 flex justify-end bg-black/15 backdrop-blur-[1px]"
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) setHistoryOpen(false);
             }}
           >
             <section
-              className={`h-full w-full max-w-[520px] overflow-y-auto border-l p-5 shadow-[-18px_0_60px_rgba(0,0,0,0.18)] animate-[mrn-drawer-in_320ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#fbfcf8] text-[#171714]"}`}
+              style={{ boxShadow: "var(--ui-shadow-pop)" }}
+              className={cx("m-2 flex h-[calc(100%-16px)] w-full max-w-[520px] flex-col overflow-hidden rounded-[20px] border animate-[mrn-drawer-in_320ms_cubic-bezier(0.22,1,0.36,1)]", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]")}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${muted}`}>
-                    Super Admin
-                  </p>
-                  <h3 className="mt-2 text-2xl font-bold small">Version history</h3>
-                  <p className={`mt-1 text-sm ${muted}`}>
-                    {row.mrnNo || "MRN"} - tracked changes from now onward.
-                  </p>
+              <div className={cx("flex items-center justify-between gap-4 border-b px-5 py-4", line)}>
+                <div className="flex min-w-0 items-center gap-3">
+                  <IconTile icon={History} tone="lavender" darkMode={darkMode} size="sm" />
+                  <div className="min-w-0">
+                    <h3 className="truncate text-[16px] tracking-[-0.01em]">Version history</h3>
+                    <p className={cx("truncate text-[12.5px]", muted)}>{row.mrnNo || "MRN"} - tracked changes from now onward</p>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setHistoryOpen(false)}
-                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-white text-black/55 hover:bg-black/[0.04]"}`}
-                >
+                <button type="button" onClick={() => setHistoryOpen(false)} aria-label="Close history" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="mt-5">
+              <div className="min-h-0 flex-1 overflow-y-auto p-5">
                 {historyLoading ? (
-                  <div className={`rounded-3xl p-8 text-center ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-[#4b9b16]" />
-                    <p className={`mt-3 text-sm ${muted}`}>Loading versions...</p>
+                  <div className={cx("rounded-[20px] p-8 text-center", softPanel)}>
+                    <Loader2 className={cx("mx-auto h-5 w-5 animate-spin", muted)} />
+                    <p className={cx("mt-3 text-[13px]", muted)}>Loading versions...</p>
                   </div>
                 ) : history.length ? (
                   <div className="space-y-3">
                     {history.map((entry) => (
-                      <article
-                        key={entry.id}
-                        className={`rounded-3xl p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
-                      >
+                      <article key={entry.id} className={cx("rounded-[18px] border p-4", darkMode ? "border-white/10" : "border-[#ececec]")}>
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <span className="inline-flex rounded-full bg-[#eafbdc] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#3f7d16]">
-                              Version {entry.version || "-"}
-                            </span>
-                            <h4 className="mt-2 text-sm font-bold">
-                              {entry.action === "added" ? "MRN created" : "MRN updated"}
-                            </h4>
-                            <p className={`mt-1 text-xs ${muted}`}>
+                            <Chip tone="lavender" darkMode={darkMode} className="h-6 text-[11.5px]">Version {entry.version || "-"}</Chip>
+                            <h4 className="mt-2 text-[14px]">{entry.action === "added" ? "MRN created" : "MRN updated"}</h4>
+                            <p className={cx("mt-0.5 text-[12px]", muted)}>
                               By {entry.actor || "System"} - {entry.createdAt ? new Date(entry.createdAt).toLocaleString("en-IN") : "-"}
                             </p>
                           </div>
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${entry.action === "added" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                            {entry.action || "changed"}
-                          </span>
+                          <Chip tone={entry.action === "added" ? "mint" : "amber"} darkMode={darkMode} className="h-6 text-[11.5px]">{entry.action || "changed"}</Chip>
                         </div>
 
                         {entry.changes?.length ? (
                           <div className="mt-4 space-y-2">
                             {entry.changes.map((change) => (
-                              <div
-                                key={`${entry.id}-${change.key}`}
-                                className={`rounded-2xl p-3 text-xs ${darkMode ? "bg-black/20" : "bg-[#f5f7f2]"}`}
-                              >
+                              <div key={`${entry.id}-${change.key}`} className={cx("rounded-[14px] p-3 text-[12.5px]", softPanel)}>
                                 <p>{change.label}</p>
                                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                                   <div>
                                     <span className={muted}>Before</span>
-                                    <p className="mt-1 break-words text-sm">
-                                      {change.before || "Blank"}
-                                    </p>
+                                    <p className="mt-0.5 break-words text-[13px]">{change.before || "Blank"}</p>
                                   </div>
                                   <div>
                                     <span className={muted}>After</span>
-                                    <p className="mt-1 break-words text-sm text-green-400">
-                                      {change.after || "Blank"}
-                                    </p>
+                                    <p className={cx("mt-0.5 break-words text-[13px]", darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]")}>{change.after || "Blank"}</p>
                                   </div>
                                 </div>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <div className={`mt-4 rounded-2xl p-3 text-xs ${darkMode ? "bg-black/20 text-white/55" : "bg-[#f5f7f2] text-black/55"}`}>
+                          <div className={cx("mt-4 rounded-[14px] p-3 text-[12.5px]", softPanel, muted)}>
                             Initial saved version. Future edits will show field-by-field changes here.
                           </div>
                         )}
@@ -681,18 +558,13 @@ export default function MrnDetailDrawer({
                     ))}
                   </div>
                 ) : (
-                  <div className={`rounded-3xl p-6 ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}>
-                    <p className="text-sm font-semibold">No stored versions yet.</p>
-                    <p className={`mt-2 text-sm leading-6 ${muted}`}>
-                      History tracking is active now. The next MRN add/edit will create a version entry with changed fields.
-                    </p>
-                    <div className={`mt-4 rounded-2xl p-4 text-xs ${darkMode ? "bg-black/20" : "bg-[#f5f7f2]"}`}>
-                      <p>Current snapshot</p>
-                      <p className={`mt-1 ${muted}`}>
-                        {row.project || "Project not added"} - {row.status || "Open"} - {items.length} material item{items.length === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                  </div>
+                  <EmptyState
+                    darkMode={darkMode}
+                    icon={History}
+                    tone="lavender"
+                    title="No stored versions yet"
+                    text={`History tracking is active now. The next MRN add or edit will create a version entry. Current: ${row.project || "Project not added"} - ${row.status || "Open"} - ${items.length} material item${items.length === 1 ? "" : "s"}.`}
+                  />
                 )}
               </div>
             </section>

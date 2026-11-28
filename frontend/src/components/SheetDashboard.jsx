@@ -1,21 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
   ArrowUpRight,
   BarChart3,
   CalendarDays,
+  CheckCircle2,
   Cloud,
   Eye,
   Image as ImageIcon,
+  Layers3,
   Loader2,
+  PieChart,
   Plus,
   RefreshCw,
+  Rows3,
   Search,
   Sheet,
+  Sparkles,
   Table2,
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { DateRangePicker, SelectMenu } from "./ui";
+import { Button, Chip, DateRangePicker, EmptyState, IconTile, PageHeader, SelectMenu, StatTile } from "./ui";
 import AdminMiscExpensesDashboard from "./sheetViews/AdminMiscExpensesDashboard";
 import AssetPurchaseDashboard from "./sheetViews/AssetPurchaseDashboard";
 import DirectorPaymentDashboard from "./sheetViews/DirectorPaymentDashboard";
@@ -34,7 +40,9 @@ import IskonBhavnagarDashboard from "./sheetViews/IskonBhavnagarDashboard";
 import KalhaarPendingWorkDashboard from "./sheetViews/KalhaarPendingWorkDashboard";
 import { isWithinDateRange } from "./sheetViews/amountUtils";
 import { API_URL } from "./AuthProvider";
-const CHART_COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899", "#84cc16"];
+// Soft chart colours drawn from the kit's pastel tones, deep enough to read on white and dark.
+const CHART_COLORS = ["#7fbf8e", "#9b87e6", "#ee9a72", "#78a9e3", "#e88a98", "#b9d65a", "#e2b84a", "#9a9a98"];
+const ROW_TONES = ["mint", "lavender", "peach", "sky", "rose", "lime", "amber"];
 
 function extractSheetId(url) {
   return url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)?.[1] || null;
@@ -71,11 +79,26 @@ function getInitials(value) {
   return words.slice(0, 2).map((word) => word[0]?.toUpperCase()).join("") || "S";
 }
 
-function accentFor(value) {
+function toneFor(value) {
   const text = String(value || "sheet");
   let hash = 0;
-  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) % CHART_COLORS.length;
-  return CHART_COLORS[Math.abs(hash) % CHART_COLORS.length];
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) % ROW_TONES.length;
+  return ROW_TONES[Math.abs(hash) % ROW_TONES.length];
+}
+
+function ChartCard({ title, description, icon = BarChart3, tone = "neutral", darkMode, children }) {
+  return (
+    <div className={`rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+      <div className="mb-4 flex items-start gap-3">
+        <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+        <div className="min-w-0">
+          <h3 className={`text-[15px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{title}</h3>
+          {description && <p className={`mt-0.5 text-[12.5px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{description}</p>}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
 }
 
 function DonutChart({ title, description, centerLabel = "records", data, darkMode }) {
@@ -89,39 +112,32 @@ function DonutChart({ title, description, centerLabel = "records", data, darkMod
         cursor += size;
         return `${CHART_COLORS[index % CHART_COLORS.length]} ${start}% ${cursor}%`;
       }).join(", ")
-    : `${darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"} 0 100%`;
+    : `${darkMode ? "rgba(255,255,255,0.08)" : "#f0f0ee"} 0 100%`;
 
   return (
-    <div className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 className={`text-sm   ${darkMode ? "text-white" : "text-black"}`}>{title}</h3>
-          {description && <p className={`text-xs mt-1 ${darkMode ? "text-white/40" : "text-black/35"}`}>{description}</p>}
-        </div>
-        <BarChart3 className={`w-4 h-4 ${darkMode ? "text-[#d8f36a]" : "text-black/45"}`} />
-      </div>
-      <div className="grid gap-5 items-center sm:grid-cols-[140px_minmax(0,1fr)]">
+    <ChartCard title={title} description={description} icon={PieChart} tone="lavender" darkMode={darkMode}>
+      <div className="grid items-center gap-5 sm:grid-cols-[140px_minmax(0,1fr)]">
         <div
-          className="w-[136px] h-[136px] rounded-full relative"
+          className="relative h-[136px] w-[136px] rounded-full"
           style={{ background: `conic-gradient(${gradient})` }}
         >
-          <div className={`absolute inset-7 rounded-full flex flex-col items-center justify-center ${darkMode ? "bg-[#121317] text-white" : "bg-white text-black"}`}>
-            <span className="text-lg   leading-none">{total}</span>
-            <span className={`text-[10px] mt-1 ${darkMode ? "text-white/45" : "text-black/40"}`}>{centerLabel}</span>
+          <div className={`absolute inset-7 flex flex-col items-center justify-center rounded-full ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}>
+            <span className="text-[20px] leading-none tracking-[-0.02em] tabular-nums">{total}</span>
+            <span className={`mt-1 text-[10.5px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{centerLabel}</span>
           </div>
         </div>
-        <div className="space-y-2 min-w-0">
+        <div className="min-w-0 space-y-2">
           {items.map((item, index) => (
-            <div key={item.label} className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: CHART_COLORS[index % CHART_COLORS.length] }} />
-              <span className={`text-xs truncate  flex-1 ${darkMode ? "text-white/65" : "text-black/55"}`}>{item.label}</span>
-              <span className={`text-xs ${darkMode ? "text-white/45" : "text-black/40"}`}>{item.value}</span>
+            <div key={item.label} className="flex min-w-0 items-center gap-2">
+              <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: CHART_COLORS[index % CHART_COLORS.length] }} />
+              <span className={`flex-1 truncate text-[12.5px] ${darkMode ? "text-white/65" : "text-[#3d3d3b]"}`}>{item.label}</span>
+              <span className={`text-[12px] tabular-nums ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{item.value}</span>
             </div>
           ))}
-          {items.length === 0 && <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/40"}`}>No chart data yet.</p>}
+          {items.length === 0 && <p className={`text-[13px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>No chart data yet.</p>}
         </div>
       </div>
-    </div>
+    </ChartCard>
   );
 }
 
@@ -129,28 +145,26 @@ function ColumnBars({ title, description, data, darkMode }) {
   const items = data.filter((item) => item.value > 0).slice(0, 10);
   const max = Math.max(...items.map((item) => item.value), 1);
   return (
-    <div className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-      <h3 className={`text-sm  ${darkMode ? "text-white" : "text-black"}`}>{title}</h3>
-      {description && <p className={`text-xs mt-1 ${darkMode ? "text-white/40" : "text-black/35"}`}>{description}</p>}
-      <div className="h-56 mt-5 flex items-end gap-3">
+    <ChartCard title={title} description={description} icon={BarChart3} tone="sky" darkMode={darkMode}>
+      <div className="flex h-56 items-end gap-3">
         {items.map((item, index) => (
-          <div key={item.label} className="flex-1 min-w-0 flex flex-col items-center gap-2">
-            <div className={`text-xs ${darkMode ? "text-white/45" : "text-black/40"}`}>{item.value}</div>
-            <div className={`w-full rounded-t-2xl ${darkMode ? "bg-white/8" : "bg-black/5"} flex items-end overflow-hidden`} style={{ height: 150 }}>
+          <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+            <div className={`text-[12px] tabular-nums ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{item.value}</div>
+            <div className={`flex w-full items-end overflow-hidden rounded-[12px] ${darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]"}`} style={{ height: 150 }}>
               <div
-                className="w-full rounded-t-2xl"
+                className="w-full rounded-[12px]"
                 style={{
                   height: `${Math.max(8, (item.value / max) * 100)}%`,
                   background: CHART_COLORS[index % CHART_COLORS.length],
                 }}
               />
             </div>
-            <p className={`text-[11px] text-center truncate w-full ${darkMode ? "text-white/55" : "text-black/45"}`}>{item.label}</p>
+            <p className={`w-full truncate text-center text-[11px] ${darkMode ? "text-white/55" : "text-[#8a8a8a]"}`}>{item.label}</p>
           </div>
         ))}
-        {items.length === 0 && <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/40"}`}>No bar chart data yet.</p>}
+        {items.length === 0 && <p className={`text-[13px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>No bar chart data yet.</p>}
       </div>
-    </div>
+    </ChartCard>
   );
 }
 
@@ -158,18 +172,15 @@ function ColorBars({ title, description, data, darkMode }) {
   const items = data.filter((item) => item.value > 0).slice(0, 8);
   const max = Math.max(...items.map((item) => item.value), 1);
   return (
-    <div className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-      <h3 className={`text-sm  ${darkMode ? "text-white" : "text-black"}`}>{title}</h3>
-      {description && <p className={`text-xs mt-1 mb-4 ${darkMode ? "text-white/40" : "text-black/35"}`}>{description}</p>}
-      {!description && <div className="mb-4" />}
+    <ChartCard title={title} description={description} icon={BarChart3} tone="mint" darkMode={darkMode}>
       <div className="space-y-3">
         {items.map((item, index) => (
           <div key={item.label}>
-            <div className="flex justify-between gap-3 text-xs mb-1">
-              <span className={`truncate ${darkMode ? "text-white/65" : "text-black/55"}`}>{item.label}</span>
-              <span className={darkMode ? "text-white/45" : "text-black/40"}>{item.value}</span>
+            <div className="mb-1 flex justify-between gap-3 text-[12.5px]">
+              <span className={`truncate ${darkMode ? "text-white/65" : "text-[#3d3d3b]"}`}>{item.label}</span>
+              <span className={`tabular-nums ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{item.value}</span>
             </div>
-            <div className={`h-2.5 rounded-full overflow-hidden ${darkMode ? "bg-white/8" : "bg-black/5"}`}>
+            <div className={`h-2.5 overflow-hidden rounded-full ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
               <div
                 className="h-full rounded-full"
                 style={{ width: `${Math.max(7, (item.value / max) * 100)}%`, background: CHART_COLORS[index % CHART_COLORS.length] }}
@@ -177,19 +188,9 @@ function ColorBars({ title, description, data, darkMode }) {
             </div>
           </div>
         ))}
-        {items.length === 0 && <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/40"}`}>No chart data yet.</p>}
+        {items.length === 0 && <p className={`text-[13px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>No chart data yet.</p>}
       </div>
-    </div>
-  );
-}
-
-function MetricTile({ label, value, accent, darkMode }) {
-  return (
-    <div className={`rounded-[24px] p-5 overflow-hidden relative ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-      <span className="absolute -right-6 -top-6 w-20 h-20 rounded-full opacity-20" style={{ background: accent }} />
-      <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/40"}`}>{label}</p>
-      <p className={`text-3xl small font-semibold mt-4 sm:text-4xl ${darkMode ? "text-white" : "text-black"}`}>{value}</p>
-    </div>
+    </ChartCard>
   );
 }
 
@@ -208,8 +209,7 @@ export default function SheetDashboard({ darkMode }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilters, setDateFilters] = useState({ from: "", to: "" });
 
-  const muted = darkMode ? "text-white/50" : "text-black/45";
-  const panel = darkMode ? "bg-white/[0.03] border border-white/10" : "bg-white/80 border border-black/5";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -369,81 +369,87 @@ export default function SheetDashboard({ darkMode }) {
     .sort((a, b) => b.value - a.value);
   const recordFields = (currentSheet?.headers || []).filter((header) => !mediaColumns.includes(header));
 
-  return (
-    <div
-      className="flex-1 overflow-y-auto px-4 py-4 newq sm:px-6 lg:overflow-hidden lg:px-8 lg:py-8"
-      style={{
-        background: darkMode
-          ? "linear-gradient(180deg, #111318 0%, #0c0d10 100%)"
-          : "linear-gradient(180deg, #f7f6f2 0%, #f3f1ea 100%)",
-      }}
-    >
-      <div className="h-full min-h-0 flex flex-col mx-auto">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-6 flex-shrink-0">
-          <div>
-            <p className={`text-[11px] uppercase tracking-[0.32em] mb-3 ${muted}`}>Adaptive sheet intelligence</p>
-            <h2 className={`text-2xl small font-semibold sm:text-3xl md:text-4xl ${darkMode ? "text-white" : "text-black"}`}>Sheet Dashboard</h2>
-            <p className={`text-sm mt-4 max-w-2xl ${muted}`}>Select a sheet and open a visual dashboard built from its own architecture.</p>
-          </div>
-          <div className="flex flex-wrap gap-2 sm:gap-3">
-            <button onClick={() => setAddModal(true)} className={`flex items-center gap-2 px-4 py-3 rounded-full sm:px-5 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
-              <Plus className="w-4 h-4" /> Add Sheet
-            </button>
-            <button onClick={() => void loadDocuments()} className={`w-12 h-12 rounded-full flex items-center justify-center ${darkMode ? "bg-white/10 text-white" : "bg-black/[0.04] text-black"}`} title="Refresh">
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+  const ink = darkMode ? "text-white" : "text-[#141414]";
+  const hair = darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]";
+  const soft = darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]";
+  const fieldInput = `w-full h-11 rounded-full border px-4 text-[13.5px] outline-none transition ${darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:ring-[3px] focus:ring-white/10" : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"}`;
+  const readyCount = documents.filter((doc) => doc.isReady).length;
+  const failedCount = documents.filter((doc) => doc.status === "failed").length;
 
-        <div className={`rounded-[30px] overflow-hidden flex-1 min-h-0 ${panel}`}>
+  return (
+    <div className={`newq flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8 lg:overflow-hidden ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}>
+      <div className="mx-auto flex h-full min-h-0 max-w-7xl flex-col gap-6">
+        <PageHeader
+          darkMode={darkMode}
+          className="flex-shrink-0"
+          badge="Adaptive sheet intelligence"
+          badgeIcon={Sparkles}
+          badgeTone="lime"
+          title="Sheet dashboard"
+          subtitle="a visual read of every linked sheet"
+          description="Select a sheet and open a visual dashboard built from its own architecture."
+          actions={<>
+            <Button darkMode={darkMode} variant="primary" icon={Plus} onClick={() => setAddModal(true)}>Add sheet</Button>
+            <button onClick={() => void loadDocuments()} aria-label="Refresh" title="Refresh" className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] text-white hover:bg-white/10" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </>}
+        />
+
+        {!loadingDocs && documents.length > 0 && (
+          <div className="grid flex-shrink-0 grid-cols-3 gap-3">
+            <StatTile darkMode={darkMode} icon={Sheet} tone="mint" value={documents.length} label="Linked sheets" className="min-h-[104px]" />
+            <StatTile darkMode={darkMode} icon={CheckCircle2} tone="lime" value={readyCount} label="Ready to view" className="min-h-[104px]" />
+            <StatTile darkMode={darkMode} icon={AlertCircle} tone={failedCount ? "rose" : "neutral"} value={failedCount} label="Need a retry" className="min-h-[104px]" />
+          </div>
+        )}
+
+        <div className={`min-h-0 flex-1 overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
           {loadingDocs ? (
-            <div className="h-full flex items-center justify-center"><Loader2 className={`w-8 h-8 animate-spin ${muted}`} /></div>
+            <div className="flex h-full min-h-[240px] items-center justify-center"><Loader2 className={`h-7 w-7 animate-spin ${muted}`} /></div>
           ) : documents.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8">
-              <Sheet className={`w-12 h-12 mb-4 ${muted}`} />
-              <p className={`text-xl font-medium ${darkMode ? "text-white" : "text-black"}`}>No sheets yet</p>
-              <p className={`text-sm mt-2 ${muted}`}>Add a Google Sheet link to create the first visual dashboard.</p>
-            </div>
+            <div className="p-5"><EmptyState darkMode={darkMode} icon={Sheet} tone="mint" title="No sheets yet" text="Add a Google Sheet link to create the first visual dashboard." /></div>
           ) : (
-            <div className="h-full overflow-auto">
+            <div className="h-full overflow-auto px-2 pb-2">
               <table className="w-full min-w-[780px] text-left">
                 <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                  <tr className={darkMode ? "border-b border-white/10" : "border-b border-black/5"}>
+                  <tr>
                     {["Sheet", "Status", "Synced", "Chunks", "Dashboard"].map((header) => (
-                      <th key={header} className={`px-6 py-5 text-[12px] uppercase tracking-[0.2em] font-medium ${darkMode ? "text-white/45" : "text-black/35"}`}>{header}</th>
+                      <th key={header} className={`px-4 py-3.5 text-[12px] font-normal ${muted}`}>{header}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {documents.map((doc) => (
-                    <tr key={doc.id} className={`transition-colors ${darkMode ? "border-b border-white/5 hover:bg-white/[0.03]" : "border-b border-black/5 hover:bg-black/[0.02]"}`}>
-                      <td className="px-6 py-5">
+                    <tr key={doc.id} className={`border-t transition-colors ${hair} ${darkMode ? "hover:bg-white/[0.02]" : "hover:bg-[#fafaf9]"}`}>
+                      <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${darkMode ? "bg-white/5" : "bg-black/[0.04]"}`}>
-                            <Sheet className={`w-5 h-5 ${darkMode ? "text-[#d8f36a]" : "text-green-600"}`} />
-                          </div>
+                          <IconTile icon={Sheet} tone="mint" darkMode={darkMode} size="sm" />
                           <div className="min-w-0">
-                            <p className={`text-sm  truncate ${darkMode ? "text-white" : "text-black"}`}>{doc.name}</p>
-                            <p className={`text-xs mt-1 ${muted}`}>{doc.sheetArchitecture ? `Architecture v${doc.sheetArchitecture.version}` : "Architecture builds on view"}</p>
+                            <p className={`truncate text-[13.5px] ${ink}`}>{doc.name}</p>
+                            <p className={`mt-0.5 text-[12px] ${muted}`}>{doc.sheetArchitecture ? `Architecture v${doc.sheetArchitecture.version}` : "Architecture builds on view"}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-5">
-                        <span className={`text-xs px-3 py-1 rounded-full ${doc.isReady ? darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-green-50 text-green-700" : "bg-amber-500/10 text-amber-500"}`}>
+                      <td className="px-4 py-3.5">
+                        <Chip darkMode={darkMode} tone={doc.isReady ? "mint" : doc.status === "failed" ? "rose" : "amber"}>
                           {doc.isReady ? "Ready" : doc.status || "Processing"}
-                        </span>
+                        </Chip>
                       </td>
-                      <td className={`px-6 py-5 text-sm ${muted}`}>{doc.lastSyncedAt ? new Date(doc.lastSyncedAt).toLocaleString() : "Not synced"}</td>
-                      <td className={`px-6 py-5 text-sm ${muted}`}>{doc.chunks || 0}</td>
-                      <td className="px-6 py-5">
-                        <button
+                      <td className={`px-4 py-3.5 text-[13px] tabular-nums ${muted}`}>{doc.lastSyncedAt ? new Date(doc.lastSyncedAt).toLocaleString() : "Not synced"}</td>
+                      <td className={`px-4 py-3.5 text-[13px] tabular-nums ${muted}`}>{doc.chunks || 0}</td>
+                      <td className="px-4 py-3.5">
+                        <Button
+                          darkMode={darkMode}
+                          size="sm"
+                          variant={doc.status === "failed" ? "secondary" : "primary"}
                           onClick={() => doc.status === "failed" ? handleRetrySync(doc) : handleViewDashboard(doc)}
                           disabled={(!doc.isReady && doc.status !== "failed") || loadingSheet}
-                          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm disabled:opacity-40 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-black text-white hover:bg-black/85"}`}
+                          loading={loadingSheet && selectedSheetId === doc.id}
+                          icon={doc.status === "failed" ? RefreshCw : Eye}
                         >
-                          {loadingSheet && selectedSheetId === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : doc.status === "failed" ? <RefreshCw className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          {doc.status === "failed" ? "Retry Sync" : "View Dashboard"}
-                        </button>
+                          {doc.status === "failed" ? "Retry sync" : "View dashboard"}
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -455,29 +461,33 @@ export default function SheetDashboard({ darkMode }) {
       </div>
 
       {dashboardOpen && (
-        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm p-2 sm:p-4">
-          <div className={`h-full max-w-7xl mx-auto w-full rounded-[22px] overflow-hidden flex flex-col sm:rounded-[28px] ${darkMode ? "bg-[#101216] border border-white/10" : "bg-[#f7f6f2] border border-black/5"}`}>
-            <div className={`px-4 py-4 flex flex-col gap-4 border-b sm:px-6 sm:py-5 lg:flex-row lg:items-center lg:justify-between ${darkMode ? "border-white/10" : "border-black/5"}`}>
-              <div className="min-w-0">
-                <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${muted}`}>Visual dashboard</p>
-                <h3 className={`text-2xl small font-semibold  truncate ${darkMode ? "text-white" : "text-black"}`}>{selectedDocument?.name || "Sheet Dashboard"}</h3>
+        <div className="fixed inset-0 z-50 bg-black/35 p-2 backdrop-blur-[2px] sm:p-4">
+          <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`mx-auto flex h-full w-full max-w-7xl flex-col overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#121317]" : "border-[#ececec] bg-white"}`}>
+            <div className={`flex flex-col gap-4 border-b px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+              <div className="flex min-w-0 items-center gap-3">
+                <IconTile icon={BarChart3} tone="lime" darkMode={darkMode} size="md" />
+                <div className="min-w-0">
+                  <h3 className={`truncate text-[18px] tracking-[-0.01em] ${ink}`}>{selectedDocument?.name || "Sheet dashboard"}</h3>
+                  <p className={`text-[12.5px] ${muted}`}>Visual dashboard</p>
+                </div>
               </div>
               <div className="flex w-full flex-wrap items-center gap-2 lg:flex-1 lg:justify-end">
-                <div className={`flex items-center gap-2 w-full max-w-sm rounded-full px-4 py-3 ${darkMode ? "bg-white/5 text-white border border-white/10" : "bg-white text-black border border-black/5"}`}>
-                  <Search className={`w-4 h-4 flex-shrink-0 ${muted}`} />
+                <div className={`flex h-10 w-full max-w-sm items-center gap-2 rounded-full px-4 ${darkMode ? "bg-white/[0.06] text-white" : "bg-[#f4f4f2] text-[#141414]"}`}>
+                  <Search className={`h-4 w-4 flex-shrink-0 ${muted}`} />
                   <input
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search all dashboard data..."
-                    className="bg-transparent outline-none text-sm flex-1 min-w-0"
+                    className={`min-w-0 flex-1 bg-transparent text-[13.5px] outline-none ${darkMode ? "placeholder:text-white/35" : "placeholder:text-[#a3a3a0]"}`}
                   />
                   {searchQuery && (
-                    <button onClick={() => setSearchQuery("")} className={`text-xs ${muted}`}>Clear</button>
+                    <button onClick={() => setSearchQuery("")} className={`text-[12px] ${muted}`}>Clear</button>
                   )}
                 </div>
-                {!['asteria-client-dl', 'iskon-bhavnagar-client-dl', 'kalhar-client-dl', 'aurika-client-dl', 'devsharnam-client-dl', 'empereon-client-dl', 'harmony-client-dl', 'imperial-client-dl', 'sheetal-client-dl', 'silverwhite-client-dl'].includes(sheetData?.architecture?.kind) && <div className="w-full sm:w-[360px]">
+                {!['asteria-client-dl', 'iskon-bhavnagar-client-dl', 'kalhar-client-dl', 'aurika-client-dl', 'devsharnam-client-dl', 'empereon-client-dl', 'harmony-client-dl', 'imperial-client-dl', 'sheetal-client-dl', 'silverwhite-client-dl'].includes(sheetData?.architecture?.kind) && <div className="w-full sm:w-[320px]">
                   <DateRangePicker
                     darkMode={darkMode}
+                    className=""
                     from={dateFilters.from}
                     to={dateFilters.to}
                     onChange={(range) => setDateFilters((current) => ({ ...current, ...range }))}
@@ -485,31 +495,26 @@ export default function SheetDashboard({ darkMode }) {
                   />
                 </div>}
                 {!['asteria-client-dl', 'iskon-bhavnagar-client-dl', 'kalhar-client-dl', 'aurika-client-dl', 'devsharnam-client-dl', 'empereon-client-dl', 'harmony-client-dl', 'imperial-client-dl', 'sheetal-client-dl', 'silverwhite-client-dl', 'kalhaarPendingWorkDl'].includes(sheetData?.architecture?.kind) && (dateFilters.from || dateFilters.to) && (
-                  <button
-                    onClick={() => setDateFilters({ from: "", to: "" })}
-                    className={`rounded-full px-3 py-2 text-xs ${darkMode ? "bg-white/5 text-white/65 hover:bg-white/10" : "bg-black/[0.04] text-black/55 hover:bg-black/[0.07]"}`}
-                  >
-                    Clear dates
-                  </button>
+                  <Button darkMode={darkMode} variant="soft" size="sm" onClick={() => setDateFilters({ from: "", to: "" })}>Clear dates</Button>
                 )}
                 <SelectMenu
                   darkMode={darkMode}
                   value={activeTab || ""}
                   onChange={setActiveTab}
-                  className="w-full min-w-[220px] sm:w-[300px]"
+                  className="w-full min-w-[220px] sm:w-[280px]"
                   options={[
                     ...(["asteria-client-dl", "iskon-bhavnagar-client-dl", "kalhar-client-dl", "aurika-client-dl", "devsharnam-client-dl", "empereon-client-dl", "harmony-client-dl", "imperial-client-dl", "sheetal-client-dl", "silverwhite-client-dl", "kalhaarPendingWorkDl"].includes(sheetData?.architecture?.kind) ? [{ value: "__overview", label: "Executive overview" }] : []),
                     ...(sheetData?.sheets || []).map((sheet) => ({ value: sheet.name, label: sheet.name })),
                   ]}
                 />
-                <button onClick={() => setDashboardOpen(false)} className={`w-11 h-11 rounded-full flex items-center justify-center ${darkMode ? "bg-white/5 text-white/60 hover:bg-white/10" : "bg-black/[0.04] text-black/55 hover:bg-black/[0.07]"}`}>
-                  <X className="w-5 h-5" />
+                <button onClick={() => setDashboardOpen(false)} aria-label="Close" className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] text-white hover:bg-white/10" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
+                  <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
             {!sheetData || !currentSheet ? (
-              <div className="flex-1 flex items-center justify-center"><Loader2 className={`w-8 h-8 animate-spin ${muted}`} /></div>
+              <div className="flex-1 flex items-center justify-center"><Loader2 className={`h-7 w-7 animate-spin ${muted}`} /></div>
             ) : sheetData?.architecture?.kind === "kalhaar-pending-tracker" ? (
               <KalhaarPendingTrackerDashboard
                 darkMode={darkMode}
@@ -636,15 +641,15 @@ export default function SheetDashboard({ darkMode }) {
               />
             ) : (
               <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-5">
-                  <MetricTile darkMode={darkMode} label={searchQuery ? "Matching rows" : "Rows"} value={filteredRows.length.toLocaleString()} accent="#22c55e" />
-                  <MetricTile darkMode={darkMode} label={entityColumn || "Groups"} value={countBy(filteredRows, entityColumn).length.toLocaleString()} accent="#3b82f6" />
-                  <MetricTile darkMode={darkMode} label="Media" value={mediaItems.length.toLocaleString()} accent="#f59e0b" />
-                  <MetricTile darkMode={darkMode} label="Alerts" value={challengeCount.toLocaleString()} accent="#ef4444" />
-                  <MetricTile darkMode={darkMode} label="Latest" value={latestDate ? latestDate.toLocaleDateString() : "N/A"} accent="#a855f7" />
+                <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                  <StatTile darkMode={darkMode} icon={Rows3} tone="mint" label={searchQuery ? "Matching rows" : "Rows"} value={filteredRows.length.toLocaleString()} />
+                  <StatTile darkMode={darkMode} icon={Layers3} tone="sky" label={entityColumn || "Groups"} value={countBy(filteredRows, entityColumn).length.toLocaleString()} />
+                  <StatTile darkMode={darkMode} icon={ImageIcon} tone="amber" label="Media" value={mediaItems.length.toLocaleString()} />
+                  <StatTile darkMode={darkMode} icon={AlertCircle} tone="rose" label="Alerts" value={challengeCount.toLocaleString()} />
+                  <StatTile darkMode={darkMode} icon={CalendarDays} tone="lavender" label="Latest" value={latestDate ? latestDate.toLocaleDateString() : "N/A"} />
                 </div>
 
-                <div className="grid xl:grid-cols-2 gap-4 mb-5">
+                <div className="mb-5 grid gap-4 xl:grid-cols-2">
                   <DonutChart
                     darkMode={darkMode}
                     title={`Records by ${entityColumn || "group"}`}
@@ -659,7 +664,7 @@ export default function SheetDashboard({ darkMode }) {
                   />
                 </div>
 
-                <div className="grid xl:grid-cols-2 gap-4 mb-5">
+                <div className="mb-5 grid gap-4 xl:grid-cols-2">
                   <ColumnBars
                     darkMode={darkMode}
                     title={`Bar graph by ${entityColumn || "group"}`}
@@ -674,15 +679,14 @@ export default function SheetDashboard({ darkMode }) {
                   />
                 </div>
 
-                <div className="grid xl:grid-cols-[1fr_0.7fr] gap-4 mb-5">
+                <div className="mb-5 grid gap-4 xl:grid-cols-[1fr_0.7fr]">
                   <ColorBars
                     darkMode={darkMode}
                     title={ownerColumn ? `Bar graph by ${ownerColumn}` : "Ownership bar graph"}
                     description="Horizontal comparison of record ownership or assignee distribution."
                     data={countBy(filteredRows, ownerColumn)}
                   />
-                  <div className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-                    <h3 className={`text-sm  mb-4 ${darkMode ? "text-white" : "text-black"}`}>Architecture</h3>
+                  <ChartCard title="Architecture" description="How this sheet is laid out" icon={Table2} tone="peach" darkMode={darkMode}>
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         ["Tabs", sheetData.sheets?.length || 0],
@@ -690,75 +694,66 @@ export default function SheetDashboard({ darkMode }) {
                         ["Media cols", mediaColumns.length],
                         ["Shown rows", filteredRows.length],
                       ].map(([label, value]) => (
-                        <div key={label} className={`rounded-2xl p-4 ${darkMode ? "bg-black/20" : "bg-black/[0.025]"}`}>
-                          <p className={`text-xs ${muted}`}>{label}</p>
-                          <p className={`text-2xl mt-2 ${darkMode ? "text-white" : "text-black"}`}>{value}</p>
+                        <div key={label} className={`rounded-[14px] p-4 ${soft}`}>
+                          <p className={`text-[12px] ${muted}`}>{label}</p>
+                          <p className={`mt-1.5 text-[24px] leading-none tracking-[-0.02em] tabular-nums ${ink}`}>{value}</p>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </ChartCard>
                 </div>
 
-                <div className="grid xl:grid-cols-2 gap-4 mb-5">
+                <div className="mb-5 grid gap-4 xl:grid-cols-2">
                   {sortedRows.map((row) => {
                     const rowMedia = mediaColumns.flatMap((column) => extractUrls(row[column]).map((url) => ({ url, column })));
                     const cardTitle = cleanValue(row[entityColumn]) || `Row ${row.__rowIndex}`;
-                    const accent = accentFor(cardTitle);
+                    const tone = toneFor(cardTitle);
                     return (
-                      <article key={`${row.__sheetName}-${row.__rowIndex}`} className={`rounded-[26px] p-5 overflow-hidden relative ${darkMode ? "bg-white/[0.04] border border-white/10" : "bg-white border border-black/5"}`}>
-                        <span className="absolute inset-x-0 top-0 h-1.5"  />
+                      <article key={`${row.__sheetName}-${row.__rowIndex}`} className={`relative overflow-hidden rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div
-                              className="w-12 h-12 small font-semibold rounded-full flex items-center justify-center text-white  flex-shrink-0"
-                              style={{ background: accent }}
-                            >
-                              {getInitials(cardTitle)}
-                            </div>
+                          <div className="flex min-w-0 items-center gap-3">
+                            <IconTile icon={<span className="text-[14px]">{getInitials(cardTitle)}</span>} tone={tone} darkMode={darkMode} size="md" />
                             <div className="min-w-0">
-                              <h4 className={`text-xl small font-semibold tracking-wide truncate ${darkMode ? "text-white" : "text-black"}`}>{cardTitle}</h4>
-                              <p className={`text-sm mt-1 truncate ${muted}`}>{cleanValue(row[ownerColumn]) || currentSheet.name}</p>
+                              <h4 className={`truncate text-[17px] tracking-[-0.01em] ${ink}`}>{cardTitle}</h4>
+                              <p className={`mt-0.5 truncate text-[13px] ${muted}`}>{cleanValue(row[ownerColumn]) || currentSheet.name}</p>
                             </div>
                           </div>
                           {dateColumn && cleanValue(row[dateColumn]) && (
-                            <span className={`text-xs px-3 py-1.5 rounded-full whitespace-nowrap ${darkMode ? "bg-white/5 text-white/60" : "bg-black/[0.04] text-black/50"}`}>
-                              <CalendarDays className="w-3 h-3 inline mr-1" />
+                            <Chip darkMode={darkMode} tone="neutral" icon={CalendarDays} className="whitespace-nowrap">
                               {parseDate(row[dateColumn])?.toLocaleDateString() || cleanValue(row[dateColumn])}
-                            </span>
+                            </Chip>
                           )}
                         </div>
 
-                        <div className="grid sm:grid-cols-2 gap-3 mt-5">
+                        <div className="mt-5 grid gap-2 sm:grid-cols-2">
                           {recordFields.map((field) => (
-                            <div key={field} className={`rounded-2xl p-3 ${darkMode ? "bg-black/20" : "bg-black/[0.025]"}`}>
-                              <p className={`text-[10px] uppercase tracking-[0.16em] mb-1 ${darkMode ? "text-white/35" : "text-black/35"}`}>{field}</p>
-                              <p className={`text-sm leading-5 break-words ${darkMode ? "text-white/75" : "text-black/70"}`}>{cleanValue(row[field]) || "—"}</p>
+                            <div key={field} className={`rounded-[14px] p-3 ${soft}`}>
+                              <p className={`mb-0.5 text-[11.5px] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{field}</p>
+                              <p className={`break-words text-[13px] leading-5 ${darkMode ? "text-white/80" : "text-[#3d3d3b]"}`}>{cleanValue(row[field]) || "—"}</p>
                             </div>
                           ))}
                         </div>
 
                         {rowMedia.length > 0 && (
                           <div className="mt-5">
-                            <p className={`text-[10px] uppercase tracking-[0.16em] mb-3 ${darkMode ? "text-white/35" : "text-black/35"}`}>Drive attachments</p>
-                            <div className="grid sm:grid-cols-2 gap-3">
+                            <p className={`mb-2.5 text-[12px] ${muted}`}>Drive attachments</p>
+                            <div className="grid gap-2 sm:grid-cols-2">
                               {rowMedia.map((item, index) => (
                                 <a
                                   key={`${item.url}-${index}`}
                                   href={item.url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className={`rounded-2xl p-3 flex items-center justify-between gap-3 transition-colors ${darkMode ? "bg-white/5 text-white/75 hover:bg-white/10" : "bg-black/[0.035] text-black/70 hover:bg-black/[0.06]"}`}
+                                  className={`flex items-center justify-between gap-3 rounded-[14px] p-3 transition-colors ${darkMode ? "bg-white/[0.04] text-white/75 hover:bg-white/[0.08]" : "bg-[#f7f7f5] text-[#3d3d3b] hover:bg-[#f0f0ee]"}`}
                                 >
-                                  <span className="flex items-center gap-3 min-w-0">
-                                    <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-[#34a853]/12 text-[#34a853]">
-                                      <Cloud className="w-5 h-5" />
-                                    </span>
+                                  <span className="flex min-w-0 items-center gap-3">
+                                    <IconTile icon={Cloud} tone="mint" darkMode={darkMode} size="sm" />
                                     <span className="min-w-0">
-                                      <span className={`block text-sm truncate ${darkMode ? "text-white" : "text-black"}`}>{item.column}</span>
-                                      <span className={`block text-xs mt-1 ${muted}`}>Google Drive link {index + 1}</span>
+                                      <span className={`block truncate text-[13px] ${ink}`}>{item.column}</span>
+                                      <span className={`mt-0.5 block text-[12px] ${muted}`}>Google Drive link {index + 1}</span>
                                     </span>
                                   </span>
-                                  <ArrowUpRight className="w-4 h-4 flex-shrink-0" />
+                                  <ArrowUpRight className="h-4 w-4 flex-shrink-0" />
                                 </a>
                               ))}
                             </div>
@@ -769,35 +764,38 @@ export default function SheetDashboard({ darkMode }) {
                   })}
                 </div>
 
-                <div className={`rounded-[24px] overflow-hidden ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-                  <div className="px-5 py-4 flex items-center justify-between border-b border-black/5 dark:border-white/10">
-                    <h3 className={`text-sm font-medium ${darkMode ? "text-white" : "text-black"}`}>Complete data</h3>
-                    <Table2 className={`w-4 h-4 ${muted}`} />
+                <div className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+                  <div className={`flex items-center gap-3 border-b px-5 py-4 ${hair}`}>
+                    <IconTile icon={Table2} tone="neutral" darkMode={darkMode} size="sm" />
+                    <div>
+                      <h3 className={`text-[15px] ${ink}`}>Complete data</h3>
+                      <p className={`text-[12px] ${muted}`}>First 100 rows of {currentSheet.name}</p>
+                    </div>
                   </div>
-                  <div className="max-h-[360px] overflow-auto">
-                    <table className="w-full min-w-[760px] text-sm">
+                  <div className="max-h-[360px] overflow-auto px-2 pb-2">
+                    <table className="w-full min-w-[760px] text-[13px]">
                       <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                        <tr className={darkMode ? "border-b border-white/10" : "border-b border-black/5"}>
+                        <tr>
                           {currentSheet.headers.map((header) => (
-                            <th key={header} className={`text-left px-5 py-3 font-medium whitespace-nowrap ${darkMode ? "text-white/55" : "text-black/45"}`}>{header}</th>
+                            <th key={header} className={`whitespace-nowrap px-4 py-3 text-left text-[12px] font-normal ${muted}`}>{header}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {rows.slice(0, 100).map((row) => (
-                          <tr key={row.__rowIndex} className={darkMode ? "border-b border-white/5" : "border-b border-black/5"}>
+                          <tr key={row.__rowIndex} className={`border-t ${hair}`}>
                             {currentSheet.headers.map((header) => {
                               const urls = extractUrls(row[header]);
                               return (
-                                <td key={header} className={`px-5 py-3 min-w-[170px] align-top ${darkMode ? "text-white/75" : "text-black/65"}`}>
+                                <td key={header} className={`min-w-[170px] px-4 py-3 align-top ${darkMode ? "text-white/75" : "text-[#3d3d3b]"}`}>
                                   {urls.length > 0 ? (
                                     <div className="flex flex-wrap gap-2">
                                       {urls.slice(0, 3).map((url) => (
-                                        <a key={url} href={url} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full ${darkMode ? "bg-white/5 text-white/70" : "bg-black/[0.04] text-black/60"}`}>
-                                          <ArrowUpRight className="w-3 h-3" /> Link
+                                        <a key={url} href={url} target="_blank" rel="noreferrer" className={`inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] ${darkMode ? "bg-white/[0.06] text-white/70" : "bg-[#f4f4f2] text-[#3d3d3b]"}`}>
+                                          <ArrowUpRight className="h-3 w-3" /> Link
                                         </a>
                                       ))}
-                                      {urls.length > 3 && <span className={`text-xs ${muted}`}>+{urls.length - 3}</span>}
+                                      {urls.length > 3 && <span className={`text-[12px] ${muted}`}>+{urls.length - 3}</span>}
                                     </div>
                                   ) : cleanValue(row[header]) || "—"}
                                 </td>
@@ -816,43 +814,43 @@ export default function SheetDashboard({ darkMode }) {
       )}
 
       {addModal && (
-        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4 sm:p-5">
-          <div className={`w-full max-w-lg rounded-[24px] p-5 sm:rounded-[28px] sm:p-6 ${darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"}`}>
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${muted}`}>New architecture</p>
-                <h3 className={`text-2xl  ${darkMode ? "text-white" : "text-black"}`}>Add Google Sheet</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[2px] sm:p-5">
+          <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`w-full max-w-lg rounded-[24px] border p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <IconTile icon={Sheet} tone="mint" darkMode={darkMode} size="md" />
+                <div>
+                  <h3 className={`text-[20px] leading-tight tracking-[-0.01em] ${ink}`}>Add Google Sheet</h3>
+                  <p className={`mt-1 text-[13px] ${muted}`}>A new dashboard is built from its architecture</p>
+                </div>
               </div>
-              <button onClick={() => setAddModal(false)} className={`w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}>
-                <X className={`w-5 h-5 ${muted}`} />
+              <button onClick={() => setAddModal(false)} aria-label="Close" className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}>
+                <X className="h-4 w-4" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className={`text-xs uppercase tracking-widest mb-2 block ${muted}`}>Sheet URL</label>
+                <label className={`mb-1.5 block text-[12px] ${muted}`}>Sheet URL</label>
                 <input
                   value={sheetUrl}
                   onChange={(event) => setSheetUrl(event.target.value)}
                   placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className={`w-full px-4 py-4 rounded-2xl text-sm outline-none ${darkMode ? "bg-white/5 text-white placeholder-white/25" : "bg-black/[0.03] text-black placeholder-black/30"}`}
+                  className={fieldInput}
                 />
               </div>
               <div>
-                <label className={`text-xs uppercase tracking-widest mb-2 block ${muted}`}>Display name</label>
+                <label className={`mb-1.5 block text-[12px] ${muted}`}>Display name</label>
                 <input
                   value={sheetName}
                   onChange={(event) => setSheetName(event.target.value)}
                   placeholder="Site daily report"
-                  className={`w-full px-4 py-4 rounded-2xl text-sm outline-none ${darkMode ? "bg-white/5 text-white placeholder-white/25" : "bg-black/[0.03] text-black placeholder-black/30"}`}
+                  className={fieldInput}
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-3 mt-6 sm:flex-row">
-              <button onClick={() => setAddModal(false)} className={`flex-1 px-4 py-3 rounded-full ${darkMode ? "bg-white/5 text-white" : "bg-black/[0.04] text-black"}`}>Cancel</button>
-              <button onClick={handleAddSheet} disabled={adding || !sheetUrl.trim()} className={`flex-1 px-4 py-3 rounded-full flex items-center justify-center gap-2 disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
-                {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-                Build Dashboard
-              </button>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button darkMode={darkMode} variant="secondary" onClick={() => setAddModal(false)}>Cancel</Button>
+              <Button darkMode={darkMode} variant="primary" icon={ImageIcon} loading={adding} onClick={handleAddSheet} disabled={adding || !sheetUrl.trim()}>Build dashboard</Button>
             </div>
           </div>
         </div>

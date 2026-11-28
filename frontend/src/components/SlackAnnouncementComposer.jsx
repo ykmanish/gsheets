@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Hash, Loader2, Megaphone, Send, Users, X } from "lucide-react";
+import { Hash, Megaphone, Send, Users, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
+import { Button, Chip, IconTile, cx } from "./ui";
 
 const CLOSE_MS = 220;
 
@@ -65,8 +66,8 @@ export default function SlackAnnouncementComposer({ darkMode }) {
 
   if (!access?.canPost) return null;
 
-  const muted = darkMode ? "text-white/65" : "text-black/58";
-  const field = `w-full rounded-[22px] border px-4 text-sm font-medium outline-none transition focus:ring-4 ${darkMode ? "border-white/10 bg-white/[0.05] text-white placeholder:text-white/35 focus:border-white/25 focus:ring-white/5" : "border-[#dfe7e4] bg-white text-[#161616] placeholder:text-black/35 focus:border-[#0f6b49]/40 focus:ring-emerald-500/10"}`;
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
+  const field = `w-full border px-4 text-[13.5px] outline-none transition ${darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:ring-[3px] focus:ring-white/10" : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"}`;
 
   async function post(event) {
     event.preventDefault();
@@ -96,70 +97,68 @@ export default function SlackAnnouncementComposer({ darkMode }) {
   }
 
   const drawer = open && createPortal(
-    <div className="fixed inset-0 z-[120] flex justify-end">
+    <div className="fixed inset-0 z-[120] flex justify-end newq">
       <div
         onMouseDown={closeDrawer}
-        className={`project-drawer-backdrop absolute inset-0 bg-[#020609]/55 backdrop-blur-sm ${closing ? "is-closing" : ""}`}
+        className={`ui-backdrop absolute inset-0 bg-black/20 backdrop-blur-[2px] ${closing ? "is-closing" : ""}`}
         aria-hidden="true"
       />
       <aside
         role="dialog"
         aria-modal="true"
         aria-label="Post an announcement"
-        className={`project-drawer-panel relative flex h-full w-full max-w-[520px] flex-col overflow-hidden border-l shadow-[0_30px_100px_rgba(0,0,0,0.25)] ${closing ? "is-closing" : ""} ${darkMode ? "border-white/10 bg-[#171a20] text-white" : "border-[#dfe7e4] bg-white text-[#161616]"}`}
-      >
-        {!darkMode && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-56 overflow-hidden">
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(17,17,17,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(17,17,17,0.035)_1px,transparent_1px)] bg-[size:72px_72px]" />
-            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-transparent" />
-          </div>
+        className={cx(
+          "ui-drawer relative flex h-full w-full max-w-[520px] flex-col overflow-hidden border-l shadow-[0_24px_70px_rgba(0,0,0,0.16)] sm:m-2.5 sm:h-[calc(100%-20px)] sm:rounded-3xl sm:border",
+          closing && "is-closing",
+          darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]",
         )}
-
-        <header className="relative z-10 flex items-start justify-between gap-4 px-6 pb-2 pt-6 sm:px-7">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-[#dfe7e4] bg-[#e8f6ee] text-[#0f6b49]"}`}>
-                <Megaphone className="h-4 w-4" /> Announcement
-              </span>
-              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-[#eadb8f] bg-[#fff4a8] text-[#5b4b00]"}`}>
-                <Hash className="h-3.5 w-3.5" /> {access.channel}
-              </span>
-              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-[#efaccb] bg-[#f7bdd7] text-[#6f123b]"}`}>
-                <Users className="h-3.5 w-3.5" /> Everyone
-              </span>
+      >
+        <header className={cx("flex items-center justify-between gap-3 border-b px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={Megaphone} tone="peach" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h2 className="truncate text-[17px] tracking-[-0.01em]">Share an announcement</h2>
+              <p className={cx("truncate text-[12.5px]", muted)}>Goes to everyone, with your name and department</p>
             </div>
-            <h2 className={`mt-5 text-3xl small font-black leading-[0.96] tracking-tight ${darkMode ? "text-white" : "text-[#161616]"}`}>Share an announcement.</h2>
-            <p className={`mt-3 text-sm font-medium leading-6 ${muted}`}>It goes to everyone in the Slack announcement channel, with your name and department.</p>
           </div>
-          <button type="button" onClick={closeDrawer} aria-label="Close" className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}>
-            <X className="h-5 w-5" />
+          <button type="button" onClick={closeDrawer} aria-label="Close" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
+            <X className="h-4 w-4" />
           </button>
         </header>
 
-        <form onSubmit={post} className="relative z-10 flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5 sm:px-7">
+        <form onSubmit={post} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+            <div className="flex flex-wrap gap-1.5">
+              <Chip darkMode={darkMode} tone="sky" icon={Hash}>{access.channel}</Chip>
+              <Chip darkMode={darkMode} tone="lavender" icon={Users}>Everyone</Chip>
+            </div>
             <label className="block">
-              <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Title</span>
-              <input ref={titleRef} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={150} placeholder="e.g. Office closed on Friday" className={`mt-2 h-12 font-semibold ${field}`} />
+              <span className={`text-[12.5px] ${muted}`}>Title</span>
+              <input ref={titleRef} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={150} placeholder="e.g. Office closed on Friday" className={`mt-1.5 h-11 rounded-full ${field}`} />
             </label>
             <label className="block">
-              <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Message</span>
-              <textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={2800} rows={7} placeholder="What everyone should know" className={`mt-2 resize-y py-3.5 ${field}`} />
+              <span className={`text-[12.5px] ${muted}`}>Message</span>
+              <textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={2800} rows={7} placeholder="What everyone should know" className={`mt-1.5 resize-y rounded-[16px] py-3 leading-6 ${field}`} />
             </label>
-            <label className={`flex items-center gap-2.5 rounded-[18px] px-4 py-3 text-sm font-medium ${darkMode ? "bg-white/[0.05] text-white/75" : "bg-[#f7f5ef] text-black/70"}`}>
-              <input type="checkbox" checked={notifyAll} onChange={(event) => setNotifyAll(event.target.checked)} className="h-4 w-4 accent-[#00c853]" />
-              Notify everyone in the channel (@channel)
+            <label className={cx("flex cursor-pointer items-center justify-between gap-3 rounded-[16px] px-4 py-3 text-[13px]", darkMode ? "bg-white/[0.04] text-white/80" : "bg-[#f7f7f5] text-[#3d3d3b]")}>
+              <span className="flex items-center gap-2.5">
+                <input type="checkbox" checked={notifyAll} onChange={(event) => setNotifyAll(event.target.checked)} className={cx("h-4 w-4", darkMode ? "accent-[#cff07a]" : "accent-[#141414]")} />
+                Notify everyone in the channel (@channel)
+              </span>
             </label>
 
             {access.recent?.length > 0 && (
               <div className="pt-2">
-                <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Recently posted</span>
-                <ul className="mt-3 grid gap-2">
+                <span className={`text-[12.5px] ${muted}`}>Recently posted</span>
+                <ul className={cx("mt-2 divide-y", darkMode ? "divide-white/[0.07]" : "divide-[#f0f0ee]")}>
                   {access.recent.map((item) => (
-                    <li key={item.id} className={`rounded-[18px] border px-4 py-3 text-sm ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-[#dfe7e4] bg-white"}`}>
-                      <span className="block font-semibold">{item.title}</span>
-                      <span className={`mt-0.5 block text-xs ${muted}`}>
-                        {item.authorName}{item.department ? ` · ${item.department}` : ""} · {new Date(item.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                    <li key={item.id} className="flex items-start gap-3 py-3 text-[13.5px]">
+                      <IconTile icon={Megaphone} tone="neutral" darkMode={darkMode} size="xs" />
+                      <span className="min-w-0">
+                        <span className="block truncate">{item.title}</span>
+                        <span className={`mt-0.5 block text-[12px] ${muted}`}>
+                          {item.authorName}{item.department ? ` · ${item.department}` : ""} · {new Date(item.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                        </span>
                       </span>
                     </li>
                   ))}
@@ -168,11 +167,11 @@ export default function SlackAnnouncementComposer({ darkMode }) {
             )}
           </div>
 
-          <footer className={`flex items-center justify-end gap-3 border-t px-6 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-[#dfe7e4]"}`}>
-            <button type="button" onClick={closeDrawer} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
-            <button type="submit" disabled={posting} className="flex h-11 items-center justify-center gap-2 rounded-full bg-[#00c853] px-6 text-sm font-bold text-white transition hover:bg-[#00b84d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60">
-              {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Post announcement
-            </button>
+          <footer className={cx("flex items-center justify-end gap-2 border-t px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+            <Button darkMode={darkMode} variant="secondary" onClick={closeDrawer}>Cancel</Button>
+            <Button type="submit" darkMode={darkMode} variant={darkMode ? "accent" : "primary"} disabled={posting} loading={posting} icon={Send}>
+              Post announcement
+            </Button>
           </footer>
         </form>
       </aside>
@@ -185,7 +184,10 @@ export default function SlackAnnouncementComposer({ darkMode }) {
       <button
         type="button"
         onClick={openDrawer}
-        className={`flex h-9 items-center gap-1.5 rounded-[10px] border px-2.5 text-[13px] font-medium transition-colors active:scale-[0.98] sm:px-3 ${darkMode ? "border-white/10 bg-white/[0.04] text-white/85 hover:bg-white/10" : "border-[#e4e4e1] bg-white text-[#171717] shadow-[0_1px_1px_rgba(0,0,0,0.03)] hover:bg-[#f6f6f4]"}`}
+        className={cx(
+          "flex h-9 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition-colors active:scale-[0.98] sm:px-3.5",
+          darkMode ? "border-white/10 bg-white/[0.04] text-white/85 hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]",
+        )}
         title="Post an announcement"
         aria-label="Post an announcement"
       >

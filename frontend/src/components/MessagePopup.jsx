@@ -144,37 +144,38 @@ function MessagePopupCard({ item, darkMode, onView }) {
 
   return (
     <div
-      className={`forum-message-popup pointer-events-auto w-full max-w-[min(840px,calc(100vw-2.5rem))] overflow-hidden rounded-[22px] border shadow-[0_24px_64px_rgba(15,23,42,0.26)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/[0.07] bg-white text-[#111827]"}`}
+      style={{ boxShadow: "var(--ui-shadow-pop)" }}
+      className={`forum-message-popup newq pointer-events-auto w-full max-w-[min(840px,calc(100vw-2.5rem))] overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#17181c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}
       role="alert"
     >
       <div className="flex items-start gap-3.5 px-4 pt-4">
         <UserAvatar user={item.sender} name={item.senderName} className="h-11 w-11" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="min-w-0 flex-1 truncate text-[15px] font-bold leading-tight">{item.senderName || "Someone"}</p>
-            <span className={`shrink-0 text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>{popupTime(item.createdAt)}</span>
+            <p className="min-w-0 flex-1 truncate text-[15px] leading-tight">{item.senderName || "Someone"}</p>
+            <span className={`shrink-0 text-[12px] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{popupTime(item.createdAt)}</span>
           </div>
           {item.context && (
-            <p className={`mt-0.5 truncate text-xs font-semibold ${darkMode ? "text-white/45" : "text-black/45"}`}>{item.context}</p>
+            <p className={`mt-0.5 truncate text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{item.context}</p>
           )}
-          <p className={`mt-1.5 line-clamp-3 break-words text-[15px] leading-6 ${darkMode ? "text-white/80" : "text-black/72"}`}>
+          <p className={`mt-1.5 line-clamp-3 break-words text-[14px] leading-6 ${darkMode ? "text-white/75" : "text-[#3d3d3b]"}`}>
             {item.text || "Sent a message"}
           </p>
         </div>
         <button
           type="button"
           onClick={() => dismissMessagePopup(item.id)}
-          className={`-mr-1.5 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${darkMode ? "text-white/45 hover:bg-white/10 hover:text-white" : "text-black/35 hover:bg-black/[0.05] hover:text-black"}`}
+          className={`-mr-1.5 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/60 hover:bg-white/10 hover:text-white" : "bg-[#f4f4f2] text-[#5f5f5c] hover:bg-[#ebebe8] hover:text-[#141414]"}`}
           aria-label="Dismiss message notification"
         >
-          <X className="h-4.5 w-4.5" />
+          <X className="h-4 w-4" />
         </button>
       </div>
       {/* One footer row on a wide card — reply box, then View — so the extra width gets used
           instead of leaving two sparse rows stacked on top of each other. */}
       <div className="flex flex-col gap-2.5 px-4 pb-4 pt-3 sm:flex-row sm:items-center sm:gap-3">
         {item.mentioned && (
-          <span className="inline-flex h-8 shrink-0 items-center self-start rounded-full bg-amber-50 px-3 text-xs font-bold text-amber-700 sm:self-auto dark:bg-amber-400/12 dark:text-amber-200">
+          <span className={`inline-flex h-8 shrink-0 items-center self-start rounded-full px-3 text-[12px] sm:self-auto ${darkMode ? "bg-amber-400/[0.13] text-[#f5d27a]" : "bg-[#fbf0d4] text-[#8a6200]"}`}>
             Mentioned you
           </span>
         )}
@@ -192,16 +193,16 @@ function MessagePopupCard({ item, darkMode, onView }) {
             disabled={sending}
             placeholder={`Reply to ${replyTarget}…`}
             aria-label="Reply message"
-            className={`h-11 min-w-0 flex-1 rounded-full border px-4 text-[15px] outline-none transition disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.06] text-white placeholder:text-white/35 focus:border-[#2563eb]" : "border-[#e3e8ef] bg-[#f6f8fb] text-[#111827] placeholder:text-slate-400 focus:border-[#2563eb] focus:bg-white"}`}
+            className={`h-10 min-w-0 flex-1 rounded-full border border-transparent px-4 text-[14px] outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-[3px] focus:ring-white/10" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"}`}
           />
           <button
             type="button"
             onClick={() => void sendReply()}
             disabled={sending || !draft.trim()}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#22c55e] text-white transition hover:bg-[#16a34a] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${darkMode ? "bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black"}`}
             aria-label="Send reply"
           >
-            {sending ? <LoaderCircle className="h-4.5 w-4.5 animate-spin" /> : <Send className="h-4.5 w-4.5" />}
+            {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
         <button
@@ -210,7 +211,7 @@ function MessagePopupCard({ item, darkMode, onView }) {
             dismissMessagePopup(item.id);
             onView?.(item);
           }}
-          className="h-11 shrink-0 rounded-full bg-[#2563eb] px-6 text-[15px] font-bold text-white transition hover:bg-[#1d4ed8] active:scale-95"
+          className={`h-10 shrink-0 rounded-full border px-5 text-[13.5px] transition active:scale-95 ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
         >
           View
         </button>

@@ -33,7 +33,7 @@ export function useShell() {
 function ShellSkeleton({ darkMode }) {
   const bar = darkMode ? "skeleton-bar skeleton-bar-dark" : "skeleton-bar";
   return (
-    <div className={`flex min-h-dvh ${darkMode ? "bg-[#0b0c0f]" : "bg-[#eef3f2]"}`} aria-busy="true">
+    <div className={`flex min-h-dvh ${darkMode ? "bg-[#0b0c0f]" : "bg-[#f5f5f3]"}`} aria-busy="true">
       <div className={`hidden w-[248px] shrink-0 flex-col gap-3 border-r p-4 md:flex ${darkMode ? "border-white/10 bg-[#101114]" : "border-[#e7eaee] bg-white"}`}>
         <div className={`h-8 w-36 rounded-lg ${bar}`} />
         <div className={`mt-2 h-10 rounded-xl ${bar}`} />
@@ -538,7 +538,8 @@ function ShellContent({ children }) {
     [allowedMenus, darkMode, selectedDocs, user],
   );
 
-  if (!isMounted || !user) return <ShellSkeleton darkMode={darkMode} />;
+  // Light until mounted: the server can't know the stored theme, so the first paint must match it.
+  if (!isMounted || !user) return <ShellSkeleton darkMode={isMounted && darkMode} />;
 
   if (maintenance?.enabled && !user?.isSuperAdmin) {
     return <MaintenanceScreen darkMode={darkMode} maintenance={maintenance} user={user} onLogout={logout} />;
@@ -580,7 +581,7 @@ function ShellContent({ children }) {
   );
 
   return (
-    <div className={`shell-root flex newq ${hideTopChrome ? "h-dvh max-h-dvh overflow-hidden" : "min-h-dvh md:h-screen"} ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#f3f3f1]"}`}>
+    <div className={`shell-root flex newq ${hideTopChrome ? "h-dvh max-h-dvh overflow-hidden" : "min-h-dvh md:h-screen"} ${darkMode ? "dark bg-[#0b0c0f]" : "bg-[#f5f5f3]"}`}>
       <Toaster position="top-center" />
       <Sidebar
         activeMenu={moduleId}
@@ -596,7 +597,7 @@ function ShellContent({ children }) {
         onOpenSearch={() => setCommandPaletteOpen(true)}
       />
       {/* Each page sits on a white rounded panel inside the grey frame, as in the reference. */}
-      <div className={`app-panel flex-1 newq flex min-h-0 min-w-0 flex-col overflow-hidden md:my-2 md:mr-2 md:rounded-[16px] md:border ${darkMode ? "bg-[#101114] md:border-white/10" : "bg-white md:border-[#e8e8e6] md:shadow-[0_1px_2px_rgba(0,0,0,0.04)]"}`}>
+      <div className={`app-panel flex-1 newq flex min-h-0 min-w-0 flex-col overflow-hidden md:my-2.5 md:mr-2.5 md:rounded-[24px] md:border ${darkMode ? "bg-[#101114] md:border-white/10" : "bg-white md:border-[#ececec]"}`}>
         {!hideTopChrome && (
           <>
             <Navbar
@@ -626,7 +627,7 @@ function ShellContent({ children }) {
         <button
           type="button"
           onClick={() => router.push("/loop")}
-          className="fixed bottom-5 right-5 z-[80] grid h-14 w-14 place-items-center rounded-full bg-[#2563eb] text-white shadow-[0_18px_45px_rgba(37,99,235,0.34)] transition hover:scale-105 hover:bg-[#1d4ed8] active:scale-95 lg:hidden"
+          className="loop-launcher fixed bottom-5 right-5 z-[80] grid h-14 w-14 place-items-center rounded-full bg-[#2563eb] text-white shadow-[0_18px_45px_rgba(37,99,235,0.34)] transition hover:scale-105 hover:bg-[#1d4ed8] active:scale-95 lg:hidden"
           aria-label="Open Loop chat"
         >
           <MessageCircleMore className="h-6 w-6" />

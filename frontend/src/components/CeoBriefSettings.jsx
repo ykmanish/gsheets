@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Bot, CalendarCheck, Clock3, FileText, Hash, Loader2, Save, Send } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { TimeInput } from "./ui";
+import { Button, Chip, IconTile, TimeInput, Toggle, cx } from "./ui";
 
 // Slack's four-colour mark (lucide no longer ships brand icons).
 function SlackMark({ className = "h-4 w-4" }) {
@@ -31,9 +31,8 @@ export default function CeoBriefSettings({ darkMode }) {
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState("");
 
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const field = `h-11 w-full rounded-2xl border px-3 text-sm font-semibold outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white focus:border-white/25" : "border-black/10 bg-white text-[#171714] focus:border-black/25"}`;
-  const chip = `inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold`;
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const field = `h-10 w-full rounded-full border px-4 text-[13.5px] outline-none transition ${darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:ring-[3px] focus:ring-white/10" : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"}`;
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +87,7 @@ export default function CeoBriefSettings({ darkMode }) {
 
   if (!settings) {
     return (
-      <section className={`mb-5 flex items-center gap-3 rounded-[30px] border p-6 text-sm ${muted} ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white"}`}>
+      <section className={cx("mb-5 flex items-center gap-3 rounded-[20px] border p-6 text-[13px]", muted, darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white")}>
         <Loader2 className="h-4 w-4 animate-spin" /> Loading CEO brief settings…
       </section>
     );
@@ -98,50 +97,48 @@ export default function CeoBriefSettings({ darkMode }) {
   const channelError = status?.channel?.error;
 
   return (
-    <section className={`mb-5 overflow-hidden rounded-[30px] border p-5 sm:p-7 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-white"}`}>
+    <section className={cx("mb-5 rounded-[20px] border p-5 sm:p-6", darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white")}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <span className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-xs font-black uppercase tracking-[0.14em] ${darkMode ? "bg-[#4a154b]/40 text-[#e9c8ea]" : "bg-[#4a154b]/10 text-[#4a154b]"}`}>
-            <SlackMark /> CEO daily report
-          </span>
-          <h2 className="small mt-4 text-2xl font-black">Today&apos;s report on Slack</h2>
-          <p className={`mt-2 max-w-2xl text-sm leading-6 ${muted}`}>
-            Three posts in the Slack channel, Monday to Saturday, each under a &quot;Today&apos;s Report&quot; title with the day and date and colour-coded green, amber or red: the DMR at its cut-off, tomorrow&apos;s plan at its cut-off, and the evening report with the CEO&apos;s priorities and the DMR and employee PDFs. Nothing else goes to Slack.
-          </p>
+        <div className="flex min-w-0 items-start gap-3">
+          <IconTile icon={<SlackMark className="h-5 w-5" />} tone="neutral" darkMode={darkMode} size="md" />
+          <div className="min-w-0">
+            <h2 className="text-[18px] leading-tight tracking-[-0.01em]">Today&apos;s report on Slack</h2>
+            <p className={cx("text-[18px] leading-tight tracking-[-0.01em]", darkMode ? "text-white/40" : "text-[#9a9a98]")}>the CEO daily report</p>
+            <p className={`mt-2 max-w-2xl text-[13px] leading-6 ${muted}`}>
+              Three posts in the Slack channel, Monday to Saturday, each under a &quot;Today&apos;s Report&quot; title with the day and date and colour-coded green, amber or red: the DMR at its cut-off, tomorrow&apos;s plan at its cut-off, and the evening report with the CEO&apos;s priorities and the DMR and employee PDFs. Nothing else goes to Slack.
+            </p>
+          </div>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={settings.enabled}
-          onClick={() => setSettings((current) => ({ ...current, enabled: !current.enabled }))}
-          className={`inline-flex h-11 shrink-0 items-center gap-3 rounded-full px-4 text-sm font-semibold transition ${settings.enabled ? "bg-emerald-500/10 text-emerald-600" : darkMode ? "bg-white/10 text-white/55" : "bg-slate-100 text-slate-500"}`}
-        >
-          <span className={`relative h-6 w-11 rounded-full transition ${settings.enabled ? "bg-emerald-500" : darkMode ? "bg-white/20" : "bg-slate-300"}`}>
-            <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${settings.enabled ? "left-6" : "left-1"}`} />
-          </span>
-          {settings.enabled ? "On" : "Off"}
-        </button>
+        <div className={cx("flex shrink-0 items-center gap-3 rounded-full py-1.5 pl-4 pr-1.5", darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]")}>
+          <span className="text-[13px]">{settings.enabled ? "On" : "Off"}</span>
+          <Toggle
+            darkMode={darkMode}
+            checked={settings.enabled}
+            label="CEO daily report"
+            onChange={() => setSettings((current) => ({ ...current, enabled: !current.enabled }))}
+          />
+        </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        <span className={`${chip} ${status?.slackConfigured ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-500"}`}>
-          <SlackMark className="h-3.5 w-3.5" /> {status?.slackConfigured ? "Slack connected" : "Slack not connected"}
-        </span>
-        <span className={`${chip} ${channelName ? "bg-sky-500/10 text-sky-600" : "bg-amber-500/10 text-amber-600"}`}>
-          <Hash className="h-3.5 w-3.5" /> {channelName ? `Posts in ${channelName}` : channelError || "Channel not found"}
-        </span>
-        <span className={`${chip} ${status?.canAttachPdf ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
-          <FileText className="h-3.5 w-3.5" /> {status?.canAttachPdf ? "PDF attaches in Slack" : "PDF sent as a link (add files:write to the Slack app)"}
-        </span>
-        <span className={`${chip} ${status?.aiConfigured ? "bg-violet-500/10 text-violet-600" : "bg-rose-500/10 text-rose-500"}`}>
-          <Bot className="h-3.5 w-3.5" /> {status?.aiConfigured ? `AI summary: ${status.model}` : "AI summary off (no Anthropic key)"}
-        </span>
+      <div className="mt-5 flex flex-wrap gap-1.5">
+        <Chip darkMode={darkMode} tone={status?.slackConfigured ? "mint" : "rose"} icon={SlackMark}>
+          {status?.slackConfigured ? "Slack connected" : "Slack not connected"}
+        </Chip>
+        <Chip darkMode={darkMode} tone={channelName ? "sky" : "amber"} icon={Hash}>
+          {channelName ? `Posts in ${channelName}` : channelError || "Channel not found"}
+        </Chip>
+        <Chip darkMode={darkMode} tone={status?.canAttachPdf ? "mint" : "amber"} icon={FileText}>
+          {status?.canAttachPdf ? "PDF attaches in Slack" : "PDF sent as a link (add files:write to the Slack app)"}
+        </Chip>
+        <Chip darkMode={darkMode} tone={status?.aiConfigured ? "lavender" : "rose"} icon={Bot}>
+          {status?.aiConfigured ? `AI summary: ${status.model}` : "AI summary off (no Anthropic key)"}
+        </Chip>
       </div>
 
       <label className="mt-6 block max-w-xl">
-        <span className={`text-xs font-semibold uppercase tracking-wide ${muted}`}>Slack channel</span>
-        <div className="relative mt-2">
-          <Hash className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+        <span className={`text-[12.5px] ${muted}`}>Slack channel</span>
+        <div className="relative mt-1.5">
+          <Hash className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
           <input
             type="text"
             value={settings.channel}
@@ -153,40 +150,30 @@ export default function CeoBriefSettings({ darkMode }) {
       </label>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {TIMES.map(({ key, part, label, hint, icon: Icon }) => (
-          <div key={key} className={`rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-slate-200 bg-[#f8f9fc]"}`}>
-            <div className="flex items-center gap-2 text-sm font-black">
-              <Icon className="h-4 w-4" /> {label}
-            </div>
-            <p className={`mt-1 text-xs leading-5 ${muted}`}>{hint}</p>
+        {TIMES.map(({ key, part, label, hint, icon: Icon }, index) => (
+          <div key={key} className={cx("relative rounded-[20px] border p-5", darkMode ? "border-white/10 bg-white/[0.02]" : "border-[#ececec] bg-white")}>
+            <span className={cx("absolute right-5 top-4 text-[12px] tabular-nums", darkMode ? "text-white/35" : "text-[#b0b0ae]")}>{String(index + 1).padStart(2, "0")}</span>
+            <IconTile icon={Icon} tone={["mint", "amber", "lavender"][index] || "neutral"} darkMode={darkMode} size="md" />
+            <p className="mt-4 text-[15px] tracking-[-0.01em]">{label}</p>
+            <p className={`mt-1 text-[12.5px] leading-5 ${muted}`}>{hint}</p>
             <TimeInput
               darkMode={darkMode}
               value={settings[key]}
               onChange={(event) => setSettings((current) => ({ ...current, [key]: event.target.value }))}
-              className="mt-3"
+              className="mt-4"
               aria-label={`${label} time`}
             />
-            <button
-              type="button"
-              onClick={() => sendNow(part)}
-              disabled={Boolean(sending)}
-              className={`mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-full text-xs font-semibold transition active:scale-[0.98] disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-white text-[#171714] ring-1 ring-black/10 hover:bg-slate-50"}`}
-            >
-              {sending === part ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send now
-            </button>
+            <Button darkMode={darkMode} variant="secondary" size="sm" onClick={() => sendNow(part)} disabled={Boolean(sending)} loading={sending === part} icon={Send} className="mt-2 w-full">
+              Send now
+            </Button>
           </div>
         ))}
       </div>
 
       <div className="mt-5 flex justify-end">
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className={`inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${darkMode ? "bg-white text-black hover:bg-white/90" : "bg-[#171714] text-white hover:bg-black/85"}`}
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save schedule
-        </button>
+        <Button darkMode={darkMode} variant="primary" size="lg" onClick={save} disabled={saving} loading={saving} icon={Save}>
+          Save schedule
+        </Button>
       </div>
     </section>
   );

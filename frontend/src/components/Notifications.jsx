@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Eye, Loader2, MailOpen, Trash2, X } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, Eye, Loader2, MailOpen, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
-import { ConfirmModal } from "./ui";
+import { Button, Chip, ConfirmModal, EmptyState, IconTile, InfoRows, PageHeader, StatTile } from "./ui";
 import { API_URL } from "./AuthProvider";
 
 export default function Notifications({ darkMode }) {
@@ -11,8 +11,7 @@ export default function Notifications({ darkMode }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  const panel = darkMode ? "bg-white/[0.03] border border-white/10" : "bg-white/80 border border-black/5";
-  const muted = darkMode ? "text-white/50" : "text-black/45";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -73,102 +72,87 @@ export default function Notifications({ darkMode }) {
     return new Date(dateString).toLocaleString();
   };
 
+  const severityTone = (severity) => (severity === "error" ? "rose" : severity === "warning" ? "amber" : "mint");
+
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 newq sm:px-6 lg:px-8 lg:py-8" style={{ background: darkMode ? "linear-gradient(180deg,#111318,#0c0d10)" : "linear-gradient(180deg,#f7f6f2,#f3f1ea)" }}>
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between mb-8">
-          <div>
-            <p className={`text-[11px] uppercase tracking-[0.32em] mb-3 ${muted}`}>Action inbox</p>
-            <h2 className={`text-2xl small font-semibold sm:text-3xl md:text-4xl ${darkMode ? "text-white" : "text-black"}`}>Important notifications</h2>
-            <p className={`text-sm mt-4 max-w-2xl ${muted}`}>Every automation alert, failed action, AI finding, and scheduled report notice lands here.</p>
-          </div>
-          <button onClick={markAllRead} disabled={unread === 0} className={`flex w-full items-center justify-center gap-2 px-5 py-3 rounded-full disabled:opacity-40 sm:w-auto ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
-            <MailOpen className="w-4 h-4" /> Mark all read
-          </button>
+    <div className={`newq flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}>
+      <div className="mx-auto max-w-7xl">
+        <PageHeader
+          darkMode={darkMode}
+          badge="Action inbox"
+          badgeIcon={Bell}
+          badgeTone="sky"
+          title="Important notifications"
+          subtitle="from automations and reports"
+          description="Every automation alert, failed action, AI finding, and scheduled report notice lands here."
+          actions={
+            <Button darkMode={darkMode} variant="primary" icon={MailOpen} onClick={markAllRead} disabled={unread === 0}>
+              Mark all read
+            </Button>
+          }
+        />
+
+        <div className="mb-6 mt-6 grid gap-3 sm:grid-cols-3">
+          <StatTile darkMode={darkMode} icon={Bell} tone="sky" value={notifications.length} label="All" />
+          <StatTile darkMode={darkMode} icon={MailOpen} tone="lavender" value={unread} label="Unread" />
+          <StatTile darkMode={darkMode} icon={AlertTriangle} tone="amber" value={notifications.filter((item) => item.severity === "warning" || item.severity === "error").length} label="Warnings" />
         </div>
 
-        <div className="grid sm:grid-cols-3 gap-4 mb-6">
-          {[
-            ["All", notifications.length],
-            ["Unread", unread],
-            ["Warnings", notifications.filter((item) => item.severity === "warning" || item.severity === "error").length],
-          ].map(([label, value]) => (
-            <div key={label} className={`rounded-[24px] p-5 ${panel}`}>
-              <p className={`text-sm ${muted}`}>{label}</p>
-              <p className={`text-3xl mt-4 ${darkMode ? "text-white" : "text-black"}`}>{value}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className={`rounded-[30px] overflow-hidden ${panel}`}>
+        <div className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
           {loading ? (
-            <div className="py-20 flex justify-center"><Loader2 className={`w-7 h-7 animate-spin ${muted}`} /></div>
+            <div className="flex justify-center py-20"><Loader2 className={`h-6 w-6 animate-spin ${muted}`} /></div>
+          ) : notifications.length === 0 ? (
+            <div className="p-4">
+              <EmptyState darkMode={darkMode} icon={CheckCircle2} tone="mint" title="No notifications yet" text="Run an automation and important results will show up here." />
+            </div>
           ) : (
             <div className="max-h-[56vh] overflow-auto">
               <table className="w-full min-w-[900px] text-left">
                 <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                  <tr className={darkMode ? "border-b border-white/10" : "border-b border-black/5"}>
+                  <tr className={`border-b ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
                     {["Title", "Automation", "Category", "Severity", "Created", "Status", "Action"].map((header) => (
-                      <th key={header} className={`px-5 py-4 text-[11px] uppercase tracking-[0.18em] font-medium ${darkMode ? "text-white/45" : "text-black/35"}`}>
+                      <th key={header} className={`px-5 py-3 text-[12px] ${muted}`}>
                         {header}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {notifications.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="px-5 py-16 text-center">
-                        <CheckCircle2 className={`w-10 h-10 mx-auto mb-4 ${muted}`} />
-                        <p className={`text-lg ${darkMode ? "text-white" : "text-black"}`}>No notifications yet</p>
-                        <p className={`text-sm mt-2 ${muted}`}>Run an automation and important results will show up here.</p>
-                      </td>
-                    </tr>
-                  ) : notifications.map((notification) => (
+                  {notifications.map((notification) => (
                     <tr
                       key={notification.id}
-                      className={`transition-colors ${darkMode ? "border-b border-white/5 hover:bg-white/[0.03]" : "border-b border-black/5 hover:bg-black/[0.02]"}`}
+                      className={`border-b transition-colors last:border-b-0 ${darkMode ? "border-white/[0.06] hover:bg-white/[0.03]" : "border-[#f0f0ee] hover:bg-[#fafaf9]"}`}
                     >
-                      <td className="px-5 py-4 min-w-[220px]">
+                      <td className="min-w-[220px] px-5 py-3.5">
                         <div className="flex items-center gap-2">
-                          {!notification.readAt && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
-                          <span className={`block max-w-[260px] truncate text-sm ${darkMode ? "text-white" : "text-black"}`}>
+                          {!notification.readAt && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-[#2f6fc0]" />}
+                          <span className="block max-w-[260px] truncate text-[13.5px]">
                             {notification.title || "Untitled notification"}
                           </span>
                         </div>
                       </td>
-                      <td className={`px-5 py-4 text-sm ${muted}`}>{notification.automationName || "N/A"}</td>
-                      <td className={`px-5 py-4 text-sm ${muted}`}>{notification.category || "N/A"}</td>
-                      <td className="px-5 py-4">
-                        <span className={`text-xs px-3 py-1 rounded-full ${
-                          notification.severity === "error"
-                            ? "bg-red-500/10 text-red-500"
-                            : notification.severity === "warning"
-                            ? "bg-amber-500/10 text-amber-500"
-                            : darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-green-50 text-green-700"
-                        }`}>
-                          {notification.severity || "info"}
-                        </span>
+                      <td className={`px-5 py-3.5 text-[13px] ${muted}`}>{notification.automationName || "N/A"}</td>
+                      <td className={`px-5 py-3.5 text-[13px] ${muted}`}>{notification.category || "N/A"}</td>
+                      <td className="px-5 py-3.5">
+                        <Chip tone={severityTone(notification.severity)} darkMode={darkMode}>{notification.severity || "info"}</Chip>
                       </td>
-                      <td className={`px-5 py-4 text-sm whitespace-nowrap ${muted}`}>{formatDateTime(notification.createdAt)}</td>
-                      <td className={`px-5 py-4 text-sm ${muted}`}>{notification.readAt ? "Read" : "Unread"}</td>
-                      <td className="px-5 py-4">
-                        <div className="flex gap-2">
+                      <td className={`whitespace-nowrap px-5 py-3.5 text-[13px] ${muted}`}>{formatDateTime(notification.createdAt)}</td>
+                      <td className={`px-5 py-3.5 text-[13px] ${muted}`}>{notification.readAt ? "Read" : "Unread"}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex gap-1.5">
                           <button
                             onClick={() => openNotification(notification)}
-                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                              darkMode ? "bg-white/5 text-white/70 hover:bg-white/10" : "bg-black/[0.04] text-black/60 hover:bg-black/[0.07]"
-                            }`}
+                            className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${darkMode ? "bg-white/[0.07] text-white/75 hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8]"}`}
                             title="View notification details"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(notification)}
-                            className="w-10 h-10 rounded-full flex items-center justify-center text-red-500 hover:bg-red-500/10"
+                            className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${darkMode ? "bg-rose-400/[0.13] text-[#f7aab5] hover:bg-rose-400/20" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"}`}
                             title="Delete notification"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -182,53 +166,48 @@ export default function Notifications({ darkMode }) {
       </div>
 
       {viewNotification && (
-        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4 sm:p-5">
-          <div className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-[24px] p-5 sm:rounded-[28px] sm:p-6 ${darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"}`}>
-            <div className="flex items-start justify-between gap-4 mb-6">
-              <div className="min-w-0">
-                <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${muted}`}>Notification details</p>
-                <h3 className={`text-2xl font-semibold ${darkMode ? "text-white" : "text-black"}`}>
-                  {viewNotification.title || "Untitled notification"}
-                </h3>
+        <div className="ui-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 sm:p-5">
+          <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[24px] border p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <IconTile icon={Bell} tone={severityTone(viewNotification.severity)} darkMode={darkMode} size="sm" />
+                <div className="min-w-0">
+                  <h3 className="truncate text-[17px] tracking-[-0.01em]">{viewNotification.title || "Untitled notification"}</h3>
+                  <p className={`text-[12.5px] ${muted}`}>Notification details</p>
+                </div>
               </div>
               <button
                 onClick={() => setViewNotification(null)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}
+                className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
                 title="Close"
               >
-                <X className={`w-5 h-5 ${muted}`} />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-3 mb-5">
-              {[
+            <InfoRows
+              darkMode={darkMode}
+              rows={[
                 ["Automation", viewNotification.automationName || "N/A"],
                 ["Category", viewNotification.category || "N/A"],
                 ["Severity", viewNotification.severity || "info"],
                 ["Status", viewNotification.readAt ? "Read" : "Unread"],
                 ["Created", formatDateTime(viewNotification.createdAt)],
                 ["Read at", formatDateTime(viewNotification.readAt)],
-              ].map(([label, value]) => (
-                <div key={label} className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-black/[0.025]"}`}>
-                  <p className={`text-[11px] uppercase tracking-[0.18em] ${muted}`}>{label}</p>
-                  <p className={`text-sm mt-2 break-words ${darkMode ? "text-white/80" : "text-black/70"}`}>{value}</p>
-                </div>
-              ))}
-            </div>
+              ]}
+            />
 
-            <div className={`rounded-2xl p-5 ${darkMode ? "bg-white/[0.04]" : "bg-black/[0.025]"}`}>
-              <p className={`text-[11px] uppercase tracking-[0.18em] mb-3 ${muted}`}>Message</p>
-              <p className={`text-sm leading-6 whitespace-pre-wrap ${darkMode ? "text-white/80" : "text-black/70"}`}>
+            <div className={`mt-3 rounded-[16px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f4f2]"}`}>
+              <p className={`mb-2 text-[12px] ${muted}`}>Message</p>
+              <p className={`whitespace-pre-wrap text-[13.5px] leading-6 ${darkMode ? "text-white/80" : "text-[#3d3d3b]"}`}>
                 {viewNotification.message || "No message provided."}
               </p>
             </div>
-            <button
-              onClick={() => setDeleteConfirm(viewNotification)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-red-600 px-4 py-3 text-white hover:bg-red-700"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete notification
-            </button>
+            <div className="mt-5 flex justify-end">
+              <Button darkMode={darkMode} variant="danger" icon={Trash2} onClick={() => setDeleteConfirm(viewNotification)}>
+                Delete notification
+              </Button>
+            </div>
           </div>
         </div>
       )}

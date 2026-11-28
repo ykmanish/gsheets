@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { ConfirmModal, SelectMenu } from "./ui";
+import { Button, Chip, ConfirmModal, EmptyState, IconTile, Notice, PageHeader, SelectMenu, Tabs, toneOf } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -80,7 +80,7 @@ function formatListTime(value) {
     : date.toLocaleDateString([], { day: "2-digit", month: "short" });
 }
 
-function Initials({ name, accent = false, size = "md" }) {
+function Initials({ name, accent = false, size = "md", darkMode }) {
   const initials = String(name || "WA")
     .split(/\s+/)
     .filter(Boolean)
@@ -89,90 +89,71 @@ function Initials({ name, accent = false, size = "md" }) {
     .join("")
     .toUpperCase();
 
-  const sizeClass = size === "lg" ? "h-12 w-12 text-base" : "h-10 w-10 text-sm";
+  const sizeClass = size === "lg" ? "h-12 w-12 text-[15px]" : "h-10 w-10 text-[13px]";
+  const t = toneOf(accent ? "mint" : "lime");
 
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${sizeClass} ${
-        accent ? "bg-[#25D366] text-white" : "bg-[#d8f36a] text-black"
-      }`}
+      style={{ backgroundColor: darkMode ? t[2] : t[0], color: darkMode ? t[3] : t[1] }}
+      className={`flex shrink-0 items-center justify-center rounded-full ${sizeClass}`}
     >
       {initials || "WA"}
     </span>
   );
 }
 
-function Modal({ darkMode, title, onClose, children }) {
+function Modal({ darkMode, title, onClose, children, icon = MessageCircleMore }) {
   return (
     <div
-      className="fixed inset-0 z-[70] bg-black/45 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]"
+      className="fixed inset-0 z-[70] bg-black/30 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
-        className={`employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${
+        className={`employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] newq animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${
           darkMode
-            ? "bg-[#15171c] text-white"
-            : "bg-white text-[#171714]"
+            ? "border-white/10 bg-[#121317] text-white"
+            : "border-[#ececec] bg-white text-[#141414]"
         }`}
       >
-        <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-          <span><b>WhatsApp</b> · {title}</span>
+        <div className={`flex shrink-0 items-start justify-between gap-4 border-b px-6 py-5 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+          <div className="flex min-w-0 items-start gap-3">
+            <IconTile icon={icon} tone="mint" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h3 className="truncate text-[17px] leading-tight">{title}</h3>
+              <p className={`mt-1 text-[12.5px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>WhatsApp · workspace action</p>
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close drawer"
-            className="font-semibold text-[#25D366]"
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
           >
-            Close
+            <X className="h-4 w-4" />
           </button>
         </div>
-        <div className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-          <section className={`rounded-[30px]  p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}>
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#25D366]">Workspace action</p>
-                <h3 className="mt-1 text-2xl font-bold">{title}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close drawer"
-                className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#25D366]"}`}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            {children}
-          </section>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+          {children}
         </div>
       </div>
     </div>
   );
 }
 
-function EmptyState({ darkMode, muted, onAddContact }) {
+function InboxEmpty({ darkMode, onAddContact }) {
   return (
-    <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-y-auto p-8 text-center">
-      <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#25D366]/10 text-[#25D366]">
-        <MessageCircleMore className="h-10 w-10" />
-      </span>
-      <h2 className="mt-5 text-xl font-semibold">Select or start a conversation</h2>
-      <p className={`mt-2 max-w-sm text-sm leading-6 ${muted}`}>
-        Choose a conversation from the left panel, or add a new verified WhatsApp recipient.
-      </p>
-      <button
-        type="button"
-        onClick={onAddContact}
-        className={`mt-5 rounded-full px-5 py-2.5 text-sm font-medium transition ${
-          darkMode
-            ? "bg-[#25D366] text-black hover:bg-[#23ef6e]"
-            : "bg-black text-white hover:bg-black/80"
-        }`}
-      >
-        Add contact
-      </button>
+    <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-y-auto p-8">
+      <EmptyState
+        darkMode={darkMode}
+        icon={MessageCircleMore}
+        tone="mint"
+        title="Select or start a conversation"
+        text="Choose a conversation from the left panel, or add a new verified WhatsApp recipient."
+        action={<Button darkMode={darkMode} variant="primary" icon={Plus} onClick={onAddContact}>Add contact</Button>}
+        className="w-full max-w-md !bg-transparent"
+      />
     </div>
   );
 }
@@ -216,17 +197,16 @@ export default function WhatsApp({ darkMode }) {
 
   const surface = darkMode
     ? "border-white/10 bg-[#15171c]"
-    : "border-black/[0.06] bg-white";
-  const subSurface = darkMode ? "bg-white/[0.035]" : "bg-[#f7f8f6]";
-  const divider = darkMode ? "border-white/10" : "border-black/[0.06]";
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const softText = darkMode ? "text-white/70" : "text-black/70";
-  const hover = darkMode ? "hover:bg-white/[0.06]" : "hover:bg-black/[0.035]";
-  const selected = darkMode ? "bg-white/[0.09]" : "bg-black/[0.055]";
-  const field = `h-12 w-full rounded-2xl border px-4 text-sm outline-none transition focus:border-[#25D366]/70 focus:ring-4 focus:ring-[#25D366]/10 ${
+    : "border-[#ececec] bg-white";
+  const subSurface = darkMode ? "bg-white/[0.02]" : "bg-[#fafaf9]";
+  const divider = darkMode ? "border-white/10" : "border-[#f0f0ee]";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const hover = darkMode ? "hover:bg-white/[0.05]" : "hover:bg-[#f7f7f5]";
+  const selected = darkMode ? "bg-white/[0.08]" : "bg-[#f4f4f2]";
+  const field = `h-11 w-full rounded-full border px-4 text-[13.5px] outline-none transition ${
     darkMode
-      ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/30"
-      : "border-black/10 bg-white text-black placeholder:text-black/35"
+      ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-[3px] focus:ring-white/10"
+      : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"
   }`;
 
   const navigation = [
@@ -601,8 +581,8 @@ export default function WhatsApp({ darkMode }) {
   if (loading) {
     return (
       <div
-        className={`flex h-[calc(100dvh-24px)] min-h-[560px] items-center justify-center ${
-          darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f2f4f1] text-black"
+        className={`flex h-[calc(100dvh-24px)] min-h-[560px] items-center justify-center newq ${
+          darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"
         }`}
       >
         <Loader2 className="h-7 w-7 animate-spin" />
@@ -610,34 +590,65 @@ export default function WhatsApp({ darkMode }) {
     );
   }
 
+  const navTones = { inbox: "mint", contacts: "sky", groups: "lavender" };
+  const modeTabs = [
+    { id: "text", label: "Text" },
+    { id: "template", label: "Template" },
+  ];
+  const primaryRound = darkMode
+    ? "bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a]"
+    : "bg-[#141414] text-white hover:bg-black";
+  const iconGhost = `grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${hover}`;
+  const fieldLabel = `mb-2 block text-[12.5px] ${muted}`;
+
   return (
     <div
-      className={`h-[calc(100dvh-24px)] min-h-[560px] overflow-hidden p-3 sm:p-4 ${
-        darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f2f4f1] text-black"
+      className={`flex h-[calc(100dvh-24px)] min-h-[560px] flex-col overflow-hidden px-4 py-5 newq sm:px-6 lg:px-8 lg:py-6 ${
+        darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"
       }`}
     >
+      <PageHeader
+        darkMode={darkMode}
+        className="shrink-0"
+        badge="WhatsApp Business"
+        badgeIcon={MessageCircleMore}
+        badgeTone="mint"
+        title="WhatsApp"
+        subtitle="inbox, contacts and broadcasts"
+        actions={(
+          <>
+            <Chip darkMode={darkMode} tone={health ? "mint" : "rose"} icon={health ? Wifi : WifiOff}>
+              <span className="max-w-[200px] truncate">
+                {health
+                  ? health.displayPhoneNumber || "Meta connected"
+                  : "Connection needs attention"}
+              </span>
+            </Chip>
+            <Button darkMode={darkMode} variant="secondary" icon={RefreshCw} loading={refreshing} onClick={() => loadData(true)} disabled={refreshing} aria-label="Refresh WhatsApp data">
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+          </>
+        )}
+      />
+
       <div
-        className={`grid h-full min-h-0 min-w-0 overflow-hidden rounded-[30px] border -sm lg:grid-cols-[230px_minmax(0,1fr)] ${surface}`}
+        className={`mt-5 grid min-h-0 min-w-0 flex-1 overflow-hidden rounded-[20px] border lg:grid-cols-[236px_minmax(0,1fr)] ${surface}`}
       >
         {/* Desktop navigation rail. This area scrolls independently. */}
         <aside
           className={`hidden min-h-0 flex-col overflow-hidden border-r lg:flex ${divider}`}
         >
-          <div className={`shrink-0 border-b p-5 ${divider}`}>
+          <div className={`shrink-0 border-b px-5 py-4 ${divider}`}>
             <div className="flex items-center gap-3">
-              <img src="/whatsappbusiness.svg" alt="WhatsApp" className="h-10 w-auto rounded-2xl" />
+              <img src="/whatsappbusiness.svg" alt="WhatsApp" className="h-9 w-auto rounded-[11px]" />
               <div className="min-w-0">
-                <p className="truncate font-semibold">WhatsApp</p>
-                <p className={`truncate text-xs ${muted}`}>Business inbox</p>
+                <p className="truncate text-[14px]">WhatsApp</p>
+                <p className={`truncate text-[12px] ${muted}`}>Business inbox</p>
               </div>
             </div>
           </div>
 
           <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3">
-            <p className={`px-3 pb-2 pt-1 text-[11px] font-medium uppercase tracking-[0.18em] ${muted}`}>
-              Workspace
-            </p>
-
             {navigation.map(({ id, label, subtitle, icon: Icon }) => {
               const active = view === id;
 
@@ -646,24 +657,14 @@ export default function WhatsApp({ darkMode }) {
                   key={id}
                   type="button"
                   onClick={() => setView(id)}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                  className={`flex w-full items-center gap-3 rounded-[14px] px-2.5 py-2.5 text-left transition ${
                     active ? selected : hover
                   }`}
                 >
-                  <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                      active
-                        ? "bg-[#25D366] text-white"
-                        : darkMode
-                          ? "bg-white/[0.05] text-white/65"
-                          : "bg-black/[0.04] text-black/65"
-                    }`}
-                  >
-                    <Icon className="h-4.5 w-4.5" />
-                  </span>
+                  <IconTile icon={Icon} tone={active ? navTones[id] : "neutral"} darkMode={darkMode} size="sm" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{label}</span>
-                    <span className={`mt-0.5 block truncate text-xs ${muted}`}>
+                    <span className="block truncate text-[13.5px]">{label}</span>
+                    <span className={`mt-0.5 block truncate text-[12px] ${muted}`}>
                       {subtitle}
                     </span>
                   </span>
@@ -671,109 +672,24 @@ export default function WhatsApp({ darkMode }) {
               );
             })}
           </nav>
-
-          <div className={`shrink-0 border-t p-3 ${divider}`}>
-            <div
-              className={`rounded-2xl p-3 ${
-                health
-                  ? "bg-emerald-500/10 text-emerald-500"
-                  : "bg-red-500/10 text-red-500"
-              }`}
-            >
-              <div className="flex items-center gap-2 text-xs font-medium">
-                {health ? (
-                  <Wifi className="h-4 w-4" />
-                ) : (
-                  <WifiOff className="h-4 w-4" />
-                )}
-                <span className="truncate">
-                  {health
-                    ? health.displayPhoneNumber || "Meta connected"
-                    : "Connection needs attention"}
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => loadData(true)}
-              disabled={refreshing}
-              className={`mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-2xl text-sm transition disabled:opacity-50 ${hover}`}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              />
-              Refresh data
-            </button>
-          </div>
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden">
           {/* Mobile navigation */}
-          <div className={`shrink-0 border-b p-3 lg:hidden ${divider}`}>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25D366] text-white">
-                  <MessageCircleMore className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate font-semibold">WhatsApp Business</p>
-                  <p
-                    className={`truncate text-xs ${
-                      health ? "text-emerald-500" : "text-red-500"
-                    }`}
-                  >
-                    {health
-                      ? health.displayPhoneNumber || "Meta connected"
-                      : "Connection needs attention"}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => loadData(true)}
-                disabled={refreshing}
-                aria-label="Refresh WhatsApp data"
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition disabled:opacity-50 ${hover}`}
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-                />
-              </button>
-            </div>
-
-            <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
-              {navigation.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setView(id)}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
-                    view === id
-                      ? "bg-[#25D366] text-white"
-                      : darkMode
-                        ? "bg-white/[0.05] text-white/60"
-                        : "bg-black/[0.04] text-black/60"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </button>
-              ))}
-            </div>
+          <div className={`shrink-0 overflow-x-auto border-b p-3 lg:hidden ${divider}`}>
+            <Tabs
+              darkMode={darkMode}
+              items={navigation.map(({ id, label, icon }) => ({ id, label, icon }))}
+              value={view}
+              onChange={setView}
+            />
           </div>
 
           {healthError && (
-            <div
-              className={`mx-3 mt-3 flex shrink-0 items-start gap-3 rounded-2xl  border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 sm:mx-4`}
-            >
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-              <span className="leading-5">
-                {healthError}. Temporary Meta tokens expire; regenerate the token if
-                necessary.
-              </span>
-            </div>
+            <Notice tone="amber" darkMode={darkMode} icon={CircleAlert} className="mx-3 mt-3 shrink-0 sm:mx-4">
+              {healthError}. Temporary Meta tokens expire; regenerate the token if
+              necessary.
+            </Notice>
           )}
 
           {view === "inbox" && (
@@ -787,8 +703,8 @@ export default function WhatsApp({ darkMode }) {
                 <div className={`shrink-0 border-b p-4 ${divider}`}>
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                      <h1 className="text-lg font-semibold">Conversations</h1>
-                      <p className={`mt-0.5 text-xs ${muted}`}>
+                      <h1 className="text-[16px] leading-tight">Conversations</h1>
+                      <p className={`mt-0.5 text-[12px] ${muted}`}>
                         {search.trim()
                           ? `${filteredConversations.length} of ${conversations.length} chats`
                           : `${conversations.length} chats available`}
@@ -798,27 +714,28 @@ export default function WhatsApp({ darkMode }) {
                       type="button"
                       onClick={() => openContactModal()}
                       title="Add contact"
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#25D366] text-white transition hover:bg-[#20bd5a]"
+                      aria-label="Add contact"
+                      className={`grid h-9 w-9 place-items-center rounded-full transition ${primaryRound}`}
                     >
-                      <Plus className="h-5 w-5" />
+                      <Plus className="h-4 w-4" />
                     </button>
                   </div>
 
                   <div className="relative">
                     <Search
-                      className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`}
+                      className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`}
                     />
                     <input
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="Search conversations"
-                      className={`${field} pl-10`}
+                      className={`${field} h-10 pl-10`}
                     />
                   </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {filteredConversations.map((item) => {
                       const name = item.contact?.name || formatPhone(item.phone);
                       const isActive = selectedPhone === item.phone;
@@ -828,20 +745,20 @@ export default function WhatsApp({ darkMode }) {
                           key={item.phone}
                           type="button"
                           onClick={() => openConversation(item.phone)}
-                          className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${
+                          className={`flex w-full items-center gap-3 rounded-[14px] p-2.5 text-left transition ${
                             isActive ? selected : hover
                           }`}
                         >
-                          <Initials name={name} accent />
+                          <Initials name={name} accent darkMode={darkMode} />
 
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center justify-between gap-2">
-                              <span className="truncate text-sm font-medium">{name}</span>
-                              <span className={`shrink-0 text-[10px] ${muted}`}>
+                              <span className="truncate text-[13.5px]">{name}</span>
+                              <span className={`shrink-0 text-[11px] tabular-nums ${muted}`}>
                                 {formatListTime(item.lastMessage?.timestamp)}
                               </span>
                             </span>
-                            <span className={`mt-1 block truncate text-xs ${muted}`}>
+                            <span className={`mt-0.5 block truncate text-[12.5px] ${muted}`}>
                               {item.lastMessage?.text || "No message preview"}
                             </span>
                           </span>
@@ -850,19 +767,16 @@ export default function WhatsApp({ darkMode }) {
                     })}
 
                     {!filteredConversations.length && (
-                      <div className="flex min-h-72 flex-col items-center justify-center px-6 py-10 text-center">
-                        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366]/10 text-[#25D366]">
-                          <MessageCircleMore className="h-6 w-6" />
-                        </span>
-                        <p className="mt-4 text-sm font-medium">
-                          {search.trim() ? "No matching conversations" : "No conversations found"}
-                        </p>
-                        <p className={`mt-1 text-xs leading-5 ${muted}`}>
-                          {search.trim()
-                            ? "Try another name, phone number, or message keyword."
-                            : "Add a verified recipient and send the hello_world template."}
-                        </p>
-                      </div>
+                      <EmptyState
+                        darkMode={darkMode}
+                        icon={MessageCircleMore}
+                        tone="mint"
+                        title={search.trim() ? "No matching conversations" : "No conversations found"}
+                        text={search.trim()
+                          ? "Try another name, phone number, or message keyword."
+                          : "Add a verified recipient and send the hello_world template."}
+                        className="m-1 min-h-72"
+                      />
                     )}
                   </div>
                 </div>
@@ -881,16 +795,16 @@ export default function WhatsApp({ darkMode }) {
                         type="button"
                         onClick={() => setSelectedPhone("")}
                         aria-label="Back to conversations"
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl lg:hidden ${hover}`}
+                        className={`${iconGhost} lg:hidden`}
                       >
                         <ArrowLeft className="h-5 w-5" />
                       </button>
 
-                      <Initials name={recipientName} accent />
+                      <Initials name={recipientName} accent darkMode={darkMode} />
 
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{recipientName}</p>
-                        <p className={`truncate text-xs ${muted}`}>
+                        <p className="truncate text-[14.5px]">{recipientName}</p>
+                        <p className={`truncate text-[12px] ${muted}`}>
                           {formatPhone(selectedPhone)}
                         </p>
                       </div>
@@ -908,17 +822,17 @@ export default function WhatsApp({ darkMode }) {
                             },
                           )
                         }
-                        className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl transition sm:flex ${hover}`}
+                        className={`${iconGhost} hidden sm:grid`}
                         title={selectedContact ? "Rename contact" : "Save contact name"}
                         aria-label={selectedContact ? "Rename contact" : "Save contact name"}
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
 
-                      <span className="hidden items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-500 sm:inline-flex">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      <Chip darkMode={darkMode} tone="mint" className="hidden h-7 sm:inline-flex">
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
                         WhatsApp
-                      </span>
+                      </Chip>
                     </header>
 
                     <div
@@ -926,12 +840,12 @@ export default function WhatsApp({ darkMode }) {
                       onScroll={updateMessageScrollState}
                       className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 ${subSurface}`}
                     >
-                      <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-end space-y-3">
+                      <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-end space-y-2.5">
                         {!messages.length && (
                           <div className="flex flex-1 items-center justify-center py-16 text-center">
                             <div>
-                              <p className="text-sm font-medium">No messages yet</p>
-                              <p className={`mt-1 text-xs ${muted}`}>
+                              <p className="text-[14px]">No messages yet</p>
+                              <p className={`mt-1 text-[12.5px] ${muted}`}>
                                 Send a message to begin this conversation.
                               </p>
                             </div>
@@ -941,11 +855,11 @@ export default function WhatsApp({ darkMode }) {
                         {messages.map((message) => {
                           const outbound = message.direction === "outbound";
                           const outboundBubble = darkMode
-                            ? "rounded-br-md bg-[#005c4b] text-white"
-                            : "rounded-br-md bg-[#dcf8c6] text-[#111b21]";
+                            ? "rounded-br-[6px] bg-[#cff07a]/15 text-white"
+                            : "rounded-br-[6px] bg-[#e7f6c0] text-[#141414]";
                           const inboundBubble = darkMode
-                            ? "rounded-bl-md bg-[#202c33] text-white"
-                            : "rounded-bl-md bg-white text-[#111b21]";
+                            ? "rounded-bl-[6px] bg-white/[0.07] text-white"
+                            : "rounded-bl-[6px] border border-[#ececec] bg-white text-[#141414]";
 
                           return (
                             <div
@@ -953,7 +867,7 @@ export default function WhatsApp({ darkMode }) {
                               className={`flex ${outbound ? "justify-end" : "justify-start"}`}
                             >
                               <div
-                                className={`max-w-[88%] rounded-[20px] px-4 py-3 text-sm -sm sm:max-w-[75%] ${
+                                className={`max-w-[88%] rounded-[18px] px-4 py-2.5 text-[13.5px] sm:max-w-[75%] ${
                                   outbound ? outboundBubble : inboundBubble
                                 }`}
                               >
@@ -962,12 +876,8 @@ export default function WhatsApp({ darkMode }) {
                                 </p>
 
                                 <p
-                                  className={`mt-1.5 flex items-center justify-end gap-1 text-[10px] ${
-                                    outbound
-                                      ? darkMode
-                                        ? "text-white/58"
-                                        : "text-[#667781]"
-                                      : muted
+                                  className={`mt-1 flex items-center justify-end gap-1 text-[10.5px] ${
+                                    darkMode ? "text-white/45" : "text-[#8a8a8a]"
                                   }`}
                                 >
                                   {formatTime(message.timestamp)}
@@ -975,17 +885,17 @@ export default function WhatsApp({ darkMode }) {
                                     <CheckCheck
                                       className={`h-3 w-3 ${
                                         message.status === "read"
-                                          ? "text-[#53bdeb]"
+                                          ? "text-[#2f6fc0]"
                                           : darkMode
                                             ? "text-white/50"
-                                            : "text-[#667781]"
+                                            : "text-[#8a8a8a]"
                                       }`}
                                     />
                                   )}
                                 </p>
 
                                 {message.error && (
-                                  <p className="mt-1 text-xs text-red-600">
+                                  <p className="mt-1 text-[12px] text-[#c0394b]">
                                     {message.error}
                                   </p>
                                 )}
@@ -1000,26 +910,15 @@ export default function WhatsApp({ darkMode }) {
 
                     <footer className={`shrink-0 border-t p-3 sm:p-4 ${divider}`}>
                       <div className="mx-auto w-full max-w-4xl">
-                        <div className="mb-3 flex items-center gap-2">
-                          {["text", "template"].map((mode) => (
-                            <button
-                              key={mode}
-                              type="button"
-                              onClick={() =>
-                                setComposer((current) => ({ ...current, mode }))
-                              }
-                              className={`rounded-full px-3 py-1.5 text-xs capitalize transition ${
-                                composer.mode === mode
-                                  ? "bg-[#25D366] text-white"
-                                  : darkMode
-                                    ? "bg-white/[0.06] text-white/55"
-                                    : "bg-black/[0.04] text-black/55"
-                              }`}
-                            >
-                              {mode}
-                            </button>
-                          ))}
-                        </div>
+                        <Tabs
+                          darkMode={darkMode}
+                          className="mb-3"
+                          items={modeTabs}
+                          value={composer.mode}
+                          onChange={(mode) =>
+                            setComposer((current) => ({ ...current, mode }))
+                          }
+                        />
 
                         <div className="flex items-end gap-2 sm:gap-3">
                           {composer.mode === "text" ? (
@@ -1039,7 +938,7 @@ export default function WhatsApp({ darkMode }) {
                               }}
                               rows={2}
                               placeholder="Type a message…"
-                              className={`${field} max-h-36 min-h-12 resize-none py-3`}
+                              className={`${field} max-h-36 min-h-12 resize-none rounded-[22px] py-3`}
                             />
                           ) : (
                             <SelectMenu
@@ -1061,12 +960,12 @@ export default function WhatsApp({ darkMode }) {
                             onClick={() => sendMessage()}
                             disabled={sending}
                             aria-label="Send message"
-                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#25D366] text-white transition hover:bg-[#20bd5a] disabled:opacity-50"
+                            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full transition disabled:opacity-50 ${primaryRound}`}
                           >
                             {sending ? (
                               <Loader2 className="h-5 w-5 animate-spin" />
                             ) : (
-                              <Send className="h-5 w-5" />
+                              <Send className="h-[18px] w-[18px]" />
                             )}
                           </button>
                         </div>
@@ -1074,9 +973,8 @@ export default function WhatsApp({ darkMode }) {
                     </footer>
                   </>
                 ) : (
-                  <EmptyState
+                  <InboxEmpty
                     darkMode={darkMode}
-                    muted={muted}
                     onAddContact={() => openContactModal()}
                   />
                 )}
@@ -1086,40 +984,38 @@ export default function WhatsApp({ darkMode }) {
 
           {view === "contacts" && (
             <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <header className={`flex shrink-0 items-center justify-between gap-4 border-b p-4 sm:p-5 ${divider}`}>
-                <div className="min-w-0">
-                  <h1 className="truncate text-lg font-semibold">Contacts</h1>
-                  <p className={`mt-1 text-xs ${muted}`}>
-                    {contacts.length} saved WhatsApp recipients
-                  </p>
+              <header className={`flex shrink-0 items-center justify-between gap-4 border-b px-5 py-4 ${divider}`}>
+                <div className="flex min-w-0 items-center gap-3">
+                  <IconTile icon={ContactRound} tone="sky" darkMode={darkMode} size="sm" />
+                  <div className="min-w-0">
+                    <h1 className="truncate text-[16px] leading-tight">Contacts</h1>
+                    <p className={`mt-0.5 text-[12px] ${muted}`}>
+                      {contacts.length} saved WhatsApp recipients
+                    </p>
+                  </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => openContactModal()}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#25D366] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#20bd5a]"
-                >
-                  <Plus className="h-4 w-4" />
+                <Button darkMode={darkMode} variant="primary" icon={Plus} onClick={() => openContactModal()} className="shrink-0">
                   <span className="hidden sm:inline">Add contact</span>
-                </button>
+                </Button>
               </header>
 
-              <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 ${subSurface}`}>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {contacts.map((contact) => (
                     <div
                       key={contact.id}
-                      className={`flex items-center gap-3 rounded-2xl  p-4 transition ${surface}`}
+                      className={`flex items-center gap-3 rounded-[18px] border p-4 transition ${darkMode ? "border-white/10 bg-white/[0.02]" : "border-[#ececec] bg-white"}`}
                     >
-                      <Initials name={contact.name} accent size="lg" />
+                      <Initials name={contact.name} accent size="lg" darkMode={darkMode} />
 
                       <button
                         type="button"
                         onClick={() => openConversation(contact.phone)}
                         className="min-w-0 flex-1 text-left"
                       >
-                        <p className="truncate text-sm font-medium">{contact.name}</p>
-                        <p className={`mt-1 truncate text-xs ${muted}`}>
+                        <p className="truncate text-[14px]">{contact.name}</p>
+                        <p className={`mt-0.5 truncate text-[12.5px] ${muted}`}>
                           {formatPhone(contact.phone)}
                         </p>
                       </button>
@@ -1129,7 +1025,7 @@ export default function WhatsApp({ darkMode }) {
                           type="button"
                           onClick={() => openContactModal(contact)}
                           aria-label={`Rename ${contact.name}`}
-                          className={`rounded-xl p-2 transition ${hover}`}
+                          className={iconGhost}
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -1138,7 +1034,7 @@ export default function WhatsApp({ darkMode }) {
                           type="button"
                           onClick={() => deleteContact(contact.id)}
                           aria-label={`Delete ${contact.name}`}
-                          className="rounded-xl p-2 text-red-500 transition hover:bg-red-500/10"
+                          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${darkMode ? "text-rose-200 hover:bg-rose-400/10" : "text-[#c0394b] hover:bg-[#fbe4e6]"}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -1148,13 +1044,7 @@ export default function WhatsApp({ darkMode }) {
                 </div>
 
                 {!contacts.length && (
-                  <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
-                    <ContactRound className="h-10 w-10 text-[#25D366]" />
-                    <p className="mt-4 font-medium">No contacts saved</p>
-                    <p className={`mt-1 text-sm ${muted}`}>
-                      Add your first WhatsApp recipient.
-                    </p>
-                  </div>
+                  <EmptyState darkMode={darkMode} icon={ContactRound} tone="sky" title="No contacts saved" text="Add your first WhatsApp recipient." className="min-h-[50vh]" />
                 )}
               </div>
             </section>
@@ -1162,42 +1052,39 @@ export default function WhatsApp({ darkMode }) {
 
           {view === "groups" && (
             <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <header className={`flex shrink-0 items-center justify-between gap-4 border-b p-4 sm:p-5 ${divider}`}>
-                <div className="min-w-0">
-                  <h1 className="truncate text-lg font-semibold">Recipient groups</h1>
-                  <p className={`mt-1 text-xs ${muted}`}>
-                    Broadcasts are sent as individual WhatsApp messages.
-                  </p>
+              <header className={`flex shrink-0 items-center justify-between gap-4 border-b px-5 py-4 ${divider}`}>
+                <div className="flex min-w-0 items-center gap-3">
+                  <IconTile icon={UsersRound} tone="lavender" darkMode={darkMode} size="sm" />
+                  <div className="min-w-0">
+                    <h1 className="truncate text-[16px] leading-tight">Recipient groups</h1>
+                    <p className={`mt-0.5 text-[12px] ${muted}`}>
+                      Broadcasts are sent as individual WhatsApp messages.
+                    </p>
+                  </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => openGroupModal()}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#25D366] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#20bd5a]"
-                >
-                  <Plus className="h-4 w-4" />
+                <Button darkMode={darkMode} variant="primary" icon={Plus} onClick={() => openGroupModal()} className="shrink-0">
                   <span className="hidden sm:inline">Create group</span>
-                </button>
+                </Button>
               </header>
 
-              <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 ${subSurface}`}>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {groups.map((group) => (
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {groups.map((group, index) => (
                     <div
                       key={group.id}
-                      className={`rounded-[22px]  p-5 ${surface}`}
+                      className={`relative flex flex-col rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.02]" : "border-[#ececec] bg-white"}`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#25D366]/10 text-[#25D366]">
-                          <UsersRound className="h-5 w-5" />
-                        </span>
+                        <IconTile icon={UsersRound} tone="lavender" darkMode={darkMode} />
 
                         <div className="flex items-center gap-1">
+                          <span className={`mr-1 text-[12px] tabular-nums ${darkMode ? "text-white/35" : "text-[#b0b0ae]"}`}>{String(index + 1).padStart(2, "0")}</span>
                           <button
                             type="button"
                             onClick={() => openGroupModal(group)}
                             aria-label={`Edit ${group.name}`}
-                            className={`rounded-xl p-2 transition ${darkMode ? "text-white/70 hover:bg-white/10 hover:text-white" : "text-black/55 hover:bg-black/5 hover:text-black"}`}
+                            className={iconGhost}
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
@@ -1206,42 +1093,27 @@ export default function WhatsApp({ darkMode }) {
                             type="button"
                             onClick={() => deleteGroup(group.id)}
                             aria-label={`Delete ${group.name}`}
-                            className="rounded-xl p-2 text-red-500 transition hover:bg-red-500/10"
+                            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${darkMode ? "text-rose-200 hover:bg-rose-400/10" : "text-[#c0394b] hover:bg-[#fbe4e6]"}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
                       </div>
 
-                      <h3 className="mt-4 truncate font-semibold">{group.name}</h3>
-                      <p className={`mt-1 text-sm ${muted}`}>
+                      <h3 className="mt-4 truncate text-[15px]">{group.name}</h3>
+                      <p className={`mt-0.5 text-[13px] ${muted}`}>
                         {group.members.length} recipients
                       </p>
 
-                      <button
-                        type="button"
-                        onClick={() => setBroadcastGroup(group)}
-                        className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-medium transition ${
-                          darkMode
-                            ? "bg-white/[0.08] hover:bg-white/[0.13]"
-                            : "bg-black text-white hover:bg-black/80"
-                        }`}
-                      >
-                        <Send className="h-4 w-4" />
+                      <Button darkMode={darkMode} variant="primary" icon={Send} onClick={() => setBroadcastGroup(group)} className="mt-5 w-full">
                         Send broadcast
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>
 
                 {!groups.length && (
-                  <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
-                    <UsersRound className="h-10 w-10 text-[#25D366]" />
-                    <p className="mt-4 font-medium">No recipient groups</p>
-                    <p className={`mt-1 text-sm ${muted}`}>
-                      Create a group to send a broadcast.
-                    </p>
-                  </div>
+                  <EmptyState darkMode={darkMode} icon={UsersRound} tone="lavender" title="No recipient groups" text="Create a group to send a broadcast." className="min-h-[50vh]" />
                 )}
               </div>
             </section>
@@ -1252,47 +1124,54 @@ export default function WhatsApp({ darkMode }) {
       {contactModal && (
         <Modal
           darkMode={darkMode}
+          icon={ContactRound}
           title={contactForm.id ? "Rename WhatsApp contact" : "Add WhatsApp contact"}
           onClose={closeContactModal}
         >
-          <form onSubmit={addContact} className="space-y-4">
-            <input
-              required
-              value={contactForm.name}
-              onChange={(event) =>
-                setContactForm((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-              placeholder="Contact name"
-              className={field}
-            />
+          <form onSubmit={addContact} className="space-y-5">
+            <label className="block">
+              <span className={fieldLabel}>Contact name</span>
+              <input
+                required
+                value={contactForm.name}
+                onChange={(event) =>
+                  setContactForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="Contact name"
+                className={field}
+              />
+            </label>
 
-            <input
-              required
-              inputMode="tel"
-              disabled={Boolean(contactForm.id)}
-              value={contactForm.phone}
-              onChange={(event) =>
-                setContactForm((current) => ({
-                  ...current,
-                  phone: event.target.value,
-                }))
-              }
-              placeholder="Phone with country code, e.g. 9198…"
-              className={`${field} disabled:cursor-not-allowed disabled:opacity-60`}
-            />
+            <label className="block">
+              <span className={fieldLabel}>Phone number</span>
+              <input
+                required
+                inputMode="tel"
+                disabled={Boolean(contactForm.id)}
+                value={contactForm.phone}
+                onChange={(event) =>
+                  setContactForm((current) => ({
+                    ...current,
+                    phone: event.target.value,
+                  }))
+                }
+                placeholder="Phone with country code, e.g. 9198…"
+                className={`${field} disabled:cursor-not-allowed disabled:opacity-60`}
+              />
+            </label>
 
-            <p className={`text-xs leading-5 ${muted}`}>
+            <Notice tone="neutral" darkMode={darkMode}>
               {contactForm.id
                 ? "Only the display name will change; existing chat history stays linked to this number."
                 : "Test-number recipients must also be verified in Meta API Setup."}
-            </p>
+            </Notice>
 
-            <button className="w-full rounded-full bg-[#25D366] py-3 text-sm font-medium text-white transition hover:bg-[#20bd5a]">
+            <Button darkMode={darkMode} variant="primary" size="lg" type="submit" className="w-full">
               {contactForm.id ? "Save name" : "Save and open chat"}
-            </button>
+            </Button>
           </form>
         </Modal>
       )}
@@ -1300,12 +1179,13 @@ export default function WhatsApp({ darkMode }) {
       {groupModal && (
         <Modal
           darkMode={darkMode}
+          icon={UsersRound}
           title={groupForm.id ? "Edit recipient group" : "Create recipient group"}
           onClose={closeGroupModal}
         >
-          <form onSubmit={saveGroup} className="space-y-5">
+          <form onSubmit={saveGroup} className="space-y-6">
             <label className="block">
-              <span className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Broadcast name</span>
+              <span className={fieldLabel}>Broadcast name</span>
               <input
                 required
                 value={groupForm.name}
@@ -1321,21 +1201,21 @@ export default function WhatsApp({ darkMode }) {
             </label>
 
             <div>
-              <div className="flex items-center justify-between gap-3">
-                <p className={`text-[10px] font-bold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Selected recipients</p>
-                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${darkMode ? "bg-emerald-300/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className={`text-[12.5px] ${muted}`}>Selected recipients</p>
+                <Chip darkMode={darkMode} tone="mint" className="h-6 px-2.5 text-[12px]">
                   {groupForm.members.length} selected
-                </span>
+                </Chip>
               </div>
-              <div className={`mt-3 min-h-16 rounded-[24px]  p-3 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-[#f7f8f6]"}`}>
+              <div className={`min-h-16 rounded-[18px] p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
                 {groupForm.members.length ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {groupForm.members.map((phone) => {
                       const contact = contactByPhone.get(phone);
                       return (
                         <span
                           key={phone}
-                          className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-xs transition ${darkMode ? "border-white/10 bg-white/10 text-white" : "border-black/5 bg-white text-black "}`}
+                          className={`inline-flex h-8 max-w-full items-center gap-1.5 rounded-full pl-3 pr-1.5 text-[12.5px] ${darkMode ? "bg-white/10 text-white" : "bg-white text-[#141414]"}`}
                         >
                           <span className="min-w-0 truncate">
                             {contact?.name || formatPhone(phone)}
@@ -1343,7 +1223,7 @@ export default function WhatsApp({ darkMode }) {
                           <button
                             type="button"
                             onClick={() => toggleGroupMember(phone)}
-                            className="rounded-full text-red-500 transition hover:bg-red-500/10"
+                            className={`grid h-5 w-5 place-items-center rounded-full transition ${darkMode ? "text-white/60 hover:bg-white/10" : "text-[#8a8a8a] hover:bg-[#f4f4f2] hover:text-[#c0394b]"}`}
                             aria-label={`Remove ${contact?.name || phone}`}
                           >
                             <X className="h-3.5 w-3.5" />
@@ -1353,84 +1233,84 @@ export default function WhatsApp({ darkMode }) {
                     })}
                   </div>
                 ) : (
-                  <p className={`py-2 text-sm ${muted}`}>No recipients selected yet.</p>
+                  <p className={`py-2 text-[13px] ${muted}`}>No recipients selected yet.</p>
                 )}
               </div>
             </div>
 
             <div>
-              <p className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Add by number</p>
+              <p className={fieldLabel}>Add by number</p>
               <div className="flex gap-2">
-              <input
-                inputMode="tel"
-                value={groupMemberInput}
-                onChange={(event) => setGroupMemberInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addGroupMemberByPhone();
-                  }
-                }}
-                placeholder="Add number, e.g. 9198..."
-                className={field}
-              />
-              <button
-                type="button"
-                onClick={addGroupMemberByPhone}
-                className="shrink-0 rounded-2xl bg-[#25D366] px-4 text-sm font-medium text-white transition hover:bg-[#20bd5a]"
-              >
-                Add
-              </button>
+                <input
+                  inputMode="tel"
+                  value={groupMemberInput}
+                  onChange={(event) => setGroupMemberInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addGroupMemberByPhone();
+                    }
+                  }}
+                  placeholder="Add number, e.g. 9198..."
+                  className={field}
+                />
+                <Button darkMode={darkMode} variant="soft" icon={Plus} onClick={addGroupMemberByPhone} className="h-11 shrink-0">
+                  Add
+                </Button>
               </div>
             </div>
 
             <div>
-            <p className={`mb-3 text-[10px] font-bold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Add from saved contacts</p>
+              <p className={fieldLabel}>Add from saved contacts</p>
 
-            <div className="max-h-64 space-y-2 overflow-y-auto overscroll-contain pr-1">
-              {contacts.map((contact) => {
-                const active = groupForm.members.includes(contact.phone);
+              <div className="max-h-64 space-y-1 overflow-y-auto overscroll-contain pr-1">
+                {contacts.map((contact) => {
+                  const active = groupForm.members.includes(contact.phone);
 
-                return (
-                  <button
-                    key={contact.id}
-                    type="button"
-                    onClick={() => toggleGroupMember(contact.phone)}
-                    className={`flex w-full cursor-pointer items-center gap-3 rounded-2xl  p-3 text-left transition-all duration-200 ${
-                      active
-                        ? darkMode ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50" : "border-emerald-500 bg-emerald-50 text-emerald-950"
-                        : darkMode
-                          ? "border-white/10 text-white/75 hover:bg-white/[0.06]"
-                          : "border-black/10 text-black/75 hover:bg-black/[0.025]"
-                    }`}
-                  >
-                    <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-lg border transition-all duration-200 ${active ? "scale-105 border-emerald-500 bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
-                      {active && <Check className="h-3.5 w-3.5" />}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {contact.name}
-                    </span>
-                    <span className={`shrink-0 text-xs ${muted}`}>
-                      {formatPhone(contact.phone)}
-                    </span>
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={contact.id}
+                      type="button"
+                      onClick={() => toggleGroupMember(contact.phone)}
+                      className={`flex w-full cursor-pointer items-center gap-3 rounded-[14px] p-3 text-left transition ${
+                        active
+                          ? darkMode ? "bg-white/[0.07] text-white" : "bg-[#f4f4f2] text-[#141414]"
+                          : darkMode
+                            ? "text-white/75 hover:bg-white/[0.04]"
+                            : "text-[#3d3d3b] hover:bg-[#f7f7f5]"
+                      }`}
+                    >
+                      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border transition ${active ? (darkMode ? "border-[#cff07a] bg-[#cff07a] text-[#141414]" : "border-[#141414] bg-[#141414] text-white") : darkMode ? "border-white/20" : "border-[#cfcfcb] bg-white"}`}>
+                        {active && <Check className="h-3 w-3" strokeWidth={3} />}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13.5px]">
+                        {contact.name}
+                      </span>
+                      <span className={`shrink-0 text-[12px] ${muted}`}>
+                        {formatPhone(contact.phone)}
+                      </span>
+                    </button>
+                  );
+                })}
 
-              {!contacts.length && (
-                <p className={`py-6 text-center text-sm ${muted}`}>
-                  Add contacts before creating a group.
-                </p>
-              )}
+                {!contacts.length && (
+                  <p className={`py-6 text-center text-[13px] ${muted}`}>
+                    Add contacts before creating a group.
+                  </p>
+                )}
+              </div>
             </div>
-            </div>
 
-            <button
+            <Button
+              darkMode={darkMode}
+              variant="primary"
+              size="lg"
+              type="submit"
               disabled={!groupForm.members.length}
-              className="mt-5 w-full rounded-full bg-[#25D366] py-3 text-sm font-medium text-white transition hover:bg-[#20bd5a] disabled:cursor-not-allowed disabled:opacity-40"
+              className="w-full"
             >
               {groupForm.id ? "Save group changes" : "Create group"}
-            </button>
+            </Button>
           </form>
         </Modal>
       )}
@@ -1438,34 +1318,24 @@ export default function WhatsApp({ darkMode }) {
       {broadcastGroup && (
         <Modal
           darkMode={darkMode}
+          icon={Send}
           title={`Message ${broadcastGroup.name}`}
           onClose={() => setBroadcastGroup(null)}
         >
-          <p className={`mb-4 text-sm ${muted}`}>
+          <p className={`mb-4 text-[13px] ${muted}`}>
             This sends an individual message to {broadcastGroup.members.length}{" "}
             recipients.
           </p>
 
-          <div className="mb-4 flex gap-2">
-            {["text", "template"].map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() =>
-                  setComposer((current) => ({ ...current, mode }))
-                }
-                className={`rounded-full px-4 py-2 text-sm capitalize transition ${
-                  composer.mode === mode
-                    ? "bg-[#25D366] text-white"
-                    : darkMode
-                      ? "bg-white/[0.06] text-white/55"
-                      : "bg-black/[0.04] text-black/55"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            darkMode={darkMode}
+            className="mb-4"
+            items={modeTabs}
+            value={composer.mode}
+            onChange={(mode) =>
+              setComposer((current) => ({ ...current, mode }))
+            }
+          />
 
           {composer.mode === "text" ? (
             <textarea
@@ -1478,7 +1348,7 @@ export default function WhatsApp({ darkMode }) {
                 }))
               }
               placeholder="Broadcast message"
-              className={`${field} h-auto resize-none py-3`}
+              className={`${field} h-auto resize-none rounded-[16px] py-3`}
             />
           ) : (
             <SelectMenu
@@ -1494,19 +1364,18 @@ export default function WhatsApp({ darkMode }) {
             />
           )}
 
-          <button
-            type="button"
+          <Button
+            darkMode={darkMode}
+            variant="primary"
+            size="lg"
+            icon={Send}
+            loading={sending}
             onClick={sendBroadcast}
             disabled={sending}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] py-3 text-sm font-medium text-white transition hover:bg-[#20bd5a] disabled:opacity-50"
+            className="mt-5 w-full"
           >
-            {sending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
             Send to group
-          </button>
+          </Button>
         </Modal>
       )}
       <ConfirmModal

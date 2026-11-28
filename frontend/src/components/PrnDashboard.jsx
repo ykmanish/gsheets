@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { CalendarDays, CheckCircle2, CircleDollarSign, Eye, FileSpreadsheet, IndianRupee, Loader2, MessageSquare, RefreshCw, Save, Search, Settings, UserRound, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, CircleDollarSign, Eye, FileSpreadsheet, IndianRupee, Loader2, MessageSquare, RefreshCw, Save, Search, Settings, UserRound, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { DatePicker } from "./ui";
+import { Badge, Button, Chip, DatePicker, Drawer, EmptyState, IconTile, Notice, PageHeader, SectionTitle, StatTile, Toggle, cx, fieldClass } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -44,6 +44,8 @@ function formatDateTime(value) {
   return text;
 }
 
+const closeButtonClass = (darkMode) => cx("grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]");
+
 function PrnWhatsappAutomationDrawer({ darkMode, onClose }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -61,8 +63,8 @@ function PrnWhatsappAutomationDrawer({ darkMode, onClose }) {
     },
     languages: { actionRequest: "en", approved: "en", declined: "en", comment: "en" },
   });
-  const muted = darkMode ? "text-white/45" : "text-black/48";
-  const panel = darkMode ? "border-white/10 bg-[#181a20]" : "border-black/[0.07] bg-white";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const panel = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white";
   const lastRun = settings.lastRun || null;
 
   const loadSettings = useCallback(async () => {
@@ -131,60 +133,70 @@ function PrnWhatsappAutomationDrawer({ darkMode, onClose }) {
     }
   }
 
-  const ContactSection = ({ title, description, field }) => (
-    <section className={`rounded-2xl border p-4 ${panel}`}>
+  const ContactSection = ({ title, description, field, icon, tone }) => (
+    <section className={cx("rounded-[20px] border p-5", panel)}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-bold">{title}</h3>
-          <p className={`mt-1 text-xs leading-5 ${muted}`}>{description}</p>
+        <div className="flex min-w-0 items-start gap-3">
+          <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+          <div className="min-w-0">
+            <h3 className="text-[15px]">{title}</h3>
+            <p className={cx("mt-0.5 text-[12.5px] leading-5", muted)}>{description}</p>
+          </div>
         </div>
-        <span className="rounded-full bg-[#eafbdc] px-3 py-1 text-[11px] font-bold text-[#3f7d16]">{(settings[field] || []).length} selected</span>
+        <Chip tone="lime" darkMode={darkMode} className="shrink-0">{(settings[field] || []).length} selected</Chip>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-2">
         {contacts.map((contact) => {
           const checked = (settings[field] || []).includes(contact.id);
           return (
-            <button key={contact.id} type="button" onClick={() => toggleContact(field, contact.id)} className={`flex items-center gap-3 rounded-xl p-3 text-left transition ${checked ? "bg-[#eafbdc] text-[#2f641b]" : darkMode ? "bg-white/[0.05] hover:bg-white/[0.08]" : "bg-[#f5f6f3] hover:bg-[#eef2ea]"}`}>
-              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold ${checked ? "bg-[#65bf45] text-white" : "bg-white text-[#5f665b]"}`}>{String(contact.name || contact.phone).slice(0, 2).toUpperCase()}</span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{contact.name || contact.phone}</span><span className="block truncate text-[11px] opacity-70">{contact.phone}</span></span>
-              <span className={`h-5 w-5 rounded-md border ${checked ? "border-[#65bf45] bg-[#65bf45]" : "border-[#b8bfb4]"}`} />
+            <button key={contact.id} type="button" onClick={() => toggleContact(field, contact.id)} className={cx("flex items-center gap-3 rounded-[14px] border p-3 text-left transition-colors", checked ? (darkMode ? "border-[#cff07a]/40 bg-[#cff07a]/10" : "border-[#141414] bg-white") : darkMode ? "border-transparent bg-white/[0.05] hover:bg-white/[0.08]" : "border-transparent bg-[#f7f7f5] hover:bg-[#f1f1ef]")}>
+              <span className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full text-[12px]", checked ? (darkMode ? "bg-[#cff07a] text-black" : "bg-[#141414] text-white") : darkMode ? "bg-white/10 text-white/70" : "bg-white text-[#5f5f5c]")}>{String(contact.name || contact.phone).slice(0, 2).toUpperCase()}</span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-[13.5px]">{contact.name || contact.phone}</span><span className={cx("block truncate text-[11.5px]", muted)}>{contact.phone}</span></span>
+              <span className={cx("grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border", checked ? (darkMode ? "border-[#cff07a] bg-[#cff07a] text-black" : "border-[#141414] bg-[#141414] text-white") : darkMode ? "border-white/25" : "border-[#cfcfcb] bg-white")}>{checked && <Check className="h-3 w-3" strokeWidth={3} />}</span>
             </button>
           );
         })}
-        {!contacts.length && <p className={`rounded-xl p-4 text-sm ${muted}`}>No WhatsApp contacts found. Add contacts in the WhatsApp module first.</p>}
+        {!contacts.length && <p className={cx("rounded-[14px] p-4 text-[13px] md:col-span-2", darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]", muted)}>No WhatsApp contacts found. Add contacts in the WhatsApp module first.</p>}
       </div>
     </section>
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <aside className={`absolute inset-y-3 right-3 flex w-[min(960px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-[24px] shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-        <header className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-          <span><b>PRN</b> - WhatsApp automation</span>
+    <div className="ui-backdrop fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] newq" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <aside style={{ boxShadow: "var(--ui-shadow-pop)" }} className={cx("ui-drawer absolute inset-y-2.5 right-2.5 flex w-[min(960px,calc(100vw-20px))] flex-col overflow-hidden rounded-[24px] border", darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]")}>
+        <header className={cx("flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={MessageSquare} tone="mint" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h2 className="truncate text-[17px] tracking-[-0.01em]">WhatsApp automation</h2>
+              <p className={cx("truncate text-[12.5px]", muted)}>Who hears about new PRNs and their outcome</p>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
-            <button onClick={saveSettings} disabled={saving || loading} className="flex h-8 items-center gap-1.5 rounded-full bg-[#20231f] px-3 font-semibold text-white disabled:opacity-50">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Save</button>
-            <button onClick={onClose} className="px-1 font-semibold text-[#3f7d16]">Close</button>
+            <Button darkMode={darkMode} variant="primary" size="sm" icon={Save} loading={saving} onClick={saveSettings} disabled={saving || loading}>Save</Button>
+            <button type="button" onClick={onClose} aria-label="Close" className={closeButtonClass(darkMode)}><X className="h-4 w-4" /></button>
           </div>
         </header>
-        <div className="grid min-h-0 flex-1 md:grid-cols-[290px_minmax(0,1fr)]">
-          <aside className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0 md:border-r ${darkMode ? "border-white/10" : "border-black/10"}`}>
-            <div className="flex gap-2"><span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#3f7d16]">WHATSAPP</span><span className="rounded bg-black/5 px-2 py-1 text-[10px] font-bold dark:bg-white/10">PRN</span></div>
-            <h2 className="mt-4 text-2xl font-bold">Automation flow</h2>
-            <p className={`mt-2 text-xs leading-5 ${muted}`}>New PRNs go to approval parties. Approve, decline and typed comments go to concern department recipients.</p>
-            <label className={`mt-5 flex items-center justify-between rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f6f3]"}`}><span><span className="block text-sm font-bold">Enable automation</span><span className={`text-[11px] ${muted}`}>Send approved templates automatically</span></span><input type="checkbox" checked={settings.enabled !== false} onChange={(event) => setSettings((current) => ({ ...current, enabled: event.target.checked }))} /></label>
-            <button type="button" onClick={() => sendTest("actionRequest")} disabled={loading || sendingTest || !(settings.approvalContactIds || []).length} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#89ed3f] text-sm font-bold text-black disabled:opacity-45">
-              {sendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />} Send test
-            </button>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {["approved", "declined", "comment"].map((event) => <button key={event} type="button" onClick={() => sendTest(event)} disabled={loading || sendingTest || !(settings.concernContactIds || []).length} className="h-9 rounded-xl bg-[#e9f0ff] text-[11px] font-bold text-[#3159a6] disabled:opacity-45">{event}</button>)}
+        <div className="grid min-h-0 flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className={cx("min-h-0 overflow-y-auto border-b p-6 md:border-b-0 md:border-r", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+            <Badge icon={MessageSquare} tone="mint" darkMode={darkMode}>WhatsApp · PRN</Badge>
+            <SectionTitle darkMode={darkMode} className="mt-4" title="Automation flow" subtitle="from request to reply" />
+            <p className={cx("mt-3 text-[13px] leading-5", muted)}>New PRNs go to approval parties. Approve, decline and typed comments go to concern department recipients.</p>
+            <div className={cx("mt-5 flex items-center justify-between gap-3 rounded-[16px] p-4", darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]")}>
+              <span><span className="block text-[13.5px]">Enable automation</span><span className={cx("text-[12px]", muted)}>Send approved templates automatically</span></span>
+              <Toggle darkMode={darkMode} label="Enable automation" checked={settings.enabled !== false} onChange={(next) => setSettings((current) => ({ ...current, enabled: next }))} />
             </div>
-            <div className={`mt-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f6f3]"}`}>
-              <div className="flex items-center justify-between gap-3"><span className="text-sm font-bold">Last run</span><span className="rounded-full bg-black/5 px-2.5 py-1 text-[10px] font-bold dark:bg-white/10">{lastRun?.status || "Not run"}</span></div>
-              {lastRun && <p className={`mt-3 break-words text-[11px] leading-5 ${muted}`}>{lastRun.event} · {lastRun.sent || 0} sent · {lastRun.failed || 0} failed · PRN: {lastRun.prnNo || "-"} · Template: {lastRun.templateName || "-"}</p>}
+            <Button darkMode={darkMode} variant="primary" className="mt-3 w-full" icon={MessageSquare} loading={sendingTest} onClick={() => sendTest("actionRequest")} disabled={loading || sendingTest || !(settings.approvalContactIds || []).length}>Send test</Button>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {["approved", "declined", "comment"].map((event) => <Button key={event} darkMode={darkMode} variant="soft" size="sm" className="px-2 capitalize" onClick={() => sendTest(event)} disabled={loading || sendingTest || !(settings.concernContactIds || []).length}>{event}</Button>)}
+            </div>
+            <div className={cx("mt-3 rounded-[16px] p-4", darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]")}>
+              <div className="flex items-center justify-between gap-3"><span className="text-[13.5px]">Last run</span><Chip darkMode={darkMode} tone={lastRun?.status === "sent" ? "mint" : lastRun?.status === "failed" ? "rose" : "outline"}>{lastRun?.status || "Not run"}</Chip></div>
+              {lastRun && <p className={cx("mt-3 break-words text-[12px] leading-5", muted)}>{lastRun.event} · {lastRun.sent || 0} sent · {lastRun.failed || 0} failed · PRN: {lastRun.prnNo || "-"} · Template: {lastRun.templateName || "-"}</p>}
             </div>
           </aside>
-          <main className={`min-h-0 overflow-y-auto p-5 ${darkMode ? "bg-[#101216]" : "bg-[#f7f8f5]"}`}>
-            {loading ? <div className={`rounded-2xl border px-6 py-16 text-center ${panel}`}><Loader2 className="mx-auto h-6 w-6 animate-spin text-[#4b9b16]" /></div> : <div className="space-y-5"><ContactSection title="Approval / action parties" description="These numbers receive the new PRN with approve, decline and comment buttons." field="approvalContactIds" /><ContactSection title="Concern department" description="These numbers receive approval, decline and the typed custom comments." field="concernContactIds" /></div>}
+          <main className={cx("min-h-0 overflow-y-auto p-6", darkMode ? "bg-[#0f1014]" : "bg-[#fafaf9]")}>
+            {loading ? <div className={cx("rounded-[20px] border px-6 py-16 text-center", panel)}><Loader2 className={cx("mx-auto h-6 w-6 animate-spin", muted)} /></div> : <div className="space-y-4"><ContactSection title="Approval / action parties" description="These numbers receive the new PRN with approve, decline and comment buttons." field="approvalContactIds" icon={CheckCircle2} tone="mint" /><ContactSection title="Concern department" description="These numbers receive approval, decline and the typed custom comments." field="concernContactIds" icon={UserRound} tone="sky" /></div>}
           </main>
         </div>
       </aside>
@@ -205,7 +217,7 @@ export default function PrnDashboard({ darkMode }) {
   const [sheetLink, setSheetLink] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
   const [selectedPrn, setSelectedPrn] = useState(null);
-  const muted = darkMode ? "text-white/45" : "text-black/48";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
 
   const load = useCallback(async (quiet = false) => {
     try {
@@ -264,7 +276,7 @@ export default function PrnDashboard({ darkMode }) {
   }
 
   if (loading) {
-    return <main className={`flex min-h-0 flex-1 items-center justify-center px-5 py-10 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f4ef] text-[#171714]"}`}><Loader2 className="h-7 w-7 animate-spin text-[#4b9b16]" /></main>;
+    return <main className={cx("flex min-h-0 flex-1 items-center justify-center px-5 py-10", darkMode ? "text-white" : "text-[#141414]")}><Loader2 className={cx("h-7 w-7 animate-spin", muted)} /></main>;
   }
 
   const settings = data?.prnSettings || {};
@@ -272,84 +284,123 @@ export default function PrnDashboard({ darkMode }) {
   const summary = data?.allSummary || data?.summary || {};
 
   return (
-    <main className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-7 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f7f2] text-[#171714]"}`}>
-      <div className={`mb-5 rounded-3xl p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.08] bg-white"}`}>
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#4b9b16]"><FileSpreadsheet className="h-3.5 w-3.5" /> Projects · PRN</span>
-            <h1 className="mt-2 text-3xl font-bold small tracking-tight">Payment Request Dashboard</h1>
-            <p className={`mt-2 max-w-2xl text-sm ${muted}`}>Track linked PRN requests, vendors, payment type, amount and approval flow.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {canManage && <button onClick={() => setWhatsappOpen(true)} className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}><MessageSquare className="h-4 w-4" /> WhatsApp automation</button>}
-            {canManage && <button onClick={() => setSettingsOpen(true)} className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}><Settings className="h-4 w-4" /> Links</button>}
-            <button onClick={() => { setAllData(null); void load(true); }} className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh</button>
-          </div>
-        </div>
+    <main className={cx("min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8", darkMode ? "text-white" : "text-[#141414]")}>
+      <PageHeader
+        darkMode={darkMode}
+        badge="Projects · PRN"
+        badgeIcon={IndianRupee}
+        badgeTone="peach"
+        title="Payment requests"
+        subtitle="who asked, for whom, how much"
+        description="Track linked PRN requests, vendors, payment type, amount and approval flow."
+        actions={<>
+          {canManage && <Button darkMode={darkMode} variant="secondary" icon={MessageSquare} onClick={() => setWhatsappOpen(true)}>WhatsApp automation</Button>}
+          {canManage && <Button darkMode={darkMode} variant="secondary" icon={Settings} onClick={() => setSettingsOpen(true)}>Links</Button>}
+          <Button darkMode={darkMode} variant="primary" onClick={() => { setAllData(null); void load(true); }}><RefreshCw className={cx("h-4 w-4", refreshing && "animate-spin")} /> Refresh</Button>
+        </>}
+      />
+
+      {!settings.linked && <Notice tone="amber" darkMode={darkMode} icon={AlertTriangle} className="mt-6">Link the PRN Google Sheet before viewing PRNs.</Notice>}
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <StatTile darkMode={darkMode} icon={FileSpreadsheet} tone="mint" value={summary.total || 0} label="All PRNs" hint="Full sheet" />
+        <StatTile darkMode={darkMode} icon={IndianRupee} tone="peach" value={money(summary.amount)} label="Total amount" hint="All records" />
+        <StatTile darkMode={darkMode} icon={CircleDollarSign} tone="lavender" value={Object.keys(summary.byPaymentType || {}).length} label="Payment types" hint="Categories" />
       </div>
 
-      {!settings.linked && <div className={`mb-5 rounded-[28px] p-5 ${darkMode ? "bg-amber-400/5 text-amber-100" : "bg-amber-50 text-amber-800"}`}>Link the PRN Google Sheet before viewing PRNs.</div>}
-
-      <div className="mb-5 grid gap-4 md:grid-cols-3">
-        <Metric darkMode={darkMode} icon={FileSpreadsheet} label="All PRNs" value={summary.total || 0} note="Full sheet" />
-        <Metric darkMode={darkMode} icon={IndianRupee} label="Total amount" value={money(summary.amount)} note="All records" />
-        <Metric darkMode={darkMode} icon={CircleDollarSign} label="Payment types" value={Object.keys(summary.byPaymentType || {}).length} note="Categories" />
-      </div>
-
-      <section className={`rounded-3xl p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#4b9b16]">Requests</p>
-            <h2 className="mt-1 text-xl font-bold small">PRN records</h2>
-            <p className={`mt-1 text-sm ${muted}`}>{records.length} visible requests</p>
+      <section className={cx("mt-6 rounded-[20px] border p-5", darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white")}>
+        <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <IconTile icon={FileSpreadsheet} tone="sky" darkMode={darkMode} size="sm" />
+            <div>
+              <h2 className="text-[15px]">PRN records</h2>
+              <p className={cx("text-[12.5px]", muted)}>{records.length} visible requests</p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <DatePicker darkMode={darkMode} value={startDate} onChange={setStartDate} placeholder="From date" />
             <DatePicker darkMode={darkMode} value={endDate} onChange={setEndDate} placeholder="To date" />
-            <label className={`flex h-12 min-w-64 items-center gap-2 rounded-xl border px-4 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#fafbf8] text-black"}`}><Search className="h-4 w-4 text-[#4b9b16]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search PRN, vendor, project" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
+            <label className={cx(fieldClass(darkMode), "w-full cursor-text sm:w-64")}><Search className={cx("h-4 w-4 shrink-0", muted)} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search PRN, vendor, project" className="min-w-0 flex-1 bg-transparent outline-none" /></label>
           </div>
         </div>
-        <div className={`overflow-x-auto rounded-xl border ${darkMode ? "border-white/10" : "border-black/[0.08]"}`}>
-          <table className="w-full min-w-[940px] border-separate border-spacing-0 text-left text-sm">
-            <thead className={darkMode ? "bg-white/[0.035] text-white/50" : "bg-[#f4f6f1] text-black/50"}>
-              <tr>{["PRN", "Timestamp", "Name", "Vendor", "Project / Site", "Payment type", "Amount", "Action"].map((header) => <th key={header} className="border-b border-black/[0.06] px-5 py-3.5 text-[10px] font-bold uppercase tracking-[0.12em]">{header}</th>)}</tr>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[940px] border-collapse text-left text-[13px]">
+            <thead>
+              <tr>{["PRN", "Timestamp", "Name", "Vendor", "Project / Site", "Payment type", "Amount", ""].map((header) => <th key={header || "action"} className={cx("px-4 pb-2.5 pt-1 text-[12px] font-normal", muted)}>{header}</th>)}</tr>
             </thead>
             <tbody>
-              {records.map((row, index) => (
-                <tr key={row.id} className={`transition ${index % 2 === 0 ? (darkMode ? "bg-white/[0.015]" : "bg-white") : darkMode ? "bg-white/[0.03]" : "bg-[#fcfcfa]"}`}>
+              {records.map((row) => (
+                <tr key={row.id} className={cx("border-t transition-colors", darkMode ? "border-white/[0.07] hover:bg-white/[0.03]" : "border-[#f0f0ee] hover:bg-[#fafaf9]")}>
                   <Cell darkMode={darkMode} strong>{row.prnNo || "-"}</Cell>
                   <Cell darkMode={darkMode}>{formatDateTime(row.timestamp)}</Cell>
                   <Cell darkMode={darkMode}>{row.name || "-"}</Cell>
                   <Cell darkMode={darkMode}>{row.vendorName || "-"}</Cell>
                   <Cell darkMode={darkMode} strong>{row.project || "-"}</Cell>
-                  <Cell darkMode={darkMode}>{row.typeOfPayment || "-"}</Cell>
-                  <Cell darkMode={darkMode} strong>{money(row.amount)}</Cell>
-                  <Cell darkMode={darkMode}><button onClick={() => setSelectedPrn(row)} className={`flex h-9 items-center gap-2 rounded-full border px-3.5 text-xs ${darkMode ? "border-white/15 bg-white/5 text-white" : "border-black/12 bg-white text-black"}`}><Eye className="h-4 w-4" /> View detail</button></Cell>
+                  <Cell darkMode={darkMode}>{row.typeOfPayment ? <Chip tone="neutral" darkMode={darkMode}>{row.typeOfPayment}</Chip> : "-"}</Cell>
+                  <Cell darkMode={darkMode} strong><span className="tabular-nums">{money(row.amount)}</span></Cell>
+                  <Cell darkMode={darkMode}><Button darkMode={darkMode} variant="soft" size="sm" icon={Eye} onClick={() => setSelectedPrn(row)}>View detail</Button></Cell>
                 </tr>
               ))}
-              {!records.length && <tr><td colSpan={8} className={`px-4 py-10 text-center ${muted}`}>No PRNs found for this range.</td></tr>}
             </tbody>
           </table>
+          {!records.length && <EmptyState darkMode={darkMode} icon={FileSpreadsheet} tone="peach" title="No PRNs found" text="Nothing in this date range. Try a wider range or another search." className="mt-2" />}
         </div>
       </section>
 
-      {selectedPrn && <div className="fixed inset-0 z-50 bg-black/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => event.target === event.currentTarget && setSelectedPrn(null)}><aside className={`ml-auto flex h-full w-full max-w-[560px] flex-col overflow-hidden rounded-[24px] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}><header className={`flex h-12 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}><span><b>{selectedPrn.prnNo}</b> · Payment request details</span><button onClick={() => setSelectedPrn(null)} className="px-1 font-semibold text-[#3f7d16]">Close</button></header><div className="space-y-4 overflow-y-auto p-5"><Detail label="Requested by" value={selectedPrn.name} icon={UserRound} darkMode={darkMode} /><Detail label="Vendor" value={selectedPrn.vendorName} darkMode={darkMode} /><Detail label="Project / Site" value={selectedPrn.project} darkMode={darkMode} /><Detail label="Type of payment" value={selectedPrn.typeOfPayment} darkMode={darkMode} /><Detail label="Amount" value={money(selectedPrn.amount)} icon={IndianRupee} darkMode={darkMode} /><Detail label="Remark" value={selectedPrn.remark} darkMode={darkMode} /><Detail label="Timestamp" value={formatDateTime(selectedPrn.timestamp)} icon={CalendarDays} darkMode={darkMode} /></div></aside></div>}
+      <Drawer open={Boolean(selectedPrn)} onClose={() => setSelectedPrn(null)} darkMode={darkMode} icon={IndianRupee} tone="peach" title={selectedPrn?.prnNo || "PRN"} subtitle="Payment request details" width={560}>
+        {selectedPrn && <div className="space-y-3">
+          <div className={cx("rounded-[20px] p-5", darkMode ? "bg-[rgba(251,146,60,0.13)]" : "bg-[#fbe5dc]")}>
+            <p className={cx("text-[12.5px]", darkMode ? "text-white/55" : "text-[#6b6b6b]")}>Amount</p>
+            <p className="mt-1 text-[30px] leading-none tracking-[-0.03em] tabular-nums">{money(selectedPrn.amount)}</p>
+            {selectedPrn.typeOfPayment && <p className={cx("mt-2 text-[12.5px]", darkMode ? "text-white/55" : "text-[#6b6b6b]")}>{selectedPrn.typeOfPayment}</p>}
+          </div>
+          <Detail label="Requested by" value={selectedPrn.name} icon={UserRound} darkMode={darkMode} />
+          <Detail label="Vendor" value={selectedPrn.vendorName} darkMode={darkMode} />
+          <Detail label="Project / Site" value={selectedPrn.project} darkMode={darkMode} />
+          <Detail label="Type of payment" value={selectedPrn.typeOfPayment} darkMode={darkMode} />
+          <Detail label="Amount" value={money(selectedPrn.amount)} icon={IndianRupee} darkMode={darkMode} />
+          <Detail label="Remark" value={selectedPrn.remark} darkMode={darkMode} />
+          <Detail label="Timestamp" value={formatDateTime(selectedPrn.timestamp)} icon={CalendarDays} darkMode={darkMode} />
+        </div>}
+      </Drawer>
 
-      {settingsOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => event.target === event.currentTarget && setSettingsOpen(false)}><div className={`w-full max-w-[620px] rounded-[22px] border p-6 ${darkMode ? "border-white/10 bg-[#101116] text-white" : "border-black/[0.08] bg-white text-[#171714]"}`}><div className="flex items-center justify-between gap-3"><h3 className="text-2xl font-bold">Link PRN sheet</h3><button onClick={() => setSettingsOpen(false)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f6f1]"}`}><X className="h-4 w-4" /></button></div><label className="mt-6 grid gap-3"><span className={`flex items-center gap-3 text-sm font-medium ${muted}`}><Image src="/gsheet-icon.png" alt="Google Sheets" width={22} height={22} /> Google Sheet <span className="rounded-md bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">{sheetLink.trim() || settings.spreadsheetId ? "Connected" : "Required"}</span></span><input value={sheetLink} onChange={(event) => setSheetLink(event.target.value)} placeholder={settings.spreadsheetId || "Paste PRN Google Sheet link or ID"} className={`h-12 rounded-xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.045] text-white" : "border-black/10 bg-[#fafbf8] text-black"}`} /></label><div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-black/[0.06] p-4"><div className="flex items-center gap-3"><CheckCircle2 className={`h-5 w-5 ${sheetLink.trim() || settings.spreadsheetId ? "text-[#4b9b16]" : muted}`} /><p className="text-sm font-bold">Existing PRNs stay untouched.</p></div><button disabled={savingSettings || !sheetLink.trim()} onClick={saveSettings} className="flex h-11 items-center gap-2 rounded-full bg-[#89ed3f] px-6 text-sm font-bold text-black disabled:opacity-45">{savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save</button></div></div></div>}
+      {settingsOpen && <div className="ui-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 newq" onMouseDown={(event) => event.target === event.currentTarget && setSettingsOpen(false)}>
+        <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={cx("ui-pop w-full max-w-[600px] rounded-[24px] border p-6", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]")}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <IconTile icon={FileSpreadsheet} tone="mint" darkMode={darkMode} size="md" />
+              <div><h3 className="text-[18px] tracking-[-0.01em]">Link PRN sheet</h3><p className={cx("text-[13px]", muted)}>where payment requests are read from</p></div>
+            </div>
+            <button type="button" aria-label="Close" onClick={() => setSettingsOpen(false)} className={closeButtonClass(darkMode)}><X className="h-4 w-4" /></button>
+          </div>
+          <label className="mt-6 grid gap-2">
+            <span className={cx("flex items-center gap-2.5 text-[13px]", muted)}><Image src="/gsheet-icon.png" alt="Google Sheets" width={20} height={20} /> Google Sheet <Chip tone={sheetLink.trim() || settings.spreadsheetId ? "mint" : "neutral"} darkMode={darkMode} className="h-6 text-[11.5px]">{sheetLink.trim() || settings.spreadsheetId ? "Connected" : "Required"}</Chip></span>
+            <input value={sheetLink} onChange={(event) => setSheetLink(event.target.value)} placeholder={settings.spreadsheetId || "Paste PRN Google Sheet link or ID"} className={fieldClass(darkMode, { size: "lg" })} />
+          </label>
+          <div className={cx("mt-5 flex items-center justify-between gap-4 rounded-[16px] p-4", darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]")}>
+            <div className="flex items-center gap-3"><CheckCircle2 className={cx("h-5 w-5", sheetLink.trim() || settings.spreadsheetId ? "text-[#2f7a4f]" : muted)} /><p className="text-[13.5px]">Existing PRNs stay untouched.</p></div>
+            <Button darkMode={darkMode} variant="primary" icon={Save} loading={savingSettings} disabled={savingSettings || !sheetLink.trim()} onClick={saveSettings}>Save</Button>
+          </div>
+        </div>
+      </div>}
 
       {whatsappOpen && <PrnWhatsappAutomationDrawer darkMode={darkMode} onClose={() => setWhatsappOpen(false)} />}
     </main>
   );
 }
 
-function Metric({ darkMode, icon: Icon, label, value, note }) {
-  return <article className={`rounded-3xl p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}><div className="flex items-start justify-between"><div><p className={`text-xs font-semibold uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/45"}`}>{label}</p><p className="mt-2 text-2xl font-bold">{value}</p><p className={`mt-1 text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>{note}</p></div><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#eafbdc] text-[#4b9b16]"><Icon className="h-5 w-5" /></span></div></article>;
-}
-
 function Cell({ darkMode, strong = false, children }) {
-  return <td className={`border-t px-5 py-4 ${strong ? "font-bold" : ""} ${darkMode ? "border-white/10 text-white/75" : "border-black/[0.06] text-black/75"}`}>{children}</td>;
+  return <td className={cx("px-4 py-3.5 align-middle", strong ? (darkMode ? "text-white" : "text-[#141414]") : darkMode ? "text-white/65" : "text-[#5f5f5c]")}>{children}</td>;
 }
 
 function Detail({ label, value, icon: Icon, darkMode }) {
-  return <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f6f3]"}`}><div className="flex items-start gap-3">{Icon && <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#eafbdc] text-[#4b9b16]"><Icon className="h-4 w-4" /></span>}<div><p className={`text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>{label}</p><p className="mt-1 break-words text-sm font-semibold">{value || "-"}</p></div></div></div>;
+  return (
+    <div className={cx("flex items-start gap-3 rounded-[16px] p-4", darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]")}>
+      {Icon && <IconTile icon={Icon} tone="neutral" darkMode={darkMode} size="xs" />}
+      <div className="min-w-0">
+        <p className={cx("text-[12px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{label}</p>
+        <p className="mt-0.5 break-words text-[14px]">{value || "-"}</p>
+      </div>
+    </div>
+  );
 }

@@ -2,9 +2,10 @@
 /* eslint-disable @next/next/no-img-element -- Google Drive image URLs are dynamic and cannot use the fixed Next image host allowlist. */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpRight, Camera, ChevronLeft, ChevronRight, Folder, ImageOff, Loader2, RefreshCw, Search, UserRound, X } from "lucide-react";
+import { ArrowUpRight, Camera, ChevronLeft, ChevronRight, Folder, Hammer, ImageOff, Images, Loader2, MapPin, RefreshCw, Search, UserRound, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
+import { Button, Chip, EmptyState, IconTile, PageHeader, StatTile, cx, fieldClass } from "./ui";
 
 function localDateKey(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
@@ -76,27 +77,24 @@ function compactDayLabel(key) {
 
 function DateStrip({ darkMode, selectedDate, weekStart, direction, counts, onSelectDate, onNavigateWeek }) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
-  const border = darkMode ? "border-white/10" : "border-black/10";
-  const navClass = darkMode ? "bg-[#15171c] text-white hover:bg-white/10" : "bg-white text-[#1594ff] hover:bg-[#f3f8ff]";
-  const trackClass = darkMode ? "border-white/10 bg-[#111318]" : "border-black/[0.08] bg-white -[0_10px_24px_rgba(15,23,42,0.08)]";
+  const navClass = cx("grid h-10 w-10 shrink-0 place-items-center self-center rounded-full transition-colors", darkMode ? "bg-white/[0.06] text-white hover:bg-white/10" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]");
 
   return (
-    <div className={`mt-5 flex overflow-hidden rounded-2xl border ${trackClass}`}>
-      <button type="button" onClick={() => onNavigateWeek(-1)} className={`flex w-12 shrink-0 items-center justify-center border-r transition ${border} ${navClass}`} aria-label="Previous week"><ChevronLeft className="h-5 w-5" /></button>
-      <div key={weekStart} className={`grid min-w-0 flex-1 grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 ${direction > 0 ? "animate-[site-week-next_320ms_cubic-bezier(0.22,1,0.36,1)]" : "animate-[site-week-prev_320ms_cubic-bezier(0.22,1,0.36,1)]"}`}>
+    <div className="mt-6 flex items-stretch gap-2">
+      <button type="button" onClick={() => onNavigateWeek(-1)} className={navClass} aria-label="Previous week"><ChevronLeft className="h-4 w-4" /></button>
+      <div key={weekStart} className={`grid min-w-0 flex-1 grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7 ${direction > 0 ? "animate-[site-week-next_320ms_cubic-bezier(0.22,1,0.36,1)]" : "animate-[site-week-prev_320ms_cubic-bezier(0.22,1,0.36,1)]"}`}>
         {days.map((day) => {
           const selected = day === selectedDate;
           const count = counts.get(day) || 0;
           return (
-            <button key={day} type="button" onClick={() => onSelectDate(day)} className={`relative min-h-[74px] border-r px-3 py-3 text-center transition last:border-r-0 ${border} ${selected ? "text-[#1295ff]" : darkMode ? "text-white/82 hover:bg-white/[0.04]" : "text-[#272727] hover:bg-[#f8fbf5]"}`}>
-              <span className="block text-sm font-bold">{compactDayLabel(day)}</span>
-              <span className={`mt-1 block text-sm ${selected ? "font-semibold text-[#1295ff]" : count ? "font-medium text-[#20a045]" : darkMode ? "text-white/45" : "text-black/48"}`}>{count ? `${count} photo${count === 1 ? "" : "s"}` : "View"}</span>
-              {selected && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[#1295ff]" />}
+            <button key={day} type="button" onClick={() => onSelectDate(day)} className={cx("min-h-[66px] rounded-[16px] px-3 py-2.5 text-center transition-colors", selected ? (darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white") : darkMode ? "bg-white/[0.05] text-white/85 hover:bg-white/[0.08]" : "bg-[#f7f7f5] text-[#141414] hover:bg-[#f0f0ee]")}>
+              <span className="block text-[13px]">{compactDayLabel(day)}</span>
+              <span className={cx("mt-1 block text-[12px]", selected ? "opacity-70" : count ? (darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]") : darkMode ? "text-white/40" : "text-[#9a9a98]")}>{count ? `${count} photo${count === 1 ? "" : "s"}` : "View"}</span>
             </button>
           );
         })}
       </div>
-      <button type="button" onClick={() => onNavigateWeek(1)} className={`flex w-12 shrink-0 items-center justify-center border-l transition ${border} ${navClass}`} aria-label="Next week"><ChevronRight className="h-5 w-5" /></button>
+      <button type="button" onClick={() => onNavigateWeek(1)} className={navClass} aria-label="Next week"><ChevronRight className="h-4 w-4" /></button>
       <style jsx>{`
         @keyframes site-week-next {
           from { opacity: 0; transform: translateX(28px); }
@@ -120,7 +118,7 @@ function siteInitials(site) {
 function SiteImage({ photo, site, alt = "", className = "" }) {
   const [failed, setFailed] = useState(false);
   if (!photo || failed) {
-    return <span className={`flex h-full w-full items-center justify-center bg-[#e8ede9] text-4xl font-bold tracking-[-0.06em] text-[#5f6862] dark:bg-white/[0.06] dark:text-white/55 ${className}`}>{siteInitials(site)}</span>;
+    return <span className={`flex h-full w-full items-center justify-center bg-[#f4f4f2] text-4xl tracking-[-0.04em] text-[#8a8a8a] dark:bg-white/[0.06] dark:text-white/55 ${className}`}>{siteInitials(site)}</span>;
   }
   return <img src={imageUrl(photo.url || photo)} alt={alt} onError={() => setFailed(true)} className={className} />;
 }
@@ -128,18 +126,20 @@ function SiteImage({ photo, site, alt = "", className = "" }) {
 function SiteFolder({ group, darkMode, onOpen }) {
   const cover = group.photos[0];
   return (
-    <button type="button" onClick={onOpen} className={`group overflow-hidden rounded-[26px] border text-left transition duration-300 hover:-translate-y-1 hover:-xl ${darkMode ? "border-white/10 bg-white/[0.035] hover:border-white/20" : "border-black/[0.06] bg-white hover:border-black/10"}`}>
-      <div className={`relative h-44 overflow-hidden ${darkMode ? "bg-white/5" : "bg-[#e9eeeb]"}`}>
-        {cover ? <SiteImage photo={cover} site={group.site} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : <ImageOff className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 opacity-30" />}
-        <span className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-black/55 text-white backdrop-blur-md"><Folder className="h-5 w-5" /></span>
-        <span className="absolute bottom-3 right-3 rounded-full bg-black/65 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur-md">{group.photos.length} photo{group.photos.length === 1 ? "" : "s"}</span>
-      </div>
-      <div className="p-5">
-        <h3 className="truncate text-lg font-semibold">{group.site}</h3>
-        <div className={`mt-2 flex items-center justify-between text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>
-          <span>{group.trades.size} trade{group.trades.size === 1 ? "" : "s"}</span>
-          <span>Open folder →</span>
+    <button type="button" onClick={onOpen} className={cx("group overflow-hidden rounded-[20px] border text-left transition-colors", darkMode ? "border-white/10 bg-[#15171c] hover:bg-[#191b21]" : "border-[#ececec] bg-white hover:bg-[#fcfcfb]")}>
+      <div className="p-2 pb-0">
+        <div className={cx("relative h-44 overflow-hidden rounded-[14px]", darkMode ? "bg-white/5" : "bg-[#f4f4f2]")}>
+          {cover ? <SiteImage photo={cover} site={group.site} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : <ImageOff className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 opacity-30" />}
+          <span className="absolute bottom-2.5 right-2.5 rounded-full bg-white/90 px-2.5 py-1 text-[11.5px] text-[#141414] backdrop-blur-md">{group.photos.length} photo{group.photos.length === 1 ? "" : "s"}</span>
         </div>
+      </div>
+      <div className="flex items-center gap-3 p-4">
+        <IconTile icon={Folder} tone="sky" darkMode={darkMode} size="sm" />
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-[15px]">{group.site}</h3>
+          <p className={cx("text-[12px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{group.trades.size} trade{group.trades.size === 1 ? "" : "s"}</p>
+        </div>
+        <ChevronRight className={cx("h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5", darkMode ? "text-white/40" : "text-[#9a9a98]")} />
       </div>
     </button>
   );
@@ -288,38 +288,57 @@ export default function SiteImagesDashboard({ darkMode }) {
     };
   }, [closeSiteDrawer, navigateSelectedPhoto, selectedPhoto, selectedSite]);
 
-  const panel = darkMode ? "border-white/10 bg-[#17191e]" : "border-black/[0.06] bg-white";
-  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const panel = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const dayPhotoCount = photoCountsByDate.get(date) || 0;
+  const dayTradeCount = new Set(photos.filter((photo) => photo.date === date).map((photo) => photo.trade)).size;
 
   return (
-    <main className={`relative min-h-0 flex-1 overflow-y-auto p-5 sm:p-7 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f7f2] text-[#171714]"}`}>
-      <div className={`mb-5 rounded-3xl p-5 sm:p-6 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.08] bg-white"}`}>
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 flex-1"><span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#4b9b16]"><Camera className="h-3.5 w-3.5" /> Projects · Site Images</span><h1 className="mt-2 text-3xl font-bold small tracking-tight">Site Images Dashboard</h1><p className={`mt-2 max-w-2xl text-sm ${muted}`}>Review daily site photos, trades and upload ownership from one workspace.</p></div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:pt-14">
-            <label className={`flex h-12 w-full min-w-0 items-center gap-2 rounded-3xl border px-4 sm:w-72 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-[#fafbf8] text-black focus-within:border-[#69c832]"}`}><Search className="h-4 w-4 shrink-0 text-[#4b9b16]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search site or trade" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
-            <button type="button" onClick={() => void load()} className={`flex h-12 w-fit shrink-0 items-center gap-2 rounded-full border px-5 text-sm font-semibold ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 bg-white hover:bg-[#f5f7f2]"}`}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh</button>
-          </div>
-        </div>
-        <DateStrip darkMode={darkMode} selectedDate={date} weekStart={weekStart} direction={weekDirection} counts={photoCountsByDate} onSelectDate={selectDate} onNavigateWeek={navigateWeek} />
+    <main className={cx("relative min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8", darkMode ? "text-white" : "text-[#141414]")}>
+      <PageHeader
+        darkMode={darkMode}
+        badge="Projects · Site images"
+        badgeIcon={Camera}
+        badgeTone="sky"
+        title="Site images"
+        subtitle="what each site looked like"
+        description="Review daily site photos, trades and upload ownership from one workspace."
+        actions={<>
+          <label className={cx(fieldClass(darkMode), "w-full cursor-text sm:w-72")}><Search className={cx("h-4 w-4 shrink-0", muted)} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search site or trade" className="min-w-0 flex-1 bg-transparent outline-none" /></label>
+          <Button darkMode={darkMode} variant="primary" onClick={() => void load()}><RefreshCw className={cx("h-4 w-4", loading && "animate-spin")} /> Refresh</Button>
+        </>}
+      />
+      <DateStrip darkMode={darkMode} selectedDate={date} weekStart={weekStart} direction={weekDirection} counts={photoCountsByDate} onSelectDate={selectDate} onNavigateWeek={navigateWeek} />
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <StatTile darkMode={darkMode} icon={Images} tone="sky" value={dayPhotoCount} label="Photos this day" />
+        <StatTile darkMode={darkMode} icon={MapPin} tone="mint" value={groups.length} label="Sites shown" />
+        <StatTile darkMode={darkMode} icon={Hammer} tone="peach" value={dayTradeCount} label="Trades covered" />
       </div>
 
-      <section className={`rounded-3xl p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.08] bg-white"}`}>
-        <div className="mb-5">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#4b9b16]">Site gallery</p><h2 className="mt-1 text-xl small font-bold">Photo folders</h2><p className={`mt-1 text-sm ${muted}`}>{prettyDate(date)} · {groups.length} visible sites</p></div>
+      <section className={cx("mt-6 rounded-[20px] border p-5", panel)}>
+        <div className="mb-4 flex items-center gap-3">
+          <IconTile icon={Folder} tone="lavender" darkMode={darkMode} size="sm" />
+          <div><h2 className="text-[15px]">Photo folders</h2><p className={cx("text-[12.5px]", muted)}>{prettyDate(date)} · {groups.length} visible sites</p></div>
         </div>
 
-        {loading && !source ? <div className={`flex h-72 items-center justify-center gap-3 ${muted}`}><Loader2 className="h-5 w-5 animate-spin" /> Reading Site Daily Report…</div> : groups.length ? (
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{groups.map((group) => <SiteFolder key={group.site} group={group} darkMode={darkMode} onOpen={() => openSiteDrawer(group.site)} />)}</div>
+        {loading && !source ? <div className={cx("flex h-72 items-center justify-center gap-3 text-[13px]", muted)}><Loader2 className="h-5 w-5 animate-spin" /> Reading Site Daily Report…</div> : groups.length ? (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{groups.map((group) => <SiteFolder key={group.site} group={group} darkMode={darkMode} onOpen={() => openSiteDrawer(group.site)} />)}</div>
         ) : (
-          <div className={`flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed text-center ${darkMode ? "border-white/10" : "border-black/10"}`}><Camera className={`h-9 w-9 ${muted}`} /><h3 className="mt-4 font-semibold">No site images for this date</h3><p className={`mt-2 max-w-md px-5 text-sm ${muted}`}>{source ? "Choose another date or wait for the site team to add photos to the daily report." : 'Connect a sheet named “Site Daily Report” in Sheet Dashboard.'}</p></div>
+          <EmptyState darkMode={darkMode} icon={Camera} tone="sky" title="No site images for this date" text={source ? "Choose another date or wait for the site team to add photos to the daily report." : "Connect a sheet named \u201cSite Daily Report\u201d in Sheet Dashboard."} className="min-h-72" />
         )}
       </section>
 
-      {activeGroup && <div className={`fixed inset-0 z-[70] bg-black/45 backdrop-blur-[2px] ${siteDrawerClosing ? "animate-[mrn-backdrop-out_300ms_ease_forwards]" : "animate-[mrn-backdrop-in_320ms_ease-out]"}`} onMouseDown={(event) => event.target === event.currentTarget && closeSiteDrawer()} role="presentation">
-        <aside className={`absolute inset-y-0 right-0 flex w-full max-w-5xl flex-col overflow-hidden border-l -[-24px_0_80px_rgba(0,0,0,0.22)] ${siteDrawerClosing ? "animate-[mrn-drawer-out_300ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#111318] text-white" : "border-black/10 bg-[#f7f7f3] text-[#171714]"}`} role="dialog" aria-modal="true" aria-label={`${activeGroup.site} site photos`}>
-          <header className={`flex shrink-0 items-center justify-between border-b px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}><div className="flex min-w-0 items-center gap-3"><button type="button" onClick={closeSiteDrawer} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${panel}`}><ArrowLeft className="h-4 w-4" /></button><div className="min-w-0"><p className={`text-[11px] font-medium uppercase tracking-[0.18em] ${muted}`}>Site folder · {prettyDate(date)}</p><h2 className="mt-1 truncate text-xl font-semibold">{activeGroup.site}</h2></div></div><button type="button" onClick={closeSiteDrawer} className="flex h-10 w-10 items-center justify-center rounded-full"><X className="h-5 w-5" /></button></header>
-          <div className="overflow-y-auto p-5 sm:p-7"><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{activeGroup.photos.map((photo) => <article key={photo.id} className={`overflow-hidden rounded-[22px] border ${panel}`}><button type="button" onClick={() => setSelectedPhoto(photo)} className="block h-52 w-full overflow-hidden bg-black/5"><SiteImage photo={photo} site={photo.site} alt={`${photo.trade} at ${photo.site}`} className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button><div className="p-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#e8f8d7] text-[#39710f]"}`}>{photo.trade}</span><p className={`mt-3 flex items-center gap-2 text-xs ${muted}`}><UserRound className="h-3.5 w-3.5" /> Uploaded by {photo.uploadedBy}</p><a href={photo.url} target="_blank" rel="noreferrer" className={`mt-4 flex items-center gap-1.5 text-xs font-semibold ${darkMode ? "text-[#d8f36a]" : "text-[#39710f]"}`}>Open original <ArrowUpRight className="h-3.5 w-3.5" /></a></div></article>)}</div></div>
+      {activeGroup && <div className={`newq fixed inset-0 z-[70] bg-black/20 backdrop-blur-[2px] ${siteDrawerClosing ? "animate-[mrn-backdrop-out_300ms_ease_forwards]" : "animate-[mrn-backdrop-in_320ms_ease-out]"}`} onMouseDown={(event) => event.target === event.currentTarget && closeSiteDrawer()} role="presentation">
+        <aside style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`absolute inset-0 flex w-full flex-col overflow-hidden sm:inset-y-2.5 sm:left-auto sm:right-2.5 sm:max-w-5xl sm:rounded-[24px] sm:border ${siteDrawerClosing ? "animate-[mrn-drawer-out_300ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]"}`} role="dialog" aria-modal="true" aria-label={`${activeGroup.site} site photos`}>
+          <header className={cx("flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+            <div className="flex min-w-0 items-center gap-3">
+              <IconTile icon={Folder} tone="sky" darkMode={darkMode} size="sm" />
+              <div className="min-w-0"><h2 className="truncate text-[17px] tracking-[-0.01em]">{activeGroup.site}</h2><p className={cx("truncate text-[12.5px]", muted)}>Site folder · {prettyDate(date)} · {activeGroup.photos.length} photo{activeGroup.photos.length === 1 ? "" : "s"}</p></div>
+            </div>
+            <button type="button" onClick={closeSiteDrawer} aria-label="Close" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}><X className="h-4 w-4" /></button>
+          </header>
+          <div className="overflow-y-auto p-6"><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{activeGroup.photos.map((photo) => <article key={photo.id} className={cx("overflow-hidden rounded-[20px] border", panel)}><div className="p-2 pb-0"><button type="button" onClick={() => setSelectedPhoto(photo)} className={cx("block h-52 w-full overflow-hidden rounded-[14px]", darkMode ? "bg-white/5" : "bg-[#f4f4f2]")}><SiteImage photo={photo} site={photo.site} alt={`${photo.trade} at ${photo.site}`} className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button></div><div className="p-4"><Chip tone="lime" darkMode={darkMode} className="h-6 max-w-full text-[11.5px]"><span className="truncate">{photo.trade}</span></Chip><p className={cx("mt-3 flex items-center gap-2 text-[12px]", muted)}><UserRound className="h-3.5 w-3.5" /> Uploaded by {photo.uploadedBy}</p><a href={photo.url} target="_blank" rel="noreferrer" className={cx("mt-3 inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] transition-colors", darkMode ? "bg-white/[0.07] hover:bg-white/[0.11]" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>Open original <ArrowUpRight className="h-3.5 w-3.5" /></a></div></article>)}</div></div>
         </aside>
       </div>}
 

@@ -14,17 +14,36 @@ import {
   Sparkles,
   Loader2,
   X,
-  ToggleLeft,
-  ToggleRight,
   RefreshCw,
   ChevronDown,
   Cloud,
   HardDrive,
   Link,
   Sheet,
+  Check,
+  CircleCheck,
+  Columns3,
+  Files,
+  FolderOpen,
+  Library,
+  Rows3,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { ConfirmModal, DateTimePicker, DocumentIcon, useClickOutside } from "./ui";
+import {
+  Button,
+  Chip,
+  ConfirmModal,
+  DateTimePicker,
+  DocumentIcon,
+  EmptyState,
+  Highlight,
+  IconTile,
+  Notice,
+  PageHeader,
+  StatTile,
+  Toggle,
+  useClickOutside,
+} from "./ui";
 import { API_URL, useAuth } from "./AuthProvider";
 
 export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
@@ -570,17 +589,17 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
   };
 
   const getTypeStyle = (type) => {
-    const styles = {
-      currency: darkMode ? "bg-emerald-500/10 text-emerald-300" : "bg-emerald-50 text-emerald-700",
-      number: darkMode ? "bg-blue-500/10 text-blue-300" : "bg-blue-50 text-blue-700",
-      percentage: darkMode ? "bg-cyan-500/10 text-cyan-300" : "bg-cyan-50 text-cyan-700",
-      date: darkMode ? "bg-violet-500/10 text-violet-300" : "bg-violet-50 text-violet-700",
-      category: darkMode ? "bg-amber-500/10 text-amber-300" : "bg-amber-50 text-amber-700",
-      boolean: darkMode ? "bg-lime-500/10 text-lime-300" : "bg-lime-50 text-lime-700",
-      email: darkMode ? "bg-sky-500/10 text-sky-300" : "bg-sky-50 text-sky-700",
-      url: darkMode ? "bg-fuchsia-500/10 text-fuchsia-300" : "bg-fuchsia-50 text-fuchsia-700",
+    const tones = {
+      currency: "mint",
+      number: "sky",
+      percentage: "sky",
+      date: "lavender",
+      category: "amber",
+      boolean: "lime",
+      email: "sky",
+      url: "rose",
     };
-    return styles[type] || (darkMode ? "bg-white/5 text-white/60" : "bg-black/5 text-black/55");
+    return tones[type] || "neutral";
   };
 
   const findTabArchitecture = (sheet) =>
@@ -596,44 +615,106 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
     return { label: "Added from local computer drive", Icon: HardDrive };
   };
 
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const ink = darkMode ? "text-white" : "text-[#141414]";
+  const body = darkMode ? "text-white/70" : "text-[#3d3d3b]";
+  const hairline = darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]";
+  const fieldLabel = `mb-1.5 block text-xs ${darkMode ? "text-white/55" : "text-[#8a8a8a]"}`;
+  const inputClass = `h-11 w-full rounded-full border px-4 text-[13.5px] outline-none transition ${
+    darkMode
+      ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-[3px] focus:ring-white/10"
+      : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"
+  }`;
+  const iconButton = (danger = false) =>
+    `grid h-9 w-9 place-items-center rounded-full transition-colors ${
+      danger
+        ? darkMode ? "text-[#f7aab5] hover:bg-red-500/10" : "text-[#c0394b] hover:bg-[#fbe4e6]"
+        : darkMode ? "text-white/60 hover:bg-white/10" : "text-[#5f5f5c] hover:bg-[#f4f4f2]"
+    }`;
+  const panel = `rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`;
+  const softPanel = `rounded-[16px] ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`;
+  const thClass = `px-5 py-3 text-left text-[12px] font-normal ${muted}`;
+  const readyCount = documents.filter((doc) => doc.isReady && doc.isActive).length;
+  const processingCount = documents.filter((doc) => !doc.isReady).length;
+
+  const renderUserPicker = (form, onToggle, maxHeight = "max-h-52") => (
+    <div className={`${maxHeight} overflow-auto rounded-[16px] border p-1.5 ${darkMode ? "border-white/10" : "border-[#ececec]"}`}>
+      {assignableUsers.length === 0 ? (
+        <p className={`px-3 py-2 text-[13px] ${muted}`}>No users available</p>
+      ) : (
+        assignableUsers.map((item) => {
+          const picked = form.allowedUserIds.includes(item.id);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onToggle(item.id)}
+              className={`flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px] transition-colors ${
+                picked
+                  ? darkMode ? "bg-white/[0.08] text-white" : "bg-[#f4f4f2] text-[#141414]"
+                  : darkMode ? "text-white/75 hover:bg-white/[0.05]" : "text-[#3d3d3b] hover:bg-[#f6f6f4]"
+              }`}
+            >
+              <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-[5px] border ${
+                picked
+                  ? darkMode ? "border-[#cff07a] bg-[#cff07a] text-black" : "border-[#141414] bg-[#141414] text-white"
+                  : darkMode ? "border-white/25" : "border-[#cfcfcb] bg-white"
+              }`}>
+                {picked && <Check className="h-3 w-3" strokeWidth={3} />}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{item.displayName}</span>
+              <span className={`shrink-0 text-[12px] ${muted}`}>{item.username}</span>
+            </button>
+          );
+        })
+      )}
+    </div>
+  );
+
+  const renderVisibilityPills = (options, value, onPick) => (
+    <div className={`inline-flex flex-wrap rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
+      {options.map(([optionValue, Icon, label]) => (
+        <button
+          key={optionValue}
+          type="button"
+          onClick={() => onPick(optionValue)}
+          className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] transition ${
+            value === optionValue
+              ? darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#141414] shadow-[0_1px_4px_rgba(0,0,0,0.08)]"
+              : darkMode ? "text-white/55 hover:text-white" : "text-[#8a8a8a] hover:text-[#141414]"
+          }`}
+        >
+          <Icon className="h-3.5 w-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
   const renderAccessControls = (form, setter, title = "Access") => (
-    <div className={`rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/5 bg-black/[0.02]"}`}>
-      <p className={`mb-3 text-xs uppercase tracking-widest ${darkMode ? "text-white/45" : "text-black/40"}`}>{title}</p>
-      <div className="flex flex-wrap gap-2">
-        {[
+    <div className={`${softPanel} p-4`}>
+      <p className={`mb-3 text-[13px] ${ink}`}>{title}</p>
+      {renderVisibilityPills(
+        [
           ["private", Lock, "Private"],
           ["selected", Users, "Selected"],
           ["public", Globe2, "Public"],
-        ].map(([value, Icon, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setter((current) => ({ ...current, visibility: value }))}
-            className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm ${
-              form.visibility === value
-                ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"
-                : darkMode ? "bg-white/5 text-white/65" : "bg-black/[0.04] text-black/60"
-            }`}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </button>
-        ))}
-      </div>
+        ],
+        form.visibility,
+        (value) => setter((current) => ({ ...current, visibility: value })),
+      )}
 
       {form.visibility === "selected" && (
         <div className="mt-4 space-y-3">
           <div>
-            <label className={`mb-2 block text-xs uppercase tracking-widest ${darkMode ? "text-white/45" : "text-black/40"}`}>
-              Access expires (optional)
-            </label>
+            <label className={fieldLabel}>Access expires (optional)</label>
             <DateTimePicker
               darkMode={darkMode}
               value={form.accessExpiresAt}
               onChange={(nextValue) => setter((current) => ({ ...current, accessExpiresAt: nextValue }))}
               placeholder="No expiry selected"
             />
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {[
                 ["1 day", 1],
                 ["7 days", 7],
@@ -646,207 +727,168 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
                     const expiry = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
                     setter((current) => ({ ...current, accessExpiresAt: expiry.toISOString().slice(0, 16) }));
                   }}
-                  className={`rounded-full px-3 py-1.5 text-xs ${darkMode ? "bg-white/5 text-white/60 hover:bg-white/10" : "bg-black/[0.04] text-black/55 hover:bg-black/[0.07]"}`}
+                  className={`h-7 rounded-full border px-3 text-[12px] transition-colors ${darkMode ? "border-white/10 text-white/65 hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#3d3d3b] hover:bg-[#f6f6f4]"}`}
                 >
                   {label}
                 </button>
               ))}
             </div>
           </div>
-          <div className={`max-h-52 overflow-auto rounded-2xl border p-2 ${darkMode ? "border-white/10" : "border-black/5"}`}>
-            {assignableUsers.length === 0 ? (
-              <p className={`px-3 py-2 text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>No users available</p>
-            ) : (
-              assignableUsers.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => toggleAssignedUser(item.id, setter)}
-                  className={`mb-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${
-                    form.allowedUserIds.includes(item.id)
-                      ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"
-                      : darkMode ? "text-white/70 hover:bg-white/5" : "text-black/65 hover:bg-black/[0.04]"
-                  }`}
-                >
-                  <span>{item.displayName}</span>
-                  <span className="text-xs opacity-70">{item.username}</span>
-                </button>
-              ))
-            )}
-          </div>
+          {renderUserPicker(form, (userId) => toggleAssignedUser(userId, setter))}
         </div>
       )}
     </div>
   );
 
   return (
-    <div
-      className="flex-1 newq overflow-y-auto px-4 py-4 sm:px-6 lg:overflow-hidden lg:px-8 lg:py-8"
-      style={{
-        background: darkMode
-          ? "linear-gradient(180deg, #111318 0%, #0c0d10 100%)"
-          : "linear-gradient(180deg, #f7f6f2 0%, #f3f1ea 100%)",
-      }}
-    >
-      <div
-        className={`min-h-full rounded-[24px] newq p-4 -sm flex flex-col sm:p-6 lg:h-full lg:min-h-0 lg:rounded-[32px] lg:p-8 ${
-          darkMode ? "bg-white/[0.03] border-white/10" : "bg-white/80 border-black/5"
-        }`}
-      >
-        <div className="mb-8 flex newq flex-col gap-5 lg:flex-row lg:items-end lg:justify-between flex-shrink-0">
-          <div>
-            <p className={`text-[11px] uppercase tracking-[0.32em] mb-3 ${darkMode ? "text-white/45" : "text-black/40"}`}>
-              Document Library
-            </p>
-            <h2 className={`text-2xl small font-semibold sm:text-3xl md:text-4xl ${darkMode ? "text-white" : "text-black"}`}>
-              Upload and manage your files
-            </h2>
-            <p className={`text-sm mt-4 max-w-2xl ${darkMode ? "text-white/55" : "text-black/45"}`}>
-              {currentFolder ? `Folder: ${currentFolder.name}` : "Open a folder to view and manage its sources."}
-            </p>
-          </div>
-
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:gap-3">
-            {currentFolder && (
-              <button
-                onClick={() => setCurrentFolderId(null)}
-                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-full transition-all duration-200 sm:px-5 ${
-                  darkMode ? "text-white bg-white/10" : "text-black bg-black/[0.03]"
-                }`}
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </button>
-            )}
-            {canCreateFolders && !currentFolder && (
-              <button
-              onClick={() => openFolderModal()}
-                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-full transition-all duration-200 sm:px-5 ${
-                  darkMode ? "text-white bg-white/10" : "text-black bg-black/[0.03]"
-                }`}
-              >
-                <FolderPlus className="w-4 h-4" />
-                Create Folder
-              </button>
-            )}
-            {currentFolder && (canLinkSheets || isAssignedFolderContributor) && (
-              <button
-                onClick={() => {
-                  resetUploadAccess();
-                  setSheetModal(true);
-                }}
-                className="flex items-center justify-center gap-2 rounded-full bg-green-500 px-4 py-3 text-white transition-all duration-200 sm:px-5"
-              >
-                <Sheet className="w-4 h-4 text-white" />
-                Link Sheet
-              </button>
-            )}
-
-            {currentFolder && (canUploadDocuments || isAssignedFolderContributor) && <div ref={uploadMenuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setUploadMenuOpen((current) => !current)}
-                disabled={uploading}
-                className={`flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 transition-all duration-200 disabled:opacity-60 sm:px-5 ${
-                  darkMode ? "bg-[#d8f36a] text-black hover:opacity-90" : "bg-black text-white hover:opacity-90"
-                }`}
-              >
-                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Upload Docs
-                <ChevronDown className={`h-4 w-4 transition-transform ${uploadMenuOpen ? "rotate-180" : ""}`} />
-              </button>
-
-              {uploadMenuOpen && !uploading && (
-                <div
-                  className={`absolute right-0 top-[calc(100%+10px)] z-40 w-[290px] rounded-2xl border p-2 shadow-xl ${
-                    darkMode ? "border-white/10 bg-[#181a20]" : "border-black/5 bg-white"
-                  }`}
+    <div className={`flex-1 newq overflow-y-auto ${darkMode ? "bg-[#121317]" : "bg-white"}`}>
+      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
+        <PageHeader
+          darkMode={darkMode}
+          badge={currentFolder ? `Folder · ${currentFolder.name}` : "Document library"}
+          badgeIcon={currentFolder ? FolderOpen : Library}
+          badgeTone="sky"
+          title={currentFolder ? currentFolder.name : "Documents"}
+          subtitle={currentFolder ? "sources in this folder" : "files the assistant can read"}
+          description={currentFolder ? "Upload files, link sheets and choose who can see each source." : "Open a folder to view and manage its sources."}
+          actions={
+            <>
+              {currentFolder && (
+                <Button darkMode={darkMode} variant="secondary" icon={ArrowLeft} onClick={() => setCurrentFolderId(null)}>
+                  Back
+                </Button>
+              )}
+              {canCreateFolders && !currentFolder && (
+                <Button darkMode={darkMode} variant="secondary" icon={FolderPlus} onClick={() => openFolderModal()}>
+                  Create folder
+                </Button>
+              )}
+              {currentFolder && (canLinkSheets || isAssignedFolderContributor) && (
+                <Button
+                  darkMode={darkMode}
+                  variant="secondary"
+                  icon={Sheet}
+                  onClick={() => {
+                    resetUploadAccess();
+                    setSheetModal(true);
+                  }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUploadMenuOpen(false);
-                      fileInputRef.current?.click();
-                    }}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
-                      darkMode ? "text-white/80 hover:bg-white/8" : "text-black/70 hover:bg-black/[0.04]"
-                    }`}
-                  >
-                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                      darkMode ? "bg-white/5 text-[#d8f36a]" : "bg-black/[0.04] text-black"
-                    }`}>
-                       <img src="/localdisk.png" alt="Local Disk" className="h-7 w-7" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm small font-semibold">From local computer</span>
-                      <span className={`block truncate text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
-                        PDF, Word, Excel, CSV, text, or image
-                      </span>
-                    </span>
-                  </button>
+                  Link sheet
+                </Button>
+              )}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUploadMenuOpen(false);
-                      resetUploadAccess();
-                      setDriveModal(true);
-                    }}
-                    className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
-                      darkMode ? "text-white/80 hover:bg-white/8" : "text-black/70 hover:bg-black/[0.04]"
-                    }`}
+              {currentFolder && (canUploadDocuments || isAssignedFolderContributor) && (
+                <div ref={uploadMenuRef} className="relative">
+                  <Button
+                    darkMode={darkMode}
+                    variant="primary"
+                    icon={Upload}
+                    loading={uploading}
+                    iconRight={ChevronDown}
+                    onClick={() => setUploadMenuOpen((current) => !current)}
+                    disabled={uploading}
                   >
-                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                      darkMode ? "bg-white/5 text-[#d8f36a]" : "bg-black/[0.04] text-black"
-                    }`}>
-                      <img src="/drive.svg" alt="Google Drive" className="h-7 w-7" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm small font-semibold">From Google Drive</span>
-                      <span className={`block truncate text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
-                        Paste a Drive document link
-                      </span>
-                    </span>
-                  </button>
+                    Upload docs
+                  </Button>
+
+                  {uploadMenuOpen && !uploading && (
+                    <div
+                      style={{ boxShadow: "var(--ui-shadow-pop)" }}
+                      className={`absolute right-0 top-[calc(100%+8px)] z-40 w-[290px] rounded-[18px] border p-1.5 ${
+                        darkMode ? "border-white/10 bg-[#17181c]" : "border-[#ececec] bg-white"
+                      }`}
+                    >
+                      {[
+                        {
+                          key: "local",
+                          img: "/localdisk.png",
+                          alt: "Local Disk",
+                          title: "From local computer",
+                          text: "PDF, Word, Excel, CSV, text, or image",
+                        },
+                        {
+                          key: "drive",
+                          img: "/drive.svg",
+                          alt: "Google Drive",
+                          title: "From Google Drive",
+                          text: "Paste a Drive document link",
+                        },
+                      ].map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => {
+                            setUploadMenuOpen(false);
+                            if (item.key === "local") {
+                              fileInputRef.current?.click();
+                            } else {
+                              resetUploadAccess();
+                              setDriveModal(true);
+                            }
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-[12px] px-2.5 py-2.5 text-left transition-colors ${
+                            darkMode ? "text-white hover:bg-white/[0.06]" : "text-[#141414] hover:bg-[#f6f6f4]"
+                          }`}
+                        >
+                          <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-[12px] ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
+                            <img src={item.img} alt={item.alt} className="h-6 w-6" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-[13.5px]">{item.title}</span>
+                            <span className={`block truncate text-[12px] ${muted}`}>{item.text}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>}
 
-            <button
-              onClick={handleRefresh}
-              disabled={loading}
-              className={`col-span-2 flex items-center justify-center gap-2 px-4 py-3 rounded-full transition-all duration-200 disabled:opacity-60 sm:col-span-1 sm:px-5 ${
-                darkMode ? "text-white bg-white/10" : "text-black bg-black/[0.03]"
-              }`}
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            </button>
-          </div>
+              <Button
+                darkMode={darkMode}
+                variant="soft"
+                onClick={handleRefresh}
+                disabled={loading}
+                aria-label="Refresh documents"
+                title="Refresh"
+                icon={RefreshCw}
+                className={`w-9 shrink-0 px-0 ${loading ? "[&>svg]:animate-spin" : ""}`}
+              />
+            </>
+          }
+        />
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.docx,.csv,.xlsx,.xls,.txt,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
-            multiple
-            className="hidden"
-            onChange={handleFileUpload}
-          />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,.csv,.xlsx,.xls,.txt,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
+          multiple
+          className="hidden"
+          onChange={handleFileUpload}
+        />
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile darkMode={darkMode} icon={Folder} tone="sky" value={folders.length.toLocaleString()} label="Folders" />
+          <StatTile darkMode={darkMode} icon={Files} tone="lavender" value={(currentFolder ? visibleDocuments.length : documents.length).toLocaleString()} label={currentFolder ? "Sources in folder" : "Sources"} />
+          <StatTile darkMode={darkMode} icon={CircleCheck} tone="mint" value={readyCount.toLocaleString()} label="Active for queries" />
+          <StatTile darkMode={darkMode} icon={Sparkles} tone="peach" value={processingCount.toLocaleString()} label="Processing" />
         </div>
 
         {shouldShowFolders && (
-          <div
-            className={`rounded-[22px] overflow-hidden flex-1 min-h-[420px] lg:min-h-0 lg:rounded-[28px] ${
-              darkMode ? "bg-white/[0.03] border-white/10" : "bg-white border-black/5"
-            }`}
-          >
-            <div className="h-full overflow-auto newq">
+          <section className={`${panel} overflow-hidden`}>
+            <header className="flex items-center gap-3 px-5 pb-2 pt-5">
+              <IconTile icon={Folder} tone="sky" darkMode={darkMode} size="sm" />
+              <div className="min-w-0">
+                <h3 className={`text-[15px] ${ink}`}>Folders</h3>
+                <p className={`text-[12.5px] ${muted}`}>Click a folder to open it</p>
+              </div>
+            </header>
+            <div className="overflow-auto newq">
               <table className="w-full min-w-[920px]">
-                <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                  <tr className={`text-left ${darkMode ? "border-b border-white/10" : "border-b border-black/5"}`}>
-                    {["Folder Name", "Type", "Visibility", "Sources", "Assigned Users", "Actions"].map((h) => (
-                      <th key={h} className="px-6 py-5 text-[12px] dark:text-white/85 font-medium uppercase tracking-[0.22em]">
-                        {h}
-                      </th>
+                <thead>
+                  <tr className={`border-b ${hairline}`}>
+                    {["Folder name", "Type", "Visibility", "Sources", "Assigned users", ""].map((h) => (
+                      <th key={h || "actions"} className={thClass}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -857,55 +899,42 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
                       <tr
                         key={folder.id}
                         onClick={() => setCurrentFolderId(folder.id)}
-                        className={`cursor-pointer transition-colors ${darkMode ? "hover:bg-white/[0.03]" : "hover:bg-black/[0.02]"}`}
-                        style={{
-                          borderBottom: darkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.05)",
-                        }}
+                        className={`cursor-pointer border-b transition-colors last:border-b-0 ${hairline} ${darkMode ? "hover:bg-white/[0.03]" : "hover:bg-[#fafaf9]"}`}
                         title="Open folder"
                       >
-                        <td className="px-6 py-5">
+                        <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
-                            <span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${
-                              darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-green-50 text-green-700"
-                            }`}>
-                              <Folder className="h-5 w-5" />
-                            </span>
+                            <IconTile icon={Folder} tone="lime" darkMode={darkMode} size="sm" />
                             <div className="min-w-0">
-                              <p className={`truncate text-sm ${darkMode ? "text-white" : "text-black"}`}>{folder.name}</p>
-                              <p className={`mt-1 text-xs ${darkMode ? "text-white/40" : "text-black/35"}`}>Click to open</p>
+                              <p className={`truncate text-[13.5px] ${ink}`}>{folder.name}</p>
+                              <p className={`text-[12px] ${muted}`}>Click to open</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-5">
-                          <span className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/5 text-black/55"}`}>
-                            Folder
-                          </span>
+                        <td className="px-5 py-3.5">
+                          <Chip darkMode={darkMode} tone="neutral">Folder</Chip>
                         </td>
-                        <td className="px-6 py-5">
-                          <span className={`rounded-full px-3 py-1 text-xs ${
-                            folder.visibility === "public"
-                              ? darkMode ? "bg-sky-500/10 text-sky-300" : "bg-sky-50 text-sky-700"
-                              : darkMode ? "bg-white/5 text-white/55" : "bg-black/5 text-black/55"
-                          }`}>
+                        <td className="px-5 py-3.5">
+                          <Chip darkMode={darkMode} tone={folder.visibility === "public" ? "sky" : "lavender"} icon={folder.visibility === "public" ? Globe2 : Users}>
                             {folder.visibility === "public" ? "Public" : "Selected"}
-                          </span>
+                          </Chip>
                         </td>
-                        <td className={`px-6 py-5 text-sm ${darkMode ? "text-white/55" : "text-black/50"}`}>
+                        <td className={`px-5 py-3.5 text-[13px] ${body}`}>
                           {sourceCount} source{sourceCount === 1 ? "" : "s"}
                         </td>
-                        <td className={`px-6 py-5 text-sm ${darkMode ? "text-white/55" : "text-black/50"}`}>
+                        <td className={`px-5 py-3.5 text-[13px] ${body}`}>
                           {folder.visibility === "public" ? "All users" : `${folder.allowedUserIds?.length || 0} user(s)`}
                         </td>
-                        <td className="px-6 py-5">
+                        <td className="px-5 py-3.5">
                           {canManageAccess && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-end gap-1">
                               <button
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   openFolderModal(folder);
                                 }}
-                                className={`h-10 w-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/10 text-white/60" : "hover:bg-black/5 text-black/50"}`}
+                                className={iconButton()}
                                 title="Edit folder"
                               >
                                 <Edit3 className="h-4 w-4" />
@@ -916,10 +945,10 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
                                   event.stopPropagation();
                                   setDeleteModal({ type: "folder", item: folder });
                                 }}
-                                className={`h-10 w-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-red-500/10" : "hover:bg-red-50"}`}
+                                className={iconButton(true)}
                                 title="Delete folder"
                               >
-                                <Trash2 className="h-4 w-4 text-red-500" />
+                                <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
                           )}
@@ -930,84 +959,79 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
         )}
 
         {!shouldShowFolders && (
-        <div
-          className={`rounded-[22px] overflow-hidden flex-1 min-h-[420px] lg:min-h-0 lg:rounded-[28px] ${
-            darkMode ? "bg-white/[0.03] border-white/10" : "bg-white border-black/5"
-          }`}
-        >
-          <div className="h-full overflow-auto newq">
+        <section className={`${panel} overflow-hidden`}>
+          <header className="flex items-center gap-3 px-5 pb-2 pt-5">
+            <IconTile icon={FileText} tone="lavender" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h3 className={`text-[15px] ${ink}`}>Sources</h3>
+              <p className={`text-[12.5px] ${muted}`}>Active sources are used to answer questions</p>
+            </div>
+          </header>
+          <div className="overflow-auto newq">
+            {loading && documents.length === 0 ? (
+              <div className="px-5 py-16 text-center">
+                <Loader2 className={`mx-auto mb-3 h-7 w-7 animate-spin ${muted}`} />
+                <p className={`text-[13px] ${muted}`}>Loading documents...</p>
+              </div>
+            ) : visibleDocuments.length === 0 ? (
+              <div className="p-5 pt-3">
+                <EmptyState
+                  darkMode={darkMode}
+                  icon={FileText}
+                  tone="lavender"
+                  title={shouldShowFolders ? "Open a folder to view sources" : "No documents uploaded yet"}
+                  text="Uploaded files and linked sheets appear here once they are processed."
+                  action={
+                    <Button darkMode={darkMode} variant="primary" icon={Upload} onClick={() => fileInputRef.current?.click()}>
+                      Upload your first document
+                    </Button>
+                  }
+                />
+              </div>
+            ) : (
             <table className="w-full min-w-[920px]">
-              <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                <tr className={`text-left ${darkMode ? "border-b border-white/10" : "border-b border-black/5"}`}>
-                  {["Document Name", "Type", "Uploaded At", "Size", "Status", "Actions"].map((h) => (
-                    <th key={h} className="px-6 py-5 text-[12px] dark:text-white/85 font-medium uppercase tracking-[0.22em]">
-                      {h}
-                    </th>
+              <thead>
+                <tr className={`border-b ${hairline}`}>
+                  {["Document name", "Type", "Uploaded", "Size", "Status", ""].map((h) => (
+                    <th key={h || "actions"} className={thClass}>{h}</th>
                   ))}
                 </tr>
               </thead>
 
               <tbody>
-                {loading && documents.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="text-center py-16">
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" style={{ color: darkMode ? "#ffffff66" : "#9ca3af" }} />
-                      <p className={darkMode ? "text-white/55" : "text-black/45"}>Loading documents...</p>
-                    </td>
-                  </tr>
-                ) : visibleDocuments.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="text-center py-16">
-                      <FileText className="w-12 h-12 mx-auto mb-3 opacity-40" style={{ color: darkMode ? "#ffffff55" : "#9ca3af" }} />
-                      <p className={darkMode ? "text-white/55" : "text-black/45"}>
-                        {shouldShowFolders ? "Open a folder to view sources" : "No documents uploaded yet"}
-                      </p>
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`mt-4 text-sm underline-offset-4 ${darkMode ? "text-[#d8f36a]" : "text-black"}`}
-                      >
-                        Upload your first document
-                      </button>
-                    </td>
-                  </tr>
-                ) : (
-                  visibleDocuments.map((doc) => {
+                {visibleDocuments.map((doc) => {
                     const source = getDocumentSource(doc);
                     const SourceIcon = source.Icon;
+                    const canToggle = canToggleDocuments || doc.ownerId === user?.id;
 
                     return (
                     <tr
                       key={doc.id}
-                      className={`transition-colors ${darkMode ? "hover:bg-white/[0.03]" : "hover:bg-black/[0.02]"}`}
-                      style={{
-                        borderBottom: darkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.05)",
-                      }}
+                      className={`border-b transition-colors last:border-b-0 ${hairline} ${darkMode ? "hover:bg-white/[0.03]" : "hover:bg-[#fafaf9]"}`}
                     >
-                      <td className="px-6 py-5">
+                      <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                            darkMode ? "bg-white/5" : "bg-black/[0.04]"
-                          }`}>
+                          <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
                             <DocumentIcon doc={doc} darkMode={darkMode} />
                           </div>
                           <button
                             // onClick={() => openSheetPreview(doc)}
                             disabled={doc.type !== "sheet" || !doc.isReady}
-                            className="min-w-0 text-left "
+                            className="min-w-0 text-left"
                           >
-                            <span className={`text-sm block truncate ${darkMode ? "text-white" : "text-black"}`}>
+                            <span className={`block truncate text-[13.5px] ${ink}`}>
                               {doc.name}
                             </span>
-                            <span className={`mt-1 flex items-center gap-1.5 text-xs ${darkMode ? "text-white/40" : "text-black/35"}`}>
+                            <span className={`mt-0.5 flex items-center gap-1.5 text-[12px] ${muted}`}>
                               <SourceIcon className="h-3.5 w-3.5 flex-shrink-0" />
                               <span className="truncate">{source.label}</span>
                             </span>
                             {doc.type === "sheet" && doc.lastSyncedAt && (
-                              <span className={`mt-0.5 block text-xs ${darkMode ? "text-white/35" : "text-black/35"}`}>
+                              <span className={`mt-0.5 block text-[12px] ${muted}`}>
                                 Synced {new Date(doc.lastSyncedAt).toLocaleTimeString()}
                               </span>
                             )}
@@ -1015,288 +1039,209 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
                         </div>
                       </td>
 
-                      <td className="px-6 py-5">
-                        <span
-                          className={`text-xs px-3 py-1 rounded-full ${
-                            doc.type === "sheet"
-                              ? darkMode
-                                ? "bg-[#d8f36a]/10 text-[#d8f36a]"
-                                : "bg-green-50 text-green-700"
-                              : darkMode
-                              ? "bg-white/5 text-white/50"
-                              : "bg-black/5 text-black/50"
-                          }`}
-                        >
+                      <td className="px-5 py-3.5">
+                        <Chip darkMode={darkMode} tone={doc.type === "sheet" ? "mint" : "neutral"}>
                           {doc.type === "sheet" ? "Sheet" : "File"}
-                        </span>
+                        </Chip>
                       </td>
 
-                      <td className={`px-6 py-5 text-sm ${darkMode ? "text-white/55" : "text-black/50"}`}>
+                      <td className={`px-5 py-3.5 text-[13px] ${body}`}>
                         {formatDate(doc.uploadedAt)}
                       </td>
 
-                      <td className={`px-6 py-5 text-sm ${darkMode ? "text-white/55" : "text-black/50"}`}>
+                      <td className={`px-5 py-3.5 text-[13px] ${body}`}>
                         {doc.type === "sheet" ? "—" : formatFileSize(doc.fileSize)}
                       </td>
 
-                      {/* <td className={`px-6 py-5 text-sm ${darkMode ? "text-white/55" : "text-black/50"}`}>
-                        {doc.chunks || 0}
-                      </td> */}
-
-                      <td className="px-6 py-5">
+                      <td className="px-5 py-3.5">
                         {doc.isReady ? (
-                          (canToggleDocuments || doc.ownerId === user?.id) ? <button onClick={() => handleToggleActive(doc)} className="flex items-center gap-2 text-sm">
-                            {doc.isActive ? (
-                              <>
-                                <ToggleRight className="w-5 h-5 text-green-500" />
-                                <span className={darkMode ? "text-white/60" : "text-black/50"}>Active</span>
-                              </>
-                            ) : (
-                              <>
-                                <ToggleLeft className="w-5 h-5 text-black/35" />
-                                <span className={darkMode ? "text-white/60" : "text-black/50"}>Inactive</span>
-                              </>
+                          <div className="flex items-center gap-2.5">
+                            {canToggle && (
+                              <Toggle
+                                darkMode={darkMode}
+                                size="sm"
+                                checked={Boolean(doc.isActive)}
+                                label={doc.isActive ? "Disable for queries" : "Enable for queries"}
+                                onChange={() => handleToggleActive(doc)}
+                              />
                             )}
-                          </button> : (
-                            <div className="flex items-center gap-2 text-sm">
-                              {doc.isActive ? <ToggleRight className="w-5 h-5 text-green-500" /> : <ToggleLeft className="w-5 h-5 text-black/35" />}
-                              <span className={darkMode ? "text-white/60" : "text-black/50"}>{doc.isActive ? "Active" : "Inactive"}</span>
-                            </div>
-                          )
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            <span className={`text-xs ${darkMode ? "text-white/45" : "text-black/40"}`}>
-                              Processing
-                            </span>
+                            <Chip darkMode={darkMode} tone={doc.isActive ? "mint" : "neutral"}>
+                              {doc.isActive ? "Active" : "Inactive"}
+                            </Chip>
                           </div>
+                        ) : (
+                          <Chip darkMode={darkMode} tone="amber" icon={Loader2} className="[&>svg]:animate-spin">
+                            Processing
+                          </Chip>
                         )}
                       </td>
 
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-2">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1">
                           {(canManageAccess || doc.ownerId === user?.id) && (
                             <button
                               onClick={() => openAccessModal(doc)}
-                              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                                darkMode ? "hover:bg-white/10 text-white/65" : "hover:bg-black/5 text-black/55"
-                              }`}
+                              className={iconButton()}
                               title="Manage access"
                             >
-                              <Users className="w-4 h-4" />
+                              <Users className="h-4 w-4" />
                             </button>
                           )}
-                          {/* {doc.type === "sheet" && doc.isReady && (
-                            <button
-                              onClick={() => openSheetPreview(doc)}
-                              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                                darkMode ? "hover:bg-white/10 text-white/70" : "hover:bg-black/5 text-black/60"
-                              }`}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          )} */}
                           {(canRenameDocuments || doc.ownerId === user?.id) && <button
                             onClick={() => openRenameModal(doc)}
-                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                              darkMode ? "hover:bg-white/10 text-white/65" : "hover:bg-black/5 text-black/55"
-                            }`}
+                            className={iconButton()}
                             title="Rename document"
                           >
-                            <Edit3 className="w-4 h-4" />
+                            <Edit3 className="h-4 w-4" />
                           </button>}
                           {(canDeleteDocuments || doc.ownerId === user?.id) && <button
                             onClick={() => setDeleteModal({ type: "document", item: doc })}
-                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                              darkMode ? "hover:bg-red-500/10" : "hover:bg-red-50"
-                            }`}
+                            className={iconButton(true)}
+                            title="Delete document"
                           >
-                            <Trash2 className="w-4 h-4 text-red-500" />
+                            <Trash2 className="h-4 w-4" />
                           </button>}
                         </div>
                       </td>
                     </tr>
                     );
-                  })
-                )}
+                  })}
               </tbody>
             </table>
+            )}
           </div>
-        </div>
+        </section>
         )}
       </div>
 
       {showProcessingModal && Object.keys(processingDocs).length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div
-            className={`w-full max-w-xl rounded-[30px] border p-6 shadow-2xl ${
-              darkMode ? "border-white/10 bg-[#121317]" : "border-black/5 bg-white"
-            }`}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className={`mb-2 text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>
-                  Document processing
-                </p>
-                <h3 className={`text-2xl small font-semibold ${darkMode ? "text-white" : "text-black"}`}>
-                  Preparing your source
-                </h3>
-                <p className={`mt-2 text-sm ${darkMode ? "text-white/50" : "text-black/45"}`}>
-                  OCR, chunking, and vector generation are running in the background.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowProcessingModal(false)}
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                  darkMode ? "hover:bg-white/5" : "hover:bg-black/5"
-                }`}
-                title="Hide processing modal"
-              >
-                <X className={`h-5 w-5 ${darkMode ? "text-white/50" : "text-black/40"}`} />
-              </button>
-            </div>
-
-            <div className="relative mx-auto my-8 flex h-28 w-28 items-center justify-center">
-              <span className={`absolute inset-0 rounded-full ${darkMode ? "bg-[#d8f36a]/10" : "bg-black/[0.04]"}`} />
-              <span className="absolute inset-3 animate-ping rounded-full bg-[#d8f36a]/25" />
-              <span className={`absolute inset-5 animate-spin rounded-full border-2 border-dashed ${
-                darkMode ? "border-[#d8f36a]" : "border-black"
-              }`} />
-              <Sparkles className={`relative h-9 w-9 ${darkMode ? "text-[#d8f36a]" : "text-black"}`} />
-            </div>
-
-            <div className="space-y-3">
-              {Object.entries(processingDocs).map(([id, doc]) => (
-                <div
-                  key={id}
-                  className={`rounded-2xl border p-4 ${
-                    darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/5 bg-[#faf8f2]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Loader2 className={`h-4 w-4 animate-spin ${darkMode ? "text-[#d8f36a]" : "text-black"}`} />
-                    <span className={`min-w-0 flex-1 truncate text-sm ${darkMode ? "text-white/85" : "text-black/75"}`}>
-                      {doc.name}
-                    </span>
-                    <span className={`shrink-0 text-xs ${darkMode ? "text-white/45" : "text-black/40"}`}>
-                      {doc.stage}
-                    </span>
-                  </div>
-                  <div className={`mt-3 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/5"}`}>
-                    <div className="h-full w-1/2 animate-pulse rounded-full bg-[#d8f36a]" />
-                  </div>
-                </div>
-              ))}
-            </div>
+        <DocModal
+          darkMode={darkMode}
+          icon={Sparkles}
+          tone="lavender"
+          title="Preparing your source"
+          subtitle="OCR, chunking and vector generation run in the background."
+          onClose={() => setShowProcessingModal(false)}
+          closeTitle="Hide processing modal"
+        >
+          <div className="relative mx-auto mb-6 mt-2 flex h-24 w-24 items-center justify-center">
+            <span className={`absolute inset-0 rounded-full ${darkMode ? "bg-[#cff07a]/10" : "bg-[#eef8cc]"}`} />
+            <span className={`absolute inset-4 animate-spin rounded-full border-2 border-dashed ${darkMode ? "border-[#cff07a]" : "border-[#4d6b12]"}`} />
+            <Sparkles className={`relative h-7 w-7 ${darkMode ? "text-[#cff07a]" : "text-[#4d6b12]"}`} />
           </div>
-        </div>
+
+          <div className="space-y-2">
+            {Object.entries(processingDocs).map(([id, doc]) => (
+              <div key={id} className={`${softPanel} rounded-[14px] p-3.5`}>
+                <div className="flex items-center gap-3">
+                  <Loader2 className={`h-4 w-4 animate-spin ${muted}`} />
+                  <span className={`min-w-0 flex-1 truncate text-[13.5px] ${ink}`}>
+                    {doc.name}
+                  </span>
+                  <Chip darkMode={darkMode} tone="lavender">{doc.stage}</Chip>
+                </div>
+                <div className={`mt-3 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-[#ebebe8]"}`}>
+                  <div className="h-full w-1/2 animate-pulse rounded-full bg-[#cff07a]" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </DocModal>
       )}
 
       {localUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-xl rounded-[28px] border p-6 ${darkMode ? "border-white/10 bg-[#121317]" : "border-black/5 bg-white"}`}>
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className={`mb-2 text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>Local upload</p>
-                <h3 className={`text-2xl small font-semibold ${darkMode ? "text-white" : "text-black"}`}>
-                  Add {pendingLocalFiles.length} file{pendingLocalFiles.length === 1 ? "" : "s"}
-                </h3>
-                <p className={`mt-2 text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>
-                  Choose who can see these documents before processing starts.
-                </p>
-              </div>
-              <button
+        <DocModal
+          darkMode={darkMode}
+          icon={HardDrive}
+          tone="sky"
+          title={`Add ${pendingLocalFiles.length} file${pendingLocalFiles.length === 1 ? "" : "s"}`}
+          subtitle="Choose who can see these documents before processing starts."
+          onClose={() => {
+            setLocalUploadModal(false);
+            setPendingLocalFiles([]);
+          }}
+          footer={
+            <>
+              <Button
+                darkMode={darkMode}
+                variant="secondary"
                 onClick={() => {
                   setLocalUploadModal(false);
                   setPendingLocalFiles([]);
                 }}
-                className={`h-10 w-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}
               >
-                <X className={`h-5 w-5 ${darkMode ? "text-white/50" : "text-black/40"}`} />
-              </button>
+                Cancel
+              </Button>
+              <Button
+                darkMode={darkMode}
+                variant="primary"
+                icon={Upload}
+                loading={uploading}
+                onClick={uploadLocalFiles}
+                disabled={uploading || pendingLocalFiles.length === 0}
+              >
+                Start upload
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div className={`${softPanel} max-h-28 overflow-auto px-4 py-2.5`}>
+              {pendingLocalFiles.map((file) => (
+                <div key={`${file.name}-${file.size}`} className={`flex items-center justify-between gap-3 py-1 text-[13px] ${body}`}>
+                  <span className="truncate">{file.name}</span>
+                  <span className={`shrink-0 text-[12px] ${muted}`}>{formatFileSize(file.size)}</span>
+                </div>
+              ))}
             </div>
-
-            <div className="space-y-4">
-              <div className={`max-h-28 overflow-auto rounded-2xl p-3 ${darkMode ? "bg-white/5" : "bg-black/[0.03]"}`}>
-                {pendingLocalFiles.map((file) => (
-                  <div key={`${file.name}-${file.size}`} className={`flex items-center justify-between gap-3 py-1 text-sm ${darkMode ? "text-white/70" : "text-black/65"}`}>
-                    <span className="truncate">{file.name}</span>
-                    <span className="shrink-0 text-xs opacity-60">{formatFileSize(file.size)}</span>
-                  </div>
-                ))}
-              </div>
-              {renderAccessControls(uploadAccessForm, setUploadAccessForm, "Initial access")}
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <button
-                  onClick={() => {
-                    setLocalUploadModal(false);
-                    setPendingLocalFiles([]);
-                  }}
-                  className={`flex-1 rounded-full px-4 py-3 ${darkMode ? "bg-white/5 text-white" : "bg-black/[0.04] text-black"}`}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={uploadLocalFiles}
-                  disabled={uploading || pendingLocalFiles.length === 0}
-                  className={`flex-1 rounded-full px-4 py-3 flex items-center justify-center gap-2 disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}
-                >
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  Start Upload
-                </button>
-              </div>
-            </div>
+            {renderAccessControls(uploadAccessForm, setUploadAccessForm, "Initial access")}
           </div>
-        </div>
+        </DocModal>
       )}
 
       {folderModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-xl rounded-[28px] border p-6 ${darkMode ? "border-white/10 bg-[#121317]" : "border-black/5 bg-white"}`}>
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className={`mb-2 text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>Department folder</p>
-                <h3 className={`text-2xl small font-semibold ${darkMode ? "text-white" : "text-black"}`}>
-                  {folderForm.id ? "Edit Folder" : "Create Folder"}
-                </h3>
-              </div>
-              <button onClick={() => setFolderModalOpen(false)} className={`h-10 w-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}>
-                <X className={`h-5 w-5 ${darkMode ? "text-white/50" : "text-black/40"}`} />
-              </button>
-            </div>
-            <div className="space-y-4">
+        <DocModal
+          darkMode={darkMode}
+          icon={folderForm.id ? Folder : FolderPlus}
+          tone="lime"
+          title={folderForm.id ? "Edit folder" : "Create folder"}
+          subtitle="Department folder"
+          onClose={() => setFolderModalOpen(false)}
+          footer={
+            <>
+              <Button darkMode={darkMode} variant="secondary" onClick={() => setFolderModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button darkMode={darkMode} variant="primary" onClick={folderForm.id ? saveFolder : createFolder}>
+                {folderForm.id ? "Save folder" : "Create folder"}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className={fieldLabel}>Folder name</label>
               <input
                 value={folderForm.name}
                 onChange={(event) => setFolderForm((current) => ({ ...current, name: event.target.value }))}
                 placeholder="Folder name, e.g. Accounts"
-                className={`w-full rounded-2xl px-4 py-4 text-sm outline-none ${darkMode ? "bg-white/5 text-white placeholder-white/25" : "bg-black/[0.03] text-black placeholder-black/30"}`}
+                className={inputClass}
               />
-              <div className="flex flex-wrap gap-2">
-                {[
+            </div>
+            <div className={`${softPanel} p-4`}>
+              <p className={`mb-3 text-[13px] ${ink}`}>Who can open it</p>
+              {renderVisibilityPills(
+                [
                   ["selected", Users, "Selected users"],
                   ["public", Globe2, "Public to all"],
-                ].map(([value, Icon, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setFolderForm((current) => ({ ...current, visibility: value }))}
-                    className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm ${
-                      folderForm.visibility === value
-                        ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"
-                        : darkMode ? "bg-white/5 text-white/65" : "bg-black/[0.04] text-black/60"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                  </button>
-                ))}
-              </div>
+                ],
+                folderForm.visibility,
+                (value) => setFolderForm((current) => ({ ...current, visibility: value })),
+              )}
               {folderForm.visibility === "selected" && (
-                <>
+                <div className="mt-4 space-y-3">
                   <div>
-                    <label className={`mb-2 block text-xs uppercase tracking-widest ${darkMode ? "text-white/45" : "text-black/40"}`}>
-                      Access expires (optional)
-                    </label>
+                    <label className={fieldLabel}>Access expires (optional)</label>
                     <DateTimePicker
                       darkMode={darkMode}
                       value={folderForm.accessExpiresAt}
@@ -1304,385 +1249,288 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
                       placeholder="No expiry selected"
                     />
                   </div>
-                  <div className="max-h-56 overflow-auto rounded-2xl border p-2 border-black/5">
-                    {assignableUsers.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => toggleAssignedUser(item.id, setFolderForm)}
-                        className={`mb-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${
-                          folderForm.allowedUserIds.includes(item.id)
-                            ? darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"
-                            : darkMode ? "text-white/70 hover:bg-white/5" : "text-black/65 hover:bg-black/[0.04]"
-                        }`}
-                      >
-                        <span>{item.displayName}</span>
-                        <span className="text-xs opacity-70">{item.username}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
+                  {renderUserPicker(folderForm, (userId) => toggleAssignedUser(userId, setFolderForm), "max-h-56")}
+                </div>
               )}
-              <button onClick={folderForm.id ? saveFolder : createFolder} className={`w-full rounded-full px-4 py-3 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
-                {folderForm.id ? "Save Folder" : "Create Folder"}
-              </button>
             </div>
           </div>
-        </div>
+        </DocModal>
       )}
 
       {accessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-xl rounded-[28px] border p-6 ${darkMode ? "border-white/10 bg-[#121317]" : "border-black/5 bg-white"}`}>
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className={`mb-2 text-[11px] uppercase tracking-[0.28em] ${darkMode ? "text-white/40" : "text-black/35"}`}>Document access</p>
-                <h3 className={`text-2xl small font-semibold ${darkMode ? "text-white" : "text-black"}`}>{accessModal.name}</h3>
-              </div>
-              <button onClick={() => setAccessModal(null)} className={`h-10 w-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}>
-                <X className={`h-5 w-5 ${darkMode ? "text-white/50" : "text-black/40"}`} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              {renderAccessControls(accessForm, setAccessForm, "Document visibility")}
-              <button onClick={saveAccess} className={`w-full rounded-full px-4 py-3 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>
-                Save Access
-              </button>
-            </div>
-          </div>
-        </div>
+        <DocModal
+          darkMode={darkMode}
+          icon={Lock}
+          tone="peach"
+          title={accessModal.name}
+          subtitle="Document access"
+          onClose={() => setAccessModal(null)}
+          footer={
+            <>
+              <Button darkMode={darkMode} variant="secondary" onClick={() => setAccessModal(null)}>
+                Cancel
+              </Button>
+              <Button darkMode={darkMode} variant="primary" onClick={saveAccess}>
+                Save access
+              </Button>
+            </>
+          }
+        >
+          {renderAccessControls(accessForm, setAccessForm, "Document visibility")}
+        </DocModal>
       )}
 
       {driveModal && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm p-4">
-          <div
-            className={`w-full max-w-lg rounded-[28px] p-6 ${
-              darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"
-            }`}
-          >
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${darkMode ? "text-white/40" : "text-black/35"}`}>
-                  Drive Document
-                </p>
-                <h3 className={`text-2xl ${darkMode ? "text-white" : "text-black"}`}>
-                  Add from Google Drive
-                </h3>
-              </div>
-              <button
-                onClick={() => { setDriveModal(false); setDriveUrl(""); setDriveName(""); resetUploadAccess(); }}
-                className={`w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}
-              >
-                <X className={`w-5 h-5 ${darkMode ? "text-white/50" : "text-black/40"}`} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className={`text-xs uppercase tracking-widest mb-2 block ${darkMode ? "text-white/45" : "text-black/40"}`}>
-                  Drive link *
-                </label>
-                <div className="relative">
-                  <Link className={`absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${darkMode ? "text-white/35" : "text-black/35"}`} />
-                  <input
-                    type="text"
-                    value={driveUrl}
-                    onChange={(e) => setDriveUrl(e.target.value)}
-                    placeholder="https://drive.google.com/file/d/..."
-                    className={`w-full rounded-2xl px-11 py-4 text-sm outline-none transition-colors ${
-                      darkMode
-                        ? "bg-white/5 border-white/10 text-white placeholder-white/25 focus:border-white/25"
-                        : "bg-black/[0.03] border-black/8 text-black placeholder-black/30 focus:border-black/20"
-                    }`}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={`text-xs uppercase tracking-widest mb-2 block ${darkMode ? "text-white/45" : "text-black/40"}`}>
-                  Display Name (optional)
-                </label>
-                <input
-                  type="text"
-                  value={driveName}
-                  onChange={(e) => setDriveName(e.target.value)}
-                  placeholder="e.g. Vendor agreement"
-                  className={`w-full px-4 py-4 rounded-2xl text-sm outline-none transition-colors ${
-                    darkMode
-                      ? "bg-white/5 border-white/10 text-white placeholder-white/25 focus:border-white/25"
-                      : "bg-black/[0.03] border-black/8 text-black placeholder-black/30 focus:border-black/20"
-                  }`}
-                />
-              </div>
-
-              {renderAccessControls(uploadAccessForm, setUploadAccessForm, "Initial access")}
-
-              <div
-                className={`p-4 rounded-2xl text-xs leading-6 ${
-                  darkMode ? "bg-[#d8f36a]/8 text-[#d8f36a]/80" : "bg-amber-50 text-amber-800"
-                }`}
-              >
-                <ol className="list-decimal list-inside space-y-1">
-                  <li>Share private files with the Google service account email</li>
-                  <li>Google Docs, Sheets, Slides, PDFs, and images are converted into readable text</li>
-                  <li>The temporary local copy is removed after vector processing</li>
-                </ol>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 mt-6 sm:flex-row">
-              <button
-                onClick={() => { setDriveModal(false); setDriveUrl(""); setDriveName(""); resetUploadAccess(); }}
-                className={`flex-1 px-4 py-3 rounded-full transition-colors ${
-                  darkMode ? "bg-white/5 text-white hover:bg-white/10" : "bg-black/[0.04] text-black hover:bg-black/[0.07]"
-                }`}
-              >
+        <DocModal
+          darkMode={darkMode}
+          icon={Cloud}
+          tone="sky"
+          title="Add from Google Drive"
+          subtitle="Drive document"
+          onClose={() => { setDriveModal(false); setDriveUrl(""); setDriveName(""); resetUploadAccess(); }}
+          footer={
+            <>
+              <Button darkMode={darkMode} variant="secondary" onClick={() => { setDriveModal(false); setDriveUrl(""); setDriveName(""); resetUploadAccess(); }}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                darkMode={darkMode}
+                variant="primary"
+                icon={Cloud}
+                loading={addingDrive}
                 onClick={handleAddDriveDocument}
                 disabled={addingDrive || !driveUrl.trim()}
-                className={`flex-1 px-4 py-3 rounded-full transition-colors flex items-center justify-center gap-2 disabled:opacity-50 ${
-                  darkMode ? "bg-[#d8f36a] text-black hover:opacity-90" : "bg-black text-white hover:opacity-90"
-                }`}
               >
-                {addingDrive ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
-                {addingDrive ? "Adding..." : "Add Drive Document"}
-              </button>
+                {addingDrive ? "Adding..." : "Add Drive document"}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className={fieldLabel}>Drive link</label>
+              <div className="relative">
+                <Link className={`absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+                <input
+                  type="text"
+                  value={driveUrl}
+                  onChange={(e) => setDriveUrl(e.target.value)}
+                  placeholder="https://drive.google.com/file/d/..."
+                  className={`${inputClass} pl-10`}
+                />
+              </div>
             </div>
+
+            <div>
+              <label className={fieldLabel}>Display name (optional)</label>
+              <input
+                type="text"
+                value={driveName}
+                onChange={(e) => setDriveName(e.target.value)}
+                placeholder="e.g. Vendor agreement"
+                className={inputClass}
+              />
+            </div>
+
+            {renderAccessControls(uploadAccessForm, setUploadAccessForm, "Initial access")}
+
+            <Notice darkMode={darkMode} tone="amber">
+              <ol className="list-inside list-decimal space-y-1">
+                <li>Share private files with the Google service account email</li>
+                <li>Google Docs, Sheets, Slides, PDFs, and images are converted into readable text</li>
+                <li>The temporary local copy is removed after vector processing</li>
+              </ol>
+            </Notice>
           </div>
-        </div>
+        </DocModal>
       )}
 
       {sheetModal && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm p-4">
-          <div
-            className={`w-full max-w-lg rounded-[28px] p-6 ${
-              darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"
-            }`}
-          >
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${darkMode ? "text-white/40" : "text-black/35"}`}>
-                  Live Data Source
-                </p>
-                <h3 className={`text-2xl ${darkMode ? "text-white" : "text-black"}`}>
-                  Add Google Sheet
-                </h3>
-              </div>
-              <button
-                onClick={() => { setSheetModal(false); setSheetUrl(""); setSheetName(""); resetUploadAccess(); }}
-                className={`w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}
-              >
-                <X className={`w-5 h-5 ${darkMode ? "text-white/50" : "text-black/40"}`} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className={`text-xs uppercase tracking-widest mb-2 block ${darkMode ? "text-white/45" : "text-black/40"}`}>
-                  Sheet URL *
-                </label>
-                <input
-                  type="text"
-                  value={sheetUrl}
-                  onChange={(e) => setSheetUrl(e.target.value)}
-                  placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className={`w-full px-4 py-4 rounded-2xl text-sm outline-none transition-colors ${
-                    darkMode
-                      ? "bg-white/5 border-white/10 text-white placeholder-white/25 focus:border-white/25"
-                      : "bg-black/[0.03] border-black/8 text-black placeholder-black/30 focus:border-black/20"
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className={`text-xs uppercase tracking-widest mb-2 block ${darkMode ? "text-white/45" : "text-black/40"}`}>
-                  Display Name (optional)
-                </label>
-                <input
-                  type="text"
-                  value={sheetName}
-                  onChange={(e) => setSheetName(e.target.value)}
-                  placeholder="e.g. Sales Data Q2"
-                  className={`w-full px-4 py-4 rounded-2xl text-sm outline-none transition-colors ${
-                    darkMode
-                      ? "bg-white/5 border-white/10 text-white placeholder-white/25 focus:border-white/25"
-                      : "bg-black/[0.03] border-black/8 text-black placeholder-black/30 focus:border-black/20"
-                  }`}
-                />
-              </div>
-
-              {renderAccessControls(uploadAccessForm, setUploadAccessForm, "Initial access")}
-
-              <div
-                className={`p-4 rounded-2xl text-xs leading-6 ${
-                  darkMode ? "bg-[#d8f36a]/8 text-[#d8f36a]/80" : "bg-amber-50 text-amber-800"
-                }`}
-              >
-                <ol className="list-decimal list-inside space-y-1">
-                  <li>Share the sheet with your service account email</li>
-                  <li>Or make it public (&quot;Anyone with the link can view&quot;)</li>
-                  <li>The sheet auto-syncs when data changes (checked every 30s)</li>
-                </ol>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 mt-6 sm:flex-row">
-              <button
-                onClick={() => { setSheetModal(false); setSheetUrl(""); setSheetName(""); resetUploadAccess(); }}
-                className={`flex-1 px-4 py-3 rounded-full transition-colors ${
-                  darkMode ? "bg-white/5 text-white hover:bg-white/10" : "bg-black/[0.04] text-black hover:bg-black/[0.07]"
-                }`}
-              >
+        <DocModal
+          darkMode={darkMode}
+          icon={Sheet}
+          tone="mint"
+          title="Add Google Sheet"
+          subtitle="Live data source"
+          onClose={() => { setSheetModal(false); setSheetUrl(""); setSheetName(""); resetUploadAccess(); }}
+          footer={
+            <>
+              <Button darkMode={darkMode} variant="secondary" onClick={() => { setSheetModal(false); setSheetUrl(""); setSheetName(""); resetUploadAccess(); }}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                darkMode={darkMode}
+                variant="primary"
+                icon={Sheet}
+                loading={addingSheet}
                 onClick={handleAddSheet}
                 disabled={addingSheet || !sheetUrl.trim()}
-                className={`flex-1 px-4 py-3 rounded-full transition-colors flex items-center justify-center gap-2 disabled:opacity-50 ${
-                  darkMode ? "bg-[#d8f36a] text-black hover:opacity-90" : "bg-black text-white hover:opacity-90"
-                }`}
               >
-                {addingSheet ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sheet className="w-4 h-4" />}
-                {addingSheet ? "Connecting..." : "Add Sheet"}
-              </button>
+                {addingSheet ? "Connecting..." : "Add sheet"}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className={fieldLabel}>Sheet URL</label>
+              <input
+                type="text"
+                value={sheetUrl}
+                onChange={(e) => setSheetUrl(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className={inputClass}
+              />
             </div>
+
+            <div>
+              <label className={fieldLabel}>Display name (optional)</label>
+              <input
+                type="text"
+                value={sheetName}
+                onChange={(e) => setSheetName(e.target.value)}
+                placeholder="e.g. Sales Data Q2"
+                className={inputClass}
+              />
+            </div>
+
+            {renderAccessControls(uploadAccessForm, setUploadAccessForm, "Initial access")}
+
+            <Notice darkMode={darkMode} tone="amber">
+              <ol className="list-inside list-decimal space-y-1">
+                <li>Share the sheet with your service account email</li>
+                <li>Or make it public (&quot;Anyone with the link can view&quot;)</li>
+                <li>The sheet auto-syncs when data changes (checked every 30s)</li>
+              </ol>
+            </Notice>
           </div>
-        </div>
+        </DocModal>
       )}
 
       {sheetPreview && (
-        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4 sm:p-5">
-          <div className={`w-full max-w-6xl max-h-[92vh] overflow-y-auto rounded-[24px] p-4 sm:rounded-[30px] sm:p-7 ${darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"}`}>
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${darkMode ? "text-white/40" : "text-black/35"}`}>
-                  Sheet dashboard
-                </p>
-                <h3 className={`text-2xl font-semibold ${darkMode ? "text-white" : "text-black"}`}>{sheetPreview.document?.name}</h3>
-                <p className={`text-sm mt-2 ${darkMode ? "text-white/45" : "text-black/40"}`}>
-                  Synced {sheetPreview.document?.lastSyncedAt ? new Date(sheetPreview.document.lastSyncedAt).toLocaleString() : "recently"}
-                </p>
-              </div>
-              <button onClick={() => setSheetPreview(null)} className={`w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}>
-                <X className={`w-5 h-5 ${darkMode ? "text-white/50" : "text-black/40"}`} />
-              </button>
-            </div>
-
+        <DocModal
+          darkMode={darkMode}
+          icon={BarChart3}
+          tone="mint"
+          title={sheetPreview.document?.name}
+          subtitle={`Synced ${sheetPreview.document?.lastSyncedAt ? new Date(sheetPreview.document.lastSyncedAt).toLocaleString() : "recently"}`}
+          onClose={() => setSheetPreview(null)}
+          wide
+        >
             {loadingPreview ? (
-              <div className="py-20 flex justify-center">
-                <Loader2 className={`w-7 h-7 animate-spin ${darkMode ? "text-white/50" : "text-black/40"}`} />
+              <div className="flex justify-center py-20">
+                <Loader2 className={`h-7 w-7 animate-spin ${muted}`} />
               </div>
             ) : (
               <>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {[
-                    ["Total rows", sheetPreview.overview?.totalRows || 0],
-                    ["Columns", sheetPreview.overview?.columns?.length || 0],
-                    ["Tabs", sheetPreview.sheets?.length || 0],
-                    ["Architecture", sheetPreview.architecture ? "Saved" : "Detected"],
-                  ].map(([label, value]) => (
-                    <div key={label} className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.03] border border-white/10" : "bg-black/[0.025] border border-black/5"}`}>
-                      <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/40"}`}>{label}</p>
-                      <p className={`text-3xl mt-4 ${darkMode ? "text-white" : "text-black"}`}>{typeof value === "number" ? value.toLocaleString() : value}</p>
-                    </div>
+                    ["Total rows", sheetPreview.overview?.totalRows || 0, Rows3, "mint"],
+                    ["Columns", sheetPreview.overview?.columns?.length || 0, Columns3, "sky"],
+                    ["Tabs", sheetPreview.sheets?.length || 0, Sheet, "lavender"],
+                    ["Architecture", sheetPreview.architecture ? "Saved" : "Detected", BarChart3, "peach"],
+                  ].map(([label, value, Icon, tone]) => (
+                    <StatTile key={label} darkMode={darkMode} icon={Icon} tone={tone} label={label} value={typeof value === "number" ? value.toLocaleString() : value} />
                   ))}
                 </div>
 
                 {sheetPreview.architecture?.ai && (
-                  <div className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.03] border border-white/10" : "bg-black/[0.025] border border-black/5"}`}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <BarChart3 className={`w-4 h-4 ${darkMode ? "text-[#d8f36a]" : "text-black/50"}`} />
-                      <h4 className={darkMode ? "text-white" : "text-black"}>AI architecture read</h4>
-                    </div>
-                    <p className={`text-sm leading-6 ${darkMode ? "text-white/65" : "text-black/55"}`}>
-                      {sheetPreview.architecture.ai.purpose || "This sheet has been profiled for structure and useful views."}
-                    </p>
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      {(sheetPreview.architecture.ai.recommendedViews || sheetPreview.architecture.summary?.suggestedViews || []).map((view) => (
-                        <span key={view} className={`text-xs px-3 py-1.5 rounded-full ${darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-green-50 text-green-700"}`}>
-                          {view}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                  <Highlight
+                    darkMode={darkMode}
+                    icon={Sparkles}
+                    className="mb-5"
+                    title="AI architecture read"
+                    text={sheetPreview.architecture.ai.purpose || "This sheet has been profiled for structure and useful views."}
+                    action={
+                      <div className="hidden max-w-[50%] flex-wrap justify-end gap-1.5 md:flex">
+                        {(sheetPreview.architecture.ai.recommendedViews || sheetPreview.architecture.summary?.suggestedViews || []).map((view) => (
+                          <Chip key={view} darkMode={darkMode} tone="outline">{view}</Chip>
+                        ))}
+                      </div>
+                    }
+                  />
                 )}
 
-                <div className="grid lg:grid-cols-2 gap-4 mb-6">
-                  <div className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.03] border border-white/10" : "bg-black/[0.025] border border-black/5"}`}>
-                    <div className="flex items-center gap-2 mb-4">
-                      <BarChart3 className={`w-4 h-4 ${darkMode ? "text-[#d8f36a]" : "text-black/50"}`} />
-                      <h4 className={darkMode ? "text-white" : "text-black"}>Numeric fields</h4>
+                <div className="mb-5 grid gap-4 lg:grid-cols-2">
+                  <div className={`${panel} p-5`}>
+                    <div className="mb-4 flex items-center gap-2.5">
+                      <IconTile icon={BarChart3} tone="sky" darkMode={darkMode} size="sm" />
+                      <h4 className={`text-[15px] ${ink}`}>Numeric fields</h4>
                     </div>
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {(sheetPreview.architecture?.tabs || [])
                         .flatMap((tab) => tab.columns.filter((column) => column.stats).map((column) => ({ ...column, tab: tab.name })))
                         .slice(0, 6)
                         .map((column) => (
-                          <div key={`${column.tab}-${column.name}`} className={`rounded-2xl p-4 ${darkMode ? "bg-black/20" : "bg-white"}`}>
-                            <div className="flex justify-between gap-3 text-sm">
-                              <span className={darkMode ? "text-white" : "text-black"}>{column.name}</span>
-                              <span className={darkMode ? "text-white/45" : "text-black/40"}>{column.tab}</span>
+                          <div key={`${column.tab}-${column.name}`} className={`${softPanel} rounded-[14px] px-4 py-3`}>
+                            <div className="flex justify-between gap-3 text-[13px]">
+                              <span className={ink}>{column.name}</span>
+                              <span className={muted}>{column.tab}</span>
                             </div>
-                            <p className={`text-xs mt-2 ${darkMode ? "text-white/40" : "text-black/35"}`}>
+                            <p className={`mt-1 text-[12px] ${muted}`}>
                               Avg {formatMetric(column.stats.average)} · Min {formatMetric(column.stats.min)} · Max {formatMetric(column.stats.max)}
                             </p>
                           </div>
                         ))}
                       {!sheetPreview.architecture?.tabs?.some((tab) => tab.columns.some((column) => column.stats)) && (
-                        <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/40"}`}>No numeric columns detected yet.</p>
+                        <p className={`text-[13px] ${muted}`}>No numeric columns detected yet.</p>
                       )}
                     </div>
                   </div>
 
-                  <div className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.03] border border-white/10" : "bg-black/[0.025] border border-black/5"}`}>
-                    <h4 className={`mb-4 ${darkMode ? "text-white" : "text-black"}`}>Categories and workflow</h4>
+                  <div className={`${panel} p-5`}>
+                    <div className="mb-4 flex items-center gap-2.5">
+                      <IconTile icon={Columns3} tone="amber" darkMode={darkMode} size="sm" />
+                      <h4 className={`text-[15px] ${ink}`}>Categories and workflow</h4>
+                    </div>
                     <div className="space-y-4">
                       {(sheetPreview.architecture?.tabs || [])
                         .flatMap((tab) => tab.columns.filter((column) => column.topValues).map((column) => ({ ...column, tab: tab.name })))
                         .slice(0, 5)
                         .map((column) => (
                           <div key={`${column.tab}-${column.name}`}>
-                            <p className={`text-xs uppercase tracking-wider mb-2 ${darkMode ? "text-white/40" : "text-black/35"}`}>
+                            <p className={`mb-2 text-[12px] ${muted}`}>
                               {column.name} · {column.tab}
                             </p>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-1.5">
                               {column.topValues.map((item) => (
-                                <span key={`${column.name}-${item.value}`} className={`text-xs px-3 py-1.5 rounded-full ${darkMode ? "bg-white/5 text-white/70" : "bg-white text-black/60"}`}>
+                                <Chip key={`${column.name}-${item.value}`} darkMode={darkMode} tone="neutral">
                                   {item.value}: {item.count}
-                                </span>
+                                </Chip>
                               ))}
                             </div>
                           </div>
                         ))}
                       {!sheetPreview.architecture?.tabs?.some((tab) => tab.columns.some((column) => column.topValues)) && (
-                        <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/40"}`}>No category-like columns detected.</p>
+                        <p className={`text-[13px] ${muted}`}>No category-like columns detected.</p>
                       )}
                     </div>
                   </div>
                 </div>
 
                 {(sheetPreview.sheets || []).map((sheet) => (
-                  <div key={sheet.name} className={`rounded-[24px] overflow-hidden mb-5 ${darkMode ? "bg-white/[0.03] border border-white/10" : "bg-black/[0.025] border border-black/5"}`}>
-                    <div className={`px-5 py-4 border-b ${darkMode ? "border-white/10" : "border-black/5"}`}>
+                  <div key={sheet.name} className={`${panel} mb-5 overflow-hidden`}>
+                    <div className={`border-b px-5 py-4 ${hairline}`}>
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <h4 className={darkMode ? "text-white" : "text-black"}>{sheet.name}</h4>
-                          <p className={`text-xs mt-1 ${darkMode ? "text-white/40" : "text-black/35"}`}>
-                            {sheet.rows.length} rows · {sheet.headers.length} columns
-                          </p>
+                        <div className="flex items-center gap-2.5">
+                          <IconTile icon={Sheet} tone="mint" darkMode={darkMode} size="sm" />
+                          <div>
+                            <h4 className={`text-[15px] ${ink}`}>{sheet.name}</h4>
+                            <p className={`text-[12px] ${muted}`}>
+                              {sheet.rows.length} rows · {sheet.headers.length} columns
+                            </p>
+                          </div>
                         </div>
                         {findTabArchitecture(sheet) && (
-                          <div className="flex flex-wrap gap-2 lg:justify-end">
+                          <div className="flex flex-wrap gap-1.5 lg:justify-end">
                             {[
                               ["Primary", findTabArchitecture(sheet).primaryLabel],
                               ["Metrics", findTabArchitecture(sheet).keyMetrics?.join(", ")],
                               ["Workflow", findTabArchitecture(sheet).workflowColumns?.join(", ")],
                             ].filter(([, value]) => value).map(([label, value]) => (
-                              <span key={label} className={`text-xs px-3 py-1.5 rounded-full ${darkMode ? "bg-white/5 text-white/60" : "bg-white text-black/55"}`}>
+                              <Chip key={label} darkMode={darkMode} tone="neutral">
                                 {label}: {value}
-                              </span>
+                              </Chip>
                             ))}
                           </div>
                         )}
@@ -1690,26 +1538,24 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
                     </div>
 
                     {findTabArchitecture(sheet) && (
-                      <div className={`px-5 py-4 border-b ${darkMode ? "border-white/10" : "border-black/5"}`}>
-                        <p className={`text-[11px] uppercase tracking-[0.18em] mb-3 ${darkMode ? "text-white/40" : "text-black/35"}`}>
-                          Detected architecture
-                        </p>
-                        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                      <div className={`border-b px-5 py-4 ${hairline}`}>
+                        <p className={`mb-3 text-[13px] ${ink}`}>Detected architecture</p>
+                        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                           {findTabArchitecture(sheet).columns.map((column) => (
-                            <div key={column.name} className={`rounded-2xl p-4 ${darkMode ? "bg-black/20" : "bg-white"}`}>
+                            <div key={column.name} className={`${softPanel} rounded-[14px] p-3.5`}>
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className={`text-sm truncate ${darkMode ? "text-white" : "text-black"}`}>{column.name}</p>
-                                  <p className={`text-xs mt-1 ${darkMode ? "text-white/40" : "text-black/35"}`}>
+                                  <p className={`truncate text-[13px] ${ink}`}>{column.name}</p>
+                                  <p className={`mt-0.5 text-[12px] ${muted}`}>
                                     {column.role} · {column.filled} filled · {column.blank} blank
                                   </p>
                                 </div>
-                                <span className={`text-[11px] px-2.5 py-1 rounded-full flex-shrink-0 ${getTypeStyle(column.type)}`}>
+                                <Chip darkMode={darkMode} tone={getTypeStyle(column.type)} className="h-6 shrink-0 px-2.5 text-[11px]">
                                   {column.type}
-                                </span>
+                                </Chip>
                               </div>
                               {column.examples?.length > 0 && (
-                                <p className={`text-xs mt-3 truncate ${darkMode ? "text-white/40" : "text-black/35"}`}>
+                                <p className={`mt-2 truncate text-[12px] ${muted}`}>
                                   e.g. {column.examples.join(", ")}
                                 </p>
                               )}
@@ -1719,28 +1565,26 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
                       </div>
                     )}
 
-                    <div className={`px-5 py-4 border-b ${darkMode ? "border-white/10" : "border-black/5"}`}>
-                      <p className={`text-[11px] uppercase tracking-[0.18em] mb-3 ${darkMode ? "text-white/40" : "text-black/35"}`}>
-                        Sheet data
-                      </p>
-                      <p className={`text-xs ${darkMode ? "text-white/45" : "text-black/40"}`}>
+                    <div className={`border-b px-5 py-3 ${hairline}`}>
+                      <p className={`text-[13px] ${ink}`}>Sheet data</p>
+                      <p className={`text-[12px] ${muted}`}>
                         Showing all columns and up to 100 rows for this tab.
                       </p>
                     </div>
                     <div className="max-h-[420px] overflow-auto">
-                      <table className="w-full min-w-[760px] text-sm">
+                      <table className="w-full min-w-[760px] text-[13px]">
                         <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-                          <tr className={darkMode ? "border-b border-white/10" : "border-b border-black/5"}>
+                          <tr className={`border-b ${hairline}`}>
                             {sheet.headers.map((header) => (
-                              <th key={header} className={`text-left px-5 py-3 font-medium whitespace-nowrap ${darkMode ? "text-white/55" : "text-black/45"}`}>{header}</th>
+                              <th key={header} className={`${thClass} whitespace-nowrap`}>{header}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {sheet.rows.slice(0, 100).map((row) => (
-                            <tr key={row.__rowIndex} className={darkMode ? "border-b border-white/5" : "border-b border-black/5"}>
+                            <tr key={row.__rowIndex} className={`border-b last:border-b-0 ${hairline}`}>
                               {sheet.headers.map((header) => (
-                                <td key={header} className={`px-5 py-3 min-w-[160px] align-top ${darkMode ? "text-white/80" : "text-black/70"}`}>{row[header] || "—"}</td>
+                                <td key={header} className={`min-w-[160px] px-5 py-3 align-top ${body}`}>{row[header] || "—"}</td>
                               ))}
                             </tr>
                           ))}
@@ -1751,72 +1595,47 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
                 ))}
               </>
             )}
-          </div>
-        </div>
+        </DocModal>
       )}
 
       {renameModal && (
-        <div className="fixed inset-0 newq flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm p-4">
-          <div
-            className={`w-full max-w-lg rounded-[28px] p-6 ${
-              darkMode ? "bg-[#121317] border border-white/10" : "bg-white border border-black/5"
-            }`}
-          >
-            <div className="flex justify-between items-start mb-5">
-              <div>
-                <p className={`text-[11px] uppercase tracking-[0.28em] mb-2 ${darkMode ? "text-white/40" : "text-black/35"}`}>
-                  Document name
-                </p>
-                <h3 className={`text-2xl small font-semibold ${darkMode ? "text-white" : "text-black"}`}>
-                  Rename Document
-                </h3>
-              </div>
-              <button
-                onClick={() => setRenameModal(null)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-white/5" : "hover:bg-black/5"}`}
-              >
-                <X className={`w-5 h-5 ${darkMode ? "text-white/50" : "text-black/40"}`} />
-              </button>
-            </div>
-
-            <input
-              type="text"
-              value={renameValue}
-              onChange={(event) => setRenameValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void handleRename();
-              }}
-              className={`w-full rounded-2xl px-4 py-4 text-sm outline-none transition-colors ${
-                darkMode
-                  ? "bg-white/5 border-white/10 text-white placeholder-white/25 focus:border-white/25"
-                  : "bg-black/[0.03] border-black/8 text-black placeholder-black/30 focus:border-black/20"
-              }`}
-              placeholder="Document name"
-              autoFocus
-            />
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setRenameModal(null)}
-                className={`flex-1 px-4 py-3 rounded-full transition-colors ${
-                  darkMode ? "bg-white/5 text-white hover:bg-white/10" : "bg-black/[0.04] text-black hover:bg-black/[0.07]"
-                }`}
-              >
+        <DocModal
+          darkMode={darkMode}
+          icon={Edit3}
+          tone="amber"
+          title="Rename document"
+          subtitle="Document name"
+          onClose={() => setRenameModal(null)}
+          footer={
+            <>
+              <Button darkMode={darkMode} variant="secondary" onClick={() => setRenameModal(null)}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                darkMode={darkMode}
+                variant="primary"
+                icon={Edit3}
+                loading={renaming}
                 onClick={handleRename}
                 disabled={renaming || !renameValue.trim()}
-                className={`flex-1 px-4 py-3 rounded-full transition-colors flex items-center justify-center gap-2 disabled:opacity-50 ${
-                  darkMode ? "bg-[#d8f36a] text-black hover:opacity-90" : "bg-black text-white hover:opacity-90"
-                }`}
               >
-                {renaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Edit3 className="w-4 h-4" />}
                 Save
-              </button>
-            </div>
-          </div>
-        </div>
+              </Button>
+            </>
+          }
+        >
+          <input
+            type="text"
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void handleRename();
+            }}
+            className={inputClass}
+            placeholder="Document name"
+            autoFocus
+          />
+        </DocModal>
       )}
 
       <ConfirmModal
@@ -1835,6 +1654,48 @@ export default function Documents({ darkMode, selectedDocs, setSelectedDocs }) {
           return handleDelete(deleteModal.item);
         }}
       />
+    </div>
+  );
+}
+
+// Centered modal in the reference style: radius 24, icon tile header, round close button,
+// pill footer buttons.
+function DocModal({ darkMode, icon, tone = "neutral", title, subtitle, onClose, closeTitle = "Close", footer, wide = false, children }) {
+  return (
+    <div className="ui-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 newq">
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{ boxShadow: "var(--ui-shadow-pop)" }}
+        className={`ui-pop flex max-h-[92vh] w-full flex-col overflow-hidden rounded-[24px] border ${wide ? "max-w-6xl" : "max-w-xl"} ${
+          darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"
+        }`}
+      >
+        <header className={`flex items-center justify-between gap-3 border-b px-6 py-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h3 className="truncate text-[17px] tracking-[-0.01em]">{title}</h3>
+              {subtitle && <p className={`truncate text-[12.5px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{subtitle}</p>}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            title={closeTitle}
+            aria-label={closeTitle}
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        {footer && (
+          <footer className={`flex items-center justify-end gap-2 border-t px-6 py-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+            {footer}
+          </footer>
+        )}
+      </div>
     </div>
   );
 }

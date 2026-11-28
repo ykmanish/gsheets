@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, FileSpreadsheet, Loader2, Lock, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
+import { Button, Card, Notice, PageHeader } from "./ui";
 
 // Everything under Finance is gated on Google rather than on a role: the Google account
 // must be the email on the raga profile, and Google itself must grant it access to the
@@ -21,7 +22,12 @@ async function api(path, options = {}) {
 }
 
 export function muteFor(darkMode) {
-  return darkMode ? "text-white/50" : "text-black/50";
+  return darkMode ? "text-white/50" : "text-[#8a8a8a]";
+}
+
+// The page surface every Finance sub-module sits on.
+export function financePage(darkMode) {
+  return `flex-1 overflow-y-auto px-4 py-5 newq sm:px-6 lg:px-8 lg:py-8 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`;
 }
 
 export function GoogleMark() {
@@ -35,18 +41,8 @@ export function GoogleMark() {
   );
 }
 
-function StatusPill({ children, tone = "slate", darkMode }) {
-  const tones = {
-    amber: darkMode ? "bg-amber-300/10 text-amber-200" : "bg-amber-100 text-amber-700",
-    blue: darkMode ? "bg-blue-300/10 text-blue-200" : "bg-blue-100 text-blue-700",
-    slate: darkMode ? "bg-white/10 text-white/65" : "bg-slate-100 text-slate-600",
-  };
-  return <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black ${tones[tone]}`}>{children}</span>;
-}
-
 function GateScreen({ status, darkMode, onVerify, busy, notice, title }) {
   const muted = muteFor(darkMode);
-  const panel = darkMode ? "border-transparent bg-[#15171c]" : "border-black/[0.06] bg-white";
   const unconfigured = status && status.configured === false;
   const hasEmail = Boolean(status?.profileEmail);
   const problem = unconfigured
@@ -56,54 +52,58 @@ function GateScreen({ status, darkMode, onVerify, busy, notice, title }) {
       : notice;
 
   return (
-    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f4f5f8] text-[#171714]"}`}>
-      <section className={`overflow-hidden rounded-[30px] border p-6 sm:p-8 ${panel}`}>
-        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusPill tone="blue" darkMode={darkMode}><FileSpreadsheet className="mr-2 h-4 w-4" /> Finance</StatusPill>
-              <StatusPill tone="amber" darkMode={darkMode}><Lock className="mr-1.5 h-3.5 w-3.5" /> Locked</StatusPill>
-            </div>
-            <h1 className="small mt-5 text-4xl font-black leading-none sm:text-5xl">{title} is locked</h1>
-            <p className={`mt-4 max-w-xl text-sm leading-6 ${muted}`}>
-              Sign in with the Google account that has access to the CRBR sheets. It has to be the same address as your
-              raga profile.
-            </p>
+    <main className={financePage(darkMode)}>
+      <div className="mx-auto max-w-5xl">
+        <PageHeader
+          darkMode={darkMode}
+          badge="Finance · locked"
+          badgeIcon={Lock}
+          badgeTone="amber"
+          title={`${title} is locked`}
+          subtitle="sign in with Google to continue"
+          description="Use the Google account that has access to the CRBR sheets. It has to be the same address as your raga profile."
+        />
 
-            {hasEmail && (
-              <div className={`mt-5 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl px-4 py-3 ${darkMode ? "bg-white/[0.05]" : "bg-[#f8f9fc]"}`}>
-                <span className={`text-[11px] font-black uppercase tracking-wide ${muted}`}>Your profile email</span>
-                <span className="break-all text-sm font-black">{status.profileEmail}</span>
-              </div>
-            )}
-
-            {problem && (
-              <div className={`mt-4 flex max-w-xl items-start gap-3 rounded-2xl p-4 ${problem.tone === "error" ? darkMode ? "bg-rose-300/10" : "bg-rose-50" : darkMode ? "bg-amber-300/10" : "bg-amber-50"}`}>
-                <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${problem.tone === "error" ? "text-rose-500" : "text-amber-600"}`} />
-                <div>
-                  <p className={`text-sm font-black ${problem.tone === "error" ? "text-rose-500" : "text-amber-600"}`}>{problem.title}</p>
-                  {problem.detail ? <p className={`mt-1 text-sm ${muted}`}>{problem.detail}</p> : null}
+        <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <Card darkMode={darkMode} icon={FileSpreadsheet} tone="sky" title="Google check" subtitle="Asked once per login">
+            <div className="grid gap-3">
+              {hasEmail && (
+                <div className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-[14px] px-4 py-3 ${darkMode ? "bg-white/[0.05]" : "bg-[#f7f7f5]"}`}>
+                  <span className={`text-[12.5px] ${muted}`}>Your profile email</span>
+                  <span className="break-all text-[14px]">{status.profileEmail}</span>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+              {problem && (
+                <Notice tone={problem.tone === "error" ? "red" : "amber"} darkMode={darkMode} icon={AlertTriangle}>
+                  <p>{problem.title}</p>
+                  {problem.detail ? <p className="mt-0.5 opacity-75">{problem.detail}</p> : null}
+                </Notice>
+              )}
+            </div>
+          </Card>
 
           {!unconfigured && (
-            <div className="grid w-full gap-2 xl:w-auto xl:justify-end">
-              <button
-                type="button"
+            <div className={`flex flex-col justify-between gap-4 rounded-[20px] p-5 ${darkMode ? "bg-[#cff07a]/15" : "bg-[#d4f28a]"}`}>
+              <div>
+                <span className={`grid h-9 w-9 place-items-center rounded-[11px] ${darkMode ? "bg-white/10" : "bg-white/70"}`}><Lock className="h-4 w-4" strokeWidth={1.8} /></span>
+                <p className="mt-4 text-[15px]">Unlock {title}</p>
+                <p className={`mt-1 text-[12.5px] ${darkMode ? "text-white/60" : "text-[#3d4a1a]"}`}>Google confirms the account and its sheet access.</p>
+              </div>
+              <Button
+                darkMode={darkMode}
+                variant="primary"
+                size="lg"
                 onClick={onVerify}
                 disabled={busy || !hasEmail}
-                className="flex h-14 items-center justify-center gap-3 rounded-2xl bg-[#6ee72f] px-7 text-[15px] font-black text-[#10210c] transition hover:bg-[#5edb22] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                className="w-full"
               >
-                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <GoogleMark />}
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <span className="grid h-6 w-6 place-items-center rounded-full bg-white"><GoogleMark /></span>}
                 Continue with Google
-              </button>
-              <p className={`text-center text-xs xl:text-right ${muted}`}>Asked once per login</p>
+              </Button>
             </div>
           )}
         </div>
-      </section>
+      </div>
     </main>
   );
 }
@@ -168,8 +168,8 @@ export default function AccountsGoogleGuard({ darkMode, title = "This module", c
 
   if (!gate) {
     return (
-      <main className={`grid flex-1 place-items-center ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f4f5f8] text-[#171714]"}`}>
-        <div className={`flex items-center gap-3 text-sm font-semibold ${muteFor(darkMode)}`}><Loader2 className="h-5 w-5 animate-spin" /> Checking access...</div>
+      <main className={`grid flex-1 place-items-center newq ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}>
+        <div className={`flex items-center gap-3 text-[13.5px] ${muteFor(darkMode)}`}><Loader2 className="h-5 w-5 animate-spin" /> Checking access…</div>
       </main>
     );
   }
@@ -184,13 +184,14 @@ export default function AccountsGoogleGuard({ darkMode, title = "This module", c
 // The "signed in as x — click to sign out" button each sub-module puts in its header.
 export function GoogleSessionButton({ gate, onSignOut, darkMode }) {
   return (
-    <button
-      type="button"
+    <Button
+      darkMode={darkMode}
+      variant="secondary"
       onClick={onSignOut}
       title={`Signed in as ${gate.email}${gate.canManage ? "" : " · view only"}`}
-      className={`flex h-11 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-black transition ${darkMode ? "border-white/10 bg-white/10" : "border-black/10 bg-white"}`}
+      icon={LogOut}
     >
-      <LogOut className="h-4 w-4" /> <span className="max-w-[160px] truncate">{gate.email}</span>
-    </button>
+      <span className="max-w-[160px] truncate">{gate.email}</span>
+    </Button>
   );
 }

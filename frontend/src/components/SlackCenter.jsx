@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlarmClock, AlertTriangle, ArrowUpRight, BellRing, CalendarDays, CheckCircle2, Hash, Lock, Megaphone, MessageSquareText, Moon, NotebookPen, Palmtree, RefreshCw, Repeat, ShieldCheck, Sunrise, Trash2, UserRound, Users } from "lucide-react";
+import { AlarmClock, AlertTriangle, ArrowUpRight, BellRing, CalendarDays, CheckCircle2, Hash, Lock, Megaphone, MessageSquareText, Moon, NotebookPen, Palmtree, RefreshCw, Repeat, Settings2, ShieldCheck, Sunrise, Trash2, UserRound, Users } from "lucide-react";
 import { API_URL } from "./AuthProvider";
 import SlackLogo from "./SlackLogo";
-import { Tabs } from "./ui";
+import { Badge, Button, Chip, IconTile, Notice, SectionTitle, Tabs, cx, toneOf } from "./ui";
 import SlackAttendanceSettings from "./SlackAttendanceSettings";
 import CeoBriefSettings from "./CeoBriefSettings";
 
@@ -27,34 +27,41 @@ function clockLabel(hhmm = "00:00") {
   return `${((hour + 11) % 12) + 1}:${String(minutes % 60).padStart(2, "0")} ${hour < 12 ? "AM" : "PM"}`;
 }
 
-// A striped bar with its count in a dark pill at the end of the fill.
-function HatchBar({ value, total, color, darkMode }) {
+// A soft bar in a pastel tone, with its count in a small pill at the end of the fill.
+function HatchBar({ value, total, tone = "mint", darkMode }) {
   const pct = total ? Math.max(value ? 9 : 0, Math.min(100, (value / total) * 100)) : 0;
+  const t = toneOf(tone);
   return (
-    <div className={`relative h-8 w-full overflow-hidden rounded-full ${darkMode ? "bg-white/[0.06]" : "bg-[#efeee9]"}`}>
+    <div className={`relative h-7 w-full overflow-hidden rounded-full ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
       <div
         className="absolute inset-y-0 left-0 flex items-center justify-end rounded-full pr-1 transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
-        style={{ width: `${pct}%`, backgroundColor: color, backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,0.28) 0 2px, transparent 2px 7px)" }}
+        style={{ width: `${pct}%`, backgroundColor: darkMode ? t[2] : t[0] }}
       >
-        {value > 0 && <span className="grid h-6 min-w-8 place-items-center rounded-full bg-[#10231c] px-2 text-[11px] font-semibold text-white">{value}</span>}
+        {value > 0 && <span className={cx("grid h-5 min-w-7 place-items-center rounded-full px-2 text-[11px] tabular-nums", darkMode ? "bg-white text-[#141414]" : "bg-[#141414] text-white")}>{value}</span>}
       </div>
-      {value === 0 && <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold ${darkMode ? "text-white/40" : "text-black/35"}`}>0</span>}
+      {value === 0 && <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] ${darkMode ? "text-white/40" : "text-[#a3a3a0]"}`}>0</span>}
     </div>
   );
 }
 
 function Card({ darkMode, className = "", children }) {
-  return <section className={`rounded-[18px] border p-6 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#e8e8e6] bg-white text-[#171717]"} ${className}`}>{children}</section>;
+  return <section className={cx("rounded-[20px] border p-5 sm:p-6", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]", className)}>{children}</section>;
 }
 
-function Pill({ tone = "green", children }) {
-  const tones = {
-    green: "bg-[#e3f6ea] text-[#147a45]",
-    amber: "bg-[#fff2d9] text-[#9a6200]",
-    red: "bg-[#fde8e4] text-[#b4412b]",
-    grey: "bg-[#efeee9] text-[#5c625f]",
-  };
-  return <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${tones[tone]}`}>{children}</span>;
+// Card heading: a pastel icon tile, a title and a grey line, with something on the right.
+function CardHead({ darkMode, icon, tone, title, subtitle, right }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+        <div className="min-w-0">
+          <h2 className="truncate text-[15px]">{title}</h2>
+          {subtitle && <p className={cx("truncate text-[12.5px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{subtitle}</p>}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
 }
 
 export default function SlackCenter({ darkMode }) {
@@ -91,8 +98,8 @@ export default function SlackCenter({ darkMode }) {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const muted = darkMode ? "text-white/50" : "text-[#6b716e]";
-  const soft = darkMode ? "bg-white/[0.045]" : "bg-[#f6f5f1]";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const soft = darkMode ? "bg-white/[0.035]" : "bg-[#f7f7f5]";
   const status = data?.status;
   const settings = data?.settings;
   const employees = status?.employees || { total: 0, inSlack: 0, missing: [], noContact: [] };
@@ -130,95 +137,88 @@ export default function SlackCenter({ darkMode }) {
   const today = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
 
   return (
-    <main className={`min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-6 ${darkMode ? "text-white" : "text-[#171717]"}`}>
-      <div className="mx-auto w-full max-w-[1500px]">
+    <main className={`min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8 ${darkMode ? "text-white" : "text-[#141414]"}`}>
+      <div className="mx-auto w-full max-w-[1400px]">
         {/* Header */}
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className={`text-sm ${muted}`}>UIPL Docs · Juniper workspace · {today}</p>
-            <h1 className="mt-1 flex items-center gap-3 text-[26px] font-semibold leading-none tracking-tight">
-              <span className={`grid h-10 w-10 place-items-center rounded-[11px] border ${darkMode ? "border-white/10 bg-white/[0.05]" : "border-[#e8e8e6] bg-white"}`}><SlackLogo className="h-5 w-5" /></span>
-              Slack
-            </h1>
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <Badge icon={<SlackLogo className="h-3.5 w-3.5" />} tone="lavender" darkMode={darkMode} className="mb-3">Juniper workspace · {today}</Badge>
+            <SectionTitle darkMode={darkMode} title="Slack" subtitle="who it reaches and what went out today" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {settings && (settings.enabled ? <Pill tone="green"><span className="h-2 w-2 rounded-full bg-[#1fa463]" /> Reminders on</Pill> : <Pill tone="grey">Reminders off</Pill>)}
-            <button type="button" onClick={load} disabled={refreshing} className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3.5 text-[13px] font-medium transition active:scale-[0.98] ${darkMode ? "border-white/10 bg-white/[0.04] hover:bg-white/10" : "border-[#e4e4e1] bg-white hover:bg-[#f6f6f4]"}`}>
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-            </button>
+            {settings && (settings.enabled
+              ? <Chip darkMode={darkMode} tone="mint"><span className="h-2 w-2 rounded-full bg-current" /> Reminders on</Chip>
+              : <Chip darkMode={darkMode} tone="neutral">Reminders off</Chip>)}
+            <Button darkMode={darkMode} variant="secondary" onClick={load} disabled={refreshing} icon={RefreshCw} className={refreshing ? "[&>svg]:animate-spin" : ""}>
+              Refresh
+            </Button>
           </div>
         </header>
 
-        {error && <div className="mt-5 rounded-2xl bg-[#fde8e4] px-4 py-3 text-sm text-[#b4412b]">{error}</div>}
+        {error && <Notice darkMode={darkMode} tone="red" icon={AlertTriangle} className="mt-5">{error}</Notice>}
 
         {/* Row 1: reach + readiness */}
-        <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div className="mt-7 grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <Card darkMode={darkMode}>
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-[17px] font-medium">People on Slack</h2>
-              <Pill tone={employees.missing?.length ? "amber" : "green"}>
-                <Users className="h-3.5 w-3.5" /> {employees.total ? `${employees.total} expected each day` : "Loading"}
-              </Pill>
+            <CardHead
+              darkMode={darkMode}
+              icon={Users}
+              tone="mint"
+              title="People on Slack"
+              subtitle="Matched by email, else by phone"
+              right={<Chip darkMode={darkMode} tone={employees.missing?.length ? "amber" : "mint"} icon={Users}>{employees.total ? `${employees.total} expected each day` : "Loading"}</Chip>}
+            />
+            <div className="mt-5 flex flex-wrap items-end gap-x-3 gap-y-1">
+              <span className="text-[64px] leading-[0.9] tracking-[-0.04em] tabular-nums">{employees.inSlack}</span>
+              <span className={`pb-1.5 text-[15px] ${muted}`}>of {employees.total} people reachable</span>
             </div>
-            <div className="mt-4 flex flex-wrap items-end gap-x-4 gap-y-2">
-              <span className="text-[76px] font-light leading-[0.9] tracking-tight">{employees.inSlack}</span>
-              <span className={`pb-2 text-[15px] ${muted}`}>of {employees.total} people reachable</span>
-            </div>
-            <div className="mt-6 grid grid-cols-[minmax(0,170px)_1fr] items-center gap-x-5 gap-y-3 text-sm">
-              <span>Reachable on Slack</span><HatchBar value={employees.inSlack} total={employees.total} color="#3bbf7a" darkMode={darkMode} />
-              <span>Not in Slack yet</span><HatchBar value={notJoined} total={employees.total} color="#e38fc4" darkMode={darkMode} />
-              <span>No email or phone</span><HatchBar value={noContact} total={employees.total} color="#9aa39f" darkMode={darkMode} />
-              <span>HR in Slack</span><HatchBar value={hrInSlack} total={Math.max(hrPeople.length, 1)} color="#3bbf7a" darkMode={darkMode} />
-            </div>
-            <div className={`mt-5 flex flex-wrap items-center justify-between gap-3 text-xs ${muted}`}>
-              <span className="flex flex-wrap items-center gap-4">
-                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#3bbf7a]" /> Reachable</span>
-                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#e38fc4]" /> Needs to join</span>
-                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#9aa39f]" /> Add email or phone</span>
-              </span>
-              <span>Matched by email, else by phone</span>
+            <div className="mt-6 grid grid-cols-[minmax(0,160px)_1fr] items-center gap-x-5 gap-y-2.5 text-[13px]">
+              <span>Reachable on Slack</span><HatchBar value={employees.inSlack} total={employees.total} tone="mint" darkMode={darkMode} />
+              <span>Not in Slack yet</span><HatchBar value={notJoined} total={employees.total} tone="rose" darkMode={darkMode} />
+              <span>No email or phone</span><HatchBar value={noContact} total={employees.total} tone="neutral" darkMode={darkMode} />
+              <span>HR in Slack</span><HatchBar value={hrInSlack} total={Math.max(hrPeople.length, 1)} tone="lavender" darkMode={darkMode} />
             </div>
             {employees.missing?.length > 0 && (
-              <div className={`mt-5 rounded-2xl p-4 ${soft}`}>
-                <span className="text-sm font-medium">Not reachable yet</span>
-                <div className="mt-3 flex flex-wrap gap-2">
+              <div className={`mt-5 rounded-[16px] p-4 ${soft}`}>
+                <span className="text-[13px]">Not reachable yet</span>
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {employees.missing.slice(0, 18).map((name) => {
                     const noInfo = employees.noContact?.includes(name);
                     return (
-                      <span key={name} className={`rounded-full px-3 py-1.5 text-xs font-medium ${noInfo ? "bg-[#efeee9] text-[#5c625f]" : "bg-[#fbe3f1] text-[#8f2f68]"}`}>
+                      <Chip key={name} darkMode={darkMode} tone={noInfo ? "outline" : "rose"}>
                         {name}{noInfo ? " · add email or phone" : ""}
-                      </span>
+                      </Chip>
                     );
                   })}
-                  {employees.missing.length > 18 && <span className={`px-2 py-1.5 text-xs ${muted}`}>+{employees.missing.length - 18} more</span>}
+                  {employees.missing.length > 18 && <span className={`px-2 py-1.5 text-[12px] ${muted}`}>+{employees.missing.length - 18} more</span>}
                 </div>
               </div>
             )}
           </Card>
 
           <Card darkMode={darkMode}>
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="flex items-center gap-2.5 text-[17px] font-medium"><ShieldCheck className="h-5 w-5" /> Setup readiness</h2>
+            <CardHead darkMode={darkMode} icon={ShieldCheck} tone="sky" title="Setup readiness" subtitle={failing.length ? `${failing.length} thing${failing.length === 1 ? "" : "s"} to fix` : "All set"} />
+            <div className="mt-5 flex flex-wrap items-end gap-x-3">
+              <span className="text-[64px] leading-[0.9] tracking-[-0.04em] tabular-nums">{readiness}%</span>
+              <span className={`pb-1.5 text-[15px] ${muted}`}>{passed} of {checks.length} checks pass</span>
             </div>
-            <div className="mt-4 flex flex-wrap items-end gap-x-4">
-              <span className="text-[76px] font-light leading-[0.9] tracking-tight">{readiness}%</span>
-              <span className={`pb-2 text-[15px] ${muted}`}>{passed} of {checks.length} checks pass</span>
+            <div className={`mt-5 h-2 overflow-hidden rounded-full ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
+              <div className={cx("h-full rounded-full transition-[width] duration-700", darkMode ? "bg-[#cff07a]" : "bg-[#141414]")} style={{ width: `${readiness}%` }} />
             </div>
-            <div className={`mt-5 h-3 overflow-hidden rounded-full ${darkMode ? "bg-white/[0.06]" : "bg-[#efeee9]"}`}>
-              <div className="h-full rounded-full bg-[#3bbf7a] transition-[width] duration-700" style={{ width: `${readiness}%` }} />
-            </div>
-            <p className="mt-4 text-sm font-medium">{failing.length ? `${failing.length} thing${failing.length === 1 ? "" : "s"} to fix` : "All set"}</p>
-            <div className="mt-3 space-y-2.5">
+            <div className="mt-5 space-y-2">
               {(failing.length ? failing : checks).slice(0, 4).map((check) => {
                 const Icon = check.icon;
                 return (
-                  <div key={check.title} className={`flex items-center gap-3.5 rounded-2xl px-4 py-3 ${soft}`}>
-                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${check.ok ? "bg-[#e3f6ea] text-[#147a45]" : "bg-[#fde8e4] text-[#b4412b]"}`}>
-                      {check.ok ? <CheckCircle2 className="h-5 w-5" /> : Icon === SlackLogo ? <AlertTriangle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-                    </span>
+                  <div key={check.title} className={`flex items-center gap-3 rounded-[14px] px-3.5 py-3 ${soft}`}>
+                    <IconTile
+                      icon={check.ok ? CheckCircle2 : Icon === SlackLogo ? AlertTriangle : Icon}
+                      tone={check.ok ? "mint" : "rose"}
+                      darkMode={darkMode}
+                      size="sm"
+                    />
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{check.title}</span>
-                      <span className={`block truncate text-xs ${muted}`}>{check.detail}</span>
+                      <span className="block truncate text-[13.5px]">{check.title}</span>
+                      <span className={`block truncate text-[12px] ${muted}`}>{check.detail}</span>
                     </span>
                   </div>
                 );
@@ -228,30 +228,36 @@ export default function SlackCenter({ darkMode }) {
         </div>
 
         {/* Row 2: today + schedule */}
-        <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <Card darkMode={darkMode}>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-[17px] font-medium">Today on Slack</h2>
-              <span className={`text-sm ${muted}`}>{sentTotal} message{sentTotal === 1 ? "" : "s"} sent</span>
-            </div>
+            <CardHead
+              darkMode={darkMode}
+              icon={MessageSquareText}
+              tone="lavender"
+              title="Today on Slack"
+              subtitle={`${sentTotal} message${sentTotal === 1 ? "" : "s"} sent`}
+            />
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {[
-                { label: "Everyone channel", value: sent.team || 0, icon: Users, note: "Plain reminders, no names", tone: "#8f7ad8" },
-                { label: "Private messages", value: sent.personal || 0, icon: UserRound, note: "Each person's own status", tone: "#3bbf7a" },
-                { label: "HR channel", value: sent.hr || 0, icon: ShieldCheck, note: "Live lists and reports", tone: "#1f4d3d" },
-                { label: "Leave waiting for HR", value: overview?.pendingLeave || 0, icon: Palmtree, note: "Approve or decline on Slack", tone: "#d98a4e" },
-              ].map((tile) => (
-                <div key={tile.label} className={`rounded-[22px] p-5 ${soft}`}>
-                  <span className={`flex items-center gap-2 text-sm ${muted}`}><tile.icon className="h-4 w-4" /> {tile.label}</span>
-                  <span className="mt-3 block text-[44px] font-light leading-none tracking-tight">{tile.value}</span>
-                  <span className={`mt-4 block h-1.5 w-full rounded-full ${darkMode ? "bg-white/10" : "bg-[#e4e3dd]"}`}>
-                    <span className="block h-full rounded-full" style={{ width: `${sentTotal || tile.label.startsWith("Leave") ? Math.min(100, tile.label.startsWith("Leave") ? tile.value * 20 : (tile.value / Math.max(sentTotal, 1)) * 100) : 0}%`, background: tile.tone }} />
-                  </span>
-                  <span className={`mt-3 block text-xs ${muted}`}>{tile.note}</span>
-                </div>
-              ))}
+                { label: "Everyone channel", value: sent.team || 0, icon: Users, note: "Plain reminders, no names", tone: "lavender" },
+                { label: "Private messages", value: sent.personal || 0, icon: UserRound, note: "Each person's own status", tone: "mint" },
+                { label: "HR channel", value: sent.hr || 0, icon: ShieldCheck, note: "Live lists and reports", tone: "sky" },
+                { label: "Leave waiting for HR", value: overview?.pendingLeave || 0, icon: Palmtree, note: "Approve or decline on Slack", tone: "peach" },
+              ].map((tile) => {
+                const t = toneOf(tile.tone);
+                return (
+                  <div key={tile.label} style={{ backgroundColor: darkMode ? t[2] : t[0] }} className="rounded-[20px] p-4">
+                    <span style={{ color: darkMode ? t[3] : t[1] }} className="flex items-center gap-2 text-[12.5px]"><tile.icon className="h-4 w-4" strokeWidth={1.8} /> {tile.label}</span>
+                    <span className="mt-4 block text-[34px] leading-none tracking-[-0.03em] tabular-nums">{tile.value}</span>
+                    <span className={`mt-4 block h-1 w-full rounded-full ${darkMode ? "bg-white/10" : "bg-white/70"}`}>
+                      <span className="block h-full rounded-full" style={{ width: `${sentTotal || tile.label.startsWith("Leave") ? Math.min(100, tile.label.startsWith("Leave") ? tile.value * 20 : (tile.value / Math.max(sentTotal, 1)) * 100) : 0}%`, background: darkMode ? t[3] : t[1] }} />
+                    </span>
+                    <span className={`mt-2.5 block text-[12px] ${darkMode ? "text-white/55" : "text-[#6b6b6b]"}`}>{tile.note}</span>
+                  </div>
+                );
+              })}
             </div>
-            <div className={`mt-4 flex flex-wrap items-center gap-2 text-xs ${muted}`}>
+            <div className={`mt-4 flex flex-wrap items-center gap-2 text-[12px] ${muted}`}>
               <Moon className="h-3.5 w-3.5" />
               {overview?.cleanedAt
                 ? `Yesterday cleared at ${new Date(overview.cleanedAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })}`
@@ -262,38 +268,38 @@ export default function SlackCenter({ darkMode }) {
           </Card>
 
           <Card darkMode={darkMode}>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2.5 text-[17px] font-medium"><CalendarDays className="h-5 w-5" /> Today&apos;s schedule</h2>
-              <span className={`text-sm ${muted}`}>Mon–Sat, IST</span>
-            </div>
-            <div className="mt-5 space-y-2.5">
+            <CardHead darkMode={darkMode} icon={CalendarDays} tone="amber" title="Today's schedule" subtitle="Monday to Saturday, IST" />
+            <div className="mt-5 space-y-2">
               {schedule.map((item, index) => {
                 const done = minutesOf(item.time) <= now;
                 const next = index === nextIndex;
                 return (
-                  <div key={item.label} className={`flex items-center gap-4 rounded-2xl px-4 py-3 ${next ? (darkMode ? "bg-[#3bbf7a]/15" : "bg-[#e3f6ea]") : soft}`}>
-                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${next ? "bg-[#10231c] text-white" : darkMode ? "bg-white/10" : "bg-white"}`}><item.icon className="h-[18px] w-[18px]" /></span>
+                  <div key={item.label} className={cx("flex items-center gap-3.5 rounded-[14px] px-3.5 py-3", next ? (darkMode ? "bg-[#cff07a]/15" : "bg-[#eef8cc]") : soft)}>
+                    <span className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-[11px]", next ? (darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white") : darkMode ? "bg-white/10" : "bg-white")}><item.icon className="h-4 w-4" strokeWidth={1.8} /></span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium">{item.label}</span>
-                      <span className={`block truncate text-xs ${muted}`}>{item.detail}</span>
+                      <span className="block text-[13.5px]">{item.label}</span>
+                      <span className={`block truncate text-[12px] ${muted}`}>{item.detail}</span>
                     </span>
                     <span className="text-right">
-                      <span className="block text-sm font-medium tabular-nums">{clockLabel(item.time)}</span>
-                      <span className={`block text-[11px] ${!item.on ? "text-[#b4412b]" : next ? "text-[#147a45]" : muted}`}>{!item.on ? "Off" : next ? "Next" : done ? "Done" : "Later"}</span>
+                      <span className="block text-[13.5px] tabular-nums">{clockLabel(item.time)}</span>
+                      <span className={cx("block text-[11.5px]", !item.on ? (darkMode ? "text-[#f7aab5]" : "text-[#c0394b]") : next ? (darkMode ? "text-[#d8f39a]" : "text-[#4d6b12]") : muted)}>{!item.on ? "Off" : next ? "Next" : done ? "Done" : "Later"}</span>
                     </span>
                   </div>
                 );
               })}
             </div>
-            <a href="#slack-settings" className={`mt-4 inline-flex items-center gap-1.5 text-sm font-medium ${darkMode ? "text-[#86e0b0]" : "text-[#147a45]"}`}>
-              Change times <ArrowUpRight className="h-4 w-4" />
+            <a href="#slack-settings" className={cx("mt-4 inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] transition-colors", darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]")}>
+              Change times <ArrowUpRight className="h-3.5 w-3.5" />
             </a>
           </Card>
         </div>
 
         {/* Settings */}
-        <div id="slack-settings" className="mt-8 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-[22px] font-medium tracking-tight">Settings</h2>
+        <div id="slack-settings" className="mt-10 flex flex-wrap items-end justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <IconTile icon={Settings2} tone="neutral" darkMode={darkMode} size="md" />
+            <SectionTitle darkMode={darkMode} title="Settings" subtitle="reminders and the CEO report" className="[&_h2]:text-[20px] [&_p]:text-[20px]" />
+          </div>
           <Tabs darkMode={darkMode} items={TABS} value={tab} onChange={setTab} />
         </div>
         <div className="mt-4">

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, BadgeCheck, Bookmark, BookmarkCheck, Building2, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Eye, History, KeyRound, Loader2, MapPin, RefreshCw, Search, Send, Settings2, Sparkles, Star, Trash2, UserRoundSearch, Users, X } from "lucide-react";
 import { API_URL } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
-import { SelectMenu } from "./ui";
+import { Button, Chip, IconTile, PageHeader, SelectMenu, StatTile, Tabs, EmptyState as KitEmptyState, cx, toneOf } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -21,22 +21,22 @@ async function api(path, options = {}) {
 }
 
 const PLATFORM_TONES = {
-  linkedin: { light: "bg-[#e8f0fe] text-[#1a56c4]", dark: "bg-[#2563eb]/15 text-[#93c5fd]" },
-  indeed: { light: "bg-[#eef0ff] text-[#3b45c9]", dark: "bg-indigo-400/15 text-indigo-200" },
-  foundit: { light: "bg-[#fdeef3] text-[#c2185b]", dark: "bg-pink-400/15 text-pink-200" },
-  naukri: { light: "bg-[#fff2e5] text-[#c2621a]", dark: "bg-amber-400/15 text-amber-200" },
-  github: { light: "bg-[#f1f2f4] text-[#24292f]", dark: "bg-white/10 text-white/75" },
-  other: { light: "bg-[#f1f4f8] text-slate-600", dark: "bg-white/10 text-white/60" },
+  linkedin: "sky",
+  indeed: "lavender",
+  foundit: "rose",
+  naukri: "peach",
+  github: "neutral",
+  other: "neutral",
 };
 
 const STATUS_TONES = {
-  sourced: { light: "bg-slate-100 text-slate-600", dark: "bg-white/10 text-white/65" },
-  contacted: { light: "bg-blue-50 text-blue-700", dark: "bg-blue-400/15 text-blue-200" },
-  screening: { light: "bg-violet-50 text-violet-700", dark: "bg-violet-400/15 text-violet-200" },
-  interview: { light: "bg-amber-50 text-amber-700", dark: "bg-amber-400/15 text-amber-200" },
-  offer: { light: "bg-cyan-50 text-cyan-700", dark: "bg-cyan-400/15 text-cyan-200" },
-  hired: { light: "bg-emerald-50 text-emerald-700", dark: "bg-emerald-400/15 text-emerald-200" },
-  rejected: { light: "bg-rose-50 text-rose-700", dark: "bg-rose-400/15 text-rose-200" },
+  sourced: "neutral",
+  contacted: "sky",
+  screening: "lavender",
+  interview: "amber",
+  offer: "lime",
+  hired: "mint",
+  rejected: "rose",
 };
 
 const COUNTRY_OPTIONS = [
@@ -90,8 +90,8 @@ function shortDate(value) {
 }
 
 function Pill({ tone = "other", map = PLATFORM_TONES, darkMode, children, className = "" }) {
-  const entry = map[tone] || map.other || PLATFORM_TONES.other;
-  return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${darkMode ? entry.dark : entry.light} ${className}`}>{children}</span>;
+  const kitTone = map[tone] || map.other || "neutral";
+  return <Chip tone={kitTone} darkMode={darkMode} className={cx("h-6 gap-1 px-2.5 text-[11.5px]", className)}>{children}</Chip>;
 }
 
 // Deliberately a div, not a label: these fields wrap buttons (SelectMenu, skill
@@ -101,26 +101,15 @@ function Pill({ tone = "other", map = PLATFORM_TONES, darkMode, children, classN
 function Field({ label, children, hint, darkMode }) {
   return (
     <div role="group" aria-label={label} className="block min-w-0">
-      <span className={`mb-1.5 block text-[11px] font-bold uppercase tracking-[0.08em] ${darkMode ? "text-white/45" : "text-black/45"}`}>{label}</span>
+      <span className={`mb-1.5 block text-xs ${darkMode ? "text-white/55" : "text-[#8a8a8a]"}`}>{label}</span>
       {children}
-      {hint ? <span className={`mt-1 block text-[11px] ${darkMode ? "text-white/35" : "text-black/40"}`}>{hint}</span> : null}
+      {hint ? <span className={`mt-1 block text-[11.5px] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{hint}</span> : null}
     </div>
   );
 }
 
-function EmptyState({ darkMode, icon: Icon, title, text, action }) {
-  return (
-    <div className={`grid min-h-[240px] place-items-center rounded-[24px] p-6 text-center ${darkMode ? "bg-white/[0.04]" : "bg-[#f8f9fc]"}`}>
-      <div>
-        <span className={`mx-auto grid h-14 w-14 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white/70" : "bg-[#e8f0fe] text-[#2563eb]"}`}>
-          <Icon className="h-6 w-6" />
-        </span>
-        <h3 className="mt-4 text-xl font-black">{title}</h3>
-        <p className={`mt-2 max-w-lg text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>{text}</p>
-        {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
-      </div>
-    </div>
-  );
+function EmptyState({ darkMode, icon, title, text, action, tone = "sky" }) {
+  return <KitEmptyState darkMode={darkMode} icon={icon} tone={tone} title={title} text={text} action={action} className="min-h-[240px]" />;
 }
 
 // Deterministic per-person, so the same face keeps the same colours between
@@ -144,11 +133,11 @@ function tintFor(seed = "", darkMode = false) {
 function CardStat({ icon: Icon, value, label, darkMode, accent }) {
   return (
     <div className="min-w-0 px-1 text-center">
-      <p className={`flex items-center justify-center gap-1 truncate text-[13px] font-black ${accent || ""}`}>
+      <p className={`flex items-center justify-center gap-1 truncate text-[13px] ${accent || ""}`}>
         {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null}
         <span className="truncate">{value}</span>
       </p>
-      <p className={`mt-0.5 truncate text-[10px] font-bold uppercase tracking-[0.07em] ${darkMode ? "text-white/40" : "text-black/40"}`}>{label}</p>
+      <p className={`mt-0.5 truncate text-[11px] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{label}</p>
     </div>
   );
 }
@@ -170,8 +159,8 @@ function ProfileCard({ person, darkMode, saved, onSave, onOpen, onRemove, saving
   return (
     <article className={`group flex flex-col rounded-[20px] border p-4 transition ${
       darkMode
-        ? "border-white/[0.08] bg-[#0f1319] hover:border-white/[0.16]"
-        : "border-black/[0.07] bg-white hover:border-black/[0.14] hover:shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+        ? "border-white/10 bg-[#15171c] hover:bg-[#191b21]"
+        : "border-[#ececec] bg-white hover:bg-[#fcfcfb]"
     }`}>
       <div className="flex items-start gap-3">
         <div className="relative shrink-0">
@@ -183,18 +172,18 @@ function ProfileCard({ person, darkMode, saved, onSave, onOpen, onRemove, saving
               className="grid h-14 w-14 place-items-center rounded-full"
               style={{ background: `radial-gradient(circle at 30% 25%, ${ring} 0%, ${bg} 70%)` }}
             >
-              <span className="text-base font-black tracking-tight" style={{ color: ink }}>{initials(person.name)}</span>
+              <span className="text-base tracking-tight" style={{ color: ink }}>{initials(person.name)}</span>
             </div>
           )}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-1.5">
-            <h4 className="truncate text-[15px] font-black leading-tight">{person.name}</h4>
-            {saved ? <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#2563eb]" /> : null}
+            <h4 className="truncate text-[15px] leading-tight tracking-[-0.01em]">{person.name}</h4>
+            {saved ? <BadgeCheck className={`mt-0.5 h-4 w-4 shrink-0 ${darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]"}`} /> : null}
           </div>
           {facts.length ? (
-            <p className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
+            <p className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>
               {person.location ? <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{person.location}</span> : null}
               {person.company ? <span className="inline-flex items-center gap-1 truncate"><Building2 className="h-3 w-3 shrink-0" />{person.company}</span> : null}
             </p>
@@ -209,8 +198,8 @@ function ProfileCard({ person, darkMode, saved, onSave, onOpen, onRemove, saving
             title={saved ? "Remove from pipeline" : "Save to pipeline"}
             className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:opacity-60 ${
               saved
-                ? "bg-[#2563eb] text-white"
-                : darkMode ? "bg-white/[0.07] text-white/60 hover:bg-white/[0.14] hover:text-white" : "bg-[#f1f4f8] text-slate-500 hover:bg-[#e5eaf2] hover:text-slate-700"
+                ? darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white"
+                : darkMode ? "bg-white/[0.07] text-white/60 hover:bg-white/[0.14] hover:text-white" : "bg-[#f4f4f2] text-[#5f5f5c] hover:bg-[#ebebe8] hover:text-[#141414]"
             }`}
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
@@ -218,10 +207,10 @@ function ProfileCard({ person, darkMode, saved, onSave, onOpen, onRemove, saving
         ) : null}
       </div>
 
-      <p className={`mt-3 line-clamp-2 text-[12.5px] leading-5 ${darkMode ? "text-white/50" : "text-black/52"}`}>{bio}</p>
+      <p className={`mt-3 line-clamp-2 text-[12.5px] leading-5 ${darkMode ? "text-white/50" : "text-[#7a7a78]"}`}>{bio}</p>
 
-      <div className={`mt-3 grid grid-cols-3 divide-x rounded-xl py-2 ${
-        darkMode ? "divide-white/[0.08] bg-white/[0.04]" : "divide-black/[0.06] bg-[#f7f8fb]"
+      <div className={`mt-3 grid grid-cols-3 divide-x rounded-[14px] py-2.5 ${
+        darkMode ? "divide-white/[0.08] bg-white/[0.04]" : "divide-[#e8e8e6] bg-[#f7f7f5]"
       }`}>
         {stats.map((stat) => <CardStat key={stat.label} {...stat} darkMode={darkMode} />)}
       </div>
@@ -229,8 +218,8 @@ function ProfileCard({ person, darkMode, saved, onSave, onOpen, onRemove, saving
       <button
         type="button"
         onClick={onOpen}
-        className={`mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full text-[13px] font-black transition ${
-          darkMode ? "bg-white text-[#0b0f14] hover:bg-white/90" : "bg-[#111827] text-white hover:bg-[#1f2937]"
+        className={`mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full text-[13px] transition ${
+          darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"
         }`}
       >
         {action.icon ? <action.icon className="h-4 w-4" /> : null} {action.label}
@@ -270,10 +259,11 @@ export default function RecruitmentDashboard({ darkMode }) {
   const [detailNotes, setDetailNotes] = useState("");
   const [detailSaving, setDetailSaving] = useState(false);
 
-  const muted = darkMode ? "text-slate-400" : "text-black/58";
-  const panel = darkMode ? "bg-[#090d12]" : "bg-white";
-  const soft = darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]";
-  const inputClass = `h-11 w-full rounded-2xl border px-4 text-sm outline-none transition ${darkMode ? "border-white/10 bg-white/[0.035] text-white placeholder:text-white/30 focus:border-white/25" : "border-black/10 bg-white text-slate-800 placeholder:text-slate-400 focus:border-[#2563eb]/40"}`;
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
+  const panel = darkMode ? "border border-white/10 bg-[#15171c]" : "border border-[#ececec] bg-white";
+  const soft = darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]";
+  const primaryBtn = darkMode ? "bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black";
+  const inputClass = `h-10 w-full rounded-full border border-transparent px-4 text-[13.5px] outline-none transition ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09]" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white"}`;
 
   const toast = useMemo(() => ({
     success: (message, detailText) => showAppToast(message, { type: "success", darkMode, detail: detailText }),
@@ -557,80 +547,46 @@ export default function RecruitmentDashboard({ darkMode }) {
   ];
 
   const stats = [
-    { label: "Saved candidates", value: candidates.length, icon: Users },
-    { label: "In pipeline", value: activeCount, icon: UserRoundSearch },
-    { label: "Hired", value: hiredCount, icon: BookmarkCheck },
-    { label: "Searches run", value: searches.length, icon: Search },
+    { label: "Saved candidates", value: candidates.length, icon: Users, tone: "sky" },
+    { label: "In pipeline", value: activeCount, icon: UserRoundSearch, tone: "lavender" },
+    { label: "Hired", value: hiredCount, icon: BookmarkCheck, tone: "mint" },
+    { label: "Searches run", value: searches.length, icon: Search, tone: "peach" },
   ];
 
   return (
-    <main className={`flex-1 space-y-4 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#05080c] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}>
-      <section className={`rounded-[28px] ${panel}`}>
-        <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-2xl font-black">Recruitment</h2>
-              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ${configured ? (darkMode ? "bg-emerald-400/15 text-emerald-200" : "bg-emerald-50 text-emerald-700") : darkMode ? "bg-amber-400/15 text-amber-200" : "bg-amber-50 text-amber-700"}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${configured ? "bg-emerald-500" : "bg-amber-500"}`} />
-                {configured ? "Vertex AI Search connected" : "Setup needed"}
-              </span>
-            </div>
-            <p className={`mt-1 text-sm ${muted}`}>Source candidates and job posts from LinkedIn, Indeed, Foundit and more using Google Vertex AI Search.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              disabled={!configured}
-              className="flex h-10 items-center gap-2 rounded-full bg-[#2563eb] px-5 text-sm font-black text-white transition hover:bg-[#1d4ed8] disabled:opacity-50"
-            >
-              <Search className="h-4 w-4" /> New search
-            </button>
-            {canManage ? (
-              <button type="button" onClick={() => setSettingsOpen(true)} className={`flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:bg-[#1d232d]" : "border-black/10 bg-white text-slate-700 hover:bg-[#f1f4f8]"}`}>
-                <Settings2 className="h-4 w-4" /> Settings
-              </button>
-            ) : null}
-            <button type="button" onClick={() => load()} disabled={loading} className={`flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:bg-[#1d232d]" : "border-black/10 bg-white text-slate-700 hover:bg-[#f1f4f8]"}`}>
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-            </button>
-          </div>
-        </div>
+    <main className={`flex-1 space-y-5 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}>
+      <PageHeader
+        darkMode={darkMode}
+        badge="Recruitment"
+        badgeIcon={UserRoundSearch}
+        badgeTone="sky"
+        title="Find candidates"
+        subtitle="and track every hire"
+        description="Source candidates and job posts from LinkedIn, Indeed, Foundit and more using Google Vertex AI Search."
+        actions={(
+          <>
+            <Chip tone={configured ? "mint" : "amber"} darkMode={darkMode}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {configured ? "Vertex AI Search connected" : "Setup needed"}
+            </Chip>
+            <Button darkMode={darkMode} variant="secondary" icon={RefreshCw} onClick={() => load()} disabled={loading} className={loading ? "[&>svg]:animate-spin" : ""}>Refresh</Button>
+            {canManage ? <Button darkMode={darkMode} variant="soft" icon={Settings2} onClick={() => setSettingsOpen(true)}>Settings</Button> : null}
+            <Button darkMode={darkMode} variant="primary" icon={Search} onClick={() => setSearchOpen(true)} disabled={!configured}>New search</Button>
+          </>
+        )}
+        className="mb-2"
+      />
 
-        <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
-          {stats.map((stat) => (
-            <div key={stat.label} className={`rounded-2xl p-4 ${soft}`}>
-              <div className="flex items-center gap-2">
-                <span className={`grid h-8 w-8 place-items-center rounded-xl ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-[#2563eb]"}`}>
-                  <stat.icon className="h-4 w-4" />
-                </span>
-                <span className={`text-[11px] font-bold uppercase tracking-[0.08em] ${muted}`}>{stat.label}</span>
-              </div>
-              <p className="mt-2 text-3xl font-black">{stat.value}</p>
-            </div>
-          ))}
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => (
+          <StatTile key={stat.label} darkMode={darkMode} icon={stat.icon} tone={stat.tone} value={stat.value} label={stat.label} />
+        ))}
+      </div>
 
-        <div className={`flex gap-1 border-t px-3 py-2 ${darkMode ? "border-white/[0.06]" : "border-black/[0.06]"}`}>
-          {tabs.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setTab(item.id)}
-              className={`flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold transition ${
-                tab === item.id
-                  ? darkMode ? "bg-[#2563eb]/20 text-[#93c5fd]" : "bg-[#2563eb]/10 text-[#2563eb]"
-                  : darkMode ? "text-white/55 hover:bg-white/[0.06]" : "text-slate-500 hover:bg-black/[0.04]"
-              }`}
-            >
-              <item.icon className="h-4 w-4" /> {item.label}
-            </button>
-          ))}
-        </div>
-      </section>
+      <Tabs darkMode={darkMode} items={tabs} value={tab} onChange={setTab} />
 
       {!configured && !loading ? (
-        <section className={`rounded-[28px] p-5 ${panel}`}>
+        <section className={`rounded-[20px] p-5 ${panel}`}>
           <EmptyState
             darkMode={darkMode}
             icon={KeyRound}
@@ -639,7 +595,7 @@ export default function RecruitmentDashboard({ darkMode }) {
               ? "Create a Vertex AI Search website data store in Google Cloud, add the job-board URL patterns to it, then paste the project and data store IDs into settings. The server signs every request with its existing service account."
               : "An HR manager needs to connect the Vertex AI Search data store before candidate search can run."}
             action={canManage ? (
-              <button type="button" onClick={() => setSettingsOpen(true)} className="flex h-11 items-center gap-2 rounded-full bg-[#2563eb] px-6 text-sm font-black text-white transition hover:bg-[#1d4ed8]">
+              <button type="button" onClick={() => setSettingsOpen(true)} className={`flex h-10 items-center gap-2 rounded-full px-5 text-[13px] transition disabled:opacity-50 ${primaryBtn}`}>
                 <Settings2 className="h-4 w-4" /> Open settings
               </button>
             ) : null}
@@ -649,11 +605,16 @@ export default function RecruitmentDashboard({ darkMode }) {
 
 
       {tab === "pipeline" ? (
-        <section className={`rounded-[28px] ${panel}`}>
+        <section className={`rounded-[20px] ${panel}`}>
           <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h3 className="text-lg font-black">Candidate pipeline</h3>
-              <p className={`mt-1 text-sm ${muted}`}>Everyone saved from search, with their current hiring stage.</p>
+              <div className="flex items-center gap-3">
+                <IconTile icon={Users} tone="sky" darkMode={darkMode} size="sm" />
+                <div>
+                  <h3 className="text-[15px]">Candidate pipeline</h3>
+                  <p className={`text-[12px] ${muted}`}>Everyone saved from search, with their current hiring stage.</p>
+                </div>
+              </div>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative">
@@ -709,7 +670,7 @@ export default function RecruitmentDashboard({ darkMode }) {
                   ? "Clear the search or stage filter to see everyone."
                   : "Hit New search to source profiles from LinkedIn, GitHub and the job boards. Anyone you save lands here."}
                 action={candidates.length ? null : (
-                  <button type="button" onClick={() => setSearchOpen(true)} disabled={!configured} className="flex h-11 items-center gap-2 rounded-full bg-[#2563eb] px-6 text-sm font-black text-white transition hover:bg-[#1d4ed8] disabled:opacity-50">
+                  <button type="button" onClick={() => setSearchOpen(true)} disabled={!configured} className={`flex h-10 items-center gap-2 rounded-full px-5 text-[13px] transition disabled:opacity-50 ${primaryBtn}`}>
                     <Search className="h-4 w-4" /> New search
                   </button>
                 )}
@@ -720,17 +681,22 @@ export default function RecruitmentDashboard({ darkMode }) {
       ) : null}
 
       {tab === "history" ? (
-        <section className={`rounded-[28px] ${panel}`}>
+        <section className={`rounded-[20px] ${panel}`}>
           <div className="p-5">
-            <h3 className="text-lg font-black">Recent searches</h3>
-            <p className={`mt-1 text-sm ${muted}`}>The last 25 searches your team ran. Re-run one to pull fresh results.</p>
+            <div className="flex items-center gap-3">
+              <IconTile icon={History} tone="peach" darkMode={darkMode} size="sm" />
+              <div>
+                <h3 className="text-[15px]">Recent searches</h3>
+                <p className={`text-[12px] ${muted}`}>The last 25 searches your team ran. Re-run one to pull fresh results.</p>
+              </div>
+            </div>
           </div>
           <div className="space-y-2 px-5 pb-5">
             {searches.length ? searches.map((entry) => (
-              <div key={entry.id} className={`flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between ${soft}`}>
+              <div key={entry.id} className={`flex flex-col gap-3 rounded-[14px] p-4 sm:flex-row sm:items-center sm:justify-between ${soft}`}>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-black">{entry.keyword || entry.skills.join(", ") || "Untitled search"}</p>
+                    <p className="text-[14px]">{entry.keyword || entry.skills.join(", ") || "Untitled search"}</p>
                     <Pill tone="other" darkMode={darkMode}>{entry.mode === "jobs" ? "Job posts" : "Candidates"}</Pill>
                     {entry.platforms.map((id) => (
                       <Pill key={id} tone={id} darkMode={darkMode}>{platforms.find((platform) => platform.id === id)?.label || id}</Pill>
@@ -748,10 +714,10 @@ export default function RecruitmentDashboard({ darkMode }) {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <button type="button" onClick={() => rerunSearch(entry)} className={`flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold ${darkMode ? "border-white/10 bg-white/5 text-white/75" : "border-slate-200 bg-white text-slate-700"}`}>
+                  <button type="button" onClick={() => rerunSearch(entry)} className={`flex h-8 items-center gap-1.5 rounded-full border px-3.5 text-[12.5px] transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}>
                     Run again <ArrowRight className="h-3.5 w-3.5" />
                   </button>
-                  <button type="button" onClick={() => removeSearch(entry.id)} className={`grid h-9 w-9 place-items-center rounded-xl border ${darkMode ? "border-white/10 bg-white/5 text-white/60" : "border-slate-200 bg-white text-slate-500"}`}>
+                  <button type="button" onClick={() => removeSearch(entry.id)} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "bg-white/[0.07] text-white/60 hover:bg-white/10" : "bg-white text-[#5f5f5c] hover:bg-[#ebebe8]"}`}>
                     <X className="h-4 w-4" />
                   </button>
                 </div>
@@ -765,33 +731,30 @@ export default function RecruitmentDashboard({ darkMode }) {
 
       {searchOpen ? (
         <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]"
+          className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px] animate-[mrn-backdrop-in_280ms_ease-out]"
           onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false); }}
         >
-          <div className={`employee-report-shell employee-report-drawer absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#0b0f14] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <span><b>Recruitment</b> · Source candidates{candidates.length ? ` · ${candidates.length} saved` : ""}</span>
-              <button type="button" onClick={() => setSearchOpen(false)} className="font-semibold text-[#2563eb]">Close</button>
+          <div className={`employee-report-shell employee-report-drawer absolute flex flex-col overflow-hidden border shadow-[0_24px_70px_rgba(0,0,0,0.16)] sm:!rounded-[24px] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
+            <div className={`flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+              <div className="flex min-w-0 items-center gap-3">
+                <IconTile icon={UserRoundSearch} tone="sky" darkMode={darkMode} size="sm" />
+                <div className="min-w-0">
+                  <h2 className="truncate text-[17px] tracking-[-0.01em]">Source candidates</h2>
+                  <p className={`truncate text-[12.5px] ${muted}`}>Recruitment{candidates.length ? ` · ${candidates.length} saved` : ""}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setSearchOpen(false)} aria-label="Close" className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}>
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <div className={`min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5 ${darkMode ? "bg-[#05080c]" : "bg-[#f5f7f2]"}`}>
-              <section className={`rounded-[28px] ${panel}`}>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+              <section className={`rounded-[20px] ${panel}`}>
                 <div className="flex flex-col gap-3 p-5 pb-0 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-lg font-black">Build your search</h3>
-                    <p className={`mt-1 text-sm ${muted}`}>Add the role, skills and experience. Each platform is searched separately, and results are ranked by how well they match — nothing is hidden for a missing skill or city.</p>
+                    <h3 className="text-[15px]">Build your search</h3>
+                    <p className={`mt-1 max-w-2xl text-[13px] leading-5 ${muted}`}>Add the role, skills and experience. Each platform is searched separately, and results are ranked by how well they match — nothing is hidden for a missing skill or city.</p>
                   </div>
-                  <div className={`flex shrink-0 rounded-2xl p-1 ${soft}`}>
-                    {[{ id: "candidates", label: "Candidates" }, { id: "jobs", label: "Job posts" }].map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => switchMode(option.id)}
-                        className={`h-9 rounded-xl px-4 text-xs font-bold transition ${form.mode === option.id ? "bg-[#2563eb] text-white" : darkMode ? "text-white/55" : "text-slate-500"}`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
+                  <Tabs darkMode={darkMode} className="shrink-0" items={[{ id: "candidates", label: "Candidates" }, { id: "jobs", label: "Job posts" }]} value={form.mode} onChange={switchMode} />
             </div>
 
             <div className="grid gap-4 p-5 lg:grid-cols-2">
@@ -806,9 +769,9 @@ export default function RecruitmentDashboard({ darkMode }) {
               </Field>
 
               <Field label="Skills" darkMode={darkMode} hint="Press Enter or comma to add. Matches any of the listed skills.">
-                <div className={`flex min-h-11 flex-wrap items-center gap-1.5 rounded-2xl border px-3 py-2 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}>
+                <div className={`flex min-h-10 flex-wrap items-center gap-1.5 rounded-[20px] px-3 py-1.5 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
                   {form.skills.map((skill) => (
-                    <span key={skill} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${darkMode ? "bg-[#2563eb]/20 text-[#93c5fd]" : "bg-[#2563eb]/10 text-[#2563eb]"}`}>
+                    <span key={skill} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${darkMode ? "bg-white/10 text-white" : "bg-white text-[#141414]"}`}>
                       {skill}
                       <button type="button" onClick={() => updateForm({ skills: form.skills.filter((item) => item !== skill) })} className="opacity-60 hover:opacity-100">
                         <X className="h-3 w-3" />
@@ -831,7 +794,7 @@ export default function RecruitmentDashboard({ darkMode }) {
                     }}
                     onBlur={() => addSkill(skillInput)}
                     placeholder={form.skills.length ? "Add another skill" : "React, Node.js, AutoCAD..."}
-                    className={`h-7 min-w-[140px] flex-1 bg-transparent text-sm outline-none ${darkMode ? "text-white placeholder:text-white/30" : "text-slate-800 placeholder:text-slate-400"}`}
+                    className={`h-7 min-w-[140px] flex-1 border-0 !bg-transparent text-[13.5px] outline-none ${darkMode ? "text-white placeholder:text-white/35" : "text-[#141414] placeholder:text-[#a3a3a0]"}`}
                   />
                 </div>
               </Field>
@@ -863,11 +826,12 @@ export default function RecruitmentDashboard({ darkMode }) {
               </Field>
 
               <div className="lg:col-span-2">
-                <span className={`mb-2 block text-[11px] font-bold uppercase tracking-[0.08em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Platforms</span>
+                <span className={`mb-2 block text-xs ${darkMode ? "text-white/55" : "text-[#8a8a8a]"}`}>Platforms</span>
                 <div className="flex flex-wrap gap-2">
                   {platforms.map((platform) => {
                     const active = form.platforms.includes(platform.id);
                     const tone = PLATFORM_TONES[platform.id] || PLATFORM_TONES.other;
+                    const toneColors = toneOf(tone);
                     // Job boards keep seeker profiles behind a login, so they
                     // can only ever answer in Job posts mode. Say so on the chip
                     // instead of letting the search come back empty.
@@ -879,19 +843,20 @@ export default function RecruitmentDashboard({ darkMode }) {
                         onClick={() => togglePlatform(platform.id)}
                         disabled={!usable}
                         title={usable ? platform.hint : `${platform.label} has no public ${form.mode === "jobs" ? "job posts" : "candidate profiles"} to index — switch to ${form.mode === "jobs" ? "Candidates" : "Job posts"} mode`}
-                        className={`flex h-11 items-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${
+                        style={usable && active ? { backgroundColor: darkMode ? toneColors[2] : toneColors[0], color: darkMode ? toneColors[3] : toneColors[1] } : undefined}
+                        className={`flex h-10 items-center gap-2 rounded-full border px-4 text-[13px] transition ${
                           !usable
-                            ? darkMode ? "cursor-not-allowed border-white/5 bg-white/[0.015] text-white/25" : "cursor-not-allowed border-black/5 bg-[#f7f8fb] text-slate-300"
+                            ? darkMode ? "cursor-not-allowed border-white/5 bg-white/[0.015] text-white/25" : "cursor-not-allowed border-[#f0f0ee] bg-[#fafaf8] text-[#c4c4c1]"
                             : active
-                              ? `border-transparent ${darkMode ? tone.dark : tone.light}`
-                              : darkMode ? "border-white/10 bg-white/[0.03] text-white/50 hover:bg-white/[0.06]" : "border-black/10 bg-white text-slate-500 hover:bg-[#f7f8fb]"
+                              ? "border-transparent"
+                              : darkMode ? "border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.06]" : "border-[#e6e6e3] bg-white text-[#5f5f5c] hover:bg-[#f6f6f4]"
                         }`}
                       >
-                        <span className={`grid h-5 w-5 place-items-center rounded-md border ${active && usable ? "border-transparent bg-[#2563eb] text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
-                          {active && usable ? <Check className="h-3 w-3" /> : null}
+                        <span className={`grid h-4 w-4 place-items-center rounded-[5px] border ${active && usable ? "border-current bg-current" : darkMode ? "border-white/20" : "border-[#cfcfcb]"}`}>
+                          {active && usable ? <Check className={`h-3 w-3 ${darkMode ? "text-[#121317]" : "text-white"}`} strokeWidth={3} /> : null}
                         </span>
                         {platform.label}
-                        {!usable ? <span className="text-[10px] font-semibold opacity-70">{form.mode === "jobs" ? "no jobs" : "jobs only"}</span> : null}
+                        {!usable ? <span className="text-[11px] opacity-70">{form.mode === "jobs" ? "no jobs" : "jobs only"}</span> : null}
                       </button>
                     );
                   })}
@@ -901,13 +866,13 @@ export default function RecruitmentDashboard({ darkMode }) {
 
             {meta?.query ? (
               <div className="px-5 pb-4">
-                <button type="button" onClick={() => setQueryOpen((open) => !open)} className={`flex w-full items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left text-xs font-bold ${soft} ${muted}`}>
+                <button type="button" onClick={() => setQueryOpen((open) => !open)} className={`flex w-full items-center justify-between gap-2 rounded-[14px] px-4 py-3 text-left text-xs ${soft} ${muted}`}>
                   <span className="inline-flex items-center gap-2"><Sparkles className="h-3.5 w-3.5" /> Vertex AI Search query</span>
                   <ChevronDown className={`h-4 w-4 transition ${queryOpen ? "rotate-180" : ""}`} />
                 </button>
                 {queryOpen ? (
                   <>
-                    <pre className={`mt-2 overflow-x-auto rounded-2xl p-4 text-[11px] leading-5 ${darkMode ? "bg-black/40 text-white/70" : "bg-[#0f172a] text-[#e2e8f0]"}`}>{meta.query}</pre>
+                    <pre className={`mt-2 overflow-x-auto rounded-[14px] p-4 text-[11px] leading-5 ${darkMode ? "bg-black/40 text-white/70" : "bg-[#141414] text-white/80"}`}>{meta.query}</pre>
                     {meta.servingConfig ? <p className={`mt-2 break-all text-[11px] ${muted}`}>Serving config: {meta.servingConfig}</p> : null}
                   </>
                 ) : null}
@@ -918,11 +883,11 @@ export default function RecruitmentDashboard({ darkMode }) {
               </div>
             ) : null}
 
-            <div className={`flex flex-wrap items-center justify-between gap-3 border-t px-5 py-4 ${darkMode ? "border-white/[0.06]" : "border-black/[0.06]"}`}>
+            <div className={`flex flex-wrap items-center justify-between gap-3 border-t px-5 py-4 ${darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]"}`}>
               <button
                 type="button"
                 onClick={() => { setForm(EMPTY_FORM); setResults([]); setMeta(null); setSkillInput(""); setPage(1); }}
-                className={`h-11 rounded-full border px-5 text-sm font-semibold transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/60 hover:bg-[#f7f8fb]"}`}
+                className={`h-10 rounded-full border px-5 text-[13px] transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
               >
                 Clear
               </button>
@@ -930,7 +895,7 @@ export default function RecruitmentDashboard({ darkMode }) {
                 type="button"
                 onClick={() => runSearch({})}
                 disabled={searching || !configured}
-                className="flex h-11 items-center gap-2 rounded-full bg-[#2563eb] px-7 text-sm font-black text-white transition hover:bg-[#1d4ed8] disabled:opacity-50"
+                className={`flex h-10 items-center gap-2 rounded-full px-5 text-[13px] transition disabled:opacity-50 ${primaryBtn}`}
               >
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 {searching ? "Searching Vertex AI..." : "Search"}
@@ -938,10 +903,10 @@ export default function RecruitmentDashboard({ darkMode }) {
             </div>
           </section>
 
-          <section className={`rounded-[28px] ${panel}`}>
+          <section className={`rounded-[20px] ${panel}`}>
             <div className="flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-black">Results</h3>
+                <h3 className="text-[15px]">Results</h3>
                 <p className={`mt-1 text-sm ${muted}`}>
                   {meta
                     ? `Page ${meta.page || page} · ${results.length} result${results.length === 1 ? "" : "s"}${platformBreakdown ? ` (${platformBreakdown})` : ""}${hiddenCount ? ` · ${hiddenCount} off-platform` : ""}${meta.broadened ? " · widened to fill the page" : ""}`
@@ -978,9 +943,9 @@ export default function RecruitmentDashboard({ darkMode }) {
                               value: `${result.relevance ?? 0}%`,
                               label: "Match",
                               accent: (result.relevance ?? 0) >= 60
-                                ? (darkMode ? "text-[#4ade80]" : "text-[#16a34a]")
+                                ? (darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]")
                                 : (result.relevance ?? 0) >= 30
-                                  ? (darkMode ? "text-[#fbbf24]" : "text-[#d97706]")
+                                  ? (darkMode ? "text-[#f5d27a]" : "text-[#8a6200]")
                                   : undefined,
                             },
                             { value: result.platformLabel || "-", label: "Source" },
@@ -997,16 +962,16 @@ export default function RecruitmentDashboard({ darkMode }) {
                         type="button"
                         onClick={() => runSearch({ toPage: page - 1 })}
                         disabled={page <= 1 || loadingMore || searching}
-                        className={`flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-bold transition disabled:opacity-40 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:bg-[#1d232d]" : "border-black/10 bg-white text-slate-700 hover:bg-[#f1f4f8]"}`}
+                        className={`flex h-10 items-center gap-2 rounded-full border px-5 text-[13px] transition disabled:opacity-40 ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
                       >
                         {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronLeft className="h-4 w-4" />} Previous
                       </button>
-                      <span className={`text-sm font-bold tabular-nums ${muted}`}>Page {page}</span>
+                      <span className={`text-[13px] tabular-nums ${muted}`}>Page {page}</span>
                       <button
                         type="button"
                         onClick={() => runSearch({ toPage: page + 1 })}
                         disabled={!meta.hasNextPage || loadingMore || searching}
-                        className={`flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-bold transition disabled:opacity-40 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:bg-[#1d232d]" : "border-black/10 bg-white text-slate-700 hover:bg-[#f1f4f8]"}`}
+                        className={`flex h-10 items-center gap-2 rounded-full border px-5 text-[13px] transition disabled:opacity-40 ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
                       >
                         {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Next <ChevronRight className="h-4 w-4" />
                       </button>
@@ -1029,21 +994,22 @@ export default function RecruitmentDashboard({ darkMode }) {
       ) : null}
 
       {detail ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-6" onClick={() => setDetail(null)}>
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/35 p-0 sm:items-center sm:p-6" onClick={() => setDetail(null)}>
           <div
-            className={`max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] p-6 sm:rounded-[28px] ${darkMode ? "bg-[#0d1117] text-white" : "bg-white text-[#171714]"}`}
+            style={{ boxShadow: "var(--ui-shadow-pop)" }}
+            className={`ui-pop max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-t-[24px] border p-6 sm:rounded-[24px] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
-                <span className={`grid h-14 w-14 place-items-center rounded-2xl text-base font-black ${darkMode ? "bg-white/10 text-white/70" : "bg-[#e8f0fe] text-[#2563eb]"}`}>{initials(detail.name)}</span>
+                <span className={`grid h-14 w-14 place-items-center rounded-[18px] text-base ${darkMode ? "bg-[rgba(96,165,250,0.13)] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]"}`}>{initials(detail.name)}</span>
                 <div>
-                  <h3 className="text-xl font-black">{detail.name}</h3>
+                  <h3 className="text-[20px] tracking-[-0.01em]">{detail.name}</h3>
                   <p className={`text-sm ${muted}`}>{detail.headline || "No headline"}</p>
                 </div>
               </div>
-              <button type="button" onClick={() => setDetail(null)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}>
-                <X className="h-5 w-5" />
+              <button type="button" onClick={() => setDetail(null)} aria-label="Close" className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}>
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -1054,7 +1020,7 @@ export default function RecruitmentDashboard({ darkMode }) {
               {detail.company ? <Pill tone="other" darkMode={darkMode}><Building2 className="h-3 w-3" />{detail.company}</Pill> : null}
             </div>
 
-            {detail.snippet ? <p className={`mt-4 rounded-2xl p-4 text-sm leading-6 ${soft} ${muted}`}>{detail.snippet}</p> : null}
+            {detail.snippet ? <p className={`mt-4 rounded-[16px] p-4 text-[13px] leading-6 ${soft} ${muted}`}>{detail.snippet}</p> : null}
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Field label="Hiring stage" darkMode={darkMode}>
@@ -1080,7 +1046,7 @@ export default function RecruitmentDashboard({ darkMode }) {
                   onChange={(event) => setDetailNotes(event.target.value)}
                   rows={5}
                   placeholder="Add interview or screening notes"
-                  className={`w-full rounded-2xl border p-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035] text-white placeholder:text-white/30" : "border-black/10 bg-white text-slate-800 placeholder:text-slate-400"}`}
+                  className={`w-full rounded-[16px] border border-transparent p-4 text-[13.5px] outline-none ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white"}`}
                 />
               </Field>
             </div>
@@ -1088,13 +1054,13 @@ export default function RecruitmentDashboard({ darkMode }) {
             <p className={`mt-3 text-xs ${muted}`}>Saved by {detail.savedByName || "someone"} · {shortDate(detail.createdAt)}</p>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              <a href={detail.link} target="_blank" rel="noopener noreferrer" className={`flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-bold ${darkMode ? "border-white/10 bg-white/5 text-white/80" : "border-black/10 bg-white text-slate-700"}`}>
+              <a href={detail.link} target="_blank" rel="noopener noreferrer" className={`flex h-10 items-center gap-2 rounded-full border px-5 text-[13px] ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}>
                 <ExternalLink className="h-4 w-4" /> Open profile
               </a>
-              <button type="button" onClick={saveDetailNotes} disabled={detailSaving} className="flex h-11 items-center gap-2 rounded-full bg-[#2563eb] px-6 text-sm font-black text-white transition hover:bg-[#1d4ed8] disabled:opacity-50">
+              <button type="button" onClick={saveDetailNotes} disabled={detailSaving} className={`flex h-10 items-center gap-2 rounded-full px-5 text-[13px] transition disabled:opacity-50 ${primaryBtn}`}>
                 {detailSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save notes
               </button>
-              <button type="button" onClick={() => setPendingRemove(detail)} className={`ml-auto flex h-11 items-center gap-2 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-rose-400/10 text-rose-200" : "bg-rose-50 text-rose-600"}`}>
+              <button type="button" onClick={() => setPendingRemove(detail)} className={`ml-auto flex h-10 items-center gap-2 rounded-full px-5 text-[13px] ${darkMode ? "bg-[rgba(251,113,133,0.13)] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"}`}>
                 <Trash2 className="h-4 w-4" /> Remove
               </button>
             </div>
@@ -1104,17 +1070,15 @@ export default function RecruitmentDashboard({ darkMode }) {
 
       {pendingRemove ? (
         <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-black/45 p-4 backdrop-blur-[2px] animate-[mrn-backdrop-in_200ms_ease-out]"
+          className="fixed inset-0 z-[60] grid place-items-center bg-black/35 p-4 animate-[mrn-backdrop-in_200ms_ease-out]"
           onMouseDown={(event) => { if (event.target === event.currentTarget && !removing) setPendingRemove(null); }}
         >
-          <div className={`w-full max-w-md rounded-[24px] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.3)] ${panel}`}>
+          <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop w-full max-w-md rounded-[24px] p-6 ${panel}`}>
             <div className="flex items-start gap-3">
-              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-rose-400/15 text-rose-200" : "bg-rose-50 text-rose-600"}`}>
-                <Trash2 className="h-5 w-5" />
-              </span>
+              <IconTile icon={Trash2} tone="rose" darkMode={darkMode} />
               <div className="min-w-0">
-                <h3 className="text-lg font-black leading-tight">Remove {pendingRemove.name}?</h3>
-                <p className={`mt-1.5 text-sm leading-6 ${muted}`}>
+                <h3 className="text-[16px] leading-tight">Remove {pendingRemove.name}?</h3>
+                <p className={`mt-1.5 text-[13px] leading-5 ${muted}`}>
                   They come off the pipeline along with any notes and stage history. The profile itself is untouched, so you can save them again from a later search.
                 </p>
               </div>
@@ -1124,7 +1088,7 @@ export default function RecruitmentDashboard({ darkMode }) {
                 type="button"
                 onClick={() => setPendingRemove(null)}
                 disabled={removing}
-                className={`h-11 rounded-full border px-5 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/10 bg-white/[0.045] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/60 hover:bg-[#f7f8fb]"}`}
+                className={`h-10 rounded-full border px-5 text-[13px] transition disabled:opacity-50 ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
               >
                 Keep
               </button>
@@ -1132,7 +1096,7 @@ export default function RecruitmentDashboard({ darkMode }) {
                 type="button"
                 onClick={confirmRemoveCandidate}
                 disabled={removing}
-                className="flex h-11 items-center gap-2 rounded-full bg-[#e11d48] px-6 text-sm font-black text-white transition hover:bg-[#be123c] disabled:opacity-50"
+                className="flex h-10 items-center gap-2 rounded-full bg-[#e5484d] px-5 text-[13px] text-white transition hover:bg-[#d93f44] disabled:opacity-50"
               >
                 {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Remove
               </button>
@@ -1142,19 +1106,22 @@ export default function RecruitmentDashboard({ darkMode }) {
       ) : null}
 
       {settingsOpen ? (
-        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/45 p-4" onClick={() => setSettingsOpen(false)}>
-          <div className={`max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[28px] p-6 ${darkMode ? "bg-[#0d1117] text-white" : "bg-white text-[#171714]"}`} onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/35 p-4" onClick={() => setSettingsOpen(false)}>
+          <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[24px] border p-6 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`} onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-black">Vertex AI Search settings</h3>
-                <p className={`mt-1 text-sm ${muted}`}>Recruitment runs on the Google Cloud Discovery Engine API.</p>
+              <div className="flex min-w-0 items-start gap-3">
+                <IconTile icon={Settings2} tone="sky" darkMode={darkMode} size="sm" />
+                <div className="min-w-0">
+                  <h3 className="text-[17px] tracking-[-0.01em]">Vertex AI Search settings</h3>
+                  <p className={`mt-0.5 text-[12.5px] ${muted}`}>Recruitment runs on the Google Cloud Discovery Engine API.</p>
+                </div>
               </div>
-              <button type="button" onClick={() => setSettingsOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}>
-                <X className="h-5 w-5" />
+              <button type="button" onClick={() => setSettingsOpen(false)} aria-label="Close" className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}>
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <ol className={`mt-4 space-y-2 rounded-2xl p-4 text-xs leading-5 ${soft} ${muted}`}>
+            <ol className={`mt-4 space-y-2 rounded-[16px] p-4 text-xs leading-5 ${soft} ${muted}`}>
               <li><b>1.</b> In Google Cloud Console, enable the <b>Discovery Engine API</b> on your project.</li>
               <li><b>2.</b> In <b>AI Applications &gt; Data Stores</b>, create a <b>Website</b> data store covering the job boards you want to search.</li>
               <li><b>3.</b> Create a <b>Search</b> app over that data store, then copy the project, app and data store IDs here.</li>
@@ -1162,7 +1129,7 @@ export default function RecruitmentDashboard({ darkMode }) {
             </ol>
 
             {data?.settings && !data.settings.serviceAccountConfigured ? (
-              <p className={`mt-3 flex items-start gap-2 rounded-2xl p-3 text-xs ${darkMode ? "bg-amber-400/10 text-amber-200" : "bg-amber-50 text-amber-700"}`}>
+              <p className={`mt-3 flex items-start gap-2 rounded-[14px] p-3 text-xs ${darkMode ? "bg-[rgba(251,191,36,0.13)] text-[#f5d27a]" : "bg-[#fbf0d4] text-[#8a6200]"}`}>
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 GOOGLE_SERVICE_ACCOUNT_KEY is not set on the server, so searches will fail until it is configured.
               </p>
@@ -1220,10 +1187,10 @@ export default function RecruitmentDashboard({ darkMode }) {
             ) : null}
 
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setSettingsOpen(false)} className={`h-11 rounded-full border px-5 text-sm font-semibold ${darkMode ? "border-white/10 bg-white/[0.045] text-white/70" : "border-black/10 bg-white text-black/60"}`}>
+              <button type="button" onClick={() => setSettingsOpen(false)} className={`h-10 rounded-full border px-5 text-[13px] ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}>
                 Cancel
               </button>
-              <button type="button" onClick={saveSettings} disabled={settingsSaving} className="flex h-11 items-center gap-2 rounded-full bg-[#2563eb] px-6 text-sm font-black text-white transition hover:bg-[#1d4ed8] disabled:opacity-50">
+              <button type="button" onClick={saveSettings} disabled={settingsSaving} className={`flex h-10 items-center gap-2 rounded-full px-5 text-[13px] transition disabled:opacity-50 ${primaryBtn}`}>
                 {settingsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save
               </button>
             </div>

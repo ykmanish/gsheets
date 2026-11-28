@@ -8,7 +8,7 @@ import { API_URL, getStoredAuth } from "./AuthProvider";
 import { playForumNotificationSound } from "./forumNotificationSound";
 import UserAvatar from "./UserAvatar";
 import dynamic from "next/dynamic";
-import { DateInput, TimeInput } from "./ui";
+import { DateInput, EmptyState, IconTile, TimeInput } from "./ui";
 
 const PickerFallback = () => (
   <div className="grid h-full w-full place-items-center text-xs opacity-60">Loading…</div>
@@ -328,7 +328,7 @@ const GroupAvatar = memo(function GroupAvatar({ group, className = "h-11 w-11", 
   const preset = groupAvatarPreset(group?.avatarPreset);
   return (
     <span
-      className={`grid shrink-0 select-none place-items-center overflow-hidden font-bold uppercase leading-none tracking-[0.01em] text-white ${rounded === "lg" ? "rounded-2xl" : "rounded-full"} ${className}`}
+      className={`grid shrink-0 select-none place-items-center overflow-hidden uppercase leading-none tracking-[0.01em] text-white ${rounded === "lg" ? "rounded-2xl" : "rounded-full"} ${className}`}
       style={{ backgroundColor: preset.color, fontSize: `${groupAvatarFontSize(className)}px` }}
     >
       {groupInitials(group?.name)}
@@ -342,7 +342,7 @@ const LoopAssistantAvatar = memo(function LoopAssistantAvatar({ assistant, class
     return <img src={src} alt="Loop" className={`${className} shrink-0 rounded-full object-cover`} />;
   }
   return (
-    <span className={`grid ${className} shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#10b981] to-[#2563eb] text-white`}>
+    <span className={`grid ${className} shrink-0 place-items-center rounded-full bg-[#cff07a] text-[#141414]`}>
       <Sparkles className={iconClassName} />
     </span>
   );
@@ -514,7 +514,7 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
       const url = match[1].replace(/[.,!?;:]+$/, "");
       const suffix = match[1].slice(url.length);
       parts.push(
-        <a key={`${start}-${url}`} href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`inline-flex max-w-full align-baseline rounded-full px-3 py-1.5 text-sm font-medium no-underline ${mine ? "bg-white text-[#2563eb] hover:bg-[#f8fbff]" : "bg-white text-[#2563eb] hover:bg-[#f8fafc]"}`}>
+        <a key={`${start}-${url}`} href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`inline-flex max-w-full align-baseline rounded-full px-3 py-1.5 text-sm font-medium no-underline ${mine ? "bg-white text-[var(--loop-ink)] hover:bg-[#f7f7f5]" : "bg-white text-[var(--loop-ink)] hover:bg-[#f7f7f5]"}`}>
           <span className="block max-w-full truncate">{url}</span>
         </a>
       );
@@ -523,7 +523,7 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
       const username = match[2].toLowerCase();
       const user = users.find((item) => mentionHandleForUser(item).toLowerCase() === username);
       parts.push(
-        <button key={`${start}-${match[0]}`} type="button" onClick={() => user && onMentionClick?.(user)} className="mx-0.5 inline-flex rounded-md bg-[#eef4ff] px-1.5 py-0.5 align-baseline text-[13px] font-medium text-[#2563eb] no-underline transition hover:bg-[#e0ecff] dark:bg-[#2563eb]/15 dark:text-[#93b4fb] dark:hover:bg-[#2563eb]/25">
+        <button key={`${start}-${match[0]}`} type="button" onClick={() => user && onMentionClick?.(user)} className="mx-0.5 inline-flex rounded-md bg-[#f4f4f2] px-1.5 py-0.5 align-baseline text-[13px] font-medium text-[var(--loop-ink)] no-underline transition hover:bg-[#ececea] dark:bg-[var(--loop-accent)]/15 dark:text-[#93b4fb] dark:hover:bg-[var(--loop-accent)]/25">
           {match[0]}
         </button>
       );
@@ -541,7 +541,7 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
     return (
       <span key={`highlight-${index}`}>
         {part.slice(0, start)}
-        <mark className={`rounded px-0.5 ${active ? "bg-[#22c55e] text-[#052e16]" : "bg-[#86efac] text-[#052e16]"}`}>{part.slice(start, start + needle.length)}</mark>
+        <mark className={`rounded px-0.5 ${active ? "bg-[#cff07a] text-[#141414]" : "bg-[#eef8cc] text-[#141414]"}`}>{part.slice(start, start + needle.length)}</mark>
         {part.slice(start + needle.length)}
       </span>
     );
@@ -551,37 +551,37 @@ function renderMessageText(text, query, active = false, users = [], onMentionCli
 function renderLoopAssistantText(text, darkMode = false) {
   const badgeClassFor = (label, value) => {
     const lowerLabel = String(label).toLowerCase();
-    if (/task/.test(lowerLabel)) return darkMode ? "bg-[#343842] text-white" : "bg-[#f1f5f9] text-[#0f172a]";
-    if (/evaluation/.test(lowerLabel)) return darkMode ? "bg-[#143728] text-white" : "bg-[#f0fdf4] text-[#0f172a]";
-    if (/impact/.test(lowerLabel)) return darkMode ? "bg-[#1e3a8a] text-white" : "bg-[#eff6ff] text-[#0f172a]";
-    if (/suggestion/.test(lowerLabel)) return darkMode ? "bg-[#450a0a] text-white" : "bg-[#fef2f2] text-[#0f172a]";
+    if (/task/.test(lowerLabel)) return darkMode ? "bg-[#343842] text-white" : "bg-[#f1f5f9] text-[#141414]";
+    if (/evaluation/.test(lowerLabel)) return darkMode ? "bg-[#143728] text-white" : "bg-[#f0fdf4] text-[#141414]";
+    if (/impact/.test(lowerLabel)) return darkMode ? "bg-[#60a5fa]/[0.13] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]";
+    if (/suggestion/.test(lowerLabel)) return darkMode ? "bg-[#450a0a] text-white" : "bg-[#fef2f2] text-[#141414]";
 
     const key = `${label} ${value}`.toLowerCase();
     if (/status/.test(key)) {
-      if (/done|complete/.test(key)) return darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#f0fdf4] text-[#16a34a]";
+      if (/done|complete/.test(key)) return darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]";
       if (/block|risk|delay|overdue/.test(key)) return darkMode ? "bg-[#43202a] text-[#ffc0cb]" : "bg-[#fef2f2] text-[#ef4444]";
-      if (/progress|active|working/.test(key)) return darkMode ? "bg-[#153246] text-[#a9ddff]" : "bg-[#eff6ff] text-[#2563eb]";
-      return darkMode ? "bg-[#343842] text-[#d7dde8]" : "bg-[#f8fafc] text-[#475569]";
+      if (/progress|active|working/.test(key)) return darkMode ? "bg-[#60a5fa]/[0.13] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]";
+      return darkMode ? "bg-[#343842] text-[#d7dde8]" : "bg-[#f7f7f5] text-[#475569]";
     }
     if (/priority/.test(key)) {
       if (/critical|urgent/.test(key)) return darkMode ? "bg-[#39264d] text-[#e4c8ff]" : "bg-[#faf5ff] text-[#9333ea]";
       if (/high/.test(key)) return darkMode ? "bg-[#452525] text-[#ffc4c4]" : "bg-[#fef2f2] text-[#ef4444]";
       if (/medium/.test(key)) return darkMode ? "bg-[#463515] text-[#ffd88a]" : "bg-[#fffbeb] text-[#d97706]";
-      return darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#f0fdf4] text-[#16a34a]";
+      return darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]";
     }
     if (/due|deadline|target|date/.test(key)) {
-      if (/not set|not specified|no /.test(key)) return darkMode ? "bg-[#343842] text-[#c8cfda]" : "bg-[#f8fafc] text-[#64748b]";
+      if (/not set|not specified|no /.test(key)) return darkMode ? "bg-[#343842] text-[#c8cfda]" : "bg-[#f7f7f5] text-[#64748b]";
       return darkMode ? "bg-[#123948] text-[#9ee7ff]" : "bg-[#f0f9ff] text-[#0284c7]";
     }
     if (/assignee|manager/.test(key)) return darkMode ? "bg-[#32294a] text-[#d8c9ff]" : "bg-[#f5f3ff] text-[#7c3aed]";
     if (/phase|health/.test(key)) return darkMode ? "bg-[#143b34] text-[#a5eadc]" : "bg-[#f0fdfa] text-[#0d9488]";
-    return darkMode ? "bg-[#343842] text-white" : "bg-[#f8fafc] text-[#0f172a]";
+    return darkMode ? "bg-[#343842] text-white" : "bg-[#f7f7f5] text-[#141414]";
   };
   const renderInline = (line, lineIndex) => {
     const parts = String(line || "").split(/(\*\*[^*]+\*\*)/g).filter((part) => part !== "");
     return parts.map((part, partIndex) => {
       if (/^\*\*[^*]+\*\*$/.test(part)) {
-        return <span key={`${lineIndex}-${partIndex}`} className={darkMode ? "text-white" : "text-[#0f172a]"}>{part.slice(2, -2)}</span>;
+        return <span key={`${lineIndex}-${partIndex}`} className={darkMode ? "text-white" : "text-[#141414]"}>{part.slice(2, -2)}</span>;
       }
       return <span key={`${lineIndex}-${partIndex}`}>{part}</span>;
     });
@@ -603,7 +603,7 @@ function renderLoopAssistantText(text, darkMode = false) {
         const level = headerMatch[1].length;
         const sizeClass = level === 1 ? "text-lg" : level === 2 ? "text-base" : "text-[14px]";
         return (
-          <div key={index} className={`small ${sizeClass} font-bold tracking-wider mt-4 mb-2 ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+          <div key={index} className={`small ${sizeClass} tracking-wider mt-4 mb-2 ${darkMode ? "text-white/60" : "text-[#8a8a8a]"}`}>
             {renderInline(headerMatch[2], index)}
           </div>
         );
@@ -615,12 +615,12 @@ function renderLoopAssistantText(text, darkMode = false) {
 
         if (label.toLowerCase() === "planned") {
           currentPlanned = parseInt(value, 10);
-          badgeColor = darkMode ? "bg-[#1e3a8a] text-[#bfdbfe]" : "bg-[#eff6ff] text-[#2563eb]";
+          badgeColor = darkMode ? "bg-[#60a5fa]/[0.13] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]";
         } else if (label.toLowerCase() === "actual") {
           const actualVal = parseInt(value, 10);
           if (currentPlanned !== null) {
             if (actualVal >= currentPlanned) {
-              badgeColor = darkMode ? "bg-[#143728] text-[#9ee8bf]" : "bg-[#f0fdf4] text-[#16a34a]";
+              badgeColor = darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]";
             } else {
               badgeColor = darkMode ? "bg-[#450a0a] text-[#fecaca]" : "bg-[#fef2f2] text-[#ef4444]";
             }
@@ -629,7 +629,7 @@ function renderLoopAssistantText(text, darkMode = false) {
 
         return (
           <div key={index} className={`mr-2 mt-2 inline-flex flex-col gap-1 rounded-2xl p-3 sm:min-w-[120px] ${badgeColor}`}>
-            <span className="text-[10px] font-bold uppercase tracking-[0.08em] opacity-70">{label}</span>
+            <span className="text-[12px] opacity-70">{label}</span>
             <div className="flex items-center">
               <span className={`text-[16px] leading-[1.6] font-normal break-words`}>{value}</span>
             </div>
@@ -639,7 +639,7 @@ function renderLoopAssistantText(text, darkMode = false) {
       if (bullet) {
         return (
           <div key={index} className="flex gap-2">
-            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" />
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fae6a]" />
             <p className="min-w-0 flex-1">{renderInline(bullet[1], index)}</p>
           </div>
         );
@@ -647,7 +647,7 @@ function renderLoopAssistantText(text, darkMode = false) {
       if (numbered) {
         return (
           <div key={index} className="flex gap-2">
-            <span className={`grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1 text-[10px] ${darkMode ? "bg-[#143728] font-semibold text-[#9ee8bf]" : "bg-[#e8f7ef] font-black text-[#16a34a]"}`}>{numbered[1]}</span>
+            <span className={`grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1 text-[10px] ${darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>{numbered[1]}</span>
             <p className="min-w-0 flex-1">{renderInline(numbered[2], index)}</p>
           </div>
         );
@@ -788,22 +788,22 @@ const FileAttachmentCard = memo(function FileAttachmentCard({ attachment, mine, 
           <Icon className="h-5 w-5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold">{attachment.name || "Shared file"}</span>
+          <span className="block truncate text-sm">{attachment.name || "Shared file"}</span>
           <span className={`mt-0.5 block truncate text-[11px] ${darkMode ? "text-white/55" : "text-black/45"}`}>
             {[label, formatFileSize(attachment.size)].filter(Boolean).join(" • ")}
           </span>
         </span>
-        <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : darkMode ? "text-white/50" : "text-black/45"}`}>
+        <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] ${mine ? darkMode ? "text-white/50" : "text-[#8a8a8a]" : darkMode ? "text-white/50" : "text-black/45"}`}>
           {isEdited && <span className="opacity-70">Edited</span>}
           <span>{time}</span>
           {mine && status && (
-            status === "read" ? <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" /> : <Check className="h-3.5 w-3.5" />
+            status === "read" ? <CheckCheck className="h-3.5 w-3.5 text-[var(--loop-read)]" /> : <Check className="h-3.5 w-3.5" />
           )}
         </span>
       </div>
       {isUploading ? (
         <div className="px-3 pb-3 pt-1.5">
-          <div className={`mb-1 flex items-center justify-between text-[11px] font-semibold ${darkMode ? "text-white/60" : "text-black/45"}`}>
+          <div className={`mb-1 flex items-center justify-between text-[11px] ${darkMode ? "text-white/60" : "text-black/45"}`}>
             <span>Uploading...</span>
             <span className="tabular-nums transition-all duration-300">{Math.round(attachment.progress || 0)}%</span>
           </div>
@@ -813,10 +813,10 @@ const FileAttachmentCard = memo(function FileAttachmentCard({ attachment, mine, 
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 px-2 pb-2 pt-1">
-          <a href={attachment.openUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold no-underline ${actionClass}`}>
+          <a href={attachment.openUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs no-underline ${actionClass}`}>
             Open
           </a>
-          <a href={attachment.downloadUrl || attachment.openUrl} target="_blank" rel="noreferrer" download onClick={(event) => event.stopPropagation()} className={`inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold no-underline ${actionClass}`}>
+          <a href={attachment.downloadUrl || attachment.openUrl} target="_blank" rel="noreferrer" download onClick={(event) => event.stopPropagation()} className={`inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs no-underline ${actionClass}`}>
             Download
           </a>
         </div>
@@ -844,10 +844,10 @@ const ImageAttachmentCard = memo(function ImageAttachmentCard({ attachment, mine
           {caption}
         </p>
       )}
-      <span className={`flex items-center justify-end gap-1.5 px-3 pb-1.5 pt-1 text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : darkMode ? "text-white/50" : "text-black/45"}`}>
+      <span className={`flex items-center justify-end gap-1.5 px-3 pb-1.5 pt-1 text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#8a8a8a]" : darkMode ? "text-white/50" : "text-black/45"}`}>
         <span>{time}</span>
         {mine && status && (
-          status === "read" ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" /> : <Check className="h-3.5 w-3.5 shrink-0" />
+          status === "read" ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[var(--loop-read)]" /> : <Check className="h-3.5 w-3.5 shrink-0" />
         )}
       </span>
     </button>
@@ -920,8 +920,8 @@ const LinkPreviewCard = memo(function LinkPreviewCard({ url, mine, darkMode, tim
   const surfaceClass = embedded
     ? darkMode ? "bg-white/10 hover:bg-white/15" : "bg-black/5 hover:bg-black/10"
     : mine
-      ? darkMode ? "bg-[#181a20] hover:bg-[#1f222a]" : "bg-[#e5f1ff] hover:bg-[#d6e8fb]"
-      : darkMode ? "bg-[#252830] hover:bg-[#2c303a]" : "bg-[#f0f2f5] hover:bg-[#e4e7ec]";
+      ? darkMode ? "bg-black/20 hover:bg-black/30" : "bg-white/60 hover:bg-white/80"
+      : darkMode ? "bg-[#252830] hover:bg-[#2c303a]" : "bg-[#f4f4f2] hover:bg-[#ececea]";
   return (
     <a href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className={`flex w-full min-w-0 max-w-full items-center gap-2.5 rounded-[20px] px-3 py-2.5 text-left transition sm:gap-3 sm:px-4 ${surfaceClass}`}>
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white sm:h-11 sm:w-11">
@@ -933,25 +933,25 @@ const LinkPreviewCard = memo(function LinkPreviewCard({ url, mine, darkMode, tim
             className="h-6 w-6 rounded-md object-contain sm:h-7 sm:w-7"
           />
         ) : (
-          <Globe2 className="h-6 w-6 text-[#2563eb] sm:h-7 sm:w-7" />
+          <Globe2 className="h-6 w-6 text-[var(--loop-ink)] sm:h-7 sm:w-7" />
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`block truncate text-sm font-semibold ${darkMode ? "text-white" : "text-[#14213d]"}`}>{meta.title}</span>
+        <span className={`block truncate text-sm ${darkMode ? "text-white" : "text-[#141414]"}`}>{meta.title}</span>
         <span className={`mt-0.5 block truncate text-xs ${darkMode ? "text-white/70" : "text-[#525866]"}`}>{compactUrl}</span>
       </span>
       {!embedded && (
-        <span className={`self-end inline-flex items-center gap-1 shrink-0 whitespace-nowrap pb-0.5 text-[10px] ${mine ? darkMode ? "text-white/60" : "text-[#71809a]" : darkMode ? "text-white/50" : "text-black/45"}`}>
+        <span className={`self-end inline-flex items-center gap-1 shrink-0 whitespace-nowrap pb-0.5 text-[10px] ${mine ? darkMode ? "text-white/60" : "text-[#8a8a8a]" : darkMode ? "text-white/50" : "text-black/45"}`}>
           {isEdited && <span className="opacity-70">Edited</span>}
           <span>{time}</span>
           {mine && status && (
             <span className="inline-flex items-center justify-center">
               {status === "read" ? (
-                <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+                <CheckCheck className="h-3.5 w-3.5 text-[var(--loop-read)]" title="Read" />
               ) : status === "delivered" ? (
-                <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/60" : "text-[#71809a]"}`} title="Delivered" />
+                <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/60" : "text-[#8a8a8a]"}`} title="Delivered" />
               ) : (
-                <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/60" : "text-[#71809a]"}`} title="Sent" />
+                <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/60" : "text-[#8a8a8a]"}`} title="Sent" />
               )}
             </span>
           )}
@@ -962,9 +962,9 @@ const LinkPreviewCard = memo(function LinkPreviewCard({ url, mine, darkMode, tim
 });
 
 function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, activeDirectUserId, embedded = false, widgetControls = null }) {
-  const panelBg = darkMode ? "bg-[#15171c] text-white" : "bg-[#fbfcff] text-black";
-  const softBlock = darkMode ? "bg-white/[0.05]" : "bg-[#f4f7fb]";
-  const divider = darkMode ? "border-white/[0.06]" : "border-[#eef1f5]";
+  const panelBg = darkMode ? "border-l border-white/[0.06] bg-[#15171c] text-white" : "border-l border-[#f0f0ee] bg-white text-[#141414]";
+  const softBlock = darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]";
+  const divider = darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]";
   const isActiveDirectUser = activeDirectUserId && String(activeDirectUserId) === String(user?.id);
   if (!user) return null;
   return (
@@ -973,13 +973,13 @@ function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, active
         {embedded && widgetControls ? (
           widgetControls
         ) : (
-          <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+          <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>
             <ShieldCheck className="h-4.5 w-4.5 shrink-0" />
             <span>Messages are end-to-end encrypted</span>
           </span>
         )}
         {onBack && (
-          <button type="button" onClick={onBack} className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/[0.05] hover:bg-white/10" : "bg-[#f4f7fb] hover:bg-[#edf1f7]"}`}>
+          <button type="button" onClick={onBack} className={`ml-2 rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/[0.05] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`}>
             Back
           </button>
         )}
@@ -987,31 +987,33 @@ function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, active
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="mx-auto flex w-[calc(100%-40px)] max-w-[320px] flex-col py-7">
       <UserAvatar user={user} name={user.displayName} className="mx-auto h-24 w-24" />
-      <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">{user.displayName}</h2>
+      <h2 className="small mt-5 text-center text-2xl leading-tight">{user.displayName}</h2>
       {user.username && <p className={`mt-1 truncate text-center text-sm ${muted}`}>@{user.username}</p>}
       <div className="mt-3 flex justify-center">
-        <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${online.has(user.id) ? "bg-[#dcfce7] text-[#16a34a]" : "bg-slate-100 text-slate-500"}`}>
+        <span className={`rounded-full px-3 py-1 text-[11px] ${online.has(user.id) ? "bg-[#e4f1e6] text-[#2f7a4f]" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}>
           {online.has(user.id) ? "Online" : "Offline"}
         </span>
       </div>
       {!isActiveDirectUser && (
-        <button type="button" onClick={() => onDirect(user)} className={`mt-8 flex w-full max-w-full items-center justify-center gap-2 rounded-[14px] px-4 py-4 text-sm font-semibold ${softBlock}`}>
-          <MessageCircleMore className="h-4 w-4 text-[#2563eb]" />
+        <button type="button" onClick={() => onDirect(user)} className={`mt-8 flex w-full max-w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm ${softBlock}`}>
+          <MessageCircleMore className="h-4 w-4 text-[var(--loop-ink)]" />
           Add Chat
         </button>
       )}
       <PanelSection title="Profile" muted={muted}>
+        <div className={`overflow-hidden rounded-[16px] ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
         {[
           ["Designation", user.designation],
           ["Department", user.department],
           ["Email", user.email],
           ["Phone", user.phone],
         ].map(([label, value]) => (
-          <div key={label} className="py-1.5">
-            <p className={`text-xs ${muted}`}>{label}</p>
-            <p className="mt-0.5 min-w-0 break-words text-sm font-bold">{value || "-"}</p>
+          <div key={label} className={`border-b px-4 py-2.5 last:border-b-0 ${darkMode ? "border-white/[0.06]" : "border-[#ececea]"}`}>
+            <p className={`text-[12px] ${muted}`}>{label}</p>
+            <p className="mt-0.5 min-w-0 break-words text-[13.5px]">{value || "-"}</p>
           </div>
         ))}
+        </div>
       </PanelSection>
         </div>
       </div>
@@ -1020,7 +1022,7 @@ function UserInfoPanel({ darkMode, user, online, muted, onDirect, onBack, active
 }
 
 function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDirect, activeDirectUserId }) {
-  const softBlock = darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]";
+  const softBlock = darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]";
   const isActiveDirectUser = activeDirectUserId && String(activeDirectUserId) === String(user?.id);
   if (!user) return null;
   return (
@@ -1030,36 +1032,38 @@ function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDire
         <div className="mx-auto mt-3 h-1.5 w-11 rounded-full bg-white/20" />
         <div className="max-h-[calc(88vh-16px)] overflow-y-auto px-7 pb-8 pt-6">
           <div className="relative">
-            <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close profile">
+            <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`} aria-label="Close profile">
               <X className="h-4 w-4" />
             </button>
             <UserAvatar user={user} name={user.displayName} className="mx-auto h-24 w-24" />
-            <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">{user.displayName || user.username || "User"}</h2>
+            <h2 className="small mt-5 text-center text-2xl leading-tight">{user.displayName || user.username || "User"}</h2>
             {user.username && <p className={`mt-1 truncate text-center text-sm ${muted}`}>@{mentionHandleForUser(user)}</p>}
             <div className="mt-3 flex justify-center">
-              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${online.has(user.id) ? "bg-[#dcfce7] text-[#16a34a]" : "bg-slate-100 text-slate-500"}`}>
+              <span className={`rounded-full px-3 py-1 text-[11px] ${online.has(user.id) ? "bg-[#e4f1e6] text-[#2f7a4f]" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}>
                 {online.has(user.id) ? "Online" : "Offline"}
               </span>
             </div>
           </div>
           {!isActiveDirectUser && (
-            <button type="button" onClick={() => onDirect(user)} className={`mt-8 flex w-full items-center justify-center gap-2 rounded-[14px] px-4 py-4 text-sm font-semibold ${softBlock}`}>
-              <MessageCircleMore className="h-4 w-4 text-[#2563eb]" />
+            <button type="button" onClick={() => onDirect(user)} className={`mt-8 flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm ${softBlock}`}>
+              <MessageCircleMore className="h-4 w-4 text-[var(--loop-ink)]" />
               Add Chat
             </button>
           )}
           <PanelSection title="Profile" muted={muted}>
+            <div className={`overflow-hidden rounded-[16px] ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
             {[
               ["Designation", user.designation],
               ["Department", user.department],
               ["Email", user.email],
               ["Phone", user.phone],
             ].map(([label, value]) => (
-              <div key={label} className="py-1.5">
-                <p className={`text-xs ${muted}`}>{label}</p>
-                <p className="mt-0.5 min-w-0 break-words text-sm font-bold">{value || "-"}</p>
+              <div key={label} className={`border-b px-4 py-2.5 last:border-b-0 ${darkMode ? "border-white/[0.06]" : "border-[#ececea]"}`}>
+                <p className={`text-[12px] ${muted}`}>{label}</p>
+                <p className="mt-0.5 min-w-0 break-words text-[13.5px]">{value || "-"}</p>
               </div>
             ))}
+            </div>
           </PanelSection>
         </div>
         </>
@@ -1069,22 +1073,22 @@ function MobileUserProfileSheet({ darkMode, user, online, muted, onClose, onDire
 }
 
 function LoopAssistantProfilePanel({ darkMode, assistant, currentUser, muted, embedded = false, widgetControls = null, onBack, onToggle, onAvatarUpload, uploading = false, saving = false }) {
-  const panelBg = darkMode ? "bg-[#15171c] text-white" : "bg-[#fbfcff] text-black";
-  const softBlock = darkMode ? "bg-white/[0.05]" : "bg-[#f4f7fb]";
-  const divider = darkMode ? "border-white/[0.06]" : "border-[#eef1f5]";
+  const panelBg = darkMode ? "border-l border-white/[0.06] bg-[#15171c] text-white" : "border-l border-[#f0f0ee] bg-white text-[#141414]";
+  const softBlock = darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]";
+  const divider = darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]";
   const canManage = Boolean(currentUser?.isSuperAdmin);
   const enabled = assistant?.enabled !== false;
   return (
     <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-hidden ${panelBg} xl:flex`}>
       <div className={`flex h-16 shrink-0 items-center ${embedded && widgetControls ? "justify-end" : "justify-center"} border-b px-4 ${divider}`}>
         {embedded && widgetControls ? widgetControls : (
-          <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${enabled ? darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600" : darkMode ? "bg-white/10 text-white/60" : "bg-slate-100 text-slate-500"}`}>
+          <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${enabled ? darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]" : darkMode ? "bg-white/10 text-white/60" : "bg-slate-100 text-slate-500"}`}>
             <Sparkles className="h-4.5 w-4.5 shrink-0" />
             <span>{enabled ? "Loop assistant is on" : "Loop assistant is off"}</span>
           </span>
         )}
         {onBack && (
-          <button type="button" onClick={onBack} className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-white/[0.05] hover:bg-white/10" : "bg-[#f4f7fb] hover:bg-[#edf1f7]"}`}>
+          <button type="button" onClick={onBack} className={`ml-2 rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/[0.05] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`}>
             Back
           </button>
         )}
@@ -1094,39 +1098,41 @@ function LoopAssistantProfilePanel({ darkMode, assistant, currentUser, muted, em
           <div className="relative mx-auto">
             <LoopAssistantAvatar assistant={assistant} className="h-24 w-24" iconClassName="h-10 w-10" />
             {canManage && (
-              <label className={`absolute bottom-0 right-0 grid h-9 w-9 cursor-pointer place-items-center rounded-full ${darkMode ? "bg-[#23262d] text-white" : "bg-white text-[#14213d]"} shadow-sm`}>
+              <label className={`absolute bottom-0 right-0 grid h-9 w-9 cursor-pointer place-items-center rounded-full ${darkMode ? "bg-[#23262d] text-white" : "bg-white text-[#141414]"} shadow-sm`}>
                 {uploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
                 <input type="file" accept="image/*" className="hidden" onChange={(event) => onAvatarUpload?.(event.target.files?.[0])} />
               </label>
             )}
           </div>
-          <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">Loop</h2>
+          <h2 className="small mt-5 text-center text-2xl leading-tight">Loop</h2>
           <p className={`mt-1 truncate text-center text-sm ${muted}`}>@loop</p>
           <div className="mt-3 flex justify-center">
-            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${enabled ? "bg-[#dcfce7] text-[#16a34a]" : "bg-slate-100 text-slate-500"}`}>
+            <span className={`rounded-full px-3 py-1 text-[11px] ${enabled ? "bg-[#e4f1e6] text-[#2f7a4f]" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}>
               {enabled ? "Available everywhere" : "Disabled"}
             </span>
           </div>
           {canManage && (
-            <button type="button" disabled={saving} onClick={() => onToggle?.(!enabled)} className={`mt-8 flex w-full max-w-full items-center justify-between gap-3 rounded-[14px] px-4 py-4 text-sm font-semibold ${softBlock}`}>
+            <button type="button" disabled={saving} onClick={() => onToggle?.(!enabled)} className={`mt-8 flex w-full max-w-full items-center justify-between gap-3 rounded-full px-4 py-3 text-sm ${softBlock}`}>
               <span>{enabled ? "Turn Loop off" : "Turn Loop on"}</span>
-              <span className={`relative h-7 w-12 rounded-full transition ${enabled ? "bg-[#22c55e]" : "bg-slate-300"}`}>
+              <span className={`relative h-7 w-12 rounded-full transition ${enabled ? "bg-[var(--loop-accent)]" : darkMode ? "bg-white/15" : "bg-[#dcdcda]"}`}>
                 <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${enabled ? "left-6" : "left-1"}`} />
               </span>
             </button>
           )}
           <PanelSection title="Assistant profile" muted={muted}>
+            <div className={`overflow-hidden rounded-[16px] ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
             {[
               ["Name", "Loop"],
               ["Username", "@loop"],
               ["Role", assistant?.title || "Project assistant"],
               ["Access", enabled ? "Responds in project groups" : "Hidden from mentions and disabled"],
             ].map(([label, value]) => (
-              <div key={label} className="py-1.5">
-                <p className={`text-xs ${muted}`}>{label}</p>
-                <p className="mt-0.5 min-w-0 break-words text-sm font-bold">{value}</p>
+              <div key={label} className={`border-b px-4 py-2.5 last:border-b-0 ${darkMode ? "border-white/[0.06]" : "border-[#ececea]"}`}>
+                <p className={`text-[12px] ${muted}`}>{label}</p>
+                <p className="mt-0.5 min-w-0 break-words text-[13.5px]">{value}</p>
               </div>
             ))}
+            </div>
           </PanelSection>
         </div>
       </div>
@@ -1135,7 +1141,7 @@ function LoopAssistantProfilePanel({ darkMode, assistant, currentUser, muted, em
 }
 
 function MobileLoopAssistantProfileSheet({ darkMode, assistant, currentUser, muted, onClose, onToggle, onAvatarUpload, uploading = false, saving = false }) {
-  const softBlock = darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]";
+  const softBlock = darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]";
   const canManage = Boolean(currentUser?.isSuperAdmin);
   const enabled = assistant?.enabled !== false;
   return (
@@ -1145,46 +1151,48 @@ function MobileLoopAssistantProfileSheet({ darkMode, assistant, currentUser, mut
         <div className="mx-auto mt-3 h-1.5 w-11 rounded-full bg-white/20" />
         <div className="max-h-[calc(88vh-16px)] overflow-y-auto px-7 pb-8 pt-6">
           <div className="relative">
-            <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close Loop profile">
+            <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`} aria-label="Close Loop profile">
               <X className="h-4 w-4" />
             </button>
             <div className="relative mx-auto w-24">
               <LoopAssistantAvatar assistant={assistant} className="h-24 w-24" iconClassName="h-10 w-10" />
               {canManage && (
-                <label className={`absolute bottom-0 right-0 grid h-9 w-9 cursor-pointer place-items-center rounded-full ${darkMode ? "bg-[#23262d] text-white" : "bg-white text-[#14213d]"} shadow-sm`}>
+                <label className={`absolute bottom-0 right-0 grid h-9 w-9 cursor-pointer place-items-center rounded-full ${darkMode ? "bg-[#23262d] text-white" : "bg-white text-[#141414]"} shadow-sm`}>
                   {uploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
                   <input type="file" accept="image/*" className="hidden" onChange={(event) => onAvatarUpload?.(event.target.files?.[0])} />
                 </label>
               )}
             </div>
-            <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">Loop</h2>
+            <h2 className="small mt-5 text-center text-2xl leading-tight">Loop</h2>
             <p className={`mt-1 truncate text-center text-sm ${muted}`}>@loop</p>
             <div className="mt-3 flex justify-center">
-              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${enabled ? "bg-[#dcfce7] text-[#16a34a]" : "bg-slate-100 text-slate-500"}`}>
+              <span className={`rounded-full px-3 py-1 text-[11px] ${enabled ? "bg-[#e4f1e6] text-[#2f7a4f]" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}>
                 {enabled ? "Available everywhere" : "Disabled"}
               </span>
             </div>
           </div>
           {canManage && (
-            <button type="button" disabled={saving} onClick={() => onToggle?.(!enabled)} className={`mt-8 flex w-full items-center justify-between gap-3 rounded-[14px] px-4 py-4 text-sm font-semibold ${softBlock}`}>
+            <button type="button" disabled={saving} onClick={() => onToggle?.(!enabled)} className={`mt-8 flex w-full items-center justify-between gap-3 rounded-full px-4 py-3 text-sm ${softBlock}`}>
               <span>{enabled ? "Turn Loop off" : "Turn Loop on"}</span>
-              <span className={`relative h-7 w-12 rounded-full transition ${enabled ? "bg-[#22c55e]" : "bg-slate-300"}`}>
+              <span className={`relative h-7 w-12 rounded-full transition ${enabled ? "bg-[var(--loop-accent)]" : darkMode ? "bg-white/15" : "bg-[#dcdcda]"}`}>
                 <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${enabled ? "left-6" : "left-1"}`} />
               </span>
             </button>
           )}
           <PanelSection title="Assistant profile" muted={muted}>
+            <div className={`overflow-hidden rounded-[16px] ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
             {[
               ["Name", "Loop"],
               ["Username", "@loop"],
               ["Role", assistant?.title || "Project assistant"],
               ["Access", enabled ? "Responds in project groups" : "Hidden from mentions and disabled"],
             ].map(([label, value]) => (
-              <div key={label} className="py-1.5">
-                <p className={`text-xs ${muted}`}>{label}</p>
-                <p className="mt-0.5 min-w-0 break-words text-sm font-bold">{value}</p>
+              <div key={label} className={`border-b px-4 py-2.5 last:border-b-0 ${darkMode ? "border-white/[0.06]" : "border-[#ececea]"}`}>
+                <p className={`text-[12px] ${muted}`}>{label}</p>
+                <p className="mt-0.5 min-w-0 break-words text-[13.5px]">{value}</p>
               </div>
             ))}
+            </div>
           </PanelSection>
         </div>
         </>
@@ -1205,17 +1213,17 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
         <div className="mx-auto mt-3 h-1.5 w-11 rounded-full bg-white/20" />
         <div className="max-h-[calc(88vh-16px)] overflow-y-auto px-7 pb-8 pt-6">
           <div className="relative">
-            <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close group info">
+            <button type="button" onClick={closeSheet} className={`absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`} aria-label="Close group info">
               <X className="h-4 w-4" />
             </button>
             <GroupAvatar group={group} className="mx-auto h-24 w-24" />
-            <h2 className="small mt-5 text-center text-2xl font-bold leading-tight">{group.name || "Loop Group"}</h2>
-            <p className="mt-1 text-center text-sm font-semibold text-[#22c55e]">{members.length} members · {members.filter((member) => online.has(member.id)).length} online</p>
+            <h2 className="small mt-5 text-center text-2xl leading-tight">{group.name || "Loop Group"}</h2>
+            <p className="mt-1 text-center text-sm text-[#2f9a5c]">{members.length} members · {members.filter((member) => online.has(member.id)).length} online</p>
             {group.groupKind === "project" && group.project && (
-              <p className={`mt-2 truncate text-center text-xs font-semibold ${muted}`}>Project: {group.project.name}</p>
+              <p className={`mt-2 truncate text-center text-xs ${muted}`}>Project: {group.project.name}</p>
             )}
             {group?.groupKind === "project" && group?.dailyReportEnabled && (
-              <p className={`mt-1 text-center text-xs font-semibold ${muted}`}>📊 Daily report at {group.dailyReportTime || "08:00"} IST</p>
+              <p className={`mt-1 text-center text-xs ${muted}`}>📊 Daily report at {group.dailyReportTime || "08:00"} IST</p>
             )}
           </div>
 
@@ -1228,11 +1236,11 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
           <PanelSection title={canManage ? "Group actions" : "Group"} muted={muted}>
             <div className="grid grid-cols-2 gap-2">
               {canManage && !groupDeleted && (
-                <button type="button" onClick={onRequestDeleteGroup} className="flex min-h-11 min-w-0 items-center justify-center rounded-xl bg-rose-500/10 px-2 text-center text-xs font-semibold leading-tight text-rose-500">
+                <button type="button" onClick={onRequestDeleteGroup} className="flex min-h-11 min-w-0 items-center justify-center rounded-xl bg-rose-500/10 px-2 text-center text-xs leading-tight text-rose-500">
                   Delete for everyone
                 </button>
               )}
-              <button type="button" onClick={onRequestRemoveGroupForMe} className={`flex min-h-11 min-w-0 items-center justify-center rounded-xl px-2 text-center text-xs font-semibold leading-tight ${canManage && !groupDeleted ? "" : "col-span-2"} ${darkMode ? "bg-white/10 text-white/75" : "bg-[#f4f7fb] text-[#111827]"}`}>
+              <button type="button" onClick={onRequestRemoveGroupForMe} className={`flex min-h-11 min-w-0 items-center justify-center rounded-xl px-2 text-center text-xs leading-tight ${canManage && !groupDeleted ? "" : "col-span-2"} ${darkMode ? "bg-white/10 text-white/75" : "bg-[#f4f4f2] text-[#141414]"}`}>
                 Remove from my side
               </button>
             </div>
@@ -1241,15 +1249,15 @@ function MobileGroupInfoSheet({ darkMode, group, members, online, onlineUserIds,
           <PanelSection title="Members" muted={muted}>
             <div className="space-y-2">
               {members.map((member) => (
-                <button key={member.id} type="button" onClick={() => onSelectUser(member)} className={`flex w-full items-center gap-3 rounded-2xl p-2 text-left ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+                <button key={member.id} type="button" onClick={() => onSelectUser(member)} className={`flex w-full items-center gap-3 rounded-2xl p-2 text-left ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f4f4f2]"}`}>
                   <span className="relative shrink-0">
                     <UserAvatar user={member} name={member.displayName} className="h-10 w-10" />
-                    <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(member.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
+                    <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(member.id) ? "bg-[#3fae6a]" : "bg-[#d4d4d2]"}`} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-sm font-semibold">{member.displayName || member.username}</span>
-                      {adminIds.has(String(member.id)) && <span className="shrink-0 rounded-full bg-[#dbeafe] px-1.5 py-0.5 text-[9px] font-black uppercase text-[#2563eb]">Admin</span>}
+                      <span className="truncate text-sm">{member.displayName || member.username}</span>
+                      {adminIds.has(String(member.id)) && <span className="shrink-0 rounded-full bg-[#e3eefb] px-1.5 py-0.5 text-[10px] text-[var(--loop-ink)]">Admin</span>}
                     </span>
                     <span className={`block truncate text-xs ${muted}`}>{member.designation || member.department || member.username}</span>
                   </span>
@@ -1274,7 +1282,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
   const [pendingAction, setPendingAction] = useState("");
   const avatarPickerRef = useRef(null);
   const memberPickerRef = useRef(null);
-  const panelBg = darkMode ? "bg-[#15171c] text-white" : "bg-[#fbfcff] text-black";
+  const panelBg = darkMode ? "border-l border-white/[0.06] bg-[#15171c] text-white" : "border-l border-[#f0f0ee] bg-white text-[#141414]";
   const visibleMembers = showAllMembers ? groupParticipants : groupParticipants.slice(0, 4);
   const adminIds = new Set((group?.adminIds || []).map(String));
   const participantIds = new Set((group?.participantIds || groupParticipants.map((member) => member.id)).map(String));
@@ -1328,11 +1336,11 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
 
   return (
     <aside className={`hidden min-h-0 w-[min(30vw,340px)] min-w-[280px] shrink-0 flex-col overflow-hidden ${panelBg} xl:flex`}>
-      <div className={`flex h-16 shrink-0 items-center ${embedded && widgetControls ? "justify-end" : "justify-center"} border-b px-4 ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"}`}>
+      <div className={`flex h-16 shrink-0 items-center ${embedded && widgetControls ? "justify-end" : "justify-center"} border-b px-4 ${darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]"}`}>
         {embedded && widgetControls ? (
           widgetControls
         ) : (
-          <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
+          <span className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-normal ${darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>
             <ShieldCheck className="h-4.5 w-4.5 shrink-0" />
             <span>Messages are end-to-end encrypted</span>
           </span>
@@ -1348,23 +1356,23 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
             </div>
           )}
           {canManage && (
-            <button type="button" onClick={() => setAvatarPickerOpen((open) => !open)} className={`absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full border-2 ${darkMode ? "border-[#15171c] bg-[#1c1f26] hover:bg-[#252934]" : "border-[#fbfcff] bg-white hover:bg-[#f4f7fb]"}`} aria-label="Change group avatar">
+            <button type="button" onClick={() => setAvatarPickerOpen((open) => !open)} className={`absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full border-2 ${darkMode ? "border-[#15171c] bg-[#1c1f26] hover:bg-[#252934]" : "border-[#fbfcff] bg-white hover:bg-[#f4f4f2]"}`} aria-label="Change group avatar">
               <Pencil className={`h-3.5 w-3.5 ${muted}`} />
             </button>
           )}
           {canManage && avatarPickerOpen && (
-            <div className={`absolute left-1/2 top-[calc(100%+12px)] z-40 w-[304px] -translate-x-1/2 rounded-[22px] border p-3 shadow-2xl ${darkMode ? "border-white/10 bg-[#1c1f26] text-white" : "border-black/10 bg-white text-black"}`}>
+            <div className={`absolute left-1/2 top-[calc(100%+12px)] z-40 w-[304px] -translate-x-1/2 rounded-[22px] border p-3 shadow-2xl ${darkMode ? "border-white/10 bg-[#1c1f26] text-white" : "border-[#ececec] bg-white text-black"}`}>
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${muted}`}>Group avatar</p>
-                  <p className="text-sm font-black">Choose colour</p>
+                  <p className={`text-[12px] ${muted}`}>Group avatar</p>
+                  <p className="text-sm">Choose colour</p>
                 </div>
                 <button type="button" onClick={() => setAvatarPickerOpen(false)} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close avatar picker">
                   <X className="h-4 w-4" />
                 </button>
               </div>
               <div className="mb-3">
-                <label className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border p-2 text-sm font-bold transition active:scale-[0.98] ${darkMode ? "border-white/10 hover:bg-white/5" : "border-black/10 hover:bg-black/5"}`}>
+                <label className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border p-2 text-sm transition active:scale-[0.98] ${darkMode ? "border-white/10 hover:bg-white/5" : "border-[#ececec] hover:bg-black/5"}`}>
                   <input
                     type="file"
                     accept="image/png, image/jpeg, image/webp"
@@ -1396,7 +1404,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                 {GROUP_AVATAR_PRESETS.map((preset) => {
                   const selected = !group?.avatarUrl && (group?.avatarPreset || "ocean") === preset.id;
                   return (
-                    <button key={preset.id} type="button" disabled={Boolean(pendingAction)} onClick={() => { void saveGroup({ avatarPreset: preset.id }, "avatar"); setAvatarPickerOpen(false); }} className={`grid h-10 w-10 place-items-center rounded-full outline-none focus:outline-none transition active:scale-[0.96] disabled:cursor-wait disabled:opacity-60 ${selected ? "ring-2 ring-[#111827] ring-offset-2 ring-offset-white dark:ring-[#f8fafc] dark:ring-offset-[#1c1f26]" : ""}`} style={{ backgroundColor: preset.color }} aria-label={`Use ${preset.id} colour`}>
+                    <button key={preset.id} type="button" disabled={Boolean(pendingAction)} onClick={() => { void saveGroup({ avatarPreset: preset.id }, "avatar"); setAvatarPickerOpen(false); }} className={`grid h-10 w-10 place-items-center rounded-full outline-none focus:outline-none transition active:scale-[0.96] disabled:cursor-wait disabled:opacity-60 ${selected ? "ring-2 ring-[var(--loop-accent)] ring-offset-2 ring-offset-white dark:ring-[#f8fafc] dark:ring-offset-[#1c1f26]" : ""}`} style={{ backgroundColor: preset.color }} aria-label={`Use ${preset.id} colour`}>
                       {selected && <Check className="h-4 w-4 text-white" />}
                     </button>
                   );
@@ -1407,29 +1415,29 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
         </div>
         <div className="mt-4 flex items-center justify-center gap-2">
           {canManage && editingName ? (
-            <div className={`flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl border px-3 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
-              <input value={groupNameDraft} autoFocus onChange={(event) => setGroupNameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { void saveGroup({ name: groupNameDraft }, "name").then(() => setEditingName(false)); } }} className="min-w-0 flex-1 bg-transparent text-center text-sm font-bold outline-none" />
-              <button type="button" disabled={Boolean(pendingAction) || !groupNameDraft.trim()} onClick={() => { void saveGroup({ name: groupNameDraft }, "name").then(() => setEditingName(false)); }} className="grid h-7 w-7 place-items-center rounded-full bg-[#2563eb] text-white disabled:opacity-35" aria-label="Save group name">
+            <div className={`flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl border px-3 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-[#ececec] bg-white"}`}>
+              <input value={groupNameDraft} autoFocus onChange={(event) => setGroupNameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { void saveGroup({ name: groupNameDraft }, "name").then(() => setEditingName(false)); } }} className="min-w-0 flex-1 bg-transparent text-center text-sm outline-none" />
+              <button type="button" disabled={Boolean(pendingAction) || !groupNameDraft.trim()} onClick={() => { void saveGroup({ name: groupNameDraft }, "name").then(() => setEditingName(false)); }} className="grid h-7 w-7 place-items-center rounded-full bg-[var(--loop-accent)] text-[var(--loop-accent-fg)] disabled:opacity-35" aria-label="Save group name">
                 {pendingAction === "name" ? <TinySpinner /> : <Check className="h-3.5 w-3.5" />}
               </button>
-              <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Loop Group"); setEditingName(false); }} className={`grid h-7 w-7 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Cancel group name edit">
+              <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Loop Group"); setEditingName(false); }} className={`grid h-7 w-7 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`} aria-label="Cancel group name edit">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
           ) : (
             <>
-              <h2 className="min-w-0 truncate text-center text-lg font-bold">{group?.name || "Loop Group"}</h2>
+              <h2 className="min-w-0 truncate text-center text-lg">{group?.name || "Loop Group"}</h2>
               {canManage && (
-                <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Loop Group"); setEditingName(true); }} className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`} aria-label="Edit group name">
+                <button type="button" onClick={() => { setGroupNameDraft(group?.name || "Loop Group"); setEditingName(true); }} className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`} aria-label="Edit group name">
                   <Pencil className={`h-4 w-4 ${muted}`} />
                 </button>
               )}
             </>
           )}
         </div>
-        <p className="mt-1 text-center text-xs font-semibold text-[#22c55e]">{groupParticipants.length} members · {groupParticipants.filter((member) => online.has(member.id)).length} online</p>
+        <p className="mt-1 text-center text-xs text-[#2f9a5c]">{groupParticipants.length} members · {groupParticipants.filter((member) => online.has(member.id)).length} online</p>
         {group?.groupKind === "project" && group.project && (
-          <p className={`mt-2 truncate text-center text-xs font-semibold ${muted}`}>Project: {group.project.name}</p>
+          <p className={`mt-2 truncate text-center text-xs ${muted}`}>Project: {group.project.name}</p>
         )}
 
         {groupDeleted && (
@@ -1441,32 +1449,32 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
         {canManage && (
           <PanelSection title="Group settings" muted={muted}>
             <div className="space-y-3">
-              <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => saveGroup({ adminOnlyMessages: !group?.adminOnlyMessages }, "adminOnlyMessages")} className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
+              <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => saveGroup({ adminOnlyMessages: !group?.adminOnlyMessages }, "adminOnlyMessages")} className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f4f2]"}`}>
                 <span>Only admins can message</span>
-                <span className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${group?.adminOnlyMessages ? "bg-[#2563eb]" : darkMode ? "bg-white/15" : "bg-black/10"}`}>
+                <span className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${group?.adminOnlyMessages ? "bg-[var(--loop-accent)]" : darkMode ? "bg-white/15" : "bg-black/10"}`}>
                   <span className={`absolute top-1 grid h-4 w-4 place-items-center rounded-full bg-white shadow-sm transition-all duration-300 ${group?.adminOnlyMessages ? "left-6" : "left-1"}`}>
-                    {pendingAction === "adminOnlyMessages" && <TinySpinner className="h-3 w-3 text-[#2563eb]" />}
+                    {pendingAction === "adminOnlyMessages" && <TinySpinner className="h-3 w-3 text-[var(--loop-ink)]" />}
                   </span>
                 </span>
               </button>
               {group?.groupKind === "project" && (
-                <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
-                  <span className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>Loop daily report</span>
-                  <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => saveGroup({ dailyReportEnabled: !group?.dailyReportEnabled }, "dailyReportEnabled")} className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f4f2]"}`}>
+                  <span className={`mb-2 block text-[12px] ${muted}`}>Loop daily report</span>
+                  <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => saveGroup({ dailyReportEnabled: !group?.dailyReportEnabled }, "dailyReportEnabled")} className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
                     <span>Auto daily report</span>
-                    <span className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${group?.dailyReportEnabled ? "bg-[#2563eb]" : darkMode ? "bg-white/15" : "bg-black/10"}`}>
+                    <span className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${group?.dailyReportEnabled ? "bg-[var(--loop-accent)]" : darkMode ? "bg-white/15" : "bg-black/10"}`}>
                       <span className={`absolute top-1 grid h-4 w-4 place-items-center rounded-full bg-white shadow-sm transition-all duration-300 ${group?.dailyReportEnabled ? "left-6" : "left-1"}`}>
-                        {pendingAction === "dailyReportEnabled" && <TinySpinner className="h-3 w-3 text-[#2563eb]" />}
+                        {pendingAction === "dailyReportEnabled" && <TinySpinner className="h-3 w-3 text-[var(--loop-ink)]" />}
                       </span>
                     </span>
                   </button>
                   {group?.dailyReportEnabled && (
                     <div className="mt-2 space-y-2">
                       <div className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
-                        <span className={`text-sm font-semibold ${muted}`}>Report time</span>
-                        <TimePickerInput darkMode={darkMode} value={group?.dailyReportTime || "08:00"} disabled={Boolean(pendingAction) || groupDeleted} onSave={(val) => saveGroup({ dailyReportTime: val }, "dailyReportTime")} className={`rounded-lg border px-2 py-1 text-sm font-semibold outline-none ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`} />
+                        <span className={`text-sm ${muted}`}>Report time</span>
+                        <TimePickerInput darkMode={darkMode} value={group?.dailyReportTime || "08:00"} disabled={Boolean(pendingAction) || groupDeleted} onSave={(val) => saveGroup({ dailyReportTime: val }, "dailyReportTime")} className={`rounded-lg border px-2 py-1 text-sm outline-none ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-black"}`} />
                       </div>
-                      <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => onSendDailyReport?.()} className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`}>
+                      <button type="button" disabled={Boolean(pendingAction) || groupDeleted} onClick={() => onSendDailyReport?.()} className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf] hover:bg-emerald-500/15" : "bg-[#e4f1e6] text-[#2f7a4f] hover:bg-emerald-100"}`}>
                         {pendingAction === "dailyReport" ? <TinySpinner className="h-3 w-3" /> : null}
                         Send report now
                       </button>
@@ -1474,18 +1482,18 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                   )}
                 </div>
               )}
-              <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"} ${groupDeleted ? "opacity-50" : ""}`}>
-                <span className={`mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>Add member</span>
+              <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f4f2]"} ${groupDeleted ? "opacity-50" : ""}`}>
+                <span className={`mb-2 block text-[12px] ${muted}`}>Add member</span>
                 <div className="flex gap-2">
                   <div ref={memberPickerRef} className="relative min-w-0 flex-1">
-                    <button type="button" disabled={groupDeleted} onClick={() => setMemberPickerOpen((open) => !open)} className={`flex h-9 w-full items-center justify-between gap-2 rounded-xl border px-3 text-left text-xs font-semibold outline-none disabled:cursor-not-allowed ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-black"}`}>
+                    <button type="button" disabled={groupDeleted} onClick={() => setMemberPickerOpen((open) => !open)} className={`flex h-9 w-full items-center justify-between gap-2 rounded-xl border px-3 text-left text-xs outline-none disabled:cursor-not-allowed ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-black"}`}>
                       <span className={memberToAdd ? "truncate" : `truncate ${muted}`}>{availableUsers.find((user) => user.id === memberToAdd)?.displayName || "Choose user"}</span>
                       <ChevronDown className={`h-4 w-4 shrink-0 transition ${memberPickerOpen ? "rotate-180" : ""} ${muted}`} />
                     </button>
                     {memberPickerOpen && (
-                      <div className={`absolute left-0 top-[calc(100%+8px)] z-30 max-h-64 w-full overflow-y-auto rounded-2xl border p-1.5 shadow-2xl ${darkMode ? "border-white/10 bg-[#1c1f26]" : "border-black/10 bg-white"}`}>
+                      <div className={`absolute left-0 top-[calc(100%+8px)] z-30 max-h-64 w-full overflow-y-auto rounded-2xl border p-1.5 shadow-2xl ${darkMode ? "border-white/10 bg-[#1c1f26]" : "border-[#ececec] bg-white"}`}>
                         {availableUsers.map((user) => (
-                          <button key={user.id} type="button" onClick={() => { setMemberToAdd(user.id); setMemberPickerOpen(false); }} className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold ${memberToAdd === user.id ? "bg-[#2563eb] text-white" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}>
+                          <button key={user.id} type="button" onClick={() => { setMemberToAdd(user.id); setMemberPickerOpen(false); }} className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs ${memberToAdd === user.id ? "bg-[var(--loop-accent)] text-[var(--loop-accent-fg)]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}>
                             <UserAvatar user={user} name={user.displayName} className="h-6 w-6" />
                             <span className="min-w-0 flex-1 truncate">{user.displayName || user.username}</span>
                           </button>
@@ -1494,21 +1502,21 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                       </div>
                     )}
                   </div>
-                  <button type="button" disabled={Boolean(pendingAction) || !memberToAdd || groupDeleted} onClick={() => { const addingUserId = memberToAdd; void saveGroup({ participantIds: participantListWith(addingUserId, true) }, `add:${addingUserId}`).then(() => setMemberToAdd("")); }} className="inline-flex min-w-14 items-center justify-center gap-1.5 rounded-xl bg-[#2563eb] px-3 text-xs font-bold text-white transition disabled:cursor-wait disabled:opacity-35">
+                  <button type="button" disabled={Boolean(pendingAction) || !memberToAdd || groupDeleted} onClick={() => { const addingUserId = memberToAdd; void saveGroup({ participantIds: participantListWith(addingUserId, true) }, `add:${addingUserId}`).then(() => setMemberToAdd("")); }} className="inline-flex min-w-14 items-center justify-center gap-1.5 rounded-xl bg-[var(--loop-accent)] px-3 text-xs text-[var(--loop-accent-fg)] transition disabled:cursor-wait disabled:opacity-35">
                     {pendingAction.startsWith("add:") ? <TinySpinner /> : null}
                     Add
                   </button>
                 </div>
               </div>
-              <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f7fb]"}`}>
-                <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>Delete group</span>
+              <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f4f2]"}`}>
+                <span className={`block text-[12px] ${muted}`}>Delete group</span>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   {!groupDeleted && (
-                    <button type="button" disabled={Boolean(pendingAction)} onClick={onRequestDeleteGroup} className="flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl bg-rose-500/10 px-2 text-center text-[11px] font-semibold leading-tight text-rose-500 transition hover:bg-rose-500/15 disabled:cursor-wait disabled:opacity-50">
+                    <button type="button" disabled={Boolean(pendingAction)} onClick={onRequestDeleteGroup} className="flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl bg-rose-500/10 px-2 text-center text-[11px] leading-tight text-rose-500 transition hover:bg-rose-500/15 disabled:cursor-wait disabled:opacity-50">
                       Delete for everyone
                     </button>
                   )}
-                  <button type="button" disabled={Boolean(pendingAction)} onClick={onRequestRemoveGroupForMe} className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-center text-[11px] font-semibold leading-tight transition disabled:cursor-wait disabled:opacity-50 ${groupDeleted ? "col-span-2" : ""} ${darkMode ? "bg-white/10 text-white/75 hover:bg-white/15" : "bg-white text-[#111827] hover:bg-[#eef1f5]"}`}>
+                  <button type="button" disabled={Boolean(pendingAction)} onClick={onRequestRemoveGroupForMe} className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-center text-[11px] leading-tight transition disabled:cursor-wait disabled:opacity-50 ${groupDeleted ? "col-span-2" : ""} ${darkMode ? "bg-white/10 text-white/75 hover:bg-white/15" : "bg-white text-[#141414] hover:bg-[#ececea]"}`}>
                     Remove from my side
                   </button>
                 </div>
@@ -1519,7 +1527,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
 
         {groupDeleted && !canManage && (
           <PanelSection title="Group actions" muted={muted}>
-            <button type="button" disabled={Boolean(pendingAction)} onClick={onRequestRemoveGroupForMe} className={`flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-50 ${darkMode ? "bg-white/10 text-white/75 hover:bg-white/15" : "bg-[#f4f7fb] text-[#111827] hover:bg-[#eef1f5]"}`}>
+            <button type="button" disabled={Boolean(pendingAction)} onClick={onRequestRemoveGroupForMe} className={`flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm transition disabled:cursor-wait disabled:opacity-50 ${darkMode ? "bg-white/10 text-white/75 hover:bg-white/15" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ececea]"}`}>
               Remove from my side
             </button>
           </PanelSection>
@@ -1533,15 +1541,15 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
         >
           <div className="space-y-2">
             {visibleMembers.map((member) => (
-              <button key={member.id} type="button" disabled={pendingAction === `member:${member.id}` || pendingAction === `remove:${member.id}`} onClick={() => onSelectUser(member)} className={`flex w-full items-center gap-2 rounded-xl p-2 text-left transition disabled:cursor-wait disabled:opacity-75 ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+              <button key={member.id} type="button" disabled={pendingAction === `member:${member.id}` || pendingAction === `remove:${member.id}`} onClick={() => onSelectUser(member)} className={`flex w-full items-center gap-2 rounded-xl p-2 text-left transition disabled:cursor-wait disabled:opacity-75 ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f4f4f2]"}`}>
                 <span className="relative shrink-0">
                   <UserAvatar user={member} name={member.displayName} className="h-8 w-8" />
-                  <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(member.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
+                  <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(member.id) ? "bg-[#3fae6a]" : "bg-[#d4d4d2]"}`} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-xs font-semibold">{member.displayName}</span>
-                    {adminIds.has(String(member.id)) && <span className="shrink-0 rounded-full bg-[#dbeafe] px-1.5 py-0.5 text-[9px] font-black uppercase text-[#2563eb]">Admin</span>}
+                    <span className="truncate text-xs">{member.displayName}</span>
+                    {adminIds.has(String(member.id)) && <span className="shrink-0 rounded-full bg-[#e3eefb] px-1.5 py-0.5 text-[10px] text-[var(--loop-ink)]">Admin</span>}
                   </span>
                   <span className={`block truncate text-[10px] ${muted}`}>{member.designation || member.department || member.username}</span>
                 </span>
@@ -1562,7 +1570,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                             void saveGroup({ adminIds: adminListWith(member.id, !adminIds.has(String(member.id))) }, `member:${member.id}`);
                           }
                         }}
-                        className={`inline-flex min-w-[58px] items-center justify-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-[#2563eb]"}`}
+                        className={`inline-flex min-w-[58px] items-center justify-center gap-1 rounded-full px-2 py-1 text-[10px] ${darkMode ? "bg-white/10 text-white/70" : "bg-white text-[var(--loop-ink)]"}`}
                       >
                         {pendingAction === `member:${member.id}` && <TinySpinner className="h-3 w-3" />}
                         {adminIds.has(String(member.id)) ? "Demote" : "Promote"}
@@ -1581,7 +1589,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                             void saveGroup({ participantIds: participantListWith(member.id, false), adminIds: adminListWith(member.id, false) }, `remove:${member.id}`);
                           }
                         }}
-                        className="inline-flex min-w-[54px] items-center justify-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-red-500 hover:bg-red-500/10"
+                        className="inline-flex min-w-[54px] items-center justify-center gap-1 rounded-full px-2 py-1 text-[10px] text-red-500 hover:bg-red-500/10"
                       >
                         {pendingAction === `remove:${member.id}` && <TinySpinner className="h-3 w-3" />}
                         Remove
@@ -1602,7 +1610,7 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
                         onDirect(member);
                       }
                     }}
-                    className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                    className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}
                     aria-label={`Message ${member.displayName}`}
                   >
                     <MessageCircleMore className={`h-4 w-4 ${muted}`} />
@@ -1620,11 +1628,11 @@ function ForumInfoPanel({ darkMode, group, users, currentUser, groupParticipants
 
 function PanelSection({ title, action, muted, children, onAction }) {
   return (
-    <section className="mt-6">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <h3 className="text-xs font-bold">{title}</h3>
+    <section className="mt-7">
+      <div className="mb-2 flex items-center justify-between gap-3 px-1">
+        <h3 className={`text-[12.5px] ${muted || ""}`}>{title}</h3>
         {action && (
-          <button type="button" onClick={onAction} className="shrink-0 text-[10px] font-semibold text-[#2563eb]">
+          <button type="button" onClick={onAction} className="shrink-0 text-[12px] text-[var(--loop-ink)] hover:underline">
             {action}
           </button>
         )}
@@ -1650,7 +1658,7 @@ function MobileBottomSheetFrame({ darkMode, children, onClose, label = "Close sh
       }}
       aria-label={label}
     >
-      <div className={`forum-mobile-sheet max-h-[88vh] w-full overflow-hidden rounded-t-[28px] shadow-[0_-18px_60px_rgba(0,0,0,0.28)] ${closing ? "is-closing" : ""} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-black"}`}>
+      <div className={`forum-mobile-sheet max-h-[88vh] w-full overflow-hidden rounded-t-[24px] shadow-[0_-18px_60px_rgba(20,20,20,0.16)] ${closing ? "is-closing" : ""} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}>
         {children(closeWithAnimation)}
       </div>
     </div>
@@ -1666,30 +1674,30 @@ const GroupConversationRow = memo(function GroupConversationRow({ conversation, 
   const lastFromMe = !pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUserId || "");
   const lastStatus = lastFromMe ? getMessageStatus(conversation.lastMessage, conversation, currentUserId, onlineUserIds) : null;
   return (
-    <button type="button" onClick={() => onSelect(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+    <button type="button" onClick={() => onSelect(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-[14px] px-3 py-2.5 text-left transition ${active ? darkMode ? "bg-white/[0.08]" : "bg-[#f4f4f2]" : darkMode ? "hover:bg-white/[0.04]" : "hover:bg-[#f7f7f5]"}`}>
       <GroupAvatar group={conversation} className="h-11 w-11" />
       <span className="min-w-0 flex-1 overflow-hidden">
         <span className="flex min-w-0 items-center justify-between gap-3">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 truncate text-sm font-semibold">{conversation.name}</span>
+            <span className="min-w-0 truncate text-[14px] tracking-[-0.005em]">{conversation.name}</span>
             {conversation.groupKind === "project" && (
-              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase ${darkMode ? "bg-sky-400/15 text-sky-200" : "bg-sky-50 text-sky-600"}`}>Project</span>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] ${darkMode ? "bg-[#60a5fa]/[0.13] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]"}`}>Project</span>
             )}
           </span>
           {unread?.count ? (
-            <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] px-1.5 py-0.5 text-[10px] font-bold text-white">
+            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--loop-accent)] px-1.5 text-[10.5px] tabular-nums text-[var(--loop-accent-fg)]">
               {unread.mentioned ? "@" : unread.count}
             </span>
           ) : (
             <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.pinnedMessage?.pinnedAt || conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
           )}
         </span>
-        <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? `${typingUsers[0].displayName} typing...` : previewText}>
+        <span className={`mt-0.5 flex max-w-full items-center gap-1 truncate text-[12.5px] ${typingUsers.length ? (darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]") : muted}`} title={typingUsers.length ? `${typingUsers[0].displayName} typing...` : previewText}>
           {typingUsers.length ? `${typingUsers[0].displayName} typing...` : (
             <>
               {lastFromMe && (
                 lastStatus === "read"
-                  ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
+                  ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[var(--loop-read)]" />
                   : lastStatus === "delivered"
                   ? <CheckCheck className="h-3.5 w-3.5 shrink-0" />
                   : <Check className="h-3.5 w-3.5 shrink-0" />
@@ -1711,32 +1719,32 @@ const DirectConversationRow = memo(function DirectConversationRow({ conversation
   const lastFromMe = !pinActivity && String(conversation.lastMessage?.senderId || "") === String(currentUserId || "");
   const lastStatus = lastFromMe ? getMessageStatus(conversation.lastMessage, conversation, currentUserId, onlineUserIds) : null;
   return (
-    <button type="button" onClick={() => onSelect(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition ${active ? darkMode ? "bg-white/10" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+    <button type="button" onClick={() => onSelect(conversation.id)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-[14px] px-3 py-2.5 text-left transition ${active ? darkMode ? "bg-white/[0.08]" : "bg-[#f4f4f2]" : darkMode ? "hover:bg-white/[0.04]" : "hover:bg-[#f7f7f5]"}`}>
       <span className="relative shrink-0">
         {other?.isAssistant ? (
           <LoopAssistantAvatar assistant={other} className="h-10 w-10" iconClassName="h-5 w-5" />
         ) : (
           <UserAvatar user={other} name={conversation.name} className="h-10 w-10" />
         )}
-        <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(other?.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
+        <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 ${darkMode ? "border-[#15171c]" : "border-white"} ${online.has(other?.id) ? "bg-[#3fae6a]" : darkMode ? "bg-white/25" : "bg-[#d4d4d2]"}`} />
       </span>
       <span className="min-w-0 flex-1 overflow-hidden">
         <span className="flex min-w-0 items-center justify-between gap-3">
-          <span className="min-w-0 truncate text-sm font-semibold">{conversation.name}</span>
+          <span className="min-w-0 truncate text-[14px] tracking-[-0.005em]">{conversation.name}</span>
           {unread?.count ? (
-            <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] px-1.5 py-0.5 text-[10px] font-bold text-white">
+            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--loop-accent)] px-1.5 text-[10.5px] tabular-nums text-[var(--loop-accent-fg)]">
               {unread.mentioned ? "@" : unread.count}
             </span>
           ) : (
             <span className={`shrink-0 text-[11px] ${muted}`}>{formatListTime(conversation.pinnedMessage?.pinnedAt || conversation.lastMessage?.createdAt || conversation.updatedAt)}</span>
           )}
         </span>
-        <span className={`mt-1 flex max-w-full items-center gap-1 truncate text-xs ${typingUsers.length ? "text-[#2563eb]" : muted}`} title={typingUsers.length ? "typing..." : previewText}>
+        <span className={`mt-0.5 flex max-w-full items-center gap-1 truncate text-[12.5px] ${typingUsers.length ? (darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]") : muted}`} title={typingUsers.length ? "typing..." : previewText}>
           {typingUsers.length ? "typing..." : (
             <>
               {lastFromMe && (
                 lastStatus === "read"
-                  ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
+                  ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-[var(--loop-read)]" />
                   : lastStatus === "delivered"
                   ? <CheckCheck className="h-3.5 w-3.5 shrink-0" />
                   : <Check className="h-3.5 w-3.5 shrink-0" />
@@ -1949,10 +1957,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
   }, [createGroupProjectPickerOpen]);
 
   const surface = darkMode ? "bg-[#15171c]" : "bg-white";
-  const subSurface = darkMode ? "bg-[#101116]" : "bg-[#f7f8fb]";
-  const divider = darkMode ? "border-white/[0.06]" : "border-[#eef1f5]";
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const softText = darkMode ? "text-white/72" : "text-black/68";
+  // Reference accents: black for primary/selected in light mode, lime in dark mode.
+  const loopThemeVars = darkMode
+    ? { "--loop-accent": "#cff07a", "--loop-accent-fg": "#141414", "--loop-ink": "#d8f39a", "--loop-soft": "rgba(207,240,122,0.14)", "--loop-read": "#a9cbf7", "--loop-reply": "#a7e8bf" }
+    : { "--loop-accent": "#141414", "--loop-accent-fg": "#ffffff", "--loop-ink": "#141414", "--loop-soft": "#f4f4f2", "--loop-read": "#2f6fc0", "--loop-reply": "#2f7a4f" };
+  const subSurface = darkMode ? "bg-[#121317]" : "bg-[#f7f7f5]";
+  const divider = darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const softText = darkMode ? "text-white/72" : "text-[#3d3d3b]";
   const effectiveMobileViewport = forceMobileView || isMobileViewport;
 
   const returnToConversationListAfterRemoval = useCallback(() => {
@@ -4028,44 +4040,42 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
 
   if (loading) {
     return (
-      <div className={`grid ${embedded ? "h-full min-h-0" : "h-[calc(100dvh-24px)] min-h-[560px]"} place-items-center ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f2f4f1] text-black"}`}>
-        <MessageCircleMore className="h-8 w-8 animate-pulse text-[#2563eb]" />
+      <div style={loopThemeVars} className={`grid ${embedded ? "h-full min-h-0" : "h-[calc(100dvh-24px)] min-h-[560px]"} place-items-center ${darkMode ? "bg-[#121317] text-white" : "bg-[#f7f7f5] text-black"}`}>
+        <MessageCircleMore className="h-8 w-8 animate-pulse text-[var(--loop-ink)]" />
       </div>
     );
   }
 
   return (
-    <div className={`min-h-0 w-full max-w-full ${embedded ? "h-full" : "flex-1"} overflow-hidden ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#f7f8fb] text-black"}`}>
+    <div style={loopThemeVars} className={`min-h-0 w-full max-w-full ${embedded ? "h-full" : "flex-1"} overflow-hidden ${darkMode ? "bg-[#121317] text-white" : "bg-[#f7f7f5] text-[#141414]"}`}>
       <div className={`grid h-full min-h-0 w-full max-w-full overflow-hidden ${forceMobileView ? "" : "lg:grid-cols-[320px_minmax(0,1fr)]"} ${surface}`}>
-        <aside className={`min-h-0 min-w-0 w-screen max-w-full flex-col overflow-hidden border-x ${forceMobileView ? "" : "lg:w-full lg:flex"} ${darkMode ? "border-white/[0.06]" : "border-[#eef1f5]"} ${mobileListOpen ? "flex" : forceMobileView ? "hidden" : "hidden lg:flex"}`}>
+        <aside className={`min-h-0 min-w-0 w-screen max-w-full flex-col overflow-hidden border-x ${forceMobileView ? "" : "lg:w-full lg:flex"} ${darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]"} ${mobileListOpen ? "flex" : forceMobileView ? "hidden" : "hidden lg:flex"}`}>
           <div className={`min-w-0 shrink-0 overflow-hidden border-b p-4 ${divider}`}>
             <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#10b981] text-white">
-                <MessagesSquare className="h-5 w-5" />
-              </span>
+              <IconTile icon={MessagesSquare} tone="mint" darkMode={darkMode} size="md" />
               <div className="min-w-0 flex-1 overflow-hidden">
-                <h1 className="truncate text-lg font-semibold">Loop</h1>
-                <p className={`truncate text-xs ${muted}`}>{onlineUserIds.length} online now</p>
+                <h1 className={`truncate text-[20px] leading-6 tracking-[-0.02em] ${darkMode ? "text-white" : "text-[#141414]"}`}>Loop</h1>
+                <p className={`truncate text-[13px] leading-5 ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{onlineUserIds.length} online now</p>
               </div>
               <button
                 type="button"
                 onClick={openForumSettings}
-                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f3f4f6]"}`}
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`}
                 aria-label="Loop Drive settings"
               >
                 <Settings className="h-4 w-4" />
               </button>
             </div>
-            <div className={`mt-4 flex h-11 min-w-0 items-center gap-2 overflow-hidden rounded-2xl px-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f3f4f6]"}`}>
+            <div className={`mt-4 flex h-10 min-w-0 items-center gap-2 overflow-hidden rounded-full px-4 transition focus-within:ring-1 ${darkMode ? "bg-white/[0.06] focus-within:bg-white/[0.08] focus-within:ring-white/15" : "bg-[#f4f4f2] focus-within:bg-white focus-within:ring-[#e6e6e3]"}`}>
               <Search className={`h-4 w-4 ${muted}`} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats and people" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-black/35 dark:placeholder:text-white/30" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats and people" className={`min-w-0 flex-1 bg-transparent text-[13.5px] outline-none ${darkMode ? "placeholder:text-white/30" : "placeholder:text-[#9a9a98]"}`} />
             </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
             <div className="flex items-center justify-between px-4 pb-2 pt-4">
-              <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Group</p>
-              <button type="button" onClick={() => setCreateGroupOpen(true)} className={`inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#eef4ff] text-[#2563eb] hover:bg-[#e0ecff]"}`}>
+              <p className={`text-[12.5px] ${muted}`}>Groups</p>
+              <button type="button" onClick={() => setCreateGroupOpen(true)} className={`inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ececea]"}`}>
                 <Plus className="h-3.5 w-3.5" />
                 New
               </button>
@@ -4087,7 +4097,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               ))}
             </div>
 
-            <p className={`px-4 pb-2 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Direct messages</p>
+            <p className={`px-4 pb-2 pt-5 text-[12.5px] ${muted}`}>Direct messages</p>
             <div className="min-w-0 space-y-1 overflow-hidden px-2 pb-4">
               {filteredDirectConversations.map((conversation) => (
                 <DirectConversationRow
@@ -4110,12 +4120,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               )}
               {searchedUsers.length > 0 && (
                 <>
-                  <p className={`px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>People</p>
+                  <p className={`px-3 pb-1 pt-3 text-[12.5px] ${muted}`}>People</p>
                   {searchedUsers.map((user) => (
-                    <button key={user.id} type="button" onClick={() => startDirect(user)} className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}>
+                    <button key={user.id} type="button" onClick={() => startDirect(user)} className={`flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left transition ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f7f7f5]"}`}>
                       <UserAvatar user={user} name={user.displayName} className="h-10 w-10" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold">{user.displayName}</span>
+                        <span className="block truncate text-sm">{user.displayName}</span>
                         <span className={`block truncate text-xs ${muted}`}>{user.designation || user.department || user.username}</span>
                       </span>
                       <Plus className={`h-4 w-4 ${muted}`} />
@@ -4133,18 +4143,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
           className={`min-h-0 min-w-0 w-screen max-w-full overflow-hidden ${forceMobileView ? "" : "lg:w-auto"} ${mobileListOpen ? forceMobileView ? "hidden" : "hidden lg:flex" : "flex"} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}
         >
           {!selectedConversation ? (
-            <div className={`flex flex-1 flex-col items-center justify-center p-8 text-center ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-black"}`}>
-              <div className={`grid h-16 w-16 place-items-center rounded-full ${darkMode ? "bg-white/5" : "bg-[#f2f4f8]"}`}>
-                <MessagesSquare className="h-8 w-8 text-[#2563eb]" />
-              </div>
-              <h3 className="mt-4 text-lg font-bold">Select a conversation</h3>
-              <p className={`mt-1 max-w-sm text-sm ${muted}`}>Choose a chat from the sidebar to start messaging.</p>
+            <div className={`flex flex-1 flex-col items-center justify-center p-8 ${darkMode ? "bg-[#121317] text-white" : "bg-[#f7f7f5] text-[#141414]"}`}>
+              <EmptyState
+                darkMode={darkMode}
+                icon={MessagesSquare}
+                tone="mint"
+                title="Select a conversation"
+                text="Pick a group or a person on the left to start messaging."
+                className={`w-full max-w-sm border ${darkMode ? "border-white/10 !bg-[#15171c]" : "border-[#ececec] !bg-white"}`}
+              />
             </div>
           ) : (
             <>
               <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
-                <header className={`sticky top-0 z-20 flex h-16 w-full shrink-0 items-center gap-3 border-b border-t-0 px-4 ${divider} ${surface}`}>
-                  <button type="button" onClick={closeChat} className={`h-9 w-9 shrink-0 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Back to chats">
+                <header className={`sticky top-0 z-20 flex h-16 w-full shrink-0 items-center gap-2 border-b border-t-0 px-4 ${divider} ${surface}`}>
+                  <button type="button" onClick={closeChat} className={`h-9 w-9 shrink-0 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid lg:hidden"} ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`} aria-label="Back to chats">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <button type="button" onClick={openMobileChatInfo} className={`flex min-w-0 items-center gap-3 overflow-hidden text-left transition-[max-width,opacity,transform] duration-300 ease-out ${effectiveMobileViewport ? "cursor-pointer" : "cursor-default"} ${messageSearchOpen ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[320px] flex-1 opacity-100 xl:max-w-none"}`} aria-label="Open chat info">
@@ -4162,25 +4175,25 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     )}
                     <span className="min-w-0">
                       <span className="flex min-w-0 items-center gap-1.5">
-                        <span className="block truncate text-sm font-semibold">{selectedConversation?.name || "Loop Group"}</span>
+                        <span className="block truncate text-sm">{selectedConversation?.name || "Loop Group"}</span>
                         {selectedConversation?.groupKind === "project" && (
-                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase ${darkMode ? "bg-sky-400/15 text-sky-200" : "bg-sky-50 text-sky-600"}`}>Project</span>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] ${darkMode ? "bg-[#60a5fa]/[0.13] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]"}`}>Project</span>
                         )}
                       </span>
                       {selectedConversation?.groupKind === "project" && selectedConversation.project && (
                         <span className={`block truncate text-[11px] leading-4 ${muted}`}>{selectedConversation.project.name}</span>
                       )}
                       {selectedConversation?.type === "direct" && selectedOtherUser && (
-                        <span className={`block truncate text-[11px] leading-4 lg:hidden ${online.has(selectedOtherUser.id) ? "text-[#22c55e]" : muted}`}>
+                        <span className={`block truncate text-[11px] leading-4 lg:hidden ${online.has(selectedOtherUser.id) ? "text-[#2f9a5c]" : muted}`}>
                           {online.has(selectedOtherUser.id) ? "Online" : "Offline"}
                         </span>
                       )}
                     </span>
                   </button>
-                  <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-full flex-1" : "hidden"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f8fb]"}`}>
+                  <div className={`flex h-10 items-center gap-2 overflow-hidden rounded-full px-3 transition-[width,background-color] duration-300 ease-out ${messageSearchOpen ? "w-full flex-1" : "hidden"} ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f7f5]"}`}>
                     <button type="button" onClick={() => setMessageSearchOpen(true)} className="flex h-7 shrink-0 items-center gap-2 rounded-full" aria-label="Search messages">
                       <Search className={`h-4 w-4 ${muted}`} />
-                      <span className={`hidden text-xs font-semibold transition-opacity duration-200 lg:inline ${messageSearchOpen ? "w-0 opacity-0" : "opacity-100"} ${muted}`}>Search</span>
+                      <span className={`hidden text-xs transition-opacity duration-200 lg:inline ${messageSearchOpen ? "w-0 opacity-0" : "opacity-100"} ${muted}`}>Search</span>
                     </button>
                     <input
                       value={messageSearch}
@@ -4190,7 +4203,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     />
                     {messageMatches.length > 0 && (
                       <div className="flex items-center gap-1">
-                        <span className={`text-[11px] font-semibold ${muted}`}>{activeMatchIndex + 1}/{messageMatches.length}</span>
+                        <span className={`text-[11px] ${muted}`}>{activeMatchIndex + 1}/{messageMatches.length}</span>
                         <button type="button" onClick={() => navigateMatch(-1)} className={`grid h-6 w-6 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}>
                           <ChevronUp className="h-3.5 w-3.5" />
                         </button>
@@ -4209,7 +4222,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         <button
                           type="button"
                           onClick={activeScreenShareUserId === currentUser?.id ? stopScreenShare : startScreenShare}
-                          className={`hidden sm:grid h-9 w-9 shrink-0 place-items-center rounded-full ${activeScreenShareUserId === currentUser?.id ? "bg-red-500 text-white hover:bg-red-600" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}
+                          className={`hidden sm:grid h-9 w-9 shrink-0 place-items-center rounded-full ${activeScreenShareUserId === currentUser?.id ? "bg-red-500 text-white hover:bg-red-600" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f7f5]"}`}
                           aria-label="Share Screen"
                         >
                           {activeScreenShareUserId === currentUser?.id ? <X className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
@@ -4218,44 +4231,44 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         <button
                           type="button"
                           disabled
-                          className={`hidden sm:grid h-9 w-9 shrink-0 place-items-center rounded-full opacity-30 cursor-not-allowed ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}
+                          className={`hidden sm:grid h-9 w-9 shrink-0 place-items-center rounded-full opacity-30 cursor-not-allowed ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`}
                           aria-label="Someone is already sharing"
                         >
                           <Monitor className="h-4 w-4" />
                         </button>
                       )}
                       {selectedConversation?.id?.startsWith("assistant-loop") && currentUser?.isSuperAdmin && (
-                        <button type="button" onClick={openQuestionScope} className={`hidden sm:flex h-9 px-3 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition ${darkMode ? "bg-white/10 hover:bg-white/20 text-white" : "bg-[#f7f8fb] hover:bg-[#e2e8f0] text-[#111827]"}`} aria-label="Question Scope">
-                          Question Scope
+                        <button type="button" onClick={openQuestionScope} className={`hidden sm:flex h-9 px-3 shrink-0 items-center justify-center rounded-full text-xs transition ${darkMode ? "bg-white/10 hover:bg-white/20 text-white" : "bg-[#f7f7f5] hover:bg-[#ececea] text-[#141414]"}`} aria-label="Question Scope">
+                          Question scope
                         </button>
                       )}
-                      <button type="button" onClick={() => setMessageSearchOpen(true)} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Search messages">
+                      <button type="button" onClick={() => setMessageSearchOpen(true)} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`} aria-label="Search messages">
                         <Search className="h-4 w-4" />
                       </button>
                     </>
                   )}
                   <div className="relative shrink-0">
-                    <button type="button" onClick={() => setChatMenuOpen((current) => !current)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="More chat options">
+                    <button type="button" onClick={() => setChatMenuOpen((current) => !current)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`} aria-label="More chat options">
                       <MoreVertical className="h-4 w-4" />
                     </button>
                     {chatMenuOpen && (
-                      <div ref={chatMenuRef} className={`absolute right-0 top-11 z-30 w-44 rounded-2xl border p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/10 bg-[#1c1f26] text-white" : "border-black/10 bg-white text-[#111827]"}`}>
-                        <button type="button" onClick={() => { setStarredOnlyOpen((current) => !current); setChatMenuOpen(false); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}>
-                          <Star className={`h-3.5 w-3.5 ${starredOnlyOpen ? "fill-amber-400 text-amber-400" : "text-[#2563eb]"}`} />
+                      <div ref={chatMenuRef} className={`absolute right-0 top-11 z-30 w-48 rounded-[18px] border p-1.5 shadow-[0_18px_50px_rgba(20,20,20,0.10)] ${darkMode ? "border-white/10 bg-[#1c1f26] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
+                        <button type="button" onClick={() => { setStarredOnlyOpen((current) => !current); setChatMenuOpen(false); }} className={`flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[13px] font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}>
+                          <Star className={`h-3.5 w-3.5 ${starredOnlyOpen ? "fill-amber-400 text-amber-400" : "text-[var(--loop-ink)]"}`} />
                           {starredOnlyOpen ? "Show all messages" : "Starred messages"}
                         </button>
-                        <button type="button" onClick={clearChat} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}>
-                          <Sparkles className="h-3.5 w-3.5 text-[#2563eb]" />
+                        <button type="button" onClick={clearChat} className={`flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[13px] font-normal ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}>
+                          <Sparkles className="h-3.5 w-3.5 text-[var(--loop-ink)]" />
                           Clear messages
                         </button>
-                        <button type="button" onClick={deleteChat} disabled={selectedConversation?.type !== "direct" || selectedConversation?.id?.startsWith("assistant-loop")} title={selectedConversation?.id?.startsWith("assistant-loop") ? "The Loop assistant chat can't be deleted — use Clear messages instead" : undefined} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-normal text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35">
+                        <button type="button" onClick={deleteChat} disabled={selectedConversation?.type !== "direct" || selectedConversation?.id?.startsWith("assistant-loop")} title={selectedConversation?.id?.startsWith("assistant-loop") ? "The Loop assistant chat can't be deleted — use Clear messages instead" : undefined} className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[13px] font-normal text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35">
                           <Trash2 className="h-3.5 w-3.5" />
                           Delete chat
                         </button>
                       </div>
                     )}
                   </div>
-                  <button type="button" onClick={closeChat} className={`h-9 w-9 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid"} ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`} aria-label="Close chat">
+                  <button type="button" onClick={closeChat} className={`h-9 w-9 place-items-center rounded-full ${messageSearchOpen ? "hidden" : "grid"} ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`} aria-label="Close chat">
                     <X className="h-4 w-4" />
                   </button>
                 </header>
@@ -4264,7 +4277,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   <button
                     type="button"
                     onClick={() => scrollToMessage(selectedConversation.pinnedMessage.messageId)}
-                    className={`flex h-11 shrink-0 items-center gap-3 border-b px-4 text-left transition ${darkMode ? "border-white/[0.06] bg-[#111318] hover:bg-[#171a20]" : "border-[#e5e7eb] bg-white hover:bg-[#f7f8fb]"}`}
+                    className={`flex h-11 shrink-0 items-center gap-3 border-b px-4 text-left transition ${darkMode ? "border-white/[0.06] bg-[#111318] hover:bg-[#171a20]" : "border-[#f0f0ee] bg-white hover:bg-[#f7f7f5]"}`}
                   >
                     <Pin className={`h-4 w-4 shrink-0 ${darkMode ? "text-white/70" : "text-black/60"}`} />
                     <span className="min-w-0 flex-1 truncate text-xs">
@@ -4286,7 +4299,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 )}
 
                 {(localStream || remoteStream) && (
-                  <div id="screen-share-container" className={`relative flex w-full justify-center overflow-hidden border-b shrink-0 ${darkMode ? "bg-black border-white/[0.06]" : "bg-[#f0f2f5] border-[#eef1f5]"} ${isFullscreen ? "h-screen w-screen border-none bg-black flex-col" : "max-h-[40vh]"}`}>
+                  <div id="screen-share-container" className={`relative flex w-full justify-center overflow-hidden border-b shrink-0 ${darkMode ? "bg-black border-white/[0.06]" : "bg-[#f4f4f2] border-[#f0f0ee]"} ${isFullscreen ? "h-screen w-screen border-none bg-black flex-col" : "max-h-[40vh]"}`}>
                     <video
                       ref={localStream ? localVideoRef : remoteVideoRef}
                       autoPlay
@@ -4317,9 +4330,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
 
                     {localStream && (
                       <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-2 text-white backdrop-blur-md">
-                        <Monitor className="h-4 w-4 text-emerald-400" />
-                        <span className="text-sm font-semibold">You are sharing</span>
-                        <button type="button" onClick={stopScreenShare} className="ml-2 rounded-full bg-red-500 px-3 py-1 text-xs font-bold hover:bg-red-600">
+                        <Monitor className="h-4 w-4 text-[#cff07a]" />
+                        <span className="text-sm">You are sharing</span>
+                        <button type="button" onClick={stopScreenShare} className="ml-2 rounded-full bg-red-500 px-3 py-1 text-xs hover:bg-red-600">
                           Stop
                         </button>
                       </div>
@@ -4333,9 +4346,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               remoteVideoRef.current.play().then(() => setAutoplayBlocked(false)).catch(console.error);
                             }
                           }}
-                          className="rounded-full bg-white px-6 py-2.5 text-sm font-bold text-black hover:bg-white/90"
+                          className="rounded-full bg-white px-6 py-2.5 text-sm text-black hover:bg-white/90"
                         >
-                          Tap to Play Screen Share
+                          Tap to play screen share
                         </button>
                       </div>
                     )}
@@ -4348,14 +4361,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       <button type="button" onClick={() => {
                         if (imageDraft?.previewUrl) URL.revokeObjectURL(imageDraft.previewUrl);
                         setImageDraft(null);
-                      }} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close image preview">
+                      }} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`} aria-label="Close image preview">
                         <X className="h-5 w-5" />
                       </button>
-                      <span className="text-sm font-semibold">Photo</span>
+                      <span className="text-sm">Photo</span>
                       <span className="h-9 w-9" />
                     </div>
                     <div className="flex min-h-0 flex-1 items-center justify-center p-4">
-                      <img src={imageDraft.previewUrl} alt="" className="max-h-[min(46vh,420px)] max-w-full rounded-xl object-contain shadow-[0_18px_50px_rgba(15,23,42,0.18)]" />
+                      <img src={imageDraft.previewUrl} alt="" className="max-h-[min(46vh,420px)] max-w-full rounded-xl object-contain" />
                     </div>
                     <form onSubmit={sendImageDraft} className={`shrink-0 border-t px-4 py-3 ${divider}`}>
                       <div className="mx-auto flex max-w-3xl items-center gap-3">
@@ -4363,9 +4376,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           value={imageCaption}
                           onChange={(event) => setImageCaption(event.target.value)}
                           placeholder="Type a message"
-                          className={`h-12 min-w-0 flex-1 rounded-2xl px-4 text-sm outline-none ${darkMode ? "bg-[#23262d] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/45"}`}
+                          className={`h-12 min-w-0 flex-1 rounded-full px-5 text-sm outline-none ${darkMode ? "bg-[#1c1f26] text-white placeholder:text-white/30" : "bg-white text-black placeholder:text-black/45"}`}
                         />
-                        <button type="submit" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#10b981] text-white shadow-[0_10px_30px_rgba(16,185,129,0.25)]">
+                        <button type="submit" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#cff07a] text-[#141414] transition hover:bg-[#c4ea62]">
                           <Send className="h-5 w-5" />
                         </button>
                       </div>
@@ -4383,11 +4396,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     {!starredOnlyOpen && !visibleMessages.length && (
                       <div className="flex justify-center px-4 py-20">
                         <div className={`flex w-full max-w-sm flex-col items-center gap-4 rounded-[20px] px-8 py-10 text-center ${darkMode ? "bg-[#1c1f26]" : "bg-white"}`}>
-                          <span className={`grid h-14 w-14 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] text-white/40" : "bg-[#eef1f6] text-[#9aa6b8]"}`}>
+                          <span className={`grid h-14 w-14 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] text-white/40" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}>
                             <MessagesSquare className="h-6 w-6" />
                           </span>
                           <div>
-                            <p className={`text-lg font-semibold ${darkMode ? "text-white/85" : "text-[#111827]"}`}>No messages yet</p>
+                            <p className={`text-lg ${darkMode ? "text-white/85" : "text-[#141414]"}`}>No messages yet</p>
                             <p className={`mt-1.5 text-sm leading-relaxed ${muted}`}>Send the first message to start this conversation.</p>
                           </div>
                         </div>
@@ -4402,14 +4415,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         return (
                           <div key={message.id} className="min-w-0 mt-3 first:mt-0">
                             {showDate && (
-                              <div className="my-4 flex items-center gap-3">
-                                <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
-                                <span className={`shrink-0 text-[11px] font-medium ${muted}`}>{formatMessageDate(message.createdAt)}</span>
-                                <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
+                              <div className="my-4 flex items-center justify-center">
+                                <span className={`shrink-0 rounded-full px-3 py-1 text-[11.5px] ${darkMode ? "bg-white/[0.06] text-white/55" : "bg-white text-[#8a8a8a] ring-1 ring-inset ring-[#ececec]"}`}>{formatMessageDate(message.createdAt)}</span>
                               </div>
                             )}
                             <div className="my-1.5 flex items-center gap-2.5 px-1">
-                              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${darkMode ? "bg-white/[0.08] text-white/60" : "bg-[#eef1f6] text-[#7a8699]"}`}>
+                              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${darkMode ? "bg-white/[0.08] text-white/60" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}>
                                 <Pin className="h-3 w-3" />
                               </span>
                               <span className={`min-w-0 truncate text-xs ${muted}`}>
@@ -4437,10 +4448,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         return (
                           <div key={message.clientKey || message.id} className="min-w-0 mt-4 first:mt-0">
                             {showDate && (
-                              <div className="my-4 flex items-center gap-3">
-                                <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
-                                <span className={`shrink-0 text-[11px] font-medium ${muted}`}>{formatMessageDate(message.createdAt)}</span>
-                                <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
+                              <div className="my-4 flex items-center justify-center">
+                                <span className={`shrink-0 rounded-full px-3 py-1 text-[11.5px] ${darkMode ? "bg-white/[0.06] text-white/55" : "bg-white text-[#8a8a8a] ring-1 ring-inset ring-[#ececec]"}`}>{formatMessageDate(message.createdAt)}</span>
                               </div>
                             )}
                             <div
@@ -4456,7 +4465,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               onTouchMove={handleMessageTouchMove}
                               onTouchEnd={handleMessageTouchEnd}
                               onTouchCancel={handleMessageTouchEnd}
-                              className={`forum-msg-pop relative flex min-w-0 items-start gap-2 sm:gap-3 transition-transform ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "z-[86] scale-[1.01]" : ""} ${isSelectedMessage ? darkMode ? "rounded-[24px] bg-[#123c2c]/70" : "rounded-[24px] bg-[#dff8e8]" : ""}`}
+                              className={`forum-msg-pop relative flex min-w-0 items-start gap-2 sm:gap-3 transition-transform ${mine ? "justify-end" : "justify-start"} ${isContextTarget ? "z-[86] scale-[1.01]" : ""} ${isSelectedMessage ? darkMode ? "rounded-[24px] bg-[#cff07a]/10" : "rounded-[24px] bg-[#eef8cc]" : ""}`}
                             >
                               {isSelectionMode && (
                                 <button
@@ -4465,7 +4474,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     event.stopPropagation();
                                     toggleSelectedMessage(message);
                                   }}
-                                  className={`absolute right-1 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border text-white shadow-sm ${isSelectedMessage ? "border-emerald-500 bg-emerald-500" : darkMode ? "border-white/20 bg-black/40" : "border-black/10 bg-white"}`}
+                                  className={`absolute right-1 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border ${isSelectedMessage ? "border-[var(--loop-accent)] bg-[var(--loop-accent)] text-[var(--loop-accent-fg)]" : darkMode ? "border-white/20 bg-black/40" : "border-[#ececec] bg-white"}`}
                                   aria-label={isSelectedMessage ? "Deselect message" : "Select message"}
                                 >
                                   {isSelectedMessage && <Check className="h-4 w-4" />}
@@ -4480,18 +4489,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 "relative max-w-[calc(100%-44px)] overflow-hidden rounded-[18px] p-5 sm:max-w-[78%]",
                                 mine ? "rounded-br-[4px]" : "rounded-bl-[4px]",
                                 // No border and no drop shadow — the fill alone lifts it off the pane.
-                                darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]",
+                                darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#141414] ring-1 ring-inset ring-[#ececec]",
                               ].join(" ")}>
                                 <div className="mb-4 flex min-w-0 items-start justify-between gap-3">
                                   <div className="min-w-0">
                                     {message.forwardedFrom && (
-                                      <div className={`mb-1 text-[11px] font-medium ${darkMode ? "text-white/55" : "text-[#64748b]"}`}>
+                                      <div className={`mb-1 text-[11px] font-medium ${darkMode ? "text-white/55" : "text-[#8a8a8a]"}`}>
                                         Forwarded from {message.forwardedFrom.senderName || "User"}
                                       </div>
                                     )}
                                     <div className="flex items-center gap-2">
-                                      <button type="button" onClick={() => setLoopProfileOpen(true)} className={`text-left text-sm font-black hover:underline hover:underline-offset-2 ${darkMode ? "text-white" : "text-[#0f172a]"}`}>Loop assistant</button>
-                                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${darkMode ? "bg-emerald-400/15 text-emerald-300" : "bg-[#e8f7ef] text-[#16a34a]"}`}>
+                                      <button type="button" onClick={() => setLoopProfileOpen(true)} className={`text-left text-sm hover:underline hover:underline-offset-2 ${darkMode ? "text-white" : "text-[#141414]"}`}>Loop assistant</button>
+                                      <span className={`rounded-full px-2 py-0.5 text-[12px] ${darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>
                                         {message.assistantPayload?.type === "employee-report-analysis" ? "Report" : "Project"}
                                       </span>
                                     </div>
@@ -4499,13 +4508,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                       const subtitle = message.assistantPayload?.type === "employee-report-analysis"
                                         ? message.assistantPayload?.employeeName
                                         : (message.assistantPayload?.projectName || selectedConversation?.project?.name || selectedConversation?.name || "Project");
-                                      return subtitle ? <p className={`truncate text-xs ${darkMode ? "text-white/60" : "text-[#7b8794]"}`}>{subtitle}</p> : null;
+                                      return subtitle ? <p className={`truncate text-xs ${darkMode ? "text-white/60" : "text-[#8a8a8a]"}`}>{subtitle}</p> : null;
                                     })()}
                                   </div>
                                   {/* A small corner badge — not an edge/border treatment — flags an analysis
                                       that's still awaiting a forward. Can never be mistaken for a stray border. */}
                                   {pendingForward && (
-                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${darkMode ? "bg-amber-400/20 text-amber-300" : "bg-amber-50 text-amber-600"}`} title="Not yet forwarded">
+                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${darkMode ? "bg-amber-400/20 text-amber-300" : "bg-[#fbf0d4] text-[#8a6200]"}`} title="Not yet forwarded">
                                       Pending
                                     </span>
                                   )}
@@ -4516,12 +4525,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 {message.assistantPayload?.type === "employee-report-analysis" && !message.forwardedFrom && (
                                   <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/10">
                                     {message.analysisForwardedAt ? (
-                                      <button type="button" disabled className={`flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold opacity-60 ${darkMode ? "bg-white/5 text-white/70" : "bg-black/5 text-black/50"}`}>
+                                      <button type="button" disabled className={`flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-full py-2 text-sm opacity-60 ${darkMode ? "bg-white/5 text-white/70" : "bg-black/5 text-black/50"}`}>
                                         <Check className="h-4 w-4" />
                                         Forwarded to {message.assistantPayload.employeeName}
                                       </button>
                                     ) : (
-                                      <button type="button" onClick={() => setForwardAnalysisPayload({ message, targetUserId: message.assistantPayload.userId, employeeName: message.assistantPayload.employeeName })} className={`flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition ${darkMode ? "bg-white/10 text-white hover:bg-white/20" : "bg-black/5 text-black hover:bg-black/10"}`}>
+                                      <button type="button" onClick={() => setForwardAnalysisPayload({ message, targetUserId: message.assistantPayload.userId, employeeName: message.assistantPayload.employeeName })} className={`flex w-full items-center justify-center gap-2 rounded-full py-2 text-sm transition ${darkMode ? "bg-white/10 text-white hover:bg-white/20" : "bg-black/5 text-black hover:bg-black/10"}`}>
                                         <Forward className="h-4 w-4" />
                                         Forward to {message.assistantPayload.employeeName}
                                       </button>
@@ -4532,21 +4541,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/10">
                                     <button type="button" disabled={refiningMessage} onClick={() => {
                                       sendMessage({ preventDefault: () => {}, overrideText: `Analyze next batch of employee reports for ${message.assistantPayload.date}`, actionPayload: { action: "employee-report-analysis", date: message.assistantPayload.date, offset: message.assistantPayload.offset } });
-                                    }} className={`flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563eb] py-2 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-50`}>
+                                    }} className={`flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--loop-accent)] py-2 text-sm text-[var(--loop-accent-fg)] transition hover:opacity-90 disabled:opacity-50`}>
                                       Analyze next {message.assistantPayload.nextBatchSize || 10}
                                     </button>
                                   </div>
                                 )}
                                 <div className={`mt-2 flex justify-end`}>
-                                  <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold ${darkMode ? "text-white/55" : "text-[#71809a]"}`}>
+                                  <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] ${darkMode ? "text-white/55" : "text-[#8a8a8a]"}`}>
                                     <span>{formatTime(message.createdAt)}</span>
                                     {mine && (
                                       getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
-                                        <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+                                        <CheckCheck className="h-3.5 w-3.5 text-[var(--loop-read)]" title="Read" />
                                       ) : getMessageStatus(message, selectedConversation, currentUser?.id, onlineUserIds) === "delivered" ? (
-                                        <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
+                                        <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#8a8a8a]"}`} title="Delivered" />
                                       ) : (
-                                        <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
+                                        <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#8a8a8a]"}`} title="Sent" />
                                       )
                                     )}
                                   </span>
@@ -4595,9 +4604,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       // Filled speech bubble with a soft tail on the sender's side.
                       const bubbleRounding = mine ? "rounded-t-[18px] rounded-bl-[18px] rounded-br-[4px]" : "rounded-t-[18px] rounded-br-[18px] rounded-bl-[4px]";
                       const bubbleTone = isActiveMatch
-                        ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]"
-                        : isStarred ? darkMode ? "bg-[#3a2f13] text-[#fff7d6]" : "bg-[#fff4c7] text-[#14213d]"
-                        : mine ? darkMode ? "bg-[#181a20] text-white" : "bg-[#e5f1ff] text-[#14213d]" : darkMode ? "bg-[#252830] text-white" : "bg-white text-[#14213d]";
+                        ? darkMode ? "bg-[#cff07a]/25 text-white" : "bg-[#d4f28a] text-[#141414]"
+                        : isStarred ? darkMode ? "bg-[#fbbf24]/[0.13] text-[#fff7d6]" : "bg-[#fbf0d4] text-[#141414]"
+                        : mine ? darkMode ? "bg-[#cff07a]/[0.13] text-white" : "bg-[#e6f4c8] text-[#141414]" : darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#141414] ring-1 ring-inset ring-[#ececec]";
                       const starMark = isStarred ? <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" /> : null;
                       // Room the inline stamp needs at the end of the text: the time, a delivery tick on
                       // my own messages, plus the optional Edited note and star.
@@ -4605,14 +4614,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       return (
                         <div key={message.clientKey || message.id} className={`min-w-0 ${messageTopMargin} first:mt-0`}>
                           {showDate && (
-                            <div className="my-4 flex items-center gap-3">
-                              <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
-                              <span className={`shrink-0 text-[11px] font-medium ${muted}`}>{formatMessageDate(message.createdAt)}</span>
-                              <div className={`h-px flex-1 ${darkMode ? "bg-white/10" : "bg-[#e9edf3]"}`} />
+                            <div className="my-4 flex items-center justify-center">
+                              <span className={`shrink-0 rounded-full px-3 py-1 text-[11.5px] ${darkMode ? "bg-white/[0.06] text-white/55" : "bg-white text-[#8a8a8a] ring-1 ring-inset ring-[#ececec]"}`}>{formatMessageDate(message.createdAt)}</span>
                             </div>
                           )}
                           <div
-                            className={`relative min-w-0 overflow-hidden transition-colors ${isSelectedMessage ? darkMode ? "bg-[#123c2c]/70" : "bg-[#dff8e8]" : ""}`}
+                            className={`relative min-w-0 overflow-hidden transition-colors ${isSelectedMessage ? darkMode ? "bg-[#cff07a]/10" : "bg-[#eef8cc]" : ""}`}
                             onClick={() => {
                               if (isSelectionMode) toggleSelectedMessage(message);
                             }}
@@ -4628,7 +4635,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                 event.stopPropagation();
                                 toggleSelectedMessage(message);
                               }}
-                              className={`absolute right-1 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border text-white shadow-sm ${isSelectedMessage ? "border-emerald-500 bg-emerald-500" : darkMode ? "border-white/20 bg-black/40" : "border-black/10 bg-white"}`}
+                              className={`absolute right-1 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border ${isSelectedMessage ? "border-[var(--loop-accent)] bg-[var(--loop-accent)] text-[var(--loop-accent-fg)]" : darkMode ? "border-white/20 bg-black/40" : "border-[#ececec] bg-white"}`}
                               aria-label={isSelectedMessage ? "Deselect message" : "Select message"}
                             >
                               {isSelectedMessage && <Check className="h-4 w-4" />}
@@ -4640,7 +4647,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               className="absolute left-0 top-0 bottom-0 flex items-center pl-2 pointer-events-none"
                               style={{ opacity: Math.min(swipeOffset.x / SWIPE_REPLY_THRESHOLD, 1), transform: `scale(${Math.min(swipeOffset.x / SWIPE_REPLY_THRESHOLD, 1)})` }}
                             >
-                              <div className={`grid h-8 w-8 place-items-center rounded-full ${swipeOffset.x >= SWIPE_REPLY_THRESHOLD ? "bg-[#2563eb] text-white" : darkMode ? "bg-white/10 text-white/60" : "bg-black/10 text-black/50"}`} style={{ transition: "background-color 150ms, color 150ms" }}>
+                              <div className={`grid h-8 w-8 place-items-center rounded-full ${swipeOffset.x >= SWIPE_REPLY_THRESHOLD ? "bg-[var(--loop-accent)] text-[var(--loop-accent-fg)]" : darkMode ? "bg-white/10 text-white/60" : "bg-black/10 text-black/50"}`} style={{ transition: "background-color 150ms, color 150ms" }}>
                                 <Reply className="h-4 w-4" />
                               </div>
                             </div>
@@ -4667,12 +4674,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                             {showName && (
                               <div className={`mb-1 flex items-center gap-1.5 text-[13px] ${muted}`}>
                                 {mine || !message.sender ? (
-                                  <span className={`font-normal ${darkMode ? "text-white/90" : "text-[#111827]"}`}>{mine ? "You" : selectedConversation?.name || "User"}</span>
+                                  <span className={`font-normal ${darkMode ? "text-white/90" : "text-[#141414]"}`}>{mine ? "You" : selectedConversation?.name || "User"}</span>
                                 ) : (
                                   <button
                                     type="button"
                                     onClick={() => setSidebarUser(message.sender)}
-                                    className={`font-normal hover:text-[#2563eb] hover:underline hover:underline-offset-2 ${darkMode ? "text-white/90" : "text-[#111827]"}`}
+                                    className={`font-normal hover:text-[var(--loop-ink)] hover:underline hover:underline-offset-2 ${darkMode ? "text-white/90" : "text-[#141414]"}`}
                                   >
                                     {message.sender.displayName || "User"}
                                   </button>
@@ -4680,10 +4687,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               </div>
                             )}
                             {message.attachment && (
-                              <div className={`w-full max-w-[420px] min-w-0 ${bubbleRounding} p-1.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : isActiveMatch ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]" : bubbleTone}`}>
+                              <div className={`w-full max-w-[420px] min-w-0 ${bubbleRounding} p-1.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#cff07a]/15 text-white" : "bg-[#eef8cc] text-[#141414]" : isActiveMatch ? darkMode ? "bg-[#cff07a]/25 text-white" : "bg-[#d4f28a] text-[#141414]" : bubbleTone}`}>
                                 {starMark && <div className="mb-1 flex justify-end px-1">{starMark}</div>}
                                 {message.forwardedFrom && (
-                                  <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+                                  <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-white/60" : "text-[#8a8a8a]"}`}>
                                     Forwarded from {message.forwardedFrom.senderName || "User"}
                                   </div>
                                 )}
@@ -4715,9 +4722,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               </div>
                             )}
                             {displayText && previewUrl && (
-                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} p-2.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : bubbleTone}`}>
+                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} p-2.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#cff07a]/15 text-white" : "bg-[#eef8cc] text-[#141414]" : bubbleTone}`}>
                                 {message.forwardedFrom && (
-                                  <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+                                  <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-white/60" : "text-[#8a8a8a]"}`}>
                                     Forwarded from {message.forwardedFrom.senderName || "User"}
                                   </div>
                                 )}
@@ -4725,11 +4732,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   <button
                                     type="button"
                                     onClick={() => scrollToMessage(message.replyToMessage.id)}
-                                    className={`mb-1 flex w-full items-center gap-2 rounded-[14px] px-3 py-2 text-left transition-colors ${mine ? darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-[#2563eb]/[0.07] hover:bg-[#2563eb]/[0.12]" : darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
+                                    className={`mb-1 flex w-full items-center gap-2 rounded-[14px] px-3 py-2 text-left transition-colors ${mine ? darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-black/[0.05] hover:bg-black/[0.08]" : darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
                                   >
-                                    <div className={`w-[3px] shrink-0 self-stretch rounded-full ${mine ? "bg-[#2563eb]" : "bg-[#10b981]"}`} />
+                                    <div className={`w-[3px] shrink-0 self-stretch rounded-full ${mine ? "bg-[var(--loop-accent)]" : "bg-[var(--loop-reply)]"}`} />
                                     <div className="min-w-0 flex-1">
-                                      <p className={`truncate text-[11px] ${mine ? "text-[#2563eb]" : "text-[#10b981]"}`}>{message.replyToMessage.senderName}</p>
+                                      <p className={`truncate text-[11px] ${mine ? "text-[var(--loop-ink)]" : "text-[var(--loop-reply)]"}`}>{message.replyToMessage.senderName}</p>
                                       <p className={`truncate text-[11px] ${muted}`}>{message.replyToMessage.text}</p>
                                     </div>
                                   </button>
@@ -4739,17 +4746,17 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   <span className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                                     {renderMessageText(displayText, messageSearch, isActiveMatch, users, openMentionProfile, mine)}
                                   </span>
-                                  <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                  <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap align-baseline text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#8a8a8a]" : muted}`}>
                                     {starMark}
                                     <span>{formatTime(message.createdAt)}</span>
                                     {mine && (
                                       <span className="inline-flex items-center justify-center translate-y-[0.5px]">
                                         {messageStatus === "read" ? (
-                                          <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+                                          <CheckCheck className="h-3.5 w-3.5 text-[var(--loop-read)]" title="Read" />
                                         ) : messageStatus === "delivered" ? (
-                                          <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
+                                          <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#8a8a8a]"}`} title="Delivered" />
                                         ) : (
-                                          <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
+                                          <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#8a8a8a]"}`} title="Sent" />
                                         )}
                                       </span>
                                     )}
@@ -4758,9 +4765,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               </div>
                             )}
                             {displayText && !previewUrl && (
-                              <div className={`min-w-[112px] max-w-full ${bubbleRounding} px-3.5 py-2 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : bubbleTone}`}>
+                              <div className={`min-w-[112px] max-w-full ${bubbleRounding} px-3.5 py-2 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#cff07a]/15 text-white" : "bg-[#eef8cc] text-[#141414]" : bubbleTone}`}>
                                 {message.forwardedFrom && (
-                                  <div className={`mb-1 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+                                  <div className={`mb-1 text-[11px] font-normal not-italic ${darkMode ? "text-white/60" : "text-[#8a8a8a]"}`}>
                                     Forwarded from {message.forwardedFrom.senderName || "User"}
                                   </div>
                                 )}
@@ -4768,11 +4775,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   <button
                                     type="button"
                                     onClick={() => scrollToMessage(message.replyToMessage.id)}
-                                    className={`mb-2 flex w-full items-center gap-2 rounded-[14px] px-3 py-2 text-left transition-colors ${mine ? darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-[#2563eb]/[0.07] hover:bg-[#2563eb]/[0.12]" : darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
+                                    className={`mb-2 flex w-full items-center gap-2 rounded-[14px] px-3 py-2 text-left transition-colors ${mine ? darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-black/[0.05] hover:bg-black/[0.08]" : darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
                                   >
-                                    <div className={`w-[3px] shrink-0 self-stretch rounded-full ${mine ? "bg-[#2563eb]" : "bg-[#10b981]"}`} />
+                                    <div className={`w-[3px] shrink-0 self-stretch rounded-full ${mine ? "bg-[var(--loop-accent)]" : "bg-[var(--loop-reply)]"}`} />
                                     <div className="min-w-0 flex-1">
-                                      <p className={`truncate text-[11px] ${mine ? "text-[#2563eb]" : "text-[#10b981]"}`}>{message.replyToMessage.senderName}</p>
+                                      <p className={`truncate text-[11px] ${mine ? "text-[var(--loop-ink)]" : "text-[var(--loop-reply)]"}`}>{message.replyToMessage.senderName}</p>
                                       <p className={`truncate text-[11px] ${muted}`}>{message.replyToMessage.text}</p>
                                     </div>
                                   </button>
@@ -4787,18 +4794,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     {renderMessageText(displayText, messageSearch, isActiveMatch, users, openMentionProfile, mine)}
                                     <span className="inline-block h-1 align-baseline" style={{ width: `${stampWidth}px` }} aria-hidden="true" />
                                   </p>
-                                  <span className={`absolute bottom-[2px] right-0 inline-flex items-center gap-1 whitespace-nowrap text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#71809a]" : muted}`}>
+                                  <span className={`absolute bottom-[2px] right-0 inline-flex items-center gap-1 whitespace-nowrap text-[10px] leading-none ${mine ? darkMode ? "text-white/50" : "text-[#8a8a8a]" : muted}`}>
                                     {starMark}
                                     {message.isEdited && <span className="opacity-70">Edited</span>}
                                     <span>{formatTime(message.createdAt)}</span>
                                     {mine && (
                                       <span className="inline-flex items-center justify-center translate-y-[0.5px]">
                                         {messageStatus === "read" ? (
-                                          <CheckCheck className="h-3.5 w-3.5 text-[#3b82f6]" title="Read" />
+                                          <CheckCheck className="h-3.5 w-3.5 text-[var(--loop-read)]" title="Read" />
                                         ) : messageStatus === "delivered" ? (
-                                          <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Delivered" />
+                                          <CheckCheck className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#8a8a8a]"}`} title="Delivered" />
                                         ) : (
-                                          <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#71809a]"}`} title="Sent" />
+                                          <Check className={`h-3.5 w-3.5 ${darkMode ? "text-white/50" : "text-[#8a8a8a]"}`} title="Sent" />
                                         )}
                                       </span>
                                     )}
@@ -4807,10 +4814,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                               </div>
                             )}
                             {previewUrl && !displayText && (
-                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} p-2.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#dff8e8] text-[#052e16]" : isActiveMatch ? darkMode ? "bg-[#123c2c] text-[#dcfce7]" : "bg-[#bbf7d0] text-[#052e16]" : bubbleTone}`}>
+                              <div className={`w-full max-w-full min-w-0 ${bubbleRounding} p-2.5 transition-colors ${highlightedMessageId === message.id ? "forum-msg-highlight" : ""} ${isSelectedMessage ? darkMode ? "bg-[#cff07a]/15 text-white" : "bg-[#eef8cc] text-[#141414]" : isActiveMatch ? darkMode ? "bg-[#cff07a]/25 text-white" : "bg-[#d4f28a] text-[#141414]" : bubbleTone}`}>
                                 {starMark && <div className="mb-1 flex justify-end px-1">{starMark}</div>}
                                 {message.forwardedFrom && (
-                                  <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-[#ffffff]" : "text-[#000000]"}`}>
+                                  <div className={`mb-1 px-2 text-[11px] font-normal not-italic ${darkMode ? "text-white/60" : "text-[#8a8a8a]"}`}>
                                     Forwarded from {message.forwardedFrom.senderName || "User"}
                                   </div>
                                 )}
@@ -4818,11 +4825,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   <button
                                     type="button"
                                     onClick={() => scrollToMessage(message.replyToMessage.id)}
-                                    className={`mb-1 flex w-full items-center gap-2 rounded-[14px] px-3 py-2 text-left transition-colors ${mine ? darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-[#2563eb]/[0.07] hover:bg-[#2563eb]/[0.12]" : darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
+                                    className={`mb-1 flex w-full items-center gap-2 rounded-[14px] px-3 py-2 text-left transition-colors ${mine ? darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-black/[0.05] hover:bg-black/[0.08]" : darkMode ? "bg-white/[0.06] hover:bg-white/[0.1]" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
                                   >
-                                    <div className={`w-[3px] shrink-0 self-stretch rounded-full ${mine ? "bg-[#2563eb]" : "bg-[#10b981]"}`} />
+                                    <div className={`w-[3px] shrink-0 self-stretch rounded-full ${mine ? "bg-[var(--loop-accent)]" : "bg-[var(--loop-reply)]"}`} />
                                     <div className="min-w-0 flex-1">
-                                      <p className={`truncate text-[11px] font-semibold ${mine ? "text-[#2563eb]" : "text-[#10b981]"}`}>{message.replyToMessage.senderName}</p>
+                                      <p className={`truncate text-[11px] ${mine ? "text-[var(--loop-ink)]" : "text-[var(--loop-reply)]"}`}>{message.replyToMessage.senderName}</p>
                                       <p className={`truncate text-[11px] ${muted}`}>{message.replyToMessage.text}</p>
                                     </div>
                                   </button>
@@ -4867,18 +4874,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     width: popoverWidth,
                                   });
                                 }}
-                                className={`-mt-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-all hover:scale-110 active:scale-95 ${mine ? "self-end" : "self-start"} ${darkMode ? "bg-[#181a20] text-white border border-white/10" : "bg-white text-black border border-black/10"}`}
+                                className={`-mt-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-all hover:scale-110 active:scale-95 ${mine ? "self-end" : "self-start"} ${darkMode ? "bg-[#1c1f26] text-white border border-white/10" : "bg-white text-[#141414] border border-[#ececec]"}`}
                               >
                                 {Array.from(new Set(message.reactions.map((r) => r.emoji))).map((emoji) => (
                                   <span key={emoji}>{emoji}</span>
                                 ))}
                                 {message.reactions.length > 1 && (
-                                  <span className="text-[10px] font-bold opacity-75">{message.reactions.length}</span>
+                                  <span className="text-[10px] opacity-75">{message.reactions.length}</span>
                                 )}
                               </button>
                             )}
                             {copyFeedbackId === message.id && (
-                              <span className={`mt-1 inline-flex animate-pulse items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ${darkMode ? "bg-emerald-400/15 text-emerald-200" : "bg-emerald-50 text-emerald-600"}`}>
+                              <span className={`mt-1 inline-flex animate-pulse items-center gap-1 rounded-full px-2.5 py-1 text-[10px] ${darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>
                                 <Check className="h-3 w-3" />
                                 Copied
                               </span>
@@ -4900,9 +4907,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           bubble lines up with them. */}
                       <span className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
                       <div className={`flex items-center gap-1 rounded-[18px] rounded-bl-[6px] px-4 py-3 ${darkMode ? "bg-white/[0.08]" : "bg-white"}`} aria-label={`${(typingByConversation[selectedId] || []).map((user) => user.displayName).join(", ")} typing`}>
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb]" />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb] [animation-delay:0.15s]" />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb] [animation-delay:0.3s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--loop-accent)]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--loop-accent)] [animation-delay:0.15s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--loop-accent)] [animation-delay:0.3s]" />
                       </div>
                     </div>
                   )}
@@ -4911,12 +4918,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       <button type="button" onClick={() => setLoopProfileOpen(true)} className="shrink-0 rounded-full" aria-label="Open Loop profile">
                         <LoopAssistantAvatar assistant={loopAssistant} className="h-8 w-8" iconClassName="h-4 w-4" />
                       </button>
-                      <div className={`flex items-center gap-3 rounded-[18px] rounded-bl-[4px] px-4 py-3 ${darkMode ? "bg-[#242730] text-white" : "bg-white text-[#14213d]"}`} aria-label="Loop is thinking">
-                        <span className="text-xs font-black text-[#0f172a]">Loop is thinking</span>
+                      <div className={`flex items-center gap-3 rounded-[18px] rounded-bl-[4px] px-4 py-3 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#141414] ring-1 ring-inset ring-[#ececec]"}`} aria-label="Loop is thinking">
+                        <span className={`text-xs ${muted}`}>Loop is thinking</span>
                         <span className="flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#10b981]" />
-                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2563eb] [animation-delay:0.15s]" />
-                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#10b981] [animation-delay:0.3s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--loop-ink)]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--loop-ink)] [animation-delay:0.15s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--loop-ink)] [animation-delay:0.3s]" />
                         </span>
                       </div>
                     </div>
@@ -4928,10 +4935,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               {selectedConversation?.id?.startsWith("assistant-loop") && currentUser?.isSuperAdmin && (
                 <div className="px-4 py-2 sm:px-6 flex flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`text-xs font-semibold uppercase tracking-wider ${muted}`}>Capabilities:</span>
-                    <button type="button" onClick={() => setLoopCapabilityPicker(loopCapabilityPicker === "employee-report" ? null : "employee-report")} className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition ${darkMode ? "border-white/10 bg-[#16181d] text-white hover:bg-white/5" : "border-[#e5edf8] bg-white text-[#14213d] hover:bg-[#f7f9fc]"}`}>
-                      <FileText className="h-3.5 w-3.5 text-[#2563eb]" />
-                      Employee Report
+                    <span className={`text-[12.5px] ${muted}`}>Capabilities</span>
+                    <button type="button" onClick={() => setLoopCapabilityPicker(loopCapabilityPicker === "employee-report" ? null : "employee-report")} className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${darkMode ? "border-white/10 bg-[#16181d] text-white hover:bg-white/5" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f7f7f5]"}`}>
+                      <FileText className="h-3.5 w-3.5 text-[var(--loop-ink)]" />
+                      Employee report
                     </button>
                   </div>
                   {loopCapabilityPicker === "employee-report" && (
@@ -4948,7 +4955,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         sendMessage({ preventDefault: () => {}, overrideText: `Analyze employee reports for ${displayDate}`, actionPayload: { action: "employee-report-analysis", date: loopCapabilityDate } });
                         setLoopCapabilityPicker(null);
                         setLoopCapabilityDate("");
-                      }} className="rounded-lg bg-[#2563eb] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#1d4ed8] disabled:opacity-50">
+                      }} className="h-9 rounded-full bg-[var(--loop-accent)] px-4 text-[13px] text-[var(--loop-accent-fg)] hover:opacity-90 disabled:opacity-50">
                         Analyze
                       </button>
                     </div>
@@ -4957,32 +4964,32 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               )}
               <form onSubmit={sendMessage} className={`relative shrink-0 px-3 py-2 sm:px-6 ${subSurface}`}>
                 {mentionOptions.length > 0 && (
-                  <div className={`absolute bottom-[76px] left-6 z-30 w-80 max-w-[calc(100vw-48px)] overflow-hidden rounded-[18px] p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-black"}`}>
-                    <div className={`px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] ${muted}`}>Mention</div>
+                  <div className={`absolute bottom-[76px] left-6 z-30 w-80 max-w-[calc(100vw-48px)] overflow-hidden rounded-[18px] p-1.5 shadow-[0_18px_50px_rgba(20,20,20,0.10)] ${darkMode ? "border border-white/10 bg-[#1c1f26] text-white" : "border border-[#ececec] bg-white text-[#141414]"}`}>
+                    <div className={`px-3 pb-1 pt-1 text-[12px] ${muted}`}>Mention</div>
                     {mentionOptions.map((user, index) => {
                       const active = index === Math.min(activeMentionIndex, mentionOptions.length - 1);
                       return (
-                      <button key={user.id} type="button" onMouseEnter={() => setActiveMentionIndex(index)} onClick={() => selectMention(user)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${active ? darkMode ? "bg-white/12" : "bg-[#eef4ff]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f8fb]"}`}>
+                      <button key={user.id} type="button" onMouseEnter={() => setActiveMentionIndex(index)} onClick={() => selectMention(user)} className={`flex w-full items-center gap-3 rounded-[12px] px-3 py-2 text-left transition ${active ? darkMode ? "bg-white/12" : "bg-[#f4f4f2]" : darkMode ? "hover:bg-white/10" : "hover:bg-[#f7f7f5]"}`}>
                         {user.loopAssistant ? (
                           <LoopAssistantAvatar assistant={loopAssistant} className="h-9 w-9" iconClassName="h-4 w-4" />
                         ) : (
                           <span className="relative shrink-0">
                             <UserAvatar user={user} name={user.displayName} className="h-9 w-9" />
-                            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 ${darkMode ? "border-[#1c1f26]" : "border-white"} ${online.has(user.id) ? "bg-[#22c55e]" : "bg-slate-300"}`} />
+                            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 ${darkMode ? "border-[#1c1f26]" : "border-white"} ${online.has(user.id) ? "bg-[#3fae6a]" : "bg-[#d4d4d2]"}`} />
                           </span>
                         )}
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold">{user.displayName || user.username || "User"}</span>
+                          <span className="block truncate text-sm">{user.displayName || user.username || "User"}</span>
                           <span className={`block truncate text-xs ${muted}`}>{user.loopAssistant ? "Project assistant" : `@${mentionHandleForUser(user)}`}</span>
                         </span>
-                        <AtSign className={`h-4 w-4 shrink-0 ${active ? "text-[#2563eb]" : muted}`} />
+                        <AtSign className={`h-4 w-4 shrink-0 ${active ? "text-[var(--loop-ink)]" : muted}`} />
                       </button>
                       );
                     })}
                   </div>
                 )}
                 {selectedMessageIds.length > 0 && (
-                  <div className={`mx-auto mb-2 flex max-w-4xl items-center gap-3 rounded-2xl px-3 py-2.5 ${darkMode ? "bg-[#111318] text-white" : "bg-white text-[#111827]"}`}>
+                  <div className={`mx-auto mb-2 flex max-w-4xl items-center gap-3 rounded-[20px] border px-3 py-2 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
                     <button
                       type="button"
                       onClick={() => setSelectedMessageIds([])}
@@ -4991,7 +4998,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     >
                       <X className="h-5 w-5" />
                     </button>
-                    <p className="min-w-0 flex-1 text-sm font-bold">
+                    <p className="min-w-0 flex-1 text-sm">
                       {selectedMessageIds.length} selected
                     </p>
                     <button
@@ -5022,12 +5029,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   </div>
                 )}
                 {editingMessageTarget && (
-                  <div className={`mx-auto mb-2 flex max-w-4xl items-center gap-3 rounded-2xl px-4 py-2.5 forum-reply-card-in ${darkMode ? "bg-white/[0.06]" : "bg-[#f0f4fa]"}`}>
-                    <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-[#2563eb]/20 text-[#60a5fa]" : "bg-[#2563eb]/10 text-[#2563eb]"}`}>
+                  <div className={`mx-auto mb-2 flex max-w-4xl items-center gap-3 rounded-[20px] border px-3 py-2 forum-reply-card-in ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+                    <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--loop-soft)] text-[var(--loop-ink)]`}>
                       <Pencil className="h-3.5 w-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-[#2563eb]">Editing message</p>
+                      <p className="truncate text-xs text-[var(--loop-ink)]">Editing message</p>
                       <p className={`truncate text-xs ${muted}`}>{editingMessageTarget.text}</p>
                     </div>
                     <button
@@ -5036,19 +5043,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         setEditingMessageTarget(null);
                         setComposer("");
                       }}
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded-full hover:bg-black/5 dark:hover:bg-white/10"
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`}
                     >
                       <X className={`h-4 w-4 ${muted}`} />
                     </button>
                   </div>
                 )}
                 {replyToMessageTarget && (
-                  <div className={`mx-auto mb-2 flex max-w-4xl items-center gap-3 rounded-2xl px-4 py-2.5 forum-reply-card-in ${darkMode ? "bg-white/[0.06]" : "bg-[#f0f4fa]"}`}>
-                    <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-[#2563eb]/20 text-[#60a5fa]" : "bg-[#2563eb]/10 text-[#2563eb]"}`}>
+                  <div className={`mx-auto mb-2 flex max-w-4xl items-center gap-3 rounded-[20px] border px-3 py-2 forum-reply-card-in ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+                    <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--loop-soft)] text-[var(--loop-ink)]`}>
                       <Reply className="h-3.5 w-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-[#2563eb]">
+                      <p className="truncate text-xs text-[var(--loop-ink)]">
                         {String(replyToMessageTarget.senderId) === String(currentUser?.id) ? "You" : replyToMessageTarget.sender?.displayName || replyToMessageTarget.sender?.username || "User"}
                       </p>
                       <p className={`truncate text-xs ${muted}`}>{replyToMessageTarget.text}</p>
@@ -5056,7 +5063,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     <button
                       type="button"
                       onClick={() => setReplyToMessageTarget(null)}
-                      className={`grid h-6 w-6 shrink-0 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`}
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -5073,12 +5080,12 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     className={`inline-flex h-8 items-center gap-2 rounded-full px-2.5 text-xs font-normal transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
                     aria-label="Refine with AI"
                   >
-                    <Sparkles className={`h-[17px] w-[17px] transition ${refiningMessage ? "animate-spin text-[#10b981]" : ""}`} />
+                    <Sparkles className={`h-[17px] w-[17px] transition ${refiningMessage ? "animate-spin text-[var(--loop-ink)]" : ""}`} />
                     <span>Refine with AI</span>
                   </button>
                 </div>
                 {selectedGroupDeleted && (
-                  <div className={`mx-auto mb-2 max-w-4xl rounded-2xl border px-4 py-3 text-sm ${darkMode ? "border-rose-400/20 bg-rose-400/10 text-rose-100" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
+                  <div className={`mx-auto mb-2 max-w-4xl rounded-[16px] px-4 py-3 text-[13px] ${darkMode ? "bg-[#fb7185]/[0.13] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b]"}`}>
                     This group has been deleted. You can view older messages, but no one can send new messages.
                   </div>
                 )}
@@ -5096,18 +5103,18 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     className="hidden"
                     onChange={(event) => handlePhotoSelected(event.target.files?.[0])}
                   />
-                  <label className={`relative flex min-h-12 flex-1 items-center rounded-[20px] pl-2 pr-4 transition-all ${refiningMessage ? "forum-composer-refining" : ""} ${darkMode ? "bg-[#23262d]" : "bg-white"}`} ref={mediaPickerRef}>
+                  <label className={`relative flex min-h-12 flex-1 items-center rounded-[24px] pl-2 pr-4 transition-all ${refiningMessage ? "forum-composer-refining" : ""} ${darkMode ? "bg-[#1c1f26] ring-1 ring-inset ring-white/10" : "bg-white ring-1 ring-inset ring-[#ececec]"}`} ref={mediaPickerRef}>
                     <div className="relative shrink-0">
                       {attachmentMenuOpen && (
-                        <div className={`absolute bottom-14 left-0 z-30 w-56 origin-bottom-left rounded-[18px] border-0 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] forum-ctx-actions ${darkMode ? "bg-[#1b1e25] text-white" : "bg-white text-[#111827]"}`}>
-                          <button type="button" onClick={() => { setAttachmentMenuOpen(false); documentInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f4f7fb]"}`}>
-                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-violet-400/15 text-violet-300" : "bg-violet-50 text-violet-600"}`}>
+                        <div className={`absolute bottom-14 left-0 z-30 w-56 origin-bottom-left rounded-[18px] p-2 shadow-[0_18px_50px_rgba(20,20,20,0.10)] forum-ctx-actions ${darkMode ? "border border-white/10 bg-[#1b1e25] text-white" : "border border-[#ececec] bg-white text-[#141414]"}`}>
+                          <button type="button" onClick={() => { setAttachmentMenuOpen(false); documentInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-[12px] px-3 py-2 text-left text-[13.5px] ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f7f7f5]"}`}>
+                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[10px] ${darkMode ? "bg-[#a78bfa]/[0.14] text-[#c9b9fb]" : "bg-[#ece8fb] text-[#6b4fd1]"}`}>
                               <FileText className="h-4 w-4" />
                             </span>
                             Document
                           </button>
-                          <button type="button" onClick={() => { setAttachmentMenuOpen(false); photoInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f4f7fb]"}`}>
-                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-sky-400/15 text-sky-300" : "bg-sky-50 text-sky-600"}`}>
+                          <button type="button" onClick={() => { setAttachmentMenuOpen(false); photoInputRef.current?.click(); }} className={`flex w-full items-center gap-3 rounded-[12px] px-3 py-2 text-left text-[13.5px] ${darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f7f7f5]"}`}>
+                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[10px] ${darkMode ? "bg-[#60a5fa]/[0.13] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]"}`}>
                               <ImageIcon className="h-4 w-4" />
                             </span>
                             Photos
@@ -5135,7 +5142,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       disabled={!canSendSelectedConversation}
                       className={`mr-2 grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
                     >
-                      <Smile className={`h-[22px] w-[22px] transition ${mediaPickerOpen ? "text-[#2563eb]" : ""}`} />
+                      <Smile className={`h-[22px] w-[22px] transition ${mediaPickerOpen ? "text-[var(--loop-ink)]" : ""}`} />
                     </button>
 
                     <button
@@ -5148,11 +5155,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       className={`mr-2 hidden h-8 w-8 shrink-0 place-items-center rounded-full transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 lg:grid ${darkMode ? "text-white/60 hover:text-white" : "text-black/50 hover:text-black"}`}
                       aria-label="Refine with AI"
                     >
-                      <Sparkles className={`h-[17px] w-[17px] transition ${refiningMessage ? "animate-spin text-[#10b981]" : ""}`} />
+                      <Sparkles className={`h-[17px] w-[17px] transition ${refiningMessage ? "animate-spin text-[var(--loop-ink)]" : ""}`} />
                     </button>
                     
                     {mediaPickerOpen && (
-                      <div className={`absolute bottom-[calc(100%+8px)] left-0 z-30 flex h-[420px] w-[360px] flex-col overflow-hidden rounded-[18px] border-0 shadow-[0_18px_50px_rgba(15,23,42,0.25)] forum-ctx-actions ${darkMode ? "bg-[#1b1e25] text-white" : "bg-white text-[#111827]"}`}>
+                      <div className={`absolute bottom-[calc(100%+8px)] left-0 z-30 flex h-[420px] w-[360px] flex-col overflow-hidden rounded-[18px] shadow-[0_18px_50px_rgba(20,20,20,0.10)] forum-ctx-actions ${darkMode ? "border border-white/10 bg-[#1b1e25] text-white" : "border border-[#ececec] bg-white text-[#141414]"}`}>
                         <div className="flex-1 overflow-hidden">
                           {mediaPickerTab === "emoji" ? (
                             <EmojiPicker
@@ -5172,7 +5179,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                   placeholder={`Search ${mediaPickerTab === "gif" ? "GIFs" : "Stickers"} via GIPHY`}
                                   value={giphySearch}
                                   onChange={(e) => setGiphySearch(e.target.value)}
-                                  className={`w-full rounded-full border px-4 py-2 text-sm outline-none ${darkMode ? "border-white/10 bg-black/20 focus:border-[#2563eb]" : "border-black/10 bg-black/5 focus:border-[#2563eb]"}`}
+                                  className={`w-full rounded-full border px-4 py-2 text-sm outline-none ${darkMode ? "border-transparent bg-white/[0.06] focus:border-white/15" : "border-transparent bg-[#f4f4f2] focus:border-[#e6e6e3] focus:bg-white"}`}
                                 />
                               </div>
                               <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -5194,25 +5201,25 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                             </div>
                           )}
                         </div>
-                        <div className={`flex items-center gap-1 border-t p-2 ${darkMode ? "border-white/10 bg-[#16181d]" : "border-black/10 bg-[#f4f7fb]"}`}>
+                        <div className={`flex items-center gap-1 border-t p-2 ${darkMode ? "border-white/10 bg-[#16181d]" : "border-[#ececec] bg-white"}`}>
                           <button
                             type="button"
                             onClick={() => { setMediaPickerTab("emoji"); setGiphySearch(""); }}
-                            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${mediaPickerTab === "emoji" ? (darkMode ? "bg-white/15 text-white" : "bg-white text-black") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
+                            className={`flex-1 rounded-full py-2 text-xs transition ${mediaPickerTab === "emoji" ? (darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
                           >
                             Emoji
                           </button>
                           <button
                             type="button"
                             onClick={() => { setMediaPickerTab("gif"); setGiphySearch(""); }}
-                            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${mediaPickerTab === "gif" ? (darkMode ? "bg-white/15 text-white" : "bg-white text-black") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
+                            className={`flex-1 rounded-full py-2 text-xs transition ${mediaPickerTab === "gif" ? (darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
                           >
                             GIF
                           </button>
                           <button
                             type="button"
                             onClick={() => { setMediaPickerTab("sticker"); setGiphySearch(""); }}
-                            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${mediaPickerTab === "sticker" ? (darkMode ? "bg-white/15 text-white" : "bg-white text-black") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
+                            className={`flex-1 rounded-full py-2 text-xs transition ${mediaPickerTab === "sticker" ? (darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white") : (darkMode ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")}`}
                           >
                             Stickers
                           </button>
@@ -5262,11 +5269,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       }}
                       enterKeyHint={effectiveMobileViewport ? "enter" : "send"}
                       rows={1}
-                      placeholder={selectedGroupDeleted ? "This group has been deleted" : canSendSelectedConversation ? "Write Something" : "Only group admins can message"}
+                      placeholder={selectedGroupDeleted ? "This group has been deleted" : canSendSelectedConversation ? "Write a message" : "Only group admins can message"}
                       className={`max-h-32 min-h-7 flex-1 resize-none bg-transparent py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 ${softText}`}
                     />
                   </label>
-                  <button type="submit" onMouseDown={(event) => event.preventDefault()} onPointerDown={(event) => event.preventDefault()} disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#d1d5db]" aria-label="Send message">
+                  <button type="submit" onMouseDown={(event) => event.preventDefault()} onPointerDown={(event) => event.preventDefault()} disabled={!composer.trim() || !canSendSelectedConversation} className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#cff07a] text-[#141414] transition hover:bg-[#c4ea62] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message">
                     <Send className="h-4 w-4" />
                   </button>
                 </div>
@@ -5390,25 +5397,28 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               if (event.target === event.currentTarget && !creatingGroup) setCreateGroupOpen(false);
             }}
           >
-            <form onSubmit={createGroup} className={`w-full max-w-[430px] overflow-hidden rounded-[18px] shadow-[0_18px_50px_rgba(15,23,42,0.24)] animate-in zoom-in-95 duration-200 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}>
+            <form onSubmit={createGroup} className={`w-full max-w-[430px] overflow-hidden rounded-[24px] shadow-[0_18px_50px_rgba(20,20,20,0.10)] animate-in zoom-in-95 duration-200 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#141414]"}`}>
               <div className="px-4 pb-3 pt-4">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-base font-black">Create group</h3>
-                  <p className={`mt-0.5 text-xs ${muted}`}>{createGroupStep === 1 ? "Setup your Loop group" : "Choose who can join"}</p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <IconTile icon={UsersRound} tone="lavender" darkMode={darkMode} size="sm" />
+                  <div className="min-w-0">
+                  <h3 className="text-[18px] tracking-[-0.01em]">Create group</h3>
+                  <p className={`mt-0.5 text-xs ${muted}`}>{createGroupStep === 1 ? "Set up your Loop group" : "Choose who can join"}</p>
+                  </div>
                 </div>
-                <button type="button" onClick={() => { setCreateGroupOpen(false); setCreateGroupStep(1); setCreateGroupKind("general"); setCreateGroupProjectId(""); }} disabled={creatingGroup} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close create group">
+                <button type="button" onClick={() => { setCreateGroupOpen(false); setCreateGroupStep(1); setCreateGroupKind("general"); setCreateGroupProjectId(""); }} disabled={creatingGroup} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`} aria-label="Close create group">
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
               {createGroupStep === 1 ? (
                 <>
-                  <p className="mt-4 text-sm font-black">Share with</p>
+                  <p className="mt-4 text-sm">Share with</p>
                   <div className="mt-3 flex items-start gap-4">
                     {[
-                      ["general", "General", MessagesSquare, "bg-[#fde68a] text-[#92400e]"],
-                      ["project", "Project", Layers3, "bg-[#ddd6fe] text-[#5b21b6]"],
+                      ["general", "General", MessagesSquare, darkMode ? "bg-[#fbbf24]/[0.13] text-[#f5d27a]" : "bg-[#fbf0d4] text-[#8a6200]"],
+                      ["project", "Project", Layers3, darkMode ? "bg-[#a78bfa]/[0.14] text-[#c9b9fb]" : "bg-[#ece8fb] text-[#6b4fd1]"],
                     ].map(([kind, label, Icon, tone]) => {
                       const selected = createGroupKind === kind;
                       return (
@@ -5422,38 +5432,38 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           title={label}
                           className="flex w-16 flex-col items-center gap-1.5 text-center"
                         >
-                          <span className={`grid h-12 w-12 place-items-center rounded-full transition active:scale-95 ${selected ? "ring-2 ring-[#2563eb] ring-offset-2 ring-offset-white dark:ring-offset-[#1c1f26]" : ""} ${tone}`}>
+                          <span className={`grid h-12 w-12 place-items-center rounded-[16px] transition active:scale-95 ${selected ? `ring-2 ring-[var(--loop-accent)] ring-offset-2 ${darkMode ? "ring-offset-[#1c1f26]" : "ring-offset-white"}` : ""} ${tone}`}>
                             <Icon className="h-5 w-5" />
                           </span>
-                          <span className={`max-w-full truncate text-[11px] font-semibold ${selected ? "text-[#2563eb]" : muted}`}>{label}</span>
+                          <span className={`max-w-full truncate text-[11px] ${selected ? "text-[var(--loop-ink)]" : muted}`}>{label}</span>
                         </button>
                       );
                     })}
                   </div>
 
-                  <p className="mt-5 text-sm font-black">Group links</p>
+                  <p className="mt-5 text-sm">Group links</p>
                   <div className="mt-3 space-y-2">
                   {createGroupKind === "project" && (
                     <div ref={createGroupProjectPickerRef} className="relative">
                       <button
                         type="button"
                         onClick={() => { setCreateGroupProjectPickerOpen((open) => !open); setCreateGroupProjectSearch(""); }}
-                        className={`flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f7f8fb]"}`}
+                        className={`flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition ${darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f7f7f5]"}`}
                       >
                         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-500">
                           <CircleDot className="h-5 w-5" />
                         </span>
                         <span className={`min-w-0 truncate ${selectedCreateProject ? "" : muted}`}>
-                          <span className="block truncate text-sm font-semibold text-[#111827] dark:text-white">{selectedCreateProject ? selectedCreateProject.name : "Select project"}</span>
+                          <span className="block truncate text-sm text-[#141414] dark:text-white">{selectedCreateProject ? selectedCreateProject.name : "Select project"}</span>
                           <span className={`block truncate text-xs ${muted}`}>{selectedCreateProject ? [selectedCreateProject.code, selectedCreateProject.client].filter(Boolean).join(" · ") || "Project group" : "Connect project team automatically"}</span>
                         </span>
                         <ChevronDown className={`ml-auto h-4 w-4 shrink-0 transition ${createGroupProjectPickerOpen ? "rotate-180" : ""} ${muted}`} />
                       </button>
                       {createGroupProjectPickerOpen && (
-                        <div className={`absolute left-0 top-[calc(100%+8px)] z-[120] w-full rounded-2xl border p-1.5 shadow-2xl ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
+                        <div className={`absolute left-0 top-[calc(100%+8px)] z-[120] w-full rounded-2xl border p-1.5 shadow-2xl ${darkMode ? "border-white/10 bg-[#171a20]" : "border-[#ececec] bg-white"}`}>
                           <div className="relative mb-1.5">
                             <Search className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-                            <input value={createGroupProjectSearch} onChange={(event) => setCreateGroupProjectSearch(event.target.value)} placeholder="Search projects" className={`h-10 w-full rounded-xl border pl-9 pr-3 text-sm font-normal outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white text-[#111827]"}`} />
+                            <input value={createGroupProjectSearch} onChange={(event) => setCreateGroupProjectSearch(event.target.value)} placeholder="Search projects" className={`h-10 w-full rounded-xl border pl-9 pr-3 text-sm font-normal outline-none ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-[#ececec] bg-white text-[#141414]"}`} />
                           </div>
                           <div className="max-h-64 overflow-y-auto">
                             {filteredCreateGroupProjects.map((project) => {
@@ -5482,10 +5492,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     if (!createGroupName.trim()) setCreateGroupName(project.name);
                                     setCreateGroupProjectPickerOpen(false);
                                   }}
-                                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-normal transition ${selected ? "bg-[#2563eb] text-white" : link ? (darkMode ? "text-white/40 hover:bg-white/[0.06]" : "text-black/40 hover:bg-black/[0.03]") : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
+                                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-normal transition ${selected ? "bg-[var(--loop-accent)] text-[var(--loop-accent-fg)]" : link ? (darkMode ? "text-white/40 hover:bg-white/[0.06]" : "text-black/40 hover:bg-black/[0.03]") : darkMode ? "text-white/70 hover:bg-white/10" : "text-black/70 hover:bg-black/[0.04]"}`}
                                 >
                                   <span className="min-w-0 flex-1">
-                                    <span className="block truncate font-semibold">{project.name}</span>
+                                    <span className="block truncate">{project.name}</span>
                                     <span className={`block truncate text-[11px] ${selected ? "text-white/75" : muted}`}>
                                       {link
                                         ? `Group already created${link.createdByName ? ` by ${link.createdByName}` : ""}`
@@ -5493,7 +5503,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                                     </span>
                                   </span>
                                   {link ? (
-                                    <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${darkMode ? "bg-white/10 text-white/55" : "bg-black/[0.06] text-black/45"}`}>
+                                    <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${darkMode ? "bg-white/10 text-white/55" : "bg-black/[0.06] text-black/45"}`}>
                                       <LockKeyhole className="h-3 w-3" />
                                       {link.isMember ? "Open" : "Created"}
                                     </span>
@@ -5507,7 +5517,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       )}
                       {selectedCreateProject && (
                         selectedCreateProjectGroupLink ? (
-                          <span className="mt-2 block text-xs font-semibold text-red-500">
+                          <span className="mt-2 block text-xs text-red-500">
                             A group for {selectedCreateProject.name} is already created{selectedCreateProjectGroupLink.createdByName ? ` by ${selectedCreateProjectGroupLink.createdByName}` : ""}. Pick another project.
                           </span>
                         ) : (
@@ -5519,21 +5529,21 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     </div>
                   )}
 
-                  <label className={`flex items-center gap-3 rounded-2xl border px-3 py-3 transition ${darkMode ? "border-white/10 bg-white/[0.05] focus-within:border-[#2563eb]" : "border-[#dce3ea] bg-[#f8fafc] focus-within:border-[#2563eb] focus-within:bg-white"}`}>
+                  <label className={`flex items-center gap-3 rounded-2xl border px-3 py-3 transition ${darkMode ? "border-white/10 bg-white/[0.05] focus-within:border-[var(--loop-accent)]" : "border-[#ececec] bg-[#f7f7f5] focus-within:border-[var(--loop-accent)] focus-within:bg-white"}`}>
                     <GroupAvatar group={{ name: createGroupName || "Group", avatarPreset: createGroupAvatar, avatarUrl: createGroupAvatarFile ? URL.createObjectURL(createGroupAvatarFile) : "" }} className="h-10 w-10" />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold">Group name</span>
-                      <input value={createGroupName} onChange={(event) => setCreateGroupName(event.target.value)} maxLength={80} placeholder="Enter group name" className={`mt-1 w-full bg-transparent text-base font-semibold outline-none ${darkMode ? "text-white placeholder:text-white/35" : "text-[#111827] placeholder:text-slate-400"}`} />
+                      <span className="block text-sm">Group name</span>
+                      <input value={createGroupName} onChange={(event) => setCreateGroupName(event.target.value)} maxLength={80} placeholder="Enter group name" className={`mt-1 w-full bg-transparent text-base outline-none ${darkMode ? "text-white placeholder:text-white/35" : "text-[#141414] placeholder:text-slate-400"}`} />
                     </span>
                   </label>
 
                   <div className={`rounded-2xl px-2 py-2 ${darkMode ? "bg-white/[0.03]" : "bg-[#fbfbfc]"}`}>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-sm font-semibold">Avatar colour</span>
+                      <span className="text-sm">Avatar colour</span>
                       <span className={`text-xs ${muted}`}>Initials on a solid colour</span>
                     </div>
                     <div className="grid max-h-36 grid-cols-6 gap-2.5 overflow-y-auto p-1 -m-1">
-                      <label className={`cursor-pointer grid h-10 w-10 place-items-center rounded-full border border-dashed outline-none focus:outline-none transition ${createGroupAvatarFile ? "ring-2 ring-[#111827] ring-offset-2 ring-offset-white dark:ring-[#f8fafc] dark:ring-offset-[#1c1f26]" : ""} ${darkMode ? "border-white/25 text-white/60 hover:bg-white/10" : "border-black/20 text-black/45 hover:bg-black/[0.04]"}`} aria-label="Upload custom avatar">
+                      <label className={`cursor-pointer grid h-10 w-10 place-items-center rounded-full border border-dashed outline-none focus:outline-none transition ${createGroupAvatarFile ? "ring-2 ring-[var(--loop-accent)] ring-offset-2 ring-offset-white dark:ring-[#f8fafc] dark:ring-offset-[#1c1f26]" : ""} ${darkMode ? "border-white/25 text-white/60 hover:bg-white/10" : "border-black/20 text-black/45 hover:bg-black/[0.04]"}`} aria-label="Upload custom avatar">
                         <input type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onClick={(e) => { e.target.value = null; }} onChange={(e) => {
                           const file = e.target.files[0];
                           if (file) {
@@ -5546,7 +5556,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       {GROUP_AVATAR_PRESETS.map((preset) => {
                         const selected = !createGroupAvatarFile && createGroupAvatar === preset.id;
                         return (
-                          <button key={preset.id} type="button" onClick={() => { setCreateGroupAvatar(preset.id); setCreateGroupAvatarFile(null); }} className={`grid h-10 w-10 place-items-center rounded-full outline-none focus:outline-none transition ${selected ? "ring-2 ring-[#111827] ring-offset-2 ring-offset-white dark:ring-[#f8fafc] dark:ring-offset-[#1c1f26]" : ""}`} style={{ backgroundColor: preset.color }} aria-label={`Use ${preset.id} colour`}>
+                          <button key={preset.id} type="button" onClick={() => { setCreateGroupAvatar(preset.id); setCreateGroupAvatarFile(null); }} className={`grid h-10 w-10 place-items-center rounded-full outline-none focus:outline-none transition ${selected ? "ring-2 ring-[var(--loop-accent)] ring-offset-2 ring-offset-white dark:ring-[#f8fafc] dark:ring-offset-[#1c1f26]" : ""}`} style={{ backgroundColor: preset.color }} aria-label={`Use ${preset.id} colour`}>
                             {selected && <Check className="h-4 w-4 text-white" />}
                           </button>
                         );
@@ -5559,28 +5569,28 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 <div className="mt-6">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-black">{createGroupName || "New group"}</p>
+                      <p className="text-sm">{createGroupName || "New group"}</p>
                       <p className={`text-xs ${muted}`}>{createGroupKind === "project" ? "Project people are already included" : "Choose people to add"}</p>
                     </div>
                     <span className={`text-xs ${muted}`}>{createGroupEffectiveMemberIds.length} selected</span>
                   </div>
                   {createGroupKind === "project" && (
-                    <div className={`mb-3 rounded-2xl px-3 py-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f6f8]"}`}>
+                    <div className={`mb-3 rounded-2xl px-3 py-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-black">Auto-added from project</p>
+                        <p className="text-xs">Auto-added from project</p>
                         <span className={`text-xs ${muted}`}>{createGroupProjectMembers.length}</span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {createGroupProjectMembers.slice(0, 8).map((user) => (
-                          <span key={user.id} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${darkMode ? "bg-white/10 text-white/75" : "bg-white text-[#111827]"}`}>
+                          <span key={user.id} className={`rounded-full px-2 py-1 text-[11px] ${darkMode ? "bg-white/10 text-white/75" : "bg-white text-[#141414]"}`}>
                             {user.displayName || user.username}
                           </span>
                         ))}
-                        {createGroupProjectMembers.length > 8 && <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${darkMode ? "bg-white/10 text-white/60" : "bg-white text-black/50"}`}>+{createGroupProjectMembers.length - 8}</span>}
+                        {createGroupProjectMembers.length > 8 && <span className={`rounded-full px-2 py-1 text-[11px] ${darkMode ? "bg-white/10 text-white/60" : "bg-white text-black/50"}`}>+{createGroupProjectMembers.length - 8}</span>}
                       </div>
                     </div>
                   )}
-                  <div className={`mb-3 flex h-10 items-center gap-2 rounded-2xl px-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f6f8]"}`}>
+                  <div className={`mb-3 flex h-10 items-center gap-2 rounded-2xl px-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
                     <Search className={`h-4 w-4 ${muted}`} />
                     <input value={createGroupSearch} onChange={(event) => setCreateGroupSearch(event.target.value)} placeholder={createGroupKind === "project" ? "Add extra users" : "Search users"} className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
                   </div>
@@ -5593,14 +5603,14 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           type="button"
                           disabled={createGroupProjectMemberSet.has(String(user.id))}
                           onClick={() => setCreateGroupMemberIds((current) => selected ? current.filter((id) => id !== user.id) : [...current, user.id])}
-                          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition disabled:cursor-default disabled:opacity-60 ${createGroupProjectMemberSet.has(String(user.id)) ? darkMode ? "bg-white/[0.04]" : "bg-[#f7f8fb]" : selected ? darkMode ? "bg-emerald-500/15" : "bg-emerald-50" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f5f7fb]"}`}
+                          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition disabled:cursor-default disabled:opacity-60 ${createGroupProjectMemberSet.has(String(user.id)) ? darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]" : selected ? darkMode ? "bg-white/[0.08]" : "bg-[#f4f4f2]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f4f4f2]"}`}
                         >
                           <UserAvatar user={user} name={user.displayName} className="h-9 w-9" />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold">{user.displayName}</span>
+                            <span className="block truncate text-sm">{user.displayName}</span>
                             <span className={`block truncate text-xs ${muted}`}>{user.designation || user.department || user.email || user.username}</span>
                           </span>
-                          <span className={`grid h-5 w-5 place-items-center rounded-full border ${selected || createGroupProjectMemberSet.has(String(user.id)) ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
+                          <span className={`grid h-5 w-5 place-items-center rounded-full border ${selected || createGroupProjectMemberSet.has(String(user.id)) ? "border-[var(--loop-accent)] bg-[var(--loop-accent)] text-[var(--loop-accent-fg)]" : darkMode ? "border-white/20" : "border-black/15"}`}>
                             {(selected || createGroupProjectMemberSet.has(String(user.id))) && <Check className="h-3.5 w-3.5" />}
                           </span>
                         </button>
@@ -5613,16 +5623,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               </div>
               <div className={`flex items-center justify-between gap-3 px-4 py-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f1f3f5]"}`}>
                 {createGroupStep === 2 ? (
-                  <button type="button" onClick={() => setCreateGroupStep(1)} disabled={creatingGroup} className={`h-10 rounded-xl px-3 text-sm font-bold ${darkMode ? "hover:bg-white/10" : "hover:bg-white"}`}>
+                  <button type="button" onClick={() => setCreateGroupStep(1)} disabled={creatingGroup} className={`h-10 rounded-xl px-3 text-sm ${darkMode ? "hover:bg-white/10" : "hover:bg-white"}`}>
                     Back
                   </button>
                 ) : <span className={`text-xs ${muted}`}>{createGroupKind === "project" ? "Project members auto-added" : "Share all, or specific people"}</span>}
                 {createGroupStep === 1 ? (
-                  <button type="button" onClick={() => createGroupKind === "project" ? createGroup() : setCreateGroupStep(2)} disabled={!createGroupName.trim() || (createGroupKind === "project" && (!createGroupProjectId || Boolean(selectedCreateProjectGroupLink)))} className="h-10 min-w-20 rounded-xl bg-[#22c55e] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  <button type="button" onClick={() => createGroupKind === "project" ? createGroup() : setCreateGroupStep(2)} disabled={!createGroupName.trim() || (createGroupKind === "project" && (!createGroupProjectId || Boolean(selectedCreateProjectGroupLink)))} className="h-10 min-w-20 rounded-xl bg-[#3fae6a] px-5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50">
                     {createGroupKind === "project" ? "New" : "Next"}
                   </button>
                 ) : (
-                  <button type="submit" disabled={creatingGroup || !createGroupName.trim() || !createGroupEffectiveMemberIds.length} className="inline-flex h-10 min-w-20 items-center justify-center gap-2 rounded-xl bg-[#22c55e] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  <button type="submit" disabled={creatingGroup || !createGroupName.trim() || !createGroupEffectiveMemberIds.length} className="inline-flex h-10 min-w-20 items-center justify-center gap-2 rounded-xl bg-[#3fae6a] px-5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50">
                     {creatingGroup && <LoaderCircle className="h-4 w-4 animate-spin" />}
                     Create group
                   </button>
@@ -5640,41 +5650,41 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
           >
             <form
               onSubmit={saveForumDriveSettings}
-              className={`max-h-[88vh] w-full max-w-md overflow-y-auto rounded-[24px] p-5 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}
+              className={`max-h-[88vh] w-full max-w-md overflow-y-auto rounded-[24px] p-5 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}
             >
               <div className="flex items-start gap-3">
-                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-emerald-400/15 text-emerald-300" : "bg-emerald-50 text-emerald-600"}`}>
+                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-[12px] ${darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>
                   <Settings className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-bold">Loop Drive folder</h3>
+                  <h3 className="text-[18px] tracking-[-0.01em]">Loop Drive folder</h3>
                   <p className={`mt-1 text-sm ${muted}`}>Files shared in groups and DMs will upload to this folder.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setForumSettingsOpen(false)}
                   disabled={savingForumSettings}
-                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`}
                   aria-label="Close settings"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <div className={`mt-5 rounded-2xl p-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]"}`}>
+              <div className={`mt-5 rounded-2xl p-3 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
                 <div className="flex items-center gap-3">
                   <LoopAssistantAvatar assistant={loopAssistant} className="h-11 w-11" iconClassName="h-5 w-5" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black">Loop assistant</p>
+                    <p className="text-sm">Loop assistant</p>
                     <p className={`truncate text-xs ${muted}`}>@loop · {loopAssistant.enabled === false ? "Disabled" : "Available"}</p>
                   </div>
                   {currentUser?.isSuperAdmin && (
-                    <button type="button" disabled={savingLoopAssistant} onClick={() => updateLoopAssistantEnabled(loopAssistant.enabled === false)} className={`relative h-7 w-12 rounded-full transition ${loopAssistant.enabled === false ? "bg-slate-300" : "bg-[#22c55e]"}`} aria-label="Toggle Loop assistant">
+                    <button type="button" disabled={savingLoopAssistant} onClick={() => updateLoopAssistantEnabled(loopAssistant.enabled === false)} className={`relative h-7 w-12 rounded-full transition ${loopAssistant.enabled === false ? "bg-[#d4d4d2]" : "bg-[#3fae6a]"}`} aria-label="Toggle Loop assistant">
                       <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${loopAssistant.enabled === false ? "left-1" : "left-6"}`} />
                     </button>
                   )}
                 </div>
                 {currentUser?.isSuperAdmin && (
-                  <label className={`mt-3 flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl text-sm font-bold ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-white hover:bg-[#eef4ff]"}`}>
+                  <label className={`mt-3 flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl text-sm ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-white hover:bg-[#f4f4f2]"}`}>
                     {uploadingLoopAvatar ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                     Upload Loop avatar
                     <input type="file" accept="image/*" className="hidden" onChange={(event) => uploadLoopAssistantAvatar(event.target.files?.[0])} />
@@ -5683,9 +5693,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               </div>
               {currentUser?.isSuperAdmin && (
                 <div className="mt-5">
-                  <span className={`mb-2 block text-xs font-semibold ${muted}`}>Loop assistant DM access</span>
+                  <span className={`mb-2 block text-xs ${muted}`}>Loop assistant DM access</span>
                   <p className={`mb-2 text-xs ${muted}`}>Only super admins get Loop DM by default. Check who else can chat with Loop assistant directly — they won't see employee report analysis, that stays super-admin only.</p>
-                  <div className={`grid max-h-48 grid-cols-2 gap-1 overflow-y-auto rounded-2xl p-2 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f7fb]"}`}>
+                  <div className={`grid max-h-48 grid-cols-2 gap-1 overflow-y-auto rounded-2xl p-2 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
                     {users.filter((user) => !user.isSuperAdmin && user.id !== currentUser?.id).map((user) => {
                       const checked = loopAccessUserIds.includes(user.id);
                       return (
@@ -5705,7 +5715,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     type="button"
                     disabled={savingLoopAccess}
                     onClick={saveLoopAccessList}
-                    className={`mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f3f4f6] text-[#111827] hover:bg-[#e5e7eb]"}`}
+                    className={`mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-xl text-sm transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ececea]"}`}
                   >
                     {savingLoopAccess ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     Save access
@@ -5713,16 +5723,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 </div>
               )}
               <label className="mt-5 block">
-                <span className={`mb-2 block text-xs font-semibold ${muted}`}>Drive folder link</span>
+                <span className={`mb-2 block text-xs ${muted}`}>Drive folder link</span>
                 <input
                   value={forumDriveFolderUrl}
                   onChange={(event) => setForumDriveFolderUrl(event.target.value)}
                   placeholder="https://drive.google.com/drive/folders/..."
-                  className={`h-12 w-full rounded-2xl px-4 text-sm outline-none ${darkMode ? "bg-white/[0.08] text-white placeholder:text-white/30" : "bg-[#f4f7fb] text-black placeholder:text-black/35"}`}
+                  className={`h-12 w-full rounded-2xl px-4 text-sm outline-none ${darkMode ? "bg-white/[0.08] text-white placeholder:text-white/30" : "bg-[#f4f4f2] text-black placeholder:text-black/35"}`}
                 />
               </label>
               {forumDriveConnectedUrl && (
-                <a href={forumDriveConnectedUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex max-w-full items-center gap-2 truncate text-xs font-semibold text-[#10b981] no-underline">
+                <a href={forumDriveConnectedUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex max-w-full items-center gap-2 truncate text-xs text-[var(--loop-ink)] no-underline">
                   <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">Connected folder</span>
                 </a>
@@ -5730,7 +5740,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               <button
                 type="submit"
                 disabled={savingForumSettings || !forumDriveFolderUrl.trim()}
-                className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#10b981] px-4 text-sm font-bold text-white transition hover:bg-[#059669] disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--loop-accent)] px-4 text-sm text-[var(--loop-accent-fg)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {savingForumSettings ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Connect folder
@@ -5756,8 +5766,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
           <div className="fixed inset-0 z-[96] grid place-items-center bg-black/45 px-4 backdrop-blur-[1px]" onMouseDown={(event) => {
             if (event.target === event.currentTarget && !pinSaving) setPinMessageTarget(null);
           }}>
-            <div className={`w-full max-w-md rounded-[24px] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.18)] animate-in zoom-in-95 duration-150 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
-              <h3 className="text-xl font-semibold">Choose how long your pin lasts</h3>
+            <div className={`w-full max-w-md rounded-[24px] p-6 shadow-[0_24px_70px_rgba(20,20,20,0.14)] animate-in zoom-in-95 duration-150 ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}>
+              <h3 className="text-xl">Choose how long your pin lasts</h3>
               <p className={`mt-4 text-sm ${muted}`}>You can unpin at any time.</p>
               <div className="mt-5 space-y-4">
                 {[
@@ -5766,8 +5776,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   { label: "30 days", value: 24 * 30 },
                 ].map((item) => (
                   <label key={item.value} className="flex cursor-pointer items-center gap-3 text-sm">
-                    <span className={`grid h-5 w-5 place-items-center rounded-full border-2 ${pinDurationHours === item.value ? "border-[#10b981]" : darkMode ? "border-white/35" : "border-black/35"}`}>
-                      {pinDurationHours === item.value && <span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />}
+                    <span className={`grid h-5 w-5 place-items-center rounded-full border-2 ${pinDurationHours === item.value ? "border-[var(--loop-accent)]" : darkMode ? "border-white/35" : "border-black/35"}`}>
+                      {pinDurationHours === item.value && <span className="h-2.5 w-2.5 rounded-full bg-[var(--loop-accent)]" />}
                     </span>
                     <input type="radio" className="sr-only" checked={pinDurationHours === item.value} onChange={() => setPinDurationHours(item.value)} />
                     {item.label}
@@ -5775,10 +5785,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 ))}
               </div>
               <div className="mt-10 flex justify-end gap-3">
-                <button type="button" onClick={() => setPinMessageTarget(null)} disabled={pinSaving} className="rounded-full px-5 py-2 text-sm font-bold text-[#0f766e] disabled:opacity-50">
+                <button type="button" onClick={() => setPinMessageTarget(null)} disabled={pinSaving} className="rounded-full px-5 py-2 text-sm text-[#0f766e] disabled:opacity-50">
                   Cancel
                 </button>
-                <button type="button" onClick={() => savePinnedMessage("pin")} disabled={pinSaving} className="inline-flex min-w-20 items-center justify-center gap-2 rounded-full bg-[#10b981] px-6 py-2.5 text-sm font-bold text-white disabled:opacity-60">
+                <button type="button" onClick={() => savePinnedMessage("pin")} disabled={pinSaving} className="inline-flex min-w-20 items-center justify-center gap-2 rounded-full bg-[var(--loop-accent)] px-6 py-2.5 text-sm text-[var(--loop-accent-fg)] disabled:opacity-60">
                   {pinSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}
                   Pin
                 </button>
@@ -5810,7 +5820,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
               className={`fixed z-[95] flex flex-col gap-2.5 overflow-visible forum-ctx-container ${messageMenu.mine ? "items-end origin-top-right" : "items-start origin-top-left"}`}
             >
               {/* WhatsApp Style Floating Emoji Reaction Bar */}
-              <div className={`flex items-center gap-1 rounded-full px-2.5 py-2 shadow-[0_16px_60px_rgba(0,0,0,0.18)] forum-ctx-emoji-bar ${darkMode ? "bg-[#12141a] text-white" : "bg-white text-[#111827]"}`}>
+              <div className={`flex items-center gap-1 rounded-full px-2.5 py-2 shadow-[0_16px_50px_rgba(20,20,20,0.12)] forum-ctx-emoji-bar ${darkMode ? "border border-white/10 bg-[#12141a] text-white" : "border border-[#ececec] bg-white text-[#141414]"}`}>
                 {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
                   <button
                     key={emoji}
@@ -5827,7 +5837,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 <button
                   type="button"
                   onClick={() => setEmojiPickerOpen((prev) => !prev)}
-                  className={`grid h-8 w-8 place-items-center rounded-full text-xs transition ${emojiPickerOpen ? "bg-emerald-500/20 text-emerald-400" : "hover:bg-white/10 " + muted}`}
+                  className={`grid h-8 w-8 place-items-center rounded-full text-xs transition ${emojiPickerOpen ? "bg-[var(--loop-soft)] text-[var(--loop-ink)]" : "hover:bg-white/10 " + muted}`}
                   title="More reactions"
                 >
                   <Plus className="h-4 w-4" />
@@ -5836,7 +5846,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
 
               {/* EmojiPicker for Reactions */}
               {emojiPickerOpen ? (
-                <div className={`w-[320px] h-[400px] overflow-hidden max-w-[calc(100vw-32px)] rounded-[22px] shadow-[0_24px_80px_rgba(0,0,0,0.18)] forum-ctx-picker border-0 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}>
+                <div className={`w-[320px] h-[400px] overflow-hidden max-w-[calc(100vw-32px)] rounded-[18px] shadow-[0_24px_70px_rgba(20,20,20,0.14)] forum-ctx-picker ${darkMode ? "border border-white/10 bg-[#1c1f26] text-white" : "border border-[#ececec] bg-white text-[#141414]"}`}>
                   <EmojiPicker
                     theme={darkMode ? "dark" : "light"}
                     width="100%"
@@ -5852,7 +5862,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 /* WhatsApp Style Context Menu */
                 <div
                   style={{ maxHeight: messageMenu.maxActionsHeight || 320 }}
-                  className={`w-52 overflow-y-auto overscroll-contain rounded-[22px] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.18)] forum-ctx-actions ${darkMode ? "bg-[#12141a] text-white" : "bg-white text-[#111827]"}`}
+                  className={`w-52 overflow-y-auto overscroll-contain rounded-[18px] p-1.5 shadow-[0_24px_70px_rgba(20,20,20,0.14)] forum-ctx-actions ${darkMode ? "border border-white/10 bg-[#12141a] text-white" : "border border-[#ececec] bg-white text-[#141414]"}`}
                 >
                   <button
                     type="button"
@@ -5861,9 +5871,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       setMessageMenu(null);
                       if (composerRef.current) composerRef.current.focus();
                     }}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}
                   >
-                    <Reply className="h-4 w-4 text-[#2563eb]" />
+                    <Reply className="h-4 w-4 text-[var(--loop-ink)]" />
                     Reply
                   </button>
                   {messageMenu.message?.senderId === currentUser?.id && !messageMenu.message?.loopAssistant && (
@@ -5873,45 +5883,45 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         setMessageInfoTarget(messageMenu.message);
                         setMessageMenu(null);
                       }}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}
                     >
-                      <Info className="h-4 w-4 text-[#2563eb]" />
+                      <Info className="h-4 w-4 text-[var(--loop-ink)]" />
                       Message info
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => copyMessageText(messageMenu.message)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}
                   >
-                    <Copy className="h-4 w-4 text-[#2563eb]" />
+                    <Copy className="h-4 w-4 text-[var(--loop-ink)]" />
                     Copy
                   </button>
                   <button
                     type="button"
                     disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
                     onClick={() => startMessageSelection(messageMenu.message)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}
                   >
-                    <Check className="h-4 w-4 text-[#2563eb]" />
+                    <Check className="h-4 w-4 text-[var(--loop-ink)]" />
                     Select
                   </button>
                   <button
                     type="button"
                     disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
                     onClick={() => openForwardDialog(messageMenu.message?.id)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}
                   >
-                    <Reply className="h-4 w-4 rotate-180 text-[#2563eb]" />
+                    <Reply className="h-4 w-4 rotate-180 text-[var(--loop-ink)]" />
                     Forward
                   </button>
                   <button
                     type="button"
                     disabled={String(messageMenu.message?.id || "").startsWith("temp-")}
                     onClick={() => toggleMessageStar(messageMenu.message)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}
                   >
-                    <Star className={`h-4 w-4 ${messageMenu.message?.isStarred ? "fill-amber-400 text-amber-400" : "text-[#2563eb]"}`} />
+                    <Star className={`h-4 w-4 ${messageMenu.message?.isStarred ? "fill-amber-400 text-amber-400" : "text-[var(--loop-ink)]"}`} />
                     {messageMenu.message?.isStarred ? "Unstar" : "Star message"}
                   </button>
                   <button
@@ -5925,9 +5935,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         openPinDialog(messageMenu.message);
                       }
                     }}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}
                   >
-                    <Pin className="h-4 w-4 text-[#2563eb]" />
+                    <Pin className="h-4 w-4 text-[var(--loop-ink)]" />
                     {selectedConversation?.pinnedMessage?.messageId === messageMenu.message?.id ? "Unpin" : "Pin message"}
                   </button>
                   {messageMenu.message?.senderId === currentUser?.id && !messageMenu.message?.loopAssistant && !messageMenu.message?.forwardedFrom && !messageMenu.message?.attachment && (
@@ -5940,9 +5950,9 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         setMessageMenu(null);
                         window.setTimeout(() => composerRef.current?.focus(), 0);
                       }}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f7fb]"}`}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f4f4f2]"}`}
                     >
-                      <Pencil className="h-4 w-4 text-[#2563eb]" />
+                      <Pencil className="h-4 w-4 text-[var(--loop-ink)]" />
                       Edit
                     </button>
                   )}
@@ -5953,7 +5963,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       setDeleteMessageTarget(messageMenu.message);
                       setMessageMenu(null);
                     }}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete
@@ -5980,15 +5990,15 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 width: reactionsPopoverTarget.width || 288,
                 maxWidth: "calc(100vw - 24px)",
               }}
-              className={`fixed z-[90] rounded-[22px] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.18)] forum-ctx-reactions border-0 ${darkMode ? "bg-[#1c1f26] text-white" : "bg-white text-[#111827]"}`}
+              className={`fixed z-[90] rounded-[18px] p-4 shadow-[0_24px_70px_rgba(20,20,20,0.14)] forum-ctx-reactions ${darkMode ? "border border-white/10 bg-[#1c1f26] text-white" : "border border-[#ececec] bg-white text-[#141414]"}`}
             >
               {/* Header with count and reaction filter tabs */}
               <div className="flex flex-col gap-2.5">
-                <p className="text-sm font-bold opacity-80">
+                <p className="text-sm opacity-80">
                   {reactionsPopoverTarget.message.reactions?.length || 0} reaction{reactionsPopoverTarget.message.reactions?.length === 1 ? "" : "s"}
                 </p>
                 <div className="flex items-center gap-2 forum-ctx-reaction-tabs">
-                  <div className={`grid h-8 w-8 place-items-center rounded-full border ${darkMode ? "border-white/10 bg-white/5 text-white/70" : "border-black/10 bg-black/5 text-black/70"}`}>
+                  <div className={`grid h-8 w-8 place-items-center rounded-full border ${darkMode ? "border-white/10 bg-white/5 text-white/70" : "border-[#ececec] bg-black/5 text-black/70"}`}>
                     <SmilePlus className="h-4 w-4" />
                   </div>
                   {Array.from(new Set((reactionsPopoverTarget.message.reactions || []).map((r) => r.emoji))).map((emoji) => {
@@ -5996,7 +6006,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     return (
                       <div
                         key={emoji}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-emerald-100 text-emerald-700 border border-emerald-300"}`}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ${darkMode ? "bg-[#4ade80]/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}
                       >
                         <span>{emoji}</span>
                         <span>{count}</span>
@@ -6006,7 +6016,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 </div>
               </div>
 
-              <div className={`my-3 border-b ${darkMode ? "border-white/10" : "border-black/10"}`} />
+              <div className={`my-3 border-b ${darkMode ? "border-white/10" : "border-[#ececec]"}`} />
 
               {/* Reactors list */}
               <div className="max-h-56 overflow-y-auto space-y-1 pr-1 forum-ctx-reactor-list">
@@ -6029,7 +6039,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       <div className="flex items-center gap-3 min-w-0">
                         <UserAvatar user={userObj} name={name} className="h-10 w-10 shrink-0" />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-bold">{name}</p>
+                          <p className="truncate text-sm">{name}</p>
                           {isMe && <p className={`text-xs ${muted}`}>Click to remove</p>}
                         </div>
                       </div>
@@ -6054,7 +6064,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
           >
             <div
               onMouseDown={(event) => event.stopPropagation()}
-              className={`flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-[24px] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}
+              className={`flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-[24px] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}
             >
               <div className="flex items-center gap-3 px-5 py-4">
                 <button
@@ -6065,13 +6075,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     setForwardTargetIds([]);
                     setForwardSearch("");
                   }}
-                  className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"} disabled:opacity-50`}
+                  className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"} disabled:opacity-50`}
                   aria-label="Close forward dialog"
                 >
                   <X className="h-5 w-5" />
                 </button>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-black">Forward message</h3>
+                  <h3 className="text-[18px] tracking-[-0.01em]">Forward message</h3>
                   <p className={`text-xs ${muted}`}>{forwardMessageIds.length} message{forwardMessageIds.length === 1 ? "" : "s"} selected</p>
                 </div>
               </div>
@@ -6094,7 +6104,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       key={target.key}
                       type="button"
                       onClick={() => toggleForwardTarget(target.key)}
-                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${selected ? darkMode ? "bg-emerald-500/15" : "bg-emerald-50" : darkMode ? "hover:bg-white/8" : "hover:bg-[#f6f8fb]"}`}
+                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${selected ? darkMode ? "bg-white/[0.08]" : "bg-[#f4f4f2]" : darkMode ? "hover:bg-white/8" : "hover:bg-[#f4f4f2]"}`}
                     >
                       {target.type === "group" ? (
                         <GroupAvatar group={target.group} className="h-10 w-10" />
@@ -6102,10 +6112,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                         <UserAvatar user={target.avatarUser} name={target.title} className="h-10 w-10" />
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold">{target.title}</span>
+                        <span className="block truncate text-sm">{target.title}</span>
                         <span className={`block truncate text-xs ${muted}`}>{target.subtitle}</span>
                       </span>
-                      <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${selected ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/20" : "border-black/15"}`}>
+                      <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${selected ? "border-[var(--loop-accent)] bg-[var(--loop-accent)] text-[var(--loop-accent-fg)]" : darkMode ? "border-white/20" : "border-black/15"}`}>
                         {selected && <Check className="h-4 w-4" />}
                       </span>
                     </button>
@@ -6115,13 +6125,13 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   <p className={`px-4 py-8 text-center text-sm ${muted}`}>No contacts found.</p>
                 )}
               </div>
-              <div className={`flex items-center gap-3 border-t px-5 py-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-                <p className="min-w-0 flex-1 text-sm font-bold">{forwardTargetIds.length} selected</p>
+              <div className={`flex items-center gap-3 border-t px-5 py-4 ${darkMode ? "border-white/10" : "border-[#ececec]"}`}>
+                <p className="min-w-0 flex-1 text-sm">{forwardTargetIds.length} selected</p>
                 <button
                   type="button"
                   disabled={!forwardTargetIds.length || forwardSending}
                   onClick={sendForwardedMessages}
-                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[#2563eb] px-5 text-sm font-bold text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:bg-[#cbd5e1]"
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--loop-accent)] px-5 text-sm text-[var(--loop-accent-fg)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   {forwardSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Send
@@ -6137,19 +6147,19 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
           >
             <div
               onMouseDown={(e) => e.stopPropagation()}
-              className={`w-full max-w-md overflow-hidden rounded-[24px] p-6 shadow-none border-0 animate-in zoom-in-95 duration-150 ${darkMode ? "bg-[#0b0d12] text-white" : "bg-white text-[#111827]"}`}
+              className={`w-full max-w-md overflow-hidden rounded-[24px] p-6 shadow-none border-0 animate-in zoom-in-95 duration-150 ${darkMode ? "bg-[#0b0d12] text-white" : "bg-white text-[#141414]"}`}
             >
               <div className="flex items-center justify-between pb-4">
                 <div className="flex items-center gap-2.5">
-                  <span className="grid h-9 w-9 place-items-center rounded-full bg-[#2563eb]/10 text-[#2563eb]">
-                    <Info className="h-5 w-5" />
+                  <span className={`grid h-9 w-9 place-items-center rounded-[11px] ${darkMode ? "bg-[#60a5fa]/[0.13] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]"}`}>
+                    <Info className="h-4 w-4" />
                   </span>
-                  <h3 className="text-lg font-bold">Message info</h3>
+                  <h3 className="text-[18px] tracking-[-0.01em]">Message info</h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setMessageInfoTarget(null)}
-                  className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-[#f2f4f8]"}`}
+                  className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ececea]"}`}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -6157,8 +6167,8 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
 
               {/* Message Preview */}
               <div className="my-5">
-                <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${muted}`}>Message</p>
-                <div className={`rounded-2xl px-4 py-3 text-sm leading-6 border-0 shadow-none ${darkMode ? "bg-[#13151b] text-white" : "bg-[#f3f4f6] text-[#14213d]"}`}>
+                <p className={`text-[12px] mb-2 ${muted}`}>Message</p>
+                <div className={`rounded-2xl px-4 py-3 text-sm leading-6 border-0 shadow-none ${darkMode ? "bg-[#13151b] text-white" : "bg-[#f4f4f2] text-[#141414]"}`}>
                   <p className="whitespace-pre-wrap break-words">{messageInfoTarget.text}</p>
                 </div>
               </div>
@@ -6168,11 +6178,11 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 {/* Read Status */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="grid h-8 w-8 place-items-center rounded-full bg-[#3b82f6]/10 text-[#3b82f6]">
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-[#3b82f6]/10 text-[var(--loop-read)]">
                       <CheckCheck className="h-4 w-4" />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold">Read</p>
+                      <p className="text-sm">Read</p>
                       <p className={`text-xs ${muted}`}>
                         {getMessageStatus(messageInfoTarget, selectedConversation, currentUser?.id, onlineUserIds) === "read"
                           ? Object.values(messageInfoTarget.readBy || {})[0]
@@ -6183,7 +6193,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                     </div>
                   </div>
                   {getMessageStatus(messageInfoTarget, selectedConversation, currentUser?.id, onlineUserIds) === "read" ? (
-                    <span className="text-xs font-bold text-[#3b82f6]">Read</span>
+                    <span className="text-xs text-[var(--loop-read)]">Read</span>
                   ) : (
                     <span className={`text-xs font-medium ${muted}`}>-</span>
                   )}
@@ -6196,7 +6206,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       <CheckCheck className="h-4 w-4" />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold">Delivered</p>
+                      <p className="text-sm">Delivered</p>
                       <p className={`text-xs ${muted}`}>
                         {getMessageStatus(messageInfoTarget, selectedConversation, currentUser?.id, onlineUserIds) !== "sent"
                           ? Object.values(messageInfoTarget.deliveredTo || {})[0]
@@ -6218,7 +6228,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                       <Check className="h-4 w-4" />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold">Sent</p>
+                      <p className="text-sm">Sent</p>
                       <p className={`text-xs ${muted}`}>
                         {messageInfoTarget.createdAt ? new Date(messageInfoTarget.createdAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "Sent"}
                       </p>
@@ -6236,7 +6246,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
             setDeleteMessageTarget(null);
             setDeleteSelectionTarget(null);
           }}>
-            <div onMouseDown={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[22px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+            <div onMouseDown={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[24px] p-5 shadow-[0_24px_70px_rgba(20,20,20,0.14)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}>
               <button
                 type="button"
                 disabled={deletingMessage || selectionDeleting}
@@ -6244,33 +6254,33 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   setDeleteMessageTarget(null);
                   setDeleteSelectionTarget(null);
                 }}
-                className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-black/45 hover:bg-black/5 hover:text-black"} disabled:opacity-40`}
+                className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ececea]"} disabled:opacity-40`}
                 aria-label="Close delete dialog"
               >
                 <X className="h-4 w-4" />
               </button>
               <div className="flex items-start gap-3 pr-9">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-500/10 text-red-500">
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] ${darkMode ? "bg-[#fb7185]/[0.13] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b]"}`}>
                   <Trash2 className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <h3 className="text-base font-black text-black dark:text-white">Delete {deleteSelectionTarget ? "messages" : "message"}?</h3>
+                  <h3 className="text-[18px] tracking-[-0.01em]">Delete {deleteSelectionTarget ? "messages" : "message"}?</h3>
                   <p className={`mt-1 text-xs leading-5 ${muted}`}>
                     {deleteSelectionTarget ? `${deleteSelectionTarget.messages.length} selected messages can be removed for you or everyone.` : "Choose how this message should be removed."}
                   </p>
                 </div>
               </div>
-              {/* <div className={`mt-4 max-h-24 overflow-hidden rounded-2xl px-3 py-2 text-sm ${darkMode ? "bg-white/[0.05] text-white/70" : "bg-[#f7f8fb] text-black/60"}`}>
+              {/* <div className={`mt-4 max-h-24 overflow-hidden rounded-2xl px-3 py-2 text-sm ${darkMode ? "bg-white/[0.05] text-white/70" : "bg-[#f7f7f5] text-black/60"}`}>
                 <p className="line-clamp-3 whitespace-pre-wrap break-words">{deleteMessageTarget.text || "Link preview message"}</p>
               </div> */}
               <div className="mt-5 flex items-center gap-2">
                 {(deleteSelectionTarget || (deleteMessageTarget?.senderId === currentUser?.id && !deleteMessageTarget?.loopAssistant)) && (
-                  <button type="button" disabled={deletingMessage || selectionDeleting} onClick={() => deleteSelectionTarget ? deleteSelectedMessages("everyone") : deleteSingleMessage("everyone")} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-red-500 px-3 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-60">
+                  <button type="button" disabled={deletingMessage || selectionDeleting} onClick={() => deleteSelectionTarget ? deleteSelectedMessages("everyone") : deleteSingleMessage("everyone")} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-red-500 px-3 text-xs text-white hover:bg-red-600 disabled:opacity-60">
                     {(deletingMessage || selectionDeleting) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     <span className="truncate">Delete for everyone</span>
                   </button>
                 )}
-                <button type="button" disabled={deletingMessage || selectionDeleting} onClick={() => deleteSelectionTarget ? deleteSelectedMessages("me") : deleteSingleMessage("me")} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-red-500 px-3 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-60">
+                <button type="button" disabled={deletingMessage || selectionDeleting} onClick={() => deleteSelectionTarget ? deleteSelectedMessages("me") : deleteSingleMessage("me")} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-red-500 px-3 text-xs text-white hover:bg-red-600 disabled:opacity-60">
                   {(deletingMessage || selectionDeleting) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                   <span className="truncate">Delete for me</span>
                 </button>
@@ -6283,22 +6293,22 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
             if (deletingGroup) return;
             setGroupDeleteConfirm(null);
           }}>
-            <div onMouseDown={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[22px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+            <div onMouseDown={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[24px] p-5 shadow-[0_24px_70px_rgba(20,20,20,0.14)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}>
               <button
                 type="button"
                 disabled={deletingGroup}
                 onClick={() => setGroupDeleteConfirm(null)}
-                className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-black/45 hover:bg-black/5 hover:text-black"} disabled:opacity-40`}
+                className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ececea]"} disabled:opacity-40`}
                 aria-label="Close group delete dialog"
               >
                 <X className="h-4 w-4" />
               </button>
               <div className="flex items-start gap-3 pr-9">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-rose-500/10 text-rose-500">
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] ${darkMode ? "bg-[#fb7185]/[0.13] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b]"}`}>
                   <Trash2 className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <h3 className="text-base font-black text-black dark:text-white">
+                  <h3 className="text-[18px] tracking-[-0.01em]">
                     {groupDeleteConfirm.mode === "everyone" ? "Delete group?" : "Remove group?"}
                   </h3>
                   <p className={`mt-1 text-xs leading-5 ${muted}`}>
@@ -6309,10 +6319,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 </div>
               </div>
               <div className="mt-5 flex items-center gap-2">
-                <button type="button" disabled={deletingGroup} onClick={() => setGroupDeleteConfirm(null)} className={`flex h-9 min-w-0 flex-1 items-center justify-center rounded-full px-3 text-xs font-bold transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f3f4f6] text-[#111827] hover:bg-[#e5e7eb]"}`}>
+                <button type="button" disabled={deletingGroup} onClick={() => setGroupDeleteConfirm(null)} className={`flex h-9 min-w-0 flex-1 items-center justify-center rounded-full px-3 text-xs transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ececea]"}`}>
                   Cancel
                 </button>
-                <button type="button" disabled={deletingGroup} onClick={confirmGroupDelete} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-rose-500 px-3 text-xs font-bold text-white hover:bg-rose-600 disabled:opacity-60">
+                <button type="button" disabled={deletingGroup} onClick={confirmGroupDelete} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-rose-500 px-3 text-xs text-white hover:bg-rose-600 disabled:opacity-60">
                   {deletingGroup ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                   <span className="truncate">{groupDeleteConfirm.mode === "everyone" ? "Delete" : "Remove"}</span>
                 </button>
@@ -6326,13 +6336,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
             setForwardAnalysisPayload(null);
             setForwardAnalysisComment("");
           }}>
-            <div onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[22px] p-5 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+            <div onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} className={`relative w-full max-w-[420px] rounded-[24px] p-5 shadow-[0_24px_70px_rgba(20,20,20,0.14)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}>
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-base font-bold text-black dark:text-white">Forward Analysis</h3>
+                <div className="flex items-center gap-3">
+                  <IconTile icon={Forward} tone="mint" darkMode={darkMode} size="sm" />
+                  <h3 className="text-[18px] tracking-[-0.01em]">Forward analysis</h3>
+                </div>
                 <button type="button" disabled={forwardAnalysisSending} onClick={() => {
                   setForwardAnalysisPayload(null);
                   setForwardAnalysisComment("");
-                }} className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-black/45 hover:bg-black/5 hover:text-black"} disabled:opacity-40`}>
+                }} className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ececea]"} disabled:opacity-40`}>
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -6342,7 +6355,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   value={forwardAnalysisComment}
                   onChange={(e) => setForwardAnalysisComment(e.target.value)}
                   placeholder="Add a comment... (optional)"
-                  className={`w-full resize-none rounded-xl p-3 text-sm outline-none transition focus:ring-2 focus:ring-[#2563eb] ${darkMode ? "bg-white/5 text-white placeholder:text-white/30" : "bg-black/5 text-black placeholder:text-black/40"}`}
+                  className={`w-full resize-none rounded-xl p-3 text-sm outline-none transition focus:ring-2 focus:ring-[var(--loop-accent)] ${darkMode ? "bg-white/5 text-white placeholder:text-white/30" : "bg-black/5 text-black placeholder:text-black/40"}`}
                   rows={4}
                   disabled={forwardAnalysisSending}
                 />
@@ -6350,10 +6363,10 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                   <button type="button" disabled={forwardAnalysisSending} onClick={() => {
                     setForwardAnalysisPayload(null);
                     setForwardAnalysisComment("");
-                  }} className={`flex h-10 min-w-0 flex-1 items-center justify-center rounded-full px-3 text-sm font-bold transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f3f4f6] text-[#111827] hover:bg-[#e5e7eb]"}`}>
+                  }} className={`flex h-10 min-w-0 flex-1 items-center justify-center rounded-full px-3 text-sm transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ececea]"}`}>
                     Cancel
                   </button>
-                  <button type="submit" disabled={forwardAnalysisSending} className="flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-[#2563eb] px-3 text-sm font-bold text-white hover:bg-[#1d4ed8] disabled:opacity-60">
+                  <button type="submit" disabled={forwardAnalysisSending} className="flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-[var(--loop-accent)] px-3 text-sm text-[var(--loop-accent-fg)] hover:opacity-90 disabled:opacity-60">
                     {forwardAnalysisSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Forward className="h-4 w-4" />}
                     <span>Forward</span>
                   </button>
@@ -6365,13 +6378,16 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
 
         {questionScopeOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm sm:p-6" onMouseDown={() => !savingQuestions && setQuestionScopeOpen(false)}>
-            <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} className={`relative flex w-full max-w-[500px] flex-col rounded-[22px] shadow-[0_24px_90px_rgba(15,23,42,0.28)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#111827]"}`}>
+            <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} className={`relative flex w-full max-w-[500px] flex-col rounded-[24px] shadow-[0_24px_70px_rgba(20,20,20,0.14)] ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}>
               <div className="flex items-center justify-between p-5 pb-3">
-                <div>
-                  <h3 className="text-base font-bold text-black dark:text-white">Analysis Question Scope</h3>
-                  <p className={`mt-1 text-xs ${muted}`}>Loop assistant will answer these questions for each employee report.</p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <IconTile icon={Sparkles} tone="lime" darkMode={darkMode} size="sm" />
+                  <div className="min-w-0">
+                    <h3 className="text-[18px] tracking-[-0.01em]">Analysis question scope</h3>
+                    <p className={`mt-1 text-xs ${muted}`}>Loop assistant will answer these questions for each employee report.</p>
+                  </div>
                 </div>
-                <button type="button" disabled={savingQuestions} onClick={() => setQuestionScopeOpen(false)} className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-black/45 hover:bg-black/5 hover:text-black"} disabled:opacity-40`}>
+                <button type="button" disabled={savingQuestions} onClick={() => setQuestionScopeOpen(false)} className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ececea]"} disabled:opacity-40`}>
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -6379,7 +6395,7 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                 <div className="space-y-3 mt-2">
                   {analysisQuestions.map((q, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <span className="shrink-0 text-sm font-bold opacity-50">{i + 1}.</span>
+                      <span className="shrink-0 text-sm opacity-50">{i + 1}.</span>
                       <input
                         type="text"
                         value={q}
@@ -6389,26 +6405,26 @@ export default function Forum({ darkMode, onMobileChatOpenChange, forceMobileVie
                           setAnalysisQuestions(newQ);
                         }}
                         placeholder="e.g. Did the employee complete their planned tasks?"
-                        className={`min-w-0 flex-1 rounded-xl p-3 text-sm font-medium outline-none transition focus:ring-2 focus:ring-[#2563eb] ${darkMode ? "bg-white/5 text-white placeholder:text-white/30" : "bg-black/5 text-black placeholder:text-black/40"}`}
+                        className={`min-w-0 flex-1 rounded-xl p-3 text-sm font-medium outline-none transition focus:ring-2 focus:ring-[var(--loop-accent)] ${darkMode ? "bg-white/5 text-white placeholder:text-white/30" : "bg-black/5 text-black placeholder:text-black/40"}`}
                       />
                       <button type="button" onClick={() => setAnalysisQuestions(analysisQuestions.filter((_, idx) => idx !== i))} className="shrink-0 p-2 opacity-50 hover:opacity-100 hover:text-red-500 transition">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   ))}
-                  <button type="button" onClick={() => setAnalysisQuestions([...analysisQuestions, ""])} className={`flex items-center gap-1.5 text-sm font-bold text-[#2563eb] hover:underline mt-2`}>
+                  <button type="button" onClick={() => setAnalysisQuestions([...analysisQuestions, ""])} className={`flex items-center gap-1.5 text-sm text-[var(--loop-ink)] hover:underline mt-2`}>
                     <Plus className="h-4 w-4" /> Add Question
                   </button>
                 </div>
               </div>
               <div className="border-t border-black/5 dark:border-white/10 p-5 pt-4">
                 <div className="flex items-center justify-end gap-2">
-                  <button type="button" disabled={savingQuestions} onClick={() => setQuestionScopeOpen(false)} className={`flex h-10 items-center justify-center rounded-full px-4 text-sm font-bold transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f3f4f6] text-[#111827] hover:bg-[#e5e7eb]"}`}>
+                  <button type="button" disabled={savingQuestions} onClick={() => setQuestionScopeOpen(false)} className={`flex h-10 items-center justify-center rounded-full px-4 text-sm transition disabled:opacity-60 ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ececea]"}`}>
                     Cancel
                   </button>
-                  <button type="button" disabled={savingQuestions} onClick={saveQuestionScope} className="flex h-10 items-center justify-center gap-1.5 rounded-full bg-[#2563eb] px-5 text-sm font-bold text-white hover:bg-[#1d4ed8] disabled:opacity-60">
+                  <button type="button" disabled={savingQuestions} onClick={saveQuestionScope} className="flex h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--loop-accent)] px-5 text-sm text-[var(--loop-accent-fg)] hover:opacity-90 disabled:opacity-60">
                     {savingQuestions ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    <span>Save Scope</span>
+                    <span>Save scope</span>
                   </button>
                 </div>
               </div>

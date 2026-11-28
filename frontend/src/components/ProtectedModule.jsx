@@ -31,33 +31,50 @@ const ModuleControl = lazy(moduleLoaders.ModuleControl);
 const SlackCenter = lazy(moduleLoaders.SlackCenter);
 const ProfilePage = lazy(moduleLoaders.ProfilePage);
 
-/** Shimmering stand-in while a module's code downloads, laid out like a typical module page. */
+/** Shimmering stand-in while a module's code downloads, laid out like a typical module page:
+ *  badge and two-line heading, a row of pastel stat tiles, then a white card of rows. */
 export function ModuleSkeleton({ darkMode }) {
-  const page = darkMode ? "bg-[#0b0c0f]" : "bg-[#eef3f2]";
-  const card = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white";
+  const page = darkMode ? "bg-[#121317]" : "bg-white";
+  const card = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white";
   const bar = darkMode ? "skeleton-bar skeleton-bar-dark" : "skeleton-bar";
+  const tiles = darkMode
+    ? ["rgba(74,222,128,0.08)", "rgba(167,139,250,0.09)", "rgba(251,146,60,0.08)", "rgba(96,165,250,0.08)"]
+    : ["#eef6ef", "#f3f1fc", "#fcefe9", "#edf3fc"];
   return (
-    <div className={`module-skeleton flex min-h-0 flex-1 flex-col gap-5 overflow-hidden p-4 sm:p-6 ${page}`} aria-busy="true" aria-label="Loading">
-      <div className={`rounded-[30px] border p-6 sm:p-8 ${card}`}>
-        <div className={`h-7 w-56 rounded-xl ${bar}`} />
-        <div className={`mt-3 h-4 w-80 max-w-full rounded-lg ${bar}`} />
-        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((item) => (
-            <div key={item} className={`h-20 rounded-2xl ${bar}`} />
-          ))}
-        </div>
+    <div className={`module-skeleton flex min-h-0 flex-1 flex-col gap-6 overflow-hidden px-4 py-6 sm:px-6 lg:px-8 lg:py-8 ${page}`} aria-busy="true" aria-label="Loading">
+      <div>
+        <div className={`h-7 w-40 rounded-full ${bar}`} />
+        <div className={`mt-4 h-6 w-56 rounded-lg ${bar}`} />
+        <div className={`mt-2 h-6 w-80 max-w-full rounded-lg opacity-60 ${bar}`} />
       </div>
-      <div className={`flex-1 rounded-[30px] border p-6 ${card}`}>
-        {[0, 1, 2, 3, 4].map((item) => (
-          <div key={item} className="flex items-center gap-4 py-3">
-            <div className={`h-10 w-10 shrink-0 rounded-full ${bar}`} />
-            <div className="flex-1">
-              <div className={`h-3.5 w-1/3 rounded-md ${bar}`} />
-              <div className={`mt-2 h-3 w-1/5 rounded-md ${bar}`} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {tiles.map((color) => (
+          <div key={color} style={{ backgroundColor: color }} className="flex h-[118px] flex-col justify-between rounded-[20px] p-4">
+            <div className={`h-5 w-5 rounded-md ${darkMode ? "bg-white/10" : "bg-white/70"}`} />
+            <div>
+              <div className={`h-6 w-14 rounded-md ${darkMode ? "bg-white/10" : "bg-white/70"}`} />
+              <div className={`mt-2 h-3 w-20 rounded-md ${darkMode ? "bg-white/[0.06]" : "bg-white/50"}`} />
             </div>
-            <div className={`hidden h-7 w-24 rounded-full sm:block ${bar}`} />
           </div>
         ))}
+      </div>
+      <div className={`flex-1 rounded-[20px] border p-4 ${card}`}>
+        <div className="flex items-center gap-2.5 px-1 pb-3">
+          <div className={`h-9 w-9 rounded-[11px] ${bar}`} />
+          <div className={`h-4 w-40 rounded-md ${bar}`} />
+        </div>
+        <div className="space-y-1.5">
+          {[0, 1, 2, 3, 4].map((item) => (
+            <div key={item} className={`flex items-center gap-4 rounded-[14px] px-4 py-3 ${darkMode ? "bg-white/[0.03]" : "bg-[#f7f7f5]"}`}>
+              <div className={`h-9 w-9 shrink-0 rounded-full ${bar}`} />
+              <div className="flex-1">
+                <div className={`h-3.5 w-1/3 rounded-md ${bar}`} />
+                <div className={`mt-2 h-3 w-1/5 rounded-md ${bar}`} />
+              </div>
+              <div className={`hidden h-7 w-24 rounded-full sm:block ${bar}`} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -85,7 +102,7 @@ export default function ProtectedModule({ moduleId, projectId, departmentId }) {
     <Suspense fallback={<ModuleSkeleton darkMode={darkMode} />}>
       <ModuleEntrance>
         {moduleId === "dashboard" && (
-          <Dashboard darkMode={darkMode} selectedDocs={selectedDocs} setSelectedDocs={setSelectedDocs} />
+          <Dashboard darkMode={darkMode} />
         )}
         {moduleId === "documents" && (
           <Documents darkMode={darkMode} selectedDocs={selectedDocs} setSelectedDocs={setSelectedDocs} />

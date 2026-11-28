@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { Select } from "./ui";
+import { Button, Chip as KitChip, EmptyState, IconTile, Notice, SectionTitle, Select, toneOf } from "./ui";
 
 const FIELD_TYPES = [
   { value: "text", label: "Text" },
@@ -107,14 +107,7 @@ function writeSeen(next) {
    Each form keeps its own colour, picked from its slug so it never moves about
    between reloads. Colour marks identity and state; nothing else is tinted.   */
 
-const PALETTES = [
-  { tile: "bg-indigo-50 text-indigo-600", tileDark: "bg-indigo-400/15 text-indigo-300", solid: "bg-indigo-600 hover:bg-indigo-700", solidDark: "bg-indigo-500 hover:bg-indigo-400" },
-  { tile: "bg-emerald-50 text-emerald-600", tileDark: "bg-emerald-400/15 text-emerald-300", solid: "bg-emerald-600 hover:bg-emerald-700", solidDark: "bg-emerald-500 hover:bg-emerald-400" },
-  { tile: "bg-amber-50 text-amber-600", tileDark: "bg-amber-400/15 text-amber-300", solid: "bg-amber-500 hover:bg-amber-600", solidDark: "bg-amber-500 hover:bg-amber-400" },
-  { tile: "bg-rose-50 text-rose-600", tileDark: "bg-rose-400/15 text-rose-300", solid: "bg-rose-500 hover:bg-rose-600", solidDark: "bg-rose-500 hover:bg-rose-400" },
-  { tile: "bg-sky-50 text-sky-600", tileDark: "bg-sky-400/15 text-sky-300", solid: "bg-sky-600 hover:bg-sky-700", solidDark: "bg-sky-500 hover:bg-sky-400" },
-  { tile: "bg-violet-50 text-violet-600", tileDark: "bg-violet-400/15 text-violet-300", solid: "bg-violet-600 hover:bg-violet-700", solidDark: "bg-violet-500 hover:bg-violet-400" },
-];
+const PALETTES = ["lavender", "mint", "amber", "rose", "sky", "peach"];
 
 function paletteFor(seed = "") {
   let hash = 0;
@@ -122,31 +115,20 @@ function paletteFor(seed = "") {
   return PALETTES[hash % PALETTES.length];
 }
 
-function Chip({ icon: Icon, children, tone, darkMode }) {
-  const tones = {
-    amber: darkMode ? "bg-amber-400/12 text-amber-200" : "bg-amber-50 text-amber-700",
-    blue: darkMode ? "bg-blue-400/12 text-blue-200" : "bg-blue-50 text-blue-700",
-    violet: darkMode ? "bg-violet-400/12 text-violet-200" : "bg-violet-50 text-violet-700",
-    green: darkMode ? "bg-emerald-400/15 text-emerald-200" : "bg-emerald-100 text-emerald-700",
-    dark: darkMode ? "bg-white/[0.14] text-white/75" : "bg-[#171714] text-white",
-  };
+const CHIP_TONES = { amber: "amber", blue: "sky", violet: "lavender", green: "mint", dark: "rose" };
+
+function Chip({ icon, children, tone, darkMode }) {
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold ${tone ? tones[tone] : darkMode ? "bg-white/[0.07] text-white/60" : "bg-black/[0.045] text-black/55"}`}>
-      {Icon ? <Icon className="h-3 w-3 opacity-70" /> : null}
+    <KitChip icon={icon} tone={tone ? CHIP_TONES[tone] : "neutral"} darkMode={darkMode} className="h-6 shrink-0 px-2.5 text-[12px]">
       {children}
-    </span>
+    </KitChip>
   );
 }
 
+const ICON_BUTTON_TONES = { blue: "sky", violet: "lavender", emerald: "mint", amber: "amber", rose: "rose", slate: "neutral" };
+
 function IconButton({ icon: Icon, onClick, disabled, label, tone = "slate", darkMode }) {
-  const tones = {
-    blue: darkMode ? "bg-blue-400/12 text-blue-300 hover:bg-blue-400/22" : "bg-blue-50 text-blue-600 hover:bg-blue-100",
-    violet: darkMode ? "bg-violet-400/12 text-violet-300 hover:bg-violet-400/22" : "bg-violet-50 text-violet-600 hover:bg-violet-100",
-    emerald: darkMode ? "bg-emerald-400/12 text-emerald-300 hover:bg-emerald-400/22" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100",
-    amber: darkMode ? "bg-amber-400/12 text-amber-300 hover:bg-amber-400/22" : "bg-amber-50 text-amber-600 hover:bg-amber-100",
-    rose: darkMode ? "bg-rose-400/12 text-rose-300 hover:bg-rose-400/22" : "bg-rose-50 text-rose-500 hover:bg-rose-100",
-    slate: darkMode ? "bg-white/[0.07] text-white/60 hover:bg-white/[0.13]" : "bg-black/[0.045] text-black/50 hover:bg-black/[0.08]",
-  };
+  const t = toneOf(ICON_BUTTON_TONES[tone] || "neutral");
   return (
     <button
       type="button"
@@ -154,12 +136,69 @@ function IconButton({ icon: Icon, onClick, disabled, label, tone = "slate", dark
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 ${tones[tone]}`}
+      style={{ backgroundColor: darkMode ? t[2] : t[0], color: darkMode ? t[3] : t[1] }}
+      className="grid h-9 w-9 shrink-0 place-items-center rounded-full transition hover:opacity-80 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
     >
-      <Icon className="h-4 w-4" />
+      <Icon className="h-4 w-4" strokeWidth={1.8} />
     </button>
   );
 }
+
+/* Shared look for the Finance drawers: header with an icon tile, a two-line title and a
+   round close button; grey pill fields; quiet labels. */
+
+function fieldInput(darkMode, { onSoft = false, extra = "" } = {}) {
+  return `h-11 w-full rounded-full border px-4 text-[13.5px] outline-none transition ${extra} ${
+    darkMode
+      ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-[3px] focus:ring-white/10"
+      : onSoft
+        ? "border-[#ececec] bg-white text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#dcdcd8] focus:ring-[3px] focus:ring-black/[0.05]"
+        : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"
+  }`;
+}
+
+function FieldLabel({ darkMode, label, hint, children, as: Tag = "label" }) {
+  return (
+    <Tag className="block">
+      <span className={`mb-2 block text-[12.5px] ${darkMode ? "text-white/55" : "text-[#7a7a78]"}`}>{label}</span>
+      {children}
+      {hint ? <span className={`mt-2 block text-[12px] leading-5 ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{hint}</span> : null}
+    </Tag>
+  );
+}
+
+function DrawerHead({ darkMode, icon, tone = "neutral", title, subtitle, onClose, actions, children }) {
+  return (
+    <div className={`shrink-0 border-b px-6 py-5 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+          <div className="min-w-0">
+            <h2 className="truncate text-[17px] leading-tight tracking-[-0.01em]">{title}</h2>
+            {subtitle ? <div className={`mt-1 text-[12.5px] leading-5 ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{subtitle}</div> : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {actions}
+          <button type="button" onClick={onClose} aria-label="Close" className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition active:scale-95 ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function DrawerFoot({ darkMode, children }) {
+  return (
+    <div className={`flex shrink-0 items-center justify-between gap-3 border-t px-6 py-4 ${darkMode ? "border-white/10 bg-[#121317]" : "border-[#f0f0ee] bg-white"}`}>
+      {children}
+    </div>
+  );
+}
+
+const drawerShell = (darkMode) => `border shadow-[0_24px_70px_rgba(0,0,0,0.16)] newq ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]"}`;
 
 /* ──────────────────────────────── the module ──────────────────────────────── */
 
@@ -178,10 +217,13 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
   const [responsesFor, setResponsesFor] = useState(null);
   const [seen, setSeen] = useState({});
 
-  const muted = darkMode ? "text-white/50" : "text-black/50";
-  const panel = darkMode ? "border-transparent bg-[#15171c]" : "border-black/[0.06] bg-white";
-  const cardClass = darkMode ? "border-white/[0.07] bg-[#191b21]" : "border-black/[0.07] bg-white";
-  const inputClass = `mt-2 h-11 w-full rounded-2xl border px-3 text-sm font-normal outline-none ${darkMode ? "border-white/10 bg-[#0d0f13] text-white/80 placeholder:text-white/30" : "border-black/10 bg-white text-black/75 placeholder:text-black/35"}`;
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
+  const cardClass = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white";
+  const inputClass = fieldInput(darkMode);
+  const softInputClass = fieldInput(darkMode, { onSoft: true });
+  const choiceClass = (active) => (active
+    ? darkMode ? "border-[#cff07a]/50 bg-[#cff07a]/10 text-white" : "border-[#141414] bg-white text-[#141414]"
+    : darkMode ? "border-white/10 text-white/75 hover:bg-white/[0.04]" : "border-[#ececec] text-[#3d3d3b] hover:bg-[#f7f7f5]");
 
   const load = useCallback(async () => {
     try {
@@ -335,36 +377,28 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
   }
 
   return (
-    <section className={`mt-5 rounded-[30px] border p-5 sm:p-6 ${panel}`}>
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="small text-2xl font-black">Your forms</h2>
-          <p className={`mt-1 text-sm ${muted}`}>
-            Each form has its own link and its own sheet tab. Open one to edit its fields or read its responses.
-          </p>
-        </div>
-        <button
-          type="button"
+    <section className="mt-10">
+      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <SectionTitle darkMode={darkMode} title="Your forms" subtitle="each with its own link and sheet tab" />
+        <Button
+          darkMode={darkMode}
+          variant="primary"
+          icon={FilePlus2}
           onClick={openNew}
           disabled={!canManage}
           title={canManage ? "" : "Your Google account has view access only"}
-          className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#6ee72f] px-5 text-sm font-black text-[#10210c] transition hover:bg-[#5edb22] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+          className="shrink-0"
         >
-          <FilePlus2 className="h-4 w-4" /> New form
-        </button>
+          New form
+        </Button>
       </div>
 
       {loading ? (
         <div className={`grid min-h-[120px] place-items-center text-sm ${muted}`}><Loader2 className="h-5 w-5 animate-spin" /></div>
       ) : !forms.length ? (
-        <div className={`grid min-h-[160px] place-items-center rounded-[24px] border border-dashed p-6 text-center ${darkMode ? "border-white/10" : "border-black/10"}`}>
-          <div>
-            <span className={`mx-auto grid h-12 w-12 place-items-center rounded-2xl ${darkMode ? "bg-white/[0.06]" : "bg-black/[0.04]"}`}><ClipboardList className={`h-6 w-6 ${muted}`} /></span>
-            <p className={`mt-3 text-sm font-bold ${muted}`}>No request forms yet. Create one and share its link.</p>
-          </div>
-        </div>
+        <EmptyState darkMode={darkMode} icon={ClipboardList} tone="lavender" title="No request forms yet" text="Create one and share its link." />
       ) : (
-        <div className="grid gap-3 xl:grid-cols-2">
+        <div className="grid gap-4 xl:grid-cols-2">
           {forms.map((form) => {
             const single = form.submissionMode === "single";
             const links = form.links || { total: 0, used: 0 };
@@ -377,20 +411,20 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
             const extra = mark ? form.submissionCount - mark.count : 0;
             const fresh = arrived || extra > 0 ? Math.max(1, extra) : 0;
             return (
-              <article key={form.id} className={`flex min-w-0 flex-col rounded-[20px] border p-4 ${cardClass} ${form.isActive ? "" : "opacity-55"}`}>
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-xl ${darkMode ? colour.tileDark : colour.tile}`}>
-                    <ClipboardList className="h-[18px] w-[18px]" />
+              <article key={form.id} className={`flex min-w-0 flex-col rounded-[20px] border p-5 ${cardClass} ${form.isActive ? "" : "opacity-55"}`}>
+                <div className="flex min-w-0 items-start gap-3.5">
+                  <span className="relative shrink-0">
+                    <IconTile icon={ClipboardList} tone={colour} darkMode={darkMode} />
                     {fresh > 0 && (
                       <span className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center">
                         <span className="finance-ping absolute inset-0 text-emerald-500" />
-                        <span className="relative h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#191b21]" />
+                        <span className={`relative h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ${darkMode ? "ring-[#15171c]" : "ring-white"}`} />
                       </span>
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <h3 className="small truncate text-[17px] font-black leading-tight">{form.name}</h3>
-                    <p className={`mt-0.5 truncate text-xs ${muted}`}>{form.description || `Responses go to the "${form.tabName}" tab`}</p>
+                    <h3 className="truncate text-[16px] leading-tight tracking-[-0.01em]">{form.name}</h3>
+                    <p className={`mt-1 truncate text-[13px] ${muted}`}>{form.description || `Responses go to the "${form.tabName}" tab`}</p>
                   </div>
                   <Chip
                     icon={!form.isActive ? Power : form.visibility === "link" ? Link2 : Users}
@@ -401,10 +435,10 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
                   </Chip>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-4 flex flex-wrap gap-1.5">
                   <Chip icon={Hash} darkMode={darkMode}>{form.fields.length} field{form.fields.length === 1 ? "" : "s"}</Chip>
                   <Chip icon={Table2} darkMode={darkMode}>{form.tabName}</Chip>
-                  <button type="button" onClick={() => openResponses(form)} className="rounded-lg outline-none transition hover:opacity-70 active:scale-95" title="View responses">
+                  <button type="button" onClick={() => openResponses(form)} className="rounded-full outline-none transition hover:opacity-70 active:scale-95" title="View responses">
                     {fresh > 0
                       ? <Chip icon={Inbox} tone="green" darkMode={darkMode}>{fresh} new response{fresh === 1 ? "" : "s"}</Chip>
                       : <Chip icon={Inbox} darkMode={darkMode}>{form.submissionCount} response{form.submissionCount === 1 ? "" : "s"}</Chip>}
@@ -415,11 +449,11 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
                 </div>
 
                 {/* wraps rather than forcing the card wider than a phone screen */}
-                <div className={`mt-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t pt-3 ${darkMode ? "border-white/[0.07]" : "border-black/[0.07]"}`}>
-                  <p className={`min-w-0 flex-1 truncate text-xs font-bold ${muted}`}>
+                <div className={`mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t pt-4 ${darkMode ? "border-white/[0.07]" : "border-[#f0f0ee]"}`}>
+                  <p className={`min-w-0 flex-1 truncate text-[12.5px] ${muted}`}>
                     {single ? "One link per person" : `/f/${form.slug}`}
                   </p>
-                  <div className="flex flex-wrap items-center gap-0.5">
+                  <div className="flex flex-wrap items-center gap-1">
                     <IconButton icon={Pencil} label="Edit form" tone="blue" onClick={() => openEdit(form)} disabled={!canManage} darkMode={darkMode} />
                     <IconButton icon={CopyPlus} label="Duplicate form" tone="violet" onClick={() => openDuplicate(form)} disabled={!canManage} darkMode={darkMode} />
                     <IconButton icon={Inbox} label="View responses" tone="emerald" onClick={() => openResponses(form)} darkMode={darkMode} />
@@ -432,14 +466,17 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
                       darkMode={darkMode}
                     />
                     <IconButton icon={Trash2} label="Delete form" tone="rose" onClick={() => setConfirmDelete(form)} disabled={!canManage} darkMode={darkMode} />
-                    <button
-                      type="button"
+                    <Button
+                      darkMode={darkMode}
+                      variant="primary"
+                      size="sm"
+                      icon={single ? Ticket : Copy}
                       onClick={() => (single ? setLinksFor(form) : copyText(url))}
                       disabled={single && !canManage}
-                      className={`ml-1.5 flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-xs font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-35 ${darkMode ? colour.solidDark : colour.solid}`}
+                      className="ml-1.5 h-9"
                     >
-                      {single ? <><Ticket className="h-3.5 w-3.5" /> Links</> : <><Copy className="h-3.5 w-3.5" /> Copy link</>}
-                    </button>
+                      {single ? "Links" : "Copy link"}
+                    </Button>
                   </div>
                 </div>
               </article>
@@ -464,18 +501,20 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
       {confirmDelete && (
         <Overlay variant="modal" onClose={() => setConfirmDelete(null)}>
           {({ close, closing }) => (
-          <div className={`finance-modal w-full max-w-md rounded-[28px] p-7 ${closing ? "is-closing" : ""} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-            <span className={`grid h-12 w-12 place-items-center rounded-full border ${darkMode ? "border-rose-400/30" : "border-rose-200"}`}><TriangleAlert className="h-6 w-6 text-rose-500" /></span>
-            <h3 className="small mt-4 text-2xl font-black">Delete &quot;{confirmDelete.name}&quot;?</h3>
-            <p className={`mt-3 text-sm leading-6 ${muted}`}>
-              The form, its {confirmDelete.submissionCount} saved response{confirmDelete.submissionCount === 1 ? "" : "s"} and every link to it are removed.
-              Rows already written into the spreadsheet stay where they are.
-            </p>
+          <div className={`finance-modal w-full max-w-md rounded-[24px] border p-6 newq ${closing ? "is-closing" : ""} ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`} style={{ boxShadow: "var(--ui-shadow-pop)" }}>
+            <div className="flex items-start gap-3.5">
+              <IconTile icon={TriangleAlert} tone="rose" darkMode={darkMode} />
+              <div className="min-w-0">
+                <h3 className="text-[17px] leading-tight">Delete &quot;{confirmDelete.name}&quot;?</h3>
+                <p className={`mt-2 text-[13px] leading-5 ${muted}`}>
+                  The form, its {confirmDelete.submissionCount} saved response{confirmDelete.submissionCount === 1 ? "" : "s"} and every link to it are removed.
+                  Rows already written into the spreadsheet stay where they are.
+                </p>
+              </div>
+            </div>
             <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={close} className={`h-11 rounded-full px-5 text-sm font-bold transition active:scale-95 ${darkMode ? "bg-white/10" : "bg-[#f3f5ef] text-black/60"}`}>Keep it</button>
-              <button type="button" onClick={() => deleteForm(close)} disabled={deleting} className="flex h-11 items-center gap-2 rounded-full bg-rose-500 px-6 text-sm font-bold text-white transition hover:bg-rose-600 active:scale-95 disabled:opacity-60">
-                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete form
-              </button>
+              <Button darkMode={darkMode} variant="secondary" onClick={close}>Keep it</Button>
+              <Button darkMode={darkMode} variant="danger" icon={Trash2} loading={deleting} onClick={() => deleteForm(close)} disabled={deleting}>Delete form</Button>
             </div>
           </div>
           )}
@@ -487,80 +526,67 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
           {({ close, closing }) => (
           <form
             onSubmit={(event) => { event.preventDefault(); void save(); }}
-            className={`finance-panel employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden ${closing ? "is-closing" : ""} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}
+            className={`finance-panel employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden ${closing ? "is-closing" : ""} ${drawerShell(darkMode)}`}
           >
-            <div className={`border-b px-5 py-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className={`text-xs font-black uppercase tracking-[0.16em] ${muted}`}>Finance</p>
-                  <h2 className="small mt-2 text-2xl font-black">
-                    {editingId ? "Edit request form" : duplicatedFrom ? "Duplicate request form" : "New request form"}
-                  </h2>
-                  {duplicatedFrom && (
-                    <p className={`mt-2 flex items-start gap-2 text-xs leading-5 ${muted}`}>
-                      <CopyPlus className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      <span>Copied from <b>{duplicatedFrom}</b>. Change anything you like — nothing is created until you save, and the original is untouched.</span>
-                    </p>
-                  )}
-                </div>
-                <button type="button" onClick={close} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition active:scale-95 ${darkMode ? "bg-white/10" : "bg-[#f3f5ef]"}`}><X className="h-5 w-5" /></button>
-              </div>
-            </div>
+            <DrawerHead
+              darkMode={darkMode}
+              icon={editingId ? Pencil : duplicatedFrom ? CopyPlus : FilePlus2}
+              tone="lavender"
+              title={editingId ? "Edit request form" : duplicatedFrom ? "Duplicate request form" : "New request form"}
+              subtitle={duplicatedFrom
+                ? <>Copied from <span className={darkMode ? "text-white/80" : "text-[#141414]"}>{duplicatedFrom}</span>. Change anything you like — nothing is created until you save, and the original is untouched.</>
+                : "Finance · fields, sheet tab and who can submit"}
+              onClose={close}
+            />
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-              <div className="grid gap-4">
-                <label className={`block rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
-                  <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Form name</span>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+              <div className="grid gap-5">
+                <FieldLabel darkMode={darkMode} label="Form name">
                   <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Site material request" className={inputClass} />
-                </label>
-                <label className={`block rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
-                  <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Description</span>
+                </FieldLabel>
+                <FieldLabel darkMode={darkMode} label="Description">
                   <input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Shown at the top of the form" className={inputClass} />
-                </label>
-                <label className={`block rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
-                  <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Responses spreadsheet link</span>
+                </FieldLabel>
+                <FieldLabel darkMode={darkMode} label="Responses spreadsheet link" hint="Paste the sheet link or its id. Blank means responses go to the all-projects sheet from Settings.">
                   <input value={draft.spreadsheetId} onChange={(e) => setDraft({ ...draft, spreadsheetId: e.target.value })} placeholder="Leave blank to use the all-projects sheet" className={inputClass} />
-                  <span className={`mt-2 block text-xs ${muted}`}>Paste the sheet link or its id. Blank means responses go to the all-projects sheet from Settings.</span>
                   {serviceEmail ? (
-                    <span className={`mt-3 flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-xs ${darkMode ? "bg-white/[0.06]" : "bg-white"}`}>
+                    <span className={`mt-2 flex flex-wrap items-center gap-2 rounded-[14px] px-4 py-2.5 text-[12.5px] ${darkMode ? "bg-white/[0.05]" : "bg-[#f7f7f5]"}`}>
                       <span className={muted}>Share the sheet with</span>
-                      <code className="break-all font-bold">{serviceEmail}</code>
-                      <button type="button" onClick={() => copyText(serviceEmail, "Address copied")} className="ml-auto shrink-0" title="Copy address">
+                      <code className="break-all">{serviceEmail}</code>
+                      <button type="button" onClick={() => copyText(serviceEmail, "Address copied")} className={`ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.05]"}`} title="Copy address">
                         <Copy className="h-3.5 w-3.5" />
                       </button>
                     </span>
                   ) : null}
-                </label>
-                <label className={`block rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
-                  <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Sheet tab for responses</span>
+                </FieldLabel>
+                <FieldLabel darkMode={darkMode} label="Sheet tab for responses" hint="Created with a header row if the tab does not exist yet.">
                   <input value={draft.tabName} onChange={(e) => setDraft({ ...draft, tabName: e.target.value })} placeholder="Material Requests" className={inputClass} />
-                  <span className={`mt-2 block text-xs ${muted}`}>Created with a header row if the tab does not exist yet.</span>
-                </label>
-                <label className={`block rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
-                  <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Drive folder link for uploads <span className="font-normal normal-case">— optional</span></span>
+                </FieldLabel>
+                <FieldLabel
+                  darkMode={darkMode}
+                  label={<>Drive folder link for uploads <span className={darkMode ? "text-white/35" : "text-[#a8a8a5]"}>· optional</span></>}
+                  hint="Leave blank and files are kept on the dashboard server, with the link written into the sheet. A Drive folder is used when it accepts the file — which in practice means a Shared Drive, since a service account owns no Drive storage of its own."
+                >
                   <input value={draft.driveFolderId} onChange={(e) => setDraft({ ...draft, driveFolderId: e.target.value })} placeholder="Paste a folder link, or leave blank" className={inputClass} />
-                  <span className={`mt-2 block text-xs ${muted}`}>Leave blank and files are kept on the dashboard server, with the link written into the sheet. A Drive folder is used when it accepts the file — which in practice means a Shared Drive, since a service account owns no Drive storage of its own.</span>
-                </label>
+                </FieldLabel>
 
-                <div className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
-                  <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Who can submit</span>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <FieldLabel darkMode={darkMode} label="Who can submit" as="div">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {[["dashboard", "Dashboard users", Users], ["link", "Anyone with the link", Link2]].map(([value, label, Icon]) => (
                       <button
                         key={value}
                         type="button"
                         onClick={() => setDraft({ ...draft, visibility: value })}
-                        className={`flex h-12 items-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${draft.visibility === value ? "border-[#6ee72f] bg-[#f2fde9] text-[#10210c]" : darkMode ? "border-white/10" : "border-black/10"}`}
+                        className={`flex h-11 items-center gap-2 rounded-full border px-4 text-[13.5px] transition ${choiceClass(draft.visibility === value)}`}
                       >
                         <Icon className="h-4 w-4" /> {label}
                       </button>
                     ))}
                   </div>
-                </div>
+                </FieldLabel>
 
-                <div className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
-                  <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>How many times a link works</span>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <FieldLabel darkMode={darkMode} label="How many times a link works" as="div">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {[
                       ["multi", "Accept many responses", "One link, filled in as often as you like.", Repeat2],
                       ["single", "One submission per link", "Each person gets their own link that stops working once used.", Ticket],
@@ -569,47 +595,47 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
                         key={value}
                         type="button"
                         onClick={() => setDraft({ ...draft, submissionMode: value })}
-                        className={`flex flex-col gap-1 rounded-2xl border p-4 text-left transition ${draft.submissionMode === value ? "border-[#6ee72f] bg-[#f2fde9] text-[#10210c]" : darkMode ? "border-white/10" : "border-black/10"}`}
+                        className={`flex flex-col gap-1 rounded-[16px] border p-4 text-left transition ${choiceClass(draft.submissionMode === value)}`}
                       >
-                        <span className="flex items-center gap-2 text-sm font-black"><Icon className="h-4 w-4" /> {label}</span>
-                        <span className={`text-xs leading-5 ${draft.submissionMode === value ? "text-[#10210c]/70" : muted}`}>{hint}</span>
+                        <span className="flex items-center gap-2 text-[13.5px]"><Icon className="h-4 w-4" /> {label}</span>
+                        <span className={`text-[12px] leading-5 ${muted}`}>{hint}</span>
                       </button>
                     ))}
                   </div>
                   {draft.submissionMode === "single" && (
-                    <p className={`mt-3 rounded-xl px-3 py-2.5 text-xs leading-5 ${darkMode ? "bg-white/[0.05] text-white/60" : "bg-black/[0.035] text-black/55"}`}>
-                      Save the form, then use <b>Links</b> on its card to make one link per recipient. The plain <code>/f/{"{slug}"}</code> address stops working on its own.
-                    </p>
+                    <Notice tone="neutral" darkMode={darkMode} className="mt-2">
+                      Save the form, then use Links on its card to make one link per recipient. The plain <code>/f/{"{slug}"}</code> address stops working on its own.
+                    </Notice>
                   )}
-                </div>
+                </FieldLabel>
 
                 <div className="mt-2 flex items-center justify-between">
-                  <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Fields</span>
-                  <button type="button" onClick={() => setDraft({ ...draft, fields: [...draft.fields, blankField()] })} className={`flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-black ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>
-                    <Plus className="h-3.5 w-3.5" /> Add field
-                  </button>
+                  <p className="text-[17px] tracking-[-0.01em]">Fields <span className={muted}>· {draft.fields.length}</span></p>
+                  <Button darkMode={darkMode} variant="soft" size="sm" icon={Plus} onClick={() => setDraft({ ...draft, fields: [...draft.fields, blankField()] })}>
+                    Add field
+                  </Button>
                 </div>
 
                 {draft.fields.map((field, index) => (
-                  <div key={index} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
+                  <div key={index} className={`rounded-[18px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-xs font-black ${muted}`}>Field {index + 1}</span>
+                      <span className={`text-[12.5px] ${muted}`}>Field {String(index + 1).padStart(2, "0")}</span>
                       <div className="flex items-center gap-1">
-                        <button type="button" onClick={() => moveField(index, -1)} className={`h-7 rounded-lg px-2 text-xs font-black ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>↑</button>
-                        <button type="button" onClick={() => moveField(index, 1)} className={`h-7 rounded-lg px-2 text-xs font-black ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>↓</button>
+                        <button type="button" onClick={() => moveField(index, -1)} aria-label="Move up" className={`grid h-7 w-7 place-items-center rounded-full text-[12px] ${darkMode ? "bg-white/10" : "bg-white"}`}>↑</button>
+                        <button type="button" onClick={() => moveField(index, 1)} aria-label="Move down" className={`grid h-7 w-7 place-items-center rounded-full text-[12px] ${darkMode ? "bg-white/10" : "bg-white"}`}>↓</button>
                         {draft.fields.length > 1 && (
-                          <button type="button" onClick={() => setDraft({ ...draft, fields: draft.fields.filter((_, i) => i !== index) })} className="h-7 rounded-lg bg-rose-100 px-2 text-xs font-black text-rose-700">✕</button>
+                          <button type="button" onClick={() => setDraft({ ...draft, fields: draft.fields.filter((_, i) => i !== index) })} aria-label="Remove field" className={`grid h-7 w-7 place-items-center rounded-full ${darkMode ? "bg-rose-400/15 text-rose-200" : "bg-[#fbe4e6] text-[#c0394b]"}`}><X className="h-3.5 w-3.5" /></button>
                         )}
                       </div>
                     </div>
 
-                    <input value={field.label} onChange={(e) => updateField(index, { label: e.target.value })} placeholder="Question or label" className={inputClass} />
+                    <input value={field.label} onChange={(e) => updateField(index, { label: e.target.value })} placeholder="Question or label" className={`mt-3 ${softInputClass}`} />
 
                     <div className="mt-2 grid gap-2 sm:grid-cols-2">
                       <Select darkMode={darkMode} value={field.type} onChange={(e) => updateField(index, { type: e.target.value })}>
                         {FIELD_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                       </Select>
-                      <input value={field.sheetColumn} onChange={(e) => updateField(index, { sheetColumn: e.target.value })} placeholder="Sheet column (defaults to label)" className={inputClass.replace("mt-2 ", "")} />
+                      <input value={field.sheetColumn} onChange={(e) => updateField(index, { sheetColumn: e.target.value })} placeholder="Sheet column (defaults to label)" className={softInputClass} />
                     </div>
 
                     {field.type === "select" && (
@@ -618,17 +644,17 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
                         value={field.optionsText ?? (field.options || []).join("\n")}
                         onChange={(e) => updateField(index, { optionsText: e.target.value })}
                         placeholder={"One choice per line"}
-                        className={`mt-2 w-full rounded-2xl border p-3 text-sm outline-none ${darkMode ? "border-white/10 bg-[#0d0f13] text-white/80" : "border-black/10 bg-white text-black/75"}`}
+                        className={`mt-2 w-full rounded-[16px] border p-3 text-[13.5px] outline-none ${darkMode ? "border-transparent bg-white/[0.06] text-white/85" : "border-[#ececec] bg-white text-[#141414]"}`}
                       />
                     )}
 
                     <div className="mt-3 flex flex-wrap gap-4">
-                      <label className="flex items-center gap-2 text-sm font-bold">
-                        <input type="checkbox" checked={field.required} onChange={(e) => updateField(index, { required: e.target.checked })} className="h-4 w-4 accent-[#6ee72f]" /> Required
+                      <label className="flex items-center gap-2 text-[13px]">
+                        <input type="checkbox" checked={field.required} onChange={(e) => updateField(index, { required: e.target.checked })} className="h-4 w-4 accent-[#141414]" /> Required
                       </label>
                       {field.type !== "file" && (
-                        <label className="flex items-center gap-2 text-sm font-bold">
-                          <input type="checkbox" checked={field.allowAttachment} onChange={(e) => updateField(index, { allowAttachment: e.target.checked })} className="h-4 w-4 accent-[#6ee72f]" />
+                        <label className="flex items-center gap-2 text-[13px]">
+                          <input type="checkbox" checked={field.allowAttachment} onChange={(e) => updateField(index, { allowAttachment: e.target.checked })} className="h-4 w-4 accent-[#141414]" />
                           <Paperclip className="h-3.5 w-3.5" /> Allow a file with this answer
                         </label>
                       )}
@@ -638,12 +664,12 @@ export default function AccountsRequestForms({ darkMode, canManage }) {
               </div>
             </div>
 
-            <div className={`flex items-center justify-between gap-3 border-t px-5 py-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
-              <button type="button" onClick={close} className={`h-11 rounded-full px-5 text-sm font-bold transition active:scale-95 ${darkMode ? "bg-white/10" : "bg-[#f3f5ef] text-black/60"}`}>Cancel</button>
-              <button type="submit" disabled={saving} className="flex h-11 items-center justify-center gap-2 rounded-full bg-[#89ed3f] px-6 text-sm font-bold text-black hover:bg-[#7dde35] disabled:opacity-60">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {editingId ? "Save changes" : duplicatedFrom ? "Create the copy" : "Create form"}
-              </button>
-            </div>
+            <DrawerFoot darkMode={darkMode}>
+              <Button darkMode={darkMode} variant="secondary" size="lg" onClick={close}>Cancel</Button>
+              <Button darkMode={darkMode} variant="primary" size="lg" type="submit" icon={Save} loading={saving} disabled={saving}>
+                {editingId ? "Save changes" : duplicatedFrom ? "Create the copy" : "Create form"}
+              </Button>
+            </DrawerFoot>
           </form>
           )}
         </Overlay>
@@ -661,8 +687,8 @@ function LinksDrawer({ form, darkMode, publicBase, onClose }) {
   const [busy, setBusy] = useState(false);
   const [justMade, setJustMade] = useState([]);
 
-  const muted = darkMode ? "text-white/50" : "text-black/50";
-  const inputClass = `h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-[#0d0f13] text-white/80 placeholder:text-white/30" : "border-black/10 bg-white text-black/75 placeholder:text-black/35"}`;
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
+  const inputClass = fieldInput(darkMode, { onSoft: true });
 
   const load = useCallback(async () => {
     try {
@@ -711,38 +737,31 @@ function LinksDrawer({ form, darkMode, publicBase, onClose }) {
   return (
     <Overlay onClose={onClose}>
       {({ close, closing }) => (
-      <div className={`finance-panel employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden ${closing ? "is-closing" : ""} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-        <div className={`border-b px-5 py-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className={`text-xs font-black uppercase tracking-[0.16em] ${muted}`}>One-time links</p>
-              <h2 className="small mt-2 truncate text-2xl font-black">{form.name}</h2>
-              <p className={`mt-2 text-sm ${muted}`}>Every link below accepts exactly one response, then stops working.</p>
-            </div>
-            <button type="button" onClick={close} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition active:scale-95 ${darkMode ? "bg-white/10" : "bg-[#f3f5ef]"}`}><X className="h-5 w-5" /></button>
-          </div>
-        </div>
+      <div className={`finance-panel employee-report-shell employee-settings-shell absolute flex flex-col overflow-hidden ${closing ? "is-closing" : ""} ${drawerShell(darkMode)}`}>
+        <DrawerHead
+          darkMode={darkMode}
+          icon={Ticket}
+          tone="lavender"
+          title={form.name}
+          subtitle="One-time links · each accepts exactly one response, then stops working"
+          onClose={close}
+        />
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-          <div className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfbfd]"}`}>
-            <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>Make new links</span>
-            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+          <div className={`rounded-[20px] p-5 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
+            <p className="text-[15px]">Make new links</p>
+            <p className={`mt-0.5 text-[12.5px] ${muted}`}>A single link is copied to your clipboard straight away.</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px]">
               <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Who is it for? e.g. Kalhar site" className={inputClass} />
               <input type="number" min={1} max={50} value={count} onChange={(event) => setCount(event.target.value)} className={inputClass} />
             </div>
-            <button
-              type="button"
-              onClick={create}
-              disabled={busy}
-              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#6ee72f] text-sm font-black text-[#10210c] transition hover:bg-[#5edb22] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Create {Number(count) > 1 ? `${count} links` : "link"}
-            </button>
-            <p className={`mt-2 text-xs ${muted}`}>A single link is copied to your clipboard straight away.</p>
+            <Button darkMode={darkMode} variant="primary" size="lg" icon={Plus} loading={busy} onClick={create} disabled={busy} className="mt-3 w-full">
+              Create {Number(count) > 1 ? `${count} links` : "link"}
+            </Button>
           </div>
 
-          <div className="mt-5 flex items-center justify-between">
-            <span className={`text-xs font-black uppercase tracking-wide ${muted}`}>
+          <div className="mt-6 flex items-center justify-between">
+            <span className={`text-[12.5px] ${muted}`}>
               {links === null ? "Links" : `${unused.length} unused · ${links.length - unused.length} used`}
             </span>
           </div>
@@ -750,54 +769,52 @@ function LinksDrawer({ form, darkMode, publicBase, onClose }) {
           {links === null ? (
             <div className={`mt-4 grid min-h-[100px] place-items-center ${muted}`}><Loader2 className="h-5 w-5 animate-spin" /></div>
           ) : !links.length ? (
-            <div className={`mt-4 grid min-h-[120px] place-items-center rounded-2xl border border-dashed p-6 text-center text-sm ${darkMode ? "border-white/10 text-white/45" : "border-black/10 text-black/45"}`}>
-              No links yet. Make one for each person you want a response from.
-            </div>
+            <EmptyState darkMode={darkMode} icon={Ticket} tone="lavender" title="No links yet" text="Make one for each person you want a response from." className="mt-3 py-10" />
           ) : (
             <div className="mt-3 grid gap-2">
               {links.map((link) => (
                 <div
                   key={link.id}
-                  className={`rounded-2xl border p-3.5 transition ${link.used
-                    ? darkMode ? "border-white/[0.06] bg-white/[0.02] opacity-60" : "border-black/[0.05] bg-[#fafafa] opacity-70"
+                  className={`rounded-[14px] border px-4 py-3 transition ${link.used
+                    ? darkMode ? "border-transparent bg-white/[0.02] opacity-60" : "border-transparent bg-[#f7f7f5] opacity-70"
                     : justMade.includes(link.id)
-                      ? darkMode ? "border-white/25 bg-white/[0.06]" : "border-black/25 bg-black/[0.02]"
-                      : darkMode ? "border-white/[0.08] bg-white/[0.03]" : "border-black/[0.06] bg-[#fbfbfd]"}`}
+                      ? darkMode ? "border-[#cff07a]/40 bg-[#cff07a]/10" : "border-[#c9e47a] bg-[#eef8cc]"
+                      : darkMode ? "border-transparent bg-white/[0.04]" : "border-transparent bg-[#f7f7f5]"}`}
                 >
                   <div className="flex items-center gap-2">
                     {link.used
-                      ? <CircleCheckBig className={`h-4 w-4 shrink-0 ${darkMode ? "text-white/30" : "text-black/25"}`} />
-                      : <Ticket className={`h-4 w-4 shrink-0 ${darkMode ? "text-white/45" : "text-black/35"}`} />}
-                    <span className="min-w-0 flex-1 truncate text-sm font-black">{link.label || "Unnamed link"}</span>
+                      ? <CircleCheckBig className={`h-4 w-4 shrink-0 ${darkMode ? "text-white/30" : "text-[#a8a8a5]"}`} />
+                      : <Ticket className={`h-4 w-4 shrink-0 ${darkMode ? "text-white/45" : "text-[#6b4fd1]"}`} />}
+                    <span className="min-w-0 flex-1 truncate text-[13.5px]">{link.label || "Unnamed link"}</span>
                     {link.used ? (
-                      <span className={`shrink-0 text-[11px] font-black ${darkMode ? "text-white/40" : "text-black/40"}`}>
+                      <span className={`shrink-0 text-[12px] ${muted}`}>
                         used {new Date(link.usedAt).toLocaleDateString("en-IN")}
                       </span>
                     ) : (
                       <>
-                        <button type="button" onClick={() => copyText(link.url)} className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.06]"}`} title="Copy link">
+                        <button type="button" onClick={() => copyText(link.url)} className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-white"}`} title="Copy link">
                           <Copy className="h-3.5 w-3.5" />
                         </button>
-                        <a href={link.url} target="_blank" rel="noreferrer" className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/[0.06]"}`} title="Open">
+                        <a href={link.url} target="_blank" rel="noreferrer" className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-white"}`} title="Open">
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       </>
                     )}
-                    <button type="button" onClick={() => remove(link)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-rose-500 transition hover:bg-rose-500/10" title={link.used ? "Remove from the list" : "Cancel this link"}>
+                    <button type="button" onClick={() => remove(link)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#c0394b] transition hover:bg-[#fbe4e6]" title={link.used ? "Remove from the list" : "Cancel this link"}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  {!link.used && <p className={`mt-2 truncate text-xs ${muted}`}>{link.url}</p>}
+                  {!link.used && <p className={`mt-1.5 truncate pl-6 text-[12px] ${muted}`}>{link.url}</p>}
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className={`flex items-center justify-between gap-3 border-t px-5 py-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
-          <span className={`text-xs ${muted}`}>{unused.length} link{unused.length === 1 ? "" : "s"} ready to send</span>
-          <button type="button" onClick={close} className={`h-11 rounded-full px-6 text-sm font-bold transition active:scale-95 ${darkMode ? "bg-white/10" : "bg-[#f3f5ef] text-black/60"}`}>Done</button>
-        </div>
+        <DrawerFoot darkMode={darkMode}>
+          <span className={`text-[12.5px] ${muted}`}>{unused.length} link{unused.length === 1 ? "" : "s"} ready to send</span>
+          <Button darkMode={darkMode} variant="primary" size="lg" onClick={close}>Done</Button>
+        </DrawerFoot>
       </div>
       )}
     </Overlay>
@@ -814,7 +831,7 @@ function ResponsesDrawer({ form, darkMode, onClose }) {
   // and can take the whole window when a form has a lot of columns.
   const [expanded, setExpanded] = useState(false);
 
-  const muted = darkMode ? "text-white/50" : "text-black/50";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
 
   const load = useCallback(async () => {
     try {
@@ -855,142 +872,121 @@ function ResponsesDrawer({ form, darkMode, onClose }) {
   return (
     <Overlay onClose={onClose}>
       {({ close, closing }) => (
-      <div className={`finance-panel employee-report-shell employee-report-drawer absolute flex flex-col overflow-hidden ${expanded ? "employee-report-shell-expanded" : ""} ${closing ? "is-closing" : ""} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#171714]"}`}>
-        <div className={`border-b px-5 py-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className={`text-xs font-black uppercase tracking-[0.16em] ${muted}`}>Responses</p>
-              <h2 className="small mt-2 truncate text-2xl font-black">{form.name}</h2>
-              <p className={`mt-2 text-sm ${muted}`}>
-                Read straight from the &quot;{form.tabName}&quot; tab, so edits made in the sheet show here too.
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setExpanded((current) => !current)}
-                title={expanded ? "Shrink the panel" : "Fill the window"}
-                aria-label={expanded ? "Shrink the panel" : "Fill the window"}
-                className={`hidden h-10 w-10 place-items-center rounded-full transition active:scale-95 sm:grid ${darkMode ? "bg-white/10 hover:bg-white/[0.16]" : "bg-[#f3f5ef] hover:bg-black/[0.08]"}`}
-              >
-                {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              </button>
-              <button type="button" onClick={close} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition active:scale-95 ${darkMode ? "bg-white/10" : "bg-[#f3f5ef]"}`}><X className="h-5 w-5" /></button>
-            </div>
-          </div>
-
+      <div className={`finance-panel employee-report-shell employee-report-drawer absolute flex flex-col overflow-hidden ${expanded ? "employee-report-shell-expanded" : ""} ${closing ? "is-closing" : ""} ${drawerShell(darkMode)}`}>
+        <DrawerHead
+          darkMode={darkMode}
+          icon={Inbox}
+          tone="mint"
+          title={form.name}
+          subtitle={<>Responses · read straight from the &quot;{form.tabName}&quot; tab, so edits made in the sheet show here too.</>}
+          onClose={close}
+          actions={(
+            <button
+              type="button"
+              onClick={() => setExpanded((current) => !current)}
+              title={expanded ? "Shrink the panel" : "Fill the window"}
+              aria-label={expanded ? "Shrink the panel" : "Fill the window"}
+              className={`hidden h-9 w-9 place-items-center rounded-full transition active:scale-95 sm:grid ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
+            >
+              {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+          )}
+        >
           <div className="mt-4 flex flex-wrap items-center gap-2">
             {data?.sheetUrl ? (
               <a
                 href={data.sheetUrl}
                 target="_blank"
                 rel="noreferrer"
-                className={`flex h-10 items-center gap-2 rounded-xl px-4 text-xs font-bold transition ${darkMode ? "bg-white/10 hover:bg-white/[0.16]" : "bg-black/[0.05] hover:bg-black/[0.09]"}`}
+                className={`inline-flex h-8 items-center gap-2 rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-white/[0.07] hover:bg-white/[0.11]" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
               >
                 <ExternalLink className="h-3.5 w-3.5" /> Open the sheet
               </a>
             ) : null}
-            <button
-              type="button"
-              onClick={load}
-              disabled={busy}
-              className={`flex h-10 items-center gap-2 rounded-xl px-4 text-xs font-bold transition disabled:opacity-50 ${darkMode ? "bg-white/10 hover:bg-white/[0.16]" : "bg-black/[0.05] hover:bg-black/[0.09]"}`}
-            >
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Refresh
-            </button>
+            <Button darkMode={darkMode} variant="soft" size="sm" icon={RotateCcw} loading={busy} onClick={load} disabled={busy}>
+              Refresh
+            </Button>
             {data && !data.problem ? (
-              <span className={`text-xs font-bold ${muted}`}>
+              <span className={`text-[12.5px] ${muted}`}>
                 {data.totalRows} row{data.totalRows === 1 ? "" : "s"}{data.truncated ? ` · newest ${rows.length} shown` : ""}
               </span>
             ) : null}
           </div>
-        </div>
+        </DrawerHead>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {data?.problem ? (
-            <div className={`flex items-start gap-3 rounded-2xl p-4 ${darkMode ? "bg-amber-300/10" : "bg-amber-50"}`}>
-              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-              <p className="text-sm font-bold text-amber-600">{data.problem}</p>
-            </div>
+            <Notice tone="amber" darkMode={darkMode} icon={TriangleAlert}>{data.problem}</Notice>
           ) : null}
 
           {/* The chip counts every response ever accepted; the table shows what is in the tab
               right now. They drift apart if rows are deleted in the sheet, or if the form
               was pointed at a different tab after some responses had already been written. */}
           {data && !data.problem && form.submissionCount > data.totalRows ? (
-            <div className={`mt-4 flex items-start gap-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#fbfbfd]"}`}>
-              <Info className={`mt-0.5 h-4 w-4 shrink-0 ${muted}`} />
-              <p className={`text-sm leading-6 ${muted}`}>
-                This form has accepted <b>{form.submissionCount}</b> response{form.submissionCount === 1 ? "" : "s"} in total, but the
-                &quot;{form.tabName}&quot; tab holds <b>{data.totalRows}</b>. The rest were either removed in the sheet, or written before the
-                form was pointed at this tab.
-              </p>
-            </div>
+            <Notice tone="neutral" darkMode={darkMode} icon={Info} className="mt-4">
+              This form has accepted {form.submissionCount} response{form.submissionCount === 1 ? "" : "s"} in total, but the
+              &quot;{form.tabName}&quot; tab holds {data.totalRows}. The rest were either removed in the sheet, or written before the
+              form was pointed at this tab.
+            </Notice>
           ) : null}
 
           {unsynced.length ? (
-            <div className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-rose-400/10" : "bg-rose-50"}`}>
+            <div className={`mt-4 rounded-[18px] p-4 ${darkMode ? "bg-rose-400/10" : "bg-[#fbe4e6]"}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="flex items-center gap-2 text-sm font-black text-rose-600">
+                <p className={`flex items-center gap-2 text-[13.5px] ${darkMode ? "text-rose-200" : "text-[#c0394b]"}`}>
                   <TriangleAlert className="h-4 w-4" /> {unsynced.length} response{unsynced.length === 1 ? "" : "s"} never reached the sheet
                 </p>
-                <button
-                  type="button"
-                  onClick={() => dismiss({ all: true })}
-                  className={`h-8 shrink-0 rounded-lg px-3 text-xs font-bold transition active:scale-95 ${darkMode ? "bg-white/10 text-white/70 hover:bg-white/[0.16]" : "bg-white text-black/55 hover:bg-black/[0.04]"}`}
-                >
+                <Button darkMode={darkMode} variant="secondary" size="sm" onClick={() => dismiss({ all: true })} className="shrink-0">
                   Dismiss all
-                </button>
+                </Button>
               </div>
               <div className="mt-3 grid gap-2">
                 {unsynced.map((item) => (
-                  <div key={item.id} className={`flex items-start gap-3 rounded-xl p-3 text-xs ${darkMode ? "bg-white/[0.05]" : "bg-white"}`}>
+                  <div key={item.id} className={`flex items-start gap-3 rounded-[14px] p-3 text-[12.5px] ${darkMode ? "bg-white/[0.05]" : "bg-white"}`}>
                     <div className="min-w-0 flex-1">
-                      <p className="font-black">{new Date(item.submittedAt).toLocaleString("en-IN")} · {item.submittedBy}</p>
+                      <p>{new Date(item.submittedAt).toLocaleString("en-IN")} · {item.submittedBy}</p>
                       <p className={`mt-1 break-words ${muted}`}>{Object.entries(item.answers).map(([key, value]) => `${key}: ${value}`).join(" · ") || "no answers"}</p>
-                      {item.syncError ? <p className="mt-1 font-bold text-rose-500">{item.syncError}</p> : null}
+                      {item.syncError ? <p className="mt-1 text-[#c0394b]">{item.syncError}</p> : null}
                     </div>
                     <button
                       type="button"
                       onClick={() => dismiss({ id: item.id })}
                       title="Dismiss this one"
                       aria-label="Dismiss this one"
-                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg transition active:scale-95 ${darkMode ? "text-white/40 hover:bg-white/10 hover:text-white/70" : "text-black/30 hover:bg-black/[0.05] hover:text-black/60"}`}
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full transition active:scale-95 ${darkMode ? "text-white/40 hover:bg-white/10 hover:text-white/70" : "text-[#a8a8a5] hover:bg-[#f4f4f2] hover:text-[#141414]"}`}
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 ))}
               </div>
-              <p className={`mt-3 text-xs ${muted}`}>Dismissing only clears this panel — the response itself is kept.</p>
+              <p className={`mt-3 text-[12px] ${muted}`}>Dismissing only clears this panel — the response itself is kept.</p>
             </div>
           ) : null}
 
           {!data ? (
             <div className={`grid min-h-[160px] place-items-center ${muted}`}><Loader2 className="h-5 w-5 animate-spin" /></div>
           ) : !rows.length && !data.problem ? (
-            <div className={`grid min-h-[160px] place-items-center rounded-2xl border border-dashed p-6 text-center text-sm ${darkMode ? "border-white/10 text-white/45" : "border-black/10 text-black/45"}`}>
-              No responses yet. They appear here as soon as someone submits the form.
-            </div>
+            <EmptyState darkMode={darkMode} icon={Inbox} tone="mint" title="No responses yet" text="They appear here as soon as someone submits the form." className="mt-4" />
           ) : rows.length ? (
-            <div className={`mt-4 overflow-x-auto rounded-2xl border ${darkMode ? "border-white/[0.08]" : "border-black/[0.07]"}`}>
-              <table className="w-full border-collapse text-left text-xs">
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full border-collapse text-left text-[13px]">
                 <thead>
-                  <tr className={darkMode ? "bg-white/[0.05]" : "bg-[#fbfbfd]"}>
-                    <th className={`whitespace-nowrap px-3 py-2.5 font-black ${muted}`}>#</th>
+                  <tr className={`border-b ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+                    <th className={`whitespace-nowrap px-3 py-2.5 text-[12px] ${muted}`}>#</th>
                     {headers.map((header, index) => (
-                      <th key={`${header}-${index}`} className="whitespace-nowrap px-3 py-2.5 font-black">{header || `Column ${index + 1}`}</th>
+                      <th key={`${header}-${index}`} className={`whitespace-nowrap px-3 py-2.5 text-[12px] ${muted}`}>{header || `Column ${index + 1}`}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row, rowIndex) => (
-                    <tr key={rowIndex} className={`border-t ${darkMode ? "border-white/[0.06]" : "border-black/[0.05]"}`}>
-                      <td className={`whitespace-nowrap px-3 py-2.5 font-bold ${muted}`}>{data.totalRows - rowIndex}</td>
+                    <tr key={rowIndex} className={`border-b ${darkMode ? "border-white/[0.06]" : "border-[#f0f0ee]"}`}>
+                      <td className={`whitespace-nowrap px-3 py-3 tabular-nums ${muted}`}>{data.totalRows - rowIndex}</td>
                       {row.map((cell, cellIndex) => (
-                        <td key={cellIndex} className="max-w-[280px] px-3 py-2.5 align-top">
+                        <td key={cellIndex} className="max-w-[280px] px-3 py-3 align-top">
                           {/^https?:\/\//.test(cell)
-                            ? <a href={cell} target="_blank" rel="noreferrer" className="font-bold text-blue-500 underline decoration-blue-500/30 underline-offset-2">open file</a>
+                            ? <a href={cell} target="_blank" rel="noreferrer" className={`underline underline-offset-2 ${darkMode ? "text-[#a9cbf7] decoration-[#a9cbf7]/40" : "text-[#2f6fc0] decoration-[#2f6fc0]/30"}`}>open file</a>
                             : <span className="break-words">{cell}</span>}
                         </td>
                       ))}
@@ -1002,10 +998,10 @@ function ResponsesDrawer({ form, darkMode, onClose }) {
           ) : null}
         </div>
 
-        <div className={`flex items-center justify-between gap-3 border-t px-5 py-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
-          <span className={`truncate text-xs ${muted}`}>Tab &quot;{form.tabName}&quot;</span>
-          <button type="button" onClick={close} className={`h-11 rounded-full px-6 text-sm font-bold transition active:scale-95 ${darkMode ? "bg-white/10" : "bg-[#f3f5ef] text-black/60"}`}>Done</button>
-        </div>
+        <DrawerFoot darkMode={darkMode}>
+          <span className={`truncate text-[12.5px] ${muted}`}>Tab &quot;{form.tabName}&quot;</span>
+          <Button darkMode={darkMode} variant="primary" size="lg" onClick={close}>Done</Button>
+        </DrawerFoot>
       </div>
       )}
     </Overlay>

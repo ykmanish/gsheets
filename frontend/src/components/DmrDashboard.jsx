@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BellRing,
+  Building2,
   CalendarDays,
   ChevronDown,
   Check,
@@ -14,6 +15,7 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  Package,
   Plus,
   RefreshCw,
   Rows3,
@@ -21,12 +23,14 @@ import {
   Search,
   Send,
   Settings2,
+  StickyNote,
   Users,
+  Wrench,
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { ConfirmModal, DatePicker, DateRangePicker, SelectMenu, TimeInput, useClickOutside } from "./ui";
+import { Button, Chip, ConfirmModal, DatePicker, DateRangePicker, EmptyState, IconTile, PageHeader, SelectMenu, StatTile, TimeInput, useClickOutside } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -178,15 +182,23 @@ function isDmrOthersRecord(record = {}) {
 function planStatusTone(status, darkMode) {
   return status.ok
     ? darkMode
-      ? "bg-emerald-400/10 text-emerald-200 border-emerald-400/20"
-      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+      ? "bg-emerald-400/10 text-emerald-200 border-transparent"
+      : "bg-[#e4f1e6] text-[#2f7a4f] border-transparent"
     : darkMode
-      ? "bg-red-400/10 text-red-200 border-red-400/20"
-      : "bg-red-50 text-red-700 border-red-200";
+      ? "bg-red-400/10 text-red-200 border-transparent"
+      : "bg-[#fbe4e6] text-[#c0394b] border-transparent";
 }
 
-function WorkloadBars({ title, items = [], darkMode }) {
-  const muted = darkMode ? "text-white/45" : "text-black/45";
+function ChartLegendDot({ className, label, muted }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[12px] ${muted}`}>
+      <i className={`h-2 w-2 rounded-full ${className}`} /> {label}
+    </span>
+  );
+}
+
+function WorkloadBars({ title, items = [], darkMode, icon = Users, tone = "sky" }) {
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   const chartItems = items.slice(0, 8);
   const max = Math.max(
     1,
@@ -204,24 +216,19 @@ function WorkloadBars({ title, items = [], darkMode }) {
   );
   return (
     <section
-      className={`min-w-0 overflow-hidden rounded-[24px] border p-5 ${darkMode ? "border-white/10 bg-[#111216]" : "border-[#dfe7e4] bg-white"}`}
+      className={`min-w-0 overflow-hidden rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
     >
       <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p
-            className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
-          >
-            Live DMR
-          </p>
-          <h3 className="mt-2 text-xl font-semibold">{title}</h3>
-          <p className={`mt-2 text-xs ${muted}`}>
-            {totalActual} actual / {totalPlanned} planned
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />
+          <div className="min-w-0">
+            <h3 className={`truncate text-[15px] ${darkMode ? "text-white" : "text-[#141414]"}`}>{title}</h3>
+            <p className={`text-[12.5px] ${muted}`}>
+              {totalActual} actual / {totalPlanned} planned
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-[#15a8e0]" />
-          <span className={`text-[11px] ${muted}`}>Actual</span>
-        </div>
+        <ChartLegendDot className={darkMode ? "bg-[#cff07a]" : "bg-[#141414]"} label="Actual" muted={muted} />
       </div>
 
       <div className="flex h-64 max-w-full items-end gap-2 overflow-x-auto overflow-y-hidden pb-2">
@@ -239,29 +246,27 @@ function WorkloadBars({ title, items = [], darkMode }) {
               className="flex min-w-[52px] flex-1 flex-col items-center"
             >
               <div className="mb-2 min-h-9 text-center">
-                <p
-                  className={`text-sm font-semibold ${darkMode ? "text-white" : ""}`}
-                >
+                <p className={`text-[15px] tabular-nums ${darkMode ? "text-white" : "text-[#141414]"}`}>
                   {actual}
                 </p>
-                <p className={`text-[10px] ${muted}`}>/{planned}</p>
+                <p className={`text-[11px] tabular-nums ${muted}`}>/{planned}</p>
               </div>
               <div className="flex h-36 w-full max-w-[40px] items-end">
                 <div
-                  className={`relative h-full w-full overflow-hidden rounded-t-[18px] rounded-b-md ${darkMode ? "bg-[#24262b]" : "bg-[#ece9e2]"}`}
+                  className={`relative h-full w-full overflow-hidden rounded-[14px] ${darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]"}`}
                 >
                   <div
-                    className={`absolute bottom-0 left-0 right-0 rounded-t-[18px] ${darkMode ? "bg-[#3a3d42]" : "bg-[#ece9e2]"}`}
+                    className={`absolute bottom-0 left-0 right-0 rounded-[14px] ${darkMode ? "bg-white/[0.07]" : "bg-[#ebebe8]"}`}
                     style={{ height: `${plannedHeight}%` }}
                   />
                   <div
-                    className="absolute bottom-0 left-0 right-0 rounded-t-[18px] bg-[#15a8e0]"
+                    className={`absolute bottom-0 left-0 right-0 rounded-[14px] ${darkMode ? "bg-[#cff07a]" : "bg-[#141414]"}`}
                     style={{ height: `${actualHeight}%` }}
                   />
                 </div>
               </div>
               <p
-                className={`mt-3 line-clamp-2 min-h-8 text-center text-[11px] leading-4 ${muted}`}
+                className={`mt-3 line-clamp-2 min-h-8 text-center text-[11.5px] leading-4 ${muted}`}
               >
                 {item.label}
               </p>
@@ -286,7 +291,7 @@ function TomorrowSiteBars({
   title = "Site-wise planned manpower",
   emptyText = "No plan data available yet.",
 }) {
-  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   const chartItems = items.slice(0, 8);
   const max = Math.max(
     1,
@@ -307,33 +312,23 @@ function TomorrowSiteBars({
   );
   return (
     <section
-      className={`min-w-0 overflow-hidden rounded-[24px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#dfe7e4] bg-white"}`}
+      className={`min-w-0 overflow-hidden rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
     >
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p
-            className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
-          >
-            Plan overview
-          </p>
-          <h3 className="mt-2 text-xl font-semibold">{title}</h3>
-          <p className={`mt-2 text-xs ${muted}`}>
-            {totalActual} actual / {total} planned across {items.length} site
-            {items.length === 1 ? "" : "s"}
-          </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <IconTile icon={CalendarDays} tone="lavender" darkMode={darkMode} size="sm" />
+          <div className="min-w-0">
+            <h3 className={`text-[15px] ${darkMode ? "text-white" : "text-[#141414]"}`}>{title}</h3>
+            <p className={`text-[12.5px] ${muted}`}>
+              {totalActual} actual / {total} planned across {items.length} site
+              {items.length === 1 ? "" : "s"}
+            </p>
+          </div>
         </div>
-        <div
-          className={`flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[11px] ${muted}`}
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <i className="h-2 w-2 rounded-full bg-[#8d939b]" /> Planned
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <i className="h-2 w-2 rounded-full bg-[#54d39f]" /> Actual ok
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <i className="h-2 w-2 rounded-full bg-red-500" /> Attention
-          </span>
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+          <ChartLegendDot className={darkMode ? "bg-white/25" : "bg-[#d6d6d2]"} label="Planned" muted={muted} />
+          <ChartLegendDot className="bg-[#4fae7a]" label="Actual ok" muted={muted} />
+          <ChartLegendDot className="bg-[#e5484d]" label="Attention" muted={muted} />
         </div>
       </div>
 
@@ -351,28 +346,28 @@ function TomorrowSiteBars({
             >
               <div className="mb-2 min-h-9 text-center">
                 <p
-                  className={`text-sm font-semibold ${status.ok ? "text-emerald-500" : "text-red-500"}`}
+                  className={`text-[15px] tabular-nums ${status.ok ? (darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]") : darkMode ? "text-[#f7aab5]" : "text-[#c0394b]"}`}
                 >
                   {actual}
                 </p>
-                <p className={`text-[10px] ${muted}`}>/{value}</p>
+                <p className={`text-[11px] tabular-nums ${muted}`}>/{value}</p>
               </div>
               <div className="flex h-36 w-full max-w-[46px] items-end">
                 <div
-                  className={`relative h-full w-full overflow-hidden rounded-t-[18px] rounded-b-md ${darkMode ? "bg-[#24262b]" : "bg-[#ece9e2]"}`}
+                  className={`relative h-full w-full overflow-hidden rounded-[14px] ${darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]"}`}
                 >
                   <div
-                    className={`absolute bottom-0 left-0 right-0 rounded-t-[18px] ${darkMode ? "bg-white/20" : "bg-[#8d939b]/25"}`}
+                    className={`absolute bottom-0 left-0 right-0 rounded-[14px] ${darkMode ? "bg-white/15" : "bg-[#e3e3df]"}`}
                     style={{ height: `${plannedHeight}%` }}
                   />
                   <div
-                    className={`absolute bottom-0 left-1 right-1 rounded-t-[14px] ${status.ok ? "bg-[#54d39f]" : "bg-red-500"}`}
+                    className={`absolute bottom-0 left-1 right-1 rounded-[11px] ${status.ok ? "bg-[#4fae7a]" : "bg-[#e5484d]"}`}
                     style={{ height: `${actualHeight}%` }}
                   />
                 </div>
               </div>
               <p
-                className={`mt-3 line-clamp-2 min-h-8 text-center text-[11px] leading-4 ${muted}`}
+                className={`mt-3 line-clamp-2 min-h-8 text-center text-[11.5px] leading-4 ${muted}`}
               >
                 {item.site}
               </p>
@@ -418,17 +413,17 @@ function ReportTable({
 }) {
   return (
     <section
-      className={`overflow-hidden rounded-[26px] border ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+      className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
     >
       <div className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h4 className="text-lg font-semibold">{title}</h4>
+          <h4 className={`text-[15px] ${darkMode ? "text-white" : "text-[#141414]"}`}>{title}</h4>
           {subtitle && <p className={`mt-1 text-xs ${muted}`}>{subtitle}</p>}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
           {actions}
           <span
-            className={`w-fit rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}
+            className={`inline-flex h-7 w-fit items-center rounded-full px-3 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}
           >
             {rows.length} rows
           </span>
@@ -441,15 +436,15 @@ function ReportTable({
           <thead
             className={
               darkMode
-                ? "bg-white/[0.04] text-white/55"
-                : "bg-black/[0.035] text-black/55"
+                ? "text-white/45"
+                : "text-[#8a8a8a]"
             }
           >
             <tr>
               {headers.map((header, headerIndex) => (
                 <th
                   key={header}
-                  className={`px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] ${columnClasses[headerIndex] || ""}`}
+                  className={`px-5 py-3 text-[12px] ${columnClasses[headerIndex] || ""}`}
                 >
                   {header}
                 </th>
@@ -460,12 +455,12 @@ function ReportTable({
             {rows.map((row, rowIndex) => (
               <tr
                 key={rowIndex}
-                className={`border-t ${darkMode ? "border-white/10 hover:bg-white/[0.035]" : "border-black/[0.06] hover:bg-black/[0.025]"}`}
+                className={`border-t ${darkMode ? "border-white/[0.06] hover:bg-white/[0.03]" : "border-[#f0f0ee] hover:bg-[#fafaf9]"}`}
               >
                 {row.map((cell, cellIndex) => (
                   <td
                     key={cellIndex}
-                    className={`px-5 py-3 align-top ${cellIndex === 0 ? "font-semibold" : ""} ${columnClasses[cellIndex] || ""}`}
+                    className={`px-5 py-3 align-top ${cellIndex === 0 ? "" : ""} ${columnClasses[cellIndex] || ""}`}
                   >
                     {cell}
                   </td>
@@ -490,7 +485,7 @@ function ReportTable({
 }
 
 function ReportPlannedValue({ value }) {
-  return <span className="font-semibold text-black">{value}</span>;
+  return <span className="text-inherit">{value}</span>;
 }
 
 function ReportActualValue({ planned, actual }) {
@@ -499,7 +494,7 @@ function ReportActualValue({ planned, actual }) {
   const ok = actualValue >= plannedValue;
   return (
     <span
-      className={`font-semibold ${ok ? "text-emerald-600" : "text-red-600"}`}
+      className={` ${ok ? "text-[#3f9a66]" : "text-[#d64550]"}`}
     >
       {actual}
     </span>
@@ -600,11 +595,11 @@ function TradeSiteMatrix({
 
   return (
     <section
-      className={`overflow-hidden rounded-[26px] border ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+      className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
     >
       <div className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h4 className="text-lg font-semibold lg:whitespace-nowrap">
+          <h4 className={`text-[15px] lg:whitespace-nowrap ${darkMode ? "text-white" : "text-[#141414]"}`}>
             Trade by site manpower
           </h4>
           <p className={`mt-1 text-xs ${muted}`}>{matrixRows.length} rows</p>
@@ -618,7 +613,7 @@ function TradeSiteMatrix({
               value={search}
               onChange={(event) => onSearch(event.target.value)}
               placeholder="Search site or trade..."
-              className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035] text-white placeholder:text-white/35" : "border-black/10 bg-white text-black placeholder:text-black/35"}`}
+              className={`h-10 w-full rounded-full pl-11 pr-4 text-sm outline-none transition ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09]" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
             />
           </div>
           {onExport && (
@@ -627,7 +622,7 @@ function TradeSiteMatrix({
                 type="button"
                 onClick={() => setExportOpen((current) => !current)}
                 disabled={exportBusy}
-                className={`flex h-11 w-full items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold transition disabled:opacity-60 sm:w-auto ${darkMode ? "border-white/10 bg-white/[0.05] text-white hover:bg-white/10" : "border-black/10 bg-white text-black hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                className={`flex h-10 w-full items-center justify-center gap-2 rounded-full border px-4 text-[13px] transition disabled:opacity-60 sm:w-auto ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
               >
                 {exportBusy ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -641,15 +636,15 @@ function TradeSiteMatrix({
               </button>
               {exportOpen && (
                 <div
-                  className={`absolute right-0 top-[calc(100%+8px)] z-50 w-[320px] rounded-2xl border p-3 shadow-xl ${darkMode ? "border-white/10 bg-[#181a20]" : "border-black/10 bg-white"}`}
+                  className={`absolute right-0 top-[calc(100%+8px)] z-50 w-[320px] rounded-[18px] border p-3 shadow-[0_18px_50px_rgba(0,0,0,0.12)] ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                 >
                   <p
-                    className={`px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}
+                    className={`px-1 text-[12px] ${muted}`}
                   >
                     Group the PDF by
                   </p>
                   <div
-                    className={`mt-2 flex rounded-2xl p-1 ${darkMode ? "bg-white/[0.05]" : "bg-black/[0.04]"}`}
+                    className={`mt-2 flex rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}
                   >
                     {[
                       { id: "site", label: "Site" },
@@ -660,7 +655,7 @@ function TradeSiteMatrix({
                         key={option.id}
                         type="button"
                         onClick={() => setExportMode(option.id)}
-                        className={`h-9 flex-1 rounded-xl px-1 text-xs font-semibold transition ${exportMode === option.id ? (darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white") : darkMode ? "text-white/60 hover:text-white" : "text-black/55 hover:text-black"}`}
+                        className={`h-8 flex-1 rounded-full px-1 text-[12.5px] transition ${exportMode === option.id ? (darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#141414] shadow-[0_1px_4px_rgba(0,0,0,0.08)]") : darkMode ? "text-white/60 hover:text-white" : "text-[#7a7a78] hover:text-black"}`}
                       >
                         {option.label}
                       </button>
@@ -669,7 +664,7 @@ function TradeSiteMatrix({
                   {exportMode !== "trade" && (
                     <>
                       <p
-                        className={`mt-3 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}
+                        className={`mt-3 px-1 text-[11px] ${muted}`}
                       >
                         Site
                       </p>
@@ -689,7 +684,7 @@ function TradeSiteMatrix({
                   {exportMode !== "site" && (
                     <>
                       <p
-                        className={`mt-3 px-1 text-[10px] font-bold uppercase tracking-wide ${muted}`}
+                        className={`mt-3 px-1 text-[11px] ${muted}`}
                       >
                         Trade
                       </p>
@@ -709,10 +704,10 @@ function TradeSiteMatrix({
                   <button
                     type="button"
                     onClick={() => setExportIncludeEmpty((current) => !current)}
-                    className={`mt-3 flex w-full items-center gap-2.5 rounded-xl px-1 py-2 text-left text-xs ${darkMode ? "text-white/70" : "text-black/65"}`}
+                    className={`mt-3 flex w-full items-center gap-2.5 rounded-[12px] px-1 py-2 text-left text-xs ${darkMode ? "text-white/70" : "text-[#5f5f5c]"}`}
                   >
                     <span
-                      className={`flex h-4 w-4 items-center justify-center rounded border transition ${exportIncludeEmpty ? "border-[#4b9b16] bg-[#4b9b16] text-white" : darkMode ? "border-white/20" : "border-black/20"}`}
+                      className={`flex h-4 w-4 items-center justify-center rounded border transition ${exportIncludeEmpty ? "border-[#141414] bg-[#141414] text-white" : darkMode ? "border-white/20" : "border-[#d6d6d2]"}`}
                     >
                       {exportIncludeEmpty && <Check className="h-3 w-3" />}
                     </span>
@@ -722,7 +717,7 @@ function TradeSiteMatrix({
                     type="button"
                     onClick={runPopoverExport}
                     disabled={exportBusy}
-                    className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#4b9b16] text-sm font-semibold text-white transition hover:bg-[#3f8412] disabled:opacity-60"
+                    className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#141414] text-[13px] text-white transition hover:bg-black disabled:opacity-60"
                   >
                     {exportLoading === exportKey ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -731,7 +726,7 @@ function TradeSiteMatrix({
                     )}
                     Download PDF
                   </button>
-                  <p className={`mt-2 px-1 text-[10px] leading-4 ${muted}`}>
+                  <p className={`mt-2 px-1 text-[11px] leading-4 ${muted}`}>
                     {exportModeHint}
                   </p>
                 </div>
@@ -747,32 +742,32 @@ function TradeSiteMatrix({
       >
         {scrolled && (
           <div className="pointer-events-none sticky left-[340px] top-0 z-40 float-left h-0 w-0">
-            <span className="absolute top-0 block h-[10000px] w-6 bg-gradient-to-r from-black/18 to-transparent" />
+            <span className="absolute top-0 block h-[10000px] w-6 bg-gradient-to-r from-black/[0.06] to-transparent" />
           </div>
         )}
         <table className="w-full min-w-[980px] table-fixed border-separate border-spacing-0 text-left text-sm">
           <thead
             className={
               darkMode
-                ? "bg-white/[0.04] text-white/55"
-                : "bg-black/[0.035] text-black/55"
+                ? "text-white/45"
+                : "text-[#8a8a8a]"
             }
           >
             <tr>
               <th
-                className={`sticky left-0 z-30 w-[170px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-[#f5f4f0]"}`}
+                className={`sticky left-0 z-30 w-[170px] border-b px-5 py-3 text-[12px] ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#f0f0ee] bg-white"}`}
               >
                 Site
               </th>
               <th
-                className={`sticky left-[170px] z-30 w-[170px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-[#f5f4f0]"}`}
+                className={`sticky left-[170px] z-30 w-[170px] border-b px-5 py-3 text-[12px] ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#f0f0ee] bg-white"}`}
               >
                 Trade
               </th>
               {dates.map((date) => (
                 <th
                   key={date}
-                  className={`w-[130px] border-b px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
+                  className={`w-[130px] border-b px-4 py-3 text-[12px] ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
                 >
                   {date}
                 </th>
@@ -783,10 +778,10 @@ function TradeSiteMatrix({
             {matrixRows.map((row) => (
               <tr
                 key={`${row.site}-${row.trade}`}
-                className={`group ${darkMode ? "hover:bg-white/[0.035]" : "hover:bg-black/[0.025]"}`}
+                className={`group ${darkMode ? "hover:bg-white/[0.035]" : "hover:bg-[#f7f7f5]"}`}
               >
                 <td
-                  className={`sticky left-0 z-20 w-[170px] border-b px-5 py-3 align-top font-semibold ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}
+                  className={`sticky left-0 z-20 w-[170px] border-b px-5 py-3 align-top ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#f0f0ee] bg-white"}`}
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="truncate">{row.site}</span>
@@ -797,7 +792,7 @@ function TradeSiteMatrix({
                         aria-label={`Download PDF for site ${row.site}`}
                         onClick={() => runExport("site", row.site, "")}
                         disabled={exportBusy}
-                        className={`shrink-0 rounded-lg p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-white" : "text-black/40 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                        className={`shrink-0 rounded-lg p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-white" : "text-[#8a8a8a] hover:bg-[#f6f6f4]"}`}
                       >
                         {exportLoading === `site:${row.site}:` ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -809,7 +804,7 @@ function TradeSiteMatrix({
                   </span>
                 </td>
                 <td
-                  className={`sticky left-[170px] z-20 w-[170px] border-b px-5 py-3 align-top ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}
+                  className={`sticky left-[170px] z-20 w-[170px] border-b px-5 py-3 align-top ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#f0f0ee] bg-white"}`}
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="truncate">{row.trade}</span>
@@ -821,7 +816,7 @@ function TradeSiteMatrix({
                           aria-label={`Download PDF for trade ${row.trade}`}
                           onClick={() => runExport("trade", "", row.trade)}
                           disabled={exportBusy}
-                          className={`rounded-lg p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-white" : "text-black/40 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                          className={`rounded-lg p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-white" : "text-[#8a8a8a] hover:bg-[#f6f6f4]"}`}
                         >
                           {exportLoading === `trade::${row.trade}` ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -835,7 +830,7 @@ function TradeSiteMatrix({
                           aria-label={`Download PDF for site ${row.site} and trade ${row.trade}`}
                           onClick={() => runExport("combo", row.site, row.trade)}
                           disabled={exportBusy}
-                          className={`rounded-lg p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-white" : "text-black/40 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                          className={`rounded-lg p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-white" : "text-[#8a8a8a] hover:bg-[#f6f6f4]"}`}
                         >
                           {exportLoading === `combo:${row.site}:${row.trade}` ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -855,9 +850,9 @@ function TradeSiteMatrix({
                   return (
                     <td
                       key={date}
-                      className={`w-[130px] border-b px-4 py-3 align-top ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
+                      className={`w-[130px] border-b px-4 py-3 align-top ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
                     >
-                      <span className="font-semibold text-black">
+                      <span className="text-inherit">
                         {item.planned}
                       </span>
                       <span className={muted}>/</span>
@@ -895,7 +890,7 @@ function ReportComparisonBars({
   labelKey = "label",
   limit = 10,
 }) {
-  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   const chartItems = items
     .filter((item) => Number(item.planned) || Number(item.actual))
     .slice(0, limit);
@@ -907,22 +902,22 @@ function ReportComparisonBars({
   );
   return (
     <section
-      className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+      className={`rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
     >
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h4 className="text-lg font-semibold">{title}</h4>
+          <h4 className={`text-[15px] ${darkMode ? "text-white" : "text-[#141414]"}`}>{title}</h4>
           {subtitle && <p className={`mt-1 text-xs ${muted}`}>{subtitle}</p>}
         </div>
         <div className={`flex gap-3 text-[11px] ${muted}`}>
           <span className="inline-flex items-center gap-1.5">
-            <i className="h-2 w-2 rounded-full bg-black" /> Planned
+            <i className={`h-2 w-2 rounded-full ${darkMode ? "bg-white/40" : "bg-[#141414]"}`} /> Planned
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <i className="h-2 w-2 rounded-full bg-emerald-500" /> Actual ok
+            <i className="h-2 w-2 rounded-full bg-[#4fae7a]" /> Actual ok
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <i className="h-2 w-2 rounded-full bg-red-500" /> Short
+            <i className="h-2 w-2 rounded-full bg-[#e5484d]" /> Short
           </span>
         </div>
       </div>
@@ -937,29 +932,29 @@ function ReportComparisonBars({
               className="grid gap-2 lg:grid-cols-[180px_1fr_86px] lg:items-center"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">
+                <p className="truncate text-sm">
                   {item[labelKey]}
                 </p>
                 {item.trade && (
-                  <p className={`truncate text-[11px] ${muted}`}>
+                  <p className={`truncate text-[12px] ${muted}`}>
                     {item.trade}
                   </p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <div
-                  className={`h-2.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}
+                  className={`h-2.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-[#ebebe8]"}`}
                 >
                   <div
-                    className="h-full rounded-full bg-black"
+                    className={`h-full rounded-full ${darkMode ? "bg-white/40" : "bg-[#141414]"}`}
                     style={{ width: `${Math.max(2, (planned / max) * 100)}%` }}
                   />
                 </div>
                 <div
-                  className={`h-2.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}
+                  className={`h-2.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-[#ebebe8]"}`}
                 >
                   <div
-                    className={`h-full rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"}`}
+                    className={`h-full rounded-full ${ok ? "bg-[#4fae7a]" : "bg-[#e5484d]"}`}
                     style={{
                       width: `${actual ? Math.max(2, (actual / max) * 100) : 0}%`,
                     }}
@@ -967,10 +962,10 @@ function ReportComparisonBars({
                 </div>
               </div>
               <div className="text-right text-sm">
-                <span className="font-semibold text-black">{planned}</span>
+                <span className="text-inherit">{planned}</span>
                 <span className={muted}> / </span>
                 <span
-                  className={`font-semibold ${ok ? "text-emerald-600" : "text-red-600"}`}
+                  className={` ${ok ? "text-[#3f9a66]" : "text-[#d64550]"}`}
                 >
                   {actual}
                 </span>
@@ -989,7 +984,7 @@ function ReportComparisonBars({
 }
 
 function ReportDailyTrend({ items = [], darkMode }) {
-  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   const chartItems = items || [];
   const max = Math.max(
     1,
@@ -999,21 +994,21 @@ function ReportDailyTrend({ items = [], darkMode }) {
   );
   return (
     <section
-      className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+      className={`rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
     >
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h4 className="text-lg font-semibold">Daily planned vs actual</h4>
+          <h4 className={`text-[15px] ${darkMode ? "text-white" : "text-[#141414]"}`}>Daily planned vs actual</h4>
           <p className={`mt-1 text-xs ${muted}`}>
             Each date in the selected range, including dates with no data.
           </p>
         </div>
         <div className={`flex gap-3 text-[11px] ${muted}`}>
           <span className="inline-flex items-center gap-1.5">
-            <i className="h-2 w-2 rounded-full bg-black" /> Planned
+            <i className={`h-2 w-2 rounded-full ${darkMode ? "bg-white/40" : "bg-[#141414]"}`} /> Planned
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <i className="h-2 w-2 rounded-full bg-[#15a8e0]" /> Actual
+            <i className="h-2 w-2 rounded-full bg-[#6b9fe0]" /> Actual
           </span>
         </div>
       </div>
@@ -1032,27 +1027,27 @@ function ReportDailyTrend({ items = [], darkMode }) {
             >
               <div className="mb-2 text-center">
                 <p
-                  className={`text-xs font-semibold ${actual >= planned ? "text-emerald-600" : "text-red-600"}`}
+                  className={`text-xs ${actual >= planned ? "text-[#3f9a66]" : "text-[#d64550]"}`}
                 >
                   {actual}
                 </p>
-                <p className={`text-[10px] ${muted}`}>/{planned}</p>
+                <p className={`text-[12px] ${muted}`}>/{planned}</p>
               </div>
               <div className="flex h-36 w-full max-w-[44px] items-end">
                 <div
-                  className={`relative h-full w-full overflow-hidden rounded-t-[18px] rounded-b-md ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}
+                  className={`relative h-full w-full overflow-hidden rounded-[14px] ${darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]"}`}
                 >
                   <div
-                    className="absolute bottom-0 left-0 right-0 rounded-t-[18px] bg-black/35"
+                    className={`absolute bottom-0 left-0 right-0 rounded-[14px] ${darkMode ? "bg-white/15" : "bg-[#dcdcd8]"}`}
                     style={{ height: `${plannedHeight}%` }}
                   />
                   <div
-                    className="absolute bottom-0 left-1 right-1 rounded-t-[14px] bg-[#15a8e0]"
+                    className="absolute bottom-0 left-1 right-1 rounded-[11px] bg-[#6b9fe0]"
                     style={{ height: `${actualHeight}%` }}
                   />
                 </div>
               </div>
-              <p className={`mt-3 text-center text-[10px] leading-4 ${muted}`}>
+              <p className={`mt-3 text-center text-[11px] leading-4 ${muted}`}>
                 {item.date.slice(5)}
               </p>
             </div>
@@ -1064,16 +1059,16 @@ function ReportDailyTrend({ items = [], darkMode }) {
 }
 
 function ReportTradeHeatmap({ items = [], darkMode }) {
-  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   const chartItems = items
     .filter((item) => Number(item.planned) || Number(item.actual))
     .slice(0, 24);
   return (
     <section
-      className={`rounded-[26px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+      className={`rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
     >
       <div className="mb-5">
-        <h4 className="text-lg font-semibold">Trade by site attention map</h4>
+        <h4 className={`text-[15px] ${darkMode ? "text-white" : "text-[#141414]"}`}>Trade by site attention map</h4>
         <p className={`mt-1 text-xs ${muted}`}>
           Top site/trade combinations by planned manpower.
         </p>
@@ -1091,23 +1086,23 @@ function ReportTradeHeatmap({ items = [], darkMode }) {
           return (
             <div
               key={`${item.site}-${item.trade}`}
-              className={`rounded-[18px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/[0.06] bg-[#f7f5ef]"}`}
+              className={`rounded-[16px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}
             >
-              <p className="truncate text-sm font-semibold">{item.site}</p>
+              <p className="truncate text-sm">{item.site}</p>
               <p className={`mt-1 truncate text-xs ${muted}`}>{item.trade}</p>
               <div className="mt-4 flex items-end justify-between gap-3">
-                <p className="text-2xl font-semibold text-black">{planned}</p>
+                <p className="text-2xl">{planned}</p>
                 <p
-                  className={`text-2xl font-semibold ${ok ? "text-emerald-600" : "text-red-600"}`}
+                  className={`text-2xl ${ok ? "text-[#3f9a66]" : "text-[#d64550]"}`}
                 >
                   {actual}
                 </p>
               </div>
               <div
-                className={`mt-3 h-2 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.08]"}`}
+                className={`mt-3 h-2 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-[#ebebe8]"}`}
               >
                 <div
-                  className={`h-full rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"}`}
+                  className={`h-full rounded-full ${ok ? "bg-[#4fae7a]" : "bg-[#e5484d]"}`}
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -1133,14 +1128,12 @@ function PlanCeoView({
   tomorrowPlanSites = [],
   darkMode,
 }) {
-  const muted = darkMode ? "text-white/45" : "text-black/45";
-  const line = darkMode ? "border-white/10" : "border-black/[0.07]";
-  const head = darkMode
-    ? "bg-white/[0.04] text-white/55"
-    : "bg-black/[0.035] text-black/55";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const line = darkMode ? "border-white/[0.07]" : "border-[#f0f0ee]";
+  const head = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   const rowHover = darkMode
-    ? "hover:bg-white/[0.035]"
-    : "hover:bg-black/[0.025]";
+    ? "hover:bg-white/[0.03]"
+    : "hover:bg-[#fafaf9]";
   const totalPlanned =
     activeTomorrowSite?.plannedManpower ??
     activePlan?.summary?.plannedManpower ??
@@ -1229,79 +1222,65 @@ function PlanCeoView({
 
   return (
     <div className="space-y-4 transition-all duration-300 ease-out">
-      <section
-        className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}
-      >
-        <div
-          className={`grid gap-px ${darkMode ? "bg-white/10" : "bg-black/[0.06]"} sm:grid-cols-4`}
-        >
-          {[
-            ["Planned", totalPlanned],
-            ["Actual", totalActual],
-            [
-              "Variance",
-              `${totalStatus.variance >= 0 ? "+" : ""}${totalStatus.variance}`,
-            ],
-            ["Needs attention", attentionCount],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              className={`px-5 py-4 ${darkMode ? "bg-[#111216]" : "bg-white"}`}
-            >
-              <p
-                className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}
-              >
-                {label}
-              </p>
-              <p
-                className={`mt-1 text-3xl font-semibold leading-none ${label === "Actual" ? (totalStatus.ok ? "text-emerald-600" : "text-red-600") : ""}`}
-              >
-                {value}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Planned", totalPlanned, Users, "sky"],
+          ["Actual", totalActual, Check, totalStatus.ok ? "mint" : "rose"],
+          [
+            "Variance",
+            `${totalStatus.variance >= 0 ? "+" : ""}${totalStatus.variance}`,
+            Rows3,
+            "lavender",
+          ],
+          ["Needs attention", attentionCount, BellRing, attentionCount ? "peach" : "neutral"],
+        ].map(([label, value, icon, tone]) => (
+          <StatTile
+            key={label}
+            darkMode={darkMode}
+            icon={icon}
+            tone={tone}
+            value={value}
+            label={label}
+          />
+        ))}
+      </div>
 
       <section
-        className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}
+        className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#f0f0ee] bg-white"}`}
       >
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <p
-              className={`text-[9px] font-semibold uppercase tracking-[0.18em] ${muted}`}
-            >
-              CEO summary
-            </p>
-            <h4 className="mt-1 text-base font-semibold">
-              {activePlanTitle} trade by site
-            </h4>
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={Rows3} tone="lavender" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h4 className="text-[15px]">
+                {activePlanTitle} trade by site
+              </h4>
+              <p className={`text-[12px] ${muted}`}>CEO summary</p>
+            </div>
           </div>
-          <span
-            className={`rounded-full px-2.5 py-1 text-[11px] ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}
-          >
+          <Chip darkMode={darkMode} tone="neutral">
             {siteColumns.length} sites · {tradeRows.length} trades
-          </span>
+          </Chip>
         </div>
         <div className="max-h-[58vh] overflow-auto px-3 pb-3">
           <table className="w-full min-w-[700px] border-separate border-spacing-0 text-left text-xs">
             <thead className={head}>
               <tr>
                 <th
-                  className={`sticky left-0 top-0 z-30 min-w-[120px] border-b px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] ${line} ${darkMode ? "bg-[#191b20]" : "bg-[#f4f3ef]"}`}
+                  className={`sticky left-0 top-0 z-30 min-w-[120px] border-b px-2.5 py-2 text-[11px] ${line} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}
                 >
                   Trade
                 </th>
                 {siteColumns.map((site) => (
                   <th
                     key={site}
-                    className={`sticky top-0 z-20 min-w-[112px] max-w-[150px] whitespace-normal break-words border-b px-2.5 py-2 text-[10px] font-semibold uppercase leading-4 tracking-[0.12em] ${line} ${darkMode ? "bg-[#191b20]" : "bg-[#f4f3ef]"}`}
+                    className={`sticky top-0 z-20 min-w-[112px] max-w-[150px] whitespace-normal break-words border-b px-2.5 py-2 text-[11px] leading-4 ${line} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}
                   >
                     {site}
                   </th>
                 ))}
                 <th
-                  className={`sticky top-0 z-20 min-w-[90px] border-b px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] ${line} ${darkMode ? "bg-[#191b20]" : "bg-[#f4f3ef]"}`}
+                  className={`sticky top-0 z-20 min-w-[90px] border-b px-2.5 py-2 text-[11px] ${line} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}
                 >
                   Total
                 </th>
@@ -1311,7 +1290,7 @@ function PlanCeoView({
               {tradeRows.map((trade) => (
                 <tr key={trade.trade} className={rowHover}>
                   <td
-                    className={`sticky left-0 z-10 border-b px-2.5 py-2 font-semibold ${line} ${darkMode ? "bg-[#111216]" : "bg-white"}`}
+                    className={`sticky left-0 z-10 border-b px-2.5 py-2 ${line} ${darkMode ? "bg-[#15171c]" : "bg-white"}`}
                   >
                     {trade.trade}
                   </td>
@@ -1329,18 +1308,18 @@ function PlanCeoView({
                       >
                         {cell ? (
                           <div className="flex items-baseline gap-1.5">
-                            <p className="text-base font-semibold leading-none">
+                            <p className="text-base leading-none">
                               {cell.people}
                               <span className={muted}>/</span>
                               <span
                                 className={
-                                  actualOk ? "text-emerald-600" : "text-red-600"
+                                  actualOk ? "text-[#3f9a66]" : "text-[#d64550]"
                                 }
                               >
                                 {actual}
                               </span>
                             </p>
-                            <p className={`text-[10px] ${muted}`}>
+                            <p className={`text-[12px] ${muted}`}>
                               {cell.items}i
                             </p>
                           </div>
@@ -1357,12 +1336,12 @@ function PlanCeoView({
                         const actualOk =
                           actualTotal >= (Number(trade.totalPeople) || 0);
                         return (
-                          <p className="text-base font-semibold leading-none">
+                          <p className="text-base leading-none">
                             {trade.totalPeople}
                             <span className={muted}>/</span>
                             <span
                               className={
-                                actualOk ? "text-emerald-600" : "text-red-600"
+                                actualOk ? "text-[#3f9a66]" : "text-[#d64550]"
                               }
                             >
                               {actualTotal}
@@ -1370,7 +1349,7 @@ function PlanCeoView({
                           </p>
                         );
                       })()}
-                      <p className={`text-[10px] ${muted}`}>
+                      <p className={`text-[12px] ${muted}`}>
                         {trade.totalItems}i
                       </p>
                     </div>
@@ -1393,24 +1372,21 @@ function PlanCeoView({
       </section>
 
       <section
-        className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}
+        className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#f0f0ee] bg-white"}`}
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4">
-          <div>
-            <p
-              className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}
-            >
-              Work plan
-            </p>
-            <h4 className="mt-1 text-lg font-semibold">
-              {activeTomorrowSite?.site || "All sites"}
-            </h4>
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={FileSpreadsheet} tone="amber" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h4 className="text-[15px]">
+                {activeTomorrowSite?.site || "All sites"}
+              </h4>
+              <p className={`text-[12px] ${muted}`}>Work plan</p>
+            </div>
           </div>
-          <span
-            className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
-          >
+          <Chip darkMode={darkMode} tone="neutral">
             {detailRecords.length} items
-          </span>
+          </Chip>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1060px] text-left text-sm">
@@ -1426,7 +1402,7 @@ function PlanCeoView({
                 ].map((header) => (
                   <th
                     key={header}
-                    className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em]"
+                    className="px-5 py-3 text-[12px]"
                   >
                     {header}
                   </th>
@@ -1439,11 +1415,11 @@ function PlanCeoView({
                   key={record.id}
                   className={`border-t align-top ${line} ${rowHover}`}
                 >
-                  <td className="max-w-[200px] px-5 py-3 font-semibold">
+                  <td className="max-w-[200px] px-5 py-3">
                     {record.site || "Unassigned"}
                   </td>
                   <td className="px-5 py-3">{record.category || "General"}</td>
-                  <td className="px-5 py-3 text-lg font-semibold">
+                  <td className="px-5 py-3 text-lg">
                     {record.plannedManpower ?? "-"}
                   </td>
                   <td className="max-w-[420px] px-5 py-3 leading-6">
@@ -1533,10 +1509,10 @@ export default function DmrDashboard({ darkMode }) {
   const [heroActionOpen, setHeroActionOpen] = useState(false);
   const heroActionRef = useRef(null);
 
-  const muted = darkMode ? "text-white/45" : "text-black/45";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   const panel = darkMode
-    ? "border-white/10 bg-white/[0.025]"
-    : "border-[#dfe7e4] bg-white";
+    ? "border border-white/10 bg-[#15171c]"
+    : "border border-[#ececec] bg-white";
   const dmrSheetLinked = Boolean(data?.dmrSettings?.linked);
   const canFillDmr = Boolean(data?.canEdit && dmrSheetLinked);
   useClickOutside(heroActionRef, () => setHeroActionOpen(false));
@@ -2240,10 +2216,10 @@ export default function DmrDashboard({ darkMode }) {
         title: `${equipment.length} ${equipment.length === 1 ? "entry" : "entries"}`,
         hint: equipment[0]?.details || "Tools and machinery details",
         chip: "Machinery",
-        accent: "bg-[#ff7a2f]",
+        accent: "bg-[#f2b8a0]",
         soft: darkMode
           ? "bg-[#ff7a2f]/10 text-orange-200"
-          : "bg-orange-50 text-orange-700",
+          : "bg-[#fbe5dc] text-[#c2562b]",
         count: equipment.length,
         items: equipment,
       },
@@ -2253,10 +2229,10 @@ export default function DmrDashboard({ darkMode }) {
         title: `${materials.length} ${materials.length === 1 ? "entry" : "entries"}`,
         hint: materials[0]?.details || "Material issue and quantity details",
         chip: "Stock",
-        accent: "bg-[#f2c94c]",
+        accent: "bg-[#f0d488]",
         soft: darkMode
           ? "bg-[#f2c94c]/10 text-yellow-200"
-          : "bg-yellow-50 text-yellow-700",
+          : "bg-[#fbf0d4] text-[#8a6200]",
         count: materials.length,
         items: materials,
       },
@@ -2266,7 +2242,7 @@ export default function DmrDashboard({ darkMode }) {
         title: `${notes.length} ${notes.length === 1 ? "note" : "notes"}`,
         hint: notes[0]?.note || "Site remarks and reminders",
         chip: "Remarks",
-        accent: "bg-[#63d5bd]",
+        accent: "bg-[#9fd8b3]",
         soft: darkMode
           ? "bg-[#63d5bd]/10 text-teal-200"
           : "bg-teal-50 text-teal-700",
@@ -2282,7 +2258,7 @@ export default function DmrDashboard({ darkMode }) {
         accent: "bg-[#15a8e0]",
         soft: darkMode
           ? "bg-[#15a8e0]/10 text-sky-200"
-          : "bg-sky-50 text-sky-700",
+          : "bg-[#e3eefb] text-[#2f6fc0]",
         count: staff.filter((item) => String(item.status || "").trim()).length,
         items: staff,
       },
@@ -2325,59 +2301,48 @@ export default function DmrDashboard({ darkMode }) {
   if (loading) {
     return (
       <div
-        className={`flex min-h-0 flex-1 items-center justify-center px-5 py-10 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}
+        className={`flex min-h-0 flex-1 items-center justify-center px-5 py-10 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}
       >
         <div
-          className={`w-full max-w-2xl rounded-[30px]  p-7 ${darkMode ? "border-white/10 bg-[#151612]" : "border-black/[0.07] bg-white"}`}
+          className={`w-full max-w-2xl rounded-[20px] border p-7 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
         >
           <div className="flex items-center gap-4">
             <span className="relative flex h-14 w-14 items-center justify-center">
               <span
-                className={`absolute inset-0 animate-ping rounded-full opacity-20 ${darkMode ? "bg-[#d8f36a]" : "bg-black"}`}
+                className={`absolute inset-0 animate-ping rounded-[18px] opacity-30 ${darkMode ? "bg-[#cff07a]/40" : "bg-[#e4f1e6]"}`}
               />
-              <span
-                className={`absolute inset-1 animate-pulse rounded-full ${darkMode ? "bg-[#d8f36a]/15" : "bg-black/[0.06]"}`}
-              />
-              <span
-                className={`relative flex h-12 w-12 items-center justify-center rounded-full ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}
-              >
-                <FileSpreadsheet className="h-5 w-5" />
-              </span>
+              <IconTile icon={FileSpreadsheet} tone="mint" darkMode={darkMode} size="lg" className="relative" />
             </span>
             <div>
-              <p
-                className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-[#d8f36a]" : "text-[#e76f42]"}`}
-              >
-                DMR workspace
-              </p>
-              <h2 className="mt-2 flex flex-wrap items-center gap-2 text-xl font-semibold">
+              <p className={`text-[12px] ${muted}`}>DMR workspace</p>
+              <h2 className={`mt-1 flex flex-wrap items-center gap-2 text-[20px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>
                 Opening today&apos;s live manpower sheet
                 <span
                   className="inline-flex items-center gap-1 pt-1"
                   aria-hidden="true"
                 >
                   <span
-                    className={`h-1.5 w-1.5 animate-bounce rounded-full ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`}
+                    className={`h-1.5 w-1.5 animate-bounce rounded-full ${darkMode ? "bg-[#cff07a]" : "bg-[#141414]"}`}
                   />
                   <span
-                    className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:120ms] ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`}
+                    className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:120ms] ${darkMode ? "bg-[#cff07a]" : "bg-[#141414]"}`}
                   />
                   <span
-                    className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:240ms] ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`}
+                    className={`h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:240ms] ${darkMode ? "bg-[#cff07a]" : "bg-[#141414]"}`}
                   />
                 </span>
               </h2>
-              <p className={`mt-2 text-sm ${muted}`}>
+              <p className={`mt-1.5 text-[13px] ${muted}`}>
                 If today&apos;s tab is missing, it will be created automatically
                 from the latest DMR format.
               </p>
             </div>
           </div>
           <div
-            className={`mt-6 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}
+            className={`mt-6 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-[#f4f4f2]"}`}
           >
             <div
-              className={`h-full w-1/3 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full ${darkMode ? "bg-[#d8f36a]" : "bg-[#171714]"}`}
+              className={`h-full w-1/3 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full ${darkMode ? "bg-[#cff07a]" : "bg-[#141414]"}`}
             />
           </div>
         </div>
@@ -2385,130 +2350,30 @@ export default function DmrDashboard({ darkMode }) {
     );
   }
 
+  const sectionCardLook = {
+    equipment: { icon: Wrench, tone: "peach" },
+    materials: { icon: Package, tone: "amber" },
+    notes: { icon: StickyNote, tone: "lavender" },
+    attendance: { icon: Users, tone: "sky" },
+  };
+
   return (
     <div
-      className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}
+      className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}
     >
       <div className="mx-auto w-full">
-        <div
-          className={`relative z-30 mb-8 overflow-visible rounded-[26px] p-5 sm:rounded-[30px] sm:p-8 ${darkMode ? "border-white/10 bg-[#151612]" : "border-[#dfe7e4] bg-white/95"}`}
-        >
-          <div className="flex min-w-0 flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <span
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium ${darkMode ? "border-white/10 bg-white/5 text-white/65" : "border-[#dfe7e4] bg-[#e8f6ee] text-[#0f6b49]"}`}
-              >
-                <FileSpreadsheet className="h-3.5 w-3.5" /> Projects · DMR
-              </span>
-              <h2 className="mt-5 max-w-3xl small text-[2.35rem] font-semibold leading-[0.98] tracking-tight sm:text-4xl lg:text-4xl">
-                Daily manpower, made simple.
-              </h2>
-              <p className={`mt-3 max-w-4xl text-sm leading-6 sm:text-base ${muted}`}>
-                Live planned vs actual attendance across all sites and agencies.
-                Fill today&apos;s DMR without touching spreadsheet cells.
-              </p>
-            </div>
-            <div className="relative z-40 flex w-full min-w-0 flex-col gap-3 lg:w-auto lg:items-end">
-              <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:justify-end">
-                <button
-                  onClick={() => {
-                    setFillTab("manpower");
-                    setFillOpen(true);
-                  }}
-                  className={`flex h-11 min-w-0 items-center justify-center gap-2 rounded-3xl px-4 text-sm font-medium sm:h-12 sm:shrink-0 sm:px-5 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}
-                >
-                  <CalendarDays className="h-4 w-4" /> Fill DMR
-                </button>
-                <div ref={heroActionRef} className="relative min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => setHeroActionOpen((value) => !value)}
-                    className={`flex h-11 w-full min-w-0 items-center justify-center gap-2 rounded-3xl border px-4 text-sm font-semibold transition active:scale-[0.98] sm:h-12 sm:w-auto sm:shrink-0 sm:px-5 ${darkMode ? "border-white/10 bg-[#15171c] text-white hover:bg-white/10" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}
-                  >
-                    <Settings2 className="h-4 w-4" />
-                    Actions
-                    <ChevronDown className={`h-4 w-4 transition-transform ${heroActionOpen ? "rotate-180" : ""}`} />
-                  </button>
-                  {heroActionOpen && (
-                    <div className={`absolute right-0 top-[calc(100%+10px)] z-[120] w-[286px] overflow-hidden rounded-[22px] border p-2 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/10 bg-[#171a20]" : "border-black/10 bg-white"}`}>
-                      {[
-                        {
-                          label: "CEO Report",
-                          helper: "Download and preview DMR PDF",
-                          icon: FileSpreadsheet,
-                          onClick: () => {
-                            setReportClosing(false);
-                            setReportOpen(true);
-                          },
-                        },
-                        {
-                          label: "Today's Plan",
-                          helper: "Review current manpower plan",
-                          icon: CalendarDays,
-                          onClick: () => {
-                            setSelectedTomorrowSite("");
-                            setPlanMode("today");
-                          },
-                        },
-                        {
-                          label: "Tomorrow's Plan",
-                          helper: "Review next day manpower plan",
-                          icon: CalendarDays,
-                          onClick: () => {
-                            setSelectedTomorrowSite("");
-                            setPlanMode("tomorrow");
-                          },
-                        },
-                        {
-                          label: "Reminders",
-                          helper: "WhatsApp DMR reminder timing",
-                          icon: BellRing,
-                          onClick: openReminderDrawer,
-                          danger: true,
-                        },
-                        {
-                          label: refreshing ? "Refreshing..." : "Refresh",
-                          helper: "Sync latest DMR data",
-                          icon: RefreshCw,
-                          disabled: refreshing,
-                          onClick: () => load(true, true),
-                          spin: refreshing,
-                        },
-                        ...(data?.canViewHistory ? [{
-                          label: "History",
-                          helper: "View DMR version changes",
-                          icon: History,
-                          onClick: openHistory,
-                        }] : []),
-                      ].map((item) => {
-                        const Icon = item.icon;
-                        return (
-                          <button
-                            key={item.label}
-                            type="button"
-                            disabled={item.disabled}
-                            onClick={() => {
-                              if (item.disabled) return;
-                              setHeroActionOpen(false);
-                              item.onClick?.();
-                            }}
-                            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "text-white hover:bg-white/[0.08]" : "text-slate-800 hover:bg-[#f3f5f9]"}`}
-                          >
-                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${item.danger ? darkMode ? "bg-red-500/15 text-red-300" : "bg-red-50 text-red-600" : darkMode ? "bg-white/[0.08] text-white/75" : "bg-[#eef7f4] text-[#17643f]"}`}>
-                              <Icon className={`h-4 w-4 ${item.spin ? "animate-spin" : ""}`} />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className={`block font-semibold ${item.danger ? "text-red-600 dark:text-red-300" : ""}`}>{item.label}</span>
-                              <span className={`mt-0.5 block text-xs ${muted}`}>{item.helper}</span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="w-full min-w-0 sm:w-[236px]">
+        <PageHeader
+          darkMode={darkMode}
+          className="relative z-30 mb-8"
+          badge="Projects · DMR"
+          badgeIcon={FileSpreadsheet}
+          badgeTone="mint"
+          title="Daily manpower"
+          subtitle="planned vs actual, site by site"
+          description="Live attendance across all sites and agencies. Fill today's DMR without touching spreadsheet cells."
+          actions={
+            <>
+              <div className="w-full min-w-0 sm:w-[220px]">
                 <DatePicker
                   darkMode={darkMode}
                   value={date}
@@ -2516,73 +2381,175 @@ export default function DmrDashboard({ darkMode }) {
                   placeholder="Choose DMR date"
                 />
               </div>
-            </div>
-          </div>
-        </div>
+              <div ref={heroActionRef} className="relative z-40 min-w-0">
+                <Button
+                  darkMode={darkMode}
+                  variant="secondary"
+                  icon={Settings2}
+                  onClick={() => setHeroActionOpen((value) => !value)}
+                  className="h-10"
+                >
+                  Actions
+                  <ChevronDown className={`h-4 w-4 transition-transform ${heroActionOpen ? "rotate-180" : ""}`} />
+                </Button>
+                {heroActionOpen && (
+                  <div className={`absolute right-0 top-[calc(100%+8px)] z-[120] w-[290px] overflow-hidden rounded-[18px] border p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.12)] ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+                    {[
+                      {
+                        label: "CEO Report",
+                        helper: "Download and preview DMR PDF",
+                        icon: FileSpreadsheet,
+                        tone: "mint",
+                        onClick: () => {
+                          setReportClosing(false);
+                          setReportOpen(true);
+                        },
+                      },
+                      {
+                        label: "Today's Plan",
+                        helper: "Review current manpower plan",
+                        icon: CalendarDays,
+                        tone: "sky",
+                        onClick: () => {
+                          setSelectedTomorrowSite("");
+                          setPlanMode("today");
+                        },
+                      },
+                      {
+                        label: "Tomorrow's Plan",
+                        helper: "Review next day manpower plan",
+                        icon: CalendarDays,
+                        tone: "lavender",
+                        onClick: () => {
+                          setSelectedTomorrowSite("");
+                          setPlanMode("tomorrow");
+                        },
+                      },
+                      {
+                        label: "Reminders",
+                        helper: "WhatsApp DMR reminder timing",
+                        icon: BellRing,
+                        tone: "rose",
+                        onClick: openReminderDrawer,
+                      },
+                      {
+                        label: refreshing ? "Refreshing..." : "Refresh",
+                        helper: "Sync latest DMR data",
+                        icon: RefreshCw,
+                        tone: "neutral",
+                        disabled: refreshing,
+                        onClick: () => load(true, true),
+                        spin: refreshing,
+                      },
+                      ...(data?.canViewHistory ? [{
+                        label: "History",
+                        helper: "View DMR version changes",
+                        icon: History,
+                        tone: "amber",
+                        onClick: openHistory,
+                      }] : []),
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          disabled={item.disabled}
+                          onClick={() => {
+                            if (item.disabled) return;
+                            setHeroActionOpen(false);
+                            item.onClick?.();
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-[14px] px-2.5 py-2.5 text-left text-[13.5px] transition disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "text-white hover:bg-white/[0.06]" : "text-[#141414] hover:bg-[#f4f4f2]"}`}
+                        >
+                          <IconTile icon={<Icon className={`h-4 w-4 ${item.spin ? "animate-spin" : ""}`} />} tone={item.tone} darkMode={darkMode} size="sm" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block">{item.label}</span>
+                            <span className={`block text-[12px] ${muted}`}>{item.helper}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <Button
+                darkMode={darkMode}
+                variant="primary"
+                icon={CalendarDays}
+                className="h-10"
+                onClick={() => {
+                  setFillTab("manpower");
+                  setFillOpen(true);
+                }}
+              >
+                Fill DMR
+              </Button>
+            </>
+          }
+        />
 
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,.9fr)]">
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,.9fr)]">
           <WorkloadBars
             title="Site-wise actual manpower"
             items={siteManpowerBreakdown}
             darkMode={darkMode}
+            icon={Building2}
+            tone="sky"
           />
           <WorkloadBars
             title="Top agencies today"
             items={agencyManpowerBreakdown}
             darkMode={darkMode}
+            icon={Users}
+            tone="lavender"
           />
         </div>
 
-        <div className="mt-5 grid gap-5 xl:grid-cols-4">
-          {sectionCards.map((card) => (
-            <button
-              key={card.id}
-              type="button"
-              onClick={() => setDetailSection(card.id)}
-              className={`group relative min-h-44 rounded-[28px]  p-5 text-left transition ${panel}`}
-            >
-              <span
-                className={`absolute left-6 right-6 top-0 h-1 rounded-full ${card.count ? "bg-[#15a8e0]" : darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}
-              />
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p
-                    className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
-                  >
-                    {card.eyebrow}
-                  </p>
-                  <h3 className="mt-3 text-2xl font-semibold">{card.title}</h3>
-                </div>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[11px] ${card.count ? "bg-emerald-500/10 text-emerald-700" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}
-                >
-                  {card.count ? "Added" : "Empty"}
-                </span>
-              </div>
-              <p className={`mt-6 line-clamp-2 text-sm leading-6 ${muted}`}>
-                {card.hint}
-              </p>
-              <p
-                className={`mt-5 text-xs font-medium ${darkMode ? "text-[#d8f36a]" : "text-[#171714]"} opacity-70 group-hover:opacity-100`}
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {sectionCards.map((card) => {
+            const look = sectionCardLook[card.id] || { icon: FileSpreadsheet, tone: "neutral" };
+            return (
+              <button
+                key={card.id}
+                type="button"
+                onClick={() => setDetailSection(card.id)}
+                className={`group relative flex min-h-44 flex-col rounded-[20px] p-5 text-left transition-colors ${panel} ${darkMode ? "hover:bg-[#191b21]" : "hover:bg-[#fcfcfb]"}`}
               >
-                Click to view details
-              </p>
-            </button>
-          ))}
+                <div className="flex items-start justify-between gap-3">
+                  <IconTile icon={look.icon} tone={look.tone} darkMode={darkMode} />
+                  <Chip darkMode={darkMode} tone={card.count ? "mint" : "neutral"}>
+                    {card.count ? "Added" : "Empty"}
+                  </Chip>
+                </div>
+                <p className={`mt-4 text-[12.5px] ${muted}`}>{card.eyebrow}</p>
+                <h3 className={`mt-0.5 text-[22px] tracking-[-0.02em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{card.title}</h3>
+                <p className={`mt-2 line-clamp-2 text-[13px] leading-5 ${muted}`}>
+                  {card.hint}
+                </p>
+                <p
+                  className={`mt-auto pt-4 text-[12px] transition-colors ${darkMode ? "text-white/45 group-hover:text-[#cff07a]" : "text-[#8a8a8a] group-hover:text-[#141414]"}`}
+                >
+                  View details
+                </p>
+              </button>
+            );
+          })}
         </div>
 
-        <section className={`mt-5 rounded-[28px]  p-5 ${panel}`}>
+        <section className={`mt-4 rounded-[20px] p-5 ${panel}`}>
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p
-                className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
-              >
-                Project manpower
-              </p>
-              <h3 className="mt-2 text-xl font-semibold">
-                {data?.sheetName || "Today"} · {projectManpowerCards.length}{" "}
-                project sites
-              </h3>
+            <div className="flex min-w-0 items-center gap-3">
+              <IconTile icon={Building2} tone="mint" darkMode={darkMode} size="sm" />
+              <div className="min-w-0">
+                <h3 className={`text-[15px] ${darkMode ? "text-white" : "text-[#141414]"}`}>
+                  Project manpower
+                </h3>
+                <p className={`text-[12.5px] ${muted}`}>
+                  {data?.sheetName || "Today"} · {projectManpowerCards.length}{" "}
+                  project sites
+                </p>
+              </div>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <SelectMenu
@@ -2605,47 +2572,37 @@ export default function DmrDashboard({ darkMode }) {
                   value={agencySearch}
                   onChange={(event) => setAgencySearch(event.target.value)}
                   placeholder="Search site or agency…"
-                  className={`h-12 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none sm:w-64 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
+                  className={`h-10 w-full rounded-full pl-11 pr-4 text-sm outline-none transition sm:w-64 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                 />
               </label>
             </div>
           </div>
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {projectManpowerCards.map((project) => (
               <button
                 key={project.id}
                 type="button"
                 onClick={() => setSelectedProject(project)}
-                className={`group  flex min-h-80 flex-col rounded-[28px] border p-5 text-left transition ${darkMode ? "border-white/10 bg-[#111216] hover:bg-white/[0.04]" : "border-black/[0.07] bg-white hover:bg-[#fbfaf7]"}`}
+                className={`group flex min-h-80 flex-col rounded-[20px] border p-5 text-left transition-colors ${darkMode ? "border-white/10 bg-[#15171c] hover:bg-[#191b21]" : "border-[#ececec] bg-white hover:bg-[#fcfcfb]"}`}
               >
-                <div className="flex items-start justify-between gap-3 border-b pb-5 border-black/[0.06] dark:border-white/10">
+                <div className={`flex items-start justify-between gap-3 border-b pb-5 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
                   <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-blue-400/10 text-blue-200" : "bg-blue-50 text-blue-700"}`}
-                    >
-                      <FileSpreadsheet className="h-5 w-5" />
-                    </span>
+                    <IconTile icon={Building2} tone="sky" darkMode={darkMode} />
                     <div className="min-w-0">
-                      <p
-                        className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}
-                      >
-                        In production
-                      </p>
-                      <h4 className="mt-1 truncate text-xl font-semibold">
+                      <p className={`text-[12px] ${muted}`}>In production</p>
+                      <h4 className={`truncate text-[18px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>
                         {project.site}
                       </h4>
                     </div>
                   </div>
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-[11px] ${project.variance < 0 ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}
-                  >
+                  <Chip darkMode={darkMode} tone={project.variance < 0 ? "rose" : "mint"} className="tabular-nums">
                     {project.variance >= 0 ? "+" : ""}
                     {project.variance}
-                  </span>
+                  </Chip>
                 </div>
 
                 <div className="mt-5">
-                  <p className={`text-sm ${muted}`}>
+                  <p className={`line-clamp-2 text-[13px] leading-5 ${muted}`}>
                     Note:{" "}
                     {project.agencies.slice(0, 3).join(", ") ||
                       "No agencies filled yet"}
@@ -2653,11 +2610,11 @@ export default function DmrDashboard({ darkMode }) {
                       ? ` +${project.agencies.length - 3}`
                       : ""}
                   </p>
-                  <div className="mt-4 flex items-center justify-between text-sm">
-                    <span className="font-semibold">Progress</span>
-                    <span className="font-semibold">{project.progress}%</span>
+                  <div className="mt-4 flex items-center justify-between text-[13px]">
+                    <span className={muted}>Progress</span>
+                    <span className="tabular-nums">{project.progress}%</span>
                   </div>
-                  <div className="mt-3 flex h-3 overflow-hidden rounded-full">
+                  <div className="mt-2.5 flex h-2.5 overflow-hidden rounded-full">
                     {(() => {
                       const planned = Math.max(Number(project.planned) || 0, 0);
                       const actual = Math.max(Number(project.actual) || 0, 0);
@@ -2667,17 +2624,17 @@ export default function DmrDashboard({ darkMode }) {
                         {
                           label: "Planned",
                           value: planned,
-                          color: "bg-[#ff7a2f]",
+                          color: "bg-[#f2b8a0]",
                         },
                         {
                           label: "Actual",
                           value: actual,
-                          color: "bg-[#f2c94c]",
+                          color: "bg-[#f0d488]",
                         },
                         {
                           label: "Variance",
                           value: variance,
-                          color: "bg-[#63d5bd]",
+                          color: "bg-[#9fd8b3]",
                         },
                       ].map((segment) => (
                         <span
@@ -2690,31 +2647,21 @@ export default function DmrDashboard({ darkMode }) {
                       ));
                     })()}
                   </div>
-                  <div
-                    className={`mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] ${muted}`}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <i className="h-2 w-2 rounded-full bg-[#ff7a2f]" />{" "}
-                      Planned
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <i className="h-2 w-2 rounded-full bg-[#f2c94c]" /> Actual
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <i className="h-2 w-2 rounded-full bg-[#63d5bd]" />{" "}
-                      Variance
-                    </span>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <ChartLegendDot className="bg-[#f2b8a0]" label="Planned" muted={muted} />
+                    <ChartLegendDot className="bg-[#f0d488]" label="Actual" muted={muted} />
+                    <ChartLegendDot className="bg-[#9fd8b3]" label="Variance" muted={muted} />
                   </div>
                 </div>
 
                 <div className="mt-5 pb-2">
-                  <p className="text-sm font-semibold">Active agencies</p>
-                  <div className="mt-3 flex items-center">
+                  <p className={`text-[12.5px] ${muted}`}>Active agencies</p>
+                  <div className="mt-2.5 flex items-center">
                     {project.agencies.slice(0, 5).map((agency, index) => (
                       <span
                         key={agency}
                         title={agency}
-                        className={`-ml-2 first:ml-0 grid h-9 w-9 place-items-center rounded-full border-2 text-[10px] font-semibold ${darkMode ? "border-[#111216] bg-white/10 text-white" : "border-white bg-[#f4f0e8] text-black"}`}
+                        className={`-ml-2 first:ml-0 grid h-9 w-9 place-items-center rounded-full border-2 text-[11px] ${darkMode ? "border-[#15171c] bg-white/10 text-white" : "border-white bg-[#f4f4f2] text-[#3d3d3b]"}`}
                       >
                         {agency
                           .split(/\s+/)
@@ -2724,28 +2671,26 @@ export default function DmrDashboard({ darkMode }) {
                           .toUpperCase() || index + 1}
                       </span>
                     ))}
-                    <span
-                      className={`ml-3 rounded-full px-3 py-2 text-xs font-medium ${darkMode ? "bg-white/5 text-white/60" : "bg-[#f4f0e8] text-black/60"}`}
-                    >
+                    <Chip darkMode={darkMode} tone="neutral" className="ml-3">
                       {project.agencies.length} agencies
-                    </span>
+                    </Chip>
                   </div>
                 </div>
 
                 <div
-                  className={`mt-auto grid grid-cols-3 gap-2 border-t pt-4 text-xs ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
+                  className={`mt-auto grid grid-cols-3 items-end gap-2 border-t pt-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
                 >
                   <div>
-                    <p className="font-semibold">{project.planned}</p>
-                    <p className={muted}>Planned</p>
+                    <p className="text-[18px] tabular-nums">{project.planned}</p>
+                    <p className={`text-[12px] ${muted}`}>Planned</p>
                   </div>
                   <div>
-                    <p className="font-semibold">{project.actual}</p>
-                    <p className={muted}>Actual</p>
+                    <p className="text-[18px] tabular-nums">{project.actual}</p>
+                    <p className={`text-[12px] ${muted}`}>Actual</p>
                   </div>
                   <div className="text-right">
                     <span
-                      className={`inline-flex rounded-full px-3 py-2 font-semibold ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                      className={`inline-flex h-8 items-center rounded-full px-3.5 text-[12.5px] ${darkMode ? "bg-[#cff07a] text-black" : "bg-[#141414] text-white"}`}
                     >
                       View
                     </span>
@@ -2754,11 +2699,14 @@ export default function DmrDashboard({ darkMode }) {
               </button>
             ))}
             {!projectManpowerCards.length && (
-              <div
-                className={`rounded-[24px] border px-4 py-10 text-center text-sm md:col-span-2 xl:col-span-3 ${darkMode ? "border-white/10 bg-white/[0.025] text-white/45" : "border-black/[0.06] bg-white text-black/45"}`}
-              >
-                No project manpower found for the selected filters.
-              </div>
+              <EmptyState
+                darkMode={darkMode}
+                icon={Building2}
+                tone="neutral"
+                title="No project manpower"
+                text="Nothing matches the selected site or search."
+                className="md:col-span-2 xl:col-span-3"
+              />
             )}
           </div>
         </section>
@@ -2766,28 +2714,22 @@ export default function DmrDashboard({ darkMode }) {
 
       {planMode && (
         <div
-          className={`fixed inset-0 z-50 flex ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f7f5ef] text-[#171714]"}`}
+          className={`fixed inset-0 z-50 flex ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}
         >
           <div className="flex h-[100dvh] w-screen flex-col overflow-hidden">
             <div
-              className={`flex flex-col gap-4 border-b px-4 py-4 sm:px-7 sm:py-5 md:flex-row md:items-start md:justify-between ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex flex-col gap-4 border-b px-4 py-4 sm:px-7 sm:py-5 md:flex-row md:items-center md:justify-between ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
             >
-              <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-                <span
-                  className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-[#d8f36a]/10 text-[#d8f36a]" : "bg-[#ebe6dc] text-[#171714]"}`}
-                >
-                  <FileSpreadsheet className="h-5 w-5" />
-                </span>
+              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                <IconTile icon={CalendarDays} tone={planMode === "today" ? "sky" : "lavender"} darkMode={darkMode} />
                 <div className="min-w-0">
-                  <p
-                    className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}
-                  >
+                  <p className={`text-[12px] ${muted}`}>
                     {activePlanTitle}
                   </p>
-                  <h3 className="mt-1 text-2xl font-semibold leading-tight sm:mt-2 sm:text-3xl">
+                  <h3 className="text-[22px] leading-tight tracking-[-0.02em] sm:text-[26px]">
                     {activePlanHeading}
                   </h3>
-                  <p className={`mt-1 text-sm ${muted}`}>
+                  <p className={`mt-0.5 text-[13px] ${muted}`}>
                     {activePlan?.selectedDate ||
                       activePlan?.requestedDate ||
                       date}{" "}
@@ -2798,40 +2740,34 @@ export default function DmrDashboard({ darkMode }) {
               </div>
               <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:shrink-0 md:justify-end">
                 {planMode === "today" && (
-                  <button
-                    type="button"
+                  <Button
+                    darkMode={darkMode}
+                    variant="accent"
                     onClick={downloadDmrReportPdf}
                     disabled={reportPdfLoading}
-                    className={`relative flex h-11 flex-1 items-center justify-center gap-2 overflow-hidden rounded-full px-3 text-xs font-semibold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none sm:px-4 sm:text-sm ${
-                      darkMode
-                        ? "bg-gradient-to-r from-[#6af3a8] via-[#7df0c5] to-[#6af3a8] text-black shadow-lg shadow-[#d8f36a]/15 hover:scale-[1.02]"
-                        : "bg-gradient-to-r from-[#6aff9e] via-[#7df0c5] to-[#6af3a8] text-[#171714] shadow-lg shadow-emerald-200/60 hover:scale-[1.02]"
-                    }`}
+                    loading={reportPdfLoading}
+                    icon={reportPdfLoading ? undefined : Download}
+                    className="h-10 flex-1 sm:flex-none"
                   >
-                    <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/45 to-transparent transition-transform duration-700 hover:translate-x-full" />
-                    <span className="relative inline-flex items-center gap-2">
-                      {reportPdfLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4 " />
-                      )}
-                      Download Today&apos;s PDF
-                    </span>
-                  </button>
+                    Download Today&apos;s PDF
+                  </Button>
                 )}
-                <button
-                  type="button"
+                <Button
+                  darkMode={darkMode}
+                  variant={ceoPlanView ? "primary" : "secondary"}
                   onClick={() => setCeoPlanView((value) => !value)}
-                  className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-full border px-3 text-xs font-medium transition-all duration-300 sm:flex-none sm:px-4 sm:text-sm ${ceoPlanView ? (darkMode ? "border-[#d8f36a] bg-[#d8f36a] text-black shadow-lg shadow-[#d8f36a]/10" : "border-[#171714] bg-[#171714] text-white shadow-lg shadow-black/10") : darkMode ? "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/10" : "border-black/10 bg-white text-black/65 hover:bg-black/[0.03]"}`}
+                  className={`h-10 flex-1 sm:flex-none ${ceoPlanView && darkMode ? "!bg-[#cff07a] !text-black" : ""}`}
                 >
                   CEO&apos;s View
-                </button>
+                </Button>
                 <button
+                  type="button"
+                  aria-label="Close"
                   onClick={() => {
                     setPlanMode(null);
                     setSelectedTomorrowSite("");
                   }}
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -2841,7 +2777,7 @@ export default function DmrDashboard({ darkMode }) {
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-7">
               {activePlan?.error && (
                 <div
-                  className={`mb-5 rounded-2xl border px-4 py-3 text-sm ${darkMode ? "border-red-400/20 bg-red-400/5 text-red-200" : "border-red-500/20 bg-red-50 text-red-700"}`}
+                  className={`mb-5 rounded-2xl border px-4 py-3 text-sm ${darkMode ? "border-red-400/20 bg-red-400/5 text-red-200" : "border-red-500/20 bg-[#fbe4e6] text-[#c0394b]"}`}
                 >
                   Could not load {activePlanTitle} sheet: {activePlan.error}
                 </div>
@@ -2849,10 +2785,10 @@ export default function DmrDashboard({ darkMode }) {
 
               <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <aside
-                  className={`rounded-[28px] border p-3 lg:sticky lg:top-0 lg:self-start ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                  className={`rounded-[20px] border p-3 lg:sticky lg:top-0 lg:self-start ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                 >
                   <p
-                    className={`px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
+                    className={`px-3 py-2 text-[12px] ${muted}`}
                   >
                     Plan menu
                   </p>
@@ -2866,11 +2802,11 @@ export default function DmrDashboard({ darkMode }) {
                       role="tab"
                       aria-selected={!activeTomorrowSite}
                       onClick={() => setSelectedTomorrowSite("")}
-                      className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition ${!activeTomorrowSite ? (darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white") : darkMode ? "text-white/65 hover:bg-white/5" : "text-black/65 hover:bg-black/[0.04]"}`}
+                      className={`flex w-full items-center justify-between rounded-[14px] px-4 py-2.5 text-left text-[13.5px] transition ${!activeTomorrowSite ? (darkMode ? "bg-[#cff07a] text-black" : "bg-[#141414] text-white") : darkMode ? "text-white/65 hover:bg-white/5" : "text-[#5f5f5c] hover:bg-[#f4f4f2]"}`}
                     >
                       <span className="">Overview</span>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${!activeTomorrowSite ? "bg-black/10 text-inherit" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}
+                        className={`rounded-full px-2 py-0.5 text-xs ${!activeTomorrowSite ? (darkMode ? "bg-black/15 text-inherit" : "bg-white/15 text-inherit") : darkMode ? "bg-white/5 text-white/45" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}
                       >
                         {activePlan?.summary?.plannedManpower || 0}
                       </span>
@@ -2884,11 +2820,11 @@ export default function DmrDashboard({ darkMode }) {
                           role="tab"
                           aria-selected={selected}
                           onClick={() => setSelectedTomorrowSite(site.site)}
-                          className={`flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${selected ? (darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white") : darkMode ? "text-white/65 hover:bg-white/5" : "text-black/65 hover:bg-black/[0.04]"}`}
+                          className={`flex w-full items-center justify-between gap-3 rounded-[14px] px-4 py-2.5 text-left text-[13.5px] transition ${selected ? (darkMode ? "bg-[#cff07a] text-black" : "bg-[#141414] text-white") : darkMode ? "text-white/65 hover:bg-white/5" : "text-[#5f5f5c] hover:bg-[#f4f4f2]"}`}
                         >
                           <span className="truncate ">{site.site}</span>
                           <span
-                            className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${selected ? "bg-black/10 text-inherit" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${selected ? (darkMode ? "bg-black/15 text-inherit" : "bg-white/15 text-inherit") : darkMode ? "bg-white/5 text-white/45" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}
                           >
                             {site.plannedManpower}
                           </span>
@@ -2910,16 +2846,16 @@ export default function DmrDashboard({ darkMode }) {
                   ) : !activeTomorrowSite ? (
                     <div className="grid gap-4 xl:grid-cols-2">
                       <section
-                        className={`rounded-[28px]  p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.07] bg-white"}`}
+                        className={`rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <p className="text-sm font-semibold">
+                            <p className="text-sm">
                               {activePlanTitle} manpower summary
                             </p>
                             <div className="mt-5 flex flex-wrap items-end gap-x-6 gap-y-3">
                               <div>
-                                <p className="text-6xl font-semibold leading-none">
+                                <p className="text-6xl leading-none">
                                   {activePlanStatus.planned}
                                 </p>
                                 <p className={`mt-1 text-xs ${muted}`}>
@@ -2928,7 +2864,7 @@ export default function DmrDashboard({ darkMode }) {
                               </div>
                               <div>
                                 <p
-                                  className={`text-5xl font-semibold leading-none ${activePlanStatus.ok ? "text-emerald-500" : "text-red-500"}`}
+                                  className={`text-5xl leading-none ${activePlanStatus.ok ? "text-[#3f9a66]" : "text-[#d64550]"}`}
                                 >
                                   {activePlanStatus.actual}
                                 </p>
@@ -2937,7 +2873,7 @@ export default function DmrDashboard({ darkMode }) {
                                 </p>
                               </div>
                               <span
-                                className={`mb-2 rounded-full border px-3 py-1 text-sm font-semibold ${planStatusTone(activePlanStatus, darkMode)}`}
+                                className={`mb-2 rounded-full border px-3 py-1 text-sm ${planStatusTone(activePlanStatus, darkMode)}`}
                               >
                                 {activePlanProgress}% progress
                               </span>
@@ -2947,27 +2883,27 @@ export default function DmrDashboard({ darkMode }) {
                             </p>
                           </div>
                           <span
-                            className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}
+                            className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-[#f4f4f2] text-[#7a7a78]"}`}
                           >
                             Live sheet
                           </span>
                         </div>
                         <div
-                          className={`mt-5 h-3 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}
+                          className={`mt-5 h-3 rounded-full ${darkMode ? "bg-white/10" : "bg-[#ebebe8]"}`}
                         >
                           <div
-                            className={`h-full rounded-full ${activePlanStatus.ok ? "bg-[#54d39f]" : "bg-red-500"}`}
+                            className={`h-full rounded-full ${activePlanStatus.ok ? "bg-[#4fae7a]" : "bg-red-500"}`}
                             style={{
                               width: `${Math.min(100, Math.max(4, (activePlanStatus.actual / Math.max(1, activePlanStatus.planned)) * 100))}%`,
                             }}
                           />
                         </div>
                         <div
-                          className={`mt-5 grid grid-cols-3 gap-3 border-t pt-4 text-sm ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
+                          className={`mt-5 grid grid-cols-3 gap-3 border-t pt-4 text-sm ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
                         >
                           <div>
                             <p
-                              className={`text-3xl font-semibold ${activePlanStatus.ok ? "text-emerald-500" : "text-red-500"}`}
+                              className={`text-3xl ${activePlanStatus.ok ? "text-[#3f9a66]" : "text-[#d64550]"}`}
                             >
                               {activePlanStatus.variance >= 0 ? "+" : ""}
                               {activePlanStatus.variance}
@@ -2975,14 +2911,14 @@ export default function DmrDashboard({ darkMode }) {
                             <p className={muted}>variance</p>
                           </div>
                           <div>
-                            <p className="text-3xl font-semibold">
+                            <p className="text-3xl">
                               {activePlan?.summary?.sites || 0}
                             </p>
                             <p className={muted}>sites</p>
                           </div>
                           <div>
                             <p
-                              className={`text-3xl font-semibold ${attentionPlanSites.length ? "text-red-500" : "text-emerald-500"}`}
+                              className={`text-3xl ${attentionPlanSites.length ? "text-[#d64550]" : "text-[#3f9a66]"}`}
                             >
                               {attentionPlanSites.length}
                             </p>
@@ -2990,16 +2926,16 @@ export default function DmrDashboard({ darkMode }) {
                           </div>
                         </div>
                         <div
-                          className={`mt-4 rounded-2xl  p-4 ${attentionPlanSites.length ? (darkMode ? "border-red-400/20 bg-red-400/5" : "border-red-200 bg-red-50") : darkMode ? "border-emerald-400/20 bg-emerald-400/5" : "border-emerald-200 bg-emerald-50"}`}
+                          className={`mt-4 rounded-[16px] p-4 ${attentionPlanSites.length ? (darkMode ? "border-red-400/20 bg-red-400/5" : "bg-[#fdf1f2]") : darkMode ? "border-emerald-400/20 bg-emerald-400/5" : "bg-[#eef6ef]"}`}
                         >
                           <div className="flex items-center justify-between gap-3">
                             <p
-                              className={`text-sm font-semibold ${attentionPlanSites.length ? (darkMode ? "text-red-200" : "text-red-700") : darkMode ? "text-emerald-200" : "text-emerald-700"}`}
+                              className={`text-sm ${attentionPlanSites.length ? (darkMode ? "text-red-200" : "text-red-700") : darkMode ? "text-emerald-200" : "text-emerald-700"}`}
                             >
                               What needs attention
                             </p>
                             <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${attentionPlanSites.length ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}
+                              className={`rounded-full px-2.5 py-1 text-xs ${attentionPlanSites.length ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}
                             >
                               {attentionPlanSites.length
                                 ? `${attentionPlanSites.length} site${attentionPlanSites.length === 1 ? "" : "s"}`
@@ -3018,13 +2954,13 @@ export default function DmrDashboard({ darkMode }) {
                               return (
                                 <div
                                   key={site.site}
-                                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm ${darkMode ? "bg-black/15" : "bg-white/70"}`}
+                                  className={`flex items-center justify-between gap-3 rounded-full px-3.5 py-2 text-[13px] ${darkMode ? "bg-black/15" : "bg-white/80"}`}
                                 >
-                                  <span className="truncate font-medium">
+                                  <span className="truncate">
                                     {site.site}
                                   </span>
                                   <span
-                                    className={`shrink-0 font-semibold ${status.ok ? "text-emerald-600" : "text-red-600"}`}
+                                    className={`shrink-0 ${status.ok ? "text-[#3f9a66]" : "text-[#d64550]"}`}
                                   >
                                     {status.actual}/{status.planned}
                                   </span>
@@ -3040,11 +2976,11 @@ export default function DmrDashboard({ darkMode }) {
                         </div>
                         {planMode === "tomorrow" && (
                           <div
-                            className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-white/[0.035]" : "bg-black/[0.025]"}`}
+                            className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#f7f7f5]"}`}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <p className="text-sm font-semibold">
+                                <p className="text-sm">
                                   Submission timing
                                 </p>
                                 <p className={`mt-1 text-xs ${muted}`}>
@@ -3052,7 +2988,7 @@ export default function DmrDashboard({ darkMode }) {
                                 </p>
                               </div>
                               <span
-                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${!activePlanTimeliness.length ? (darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55") : activePlanTimeliness.some((item) => item.status === "delayed") ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}
+                                className={`rounded-full px-2.5 py-1 text-xs ${!activePlanTimeliness.length ? (darkMode ? "bg-white/5 text-white/55" : "bg-[#f4f4f2] text-[#7a7a78]") : activePlanTimeliness.some((item) => item.status === "delayed") ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}
                               >
                                 {!activePlanTimeliness.length
                                   ? "No submissions"
@@ -3069,14 +3005,14 @@ export default function DmrDashboard({ darkMode }) {
                                 return (
                                   <div
                                     key={item.name}
-                                    className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm ${darkMode ? "bg-black/15" : "bg-white/75"}`}
+                                    className={`flex items-center justify-between gap-3 rounded-[14px] px-3 py-2 text-[13px] ${darkMode ? "bg-black/15" : "bg-white/75"}`}
                                   >
                                     <div className="min-w-0">
-                                      <p className="truncate font-medium">
+                                      <p className="truncate">
                                         {item.name}
                                       </p>
                                       <p
-                                        className={`mt-0.5 truncate text-[11px] ${muted}`}
+                                        className={`mt-0.5 truncate text-[12px] ${muted}`}
                                       >
                                         {item.records} entr
                                         {item.records === 1 ? "y" : "ies"}
@@ -3086,7 +3022,7 @@ export default function DmrDashboard({ darkMode }) {
                                       </p>
                                     </div>
                                     <span
-                                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${delayed ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}
+                                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs ${delayed ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}
                                     >
                                       {delayed ? "Delayed" : "On time"}
                                     </span>
@@ -3112,16 +3048,16 @@ export default function DmrDashboard({ darkMode }) {
                     </div>
                   ) : (
                     <article
-                      className={`rounded-[32px]  p-6 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                      className={`rounded-[20px] border p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                     >
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p
-                            className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
+                            className={`text-[12px] ${muted}`}
                           >
                             Selected project site
                           </p>
-                          <h4 className="mt-2 text-3xl font-semibold">
+                          <h4 className="mt-2 text-3xl">
                             {activeTomorrowSite.site}
                           </h4>
                           <p className={`mt-2 text-sm ${muted}`}>
@@ -3135,9 +3071,9 @@ export default function DmrDashboard({ darkMode }) {
                           </p>
                         </div>
                         <div
-                          className={`rounded-[24px] border px-5 py-4 text-right ${planStatusTone(planActualStatus(activeTomorrowSite.plannedManpower, activeTomorrowSite.actualManpower), darkMode)}`}
+                          className={`rounded-[20px] border px-5 py-4 text-right ${planStatusTone(planActualStatus(activeTomorrowSite.plannedManpower, activeTomorrowSite.actualManpower), darkMode)}`}
                         >
-                          <p className="text-4xl font-semibold leading-none">
+                          <p className="text-4xl leading-none">
                             {activeTomorrowSite.actualManpower}/
                             {activeTomorrowSite.plannedManpower}
                           </p>
@@ -3186,22 +3122,20 @@ export default function DmrDashboard({ darkMode }) {
                             return (
                               <section
                                 key={record.id}
-                                className={`flex min-h-72 flex-col overflow-hidden rounded-[28px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/[0.06] bg-[#fbfaf7]"}`}
+                                className={`flex min-h-72 flex-col overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#f0f0ee] bg-white"}`}
                               >
                                 <div
-                                  className={`border-b px-5 py-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                                  className={`border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
                                 >
                                   <div className="flex items-center justify-between gap-3">
                                     <div className="flex min-w-0 items-center gap-3">
-                                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#ffb000]">
-                                        <span className="h-3 w-3 rounded bg-white/80" />
-                                      </span>
-                                      <h5 className="truncate text-lg font-semibold">
+                                      <IconTile icon={Rows3} tone="amber" darkMode={darkMode} size="sm" />
+                                      <h5 className="truncate text-lg">
                                         {record.category}
                                       </h5>
                                     </div>
                                     <span
-                                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${darkMode ? "bg-white/5 text-white/60" : "bg-black/[0.04] text-black/60"}`}
+                                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${darkMode ? "bg-white/5 text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}
                                     >
                                       {record.submittedBy || "Unknown"}
                                     </span>
@@ -3214,13 +3148,13 @@ export default function DmrDashboard({ darkMode }) {
                                         Planned manpower
                                       </p>
                                       <p
-                                        className={`mt-1 text-5xl font-semibold leading-none ${people === null ? muted : ""}`}
+                                        className={`mt-1 text-5xl leading-none ${people === null ? muted : ""}`}
                                       >
                                         {people ?? "—"}
                                       </p>
                                     </div>
                                     <span
-                                      className={`rounded-full px-3 py-1.5 text-xs font-semibold ${people !== null ? "bg-emerald-500/10 text-emerald-700" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}
+                                      className={`rounded-full px-3 py-1.5 text-xs ${people !== null ? "bg-emerald-500/10 text-emerald-700" : darkMode ? "bg-white/5 text-white/45" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}
                                     >
                                       {people !== null
                                         ? `${people} people`
@@ -3234,20 +3168,20 @@ export default function DmrDashboard({ darkMode }) {
                                   </p>
                                   <div className="mt-5">
                                     <div className="mb-2 flex items-center justify-between text-sm">
-                                      <span className="font-semibold">
+                                      <span className="">
                                         Share of site manpower
                                       </span>
-                                      <span className="font-semibold">
+                                      <span className="">
                                         {progress === null
                                           ? "—"
                                           : `${Math.round(progress)}%`}
                                       </span>
                                     </div>
                                     <div
-                                      className={`h-3 rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.07]"}`}
+                                      className={`h-3 rounded-full ${darkMode ? "bg-white/10" : "bg-[#ebebe8]"}`}
                                     >
                                       <div
-                                        className="h-full rounded-full bg-[#15a8e0]"
+                                        className={`h-full rounded-full ${darkMode ? "bg-[#cff07a]" : "bg-[#141414]"}`}
                                         style={{ width: `${progress || 0}%` }}
                                       />
                                     </div>
@@ -3274,21 +3208,25 @@ export default function DmrDashboard({ darkMode }) {
           }}
         >
           <div
-            className={`dmr-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${reportExpanded ? "dmr-report-shell-expanded" : ""} ${reportClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}
+            className={`dmr-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] ${reportExpanded ? "dmr-report-shell-expanded" : ""} ${reportClosing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#15171c] text-white" : "bg-white text-[#141414]"}`}
             role="dialog"
             aria-modal="true"
             aria-label="DMR performance report"
           >
             <div
-              className={`flex h-12 shrink-0 items-center justify-between border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}
+              className={`flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3.5 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
             >
-              <span>
-                <b>CEO report</b> · DMR performance
+              <span className="flex min-w-0 items-center gap-3">
+                <IconTile icon={FileSpreadsheet} tone="mint" darkMode={darkMode} size="sm" />
+                <span className="min-w-0">
+                  <span className="block truncate text-[15px]">CEO report</span>
+                  <span className={`block truncate text-[12px] ${muted}`}>DMR performance</span>
+                </span>
               </span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setReportExpanded((current) => !current)}
-                  className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`}
+                  className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f4f4f2] text-[#5f5f5c] hover:bg-[#f6f6f4]"}`}
                   aria-label={
                     reportExpanded
                       ? "Restore drawer size"
@@ -3305,22 +3243,24 @@ export default function DmrDashboard({ darkMode }) {
                   </span>
                 </button>
                 <button
+                  type="button"
                   onClick={closeReportDrawer}
-                  className="px-1 font-semibold text-[#4b9b16]"
+                  aria-label="Close"
+                  className={`grid h-9 w-9 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
                 >
-                  Close
+                  <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
             <div className="grid min-h-0 flex-1 md:grid-cols-[250px_minmax(0,1fr)]">
               <aside
-                className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0  ${darkMode ? "border-white/10" : "border-black/10"}`}
+                className={`min-h-0 overflow-y-auto border-b p-5 md:border-b-0 md:border-r ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
               >
-                <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold text-[#4b9b16]">
-                  CEO REPORT
+                <span className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] ${darkMode ? "bg-[rgba(74,222,128,0.12)] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>
+                  <FileSpreadsheet className="h-3.5 w-3.5" /> CEO report
                 </span>
-                <h3 className="mt-4 small text-black dark:text-white text-2xl font-bold leading-tight">
+                <h3 className={`mt-4 text-[22px] leading-tight tracking-[-0.02em] ${darkMode ? "text-white" : "text-[#141414]"}`}>
                   DMR performance report
                 </h3>
                 <p className={`mt-2 text-xs leading-5 ${muted}`}>
@@ -3328,34 +3268,34 @@ export default function DmrDashboard({ darkMode }) {
                   performance in one view.
                 </p>
                 <div
-                  className={`mt-5 rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}
+                  className={`mt-5 rounded-[16px] p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]"}`}
                 >
                   <p
-                    className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}
+                    className={`text-[12px] ${muted}`}
                   >
                     Report range
                   </p>
-                  <p className="mt-2 text-sm font-bold">{reportStartDate}</p>
+                  <p className="mt-2 text-sm">{reportStartDate}</p>
                   <p className={`my-1 text-xs ${muted}`}>to</p>
-                  <p className="text-sm font-bold">{reportEndDate}</p>
+                  <p className="text-sm">{reportEndDate}</p>
                 </div>
                 <div className="mt-5">
                   <p
-                    className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}
+                    className={`text-[12px] ${muted}`}
                   >
                     Included sections
                   </p>
-                  <p className="mt-2 text-3xl font-bold">
+                  <p className="mt-2 text-3xl">
                     {reportSections.length}
                   </p>
                   <p className={`text-xs ${muted}`}>report modules selected</p>
                 </div>
                 {reportData && (
                   <div
-                    className={`mt-5 rounded-xl border p-4 ${darkMode ? "border-white/10" : "border-black/[0.08]"}`}
+                    className={`mt-5 rounded-[16px] border p-4 ${darkMode ? "border-white/10" : "border-[#ececec]"}`}
                   >
                     <p className={`text-xs ${muted}`}>Overall progress</p>
-                    <p className="mt-1 text-3xl font-bold text-[#4b9b16]">
+                    <p className={`mt-1 text-3xl tabular-nums ${darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]"}`}>
                       {reportData.summary.progress}%
                     </p>
                     <p className={`mt-2 text-xs ${muted}`}>
@@ -3367,10 +3307,10 @@ export default function DmrDashboard({ darkMode }) {
               </aside>
 
               <div
-                className={`min-h-0 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}
+                className={`min-h-0 overflow-y-auto p-5 sm:p-6 ${darkMode ? "bg-[#121317]" : "bg-[#f7f7f5]"}`}
               >
                 <section
-                  className={`rounded-2xl  p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.08] bg-white"}`}
+                  className={`rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                 >
                   <div className="grid gap-4 xl:grid-cols-[1fr_1.15fr_auto] xl:items-end">
                     <div>
@@ -3387,7 +3327,7 @@ export default function DmrDashboard({ darkMode }) {
                             key={value}
                             type="button"
                             onClick={() => setReportPreset(value)}
-                            className={`h-9 rounded-full border px-3.5 text-xs  ${darkMode ? "border-white/10 bg-white/5 hover:border-[#89ed3f]" : "border-black/10 bg-[#fafbf8] hover:border-[#69c832] hover:text-[#4b9b16]"}`}
+                            className={`h-8 rounded-full border px-3.5 text-[12.5px] transition ${darkMode ? "border-white/10 bg-white/[0.04] hover:bg-white/10" : "border-[#e6e6e3] bg-white hover:bg-[#f6f6f4]"}`}
                           >
                             {label}
                           </button>
@@ -3410,7 +3350,7 @@ export default function DmrDashboard({ darkMode }) {
                       <button
                         onClick={generateDmrReport}
                         disabled={reportLoading}
-                        className="flex h-11 min-w-40 items-center justify-center gap-2 rounded-full bg-[#89ed3f] px-5 text-sm font-bold text-black hover:bg-[#7dde35] disabled:opacity-60"
+                        className={`flex h-10 min-w-40 items-center justify-center gap-2 rounded-full px-5 text-[13px] transition disabled:opacity-60 ${darkMode ? "bg-[#cff07a] text-black hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black"}`}
                       >
                         {reportLoading ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -3429,7 +3369,7 @@ export default function DmrDashboard({ darkMode }) {
                           key={option.id}
                           type="button"
                           onClick={() => toggleReportSection(option.id)}
-                          className={`rounded-full border px-3 py-1.5 text-xs ${selected ? (darkMode ? "border-[#89ed3f]/40 bg-[#89ed3f]/15 text-[#89ed3f]" : "border-[#69c832] bg-[#eafbdc] text-[#4b9b16]") : darkMode ? "border-white/10 text-white/50" : "border-black/10 bg-white text-black/50"}`}
+                          className={`h-8 rounded-full border px-3.5 text-[12.5px] transition ${selected ? (darkMode ? "border-[#cff07a] bg-[#cff07a] text-black" : "border-[#141414] bg-[#141414] text-white") : darkMode ? "border-white/10 text-white/50" : "border-[#e6e6e3] bg-white text-[#7a7a78]"}`}
                         >
                           {option.label}
                         </button>
@@ -3441,16 +3381,16 @@ export default function DmrDashboard({ darkMode }) {
                 {reportData && (
                   <div className="mt-5 space-y-5">
                     <section
-                      className={`rounded-2xl border p-5 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.08] bg-white"}`}
+                      className={`rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p
-                            className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
+                            className={`text-[12px] ${muted}`}
                           >
                             {reportData.startDate} to {reportData.endDate}
                           </p>
-                          <h4 className="mt-2 text-2xl font-semibold">
+                          <h4 className="mt-2 text-2xl">
                             Executive summary
                           </h4>
                           <p className={`mt-1 text-sm ${muted}`}>
@@ -3461,9 +3401,9 @@ export default function DmrDashboard({ darkMode }) {
                           </p>
                         </div>
                         <div
-                          className={`rounded-[22px] px-5 py-4 text-right ${reportData.summary.progress >= 90 ? "bg-emerald-500/10 text-emerald-700" : reportData.summary.progress >= 60 ? "bg-amber-500/10 text-amber-700" : "bg-red-500/10 text-red-700"}`}
+                          className={`rounded-[20px] px-5 py-4 text-right ${reportData.summary.progress >= 90 ? (darkMode ? "bg-[rgba(74,222,128,0.12)] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]") : reportData.summary.progress >= 60 ? (darkMode ? "bg-[rgba(251,191,36,0.13)] text-[#f5d27a]" : "bg-[#fbf0d4] text-[#8a6200]") : darkMode ? "bg-[rgba(251,113,133,0.13)] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b]"}`}
                         >
-                          <p className="text-4xl font-semibold leading-none">
+                          <p className="text-4xl leading-none">
                             {reportData.summary.progress}%
                           </p>
                           <p className="mt-1 text-xs">overall progress</p>
@@ -3498,19 +3438,20 @@ export default function DmrDashboard({ darkMode }) {
                           ["Agencies", reportData.summary.agencies],
                           ["Equipment", reportData.summary.equipment],
                           ["Materials", reportData.summary.materials],
-                        ].map(([label, value]) => (
-                          <div
+                        ].map(([label, value], index) => (
+                          <StatTile
                             key={label}
-                            className={`rounded-[20px] p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f7f5ef]"}`}
-                          >
-                            <p className="text-2xl font-semibold">{value}</p>
-                            <p className={`mt-1 text-xs ${muted}`}>{label}</p>
-                          </div>
+                            darkMode={darkMode}
+                            tone={["mint", "sky", "lavender", "peach", "amber", "lime", "rose", "neutral"][index % 8]}
+                            value={value}
+                            label={label}
+                            className="min-h-[92px]"
+                          />
                         ))}
                       </div>
                       {reportData.summary.datesWithoutData?.length > 0 && (
                         <div
-                          className={`mt-4 rounded-[18px] border px-4 py-3 text-sm ${darkMode ? "border-amber-400/20 bg-amber-400/10 text-amber-100" : "border-amber-200 bg-amber-50 text-amber-800"}`}
+                          className={`mt-4 rounded-[14px] px-4 py-3 text-[13px] ${darkMode ? "bg-amber-400/[0.08] text-amber-100" : "bg-[#fbf3dc] text-[#4a3a1c]"}`}
                         >
                           No data was provided for:{" "}
                           {reportData.summary.datesWithoutData.join(", ")}
@@ -3735,37 +3676,33 @@ export default function DmrDashboard({ darkMode }) {
       )}
 
       {selectedProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#171714]/60 p-4 backdrop-blur-md sm:p-7">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px] sm:p-7">
           <div
-            className={`flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-[34px] ${darkMode ? "border border-white/10 bg-[#111216] text-white" : "border border-black/10 bg-[#f7f5ef] text-[#171714]"}`}
+            className={`flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-[24px] ${darkMode ? "border border-white/10 bg-[#15171c] text-white" : "border border-[#e6e6e3] bg-white text-[#141414]"}`}
           >
             <div
-              className={`flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
             >
-              <div className="flex min-w-0 items-start gap-4">
-                <span
-                  className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-blue-400/10 text-blue-200" : "bg-blue-50 text-blue-700"}`}
-                >
-                  <FileSpreadsheet className="h-5 w-5" />
-                </span>
+              <div className="flex min-w-0 items-center gap-4">
+                <IconTile icon={Building2} tone="sky" darkMode={darkMode} />
                 <div className="min-w-0">
-                  <p
-                    className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}
-                  >
+                  <p className={`text-[12px] ${muted}`}>
                     Project manpower
                   </p>
-                  <h3 className="mt-2 truncate text-3xl small text-black dark:text-white font-semibold">
+                  <h3 className="truncate text-[24px] leading-tight tracking-[-0.02em]">
                     {selectedProject.site}
                   </h3>
-                  <p className={`mt-1 text-sm ${muted}`}>
+                  <p className={`mt-0.5 text-[13px] ${muted}`}>
                     {selectedProject.actual} actual / {selectedProject.planned}{" "}
                     planned · {selectedProject.agencies.length} agencies
                   </p>
                 </div>
               </div>
               <button
+                type="button"
+                aria-label="Close"
                 onClick={() => setSelectedProject(null)}
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -3773,28 +3710,24 @@ export default function DmrDashboard({ darkMode }) {
 
             <div className="min-h-0 overflow-y-auto p-5 sm:p-7">
               <div
-                className={`rounded-[30px]  p-5 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                className={`rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
               >
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <p
-                      className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
-                    >
+                    <p className={`text-[12px] ${muted}`}>
                       Manpower mix
                     </p>
-                    <h4 className="mt-2 text-2xl font-semibold">
+                    <h4 className="mt-1 text-[22px] tracking-[-0.02em]">
                       {selectedProject.progress}% progress
                     </h4>
                     <p className={`mt-1 text-sm ${muted}`}>
                       Planned, actual and variance at a glance.
                     </p>
                   </div>
-                  <div
-                    className={`rounded-full px-4 py-2 text-sm font-semibold ${selectedProject.variance < 0 ? "bg-red-500/10 text-red-700" : "bg-emerald-500/10 text-emerald-700"}`}
-                  >
+                  <Chip darkMode={darkMode} tone={selectedProject.variance < 0 ? "rose" : "mint"}>
                     {selectedProject.variance >= 0 ? "+" : ""}
                     {selectedProject.variance} variance
-                  </div>
+                  </Chip>
                 </div>
 
                 <div className="mt-5 flex h-3 overflow-hidden rounded-full">
@@ -3815,13 +3748,13 @@ export default function DmrDashboard({ darkMode }) {
                       {
                         label: "Planned",
                         value: planned,
-                        color: "bg-[#ff7a2f]",
+                        color: "bg-[#f2b8a0]",
                       },
-                      { label: "Actual", value: actual, color: "bg-[#f2c94c]" },
+                      { label: "Actual", value: actual, color: "bg-[#f0d488]" },
                       {
                         label: "Variance",
                         value: variance,
-                        color: "bg-[#63d5bd]",
+                        color: "bg-[#9fd8b3]",
                       },
                     ].map((segment) => (
                       <span
@@ -3838,13 +3771,13 @@ export default function DmrDashboard({ darkMode }) {
                   className={`mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}
                 >
                   <span className="inline-flex items-center gap-1.5">
-                    <i className="h-2 w-2 rounded-full bg-[#ff7a2f]" /> Planned
+                    <i className="h-2 w-2 rounded-full bg-[#f2b8a0]" /> Planned
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <i className="h-2 w-2 rounded-full bg-[#f2c94c]" /> Actual
+                    <i className="h-2 w-2 rounded-full bg-[#f0d488]" /> Actual
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <i className="h-2 w-2 rounded-full bg-[#63d5bd]" /> Variance
+                    <i className="h-2 w-2 rounded-full bg-[#9fd8b3]" /> Variance
                   </span>
                 </div>
               </div>
@@ -3856,14 +3789,14 @@ export default function DmrDashboard({ darkMode }) {
                     value: selectedProject.planned,
                     tone: darkMode
                       ? "bg-[#ff7a2f]/10 text-orange-200"
-                      : "bg-orange-50 text-orange-700",
+                      : "bg-[#fbe5dc] text-[#c2562b]",
                   },
                   {
                     label: "Actual",
                     value: selectedProject.actual,
                     tone: darkMode
                       ? "bg-[#f2c94c]/10 text-yellow-200"
-                      : "bg-yellow-50 text-yellow-700",
+                      : "bg-[#fbf0d4] text-[#8a6200]",
                   },
                   {
                     label: "Variance",
@@ -3872,40 +3805,39 @@ export default function DmrDashboard({ darkMode }) {
                       selectedProject.variance < 0
                         ? darkMode
                           ? "bg-red-400/10 text-red-200"
-                          : "bg-red-50 text-red-700"
+                          : "bg-[#fbe4e6] text-[#c0394b]"
                         : darkMode
                           ? "bg-emerald-400/10 text-emerald-200"
-                          : "bg-emerald-50 text-emerald-700",
+                          : "bg-[#e4f1e6] text-[#2f7a4f]",
                   },
                   {
                     label: "Progress",
                     value: `${selectedProject.progress}%`,
                     tone: darkMode
                       ? "bg-blue-400/10 text-blue-200"
-                      : "bg-blue-50 text-blue-700",
+                      : "bg-[#e3eefb] text-[#2f6fc0]",
                   },
-                ].map((metric) => (
-                  <div
+                ].map((metric, metricIndex) => (
+                  <StatTile
                     key={metric.label}
-                    className={`rounded-[24px] px-5 py-4 ${metric.tone}`}
-                  >
-                    <p className="text-3xl font-semibold">{metric.value}</p>
-                    <p className="mt-1 text-xs opacity-70">{metric.label}</p>
-                  </div>
+                    darkMode={darkMode}
+                    icon={[Users, Check, Rows3, CalendarDays][metricIndex]}
+                    tone={["peach", "amber", selectedProject.variance < 0 ? "rose" : "mint", "sky"][metricIndex]}
+                    value={metric.value}
+                    label={metric.label}
+                  />
                 ))}
               </div>
 
               <div className="mt-6">
                 <div className="mb-3 flex items-center justify-between">
                   <div>
-                    <p
-                      className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
-                    >
-                      Agency details
-                    </p>
-                    <h4 className="mt-1 text-xl font-semibold">
+                    <h4 className="text-[18px] tracking-[-0.01em]">
                       Who is active on this project
                     </h4>
+                    <p className={`text-[13px] ${muted}`}>
+                      Agency details
+                    </p>
                   </div>
                 </div>
                 <div className="grid gap-4 md:grid-cols-3">
@@ -3925,11 +3857,11 @@ export default function DmrDashboard({ darkMode }) {
                       return (
                         <article
                           key={`${row.agency}-${row.rowIndex || index}`}
-                          className={`rounded-[26px]  p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                          className={`rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="truncate text-lg font-semibold">
+                              <p className="truncate text-[15px]">
                                 {row.agency || "Unnamed agency"}
                               </p>
                               <p className={`mt-1 text-xs ${muted}`}>
@@ -3937,7 +3869,7 @@ export default function DmrDashboard({ darkMode }) {
                               </p>
                             </div>
                             <span
-                              className={`rounded-full px-3 py-1 text-xs font-semibold ${variance < 0 ? (darkMode ? "bg-red-400/10 text-red-200" : "bg-red-50 text-red-700") : darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-emerald-50 text-emerald-700"}`}
+                              className={`inline-flex h-7 items-center rounded-full px-3 text-[12.5px] ${variance < 0 ? (darkMode ? "bg-red-400/10 text-red-200" : "bg-[#fbe4e6] text-[#c0394b]") : darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}
                             >
                               {variance >= 0 ? "+" : ""}
                               {variance}
@@ -3945,11 +3877,11 @@ export default function DmrDashboard({ darkMode }) {
                           </div>
                           <div className="mt-4 flex h-2.5 overflow-hidden rounded-full">
                             {[
-                              { value: planned, color: "bg-[#ff7a2f]" },
-                              { value: actual, color: "bg-[#f2c94c]" },
+                              { value: planned, color: "bg-[#f2b8a0]" },
+                              { value: actual, color: "bg-[#f0d488]" },
                               {
                                 value: Math.abs(variance),
-                                color: "bg-[#63d5bd]",
+                                color: "bg-[#9fd8b3]",
                               },
                             ].map((segment, segmentIndex) => (
                               <span
@@ -3963,25 +3895,25 @@ export default function DmrDashboard({ darkMode }) {
                           </div>
                           <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
                             <div
-                              className={`rounded-2xl px-3 py-2 ${darkMode ? "bg-[#ff7a2f]/10 text-orange-200" : "bg-orange-50 text-orange-700"}`}
+                              className={`rounded-[14px] px-3 py-2 ${darkMode ? "bg-[#ff7a2f]/10 text-orange-200" : "bg-[#fbe5dc] text-[#c2562b]"}`}
                             >
-                              <p className="text-base font-semibold">
+                              <p className="text-base">
                                 {planned}
                               </p>
                               <p className="opacity-70">Planned</p>
                             </div>
                             <div
-                              className={`rounded-2xl px-3 py-2 ${darkMode ? "bg-[#f2c94c]/10 text-yellow-200" : "bg-yellow-50 text-yellow-700"}`}
+                              className={`rounded-[14px] px-3 py-2 ${darkMode ? "bg-[#f2c94c]/10 text-yellow-200" : "bg-[#fbf0d4] text-[#8a6200]"}`}
                             >
-                              <p className="text-base font-semibold">
+                              <p className="text-base">
                                 {actual}
                               </p>
                               <p className="opacity-70">Actual</p>
                             </div>
                             <div
-                              className={`rounded-2xl px-3 py-2 ${darkMode ? "bg-white/5 text-white/65" : "bg-black/[0.035] text-black/60"}`}
+                              className={`rounded-[14px] px-3 py-2 ${darkMode ? "bg-white/5 text-white/65" : "bg-[#f7f7f5] text-[#5f5f5c]"}`}
                             >
-                              <p className="text-base font-semibold">
+                              <p className="text-base">
                                 {row.rowIndex || "-"}
                               </p>
                               <p className="opacity-70">Row</p>
@@ -3999,34 +3931,28 @@ export default function DmrDashboard({ darkMode }) {
 
       {reminderOpen && (
         <div
-          className="fixed inset-0 z-50 bg-[#171714]/60 backdrop-blur-md"
+          className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px]"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setReminderOpen(false);
           }}
         >
           <form
             onSubmit={saveDmrReminderSchedule}
-            className={`flex h-[100dvh] w-screen flex-col overflow-hidden ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#faf9f5] text-[#171714]"}`}
+            className={`flex h-[100dvh] w-screen flex-col overflow-hidden ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}
             role="dialog"
             aria-modal="true"
             aria-label="DMR WhatsApp reminder schedule"
           >
             <div
-              className={`flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
             >
-              <div className="flex min-w-0 items-start gap-3">
-                <span
-                  className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-red-400/10 text-red-100" : "bg-red-50 text-red-600"}`}
-                >
-                  <BellRing className="h-5 w-5" />
-                </span>
+              <div className="flex min-w-0 items-center gap-3">
+                <IconTile icon={BellRing} tone="rose" darkMode={darkMode} />
                 <div className="min-w-0">
-                  <p
-                    className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-red-200" : "text-red-600"}`}
-                  >
+                  <p className={`text-[12px] ${muted}`}>
                     DMR WhatsApp reminders
                   </p>
-                  <h3 className="mt-1 text-2xl font-semibold">
+                  <h3 className="text-[22px] leading-tight tracking-[-0.02em]">
                     Reminder schedule
                   </h3>
                   <p className={`mt-1 hidden text-sm sm:block ${muted}`}>
@@ -4039,7 +3965,7 @@ export default function DmrDashboard({ darkMode }) {
               <button
                 type="button"
                 onClick={() => setReminderOpen(false)}
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -4047,18 +3973,16 @@ export default function DmrDashboard({ darkMode }) {
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-7">
               <section
-                className={`rounded-[30px] border p-4 sm:p-6 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/[0.07] bg-white"}`}
+                className={`rounded-[20px] border p-4 sm:p-6 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <p
-                      className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}
-                    >
+                    <h4 className="text-[20px] tracking-[-0.02em]">
                       Daily schedule
-                    </p>
-                    <h4 className="mt-2 text-2xl font-semibold">
-                      Send only to pending DMR users
                     </h4>
+                    <p className={`text-[20px] tracking-[-0.02em] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>
+                      Send only to pending DMR users
+                    </p>
                     <p className={`mt-2 max-w-3xl text-sm leading-6 ${muted}`}>
                       Each reminder sends once per day per type. People selected
                       below are skipped automatically once their matching DMR
@@ -4073,7 +3997,7 @@ export default function DmrDashboard({ darkMode }) {
                         enabled: !current.enabled,
                       }))
                     }
-                    className={`flex h-14 w-28 items-center justify-between rounded-full p-2 text-sm font-semibold transition ${reminderSettings.enabled ? "bg-[#10a66b] text-white" : darkMode ? "bg-white/10 text-white/55" : "bg-black/[0.06] text-black/55"}`}
+                    className={`flex h-14 w-28 items-center justify-between rounded-full p-2 text-sm transition ${reminderSettings.enabled ? (darkMode ? "bg-[#cff07a] text-black" : "bg-[#141414] text-white") : darkMode ? "bg-white/10 text-white/55" : "bg-[#ebebe8] text-[#7a7a78]"}`}
                   >
                     <span
                       className={`h-10 w-10 rounded-full bg-white transition ${reminderSettings.enabled ? "translate-x-0" : "translate-x-14"}`}
@@ -4085,7 +4009,7 @@ export default function DmrDashboard({ darkMode }) {
 
               {reminderLoading ? (
                 <div
-                  className={`mt-5 rounded-[30px] border px-5 py-14 text-center text-sm ${darkMode ? "border-white/10 bg-white/[0.025] text-white/55" : "border-black/[0.06] bg-white text-black/55"}`}
+                  className={`mt-5 rounded-[20px] px-5 py-14 text-center text-[13px] ${darkMode ? "bg-white/[0.03] text-white/55" : "bg-[#f7f7f5] text-[#7a7a78]"}`}
                 >
                   <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
                   Loading WhatsApp contacts and DMR reminder status...
@@ -4106,18 +4030,16 @@ export default function DmrDashboard({ darkMode }) {
                       return (
                         <article
                           key={item.id}
-                          className={`rounded-[28px] border p-4 ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.07] bg-white"}`}
+                          className={`rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p
-                                className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}
-                              >
-                                {item.templateName}
-                              </p>
-                              <h5 className="mt-2 text-xl font-semibold">
+                              <h5 className="text-[16px] tracking-[-0.01em]">
                                 {item.label}
                               </h5>
+                              <p className={`truncate text-[12px] ${muted}`}>
+                                {item.templateName}
+                              </p>
                               <p className={`mt-1 text-xs ${muted}`}>
                                 {selectedCount} recipients selected
                               </p>
@@ -4129,7 +4051,7 @@ export default function DmrDashboard({ darkMode }) {
                                   enabled: !itemEnabled,
                                 })
                               }
-                              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${itemEnabled ? "bg-emerald-500/10 text-emerald-700" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}
+                              className={`inline-flex h-7 items-center rounded-full px-3 text-[12.5px] transition ${itemEnabled ? (darkMode ? "bg-[rgba(74,222,128,0.12)] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]") : darkMode ? "bg-white/[0.07] text-white/50" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}
                             >
                               {itemEnabled ? "On" : "Off"}
                             </button>
@@ -4138,7 +4060,7 @@ export default function DmrDashboard({ darkMode }) {
                           <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_auto]">
                             <label className="block">
                               <span
-                                className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}
+                                className={`text-[12px] ${muted}`}
                               >
                                 Reminder time
                               </span>
@@ -4157,7 +4079,7 @@ export default function DmrDashboard({ darkMode }) {
                               type="button"
                               onClick={() => sendDmrReminderNow(item.id)}
                               disabled={reminderSending === item.id}
-                              className={`mt-auto flex h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                              className={`mt-auto flex h-10 items-center justify-center gap-2 rounded-full px-5 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#cff07a] text-black" : "bg-[#141414] text-white"}`}
                             >
                               {reminderSending === item.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -4169,24 +4091,24 @@ export default function DmrDashboard({ darkMode }) {
                           </div>
 
                           <div
-                            className={`mt-4 rounded-2xl p-3 text-xs ${darkMode ? "bg-white/[0.035] text-white/60" : "bg-[#f5f7f2] text-black/55"}`}
+                            className={`mt-4 rounded-[14px] p-3 text-[12px] ${darkMode ? "bg-white/[0.04] text-white/60" : "bg-[#f7f7f5] text-[#7a7a78]"}`}
                           >
                             <div className="flex items-center justify-between gap-3">
                               <span>Last run</span>
-                              <span className="font-semibold">
+                              <span className="">
                                 {status.finishedAt
                                   ? new Date(status.finishedAt).toLocaleString()
                                   : "Not sent yet"}
                               </span>
                             </div>
                             <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-                              <span className="rounded-xl bg-emerald-500/10 px-2 py-1 text-emerald-700">
+                              <span className={`rounded-full px-2 py-1 ${darkMode ? "bg-[rgba(74,222,128,0.12)] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>
                                 {status.sent || 0} sent
                               </span>
-                              <span className="rounded-xl bg-red-500/10 px-2 py-1 text-red-700">
+                              <span className={`rounded-full px-2 py-1 ${darkMode ? "bg-[rgba(251,113,133,0.13)] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b]"}`}>
                                 {status.failed || 0} failed
                               </span>
-                              <span className="rounded-xl bg-sky-500/10 px-2 py-1 text-sky-700">
+                              <span className={`rounded-full px-2 py-1 ${darkMode ? "bg-[rgba(96,165,250,0.13)] text-[#a9cbf7]" : "bg-[#e3eefb] text-[#2f6fc0]"}`}>
                                 {status.skipped || 0} skipped
                               </span>
                             </div>
@@ -4197,25 +4119,23 @@ export default function DmrDashboard({ darkMode }) {
                   </div>
 
                   <section
-                    className={`overflow-hidden rounded-[30px] border ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.07] bg-white"}`}
+                    className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                   >
-                    <div className="flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
-                      <div>
-                        <p
-                          className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}
-                        >
-                          Numbers
-                        </p>
-                        <h4 className="mt-1 text-2xl font-semibold">
+                    <div className={`flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+                      <div className="flex min-w-0 items-start gap-3">
+                        <IconTile icon={Users} tone="mint" darkMode={darkMode} size="sm" />
+                        <div className="min-w-0">
+                        <h4 className="text-[15px]">
                           Reminder recipients
                         </h4>
-                        <p className={`mt-1 text-sm ${muted}`}>
+                        <p className={`text-[12.5px] ${muted}`}>
                           Choose which WhatsApp contacts receive each reminder
                           category.
                         </p>
+                        </div>
                       </div>
                       <span
-                        className={`rounded-full px-3 py-1.5 text-xs ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}
+                        className={`inline-flex h-7 w-fit items-center rounded-full px-3 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}
                       >
                         {reminderContacts.length} saved contacts
                       </span>
@@ -4226,12 +4146,12 @@ export default function DmrDashboard({ darkMode }) {
                         <thead
                           className={
                             darkMode
-                              ? "bg-white/[0.035] text-white/55"
-                              : "bg-[#f4f0e8] text-black/55"
+                              ? "text-white/45"
+                              : "text-[#8a8a8a]"
                           }
                         >
                           <tr>
-                            <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.16em]">
+                            <th className="px-5 py-3 text-[12px]">
                               Contact
                             </th>
                             {reminderTypes.map((item) => {
@@ -4245,10 +4165,10 @@ export default function DmrDashboard({ darkMode }) {
                               return (
                                 <th
                                   key={item.id}
-                                  className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em]"
+                                  className="px-4 py-3 text-[12px]"
                                 >
                                   <span className="block">{item.label}</span>
-                                  <span className="mt-1 block normal-case tracking-normal text-black/40 dark:text-white/40">
+                                  <span className="mt-1 block normal-case tracking-normal text-[#8a8a8a] dark:text-white/40">
                                     {selectedCount} selected
                                   </span>
                                 </th>
@@ -4259,15 +4179,15 @@ export default function DmrDashboard({ darkMode }) {
                         <tbody
                           className={
                             darkMode
-                              ? "divide-y divide-white/10"
-                              : "divide-y divide-black/[0.06]"
+                              ? "divide-y divide-white/[0.07]"
+                              : "divide-y divide-[#f0f0ee]"
                           }
                         >
                           {reminderContacts.map((contact) => (
                             <tr key={contact.phone}>
                               <td className="px-5 py-4">
                                 <div className="flex items-center gap-3">
-                                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#10a66b] text-sm font-semibold text-white">
+                                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#e4f1e6] text-sm text-[#2f7a4f]">
                                     {(contact.name || contact.phone || "?")
                                       .split(/\s+/)
                                       .map((part) => part[0])
@@ -4276,7 +4196,7 @@ export default function DmrDashboard({ darkMode }) {
                                       .toUpperCase()}
                                   </span>
                                   <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold">
+                                    <p className="truncate text-sm">
                                       {contact.name || contact.phone}
                                     </p>
                                     <p className={`truncate text-xs ${muted}`}>
@@ -4302,10 +4222,10 @@ export default function DmrDashboard({ darkMode }) {
                                           contact.phone,
                                         )
                                       }
-                                      className={`inline-flex h-11 min-w-32 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold transition ${checked ? "border-emerald-400 bg-emerald-50 text-emerald-800" : darkMode ? "border-white/10 bg-white/[0.025] text-white/50 hover:bg-white/[0.055]" : "border-black/10 bg-white text-black/45 hover:bg-[#f1f7f4]"}`}
+                                      className={`inline-flex h-9 min-w-32 items-center justify-center gap-2 rounded-full border px-4 text-[13px] transition ${checked ? (darkMode ? "border-transparent bg-[rgba(74,222,128,0.12)] text-[#a7e8bf]" : "border-transparent bg-[#e4f1e6] text-[#2f7a4f]") : darkMode ? "border-white/10 bg-white/[0.025] text-white/50 hover:bg-white/[0.055]" : "border-[#e6e6e3] bg-white text-[#8a8a8a] hover:bg-[#f6f6f4]"}`}
                                     >
                                       <span
-                                        className={`grid h-5 w-5 place-items-center rounded-lg border transition ${checked ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                                        className={`grid h-5 w-5 place-items-center rounded-full border transition ${checked ? "border-[#2f7a4f] bg-[#2f7a4f] text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-[#e6e6e3] bg-white"}`}
                                       >
                                         {checked && (
                                           <Check className="h-3.5 w-3.5" />
@@ -4337,19 +4257,19 @@ export default function DmrDashboard({ darkMode }) {
             </div>
 
             <div
-              className={`flex shrink-0 items-center justify-end gap-2 border-t px-4 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex shrink-0 items-center justify-end gap-2 border-t px-4 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-[#ececec]"}`}
             >
               <button
                 type="button"
                 onClick={() => setReminderOpen(false)}
-                className={`h-11 rounded-full border px-5 text-sm ${darkMode ? "border-white/10 text-white/60" : "border-black/10 text-black/60"}`}
+                className={`h-10 rounded-full border px-5 text-[13px] transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={reminderSaving || reminderLoading}
-                className={`flex h-11 min-w-40 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#10a66b] text-white"}`}
+                className={`flex h-10 min-w-40 items-center justify-center gap-2 rounded-full px-6 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#cff07a] text-black" : "bg-[#141414] text-white"}`}
               >
                 {reminderSaving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -4364,31 +4284,32 @@ export default function DmrDashboard({ darkMode }) {
       )}
 
       {historyOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#171714]/60 p-4 backdrop-blur-md sm:p-7">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px] sm:p-7">
           <div
-            className={`flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px]  ${darkMode ? "border-white/10 bg-[#151612] text-white" : "border-black/10 bg-[#faf9f5] text-[#171714]"}`}
+            className={`flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#e6e6e3] bg-white text-[#141414]"}`}
           >
             <div
-              className={`flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
             >
-              <div>
-                <p
-                  className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}
-                >
-                  Super Admin only
-                </p>
-                <h3 className="mt-2 text-2xl font-semibold">
-                  DMR version history
-                </h3>
-                <p className={`mt-1 text-sm ${muted}`}>
-                  Who changed what for {data?.sheetName || date}.
-                </p>
+              <div className="flex min-w-0 items-center gap-3">
+                <IconTile icon={History} tone="amber" darkMode={darkMode} />
+                <div className="min-w-0">
+                  <p className={`text-[12px] ${muted}`}>
+                    Super Admin only
+                  </p>
+                  <h3 className="text-[22px] leading-tight tracking-[-0.02em]">
+                    DMR version history
+                  </h3>
+                  <p className={`mt-0.5 text-[13px] ${muted}`}>
+                    Who changed what for {data?.sheetName || date}.
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={loadHistory}
                   disabled={historyLoading}
-                  className={`flex h-10 items-center gap-2 rounded-full border px-4 text-xs font-medium ${darkMode ? "border-white/10 text-white/70" : "border-black/10 text-black/65"}`}
+                  className={`flex h-9 items-center gap-2 rounded-full border px-4 text-[12.5px] transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
                 >
                   <RefreshCw
                     className={`h-3.5 w-3.5 ${historyLoading ? "animate-spin" : ""}`}
@@ -4396,8 +4317,10 @@ export default function DmrDashboard({ darkMode }) {
                   Refresh
                 </button>
                 <button
+                  type="button"
+                  aria-label="Close"
                   onClick={() => setHistoryOpen(false)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border ${darkMode ? "border-white/10" : "border-black/10"}`}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -4406,14 +4329,14 @@ export default function DmrDashboard({ darkMode }) {
             <div className="min-h-0 overflow-y-auto p-5 sm:p-7">
               {historyLoading && (
                 <div
-                  className={`rounded-[24px] border px-4 py-10 text-center text-sm ${darkMode ? "border-white/10 bg-white/[0.025] text-white/55" : "border-black/[0.06] bg-white text-black/55"}`}
+                  className={`rounded-[20px] px-4 py-10 text-center text-[13px] ${darkMode ? "bg-white/[0.03] text-white/55" : "bg-[#f7f7f5] text-[#7a7a78]"}`}
                 >
                   Loading DMR changes…
                 </div>
               )}
               {!historyLoading && !historyItems.length && (
                 <div
-                  className={`rounded-[24px] border px-4 py-10 text-center text-sm ${darkMode ? "border-white/10 bg-white/[0.025] text-white/55" : "border-black/[0.06] bg-white text-black/55"}`}
+                  className={`rounded-[20px] px-4 py-10 text-center text-[13px] ${darkMode ? "bg-white/[0.03] text-white/55" : "bg-[#f7f7f5] text-[#7a7a78]"}`}
                 >
                   No version history found for this DMR date yet.
                 </div>
@@ -4425,7 +4348,7 @@ export default function DmrDashboard({ darkMode }) {
                     {historyItems.map((group) => (
                       <article
                         key={group.id}
-                        className={`rounded-[22px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                        className={`rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                       >
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="min-w-0">
@@ -4435,19 +4358,19 @@ export default function DmrDashboard({ darkMode }) {
                                 .map((section) => (
                                   <span
                                     key={section}
-                                    className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}
+                                    className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}
                                   >
                                     {section}
                                   </span>
                                 ))}
                               <span
-                                className={`rounded-full px-2.5 py-1 text-[10px] ${darkMode ? "bg-blue-400/10 text-blue-200" : "bg-blue-50 text-blue-700"}`}
+                                className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${darkMode ? "bg-blue-400/10 text-blue-200" : "bg-[#e3eefb] text-[#2f6fc0]"}`}
                               >
                                 {group.changeCount} change
                                 {group.changeCount === 1 ? "" : "s"}
                               </span>
                             </div>
-                            <h4 className="mt-3 truncate text-base font-semibold">
+                            <h4 className="mt-3 truncate text-[15px]">
                               DMR submitted by{" "}
                               {group.displayName || group.username}
                             </h4>
@@ -4462,7 +4385,7 @@ export default function DmrDashboard({ darkMode }) {
                           <button
                             type="button"
                             onClick={() => setSelectedHistory(group)}
-                            className={`h-10 rounded-full px-4 text-xs font-semibold ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                            className={`h-9 rounded-full px-4 text-[12.5px] transition ${darkMode ? "bg-[#cff07a] text-black hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black"}`}
                           >
                             View detail
                           </button>
@@ -4478,11 +4401,11 @@ export default function DmrDashboard({ darkMode }) {
                       <button
                         type="button"
                         onClick={() => setSelectedHistory(null)}
-                        className={`rounded-full border px-4 py-2 text-xs ${darkMode ? "border-white/10 text-white/70" : "border-black/10 text-black/65"}`}
+                        className={`h-8 rounded-full border px-4 text-[12.5px] transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
                       >
                         Back to history
                       </button>
-                      <h4 className="mt-4 text-xl font-semibold">
+                      <h4 className="mt-4 text-[18px] tracking-[-0.01em]">
                         Submission details
                       </h4>
                       <p className={`mt-1 text-sm ${muted}`}>
@@ -4495,21 +4418,21 @@ export default function DmrDashboard({ darkMode }) {
                       </p>
                     </div>
                     <span
-                      className={`rounded-full px-3 py-1.5 text-xs ${darkMode ? "bg-white/5 text-white/60" : "bg-black/[0.04] text-black/55"}`}
+                      className={`inline-flex h-7 items-center rounded-full px-3 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}
                     >
                       {selectedHistory.changeCount} changes
                     </span>
                   </div>
                   <div
-                    className={`overflow-hidden rounded-[22px] border ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+                    className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10" : "border-[#ececec]"}`}
                   >
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-left text-sm">
                         <thead
                           className={
                             darkMode
-                              ? "bg-white/[0.035] text-white/55"
-                              : "bg-[#f4f0e8] text-black/55"
+                              ? "text-white/45"
+                              : "text-[#8a8a8a]"
                           }
                         >
                           <tr>
@@ -4523,7 +4446,7 @@ export default function DmrDashboard({ darkMode }) {
                             ].map((label) => (
                               <th
                                 key={label}
-                                className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em]"
+                                className="px-4 py-3 text-[12px]"
                               >
                                 {label}
                               </th>
@@ -4533,8 +4456,8 @@ export default function DmrDashboard({ darkMode }) {
                         <tbody
                           className={
                             darkMode
-                              ? "divide-y divide-white/10"
-                              : "divide-y divide-black/[0.06]"
+                              ? "divide-y divide-white/[0.07]"
+                              : "divide-y divide-[#f0f0ee]"
                           }
                         >
                           {(selectedHistory.changes || []).map((change) => (
@@ -4554,14 +4477,14 @@ export default function DmrDashboard({ darkMode }) {
                                 {change.field || "row"}
                               </td>
                               <td
-                                className={`max-w-[220px] px-4 py-3 ${darkMode ? "text-red-200" : "text-red-700"}`}
+                                className={`max-w-[220px] px-4 py-3 ${darkMode ? "text-red-200" : "text-[#c0394b]"}`}
                               >
                                 <span className="line-clamp-2 break-words">
                                   {change.before || "Blank"}
                                 </span>
                               </td>
                               <td
-                                className={`max-w-[220px] px-4 py-3 ${darkMode ? "text-emerald-200" : "text-emerald-700"}`}
+                                className={`max-w-[220px] px-4 py-3 ${darkMode ? "text-emerald-200" : "text-[#2f7a4f]"}`}
                               >
                                 <span className="line-clamp-2 break-words">
                                   {change.after || "Blank"}
@@ -4581,38 +4504,32 @@ export default function DmrDashboard({ darkMode }) {
       )}
 
       {activeDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#171714]/60 p-4 backdrop-blur-md sm:p-7">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px] sm:p-7">
           <div
-            className={`flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-[34px] border ${darkMode ? "border-white/10 bg-[#111216] text-white" : "border-black/10 bg-[#f7f5ef] text-[#171714]"}`}
+            className={`flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#e6e6e3] bg-white text-[#141414]"}`}
           >
             <div
-              className={`flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-7 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-7 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
             >
-              <div className="flex min-w-0 items-start gap-4">
-                <span
-                  className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${activeDetail.soft}`}
-                >
-                  <span
-                    className={`h-4 w-4 rounded-md ${activeDetail.accent}`}
-                  />
-                </span>
+              <div className="flex min-w-0 items-center gap-4">
+                <IconTile icon={(sectionCardLook[activeDetail.id] || {}).icon || FileSpreadsheet} tone={(sectionCardLook[activeDetail.id] || {}).tone || "neutral"} darkMode={darkMode} />
                 <div className="min-w-0">
-                  <p
-                    className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${muted}`}
-                  >
+                  <p className={`text-[12px] ${muted}`}>
                     {activeDetail.eyebrow}
                   </p>
-                  <h3 className="mt-2 truncate text-3xl font-semibold">
+                  <h3 className="truncate text-[22px] leading-tight tracking-[-0.02em]">
                     {activeDetail.title}
                   </h3>
-                  <p className={`mt-1 text-sm ${muted}`}>
+                  <p className={`mt-0.5 text-[13px] ${muted}`}>
                     Details from {data?.sheetName || "today's DMR"}.
                   </p>
                 </div>
               </div>
               <button
+                type="button"
+                aria-label="Close"
                 onClick={() => setDetailSection(null)}
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white"}`}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -4623,25 +4540,25 @@ export default function DmrDashboard({ darkMode }) {
                   {activeDetail.items.map((item) => (
                     <article
                       key={item.id}
-                      className={`flex min-h-44 flex-col rounded-[26px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                      className={`flex min-h-44 flex-col rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <span
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-medium ${activeDetail.soft}`}
+                          className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${activeDetail.soft}`}
                         >
                           {item.site || "No site"}
                         </span>
                         <span
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-medium ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}
+                          className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}
                         >
                           {item.quantity || "—"}
                         </span>
                       </div>
-                      <p className="mt-5 text-lg font-semibold">
+                      <p className="mt-5 text-[16px] leading-6">
                         {item.details || "Equipment"}
                       </p>
                       <div
-                        className={`mt-auto border-t pt-4 text-xs ${darkMode ? "border-white/10 text-white/50" : "border-black/[0.06] text-black/50"}`}
+                        className={`mt-auto border-t pt-4 text-xs ${darkMode ? "border-white/10 text-white/50" : "border-[#f0f0ee] text-[#7a7a78]"}`}
                       >
                         Equipment & tools entry
                       </div>
@@ -4655,27 +4572,27 @@ export default function DmrDashboard({ darkMode }) {
                   {activeDetail.items.map((item) => (
                     <article
                       key={item.id}
-                      className={`flex min-h-44 flex-col rounded-[26px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                      className={`flex min-h-44 flex-col rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <span
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-medium ${activeDetail.soft}`}
+                          className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${activeDetail.soft}`}
                         >
                           {item.site || "No site"}
                         </span>
                         <span
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-medium ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}
+                          className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}
                         >
                           {[item.quantity, item.unit]
                             .filter(Boolean)
                             .join(" ") || "—"}
                         </span>
                       </div>
-                      <p className="mt-5 text-lg font-semibold">
+                      <p className="mt-5 text-[16px] leading-6">
                         {item.details || "Material"}
                       </p>
                       <div
-                        className={`mt-auto border-t pt-4 text-xs ${darkMode ? "border-white/10 text-white/50" : "border-black/[0.06] text-black/50"}`}
+                        className={`mt-auto border-t pt-4 text-xs ${darkMode ? "border-white/10 text-white/50" : "border-[#f0f0ee] text-[#7a7a78]"}`}
                       >
                         Materials entry
                       </div>
@@ -4689,23 +4606,23 @@ export default function DmrDashboard({ darkMode }) {
                   {activeDetail.items.map((item, index) => (
                     <article
                       key={item.id}
-                      className={`flex min-h-44 flex-col rounded-[26px] border p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                      className={`flex min-h-44 flex-col rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <span
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-medium ${activeDetail.soft}`}
+                          className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${activeDetail.soft}`}
                         >
                           Note {index + 1}
                         </span>
                         <span
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-medium ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}
+                          className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}
                         >
                           Remark
                         </span>
                       </div>
                       <p className="mt-5 text-sm leading-6">{item.note}</p>
                       <div
-                        className={`mt-auto border-t pt-4 text-xs ${darkMode ? "border-white/10 text-white/50" : "border-black/[0.06] text-black/50"}`}
+                        className={`mt-auto border-t pt-4 text-xs ${darkMode ? "border-white/10 text-white/50" : "border-[#f0f0ee] text-[#7a7a78]"}`}
                       >
                         Site note
                       </div>
@@ -4716,31 +4633,10 @@ export default function DmrDashboard({ darkMode }) {
 
               {activeDetail.id === "attendance" && (
                 <div>
-                  <div className="mb-5 grid grid-cols-3 gap-3 text-xs">
-                    <div
-                      className={`rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-emerald-400/10 text-emerald-200" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}
-                    >
-                      <p className="text-3xl font-semibold">
-                        {attendanceSummary.present}
-                      </p>
-                      <p className="mt-1">Present</p>
-                    </div>
-                    <div
-                      className={`rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-red-400/10 text-red-200" : "border-red-100 bg-red-50 text-red-700"}`}
-                    >
-                      <p className="text-3xl font-semibold">
-                        {attendanceSummary.absent}
-                      </p>
-                      <p className="mt-1">Absent</p>
-                    </div>
-                    <div
-                      className={`rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-white/5 text-white/55" : "border-black/[0.06] bg-white text-black/50"}`}
-                    >
-                      <p className="text-3xl font-semibold">
-                        {attendanceSummary.pending}
-                      </p>
-                      <p className="mt-1">Pending</p>
-                    </div>
+                  <div className="mb-5 grid grid-cols-3 gap-3">
+                    <StatTile darkMode={darkMode} icon={Check} tone="mint" value={attendanceSummary.present} label="Present" />
+                    <StatTile darkMode={darkMode} icon={X} tone="rose" value={attendanceSummary.absent} label="Absent" />
+                    <StatTile darkMode={darkMode} icon={Clock3} tone="neutral" value={attendanceSummary.pending} label="Pending" />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {activeDetail.items.map((item, index) => {
@@ -4764,15 +4660,15 @@ export default function DmrDashboard({ darkMode }) {
                               ? "text-amber-700 bg-amber-500/10"
                               : darkMode
                                 ? "text-white/45 bg-white/5"
-                                : "text-black/45 bg-black/[0.04]";
+                                : "text-[#8a8a8a] bg-[#f4f4f2]";
                       const headerColor =
                         status === "p"
-                          ? "bg-[#75e6b4]"
+                          ? "bg-[#e4f1e6]"
                           : status === "a"
-                            ? "bg-[#ff9aa2]"
+                            ? "bg-[#fbe4e6]"
                             : status === "l"
-                              ? "bg-[#f5f76a]"
-                              : "bg-[#6f7df2]";
+                              ? "bg-[#fbf0d4]"
+                              : "bg-[#ece8fb]";
                       const initials = (item.name || "?")
                         .split(/\s+/)
                         .map((part) => part[0])
@@ -4782,10 +4678,10 @@ export default function DmrDashboard({ darkMode }) {
                       return (
                         <article
                           key={item.id}
-                          className={`overflow-hidden rounded-[22px] border ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                          className={`overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                         >
                           <div
-                            className={`flex items-center justify-between px-4 py-3 text-sm font-semibold ${headerColor} text-[#171714]`}
+                            className={`flex items-center justify-between px-4 py-2.5 text-[12.5px] ${headerColor} text-[#3d3d3b]`}
                           >
                             <span>
                               STAFF-{String(index + 1).padStart(3, "0")}
@@ -4798,20 +4694,20 @@ export default function DmrDashboard({ darkMode }) {
                                 <p className={`text-xs ${muted}`}>
                                   Project Staff
                                 </p>
-                                <h4 className="mt-2 small tracking-wide text-black dark:text-white min-h-12 text-xl font-semibold">
+                                <h4 className="mt-1 min-h-12 text-[17px] tracking-[-0.01em]">
                                   {item.name || "Unnamed staff"}
                                 </h4>
                               </div>
                               <span
-                                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${statusTone}`}
+                                className={`inline-flex h-7 shrink-0 items-center rounded-full px-3 text-[12.5px] ${statusTone}`}
                               >
                                 {statusLabel}
                               </span>
                             </div>
 
                             {/* <div className="mt-3 flex flex-wrap gap-2">
-                              <span className={`rounded-lg px-2.5 py-1 text-[11px] ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}>Row {index + 1}</span>
-                              <span className={`rounded-lg px-2.5 py-1 text-[11px] ${darkMode ? "bg-white/5 text-white/55" : "bg-black/[0.04] text-black/55"}`}>DMR attendance</span>
+                              <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}>Row {index + 1}</span>
+                              <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}>DMR attendance</span>
                             </div> */}
                           </div>
                         </article>
@@ -4823,7 +4719,7 @@ export default function DmrDashboard({ darkMode }) {
 
               {!activeDetail.items.length && (
                 <div
-                  className={`rounded-[24px] border px-4 py-10 text-center text-sm ${darkMode ? "border-white/10 bg-white/[0.025] text-white/45" : "border-black/[0.06] bg-white text-black/45"}`}
+                  className={`rounded-[20px] px-4 py-10 text-center text-[13px] ${darkMode ? "bg-white/[0.03] text-white/45" : "bg-[#f7f7f5] text-[#8a8a8a]"}`}
                 >
                   No details added in this section yet.
                 </div>
@@ -4834,37 +4730,40 @@ export default function DmrDashboard({ darkMode }) {
       )}
 
       {fillOpen && (
-        <div className="fixed inset-0 z-50 bg-[#171714]/60 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px]">
           <div
-            className={`flex h-[100dvh] w-screen flex-col overflow-hidden ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#faf9f5] text-[#171714]"}`}
+            className={`flex h-[100dvh] w-screen flex-col overflow-hidden ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}
           >
             <div
-              className={`flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
             >
-              <div>
-                <p
-                  className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${darkMode ? "text-[#d8f36a]" : "text-[#e76f42]"}`}
-                >
-                  Fill DMR
-                </p>
-                <h3 className="mt-1 text-2xl font-semibold">
-                  {data?.sheetName || "Today"} entries
-                </h3>
-                <p className={`mt-1 hidden text-sm sm:block ${muted}`}>
-                  Pick a site from the left, then fill planned and actual
-                  manpower trade-wise.
-                </p>
+              <div className="flex min-w-0 items-center gap-3">
+                <IconTile icon={CalendarDays} tone="mint" darkMode={darkMode} />
+                <div className="min-w-0">
+                  <p className={`text-[12px] ${muted}`}>
+                    Fill DMR
+                  </p>
+                  <h3 className="text-[22px] leading-tight tracking-[-0.02em]">
+                    {data?.sheetName || "Today"} entries
+                  </h3>
+                  <p className={`mt-0.5 hidden text-[13px] sm:block ${muted}`}>
+                    Pick a site from the left, then fill planned and actual
+                    manpower trade-wise.
+                  </p>
+                </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   onClick={() => setDmrSheetOpen(true)}
-                    className={`flex h-10 items-center gap-2 rounded-full border px-3 text-xs font-medium sm:px-4 sm:text-sm ${darkMode ? "border-white/10 bg-white/5 text-white/70 hover:bg-white/10" : "border-black/10 bg-white text-black/65 hover:bg-black/[0.04]"}`}
+                    className={`flex h-9 items-center gap-2 rounded-full border px-3 text-[12.5px] transition sm:px-4 sm:text-[13px] ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
                 >
                   <FileSpreadsheet className="h-4 w-4" /> Sheet link
                 </button>
                 <button
+                  type="button"
+                  aria-label="Close"
                   onClick={() => setFillOpen(false)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -4873,7 +4772,7 @@ export default function DmrDashboard({ darkMode }) {
             <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 lg:overflow-hidden">
               {!dmrSheetLinked && (
                 <div
-                  className={`mb-4 rounded-2xl  px-4 py-3 text-xs ${darkMode ? "border-amber-400/20 bg-amber-400/5 text-amber-200/75" : "border-amber-500/20 bg-amber-50 text-amber-800"}`}
+                  className={`mb-4 rounded-[14px] px-4 py-3 text-xs ${darkMode ? "bg-amber-400/[0.08] text-amber-100" : "bg-[#fbf3dc] text-[#4a3a1c]"}`}
                 >
                   No DMR sheet is linked yet. Super Admin must link a native
                   Google Sheet before anyone can fill records.
@@ -4881,14 +4780,14 @@ export default function DmrDashboard({ darkMode }) {
               )}
               {dmrSheetLinked && !data?.canEdit && (
                 <div
-                  className={`mb-4 rounded-2xl  px-4 py-3 text-xs ${darkMode ? "border-amber-400/20 bg-amber-400/5 text-amber-200/75" : "border-amber-500/20 bg-amber-50 text-amber-800"}`}
+                  className={`mb-4 rounded-[14px] px-4 py-3 text-xs ${darkMode ? "bg-amber-400/[0.08] text-amber-100" : "bg-[#fbf3dc] text-[#4a3a1c]"}`}
                 >
                   You can view DMR, but your role does not have fill permission.
                 </div>
               )}
 
               <div
-                className={`mb-3 flex gap-2 overflow-x-auto rounded-2xl p-1.5 ${darkMode ? "bg-white/[0.035]" : "bg-[#ebe6dc]"}`}
+                className={`mb-3 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}
               >
                 {[
                   ["manpower", "Manpower", filteredRecords.length],
@@ -4905,11 +4804,11 @@ export default function DmrDashboard({ darkMode }) {
                     key={value}
                     type="button"
                     onClick={() => setFillTab(value)}
-                    className={`flex min-w-fit items-center gap-2 rounded-xl px-4 py-2.5 text-sm ${fillTab === value ? (darkMode ? "bg-[#d8f36a] text-black" : "bg-white text-black") : muted}`}
+                    className={`flex h-9 min-w-fit items-center gap-2 rounded-full px-4 text-[13px] transition ${fillTab === value ? (darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#141414] shadow-[0_1px_4px_rgba(0,0,0,0.08)]") : `${muted} ${darkMode ? "hover:text-white" : "hover:text-[#141414]"}`}`}
                   >
-                    <span className="font-medium">{label}</span>
+                    <span className="">{label}</span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] ${fillTab === value ? "bg-black/10" : darkMode ? "bg-white/5" : "bg-black/[0.04]"}`}
+                      className={`rounded-full px-1.5 text-[11px] ${fillTab === value ? (darkMode ? "bg-white/10" : "bg-[#f4f4f2]") : darkMode ? "bg-white/10" : "bg-[#e9e9e6]"}`}
                     >
                       {count}
                     </span>
@@ -4921,17 +4820,15 @@ export default function DmrDashboard({ darkMode }) {
                 <>
                   <div className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
                     <aside
-                      className={`min-h-0 overflow-hidden rounded-[22px] border ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.06] bg-white"}`}
+                      className={`min-h-0 overflow-hidden rounded-[20px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                     >
                       <div
-                        className={`border-b p-3 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
+                        className={`border-b p-3 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
                       >
-                        <p
-                          className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${muted}`}
-                        >
+                        <p className={`px-1 text-[12px] ${muted}`}>
                           Sites
                         </p>
-                        <p className="mt-1 text-lg font-semibold">
+                        <p className="px-1 text-[16px]">
                           {siteFilter === "all" ? "All sites" : siteFilter}
                         </p>
                       </div>
@@ -4943,13 +4840,13 @@ export default function DmrDashboard({ darkMode }) {
                               key={site.value}
                               type="button"
                               onClick={() => setSiteFilter(site.value)}
-                              className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-left text-sm transition ${selected ? (darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white") : darkMode ? "text-white/65 hover:bg-white/5" : "text-black/65 hover:bg-black/[0.04]"}`}
+                              className={`flex w-full items-center justify-between gap-3 rounded-[14px] px-3 py-2.5 text-left text-[13.5px] transition ${selected ? (darkMode ? "bg-[#cff07a] text-black" : "bg-[#141414] text-white") : darkMode ? "text-white/65 hover:bg-white/5" : "text-[#5f5f5c] hover:bg-[#f4f4f2]"}`}
                             >
-                              <span className="truncate font-medium">
+                              <span className="truncate">
                                 {site.label}
                               </span>
                               <span
-                                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${selected ? "bg-black/10 text-inherit" : darkMode ? "bg-white/5 text-white/45" : "bg-black/[0.04] text-black/45"}`}
+                                className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${selected ? (darkMode ? "bg-black/15 text-inherit" : "bg-white/15 text-inherit") : darkMode ? "bg-white/5 text-white/45" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}
                               >
                                 {site.count}
                               </span>
@@ -4969,7 +4866,7 @@ export default function DmrDashboard({ darkMode }) {
                             setAgencySearch(event.target.value)
                           }
                           placeholder="Search trade / agency in selected site..."
-                          className={`h-12 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`}
+                          className={`h-10 w-full rounded-full pl-11 pr-4 text-sm outline-none transition ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                         />
                       </label>
                       <div className="overflow-visible pb-6 pr-1 lg:max-h-[calc(100dvh-330px)] lg:overflow-y-auto lg:pb-24">
@@ -4977,30 +4874,30 @@ export default function DmrDashboard({ darkMode }) {
                           {filteredRecords.map((record) => (
                             <article
                               key={record.id}
-                              className={`rounded-[22px] p-4 ${darkMode ? "border-white/10 bg-white/[0.025]" : "border-black/[0.07] bg-white"}`}
+                              className={`rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className="truncate text-lg font-semibold">
+                                  <p className="truncate text-[15px]">
                                     {record.agency}
                                   </p>
                                   <p className={`mt-1 text-xs ${muted}`}>
                                     {record.site}
                                   </p>
                                 </div>
-                                <span className="rounded-full bg-black/5 px-2.5 py-1 text-[10px]">
+                                <span className={`inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-[12px] ${darkMode ? "bg-white/[0.07] text-white/60" : "bg-[#f4f4f2] text-[#5f5f5c]"}`}>
                                   Row {record.rowNumber}
                                 </span>
                               </div>
                               <div className="mt-4 grid grid-cols-2 gap-3">
                                 <label
-                                  className={`text-[11px] ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}
+                                  className={`text-[12px] ${darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]"}`}
                                 >
                                   <span className="flex items-center justify-between gap-2">
                                     Planned
                                     {autoPlannedForRecord(record) !== "" && (
                                       <span
-                                        className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`}
+                                        className={`rounded-full px-2 py-0.5 text-[11px] ${darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}
                                       >
                                         Auto
                                       </span>
@@ -5017,11 +4914,11 @@ export default function DmrDashboard({ darkMode }) {
                                         event.target.value,
                                       )
                                     }
-                                    className={`mt-2 h-12 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-emerald-400/20 bg-emerald-400/10 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}
+                                    className={`mt-1.5 h-10 w-full rounded-full px-4 text-sm tabular-nums outline-none transition focus:ring-1 disabled:opacity-60 ${darkMode ? "bg-[rgba(74,222,128,0.12)] text-white focus:ring-white/15" : "bg-[#e4f1e6] text-[#16432c] focus:ring-[#2f7a4f]/30"}`}
                                   />
                                 </label>
                                 <label
-                                  className={`text-[11px] ${darkMode ? "text-red-300" : "text-red-700"}`}
+                                  className={`text-[12px] ${darkMode ? "text-[#f7aab5]" : "text-[#c0394b]"}`}
                                 >
                                   Actual
                                   <input
@@ -5035,13 +4932,13 @@ export default function DmrDashboard({ darkMode }) {
                                         event.target.value,
                                       )
                                     }
-                                    className={`mt-2 h-12 w-full rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-red-400/20 bg-red-400/10 text-white" : "border-red-200 bg-red-50 text-red-900"}`}
+                                    className={`mt-1.5 h-10 w-full rounded-full px-4 text-sm tabular-nums outline-none transition focus:ring-1 disabled:opacity-60 ${darkMode ? "bg-[rgba(251,113,133,0.13)] text-white focus:ring-white/15" : "bg-[#fbe4e6] text-[#5c1f1c] focus:ring-[#c0394b]/30"}`}
                                   />
                                 </label>
                               </div>
                               {isDmrOthersRecord(record) && (
                                 <label
-                                  className={`mt-3 block text-[11px] ${darkMode ? "text-white/60" : "text-black/60"}`}
+                                  className={`mt-3 block text-[12px] ${darkMode ? "text-white/60" : "text-[#5f5f5c]"}`}
                                 >
                                   Remark
                                   <textarea
@@ -5056,7 +4953,7 @@ export default function DmrDashboard({ darkMode }) {
                                     }
                                     placeholder="Add line for Other work..."
                                     rows={2}
-                                    className={`mt-2 w-full resize-none rounded-2xl border px-3 py-2 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04] text-white" : "border-black/10 bg-white text-black"}`}
+                                    className={`mt-2 w-full resize-none rounded-[16px] px-4 py-2 text-sm outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                                   />
                                 </label>
                               )}
@@ -5064,7 +4961,7 @@ export default function DmrDashboard({ darkMode }) {
                           ))}
                           {!filteredRecords.length && (
                             <div
-                              className={`rounded-[24px] border px-4 py-10 text-center text-sm xl:col-span-3 2xl:col-span-4 ${darkMode ? "border-white/10 bg-white/[0.025] text-white/45" : "border-black/[0.06] bg-white text-black/45"}`}
+                              className={`rounded-[20px] px-4 py-10 text-center text-[13px] xl:col-span-3 2xl:col-span-4 ${darkMode ? "bg-white/[0.03] text-white/45" : "bg-[#f7f7f5] text-[#8a8a8a]"}`}
                             >
                               No manpower rows found for this site or search.
                             </div>
@@ -5084,10 +4981,11 @@ export default function DmrDashboard({ darkMode }) {
                 }
               >
                 {fillTab === "equipment" && (
-                  <section className={`rounded-[24px]  p-4 ${panel}`}>
+                  <section className={`rounded-[20px] p-4 ${panel}`}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-base font-semibold">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3">
+                        <IconTile icon={Wrench} tone="peach" darkMode={darkMode} size="sm" className="row-span-2" />
+                        <h4 className="text-[15px]">
                           Equipments and Tools
                         </h4>
                         <p className={`mt-1 text-xs ${muted}`}>
@@ -5098,7 +4996,7 @@ export default function DmrDashboard({ darkMode }) {
                         type="button"
                         disabled={!canFillDmr || addingRow === "equipment"}
                         onClick={() => addSectionRow("equipment")}
-                        className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                        className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-[12.5px] transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#cff07a] text-black hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black"}`}
                       >
                         {addingRow === "equipment" ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -5121,7 +5019,7 @@ export default function DmrDashboard({ darkMode }) {
                               updateDraft(item, "site", event.target.value)
                             }
                             placeholder="Site"
-                            className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                            className={`h-10 rounded-full px-4 text-sm outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                           />
                           <input
                             disabled={!canFillDmr}
@@ -5130,7 +5028,7 @@ export default function DmrDashboard({ darkMode }) {
                               updateDraft(item, "details", event.target.value)
                             }
                             placeholder="Details"
-                            className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                            className={`h-10 rounded-full px-4 text-sm outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                           />
                           <input
                             disabled={!canFillDmr}
@@ -5139,7 +5037,7 @@ export default function DmrDashboard({ darkMode }) {
                               updateDraft(item, "quantity", event.target.value)
                             }
                             placeholder="Nos/Pair"
-                            className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                            className={`h-10 rounded-full px-4 text-sm outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                           />
                         </div>
                       ))}
@@ -5148,10 +5046,11 @@ export default function DmrDashboard({ darkMode }) {
                 )}
 
                 {fillTab === "materials" && (
-                  <section className={`rounded-[24px]  p-4 ${panel}`}>
+                  <section className={`rounded-[20px] p-4 ${panel}`}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-base font-semibold">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3">
+                        <IconTile icon={Package} tone="amber" darkMode={darkMode} size="sm" className="row-span-2" />
+                        <h4 className="text-[15px]">
                           Materials Details
                         </h4>
                         <p className={`mt-1 text-xs ${muted}`}>
@@ -5162,7 +5061,7 @@ export default function DmrDashboard({ darkMode }) {
                         type="button"
                         disabled={!canFillDmr || addingRow === "materials"}
                         onClick={() => addSectionRow("materials")}
-                        className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                        className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-[12.5px] transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#cff07a] text-black hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black"}`}
                       >
                         {addingRow === "materials" ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -5185,7 +5084,7 @@ export default function DmrDashboard({ darkMode }) {
                               updateDraft(item, "site", event.target.value)
                             }
                             placeholder="Site"
-                            className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                            className={`h-10 rounded-full px-4 text-sm outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                           />
                           <input
                             disabled={!canFillDmr}
@@ -5194,7 +5093,7 @@ export default function DmrDashboard({ darkMode }) {
                               updateDraft(item, "details", event.target.value)
                             }
                             placeholder="Details"
-                            className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                            className={`h-10 rounded-full px-4 text-sm outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                           />
                           <input
                             disabled={!canFillDmr}
@@ -5203,7 +5102,7 @@ export default function DmrDashboard({ darkMode }) {
                               updateDraft(item, "unit", event.target.value)
                             }
                             placeholder="Unit"
-                            className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                            className={`h-10 rounded-full px-4 text-sm outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                           />
                           <input
                             disabled={!canFillDmr}
@@ -5212,7 +5111,7 @@ export default function DmrDashboard({ darkMode }) {
                               updateDraft(item, "quantity", event.target.value)
                             }
                             placeholder="Qty"
-                            className={`h-11 rounded-2xl border px-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                            className={`h-10 rounded-full px-4 text-sm outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                           />
                         </div>
                       ))}
@@ -5221,10 +5120,11 @@ export default function DmrDashboard({ darkMode }) {
                 )}
 
                 {fillTab === "notes" && (
-                  <section className={`rounded-[24px]  p-4 ${panel}`}>
+                  <section className={`rounded-[20px] p-4 ${panel}`}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-base font-semibold">Notes</h4>
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3">
+                        <IconTile icon={StickyNote} tone="lavender" darkMode={darkMode} size="sm" className="row-span-2" />
+                        <h4 className="text-[15px]">Notes</h4>
                         <p className={`mt-1 text-xs ${muted}`}>
                           Write any site remarks, issues, or next-day reminders.
                         </p>
@@ -5233,7 +5133,7 @@ export default function DmrDashboard({ darkMode }) {
                         type="button"
                         disabled={!canFillDmr || addingRow === "notes"}
                         onClick={() => addSectionRow("notes")}
-                        className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                        className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-[12.5px] transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#cff07a] text-black hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black"}`}
                       >
                         {addingRow === "notes" ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -5254,7 +5154,7 @@ export default function DmrDashboard({ darkMode }) {
                           }
                           placeholder={`Note ${index + 1}`}
                           rows={2}
-                          className={`w-full rounded-2xl border px-3 py-3 text-sm outline-none disabled:opacity-60 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}
+                          className={`w-full rounded-[16px] px-4 py-3 text-sm outline-none transition disabled:opacity-60 ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                         />
                       ))}
                     </div>
@@ -5262,10 +5162,11 @@ export default function DmrDashboard({ darkMode }) {
                 )}
 
                 {fillTab === "attendance" && (
-                  <section className={`rounded-[24px]  p-4 ${panel}`}>
+                  <section className={`rounded-[20px] p-4 ${panel}`}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-base font-semibold">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3">
+                        <IconTile icon={Users} tone="sky" darkMode={darkMode} size="sm" className="row-span-2" />
+                        <h4 className="text-[15px]">
                           Project Staff Attendance
                         </h4>
                         <p className={`mt-1 text-xs ${muted}`}>
@@ -5273,13 +5174,13 @@ export default function DmrDashboard({ darkMode }) {
                           required.
                         </p>
                       </div>
-                      <div className="flex gap-2 text-xs">
-                        <span className="rounded-full bg-emerald-500/10 px-3 py-1.5 text-emerald-700">
+                      <div className="flex gap-2">
+                        <Chip darkMode={darkMode} tone="mint">
                           {fillAttendanceSummary.present} Present
-                        </span>
-                        <span className="rounded-full bg-red-500/10 px-3 py-1.5 text-red-700">
+                        </Chip>
+                        <Chip darkMode={darkMode} tone="rose">
                           {fillAttendanceSummary.absent} Absent
-                        </span>
+                        </Chip>
                       </div>
                     </div>
                     <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -5312,7 +5213,7 @@ export default function DmrDashboard({ darkMode }) {
                                     label: "Pending",
                                     chip: darkMode
                                       ? "bg-white/5 text-white/45"
-                                      : "bg-black/[0.04] text-black/45",
+                                      : "bg-[#f4f4f2] text-[#8a8a8a]",
                                     dot: darkMode
                                       ? "bg-white/30"
                                       : "bg-black/30",
@@ -5321,40 +5222,38 @@ export default function DmrDashboard({ darkMode }) {
                           {
                             value: "P",
                             label: "Present",
-                            active:
-                              "bg-emerald-500 text-white border-emerald-500",
+                            active: "bg-[#2f7a4f] text-white",
                             idle: darkMode
-                              ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15"
-                              : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
+                              ? "bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15"
+                              : "bg-[#e4f1e6] text-[#2f7a4f] hover:bg-[#d6eadb]",
                           },
                           {
                             value: "A",
                             label: "Absent",
-                            active: "bg-red-500 text-white border-red-500",
+                            active: "bg-[#c0394b] text-white",
                             idle: darkMode
-                              ? "border-red-400/25 bg-red-400/10 text-red-200 hover:bg-red-400/15"
-                              : "border-red-200 bg-red-50 text-red-800 hover:bg-red-100",
+                              ? "bg-red-400/10 text-red-200 hover:bg-red-400/15"
+                              : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f7d5d9]",
                           },
                           {
                             value: "L",
                             label: "Leave",
-                            active:
-                              "bg-orange-500 text-white border-orange-500",
+                            active: "bg-[#c2562b] text-white",
                             idle: darkMode
-                              ? "border-orange-400/25 bg-orange-400/10 text-orange-200 hover:bg-orange-400/15"
-                              : "border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100",
+                              ? "bg-orange-400/10 text-orange-200 hover:bg-orange-400/15"
+                              : "bg-[#fbe5dc] text-[#c2562b] hover:bg-[#f7d6c9]",
                           },
                         ];
                         return (
                           <article
                             key={item.id}
-                            className={`flex min-h-48 flex-col rounded-[24px] border p-4 ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/[0.06] bg-white"}`}
+                            className={`flex min-h-48 flex-col rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div
-                                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${darkMode ? "bg-white/5" : "bg-black/[0.04]"}`}
+                                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${darkMode ? "bg-white/5" : "bg-[#f4f4f2]"}`}
                               >
-                                <span className="text-sm font-semibold">
+                                <span className="text-sm">
                                   {(item.name || "?")
                                     .split(/\s+/)
                                     .map((part) => part[0])
@@ -5364,7 +5263,7 @@ export default function DmrDashboard({ darkMode }) {
                                 </span>
                               </div>
                               <span
-                                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium ${statusMeta.chip}`}
+                                className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] ${statusMeta.chip}`}
                               >
                                 <span
                                   className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`}
@@ -5373,7 +5272,7 @@ export default function DmrDashboard({ darkMode }) {
                               </span>
                             </div>
                             <div className="mt-5 min-w-0">
-                              <p className=" text-xl tracking-wide text-black small font-semibold">
+                              <p className="text-[17px] tracking-[-0.01em]">
                                 {item.name}
                               </p>
                               <p className={`mt-1 text-xs ${muted}`}>
@@ -5381,9 +5280,9 @@ export default function DmrDashboard({ darkMode }) {
                               </p>
                             </div>
                             <div
-                              className={`mt-auto pt-5 ${darkMode ? "border-white/10" : "border-black/[0.06]"}`}
+                              className={`mt-auto pt-5 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
                             >
-                              <div className="grid grid-cols-3 gap-2 border-t pt-4">
+                              <div className={`grid grid-cols-3 gap-1.5 border-t pt-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
                                 {options.map((option) => (
                                   <button
                                     key={option.value}
@@ -5392,7 +5291,7 @@ export default function DmrDashboard({ darkMode }) {
                                     onClick={() =>
                                       updateDraft(item, "status", option.value)
                                     }
-                                    className={`h-9 rounded-xl  px-2 text-[14px]  transition disabled:cursor-not-allowed disabled:opacity-50 ${currentStatus === option.value ? option.active : option.idle}`}
+                                    className={`h-9 rounded-full px-2 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-50 ${currentStatus === option.value ? option.active : option.idle}`}
                                   >
                                     {option.label}
                                   </button>
@@ -5408,11 +5307,11 @@ export default function DmrDashboard({ darkMode }) {
               </div>
             </div>
             <div
-              className={`flex shrink-0 items-center justify-end gap-2 border-t px-3 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-black/[0.07]"}`}
+              className={`flex shrink-0 items-center justify-end gap-2 border-t px-3 py-3 sm:px-7 sm:py-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}
             >
               <button
                 onClick={() => setFillOpen(false)}
-                className={`h-11 rounded-full border px-5 text-sm ${darkMode ? "border-white/10 text-white/60" : "border-black/10 text-black/60"}`}
+                className={`h-10 rounded-full border px-5 text-[13px] transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}
               >
                 Cancel
               </button>
@@ -5423,7 +5322,7 @@ export default function DmrDashboard({ darkMode }) {
                   (!Object.keys(drafts).length && !hasAutoPlannedDrafts)
                 }
                 onClick={saveDmr}
-                className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-36 sm:flex-none sm:px-6 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                className={`flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-5 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-36 sm:flex-none sm:px-6 ${darkMode ? "bg-[#cff07a] text-black hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black"}`}
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -5434,18 +5333,18 @@ export default function DmrDashboard({ darkMode }) {
               </button>
             </div>
             {dmrSheetOpen && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#171714]/45 p-4 backdrop-blur-sm">
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px]">
                 <section
-                  className={`w-full max-w-2xl rounded-[28px] border p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)] ${darkMode ? "border-white/10 bg-[#151612] text-white" : "border-black/10 bg-white text-[#171714]"}`}
+                  className={`w-full max-w-2xl rounded-[24px] border p-6 shadow-[0_24px_70px_rgba(0,0,0,0.16)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#e6e6e3] bg-white text-[#141414]"}`}
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p
-                        className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${muted}`}
-                      >
-                        DMR Sheet Link
+                    <div className="flex min-w-0 items-start gap-3.5">
+                      <IconTile icon={FileSpreadsheet} tone={data?.dmrSettings?.linked ? "mint" : "amber"} darkMode={darkMode} />
+                      <div className="min-w-0">
+                      <p className={`text-[12px] ${muted}`}>
+                        DMR sheet link
                       </p>
-                      <h4 className="mt-2 text-xl font-semibold">
+                      <h4 className="text-[18px] tracking-[-0.01em]">
                         {data?.dmrSettings?.linked
                           ? "Google Sheet connected"
                           : "No DMR sheet linked"}
@@ -5457,10 +5356,13 @@ export default function DmrDashboard({ darkMode }) {
                             ? "Paste a native Google Sheet link here once. After that, all DMR reads and fills use that sheet."
                             : "Ask Super Admin to link the DMR Google Sheet before filling records."}
                       </p>
+                      </div>
                     </div>
                     <button
+                      type="button"
+                      aria-label="Close"
                       onClick={() => setDmrSheetOpen(false)}
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${darkMode ? "border-white/10 bg-white/5" : "border-black/10 bg-white"}`}
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -5473,13 +5375,13 @@ export default function DmrDashboard({ darkMode }) {
                           setDmrSheetLink(event.target.value)
                         }
                         placeholder="Paste DMR Google Sheet link or ID"
-                        className={`h-12 min-w-0 rounded-2xl border px-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-[#fafafa]"}`}
+                        className={`h-10 min-w-0 rounded-full px-4 text-sm outline-none transition ${darkMode ? "bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-1 focus:ring-white/15" : "bg-[#f4f4f2] text-[#141414] placeholder:text-[#9a9a98] focus:bg-white focus:ring-1 focus:ring-[#e6e6e3]"}`}
                       />
                       <button
                         type="button"
                         disabled={dmrSheetSaving || !dmrSheetLink.trim()}
                         onClick={linkDmrSheet}
-                        className={`h-12 rounded-2xl px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#171714] text-white"}`}
+                        className={`h-10 rounded-full px-5 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-[#cff07a] text-black hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black"}`}
                       >
                         {dmrSheetSaving
                           ? "Linking..."
@@ -5492,7 +5394,7 @@ export default function DmrDashboard({ darkMode }) {
                           type="button"
                           disabled={dmrSheetSaving}
                           onClick={() => setUnlinkConfirmOpen(true)}
-                          className={`h-12 rounded-2xl border px-5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "border-red-400/25 text-red-200 hover:bg-red-400/10" : "border-red-200 text-red-700 hover:bg-red-50"}`}
+                          className={`h-10 rounded-full px-5 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-50 ${darkMode ? "bg-red-400/10 text-red-200 hover:bg-red-400/15" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f7d5d9]"}`}
                         >
                           Unlink
                         </button>

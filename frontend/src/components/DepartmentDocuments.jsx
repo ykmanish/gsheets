@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Copy,
   Download,
+  FileText,
   ExternalLink,
   FolderLock,
   FolderPlus,
@@ -33,11 +34,12 @@ import {
   Trash2,
   Upload,
   UploadCloud,
+  X,
   Users,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL, getStoredAuth } from "./AuthProvider";
-import { ConfirmModal, SelectMenu, useClickOutside } from "./ui";
+import { Button, Chip, ConfirmModal, EmptyState as UiEmptyState, IconTile, PageHeader, SelectMenu, StatTile, Tabs, cx, toneOf, useClickOutside } from "./ui";
 import UserAvatar from "./UserAvatar";
 
 async function api(path, options = {}) {
@@ -117,16 +119,20 @@ function documentHref(doc) {
   return doc.url || "";
 }
 
-// Flat, calm surfaces that match Employee Daily Report: hairline borders, no shadows.
+// Reference surfaces: white cards with a hairline border, soft grey fills, no shadows.
 function tone(darkMode) {
   return {
-    muted: darkMode ? "text-white/45" : "text-black/45",
-    panel: darkMode ? "border-white/10 bg-white/[0.025]" : "border-[#dfe7e4] bg-white",
-    card: darkMode ? "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.055]" : "border-[#dfe7e4] bg-white hover:border-[#c6d8d0] hover:bg-[#fbfdfc]",
-    soft: darkMode ? "bg-white/[0.06]" : "bg-[#f1f7f4]",
-    line: darkMode ? "border-white/10" : "border-[#dfe7e4]",
+    muted: darkMode ? "text-white/45" : "text-[#8a8a8a]",
+    panel: darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white",
+    card: darkMode ? "border-white/10 bg-[#15171c] hover:bg-[#191b21]" : "border-[#ececec] bg-white hover:bg-[#fcfcfb]",
+    soft: darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]",
+    line: darkMode ? "border-white/10" : "border-[#f0f0ee]",
   };
 }
+
+// Department colours onto the kit's pastel tones.
+const DEPARTMENT_TONES = { emerald: "mint", sky: "sky", violet: "lavender", amber: "amber", rose: "rose", teal: "mint", indigo: "lavender", orange: "peach" };
+const departmentTone = (color) => DEPARTMENT_TONES[color] || "mint";
 
 const FOLDER_TONES = {
   emerald: ["#3fae7a", "#93dcb8"],
@@ -270,15 +276,15 @@ function useDrawerDismiss() {
 function DrawerButtons({ darkMode, onCancel, onSubmit, submitting, submitLabel }) {
   return (
     <>
-      <button type="button" onClick={onCancel} disabled={submitting} className={`h-11 flex-1 rounded-full border text-sm font-bold transition disabled:opacity-60 ${darkMode ? "border-white/15 hover:bg-white/5" : "border-black/15 hover:bg-black/[0.03]"}`}>Cancel</button>
-      <button type="button" onClick={onSubmit} disabled={submitting} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#89ed3f] px-3 text-sm font-bold text-black transition hover:bg-[#7dde35] disabled:cursor-not-allowed disabled:opacity-60">
-        {submitting && <Loader2 className="h-4 w-4 animate-spin" />} {submitLabel}
-      </button>
+      <Button darkMode={darkMode} variant="secondary" size="lg" onClick={onCancel} disabled={submitting} className="flex-1 px-3">Cancel</Button>
+      <Button darkMode={darkMode} variant={darkMode ? "accent" : "primary"} size="lg" onClick={onSubmit} disabled={submitting} loading={submitting} className="flex-1 px-3">
+        {submitLabel}
+      </Button>
     </>
   );
 }
 
-function Drawer({ darkMode, closing, onRequestClose, title, context, size = "md", tag, summary = [], footer, eyebrow, heading, subheading, children }) {
+function Drawer({ darkMode, closing, onRequestClose, title, context, size = "md", tag, summary = [], footer, eyebrow, heading, subheading, icon = FolderLock, iconTone = "mint", children }) {
   const [expanded, setExpanded] = useState(false);
   const closeRef = useRef(onRequestClose);
   useEffect(() => { closeRef.current = onRequestClose; });
@@ -292,52 +298,60 @@ function Drawer({ darkMode, closing, onRequestClose, title, context, size = "md"
       window.removeEventListener("keydown", onKeyDown);
     };
   }, []);
-  const subtle = darkMode ? "text-white/45" : "text-black/40";
+  const subtle = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const line = darkMode ? "border-white/10" : "border-[#f0f0ee]";
   return (
     <div
-      className={`fixed inset-0 z-[100] bg-black/40 backdrop-blur-[2px] ${closing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
+      className={`fixed inset-0 z-[100] bg-black/20 backdrop-blur-[2px] newq ${closing ? "animate-[mrn-backdrop-out_280ms_ease_forwards]" : "animate-[mrn-backdrop-in_280ms_ease-out]"}`}
       onMouseDown={(event) => { if (event.target === event.currentTarget) onRequestClose(); }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`employee-report-drawer employee-report-shell dept-drawer-${size} absolute flex flex-col overflow-hidden ${expanded ? "employee-report-shell-expanded" : ""} ${closing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}
+        style={{ boxShadow: "0 24px 70px rgba(0,0,0,0.16)" }}
+        className={`employee-report-drawer employee-report-shell dept-drawer-${size} absolute flex flex-col overflow-hidden border ${expanded ? "employee-report-shell-expanded" : ""} ${closing ? "animate-[mrn-drawer-out_280ms_cubic-bezier(0.4,0,1,1)_forwards]" : "animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)]"} ${darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}
       >
-        <div className={`flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4 text-xs ${darkMode ? "border-white/10" : "border-black/10"}`}>
-          <span className="min-w-0 truncate"><b>{title}</b>{context ? ` · ${context}` : ""}</span>
+        <header className={`flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4 ${line}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={icon} tone={iconTone} darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <p className="truncate text-[17px] tracking-[-0.01em]">{title}</p>
+              {context && <p className={`truncate text-[12.5px] ${subtle}`}>{context}</p>}
+            </div>
+          </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={() => setExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={expanded ? "Restore drawer size" : "Expand to full screen"}>
+            <button type="button" onClick={() => setExpanded((current) => !current)} className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-white/[0.06] text-white/75 hover:bg-white/10" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8]"}`} aria-label={expanded ? "Restore drawer size" : "Expand to full screen"}>
               {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
               <span className="hidden sm:inline">{expanded ? "Restore" : "Expand"}</span>
             </button>
-            <button type="button" onClick={onRequestClose} className="px-1 font-semibold text-[#4b9b16]">Close</button>
+            <button type="button" onClick={onRequestClose} aria-label="Close" className={`grid h-9 w-9 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}>
+              <X className="h-4 w-4" />
+            </button>
           </div>
-        </div>
+        </header>
 
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden md:grid-cols-[270px_minmax(0,1fr)] md:grid-rows-1">
-          <aside className={`order-2 flex min-h-0 flex-col overflow-hidden border-t md:order-none md:border-t-0 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-black/10 bg-white"}`}>
+          <aside className={`order-2 flex min-h-0 flex-col overflow-hidden border-t md:order-none md:border-r md:border-t-0 ${line}`}>
             <div className="hidden min-h-0 flex-1 overflow-y-auto p-6 md:block">
-              {tag && <span className="rounded bg-[#eafbdc] px-2 py-1 text-[10px] font-bold uppercase text-[#4b9b16]">{tag}</span>}
-              <div className="mt-8 space-y-3">
+              {tag && <Chip darkMode={darkMode} tone={iconTone}>{tag}</Chip>}
+              <div className="mt-6 space-y-2.5">
                 {summary.filter(Boolean).map((item) => (
-                  <div key={item.label} className={`rounded-xl p-4 ${darkMode ? "bg-white/[0.05]" : "bg-[#f5f7f2]"}`}>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${subtle}`}>{item.label}</p>
-                    <div className={`mt-1 break-words text-sm font-bold ${item.accent ? "text-[#4b9b16]" : ""}`}>{item.value}</div>
+                  <div key={item.label} className={`rounded-[16px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
+                    <p className={`text-[12px] ${subtle}`}>{item.label}</p>
+                    <div className={`mt-1 break-words text-[14px] ${item.accent ? (darkMode ? "text-[#a7e8bf]" : "text-[#2f7a4f]") : ""}`}>{item.value}</div>
                   </div>
                 ))}
               </div>
             </div>
-            {footer && <div className={`flex shrink-0 flex-col gap-2 border-t p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>{footer}</div>}
+            {footer && <div className={`flex shrink-0 flex-col gap-2 border-t p-5 ${line}`}>{footer}</div>}
           </aside>
 
-          <div className={`order-1 min-h-0 overflow-y-auto p-5 pb-10 sm:p-6 md:order-none ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
-            <div className={`rounded-3xl p-5 sm:p-6 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-              {eyebrow && <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#4b9b16]">{eyebrow}</p>}
-              {heading && <h4 className={`mt-1 break-words text-2xl font-bold ${darkMode ? "text-white" : "text-black"}`}>{heading}</h4>}
-              {subheading && <p className={`mt-1 text-sm ${subtle}`}>{subheading}</p>}
-              <div className={heading ? "mt-6" : ""}>{children}</div>
-            </div>
+          <div className="order-1 min-h-0 overflow-y-auto px-6 pb-10 pt-6 sm:px-8 md:order-none">
+            {eyebrow && <p className={`text-[12.5px] ${subtle}`}>{eyebrow}</p>}
+            {heading && <h4 className={`mt-1 break-words text-[24px] leading-[1.15] tracking-[-0.02em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{heading}</h4>}
+            {subheading && <p className={`mt-1 text-[13.5px] leading-6 ${darkMode ? "text-white/45" : "text-[#9a9a98]"}`}>{subheading}</p>}
+            <div className={heading ? "mt-7" : ""}>{children}</div>
           </div>
         </div>
       </div>
@@ -351,34 +365,35 @@ function Field({ darkMode, label, hint, group = false, children }) {
   const Wrapper = group ? "div" : "label";
   return (
     <Wrapper className="block" {...(group ? { role: "group", "aria-label": label } : {})}>
-      <span className={`mb-2 block text-xs font-semibold uppercase tracking-[0.14em] ${darkMode ? "text-white/55" : "text-black/50"}`}>{label}</span>
+      <span className={`mb-1.5 block text-[12.5px] ${darkMode ? "text-white/60" : "text-[#8a8a8a]"}`}>{label}</span>
       {children}
-      {hint && <span className={`mt-1.5 block text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>{hint}</span>}
+      {hint && <span className={`mt-1.5 block text-[12px] leading-5 ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{hint}</span>}
     </Wrapper>
   );
 }
 
 function inputClass(darkMode) {
-  return `h-12 w-full rounded-2xl border px-4 text-sm outline-none focus:ring-2 ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/30 focus:ring-[#d8f36a]/25" : "border-[#dfe7e4] bg-white text-black placeholder:text-black/35 focus:ring-[#10a66b]/15"}`;
+  return `h-11 w-full rounded-full border px-4 text-[13.5px] outline-none transition ${darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-[3px] focus:ring-white/10" : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"}`;
 }
 
 function textareaClass(darkMode) {
-  return `w-full rounded-2xl border px-4 py-3 text-sm outline-none focus:ring-2 ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/30 focus:ring-[#d8f36a]/25" : "border-[#dfe7e4] bg-white text-black placeholder:text-black/35 focus:ring-[#10a66b]/15"}`;
+  return `w-full rounded-[16px] border px-4 py-3 text-[13.5px] outline-none transition ${darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09] focus:ring-[3px] focus:ring-white/10" : "border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"}`;
 }
 
+// Pill buttons from the kit: black primary (lime in dark mode), white secondary.
 function PrimaryButton({ darkMode, children, className = "", ...props }) {
   return (
-    <button type="button" {...props} className={`inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-3xl px-5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 ${darkMode ? "bg-[#d8f36a] text-black hover:bg-[#e3f78f]" : "bg-[#10a66b] text-white hover:bg-[#0e955f]"} ${className}`}>
+    <Button darkMode={darkMode} variant={darkMode ? "accent" : "primary"} {...props} className={cx("h-10 whitespace-nowrap px-5", className)}>
       {children}
-    </button>
+    </Button>
   );
 }
 
 function GhostButton({ darkMode, children, className = "", ...props }) {
   return (
-    <button type="button" {...props} className={`inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-3xl border px-5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 ${darkMode ? "border-white/10 bg-white/10 text-white hover:bg-white/15" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"} ${className}`}>
+    <Button darkMode={darkMode} variant="secondary" {...props} className={cx("h-10 whitespace-nowrap px-4", className)}>
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -389,9 +404,9 @@ function IconButton({ darkMode, label, danger = false, children, className = "",
       title={label}
       aria-label={label}
       {...props}
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition disabled:opacity-40 ${danger
-        ? darkMode ? "text-red-300 hover:bg-red-500/15" : "text-red-500 hover:bg-red-50"
-        : darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-[#f1f7f4] hover:text-slate-900"} ${className}`}
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition disabled:opacity-40 ${danger
+        ? darkMode ? "text-red-300 hover:bg-red-500/15" : "text-[#c0394b] hover:bg-[#fbe4e6]"
+        : darkMode ? "text-white/60 hover:bg-white/10 hover:text-white" : "text-[#8a8a87] hover:bg-[#f4f4f2] hover:text-[#141414]"} ${className}`}
     >
       {children}
     </button>
@@ -402,15 +417,15 @@ function CheckList({ darkMode, items, selected, onToggle, emptyText, searchPlace
   const [query, setQuery] = useState("");
   const filtered = items.filter((item) => `${item.label} ${item.hint || ""}`.toLowerCase().includes(query.trim().toLowerCase()));
   return (
-    <div className={`overflow-hidden rounded-2xl border ${darkMode ? "border-white/10" : "border-[#dfe7e4]"}`}>
+    <div className={`overflow-hidden rounded-[18px] border ${darkMode ? "border-white/10" : "border-[#ececec]"}`}>
       {items.length > 6 && (
-        <div className={`flex items-center gap-2 border-b px-4 ${darkMode ? "border-white/10" : "border-[#e6eeeb]"}`}>
-          <Search className={`h-4 w-4 ${darkMode ? "text-white/35" : "text-black/35"}`} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} className={`h-11 w-full bg-transparent text-sm outline-none ${darkMode ? "placeholder:text-white/35" : "placeholder:text-black/35"}`} />
+        <div className={`flex items-center gap-2 border-b px-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+          <Search className={`h-4 w-4 ${darkMode ? "text-white/35" : "text-[#a3a3a0]"}`} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} className={`attendance-search-input h-11 w-full bg-transparent text-[13.5px] outline-none ${darkMode ? "placeholder:text-white/35" : "placeholder:text-[#a3a3a0]"}`} />
         </div>
       )}
-      <div className="max-h-64 overflow-y-auto">
-        {filtered.length === 0 && <p className={`px-4 py-4 text-sm ${darkMode ? "text-white/40" : "text-black/40"}`}>{emptyText}</p>}
+      <div className="max-h-64 overflow-y-auto p-1.5">
+        {filtered.length === 0 && <p className={`px-3 py-4 text-[13px] ${darkMode ? "text-white/40" : "text-[#8a8a8a]"}`}>{emptyText}</p>}
         {filtered.map((item) => {
           const active = selected.includes(item.id);
           return (
@@ -418,15 +433,15 @@ function CheckList({ darkMode, items, selected, onToggle, emptyText, searchPlace
               type="button"
               key={item.id}
               onClick={() => onToggle(item.id)}
-              className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition ${darkMode ? "hover:bg-white/5" : "hover:bg-[#f6faf8]"}`}
+              className={`flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[13.5px] transition ${active ? darkMode ? "bg-white/[0.06]" : "bg-[#f7f7f5]" : ""} ${darkMode ? "hover:bg-white/[0.05]" : "hover:bg-[#f6f6f4]"}`}
             >
-              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${active ? darkMode ? "border-[#d8f36a] bg-[#d8f36a] text-black" : "border-[#10a66b] bg-[#10a66b] text-white" : darkMode ? "border-white/20" : "border-black/20"}`}>
-                {active && <Check className="h-3.5 w-3.5" />}
+              <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[6px] border ${active ? darkMode ? "border-[#cff07a] bg-[#cff07a] text-black" : "border-[#141414] bg-[#141414] text-white" : darkMode ? "border-white/25" : "border-[#cfcfcb] bg-white"}`}>
+                {active && <Check className="h-3 w-3" strokeWidth={3} />}
               </span>
               {item.dot && <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.dot}`} />}
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{item.label}</span>
-                {item.hint && <span className={`block truncate text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>{item.hint}</span>}
+                <span className="block truncate">{item.label}</span>
+                {item.hint && <span className={`block truncate text-[12px] ${darkMode ? "text-white/40" : "text-[#8a8a8a]"}`}>{item.hint}</span>}
               </span>
             </button>
           );
@@ -490,6 +505,8 @@ function DepartmentModal({ darkMode, department, colors, users, serviceAccountEm
       closing={closing}
       onRequestClose={() => dismiss(onClose)}
       size="lg"
+      icon={department ? Settings2 : FolderPlus}
+      iconTone={departmentTone(form.color)}
       title={department ? "Edit department" : "New department"}
       context={department?.name || "Department Documents"}
       tag="Admin"
@@ -505,7 +522,7 @@ function DepartmentModal({ darkMode, department, colors, users, serviceAccountEm
             <DrawerButtons darkMode={darkMode} onCancel={() => dismiss(onClose)} onSubmit={save} submitting={saving} submitLabel={department ? "Save" : "Create"} />
           </div>
           {department && (
-            <button type="button" onClick={onDelete} className={`inline-flex h-10 items-center justify-center gap-2 rounded-full text-sm font-semibold ${darkMode ? "text-red-300 hover:bg-red-500/10" : "text-red-600 hover:bg-red-50"}`}>
+            <button type="button" onClick={onDelete} className={`inline-flex h-10 items-center justify-center gap-2 rounded-full text-[13px] transition ${darkMode ? "text-red-300 hover:bg-red-500/10" : "text-[#c0394b] hover:bg-[#fbe4e6]"}`}>
               <Trash2 className="h-4 w-4" /> Delete department
             </button>
           )}
@@ -550,14 +567,12 @@ function DepartmentModal({ darkMode, department, colors, users, serviceAccountEm
                 placeholder="https://drive.google.com/drive/folders/…"
                 className={inputClass(darkMode)}
               />
-              <GhostButton darkMode={darkMode} onClick={verify} disabled={verifying} className="shrink-0 px-4">
+              <GhostButton darkMode={darkMode} onClick={verify} disabled={verifying} className="h-11 shrink-0 px-4">
                 {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Verify
               </GhostButton>
             </div>
             {verified && (
-              <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-emerald-400/12 text-emerald-200" : "bg-emerald-50 text-emerald-700"}`}>
-                <HardDrive className="h-3.5 w-3.5" /> {verified.name}
-              </span>
+              <Chip darkMode={darkMode} tone="mint" icon={HardDrive} className="mt-2">{verified.name}</Chip>
             )}
           </Field>
         </div>
@@ -661,6 +676,8 @@ function DocumentModal({ darkMode, department, document, initialType = "file", f
       closing={closing}
       onRequestClose={() => { if (!saving) dismiss(onClose); }}
       size="md"
+      icon={editing ? Pencil : Plus}
+      iconTone="sky"
       title={editing ? "Edit document" : "Add document"}
       context={department?.name || document?.departmentName}
       tag={editing ? "Edit" : "New document"}
@@ -686,7 +703,7 @@ function DocumentModal({ darkMode, department, document, initialType = "file", f
       subheading={editing ? "Update the details, or replace the file with a new version." : "Upload a file, or link a Google Sheet, form or page."}
     >
       {!editing && (
-        <div className={`mb-5 grid grid-cols-2 gap-1 rounded-2xl p-1 sm:grid-cols-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#f1f7f4]"}`}>
+        <div className={`mb-6 grid grid-cols-2 gap-1 rounded-[22px] p-1 sm:grid-cols-4 sm:rounded-full ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
           {ADD_TABS.map((tab) => {
             const Icon = tab.icon;
             const active = type === tab.id;
@@ -695,7 +712,7 @@ function DocumentModal({ darkMode, department, document, initialType = "file", f
                 type="button"
                 key={tab.id}
                 onClick={() => setType(tab.id)}
-                className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? darkMode ? "bg-[#d8f36a] text-[#151612]" : "bg-white text-[#0f6b49] ring-1 ring-[#dfe7e4]" : darkMode ? "text-white/60 hover:text-white" : "text-black/55 hover:text-black"}`}
+                className={`flex h-9 items-center justify-center gap-2 rounded-full px-3 text-[13px] transition ${active ? darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#141414] shadow-[0_1px_4px_rgba(0,0,0,0.08)]" : darkMode ? "text-white/55 hover:text-white" : "text-[#8a8a8a] hover:text-[#141414]"}`}
               >
                 <Icon className="h-4 w-4" /> {tab.label}
               </button>
@@ -708,7 +725,7 @@ function DocumentModal({ darkMode, department, document, initialType = "file", f
         {type === "file" && (
           <div>
             {!department?.driveConfigured && !editing && (
-              <p className={`mb-3 rounded-2xl px-4 py-3 text-sm ${darkMode ? "bg-amber-400/10 text-amber-200" : "bg-amber-50 text-amber-800"}`}>
+              <p className={`mb-3 rounded-[14px] px-4 py-3 text-[13px] leading-5 ${darkMode ? "bg-amber-400/[0.08] text-amber-100" : "bg-[#fbf3dc] text-[#4a3a1c]"}`}>
                 An admin hasn&apos;t linked a shared drive folder to this department yet, so uploads will fail. Sheet, form and link documents still work.
               </p>
             )}
@@ -718,25 +735,25 @@ function DocumentModal({ darkMode, department, document, initialType = "file", f
               onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={(event) => { event.preventDefault(); setDragging(false); pickFile(event.dataTransfer.files?.[0]); }}
-              className={`flex w-full flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed px-6 py-8 text-center transition ${dragging ? darkMode ? "border-[#d8f36a] bg-[#d8f36a]/5" : "border-[#10a66b] bg-[#e8f6ee]" : darkMode ? "border-white/15 hover:border-white/30" : "border-[#cfddd7] hover:border-[#10a66b]/50"}`}
+              className={`flex w-full flex-col items-center justify-center gap-2 rounded-[20px] border border-dashed px-6 py-9 text-center transition ${dragging ? darkMode ? "border-[#cff07a] bg-[#cff07a]/[0.06]" : "border-[#141414] bg-[#eef8cc]" : darkMode ? "border-white/15 bg-white/[0.03] hover:border-white/30" : "border-[#dcdcd8] bg-[#f7f7f5] hover:border-[#b0b0ae]"}`}
             >
-              <UploadCloud className={`h-8 w-8 ${darkMode ? "text-white/50" : "text-black/40"}`} />
+              <IconTile icon={UploadCloud} tone="sky" darkMode={darkMode} size="md" />
               {file ? (
                 <>
-                  <span className="max-w-full truncate text-sm font-semibold">{file.name}</span>
-                  <span className={`text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{formatBytes(file.size)} · click to change</span>
+                  <span className="mt-1 max-w-full truncate text-[14px]">{file.name}</span>
+                  <span className={`text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{formatBytes(file.size)} · click to change</span>
                 </>
               ) : (
                 <>
-                  <span className="text-sm font-semibold">{editing ? "Replace with a new version (optional)" : "Drop a file here or click to browse"}</span>
-                  <span className={`text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>Stored in the department&apos;s shared drive folder{maxUploadBytes ? ` · up to ${formatBytes(maxUploadBytes)}` : ""}</span>
+                  <span className="mt-1 text-[14px]">{editing ? "Replace with a new version (optional)" : "Drop a file here or click to browse"}</span>
+                  <span className={`text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>Stored in the department&apos;s shared drive folder{maxUploadBytes ? ` · up to ${formatBytes(maxUploadBytes)}` : ""}</span>
                 </>
               )}
             </button>
             <input ref={fileInputRef} type="file" className="hidden" onChange={(event) => { pickFile(event.target.files?.[0]); event.target.value = ""; }} />
             {progress !== null && (
-              <div className={`mt-3 h-2 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/10"}`}>
-                <div className={`h-full rounded-full transition-all ${darkMode ? "bg-[#d8f36a]" : "bg-[#10a66b]"}`} style={{ width: `${progress}%` }} />
+              <div className={`mt-3 h-2 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-[#f0f0ee]"}`}>
+                <div className={`h-full rounded-full transition-all ${darkMode ? "bg-[#cff07a]" : "bg-[#141414]"}`} style={{ width: `${progress}%` }} />
               </div>
             )}
           </div>
@@ -750,13 +767,13 @@ function DocumentModal({ darkMode, department, document, initialType = "file", f
 
         {type === "form" && (
           <>
-            <div className={`grid grid-cols-2 gap-1 rounded-2xl p-1 ${darkMode ? "bg-white/[0.04]" : "bg-[#f1f7f4]"}`}>
+            <div className={`grid grid-cols-2 gap-1 rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
               {[{ id: "internal", label: "Workspace form" }, { id: "external", label: "External link" }].map((option) => (
                 <button
                   type="button"
                   key={option.id}
                   onClick={() => set("formSource", option.id)}
-                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${form.formSource === option.id ? darkMode ? "bg-white/10 text-white" : "bg-white text-[#0f6b49] ring-1 ring-[#dfe7e4]" : darkMode ? "text-white/55" : "text-black/50"}`}
+                  className={`h-8 rounded-full px-3 text-[13px] transition ${form.formSource === option.id ? darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#141414] shadow-[0_1px_4px_rgba(0,0,0,0.08)]" : darkMode ? "text-white/55 hover:text-white" : "text-[#8a8a8a] hover:text-[#141414]"}`}
                 >
                   {option.label}
                 </button>
@@ -830,6 +847,8 @@ function ShareModal({ darkMode, document, shareTargets, onClose, onSaved }) {
       closing={closing}
       onRequestClose={() => dismiss(onClose)}
       size="sm"
+      icon={Share2}
+      iconTone="lavender"
       title="Share document"
       context={document.departmentName}
       tag="Share"
@@ -873,22 +892,12 @@ function readStoredView() {
 }
 
 function Pill({ darkMode, variant = "green", icon: Icon, children, as = "span", className = "", ...props }) {
-  const light = {
-    green: "bg-[#e8f6ee] text-[#0f6b49]",
-    yellow: "bg-[#fff4a8] text-[#5b4b00]",
-    pink: "bg-[#f7bdd7] text-[#6f123b]",
-    blue: "bg-[#e3effc] text-[#1d4f86]",
-  }[variant];
-  const dark = {
-    green: "bg-emerald-400/12 text-emerald-200",
-    yellow: "bg-yellow-300/12 text-yellow-100",
-    pink: "bg-pink-400/14 text-pink-200",
-    blue: "bg-sky-400/12 text-sky-200",
-  }[variant];
+  // Pastel kit tones: green → mint, yellow → amber, pink → rose, blue → sky.
+  const t = toneOf({ green: "mint", yellow: "amber", pink: "rose", blue: "sky" }[variant] || "mint");
   const Element = as;
   return (
-    <Element className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition ${as === "button" ? "hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-[#10a66b]/25 active:scale-[0.98]" : ""} ${darkMode ? dark : light} ${className}`} {...props}>
-      {Icon && <Icon className="h-3.5 w-3.5" />} {children}
+    <Element style={{ backgroundColor: darkMode ? t[2] : t[0], color: darkMode ? t[3] : t[1] }} className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] transition ${as === "button" ? "hover:brightness-[0.97] focus:outline-none focus-visible:ring-[3px] focus-visible:ring-black/[0.06] active:scale-[0.98]" : ""} ${className}`} {...props}>
+      {Icon && <Icon className="h-3.5 w-3.5" strokeWidth={1.9} />} {children}
     </Element>
   );
 }
@@ -896,7 +905,7 @@ function Pill({ darkMode, variant = "green", icon: Icon, children, as = "span", 
 function ViewToggle({ darkMode, view, onChange }) {
   const t = tone(darkMode);
   return (
-    <div className={`inline-flex h-11 shrink-0 items-center rounded-2xl p-1 ${t.soft}`}>
+    <div className={`inline-flex h-10 shrink-0 items-center rounded-full p-1 ${t.soft}`}>
       {[{ id: "grid", icon: LayoutGrid, label: "Grid view" }, { id: "list", icon: List, label: "List view" }].map((option) => {
         const Icon = option.icon;
         const active = view === option.id;
@@ -907,7 +916,7 @@ function ViewToggle({ darkMode, view, onChange }) {
             onClick={() => onChange(option.id)}
             aria-label={option.label}
             aria-pressed={active}
-            className={`flex h-9 w-10 items-center justify-center rounded-xl transition ${active ? darkMode ? "bg-white/12 text-white" : "bg-white text-[#0f6b49]" : t.muted}`}
+            className={`flex h-8 w-9 items-center justify-center rounded-full transition ${active ? darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#141414] shadow-[0_1px_4px_rgba(0,0,0,0.08)]" : `${t.muted} ${darkMode ? "hover:text-white" : "hover:text-[#141414]"}`}`}
           >
             <Icon className="h-4 w-4" />
           </button>
@@ -928,7 +937,7 @@ function SortControl({ darkMode, options, sort, onChange }) {
             type="button"
             key={option.id}
             onClick={() => onChange(active ? { key: option.id, dir: sort.dir === "asc" ? "desc" : "asc" } : { key: option.id, dir: option.defaultDir || "asc" })}
-            className={`inline-flex h-11 items-center gap-1 rounded-2xl px-3 text-sm font-semibold transition ${active ? darkMode ? "text-white" : "text-[#171714]" : `${t.muted} hover:opacity-80`}`}
+            className={`inline-flex h-9 items-center gap-1 rounded-full px-3 text-[13px] transition ${active ? darkMode ? "bg-white/[0.07] text-white" : "bg-[#f4f4f2] text-[#141414]" : `${t.muted} ${darkMode ? "hover:text-white" : "hover:text-[#141414]"}`}`}
           >
             {option.label}
             {active && <ChevronDown className={`h-4 w-4 transition-transform ${sort.dir === "asc" ? "rotate-180" : ""}`} />}
@@ -948,22 +957,14 @@ function SearchBox({ darkMode, value, onChange, placeholder }) {
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.035] placeholder:text-white/35" : "border-[#dfe7e4] bg-white placeholder:text-black/35"}`}
+        className={`h-10 w-full rounded-full border pl-11 pr-4 text-[13.5px] outline-none transition ${darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:bg-white/[0.09]" : "border-transparent bg-[#f4f4f2] placeholder:text-[#a3a3a0] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"}`}
       />
     </div>
   );
 }
 
-function EmptyState({ darkMode, icon: Icon, title, body, children }) {
-  const t = tone(darkMode);
-  return (
-    <div className={`flex flex-col items-center justify-center gap-3 rounded-[24px] border border-dashed px-6 py-16 text-center ${t.line}`}>
-      <span className={`flex h-14 w-14 items-center justify-center rounded-2xl ${t.soft}`}><Icon className={`h-6 w-6 ${t.muted}`} /></span>
-      <p className="text-base font-semibold">{title}</p>
-      {body && <p className={`max-w-md text-sm ${t.muted}`}>{body}</p>}
-      {children}
-    </div>
-  );
+function EmptyState({ darkMode, icon, tone: iconTone = "neutral", title, body, children }) {
+  return <UiEmptyState darkMode={darkMode} icon={icon} tone={iconTone} title={title} text={body} action={children} />;
 }
 
 function memberSummary(department) {
@@ -985,6 +986,8 @@ function MembersDrawer({ darkMode, department, onClose }) {
       title="Members"
       context={department?.name || "Department"}
       size="sm"
+      icon={Users}
+      iconTone="amber"
       tag="Department"
       summary={[
         { label: "Folder", value: department?.name || "Department" },
@@ -997,11 +1000,11 @@ function MembersDrawer({ darkMode, department, onClose }) {
       {members.length ? (
         <div className="space-y-3">
           {members.map((member) => (
-            <div key={member.id || member.name} className={`flex items-center gap-3 rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-[#e4ece8] bg-[#fbfdfc]"}`}>
-              <UserAvatar user={member} name={member.name || member.displayName || member.username} rounded="lg" className="h-11 w-11" />
+            <div key={member.id || member.name} className={`flex items-center gap-3 rounded-[14px] p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
+              <UserAvatar user={member} name={member.name || member.displayName || member.username} rounded="lg" className="h-10 w-10" />
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold">{member.name || "Unknown user"}</p>
-                <p className={`mt-0.5 text-xs ${t.muted}`}>Department member</p>
+                <p className="truncate text-[14px]">{member.name || "Unknown user"}</p>
+                <p className={`mt-0.5 text-[12px] ${t.muted}`}>Department member</p>
               </div>
             </div>
           ))}
@@ -1028,13 +1031,15 @@ function FolderCard({ darkMode, department, isAdmin, onOpen, onManage }) {
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(); } }}
-      className={`group flex cursor-pointer flex-col rounded-[24px] border p-5 transition ${t.card}`}
+      className={`group flex cursor-pointer flex-col rounded-[20px] border p-5 transition ${t.card}`}
     >
       <div className="flex items-center gap-4">
-        <FolderGlyph color={department.color} className="h-12 w-14 shrink-0" />
+        <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-[18px] ${darkMode ? "bg-white/[0.05]" : "bg-[#f7f7f5]"}`}>
+          <FolderGlyph color={department.color} className="h-9 w-11" />
+        </span>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-[17px] font-semibold">{department.name}</h3>
-          <p className={`mt-0.5 text-xs ${t.muted}`}>
+          <h3 className="truncate text-[16px] tracking-[-0.01em]">{department.name}</h3>
+          <p className={`mt-0.5 text-[12.5px] ${t.muted}`}>
             {department.documentCount} file{department.documentCount === 1 ? "" : "s"}
             {department.sharedInCount > 0 ? ` · ${department.sharedInCount} shared in` : ""}
           </p>
@@ -1045,12 +1050,11 @@ function FolderCard({ darkMode, department, isAdmin, onOpen, onManage }) {
           </IconButton>
         )}
       </div>
-      <div className={`mt-4 flex items-center justify-between gap-3 border-t pt-3 text-xs ${t.line} ${t.muted}`}>
+      {department.description && <p className={`mt-3 line-clamp-2 text-[13px] leading-5 ${darkMode ? "text-white/55" : "text-[#7a7a78]"}`}>{department.description}</p>}
+      <div className={`mt-4 flex items-center justify-between gap-3 border-t pt-3 text-[12px] ${t.line} ${t.muted}`}>
         <span className="inline-flex min-w-0 items-center gap-1.5"><Users className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{memberSummary(department)}</span></span>
         {isAdmin && !department.driveConfigured && (
-          <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${darkMode ? "bg-amber-400/12 text-amber-200" : "bg-[#fff4a8] text-[#5b4b00]"}`}>
-            <HardDrive className="h-3 w-3" /> No drive
-          </span>
+          <Chip darkMode={darkMode} tone="amber" icon={HardDrive} className="h-6 shrink-0 px-2.5 text-[11.5px]">No drive</Chip>
         )}
       </div>
     </div>
@@ -1086,24 +1090,27 @@ function ServiceAccountInfo({ darkMode, email }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label="How to link a shared drive folder"
-        className={`flex h-9 w-9 items-center justify-center rounded-full transition ${open ? darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#dff3e8] text-[#0f6b49]" : darkMode ? "bg-white/[0.06] text-white/60 hover:text-white" : "bg-[#f3f5f4] text-black/45 hover:text-[#0f6b49]"}`}
+        className={`flex h-9 w-9 items-center justify-center rounded-full transition ${open ? darkMode ? "bg-white/[0.12] text-white" : "bg-[#141414] text-white" : darkMode ? "bg-white/[0.06] text-white/60 hover:text-white" : "bg-[#f4f4f2] text-[#5f5f5c] hover:bg-[#ebebe8] hover:text-[#141414]"}`}
       >
         <Info className="h-4 w-4" />
       </button>
       {open && (
-        <div role="dialog" aria-label="Shared drive setup" className={`absolute right-0 top-[calc(100%+10px)] z-40 w-[min(360px,calc(100vw-48px))] rounded-[22px] border p-4 animate-[mrn-backdrop-in_160ms_ease-out] sm:left-0 sm:right-auto ${darkMode ? "border-white/10 bg-[#1f2228] text-white" : "border-[#dfe7e4] bg-white text-[#171714]"}`}>
-          <div className="flex items-center gap-2">
-            <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${t.soft}`}><HardDrive className={`h-4 w-4 ${t.muted}`} /></span>
-            <p className="text-sm font-semibold">Linking a shared drive folder</p>
+        <div role="dialog" aria-label="Shared drive setup" style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop absolute right-0 top-[calc(100%+10px)] z-40 w-[min(360px,calc(100vw-48px))] rounded-[18px] border p-4 sm:left-0 sm:right-auto ${darkMode ? "border-white/10 bg-[#17181c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
+          <div className="flex items-center gap-2.5">
+            <IconTile icon={HardDrive} tone="sky" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <p className="text-[14px]">Linking a shared drive folder</p>
+              <p className={`text-[12px] ${t.muted}`}>Three steps, once per department</p>
+            </div>
           </div>
-          <ol className={`mt-3 list-decimal space-y-1.5 pl-5 text-[13px] leading-5 ${darkMode ? "text-white/65" : "text-black/60"}`}>
-            <li>Create a folder for the department inside a Google <span className="font-semibold">Shared Drive</span>.</li>
-            <li>Share it as <span className="font-semibold">Content manager</span> with the address below.</li>
+          <ol className={`mt-3 list-decimal space-y-1.5 pl-5 text-[13px] leading-5 ${darkMode ? "text-white/65" : "text-[#5f5f5c]"}`}>
+            <li>Create a folder for the department inside a Google <span className={darkMode ? "text-white" : "text-[#141414]"}>Shared Drive</span>.</li>
+            <li>Share it as <span className={darkMode ? "text-white" : "text-[#141414]"}>Content manager</span> with the address below.</li>
             <li>Paste the folder link into the department and press Verify.</li>
           </ol>
-          <div className={`mt-3 flex items-center gap-2 rounded-2xl p-2 pl-3 ${t.soft}`}>
-            <span className={`min-w-0 flex-1 break-all font-mono text-[11px] leading-4 ${darkMode ? "text-white/85" : "text-black/75"}`}>{email}</span>
-            <button type="button" onClick={copy} className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-white text-[#0f6b49] hover:bg-[#e8f6ee]"}`}>
+          <div className={`mt-3 flex items-center gap-2 rounded-[14px] p-2 pl-3 ${t.soft}`}>
+            <span className={`min-w-0 flex-1 break-all font-mono text-[11px] leading-4 ${darkMode ? "text-white/85" : "text-[#3d3d3b]"}`}>{email}</span>
+            <button type="button" onClick={copy} className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] transition ${darkMode ? "bg-white/10 hover:bg-white/15" : "bg-white text-[#141414] hover:bg-[#fafaf9]"}`}>
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy"}
             </button>
           </div>
@@ -1142,7 +1149,7 @@ function DocumentActions({ darkMode, doc, busy, onOpen, onDownload, onEdit, onSh
         <div ref={menuRef} className="relative">
           <IconButton darkMode={darkMode} label="More actions" aria-expanded={open} onClick={() => setOpen((value) => !value)}><MoreHorizontal className="h-4 w-4" /></IconButton>
           {open && (
-            <div className={`absolute right-0 top-[calc(100%+6px)] z-30 w-44 overflow-hidden rounded-2xl border p-1.5 ${darkMode ? "border-white/10 bg-[#1f2228]" : "border-[#dfe7e4] bg-white"}`}>
+            <div role="menu" style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop absolute right-0 top-[calc(100%+6px)] z-30 w-44 overflow-hidden rounded-[18px] border p-1.5 ${darkMode ? "border-white/10 bg-[#17181c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
               {[
                 { label: "Open", icon: ExternalLink, fn: onOpen },
                 ...(doc.hasFile ? [{ label: "Download", icon: Download, fn: onDownload }] : []),
@@ -1154,7 +1161,8 @@ function DocumentActions({ darkMode, doc, busy, onOpen, onDownload, onEdit, onSh
                     type="button"
                     key={item.label}
                     onClick={stop(item.fn)}
-                    className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition ${item.danger ? darkMode ? "text-red-300 hover:bg-red-500/10" : "text-red-600 hover:bg-red-50" : darkMode ? "hover:bg-white/5" : "hover:bg-[#f1f7f4]"}`}
+                    role="menuitem"
+                    className={`flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-[7px] text-left text-[13px] transition ${item.danger ? darkMode ? "text-red-300 hover:bg-red-500/10" : "text-[#c0394b] hover:bg-[#fbe4e6]" : darkMode ? "text-white/80 hover:bg-white/[0.06]" : "text-[#3d3d3b] hover:bg-[#f4f4f2]"}`}
                   >
                     <Icon className="h-4 w-4" /> {item.label}
                   </button>
@@ -1170,11 +1178,11 @@ function DocumentActions({ darkMode, doc, busy, onOpen, onDownload, onEdit, onSh
 
 function SharedBadges({ darkMode, doc, shared }) {
   if (shared) {
-    return <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${darkMode ? "text-sky-300" : "text-[#1d4f86]"}`}><Share2 className="h-3 w-3" /> From {doc.departmentName}</span>;
+    return <span className={`inline-flex items-center gap-1 text-[11.5px] ${darkMode ? "text-[#a9cbf7]" : "text-[#2f6fc0]"}`}><Share2 className="h-3 w-3" /> From {doc.departmentName}</span>;
   }
   if (!doc.sharedWith.length) return null;
   return (
-    <span className={`inline-flex min-w-0 items-center gap-1 text-[11px] font-semibold ${darkMode ? "text-sky-300" : "text-[#1d4f86]"}`}>
+    <span className={`inline-flex min-w-0 items-center gap-1 text-[11.5px] ${darkMode ? "text-[#a9cbf7]" : "text-[#2f6fc0]"}`}>
       <Share2 className="h-3 w-3 shrink-0" /> <span className="truncate">Shared with {doc.sharedWith.map((target) => target.name).join(" • ")}</span>
     </span>
   );
@@ -1182,7 +1190,7 @@ function SharedBadges({ darkMode, doc, shared }) {
 
 function CategoryChip({ darkMode, category }) {
   if (!category) return null;
-  return <span className={`inline-flex max-w-full truncate rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${darkMode ? "bg-white/10 text-white/70" : "bg-[#f1f7f4] text-[#0f6b49]"}`}>{category}</span>;
+  return <span className={`inline-flex h-6 max-w-full items-center truncate rounded-full px-2.5 text-[11.5px] ${darkMode ? "bg-white/[0.07] text-white/75" : "bg-[#f4f4f2] text-[#3d3d3b]"}`}>{category}</span>;
 }
 
 function DocumentCard({ darkMode, doc, shared, busy, handlers }) {
@@ -1193,19 +1201,21 @@ function DocumentCard({ darkMode, doc, shared, busy, handlers }) {
       tabIndex={0}
       onClick={() => handlers.onOpen(doc)}
       onKeyDown={(event) => { if (event.key === "Enter") handlers.onOpen(doc); }}
-      className={`group flex cursor-pointer flex-col rounded-[24px] border p-4 transition ${t.card}`}
+      className={`group flex cursor-pointer flex-col rounded-[20px] border p-4 transition ${t.card}`}
     >
-      <div className="flex items-start gap-4">
-        <FileGlyph doc={doc} className="h-14 w-12 shrink-0" />
-        <div className="min-w-0 flex-1 pt-0.5">
-          <p className="line-clamp-2 break-words text-[15px] font-semibold leading-snug" title={doc.name}>{doc.name}</p>
-          <p className={`mt-1 truncate text-xs ${t.muted}`}>{documentMeta(doc)}</p>
+      <div className="flex items-start gap-3.5">
+        <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-[16px] ${darkMode ? "bg-white/[0.05]" : "bg-[#f7f7f5]"}`}>
+          <FileGlyph doc={doc} className="h-10 w-9" />
+        </span>
+        <div className="min-w-0 flex-1 pt-1">
+          <p className="line-clamp-2 break-words text-[14.5px] leading-snug tracking-[-0.01em]" title={doc.name}>{doc.name}</p>
+          <p className={`mt-1 truncate text-[12px] ${t.muted}`}>{documentMeta(doc)}</p>
         </div>
         <DocumentActions darkMode={darkMode} doc={doc} busy={busy} {...handlers} />
       </div>
       {(doc.category || doc.description || shared || doc.sharedWith.length > 0) && (
         <div className="mt-3 flex min-w-0 flex-col gap-1.5">
-          {doc.description && <p className={`line-clamp-2 text-xs leading-5 ${t.muted}`}>{doc.description}</p>}
+          {doc.description && <p className={`line-clamp-2 text-[12.5px] leading-5 ${darkMode ? "text-white/55" : "text-[#7a7a78]"}`}>{doc.description}</p>}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <CategoryChip darkMode={darkMode} category={doc.category} />
             <SharedBadges darkMode={darkMode} doc={doc} shared={shared} />
@@ -1224,19 +1234,19 @@ function DocumentRow({ darkMode, doc, shared, busy, handlers }) {
       tabIndex={0}
       onClick={() => handlers.onOpen(doc)}
       onKeyDown={(event) => { if (event.key === "Enter") handlers.onOpen(doc); }}
-      className={`grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 transition sm:px-5 md:grid-cols-[36px_minmax(0,2.4fr)_minmax(0,1fr)_90px_120px_104px] ${darkMode ? "hover:bg-white/[0.04]" : "hover:bg-[#f6faf8]"}`}
+      className={`grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 rounded-[14px] px-3 py-2.5 transition md:grid-cols-[36px_minmax(0,2.4fr)_minmax(0,1fr)_90px_120px_104px] ${darkMode ? "hover:bg-white/[0.04]" : "hover:bg-[#f7f7f5]"}`}
     >
-      <FileGlyph doc={doc} className="h-10 w-9" />
+      <FileGlyph doc={doc} className="h-9 w-8" />
       <div className="min-w-0">
-        <p className="truncate font-semibold" title={doc.name}>{doc.name}</p>
+        <p className="truncate text-[14px]" title={doc.name}>{doc.name}</p>
         <div className="mt-0.5 flex min-w-0 items-center gap-2">
-          <span className={`truncate text-xs md:hidden ${t.muted}`}>{documentMeta(doc)}</span>
+          <span className={`truncate text-[12px] md:hidden ${t.muted}`}>{documentMeta(doc)}</span>
           <span className="hidden min-w-0 md:inline-flex"><SharedBadges darkMode={darkMode} doc={doc} shared={shared} /></span>
         </div>
       </div>
       <div className="hidden min-w-0 md:block"><CategoryChip darkMode={darkMode} category={doc.category} /></div>
-      <p className={`hidden text-sm md:block ${t.muted}`}>{doc.type === "file" ? formatBytes(doc.size) || "—" : "—"}</p>
-      <p className={`hidden text-sm md:block ${t.muted}`}>{formatDate(doc.updatedAt)}</p>
+      <p className={`hidden text-[13px] tabular-nums md:block ${t.muted}`}>{doc.type === "file" ? formatBytes(doc.size) || "—" : "—"}</p>
+      <p className={`hidden text-[13px] tabular-nums md:block ${t.muted}`}>{formatDate(doc.updatedAt)}</p>
       <DocumentActions darkMode={darkMode} doc={doc} busy={busy} {...handlers} />
     </div>
   );
@@ -1245,7 +1255,7 @@ function DocumentRow({ darkMode, doc, shared, busy, handlers }) {
 function ListHeader({ darkMode, columns, className }) {
   const t = tone(darkMode);
   return (
-    <div className={`hidden gap-4 border-b px-5 py-3 text-xs font-semibold md:grid ${t.line} ${t.muted} ${className}`}>
+    <div className={`hidden gap-4 border-b px-3 pb-2.5 text-[12px] md:grid ${t.line} ${t.muted} ${className}`}>
       {columns.map((column, index) => <span key={index}>{column}</span>)}
     </div>
   );
@@ -1470,8 +1480,7 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
   }
 
   const t = tone(darkMode);
-  const shell = `flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f13] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`;
-  const hero = `relative mb-5 rounded-[30px] border p-6 sm:p-8 ${darkMode ? "border-white/10 bg-[#202328]" : "border-[#dfe7e4] bg-white/95"}`;
+  const shell = `newq flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`;
 
   if (loading) {
     return (
@@ -1483,9 +1492,10 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
 
   if (!overview) {
     return (
-      <main className={`${shell} flex flex-col items-center justify-center gap-4 text-center`}>
-        <p className={t.muted}>Department documents couldn&apos;t be loaded.</p>
-        <GhostButton darkMode={darkMode} onClick={() => { setLoading(true); void loadOverview(); }}><RefreshCw className="h-4 w-4" /> Try again</GhostButton>
+      <main className={`${shell} flex flex-col items-center justify-center`}>
+        <EmptyState darkMode={darkMode} icon={FolderLock} tone="rose" title="Department documents couldn't be loaded" body="Check your connection and try again.">
+          <GhostButton darkMode={darkMode} onClick={() => { setLoading(true); void loadOverview(); }}><RefreshCw className="h-4 w-4" /> Try again</GhostButton>
+        </EmptyState>
       </main>
     );
   }
@@ -1564,88 +1574,88 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
     const memberDepartment = departments.find((department) => department.id === selectedId) || currentDepartment;
     const ownedCount = folder?.documents?.length ?? 0;
     const sharedCount = folder?.sharedDocuments?.length ?? 0;
+    const folderTone = departmentTone(currentDepartment?.color);
+    const memberCount = currentDepartment?.memberCount ?? 0;
     return (
       <main className={shell}>
-        <section className={hero}>
-          <nav aria-label="Breadcrumb" className={`mb-6 flex min-w-0 items-center gap-1.5 text-sm ${t.muted}`}>
-            {showBack ? (
-              <Link href={ROOT_PATH} className={`inline-flex shrink-0 items-center gap-1.5 font-semibold transition ${darkMode ? "hover:text-white" : "hover:text-[#0f6b49]"}`}>
-                <FolderLock className="h-4 w-4" /> Department Documents
-              </Link>
-            ) : (
-              <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold"><FolderLock className="h-4 w-4" /> Department Documents</span>
-            )}
-            <ChevronRight className="h-4 w-4 shrink-0 opacity-60" aria-hidden="true" />
-            <span aria-current="page" className={`min-w-0 truncate font-semibold ${darkMode ? "text-white" : "text-[#171714]"}`}>{currentDepartment?.name || "Department"}</span>
-          </nav>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Pill darkMode={darkMode} icon={FolderLock}>Department folder</Pill>
-                <Pill
-                  darkMode={darkMode}
-                  as="button"
-                  type="button"
-                  variant="yellow"
-                  icon={Users}
-                  onClick={() => memberDepartment && setMemberDrawer(memberDepartment)}
-                  aria-label={`Show ${currentDepartment?.name || "department"} members`}
-                  className="cursor-pointer"
-                >
-                  {currentDepartment?.memberCount ?? 0} member{currentDepartment?.memberCount === 1 ? "" : "s"}
-                </Pill>
-                {currentDepartment?.driveConfigured
-                  ? <Pill darkMode={darkMode} variant="blue" icon={HardDrive}>{currentDepartment.driveFolderName || "Shared drive linked"}</Pill>
-                  : <Pill darkMode={darkMode} variant="pink" icon={HardDrive}>No shared drive yet</Pill>}
-              </div>
-              <div className="mt-5 flex min-w-0 items-center gap-4">
-                <FolderGlyph color={currentDepartment?.color} className="h-11 w-[54px] shrink-0" />
-                <h1 className={`small min-w-0 truncate pb-0.5 text-4xl font-black leading-tight tracking-tight ${darkMode ? "text-white" : "text-[#161616]"}`}>{currentDepartment?.name || "Department"}</h1>
-              </div>
-              <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>
-                {currentDepartment?.description || "Files, sheets, forms and links your department keeps together."}
-              </p>
-              {overview.isAdmin && currentDepartment?.driveFolderUrl && (
-                <a href={currentDepartment.driveFolderUrl} target="_blank" rel="noopener noreferrer" className={`mt-3 inline-flex items-center gap-1 text-xs font-semibold underline-offset-2 hover:underline ${t.muted}`}>
-                  Open folder in Google Drive <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-3 lg:justify-end">
+        <nav aria-label="Breadcrumb" className={`mb-5 flex min-w-0 items-center gap-1.5 text-[13px] ${t.muted}`}>
+          {showBack ? (
+            <Link href={ROOT_PATH} className={`inline-flex shrink-0 items-center gap-1.5 transition ${darkMode ? "hover:text-white" : "hover:text-[#141414]"}`}>
+              <FolderLock className="h-4 w-4" /> Department documents
+            </Link>
+          ) : (
+            <span className="inline-flex shrink-0 items-center gap-1.5"><FolderLock className="h-4 w-4" /> Department documents</span>
+          )}
+          <ChevronRight className="h-4 w-4 shrink-0 opacity-60" aria-hidden="true" />
+          <span aria-current="page" className={`min-w-0 truncate ${darkMode ? "text-white" : "text-[#141414]"}`}>{currentDepartment?.name || "Department"}</span>
+        </nav>
+
+        <PageHeader
+          darkMode={darkMode}
+          badge="Department folder"
+          badgeIcon={FolderLock}
+          badgeTone={folderTone}
+          title={currentDepartment?.name || "Department"}
+          subtitle="files, sheets, forms and links"
+          description={currentDepartment?.description || "Files, sheets, forms and links your department keeps together."}
+          actions={(
+            <>
               {overview.isAdmin && adminDepartment && (
                 <GhostButton darkMode={darkMode} onClick={() => setDepartmentModal({ department: adminDepartment })}>
                   <Settings2 className="h-4 w-4" /> Manage
                 </GhostButton>
               )}
+              <GhostButton darkMode={darkMode} onClick={() => setDocumentModal({ type: "file" })}>
+                <Upload className="h-4 w-4" /> Upload files
+              </GhostButton>
               <PrimaryButton darkMode={darkMode} onClick={() => setDocumentModal({ type: "sheet" })}>
                 <Plus className="h-4 w-4" /> Add sheet, form or link
               </PrimaryButton>
-            </div>
-          </div>
-        </section>
+            </>
+          )}
+        />
 
-        <section className={`overflow-visible rounded-[28px] border ${t.panel}`}>
-          <div className={`flex flex-col gap-3 border-b p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between ${t.line}`}>
-            <div className="flex flex-wrap items-center gap-3">
-              <GhostButton darkMode={darkMode} onClick={() => setDocumentModal({ type: "file" })} className="h-11">
-                <Upload className="h-4 w-4" /> Upload files
-              </GhostButton>
-              <div className={`inline-flex h-11 items-center rounded-2xl p-1 ${t.soft}`}>
-                {[
-                  { id: "owned", label: "Our files", count: ownedCount },
-                  { id: "shared", label: "Shared with us", count: sharedCount },
-                ].map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => setTab(item.id)}
-                    className={`flex h-9 items-center gap-1.5 rounded-xl px-3.5 text-sm font-semibold transition ${tab === item.id ? darkMode ? "bg-white/12 text-white" : "bg-white text-[#0f6b49]" : t.muted}`}
-                  >
-                    {item.label} <span className="opacity-60">{item.count}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Pill
+            darkMode={darkMode}
+            as="button"
+            type="button"
+            variant="yellow"
+            icon={Users}
+            onClick={() => memberDepartment && setMemberDrawer(memberDepartment)}
+            aria-label={`Show ${currentDepartment?.name || "department"} members`}
+            className="cursor-pointer"
+          >
+            {memberCount} member{memberCount === 1 ? "" : "s"}
+          </Pill>
+          {currentDepartment?.driveConfigured
+            ? <Pill darkMode={darkMode} variant="blue" icon={HardDrive}>{currentDepartment.driveFolderName || "Shared drive linked"}</Pill>
+            : <Pill darkMode={darkMode} variant="pink" icon={HardDrive}>No shared drive yet</Pill>}
+          {overview.isAdmin && currentDepartment?.driveFolderUrl && (
+            <a href={currentDepartment.driveFolderUrl} target="_blank" rel="noopener noreferrer" className={`inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] transition ${darkMode ? "text-white/55 hover:bg-white/[0.06] hover:text-white" : "text-[#8a8a8a] hover:bg-[#f4f4f2] hover:text-[#141414]"}`}>
+              Open folder in Google Drive <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
+
+        <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile darkMode={darkMode} icon={FolderLock} tone="mint" value={ownedCount} label="Our files" />
+          <StatTile darkMode={darkMode} icon={Share2} tone="sky" value={sharedCount} label="Shared with us" />
+          <StatTile darkMode={darkMode} icon={Users} tone="amber" value={memberCount} label="Members" onClick={memberDepartment ? () => setMemberDrawer(memberDepartment) : undefined} />
+          <StatTile darkMode={darkMode} icon={HardDrive} tone={currentDepartment?.driveConfigured ? "lavender" : "rose"} value={currentDepartment?.driveConfigured ? "Linked" : "None"} label="Shared drive" />
+        </div>
+
+        <section className={`mt-6 rounded-[20px] border ${t.panel}`}>
+          <div className={`flex flex-col gap-3 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between ${t.line}`}>
+            <Tabs
+              darkMode={darkMode}
+              value={tab}
+              onChange={setTab}
+              items={[
+                { id: "owned", label: "Our files", count: ownedCount },
+                { id: "shared", label: "Shared with us", count: sharedCount },
+              ]}
+            />
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <SearchBox darkMode={darkMode} value={search} onChange={setSearch} placeholder="Search files, categories…" />
               {categories.length > 0 && (
@@ -1662,14 +1672,14 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 px-4 pt-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-3 px-5 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-1.5">
               {TYPE_FILTERS.map((filter) => (
                 <button
                   type="button"
                   key={filter.id}
                   onClick={() => setTypeFilter(filter.id)}
-                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${typeFilter === filter.id ? darkMode ? "bg-[#d8f36a]/15 text-[#d8f36a]" : "bg-[#dff3e8] text-[#0f6b49]" : darkMode ? "bg-white/[0.05] text-white/55 hover:text-white" : "bg-[#f3f5f4] text-black/50 hover:text-black"}`}
+                  className={`h-8 rounded-full px-3.5 text-[12.5px] transition ${typeFilter === filter.id ? darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white" : darkMode ? "bg-white/[0.06] text-white/60 hover:text-white" : "bg-[#f4f4f2] text-[#5f5f5c] hover:bg-[#ebebe8] hover:text-[#141414]"}`}
                 >
                   {filter.label}
                 </button>
@@ -1681,35 +1691,36 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
             </div>
           </div>
 
-          <div className="p-4 sm:p-5">
+          <div className="p-5">
             {folderLoading && !folder ? (
               <div className="flex justify-center py-20"><Loader2 className={`h-6 w-6 animate-spin ${t.muted}`} /></div>
             ) : visibleDocs.length === 0 ? (
               <EmptyState
                 darkMode={darkMode}
                 icon={tab === "owned" ? UploadCloud : Share2}
+                tone={tab === "owned" ? "sky" : "lavender"}
                 title={currentList.length ? "No documents match these filters" : tab === "owned" ? "This folder is empty" : "Nothing has been shared with this department"}
                 body={!currentList.length && tab === "owned" ? "Upload files to the department's shared drive, or link Google Sheets, forms and other pages." : undefined}
               >
                 {!currentList.length && tab === "owned" && (
-                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                  <div className="flex flex-wrap justify-center gap-2">
                     {ADD_TABS.map((item) => {
                       const Icon = item.icon;
-                      return <GhostButton key={item.id} darkMode={darkMode} onClick={() => setDocumentModal({ type: item.id })} className="h-10 px-4"><Icon className="h-4 w-4" /> {item.label}</GhostButton>;
+                      return <GhostButton key={item.id} darkMode={darkMode} onClick={() => setDocumentModal({ type: item.id })} className="h-9 px-4"><Icon className="h-4 w-4" /> {item.label}</GhostButton>;
                     })}
                   </div>
                 )}
               </EmptyState>
             ) : view === "grid" ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {visibleDocs.map((doc) => (
                   <DocumentCard key={doc.id} darkMode={darkMode} doc={doc} shared={tab === "shared"} busy={busyDocId === doc.id} handlers={docHandlers} />
                 ))}
               </div>
             ) : (
-              <div className={`overflow-visible rounded-[22px] border ${t.line}`}>
+              <div className="overflow-visible">
                 <ListHeader darkMode={darkMode} className="grid-cols-[36px_minmax(0,2.4fr)_minmax(0,1fr)_90px_120px_104px]" columns={["", "Name", "Category", "Size", "Updated", ""]} />
-                <div className={`divide-y ${darkMode ? "divide-white/10" : "divide-[#e6eeeb]"}`}>
+                <div className={`divide-y ${darkMode ? "divide-white/[0.06]" : "divide-[#f0f0ee]"}`}>
                   {visibleDocs.map((doc) => (
                     <DocumentRow key={doc.id} darkMode={darkMode} doc={doc} shared={tab === "shared"} busy={busyDocId === doc.id} handlers={docHandlers} />
                   ))}
@@ -1726,39 +1737,42 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
   // ---------- Departments overview ----------
   const linkedCount = departments.filter((department) => department.driveConfigured).length;
   const totalFiles = departments.reduce((sum, department) => sum + (department.documentCount || 0), 0);
+  const totalMembers = departments.reduce((sum, department) => sum + (department.memberCount || 0), 0);
   return (
     <main className={shell}>
-      <section className={hero}>
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Pill darkMode={darkMode} icon={FolderLock}>Department Documents</Pill>
-              <Pill darkMode={darkMode} variant="yellow">{overview.isAdmin ? "Admin view" : `${departments.length} department${departments.length === 1 ? "" : "s"}`}</Pill>
-              {overview.isAdmin && <Pill darkMode={darkMode} variant={linkedCount === departments.length ? "blue" : "pink"} icon={HardDrive}>{linkedCount}/{departments.length} drives linked</Pill>}
-            </div>
-            <div className="mt-5 flex items-center gap-3">
-              <h1 className={`small max-w-4xl text-4xl font-black leading-[1.02] tracking-tight ${darkMode ? "text-white" : "text-[#161616]"}`}>Every department, its own folder.</h1>
-              {overview.isAdmin && overview.serviceAccountEmail && <ServiceAccountInfo darkMode={darkMode} email={overview.serviceAccountEmail} />}
-            </div>
-            <p className={`mt-4 max-w-3xl text-sm font-medium leading-6 sm:text-base ${darkMode ? "text-white/65" : "text-black/58"}`}>
-              Keep files, Google Sheets, forms and links in one calm place. Members only see their department&apos;s folder and what others share with them.
-            </p>
-          </div>
-          {overview.isAdmin && (
-            <div className="flex flex-wrap gap-3 lg:justify-end">
-              <PrimaryButton darkMode={darkMode} onClick={() => setDepartmentModal({ department: null })}>
-                <FolderPlus className="h-4 w-4" /> New department
-              </PrimaryButton>
-            </div>
-          )}
-        </div>
-      </section>
+      <PageHeader
+        darkMode={darkMode}
+        badge={overview.isAdmin ? "Department documents · Admin view" : "Department documents"}
+        badgeIcon={FolderLock}
+        badgeTone="mint"
+        title="Every department,"
+        subtitle="its own folder."
+        description="Keep files, Google Sheets, forms and links in one calm place. Members only see their department's folder and what others share with them."
+        actions={overview.isAdmin ? (
+          <>
+            {overview.serviceAccountEmail && <ServiceAccountInfo darkMode={darkMode} email={overview.serviceAccountEmail} />}
+            <PrimaryButton darkMode={darkMode} onClick={() => setDepartmentModal({ department: null })}>
+              <FolderPlus className="h-4 w-4" /> New department
+            </PrimaryButton>
+          </>
+        ) : null}
+      />
 
-      <section className={`rounded-[28px] border ${t.panel}`}>
-        <div className={`flex flex-col gap-3 border-b p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between ${t.line}`}>
-          <div>
-            <h2 className="small text-2xl font-semibold">Folders</h2>
-            <p className={`mt-1 text-sm ${t.muted}`}>{departments.length} department{departments.length === 1 ? "" : "s"} · {totalFiles} file{totalFiles === 1 ? "" : "s"}</p>
+      <div className={`mt-7 grid grid-cols-2 gap-3 ${overview.isAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+        <StatTile darkMode={darkMode} icon={FolderLock} tone="mint" value={departments.length} label={`Department${departments.length === 1 ? "" : "s"}`} />
+        <StatTile darkMode={darkMode} icon={FileText} tone="sky" value={totalFiles} label={`File${totalFiles === 1 ? "" : "s"} kept`} />
+        <StatTile darkMode={darkMode} icon={Users} tone="amber" value={totalMembers} label="Member seats" />
+        {overview.isAdmin && <StatTile darkMode={darkMode} icon={HardDrive} tone={linkedCount === departments.length ? "lavender" : "peach"} value={`${linkedCount}/${departments.length}`} label="Drives linked" />}
+      </div>
+
+      <section className={`mt-6 rounded-[20px] border ${t.panel}`}>
+        <div className={`flex flex-col gap-3 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between ${t.line}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={FolderLock} tone="mint" darkMode={darkMode} size="sm" />
+            <div className="min-w-0">
+              <h2 className="text-[16px] tracking-[-0.01em]">Folders</h2>
+              <p className={`text-[12.5px] ${t.muted}`}>{departments.length} department{departments.length === 1 ? "" : "s"} · {totalFiles} file{totalFiles === 1 ? "" : "s"}</p>
+            </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <SearchBox darkMode={darkMode} value={folderSearch} onChange={setFolderSearch} placeholder="Search departments…" />
@@ -1766,16 +1780,17 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
           </div>
         </div>
 
-        <div className="p-4 sm:p-5">
+        <div className="p-5">
           {departments.length === 0 ? (
             <EmptyState
               darkMode={darkMode}
               icon={FolderLock}
+              tone="mint"
               title={overview.isAdmin ? "No departments yet" : "You haven't been added to a department"}
               body={overview.isAdmin ? "Create a department, add its members and link its shared drive folder." : "Ask an admin to add you to your department's documents folder."}
             >
               {overview.isAdmin && (
-                <PrimaryButton darkMode={darkMode} onClick={() => setDepartmentModal({ department: null })} className="mt-2">
+                <PrimaryButton darkMode={darkMode} onClick={() => setDepartmentModal({ department: null })}>
                   <FolderPlus className="h-4 w-4" /> Create department
                 </PrimaryButton>
               )}
@@ -1783,7 +1798,7 @@ export default function DepartmentDocuments({ darkMode, departmentId = null }) {
           ) : visibleDepartments.length === 0 ? (
             <EmptyState darkMode={darkMode} icon={Search} title="No departments match your search" />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {visibleDepartments.map((department) => (
                 <FolderCard
                   key={department.id}

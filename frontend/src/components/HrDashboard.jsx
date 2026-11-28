@@ -7,7 +7,7 @@ import { BadgeCheck, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, 
 import { API_URL, useAuth } from "./AuthProvider";
 import { showAppToast } from "./ToastPill";
 import UserAvatar from "./UserAvatar";
-import { DateInput, DatePicker, SelectMenu, TimePicker } from "./ui";
+import { Badge, Button, Chip, DateInput, DatePicker, EmptyState as KitEmptyState, IconTile, PageHeader, SelectMenu, StatTile, Tabs, TimePicker, cx, toneOf } from "./ui";
 
 async function api(path) {
   const response = await fetch(`${API_URL}${path}`);
@@ -30,12 +30,12 @@ const EMPLOYEE_DOCUMENT_TYPES = [
 const MULTI_EMPLOYEE_DOCUMENT_TYPES = new Set(["last_3_months_pay_slip", "educational_certificates", "last_company_letters"]);
 
 const DOCUMENT_CARD_META = {
-  aadhar_card_copy: { Icon: IdCard, card: "bg-orange-100 text-[#171714]", icon: "bg-orange-50 text-orange-600" },
-  pan_card_copy: { Icon: BadgeCheck, card: "bg-blue-100 text-[#171714]", icon: "bg-blue-50 text-blue-600" },
-  educational_certificates: { Icon: GraduationCap, card: "bg-cyan-100 text-[#171714]", icon: "bg-cyan-50 text-cyan-600" },
-  last_3_months_pay_slip: { Icon: ReceiptText, card: "bg-violet-100 text-[#171714]", icon: "bg-violet-50 text-violet-600" },
-  last_company_letters: { Icon: Building2, card: "bg-rose-100 text-[#171714]", icon: "bg-rose-50 text-rose-600" },
-  medical_certificate: { Icon: HeartPulse, card: "bg-green-100 text-[#171714]", icon: "bg-green-50 text-green-600" },
+  aadhar_card_copy: { Icon: IdCard, tone: "peach" },
+  pan_card_copy: { Icon: BadgeCheck, tone: "sky" },
+  educational_certificates: { Icon: GraduationCap, tone: "lime" },
+  last_3_months_pay_slip: { Icon: ReceiptText, tone: "lavender" },
+  last_company_letters: { Icon: Building2, tone: "rose" },
+  medical_certificate: { Icon: HeartPulse, tone: "mint" },
 };
 
 function loadGoogleMaps() {
@@ -114,18 +114,8 @@ function downloadPdf(doc, employeeName, darkMode = false) {
   showAppToast("PDF downloaded", { type: "success", darkMode });
 }
 
-function EmptyState({ darkMode, icon: Icon, title, text }) {
-  return (
-    <div className={`grid min-h-[260px] place-items-center rounded-[24px]  p-6 text-center ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-[#f8f7f3]"}`}>
-      <div>
-        <span className={`mx-auto grid h-14 w-14 place-items-center rounded-2xl ${darkMode ? "bg-white/10 text-white/70" : "bg-[#eafbdc] text-[#17643f]"}`}>
-          <Icon className="h-6 w-6" />
-        </span>
-        <h2 className="mt-4 text-xl font-black">{title}</h2>
-        <p className={`mt-2 max-w-xl text-sm leading-6 ${darkMode ? "text-white/55" : "text-black/55"}`}>{text}</p>
-      </div>
-    </div>
-  );
+function EmptyState({ darkMode, icon, title, text, tone = "neutral" }) {
+  return <KitEmptyState darkMode={darkMode} icon={icon} tone={tone} title={title} text={text} className="min-h-[240px]" />;
 }
 
 // Someone who actually turned up outranks any blanket marker. A cell holding
@@ -222,11 +212,11 @@ function roundedMoneyValue(value) {
 
 function DrawerSelect({ darkMode, label, value, placeholder, options, onChange, required, searchable = false, searchPlaceholder = "Search..." }) {
   return (
-    <div className="relative block text-xs font-normal text-black/65 dark:text-white/60">
+    <div className={cx("relative block text-xs", darkMode ? "text-white/55" : "text-[#8a8a8a]")}>
       {label}{required ? " *" : ""}
       <SelectMenu
         darkMode={darkMode}
-        className="mt-2"
+        className="mt-1.5"
         value={value}
         options={options.map((option) => ({ value: option, label: String(option) }))}
         onChange={onChange}
@@ -241,8 +231,8 @@ function DrawerSelect({ darkMode, label, value, placeholder, options, onChange, 
 function DrawerDatePicker({ darkMode, label, value, placeholder, onChange, minDate }) {
   return (
     <div className="relative">
-      <p className="text-xs font-medium text-black/65 dark:text-white/60">{label} *</p>
-      <DatePicker darkMode={darkMode} className="mt-2" value={value || ""} onChange={onChange} placeholder={placeholder} minDate={minDate} />
+      <p className={cx("text-xs", darkMode ? "text-white/55" : "text-[#8a8a8a]")}>{label} *</p>
+      <DatePicker darkMode={darkMode} className="mt-1.5" value={value || ""} onChange={onChange} placeholder={placeholder} minDate={minDate} />
     </div>
   );
 }
@@ -268,8 +258,30 @@ function currentTimeInput() {
 function AttendanceTimePicker({ darkMode, label, value, onChange, emptyLabel = "No record" }) {
   return (
     <div className="relative">
-      <p className="text-xs font-medium text-black/65 dark:text-white/60">{label} *</p>
-      <TimePicker darkMode={darkMode} className="mt-2" value={value || ""} onChange={onChange} placeholder={emptyLabel} step={5} />
+      <p className={cx("text-xs", darkMode ? "text-white/55" : "text-[#8a8a8a]")}>{label} *</p>
+      <TimePicker darkMode={darkMode} className="mt-1.5" value={value || ""} onChange={onChange} placeholder={emptyLabel} step={5} />
+    </div>
+  );
+}
+
+// Shared look for the module's own drawers: a floating white sheet, radius 24.
+function DrawerHead({ darkMode, icon, tone = "neutral", title, subtitle, onClose, extra, children }) {
+  return (
+    <div className={cx("flex shrink-0 items-start justify-between gap-4 border-b px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+      <div className="flex min-w-0 items-start gap-3">
+        {icon && <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />}
+        <div className="min-w-0">
+          <h2 className="truncate text-[17px] tracking-[-0.01em]">{title}</h2>
+          {subtitle && <p className={cx("mt-0.5 text-[12.5px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{subtitle}</p>}
+          {children}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {extra}
+        <button type="button" onClick={onClose} aria-label="Close" className={cx("grid h-9 w-9 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
+          <X className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -481,15 +493,22 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     return () => window.clearTimeout(timer);
   }, [section, data]); // eslint-disable-line react-hooks/exhaustive-deps
   const currentName = user?.displayName || user?.username || "Employee";
-  const muted = darkMode ? "text-slate-400" : "text-black/58";
-  const panel = darkMode ? "border-white/[0.075] bg-[#090d12]" : "border-[#dfe7e4] bg-white";
-  const salaryPanel = darkMode ? "border-white/[0.075] bg-[#090d12]" : "border-[#e7ebe4] bg-white";
-  const salaryTableSurface = darkMode ? "bg-[#0c1117]" : "bg-[#fbfcf9]";
-  const salaryRowBorder = darkMode ? "border-white/[0.06] bg-[#0f151c] hover:bg-[#141b24]" : "border-[#edf0ea] bg-white hover:bg-[#fbfcf7]";
-  const salaryBadge = darkMode
-    ? "border border-emerald-400/25 bg-emerald-400/14 text-emerald-200 shadow-[0_0_0_1px_rgba(52,211,153,0.04)]"
-    : "bg-[#e8f7ef] text-[#08764f]";
-  const softPanel = darkMode ? "bg-white/[0.055]" : "bg-[#f7f5ef]";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
+  const panel = darkMode ? "border border-white/10 bg-[#15171c]" : "border border-[#ececec] bg-white";
+  const salaryPanel = panel;
+  const salaryTableSurface = darkMode ? "bg-[#15171c]" : "bg-white";
+  const salaryRowBorder = darkMode ? "border-white/[0.06] hover:bg-white/[0.03]" : "border-[#f0f0ee] hover:bg-[#fafaf8]";
+  const salaryBadge = darkMode ? "bg-[rgba(74,222,128,0.12)] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]";
+  const softPanel = darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]";
+  // Floating drawer sheet, field and label styles shared by the module's own drawers.
+  const drawerSheet = darkMode ? "border border-white/10 bg-[#121317] text-white" : "border border-[#ececec] bg-white text-[#141414]";
+  const drawerBody = darkMode ? "bg-[#121317]" : "bg-white";
+  const drawerCard = darkMode ? "border border-white/10 bg-[#15171c]" : "border border-[#ececec] bg-white";
+  const fieldLabel = darkMode ? "text-white/55" : "text-[#8a8a8a]";
+  const textField = darkMode ? "border border-transparent bg-white/[0.06] text-white placeholder:text-white/35" : "border border-transparent bg-[#f4f4f2] text-[#141414] placeholder:text-[#a3a3a0] focus:bg-white focus:border-[#e2e2df]";
+  const drawerFooter = darkMode ? "border-white/10 bg-[#121317]" : "border-[#f0f0ee] bg-white";
+  const backdrop = "fixed inset-0 z-[90] flex justify-end bg-black/20 backdrop-blur-[2px]";
+  const primaryButton = darkMode ? "bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black";
   const activeEmployees = employees.filter((employee) => !employee.blacklisted);
   const selectedDocs = section === "salary" ? salarySlips : documents;
   const filteredSalarySlips = salarySlips.filter((doc) => {
@@ -1978,48 +1997,48 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
     return request?.status === "pending" && String(request?.userId || "") === String(user?.id || "");
   }
 
-  function statusClass(status) {
-    if (status === "approved") return darkMode ? "bg-emerald-400/15 text-emerald-200" : "bg-emerald-50 text-emerald-700";
-    if (status === "declined") return darkMode ? "bg-red-400/15 text-red-200" : "bg-red-50 text-red-700";
-    return darkMode ? "bg-amber-400/15 text-amber-200" : "bg-amber-50 text-amber-700";
+  function statusTone(status) {
+    if (status === "approved" || status === "completed") return "mint";
+    if (status === "declined") return "rose";
+    return "amber";
+  }
+
+  function statusChip(status, className = "") {
+    return <Chip tone={statusTone(status)} darkMode={darkMode} className={cx("capitalize", className)}>{status}</Chip>;
   }
 
   function timelineDotClass(type) {
-    if (type === "submitted") return "bg-blue-500";
-    if (type === "approved") return "bg-emerald-500";
-    if (type === "declined") return "bg-red-500";
-    return darkMode ? "bg-white/20" : "bg-black/15";
+    if (type === "submitted") return "bg-[#2f6fc0]";
+    if (type === "approved") return "bg-[#2f7a4f]";
+    if (type === "declined") return "bg-[#c0394b]";
+    return darkMode ? "bg-white/20" : "bg-[#dcdcd8]";
   }
 
-  function timelineLineClass(status) {
-    if (status === "approved") return "bg-gradient-to-b from-blue-500 to-emerald-500";
-    if (status === "declined") return "bg-gradient-to-b from-blue-500 to-red-500";
-    return darkMode ? "bg-white/10" : "bg-black/10";
+  function timelineLineClass() {
+    return darkMode ? "bg-white/10" : "bg-[#e8e8e6]";
   }
 
   function renderAttendanceAdjustmentRequest(request, { compact = false } = {}) {
     const firstItem = request.items?.[0] || {};
-    const statusTone = request.status === "approved"
-      ? darkMode ? "bg-emerald-300/12 text-emerald-200" : "bg-[#e7f6ed] text-[#08764f]"
-      : request.status === "declined"
-        ? darkMode ? "bg-red-300/12 text-red-200" : "bg-red-50 text-red-700"
-        : darkMode ? "bg-amber-300/12 text-amber-200" : "bg-amber-50 text-amber-700";
     return (
-      <div key={request.id} className={`flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${darkMode ? "bg-white/[0.04]" : "bg-white"} ${compact ? darkMode ? "border border-amber-300/15" : "border border-amber-100" : ""}`}>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-black">{data?.canManageHr ? request.employeeName : `${request.items?.length || 0} adjustment row${request.items?.length === 1 ? "" : "s"}`}</p>
-            <span className={`rounded-full px-3 py-1 text-[11px] font-black capitalize ${statusTone}`}>{request.status}</span>
+      <div key={request.id} className={cx("flex flex-col gap-3 rounded-[14px] px-4 py-3 sm:flex-row sm:items-center sm:justify-between", compact ? (darkMode ? "bg-white/[0.04]" : "bg-white") : (darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"))}>
+        <div className="flex min-w-0 items-center gap-3">
+          <IconTile icon={Clock3} tone={statusTone(request.status)} darkMode={darkMode} size="sm" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[14px]">{data?.canManageHr ? request.employeeName : `${request.items?.length || 0} adjustment row${request.items?.length === 1 ? "" : "s"}`}</p>
+              {statusChip(request.status, "h-6 px-2.5 text-[11.5px]")}
+            </div>
+            <p className={`mt-0.5 text-xs ${muted}`}>
+              {firstItem.date ? formatDateLabel(firstItem.date) : "No date"} · {firstItem.clockInTime ? displayTimeInput(firstItem.clockInTime) : "-"}{firstItem.clockOutTime ? ` - ${displayTimeInput(firstItem.clockOutTime)}` : ""}
+              {(request.items?.length || 0) > 1 ? ` · +${request.items.length - 1} more` : ""}
+            </p>
           </div>
-          <p className={`mt-1 text-xs ${muted}`}>
-            {firstItem.date ? formatDateLabel(firstItem.date) : "No date"} · {firstItem.clockInTime ? displayTimeInput(firstItem.clockInTime) : "-"}{firstItem.clockOutTime ? ` - ${displayTimeInput(firstItem.clockOutTime)}` : ""}
-            {(request.items?.length || 0) > 1 ? ` · +${request.items.length - 1} more` : ""}
-          </p>
         </div>
         {data?.canManageHr && request.status === "pending" && (
-          <button type="button" onClick={() => validateAttendanceAdjustmentRequest(request)} disabled={Boolean(attendanceRequestReviewingId)} className="flex h-10 items-center justify-center gap-2 rounded-full bg-[#6ee72f] px-5 text-sm font-black text-[#10210c] disabled:opacity-60">
-            {attendanceRequestReviewingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Validate
-          </button>
+          <Button darkMode={darkMode} variant="primary" size="sm" onClick={() => validateAttendanceAdjustmentRequest(request)} disabled={Boolean(attendanceRequestReviewingId)} icon={attendanceRequestReviewingId === request.id ? undefined : Check} loading={attendanceRequestReviewingId === request.id}>
+            Validate
+          </Button>
         )}
       </div>
     );
@@ -2027,168 +2046,205 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
   const hero = {
     dashboard: {
-      eyebrow: "HR Workspace",
+      eyebrow: "HR workspace",
       icon: BriefcaseBusiness,
-      title: "HR requests and approvals.",
-      text: "Review employee records, leave applications, attendance, and profile documents from one clean workspace.",
+      tone: "lavender",
+      title: "HR requests",
+      subtitle: "and approvals in one place",
+      text: "Review leave applications from every employee in one table.",
     },
     employees: {
-      eyebrow: "Employee Records",
+      eyebrow: "Employee records",
       icon: Users,
-      title: "Employee directory.",
-      text: "View real employee profiles, departments, designations, roles, and contact details from backend users.",
+      tone: "sky",
+      title: "Employees",
+      subtitle: data?.canManageHr ? "everyone on the team" : "your employee profile",
+      text: data?.canManageHr ? "Active users with their roles, departments and contact details." : "Showing your employee profile only.",
     },
     leave: {
-      eyebrow: "Leave Management",
+      eyebrow: "Leave",
       icon: CalendarDays,
-      title: "Leave applications.",
-      text: "Employees can apply for leave, and HR/admin can approve or decline requests with comments.",
+      tone: "mint",
+      title: data?.canManageHr ? "Leave requests" : "My leave",
+      subtitle: data?.canManageHr ? "approve, decline and track" : "apply and track approvals",
+      text: data?.canManageHr ? "Approve or decline with a comment. The applicant gets notified." : "Track your submitted applications and the admin response.",
     },
-  }[section] || {};
-  const HeroIcon = hero.icon || BriefcaseBusiness;
-  const showHero = section !== "dashboard" && section !== "employees" && section !== "leave" && section !== "attendance";
+    attendance: {
+      eyebrow: "Attendance",
+      icon: MapPin,
+      tone: "peach",
+      title: data?.canManageHr ? "Attendance" : "My attendance",
+      subtitle: "who clocked in and when",
+      text: "Geo-location based clock in and clock out for employees.",
+    },
+  }[section] || {
+    eyebrow: "HR workspace",
+    icon: BriefcaseBusiness,
+    tone: "lavender",
+    title: "HR",
+    subtitle: "records and documents",
+    text: "Employee records, leave, attendance and documents.",
+  };
+  const refreshButton = (
+    <Button darkMode={darkMode} variant="secondary" onClick={loadHr} disabled={loading} icon={RefreshCw} className={loading ? "[&>svg]:animate-spin" : ""}>
+      Refresh
+    </Button>
+  );
+  const thClass = `px-4 pb-3 pt-1 text-[12px] font-normal ${muted}`;
+  const rowClass = darkMode ? "border-b border-white/[0.06] last:border-b-0 hover:bg-white/[0.025]" : "border-b border-[#f0f0ee] last:border-b-0 hover:bg-[#fafaf8]";
+  const headRowClass = darkMode ? "border-b border-white/[0.06]" : "border-b border-[#f0f0ee]";
+  const headerActions = {
+    dashboard: (
+      <>
+        <Chip darkMode={darkMode}>{dashboardRequests.length} request{dashboardRequests.length === 1 ? "" : "s"}</Chip>
+        {refreshButton}
+      </>
+    ),
+    employees: (
+      <>
+        <div className="relative">
+          <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee, role, department..." className={`h-10 w-full rounded-full pl-11 pr-4 text-[13.5px] outline-none sm:w-80 ${textField}`} />
+        </div>
+        {refreshButton}
+      </>
+    ),
+    leave: (
+      <>
+        <Chip darkMode={darkMode}>{myLeaveRequests.length} request{myLeaveRequests.length === 1 ? "" : "s"}</Chip>
+        {refreshButton}
+        <Button darkMode={darkMode} variant="primary" icon={Plus} onClick={() => setLeaveDrawerOpen(true)}>Apply for leave</Button>
+      </>
+    ),
+    attendance: (
+      <>
+        {refreshButton}
+        <Button darkMode={darkMode} variant={pendingAttendanceAdjustmentRequests.length ? "accent" : "soft"} icon={MessageCircle} onClick={() => setAttendanceRequestHistoryOpen(true)}>
+          {pendingAttendanceAdjustmentRequests.length ? `${pendingAttendanceAdjustmentRequests.length} pending` : "Request history"}
+        </Button>
+        {!data?.canManageHr && (
+          <Button darkMode={darkMode} variant="primary" icon={MessageSquare} onClick={() => openAttendanceRequest()}>Request adjustment</Button>
+        )}
+        {data?.canManageHr && (
+          <>
+            <Button darkMode={darkMode} variant="soft" icon={SlidersHorizontal} onClick={() => { setAttendanceSettingsExpanded(false); setAttendanceSettingsOpen(true); }}>Settings</Button>
+            <Button darkMode={darkMode} variant="primary" icon={Clock3} onClick={() => { setAdjustTab("time"); openAttendanceAdjustment(); }}>Adjustments</Button>
+          </>
+        )}
+      </>
+    ),
+  }[section] || refreshButton;
 
   return (
-    <main className={`flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#05080c] text-white" : "bg-[#eef3f2] bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:72px_72px] text-[#171714]"}`}>
-      {showHero && <section className={`relative z-20 mb-5 overflow-hidden rounded-[30px] border p-6 sm:p-8 ${panel}`}>
-        {!darkMode && (
-          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[30px]">
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(17,17,17,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(17,17,17,0.035)_1px,transparent_1px)] bg-[size:72px_72px]" />
-            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white via-white/80 to-transparent" />
-          </div>
-        )}
-        <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div>
-            <span className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/10 text-white/75" : "border-[#dfe7e4] bg-[#e8f6ee] text-[#0f6b49]"}`}>
-              <HeroIcon className="h-4 w-4" /> {hero.eyebrow}
-            </span>
-            <h1 className={`mt-5 max-w-4xl small text-4xl font-black leading-[0.96] tracking-tight ${darkMode ? "text-white" : "text-[#161616]"}`}>{hero.title}</h1>
-            <p className={`mt-4 max-w-3xl  text-sm font-medium leading-6 sm:text-base ${muted}`}>{hero.text}</p>
-          </div>
-          <div className="flex flex-wrap gap-3 lg:justify-end">
-            <button onClick={loadHr} disabled={loading} className={`flex h-12 items-center justify-center gap-2 rounded-3xl border px-5 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/10 bg-white/10 text-white hover:bg-white/15" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-            </button>
-            {section === "leave" && (
-              <button type="button" onClick={() => setLeaveDrawerOpen(true)} className="flex h-12 items-center gap-2 rounded-3xl bg-[#171714] px-5 text-sm font-bold text-white shadow-sm">
-                <Plus className="h-4 w-4" /> Apply for Leave
-              </button>
-            )}
-          </div>
-        </div>
-      </section>}
+    <main className={`flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}>
+      <PageHeader
+        darkMode={darkMode}
+        badge={hero.eyebrow}
+        badgeIcon={hero.icon}
+        badgeTone={hero.tone}
+        title={hero.title}
+        subtitle={hero.subtitle}
+        description={hero.text}
+        actions={headerActions}
+        className="mb-7"
+      />
 
       {section === "dashboard" && (
-        <section className={`w-full rounded-[28px] ${panel}`}>
-          <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <section className={`w-full rounded-[20px] ${panel}`}>
+          <div className="flex items-center gap-3 px-5 pt-5">
+            <IconTile icon={MessageSquare} tone="lavender" darkMode={darkMode} size="sm" />
             <div>
-              <h2 className="text-2xl font-black">HR request records</h2>
-              <p className={`mt-1 text-sm ${muted}`}>Leave requests in one full-width table.</p>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button onClick={loadHr} disabled={loading} className={`flex h-10 items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-black/10 bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-              </button>
-              <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-black/[0.05] text-black/55"}`}>{dashboardRequests.length} request{dashboardRequests.length === 1 ? "" : "s"}</span>
+              <h2 className="text-[15px]">Request records</h2>
+              <p className={`text-[12px] ${muted}`}>Filter by type, employee and date</p>
             </div>
           </div>
-          <div className="grid gap-3 px-5 pb-5 md:grid-cols-2 xl:grid-cols-[minmax(180px,0.8fr)_minmax(220px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_auto]">
-            <DrawerSelect darkMode={darkMode} label="Request Type" value={requestTypeFilter} placeholder="Select type..." options={["All", "Leave"]} onChange={setRequestTypeFilter} />
+          <div className="grid gap-3 px-5 pb-4 pt-4 md:grid-cols-2 xl:grid-cols-[minmax(180px,0.8fr)_minmax(220px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_auto]">
+            <DrawerSelect darkMode={darkMode} label="Request type" value={requestTypeFilter} placeholder="Select type..." options={["All", "Leave"]} onChange={setRequestTypeFilter} />
             <DrawerSelect darkMode={darkMode} label="Employee" searchable searchPlaceholder="Search employee..." value={requestEmployeeFilter} placeholder="Select employee..." options={requestEmployeeOptions} onChange={setRequestEmployeeFilter} />
-            <DrawerDatePicker darkMode={darkMode} label="From Date" value={requestDateFilter.startDate} placeholder="Start date" onChange={(startDate) => setRequestDateFilter((current) => ({ ...current, startDate, endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate }))} />
-            <DrawerDatePicker darkMode={darkMode} label="To Date" value={requestDateFilter.endDate} placeholder="End date" minDate={requestDateFilter.startDate} onChange={(endDate) => setRequestDateFilter((current) => ({ ...current, endDate }))} />
-            <button type="button" onClick={() => { setRequestTypeFilter("All"); setRequestEmployeeFilter("All employees"); setRequestDateFilter({ startDate: "", endDate: "" }); }} className={`mt-auto h-10 rounded-2xl border px-4 text-xs font-black transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white/70 hover:bg-white/[0.07]" : "border-black/10 bg-white text-black/60 hover:bg-[#fafbf8]"}`}>
+            <DrawerDatePicker darkMode={darkMode} label="From date" value={requestDateFilter.startDate} placeholder="Start date" onChange={(startDate) => setRequestDateFilter((current) => ({ ...current, startDate, endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate }))} />
+            <DrawerDatePicker darkMode={darkMode} label="To date" value={requestDateFilter.endDate} placeholder="End date" minDate={requestDateFilter.startDate} onChange={(endDate) => setRequestDateFilter((current) => ({ ...current, endDate }))} />
+            <Button darkMode={darkMode} variant="soft" className="mt-auto h-10" onClick={() => { setRequestTypeFilter("All"); setRequestEmployeeFilter("All employees"); setRequestDateFilter({ startDate: "", endDate: "" }); }}>
               Clear
-            </button>
+            </Button>
           </div>
           {dashboardRequests.length ? (
-            <div className="overflow-x-auto px-3 pb-4">
-              <table className="w-full min-w-[980px] border-separate border-spacing-y-2 text-left">
-                <thead className={darkMode ? "bg-[#15171c]" : "bg-white"}>
-                  <tr>
-                    {["Request", "Employee", "Details", "Period / Date", "Status", "Actions"].map((heading) => (
-                      <th key={heading} className={`px-4 py-3 text-[11px] font-semibold ${muted}`}>{heading}</th>
+            <div className="overflow-x-auto px-2 pb-3">
+              <table className="w-full min-w-[980px] border-collapse text-left">
+                <thead>
+                  <tr className={headRowClass}>
+                    {["Request", "Employee", "Details", "Period / date", "Status", ""].map((heading) => (
+                      <th key={heading || "actions"} className={thClass}>{heading}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {dashboardRequests.map((request) => (
-                    <tr key={request.id} className={`transition ${darkMode ? "bg-white/[0.035] hover:bg-white/[0.06]" : "bg-[#f8f9fc] hover:bg-[#f3f5f9]"}`}>
-                      <td className="rounded-l-xl px-4 py-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-[#eafbdc] text-[#17643f]"}`}>{request.kind}</span></td>
-                      <td className="px-4 py-3"><p className="text-sm font-bold">{request.employeeName || "-"}</p><p className={`text-xs ${muted}`}>{request.department || "No department"}</p></td>
-                      <td className="px-4 py-3"><p className="text-sm font-semibold">{request.title}</p><p className={`text-xs ${muted}`}>{request.detail}</p></td>
-                      <td className="px-4 py-3 text-sm">{request.period || "-"}</td>
-                      <td className="px-4 py-3"><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass(request.status)}`}>{request.status}</span></td>
-                      <td className="rounded-r-xl px-4 py-3"><button onClick={request.onView} className={`h-9 rounded-lg border px-4 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/5 text-white/75" : "border-slate-200 bg-white text-slate-700"}`}>View</button></td>
+                    <tr key={request.id} className={`transition ${rowClass}`}>
+                      <td className="px-4 py-3.5"><Chip tone="lavender" darkMode={darkMode}>{request.kind}</Chip></td>
+                      <td className="px-4 py-3.5"><p className="text-[13.5px]">{request.employeeName || "-"}</p><p className={`text-xs ${muted}`}>{request.department || "No department"}</p></td>
+                      <td className="px-4 py-3.5"><p className="text-[13.5px]">{request.title}</p><p className={`text-xs ${muted}`}>{request.detail}</p></td>
+                      <td className="px-4 py-3.5 text-[13px]">{request.period || "-"}</td>
+                      <td className="px-4 py-3.5">{statusChip(request.status)}</td>
+                      <td className="px-4 py-3.5 text-right"><Button darkMode={darkMode} variant="soft" size="sm" icon={Eye} onClick={request.onView}>View</Button></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <div className="p-4"><EmptyState darkMode={darkMode} icon={MessageSquare} title={loading ? "Loading HR requests" : "No HR requests yet"} text="Leave requests will appear here in one table." /></div>
+            <div className="p-4 pt-0"><EmptyState darkMode={darkMode} icon={MessageSquare} tone="lavender" title={loading ? "Loading HR requests" : "No HR requests yet"} text="Leave requests will appear here in one table." /></div>
           )}
         </section>
       )}
 
       {section === "employees" && (
-        <section className={`overflow-hidden rounded-[28px]  ${panel}`}>
-          <div className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <section className={`overflow-hidden rounded-[20px] ${panel}`}>
+          <div className="flex items-center gap-3 px-5 pt-5">
+            <IconTile icon={Users} tone="sky" darkMode={darkMode} size="sm" />
             <div>
-              <h2 className="text-2xl font-black">Employees</h2>
-              <p className={`mt-1 text-sm ${muted}`}>{data?.canManageHr ? "Showing all active users from backend roles." : "Showing your employee profile only."}</p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative">
-                <Search className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee, role, department..." className={`h-11 w-full rounded-2xl border pl-11 pr-4 text-sm outline-none sm:w-80 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/10 bg-white"}`} />
-              </div>
-              <button onClick={loadHr} disabled={loading} className={`flex h-11 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/10 bg-white/10 text-white hover:bg-white/15" : "border-[#dfe7e4] bg-white text-slate-700 hover:bg-[#f1f7f4]"}`}>
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-              </button>
+              <h2 className="text-[15px]">Directory</h2>
+              <p className={`text-[12px] ${muted}`}>{filteredEmployees.length} employee{filteredEmployees.length === 1 ? "" : "s"}</p>
             </div>
           </div>
           {filteredEmployees.length ? (
-            <div className="overflow-x-auto px-3 pb-4">
-              <table className="w-full min-w-[980px] border-separate border-spacing-y-2 text-left">
-                <thead className={darkMode ? "bg-[#15171c]" : "bg-white"}>
-                  <tr>
-                    {["Employee", "Designation", "Department", "Employment", "Remote", "Contact", "Actions"].map((heading) => (
-                      <th key={heading} className={`px-4 py-3 text-[11px] font-semibold ${muted}`}>{heading}</th>
+            <div className="overflow-x-auto px-2 pb-3 pt-4">
+              <table className="w-full min-w-[980px] border-collapse text-left">
+                <thead>
+                  <tr className={headRowClass}>
+                    {["Employee", "Designation", "Department", "Employment", "Remote", "Contact", ""].map((heading) => (
+                      <th key={heading || "actions"} className={thClass}>{heading}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredEmployees.map((employee) => (
-                    <tr key={employee.id} className={`transition ${darkMode ? "bg-white/[0.035] hover:bg-white/[0.06]" : "bg-[#f8f9fc] hover:bg-[#f3f5f9]"}`}>
-                      <td className="rounded-l-xl px-4 py-3">
+                    <tr key={employee.id} className={`transition ${rowClass}`}>
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <UserAvatar user={employee} name={employee.displayName || employee.username} className="h-10 w-10" />
                           <div>
-                            <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>{employee.displayName || employee.username}</p>
+                            <p className="text-[13.5px]">{employee.displayName || employee.username}</p>
                             <p className={`mt-0.5 text-xs ${muted}`}>{employee.username || "-"}</p>
                           </div>
                         </div>
                       </td>
-                      <td className={`px-4 py-3 text-sm ${muted}`}>{employee.designation || "Not set"}</td>
-                      <td className={`px-4 py-3 text-sm ${muted}`}>{employee.department || "Not set"}</td>
-                      <td className="px-4 py-3"><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${employee.employmentType === "permanent" ? "bg-emerald-500/10 text-emerald-600" : darkMode ? "bg-amber-400/15 text-amber-200" : "bg-amber-50 text-amber-700"}`}>{employee.employmentType || "probation"}</span></td>
+                      <td className={`px-4 py-3 text-[13px] ${muted}`}>{employee.designation || "Not set"}</td>
+                      <td className={`px-4 py-3 text-[13px] ${muted}`}>{employee.department || "Not set"}</td>
+                      <td className="px-4 py-3"><Chip tone={employee.employmentType === "permanent" ? "mint" : "amber"} darkMode={darkMode} className="capitalize">{employee.employmentType || "probation"}</Chip></td>
                       <td className="px-4 py-3">
                         <button
                           type="button"
                           disabled={Boolean(employeeRemoteSavingId)}
                           onClick={() => saveEmployeeRemoteWorkFor(employee, !employee.remoteWorkEnabled)}
-                          className={`grid h-7 w-7 place-items-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-60 ${employee.remoteWorkEnabled ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white hover:border-emerald-300"}`}
+                          className={`grid h-7 w-7 place-items-center rounded-[9px] border transition disabled:cursor-not-allowed disabled:opacity-60 ${employee.remoteWorkEnabled ? (darkMode ? "border-[#cff07a] bg-[#cff07a] text-[#141414]" : "border-[#141414] bg-[#141414] text-white") : darkMode ? "border-white/15 bg-white/[0.04]" : "border-[#dcdcd8] bg-white hover:border-[#a3a3a0]"}`}
                           title={employee.remoteWorkEnabled ? "Disable remote today" : "Mark remote today"}
                         >
                           {employeeRemoteSavingId === employee.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : employee.remoteWorkEnabled && <Check className="h-4 w-4" />}
                         </button>
                       </td>
-                      <td className={`px-4 py-3 text-sm ${muted}`}>{employee.phone || employee.whatsappPhone || employee.email || "-"}</td>
-                      <td className="rounded-r-xl px-4 py-3">
-                        <button onClick={() => openEmployeeDetail(employee)} className={`flex h-9 items-center gap-2 rounded-lg border px-4 text-xs font-semibold ${darkMode ? "border-white/10 bg-white/5 text-white/75" : "border-slate-200 bg-white text-slate-700"}`}>
-                          <Eye className="h-3.5 w-3.5" /> View Detail
-                        </button>
+                      <td className={`px-4 py-3 text-[13px] ${muted}`}>{employee.phone || employee.whatsappPhone || employee.email || "-"}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Button darkMode={darkMode} variant="soft" size="sm" icon={Eye} onClick={() => openEmployeeDetail(employee)}>View detail</Button>
                       </td>
                     </tr>
                   ))}
@@ -2196,53 +2252,34 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </table>
             </div>
           ) : (
-            <div className="p-4"><EmptyState darkMode={darkMode} icon={Users} title={loading ? "Loading employees" : "No employees found"} text="Employees will appear here from real UIPL user accounts." /></div>
+            <div className="p-4"><EmptyState darkMode={darkMode} icon={Users} tone="sky" title={loading ? "Loading employees" : "No employees found"} text="Employees will appear here from real UIPL user accounts." /></div>
           )}
         </section>
       )}
 
       {section === "leave" && (
         <>
-          <section className={`overflow-hidden rounded-[32px] ${darkMode ? "bg-[#090d12]" : "bg-white"}`}>
-            <div className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "Remaining paid leave", value: remainingPaidLeaves, note: `${monthlyPaidLeaveAllowance} allowed this month`, icon: CheckCircle2, tone: "mint" },
+              { label: "Leave taken", value: currentMonthLeaveTaken, note: monthLabelFromInput(currentLeaveMonth), icon: CalendarDays, tone: "sky" },
+              { label: "Advance leave", value: currentMonthAdvanceLeaves, note: "Deducted in salary slip", icon: WalletCards, tone: "peach" },
+              { label: "Pending approvals", value: currentMonthPendingLeaves, note: "Waiting for HR action", icon: MessageSquare, tone: "lavender" },
+            ].map(({ label, value, note, icon, tone }) => (
+              <StatTile key={label} darkMode={darkMode} icon={icon} tone={tone} value={Number(value || 0).toLocaleString("en-IN")} label={label} hint={note} />
+            ))}
+          </div>
+          <section className={`mt-5 overflow-hidden rounded-[20px] ${panel}`}>
+            <div className="flex items-center gap-3 px-5 pt-5">
+              <IconTile icon={CalendarDays} tone="mint" darkMode={darkMode} size="sm" />
               <div>
-                <h2 className="text-2xl font-black">{data?.canManageHr ? "Leave Requests" : "My Leave Applications"}</h2>
-                <p className={`mt-1 text-sm ${muted}`}>{data?.canManageHr ? "Approve or decline with a comment. The applicant gets notified." : "Track your submitted applications and admin response."}</p>
+                <h2 className="text-[15px]">{data?.canManageHr ? "Applications" : "My applications"}</h2>
+                <p className={`text-[12px] ${muted}`}>{myLeaveRequests.length} request{myLeaveRequests.length === 1 ? "" : "s"}</p>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <button onClick={loadHr} disabled={loading} className={`flex h-12 items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/12 bg-[#171b22] text-white hover:border-white/20 hover:bg-[#1d232d]" : "border-[#e1e5df] bg-white text-slate-700 hover:bg-[#fbfcf7]"}`}>
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-                </button>
-                <button type="button" onClick={() => setLeaveDrawerOpen(true)} className="flex h-12 items-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f] transition hover:bg-[#d8f0e4]">
-                  <Plus className="h-4 w-4" /> Apply for Leave
-                </button>
-                <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{myLeaveRequests.length} request{myLeaveRequests.length === 1 ? "" : "s"}</span>
-              </div>
-            </div>
-            <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                { label: "Remaining paid leave", value: remainingPaidLeaves, note: `${monthlyPaidLeaveAllowance} allowed this month`, icon: CheckCircle2, tone: darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-50 text-emerald-700" },
-                { label: "Leave taken", value: currentMonthLeaveTaken, note: monthLabelFromInput(currentLeaveMonth), icon: CalendarDays, tone: darkMode ? "bg-sky-300/14 text-sky-200" : "bg-sky-50 text-sky-700" },
-                { label: "Advance leave", value: currentMonthAdvanceLeaves, note: "Deducted in salary slip", icon: WalletCards, tone: darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-50 text-amber-700" },
-                { label: "Pending approvals", value: currentMonthPendingLeaves, note: "Waiting for HR action", icon: MessageSquare, tone: darkMode ? "bg-violet-300/14 text-violet-200" : "bg-violet-50 text-violet-700" },
-              ].map(({ label, value, note, icon: Icon, tone }) => (
-                <div key={label} className={`rounded-[24px] p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#fbfcf9]"}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${tone}`}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <p className="text-3xl font-black leading-none">{Number(value || 0).toLocaleString("en-IN")}</p>
-                  </div>
-                  <p className="mt-4 text-sm font-black">{label}</p>
-                  <p className={`mt-1 text-xs ${muted}`}>{note}</p>
-                </div>
-              ))}
             </div>
             {myLeaveRequests.length ? (
-              <div className="px-6 pb-6">
-                <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/10 bg-white/[0.025]" : "bg-[#fbfcf9]"}`}>
-                <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
+              <div className="overflow-x-auto px-2 pb-3 pt-4">
+                <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-[13.5px]">
                   <colgroup>
                     <col className="w-[23%]" />
                     <col className="w-[15%]" />
@@ -2251,14 +2288,11 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     <col className="w-[22%]" />
                     <col className="w-[15%]" />
                   </colgroup>
-                  <thead className={muted}>
-                    <tr className={`border-b ${darkMode ? "border-white/10" : "border-[#edf0ea] bg-[#fbfcf9]"}`}>
-                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Leave type</th>
-                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Period</th>
-                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Breakdown</th>
-                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Status</th>
-                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Approval</th>
-                      <th className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">Actions</th>
+                  <thead>
+                    <tr className={headRowClass}>
+                      {["Leave type", "Period", "Breakdown", "Status", "Approval", ""].map((heading) => (
+                        <th key={heading || "actions"} className={thClass}>{heading}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -2274,35 +2308,33 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         avatarUrl: request.avatarUrl,
                       };
                       return (
-                      <tr key={request.id} className={`h-[96px] border-b last:border-b-0 ${darkMode ? "border-white/10 hover:bg-white/[0.04]" : "border-[#edf0ea] bg-white hover:bg-[#fbfcf7]"}`}>
-                        <td className="px-5 py-5">
+                      <tr key={request.id} className={`transition ${rowClass}`}>
+                        <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
-                            <UserAvatar user={leaveAvatarUser} name={request.employeeName || request.leaveType} className="h-11 w-11" />
+                            <UserAvatar user={leaveAvatarUser} name={request.employeeName || request.leaveType} className="h-10 w-10" />
                             <div className="min-w-0">
-                              <p className="truncate font-black">{data?.canManageHr ? request.employeeName : currentName}</p>
+                              <p className="truncate">{data?.canManageHr ? request.employeeName : currentName}</p>
                               <p className={`truncate text-xs ${muted}`}>{request.leaveType}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-5">
-                          <p className="font-semibold">{request.startDate}</p>
+                        <td className="px-4 py-4">
+                          <p>{request.startDate}</p>
                           <p className={`text-xs ${muted}`}>to {request.endDate}</p>
                         </td>
-                        <td className="px-5 py-5">
-                          <p className="font-bold">Total: {request.days} day{request.days === 1 ? "" : "s"}</p>
-                          <p className={`mt-1 text-xs ${muted}`}>{request.paidLeaveDays || 0} paid · {request.unpaidLeaveDays || 0} unpaid</p>
+                        <td className="px-4 py-4">
+                          <p>{request.days} day{request.days === 1 ? "" : "s"}</p>
+                          <p className={`mt-0.5 text-xs ${muted}`}>{request.paidLeaveDays || 0} paid · {request.unpaidLeaveDays || 0} unpaid</p>
                         </td>
-                        <td className="px-5 py-5"><span className={`inline-flex h-9 items-center rounded-full px-4 text-xs font-black capitalize ${statusClass(request.status)}`}>{request.status}</span></td>
-                        <td className="px-5 py-5">
-                          <p className="text-sm font-medium">{request.status === "pending" ? "Waiting for approval" : `${request.status} by ${request.reviewedBy?.name || "Admin"}`}</p>
+                        <td className="px-4 py-4">{statusChip(request.status)}</td>
+                        <td className={`px-4 py-4 text-[13px] first-letter:uppercase ${muted}`}>
+                          {request.status === "pending" ? "Waiting for approval" : `${request.status} by ${request.reviewedBy?.name || "Admin"}`}
                         </td>
-                        <td className="px-5 py-5">
-                          <div className="flex flex-wrap gap-2">
-                            <button onClick={() => { setSelectedLeave(request); setReviewComment(request.adminComment || ""); }} className={`flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-bold transition ${darkMode ? "border-white/12 bg-white/[0.04] text-white hover:bg-white/[0.08]" : "border-[#e1e5df] bg-white text-[#171714] hover:bg-[#fbfcf7]"}`}>
-                              <Eye className="h-4 w-4" /> View detail
-                            </button>
+                        <td className="px-4 py-4">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button darkMode={darkMode} variant="soft" size="sm" icon={Eye} onClick={() => { setSelectedLeave(request); setReviewComment(request.adminComment || ""); }}>View</Button>
                             {canDeleteLeave(request) && (
-                              <button onClick={() => deleteLeave(request)} className={`grid h-10 w-10 place-items-center rounded-full border ${darkMode ? "border-red-400/20 bg-red-400/10 text-red-200" : "border-red-200 bg-red-50 text-red-600"}`} title="Delete pending request">
+                              <button onClick={() => deleteLeave(request)} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "bg-[rgba(251,113,133,0.13)] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b]"}`} title="Delete pending request">
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             )}
@@ -2313,12 +2345,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     })}
                   </tbody>
                 </table>
-                </div>
-                </div>
               </div>
             ) : (
               <div className="p-4">
-                <EmptyState darkMode={darkMode} icon={CalendarDays} title="No leave applications yet" text={data?.canManageHr ? "When employees apply for leave, approval requests will appear here." : "Click Apply for Leave to submit your first leave request."} />
+                <EmptyState darkMode={darkMode} icon={CalendarDays} tone="mint" title="No leave applications yet" text={data?.canManageHr ? "When employees apply for leave, approval requests will appear here." : "Use Apply for leave to submit your first leave request."} />
               </div>
             )}
           </section>
@@ -2326,245 +2356,190 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       )}
 
       {section === "attendance" && (
-        <section className={`overflow-hidden rounded-[32px] ${darkMode ? "bg-[#090d12]" : "bg-white"}`}>
-          <div className="flex flex-col gap-4 px-7 pt-7 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-2xl font-black">{data?.canManageHr ? "Attendance" : "My Attendance"}</h2>
-              <p className={`mt-1 text-sm ${muted}`}>Geo-location based clock in and clock out for employees.</p>
+        <div className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { icon: CheckCircle2, label: "Today status", value: todayAttendanceLabel, hint: todayAttendance?.clockInAt ? `In ${new Date(todayAttendance.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : "Awaiting clock in", tone: "mint" },
+              { icon: LogIn, label: "Clock in", value: todayAttendance?.clockInAt ? new Date(todayAttendance.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-", hint: remoteWorkEnabled ? "Remote enabled" : attendanceConfigured ? "Location required" : "Geo fence not set", tone: "sky" },
+              { icon: LogOut, label: "Clock out", value: todayAttendance?.clockOutAt ? new Date(todayAttendance.clockOutAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-", hint: todayAttendance?.clockOutAt ? "Completed today" : "Pending", tone: "peach" },
+              { icon: CalendarDays, label: "Work time", value: todayWorkMinutes ? `${Math.floor(todayWorkMinutes / 60)}h ${todayWorkMinutes % 60}m` : "0h", hint: `${todayAttendanceRecords.length} marked today`, tone: "lavender" },
+            ].map((stat) => (
+              <StatTile key={stat.label} darkMode={darkMode} icon={stat.icon} tone={stat.tone} value={<span className="block truncate">{stat.value}</span>} label={stat.label} hint={stat.hint} />
+            ))}
+          </div>
+
+          <div className={`flex flex-col gap-4 rounded-[20px] px-5 py-4 lg:flex-row lg:items-center lg:justify-between ${remoteWorkEnabled || attendanceConfigured ? (darkMode ? "bg-[#cff07a]/15" : "bg-[#d4f28a]") : (darkMode ? "bg-white/[0.05]" : "bg-[#f4f4f2]")}`}>
+            <div className="flex min-w-0 flex-1 items-center gap-3.5 overflow-hidden">
+              <MapPin className="h-5 w-5 shrink-0" strokeWidth={1.8} />
+              <div className="min-w-0">
+                <p className="text-[14px]">{remoteWorkEnabled ? "Remote attendance enabled" : attendanceConfigured ? "Attendance location active" : "Attendance location not set"}</p>
+                <p className={`block max-w-full truncate text-[12.5px] ${darkMode ? "text-white/60" : "text-[#3d4a1a]"}`}>{remoteWorkEnabled ? "Office geofence is skipped for your clock in and clock out." : attendanceSettings.address || "HR must set the office/site location before employees can clock in."}</p>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-              <button onClick={loadHr} disabled={loading} className={`flex h-12 items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition disabled:opacity-50 ${darkMode ? "border-white/[0.08] bg-[#0f151c] text-slate-100 hover:border-emerald-300/25 hover:bg-[#141b24]" : "border-[#e1e5df] bg-white text-slate-700 hover:bg-[#fbfcf7]"}`}>
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-              </button>
-              {!data?.canManageHr && (
-                <button type="button" onClick={() => openAttendanceRequest()} className={`flex h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-sky-400/14 text-sky-200 hover:bg-sky-400/20" : "bg-sky-50 text-sky-700 hover:bg-sky-100"}`}>
-                  <MessageSquare className="h-4 w-4" /> Request adjustment
-                </button>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button darkMode={darkMode} variant="secondary" disabled={!attendanceReady || attendanceSaving || todayAttendance?.clockInAt} onClick={() => submitAttendance("clock-in")} icon={attendanceClockAction === "clock-in" ? undefined : LogIn} loading={attendanceClockAction === "clock-in"} className="min-w-[118px]">
+                {attendanceClockAction === "clock-in" ? "Clocking in" : "Clock in"}
+              </Button>
+              {mustFillReportBeforeClockOut ? (
+                <Button darkMode={darkMode} variant="primary" disabled={todayReportChecking} onClick={() => router.push("/employee-daily-report")} icon={todayReportChecking ? undefined : FileText} loading={todayReportChecking} className="min-w-[178px]">
+                  Fill employee report
+                </Button>
+              ) : (
+                <Button darkMode={darkMode} variant="primary" disabled={!attendanceReady || attendanceSaving || !todayAttendance?.clockInAt || todayAttendance?.clockOutAt} onClick={() => submitAttendance("clock-out")} icon={attendanceClockAction === "clock-out" ? undefined : LogOut} loading={attendanceClockAction === "clock-out"} className="min-w-[124px]">
+                  {attendanceClockAction === "clock-out" ? "Clocking out" : "Clock out"}
+                </Button>
               )}
-              {data?.canManageHr && (
-                <>
-                  <button type="button" onClick={() => { setAdjustTab("time"); openAttendanceAdjustment(); }} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#171714] px-5 text-sm font-bold text-white">
-                    <Clock3 className="h-4 w-4" /> Adjustments
-                  </button>
-                  <button type="button" onClick={() => { setAttendanceSettingsExpanded(false); setAttendanceSettingsOpen(true); }} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#e7f6ed] px-5 text-sm font-bold text-[#08764f]">
-                    <SlidersHorizontal className="h-4 w-4" /> Settings
-                  </button>
-                </>
-              )}
-              <button type="button" onClick={() => setAttendanceRequestHistoryOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-bold transition ${pendingAttendanceAdjustmentRequests.length ? darkMode ? "bg-amber-300/14 text-amber-200 hover:bg-amber-300/20" : "bg-amber-50 text-amber-700 hover:bg-amber-100" : darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/[0.1]" : "bg-[#f2ece5] text-[#6f6258] hover:bg-[#ebe3da]"}`}>
-                <MessageCircle className="h-4 w-4" /> {pendingAttendanceAdjustmentRequests.length ? `${pendingAttendanceAdjustmentRequests.length} pending` : "Request history"}
-              </button>
-              <span className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{filteredAttendanceRecords.length} record{filteredAttendanceRecords.length === 1 ? "" : "s"}</span>
             </div>
           </div>
 
-          <div className="px-7 pb-7 pt-7">
-            <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {[
-                  { icon: CheckCircle2, label: "Today status", value: todayAttendanceLabel, hint: todayAttendance?.clockInAt ? `In ${new Date(todayAttendance.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : "Awaiting clock in", tone: "emerald" },
-                  { icon: LogIn, label: "Clock in", value: todayAttendance?.clockInAt ? new Date(todayAttendance.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-", hint: remoteWorkEnabled ? "Remote enabled" : attendanceConfigured ? "Location required" : "Geo fence not set", tone: "blue" },
-                  { icon: LogOut, label: "Clock out", value: todayAttendance?.clockOutAt ? new Date(todayAttendance.clockOutAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-", hint: todayAttendance?.clockOutAt ? "Completed today" : "Pending", tone: "orange" },
-                  { icon: CalendarDays, label: "Work time", value: todayWorkMinutes ? `${Math.floor(todayWorkMinutes / 60)}h ${todayWorkMinutes % 60}m` : "0h", hint: `${todayAttendanceRecords.length} marked today`, tone: "violet" },
-                ].map((stat) => {
-                  const Icon = stat.icon;
-                  const toneClass = darkMode
-                    ? stat.tone === "blue" ? "bg-sky-400/12 text-sky-300" : stat.tone === "orange" ? "bg-amber-400/12 text-amber-300" : stat.tone === "violet" ? "bg-violet-400/12 text-violet-300" : "bg-emerald-400/12 text-emerald-300"
-                    : stat.tone === "blue" ? "bg-sky-50 text-sky-600" : stat.tone === "orange" ? "bg-amber-50 text-orange-600" : stat.tone === "violet" ? "bg-violet-50 text-violet-600" : "bg-[#e9fbf2] text-[#008f69]";
-                  return (
-                    <div key={stat.label} className={`min-h-[140px] rounded-[24px] p-5 ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-[#fbfcf9]"}`}>
-                      <div className="flex items-start justify-between gap-4">
-                        <span className={`grid h-12 w-12 place-items-center rounded-full ${toneClass}`}>
-                          <Icon className="h-5 w-5" />
-                        </span>
-                        <strong className="max-w-[170px] truncate text-right text-3xl font-black">{stat.value}</strong>
-                      </div>
-                      <p className="mt-5 text-base font-black">{stat.label}</p>
-                      <p className={`mt-1 text-sm ${muted}`}>{stat.hint}</p>
-                    </div>
-                  );
-                })}
+          <section className={`rounded-[20px] ${panel}`}>
+            <div className="flex flex-col gap-4 px-5 pt-5 xl:flex-row xl:items-end xl:justify-between">
+              <div className="flex items-center gap-3">
+                <IconTile icon={Clock3} tone="peach" darkMode={darkMode} size="sm" />
+                <div>
+                  <h2 className="text-[15px]">Attendance records</h2>
+                  <p className={`text-[12px] ${muted}`}>{filteredAttendanceRecords.length} record{filteredAttendanceRecords.length === 1 ? "" : "s"} for {attendanceDateRangeLabel}</p>
+                </div>
               </div>
-
-              <div className={`rounded-[28px] p-5 ${darkMode ? "border border-white/[0.06] bg-[#0d131a]" : "bg-[#fbfcf9]"}`}>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0 flex-1 overflow-hidden">
-                    <p className="text-lg font-black">{remoteWorkEnabled ? "Remote attendance enabled" : attendanceConfigured ? "Attendance location active" : "Attendance location not set"}</p>
-                    <p className={`mt-1 block max-w-full overflow-hidden truncate whitespace-nowrap text-sm ${muted}`}>{remoteWorkEnabled ? "Office geofence is skipped for your clock in and clock out." : attendanceSettings.address || "HR must set the office/site location before employees can clock in."}</p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <button type="button" disabled={!attendanceReady || attendanceSaving || todayAttendance?.clockInAt} onClick={() => submitAttendance("clock-in")} className={`flex h-11 min-w-[118px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-emerald-400/14 text-emerald-200 hover:bg-emerald-400/20" : "bg-[#e7f6ed] text-[#08764f]"}`}>
-                      {attendanceClockAction === "clock-in" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} {attendanceClockAction === "clock-in" ? "Clocking in" : "Clock in"}
-                    </button>
-                    {mustFillReportBeforeClockOut ? (
-                      <button type="button" disabled={todayReportChecking} onClick={() => router.push("/employee-daily-report")} className={`flex h-11 min-w-[178px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-55 ${darkMode ? "bg-sky-400/14 text-sky-200 hover:bg-sky-400/20" : "bg-sky-50 text-sky-700"}`}>
-                        {todayReportChecking ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Fill Employee Report
-                      </button>
-                    ) : (
-                      <button type="button" disabled={!attendanceReady || attendanceSaving || !todayAttendance?.clockInAt || todayAttendance?.clockOutAt} onClick={() => submitAttendance("clock-out")} className={`flex h-11 min-w-[124px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${darkMode ? "bg-red-600 text-white hover:bg-red-500" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
-                        {attendanceClockAction === "clock-out" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} {attendanceClockAction === "clock-out" ? "Clocking out" : "Clock out"}
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                <label className={`w-full text-xs sm:w-[220px] ${fieldLabel}`}>Search
+                  <div className={`mt-1.5 flex h-10 items-center gap-2 rounded-full px-4 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
+                    <Search className={`h-4 w-4 shrink-0 ${muted}`} />
+                    <input
+                      value={attendanceQuery}
+                      onChange={(event) => setAttendanceQuery(event.target.value)}
+                      placeholder="Employee, status, mode..."
+                      className={`min-w-0 flex-1 bg-transparent text-[13.5px] outline-none ${darkMode ? "text-white placeholder:text-white/35" : "text-[#141414] placeholder:text-[#a3a3a0]"}`}
+                    />
+                    {attendanceQuery && (
+                      <button type="button" onClick={() => setAttendanceQuery("")} className={`grid h-6 w-6 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Clear attendance search">
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
+                </label>
+                <div className="w-full sm:w-[160px]">
+                  <DrawerDatePicker darkMode={darkMode} label="Start date" value={attendanceDateFilter.startDate} placeholder="Start date" onChange={(startDate) => setAttendanceDateFilter(current => ({ ...current, startDate, endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate }))} />
                 </div>
-              </div>
-
-              <div className={`overflow-hidden rounded-[28px] ${darkMode ? "border border-white/[0.06] bg-[#0c1117]" : "bg-[#fbfcf9]"}`}>
-                <div className={`flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-end sm:justify-between ${darkMode ? "border-white/[0.06]" : "border-[#edf0ea]"}`}>
-                  <div>
-                    <p className="text-sm font-black">Attendance records</p>
-                    <p className={`mt-1 text-xs ${muted}`}>Showing entries for {attendanceDateRangeLabel}.</p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <label className="w-full text-xs font-medium sm:w-[220px]">Search
-                      <div className={`mt-2 flex h-12 items-center gap-2 rounded-2xl border px-3 ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
-                        <Search className={`h-4 w-4 shrink-0 ${muted}`} />
-                        <input
-                          value={attendanceQuery}
-                          onChange={(event) => setAttendanceQuery(event.target.value)}
-                          placeholder="Employee, status, mode..."
-                          className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-black/35 dark:placeholder:text-white/35"
-                        />
-                        {attendanceQuery && (
-                          <button type="button" onClick={() => setAttendanceQuery("")} className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Clear attendance search">
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </label>
-                    <div className="w-full sm:w-[150px]">
-                      <DrawerDatePicker darkMode={darkMode} label="Start Date" value={attendanceDateFilter.startDate} placeholder="Start date" onChange={(startDate) => setAttendanceDateFilter(current => ({ ...current, startDate, endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate }))} />
-                    </div>
-                    <div className="w-full sm:w-[150px]">
-                      <DrawerDatePicker darkMode={darkMode} label="End Date" value={attendanceDateFilter.endDate} placeholder="End date" minDate={attendanceDateFilter.startDate} onChange={(endDate) => setAttendanceDateFilter(current => ({ ...current, endDate }))} />
-                    </div>
-                    <div ref={attendanceExportRef} className="relative">
-                      <button type="button" onClick={() => setAttendanceExportOpen((current) => !current)} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`} aria-expanded={attendanceExportOpen} aria-haspopup="menu">
-                        <Download className="h-4 w-4" /> Export to <ChevronDown className={`h-4 w-4 transition ${attendanceExportOpen ? "rotate-180" : ""}`} />
+                <div className="w-full sm:w-[160px]">
+                  <DrawerDatePicker darkMode={darkMode} label="End date" value={attendanceDateFilter.endDate} placeholder="End date" minDate={attendanceDateFilter.startDate} onChange={(endDate) => setAttendanceDateFilter(current => ({ ...current, endDate }))} />
+                </div>
+                <div ref={attendanceExportRef} className="relative">
+                  <Button darkMode={darkMode} variant="secondary" className="h-10" onClick={() => setAttendanceExportOpen((current) => !current)} aria-expanded={attendanceExportOpen} aria-haspopup="menu" icon={Download} iconRight={ChevronDown}>
+                    Export
+                  </Button>
+                  {attendanceExportOpen && (
+                    <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`absolute right-0 top-[calc(100%+8px)] z-30 w-44 overflow-hidden rounded-[18px] border p-1.5 ${darkMode ? "border-white/10 bg-[#17181c]" : "border-[#ececec] bg-white"}`} role="menu">
+                      <button type="button" onClick={() => { setAttendanceExportOpen(false); downloadAttendanceReport(); }} className={`flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[13px] transition ${darkMode ? "text-white/80 hover:bg-white/[0.06]" : "text-[#3d3d3b] hover:bg-[#f4f4f2]"}`} role="menuitem">
+                        <Download className="h-4 w-4" /> PDF
                       </button>
-                      {attendanceExportOpen && (
-                        <div className={`absolute right-0 top-[calc(100%+8px)] z-30 w-44 overflow-hidden rounded-2xl border p-1 shadow-[0_18px_45px_rgba(15,23,42,0.14)] ${darkMode ? "border-white/10 bg-[#0f151c]" : "border-[#e1e5df] bg-white"}`} role="menu">
-                          <button type="button" onClick={() => { setAttendanceExportOpen(false); downloadAttendanceReport(); }} className={`flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold transition ${darkMode ? "text-white/75 hover:bg-white/[0.08]" : "text-black/70 hover:bg-[#f6faf2]"}`} role="menuitem">
-                            <Download className="h-4 w-4" /> PDF
-                          </button>
-                          <button type="button" onClick={() => { setAttendanceExportOpen(false); downloadExcelReport(); }} className={`flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold transition ${darkMode ? "text-white/75 hover:bg-white/[0.08]" : "text-black/70 hover:bg-[#f6faf2]"}`} role="menuitem">
-                            <FileText className="h-4 w-4" /> Excel
-                          </button>
-                          {user?.isSuperAdmin && (
-                            <button type="button" onClick={() => { setAttendanceExportOpen(false); exportToGoogleSheet(); }} className={`flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold transition ${darkMode ? "text-emerald-200 hover:bg-emerald-400/10" : "text-[#08764f] hover:bg-[#e7f6ed]"}`} role="menuitem">
-                              <Upload className="h-4 w-4" /> Sheet
-                            </button>
-                          )}
-                        </div>
+                      <button type="button" onClick={() => { setAttendanceExportOpen(false); downloadExcelReport(); }} className={`flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[13px] transition ${darkMode ? "text-white/80 hover:bg-white/[0.06]" : "text-[#3d3d3b] hover:bg-[#f4f4f2]"}`} role="menuitem">
+                        <FileText className="h-4 w-4" /> Excel
+                      </button>
+                      {user?.isSuperAdmin && (
+                        <button type="button" onClick={() => { setAttendanceExportOpen(false); exportToGoogleSheet(); }} className={`flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[13px] transition ${darkMode ? "text-white/80 hover:bg-white/[0.06]" : "text-[#3d3d3b] hover:bg-[#f4f4f2]"}`} role="menuitem">
+                          <Upload className="h-4 w-4" /> Sheet
+                        </button>
                       )}
                     </div>
-                    {(attendanceQuery || attendanceDateFilter.startDate !== todayInput() || attendanceDateFilter.endDate !== todayInput()) && (
-                      <button type="button" onClick={() => { setAttendanceQuery(""); setAttendanceDateFilter({ startDate: todayInput(), endDate: todayInput() }); }} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
-                        <X className="h-4 w-4" /> Clear
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
-                {!!pendingAttendanceAdjustmentRequests.length && (
-                  <div className={`border-b px-5 py-4 ${darkMode ? "border-white/[0.06] bg-amber-300/[0.035]" : "border-[#edf0ea] bg-[#fffaf0]"}`}>
-                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm font-black">New attendance adjustment request{pendingAttendanceAdjustmentRequests.length === 1 ? "" : "s"}</p>
-                        <p className={`mt-1 text-xs ${muted}`}>{pendingAttendanceAdjustmentRequests.length} request{pendingAttendanceAdjustmentRequests.length === 1 ? "" : "s"} waiting for validation.</p>
-                      </div>
-                      <button type="button" onClick={() => setAttendanceRequestHistoryOpen(true)} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-amber-300/20 bg-amber-300/10 text-amber-100 hover:bg-amber-300/15" : "border-amber-100 bg-white text-amber-700 hover:bg-amber-50"}`}>
-                        <Eye className="h-4 w-4" /> View history
-                      </button>
-                    </div>
-                    <div className="grid gap-2">
-                      {pendingAttendanceAdjustmentRequests.slice(0, 3).map((request) => renderAttendanceAdjustmentRequest(request, { compact: true }))}
-                    </div>
-                  </div>
+                {(attendanceQuery || attendanceDateFilter.startDate !== todayInput() || attendanceDateFilter.endDate !== todayInput()) && (
+                  <Button darkMode={darkMode} variant="soft" className="h-10" icon={X} onClick={() => { setAttendanceQuery(""); setAttendanceDateFilter({ startDate: todayInput(), endDate: todayInput() }); }}>
+                    Clear
+                  </Button>
                 )}
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-sm">
-                    <colgroup>
-                      <col className="w-[21%]" />
-                      <col className="w-[13%]" />
-                      <col className="w-[15%]" />
-                      <col className="w-[15%]" />
-                      <col className="w-[11%]" />
-                      <col className="w-[11%]" />
-                      <col className="w-[12%]" />
-                      {data?.canManageHr && <col className="w-[8%]" />}
-                    </colgroup>
-                    <thead className={muted}>
-                      <tr className={`border-b ${darkMode ? "border-white/[0.06] bg-[#0b1016]" : "border-[#edf0ea] bg-[#fbfcf9]"}`}>
-                        {["Employee", "Date", "Clock in", "Clock out", "Mode", "Hours", "Status", ...(data?.canManageHr ? ["Action"] : [])].map((heading) => (
-                          <th key={heading} className="px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em]">{heading}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredAttendanceRecords.map((record) => {
-                        const attendanceEmployee = String(record.userId || "") === String(user?.id || "") ? user : employees.find((employee) => String(employee.id || "") === String(record.userId || ""));
-                        return (
-                          <tr key={record.id} className={`h-[92px] border-b last:border-b-0 ${darkMode ? "border-white/[0.06] bg-[#0f151c] hover:bg-[#141b24]" : "border-[#edf0ea] bg-white hover:bg-[#fbfcf7]"}`}>
-                            <td className="px-5 py-5">
-                              <div className="flex items-center gap-3">
-                                <UserAvatar user={attendanceEmployee || record} name={record.employeeName} className="h-11 w-11" />
-                                <div className="min-w-0">
-                                  <p className="truncate font-black">{record.employeeName}</p>
-                                  <p className={`truncate text-xs ${muted}`}>{record.designation || record.department || "Employee"}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-5 py-5 font-semibold">{record.date}</td>
-                            <td className={`px-5 py-5 ${muted}`}>{record.clockInAt ? new Date(record.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
-                            <td className={`px-5 py-5 ${muted}`}>{record.clockOutAt ? new Date(record.clockOutAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
-                            <td className="px-5 py-5"><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${record.workMode === "remote" ? "bg-sky-100 text-sky-700" : "bg-emerald-100 text-emerald-700"}`}>{record.workMode || "office"}</span></td>
-                            <td className="px-5 py-5 font-black">{record.workMinutes ? `${Math.floor(record.workMinutes / 60)}h ${record.workMinutes % 60}m` : "-"}</td>
-                            <td className="px-5 py-5"><span className={`inline-flex h-9 items-center rounded-full px-4 text-xs font-black capitalize ${record.status === "completed" ? salaryBadge : statusClass("pending")}`}>{record.status}</span></td>
-                            {data?.canManageHr && (
-                              <td className="px-5 py-5">
-                                <button type="button" onClick={() => openAttendanceAdjustment(record)} className={`grid h-9 w-9 place-items-center rounded-xl transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f0f3ec] text-black/60 hover:bg-[#e7f6ed] hover:text-[#08764f]"}`} aria-label={`Adjust attendance for ${record.employeeName}`}>
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                      {!filteredAttendanceRecords.length && (
-                        <tr><td colSpan={data?.canManageHr ? 8 : 7} className={`px-5 py-12 text-center ${muted}`}>No attendance records found for {attendanceDateRangeLabel}.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
+              </div>
+            </div>
+            {!!pendingAttendanceAdjustmentRequests.length && (
+              <div className={`mx-5 mt-4 rounded-[16px] p-4 ${darkMode ? "bg-[rgba(251,191,36,0.08)]" : "bg-[#fbf0d4]"}`}>
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[14px]">New attendance adjustment request{pendingAttendanceAdjustmentRequests.length === 1 ? "" : "s"}</p>
+                    <p className={`mt-0.5 text-xs ${darkMode ? "text-white/55" : "text-[#8a6200]"}`}>{pendingAttendanceAdjustmentRequests.length} request{pendingAttendanceAdjustmentRequests.length === 1 ? "" : "s"} waiting for validation.</p>
+                  </div>
+                  <Button darkMode={darkMode} variant="secondary" size="sm" icon={Eye} onClick={() => setAttendanceRequestHistoryOpen(true)}>View history</Button>
+                </div>
+                <div className="grid gap-2">
+                  {pendingAttendanceAdjustmentRequests.slice(0, 3).map((request) => renderAttendanceAdjustmentRequest(request, { compact: true }))}
                 </div>
               </div>
-
+            )}
+            <div className="overflow-x-auto px-2 pb-3 pt-4">
+              <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-[13.5px]">
+                <colgroup>
+                  <col className="w-[21%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[11%]" />
+                  <col className="w-[11%]" />
+                  <col className="w-[12%]" />
+                  {data?.canManageHr && <col className="w-[8%]" />}
+                </colgroup>
+                <thead>
+                  <tr className={headRowClass}>
+                    {["Employee", "Date", "Clock in", "Clock out", "Mode", "Hours", "Status", ...(data?.canManageHr ? [""] : [])].map((heading) => (
+                      <th key={heading || "action"} className={thClass}>{heading}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAttendanceRecords.map((record) => {
+                    const attendanceEmployee = String(record.userId || "") === String(user?.id || "") ? user : employees.find((employee) => String(employee.id || "") === String(record.userId || ""));
+                    return (
+                      <tr key={record.id} className={`transition ${rowClass}`}>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <UserAvatar user={attendanceEmployee || record} name={record.employeeName} className="h-10 w-10" />
+                            <div className="min-w-0">
+                              <p className="truncate">{record.employeeName}</p>
+                              <p className={`truncate text-xs ${muted}`}>{record.designation || record.department || "Employee"}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">{record.date}</td>
+                        <td className={`px-4 py-3.5 ${muted}`}>{record.clockInAt ? new Date(record.clockInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
+                        <td className={`px-4 py-3.5 ${muted}`}>{record.clockOutAt ? new Date(record.clockOutAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
+                        <td className="px-4 py-3.5"><Chip tone={record.workMode === "remote" ? "sky" : "neutral"} darkMode={darkMode} className="capitalize">{record.workMode || "office"}</Chip></td>
+                        <td className="px-4 py-3.5 tabular-nums">{record.workMinutes ? `${Math.floor(record.workMinutes / 60)}h ${record.workMinutes % 60}m` : "-"}</td>
+                        <td className="px-4 py-3.5">{statusChip(record.status)}</td>
+                        {data?.canManageHr && (
+                          <td className="px-4 py-3.5 text-right">
+                            <button type="button" onClick={() => openAttendanceAdjustment(record)} className={`grid h-8 w-8 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8]"}`} aria-label={`Adjust attendance for ${record.employeeName}`}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {!filteredAttendanceRecords.length && (
+                    <tr><td colSpan={data?.canManageHr ? 8 : 7} className={`px-5 py-12 text-center ${muted}`}>No attendance records found for {attendanceDateRangeLabel}.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
       )}
 
       {attendanceRequestHistoryOpen && (
-        <div onMouseDown={() => setAttendanceRequestHistoryOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
-          <aside onMouseDown={(event) => event.stopPropagation()} className={`employee-report-drawer hr-request-history-drawer relative flex h-full w-full flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.32)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`} role="dialog" aria-modal="true" aria-label="Attendance adjustment request history">
-            <div className={`flex items-start justify-between gap-4 border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div>
-                <h2 className="text-xl font-black">{data?.canManageHr ? "Adjustment request history" : "My adjustment requests"}</h2>
-                <p className={`mt-1 text-xs ${muted}`}>{data?.canManageHr ? "Review pending and past employee attendance update requests." : "Track every attendance correction request you have sent to HR."}</p>
-              </div>
-              <button type="button" onClick={() => setAttendanceRequestHistoryOpen(false)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
-            </div>
-            <div className={`flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-5 py-4 ${darkMode ? "border-white/10 bg-[#0d131a]" : "border-black/10 bg-[#f7f8f4]"}`}>
+        <div onMouseDown={() => setAttendanceRequestHistoryOpen(false)} className={backdrop}>
+          <aside onMouseDown={(event) => event.stopPropagation()} className={`employee-report-drawer hr-request-history-drawer relative flex h-full w-full flex-col overflow-hidden sm:m-2.5 sm:h-[calc(100%-20px)] sm:rounded-[24px] shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerSheet}`} role="dialog" aria-modal="true" aria-label="Attendance adjustment request history">
+            <DrawerHead darkMode={darkMode} icon={MessageCircle} tone="amber" title={data?.canManageHr ? "Adjustment request history" : "My adjustment requests"} subtitle={data?.canManageHr ? "Review pending and past employee attendance update requests." : "Track every attendance correction request you have sent to HR."} onClose={() => setAttendanceRequestHistoryOpen(false)} />
+            <div className={`flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-6 py-3 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
               <div className="flex flex-wrap gap-2">
-                <span className={`rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-50 text-amber-700"}`}>{pendingAttendanceAdjustmentRequests.length} pending</span>
-                <span className={`rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/65" : "bg-[#f2ece5] text-[#6f6258]"}`}>{myAttendanceAdjustmentRequests.length} total</span>
+                <Chip tone="amber" darkMode={darkMode}>{pendingAttendanceAdjustmentRequests.length} pending</Chip>
+                <Chip darkMode={darkMode}>{myAttendanceAdjustmentRequests.length} total</Chip>
               </div>
               {!data?.canManageHr && (
-                <button type="button" onClick={() => { setAttendanceRequestHistoryOpen(false); openAttendanceRequest(null, "bulk"); }} className={`flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-bold transition ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/65 hover:bg-[#f6faf2]"}`}>
+                <button type="button" onClick={() => { setAttendanceRequestHistoryOpen(false); openAttendanceRequest(null, "bulk"); }} className={`flex h-9 items-center justify-center gap-2 rounded-full px-4 text-[13px] transition ${darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
                   <Plus className="h-4 w-4" /> Bulk request
                 </button>
               )}
             </div>
-            <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
+            <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${drawerBody}`}>
               {myAttendanceAdjustmentRequests.length ? (
                 <div className="grid gap-2">
                   {myAttendanceAdjustmentRequests.map((request) => renderAttendanceAdjustmentRequest(request))}
@@ -2578,38 +2553,22 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       )}
 
       {attendanceRequestOpen && (
-        <div onMouseDown={() => setAttendanceRequestOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
-          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={submitAttendanceAdjustmentRequest} className={`employee-report-drawer relative flex h-full w-full max-w-2xl flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.32)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex items-start justify-between border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div>
-                <h2 className="text-xl font-black">Attendance adjustment request</h2>
-                <p className={`mt-1 text-xs ${muted}`}>Send corrected clock in and clock out time to HR for validation.</p>
-                <div className={`mt-3 inline-flex rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f2f4f0]"}`}>
-                  {[{ id: "single", label: "Single" }, { id: "bulk", label: "Bulk" }].map((tab) => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setAttendanceRequestMode(tab.id)}
-                      className={`h-8 rounded-full px-4 text-xs font-bold transition ${attendanceRequestMode === tab.id ? "bg-[#171714] text-white" : darkMode ? "text-white/60" : "text-slate-600"}`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <button type="button" onClick={() => setAttendanceRequestOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
-            </div>
-            <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
+        <div onMouseDown={() => setAttendanceRequestOpen(false)} className={backdrop}>
+          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={submitAttendanceAdjustmentRequest} className={`employee-report-drawer relative flex h-full w-full max-w-2xl flex-col overflow-hidden sm:m-2.5 sm:h-[calc(100%-20px)] sm:rounded-[24px] shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerSheet}`}>
+            <DrawerHead darkMode={darkMode} icon={Clock3} tone="sky" title="Attendance adjustment request" subtitle="Send corrected clock in and clock out time to HR for validation." onClose={() => setAttendanceRequestOpen(false)}>
+              <Tabs darkMode={darkMode} className="mt-3" items={[{ id: "single", label: "Single" }, { id: "bulk", label: "Bulk" }]} value={attendanceRequestMode} onChange={setAttendanceRequestMode} />
+            </DrawerHead>
+            <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${drawerBody}`}>
               <div className="grid gap-4">
                 {(attendanceRequestMode === "bulk" ? attendanceRequestRows : attendanceRequestRows.slice(0, 1)).map((row, index) => (
-                  <section key={index} className={`rounded-[26px] border p-4 sm:p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
+                  <section key={index} className={`rounded-[20px] border p-4 sm:p-5 ${drawerCard}`}>
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-black">Adjustment {index + 1}</p>
+                        <p className="text-sm">Adjustment {index + 1}</p>
                         <p className={`mt-1 text-xs ${muted}`}>{row.date ? formatDateLabel(row.date) : "Select date"}</p>
                       </div>
                       {attendanceRequestMode === "bulk" && attendanceRequestRows.length > 1 && (
-                        <button type="button" onClick={() => removeAttendanceRequestRow(index)} className={`grid h-9 w-9 place-items-center rounded-xl ${darkMode ? "bg-rose-400/10 text-rose-200 hover:bg-rose-400/20" : "bg-rose-50 text-rose-600 hover:bg-rose-100"}`} title="Remove row">
+                        <button type="button" onClick={() => removeAttendanceRequestRow(index)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-[rgba(251,113,133,0.13)] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"}`} title="Remove row">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       )}
@@ -2633,27 +2592,27 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       <AttendanceTimePicker darkMode={darkMode} label="Clock in" value={row.clockInTime} onChange={(clockInTime) => updateAttendanceRequestRow(index, { clockInTime })} />
                       <AttendanceTimePicker darkMode={darkMode} label="Clock out" value={row.clockOutTime} onChange={(clockOutTime) => updateAttendanceRequestRow(index, { clockOutTime })} emptyLabel={row.date === todayInput() ? "Optional today" : "No record"} />
                     </div>
-                    <label className="mt-4 block text-xs font-medium text-black/65 dark:text-white/60">Reason / note
+                    <label className={`mt-4 block text-xs ${fieldLabel}`}>Reason / note
                       <textarea
                         value={row.reason}
                         onChange={(event) => updateAttendanceRequestRow(index, { reason: event.target.value })}
                         rows={3}
                         placeholder="Example: Forgot to clock out after site visit."
-                        className={`mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-sm font-semibold leading-6 outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:ring-2 focus:ring-emerald-300/20" : "border-black/10 bg-white text-[#171714] placeholder:text-black/35 focus:ring-2 focus:ring-[#6ee72f]/20"}`}
+                        className={`mt-2 w-full resize-none rounded-[16px] px-4 py-3 text-[13.5px] leading-6 outline-none transition ${textField}`}
                       />
                     </label>
                   </section>
                 ))}
                 {attendanceRequestMode === "bulk" && (
-                  <button type="button" onClick={addAttendanceRequestRow} className={`flex h-11 w-fit items-center gap-2 rounded-2xl border px-5 text-sm font-black ${darkMode ? "border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/70 hover:bg-[#f6faf2]"}`}>
+                  <button type="button" onClick={addAttendanceRequestRow} className={`flex h-10 w-fit items-center gap-2 rounded-full px-5 text-[13px] transition ${darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
                     <Plus className="h-4 w-4" /> Add another date
                   </button>
                 )}
               </div>
             </div>
-            <div className={`flex shrink-0 items-center justify-between gap-4 border-t px-6 py-5 ${darkMode ? "border-white/[0.07] bg-[#080c11]" : "border-black/10 bg-white"}`}>
-              <button type="button" onClick={() => setAttendanceRequestOpen(false)} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
-              <button disabled={attendanceRequestSaving || !attendanceRequestRows[0]?.date || !attendanceRequestRows[0]?.clockInTime} className="h-11 min-w-[180px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">
+            <div className={`flex shrink-0 items-center justify-between gap-4 border-t px-6 py-5 ${drawerFooter}`}>
+              <Button darkMode={darkMode} variant="secondary" size="lg" onClick={() => setAttendanceRequestOpen(false)}>Cancel</Button>
+              <button disabled={attendanceRequestSaving || !attendanceRequestRows[0]?.date || !attendanceRequestRows[0]?.clockInTime} type="submit" className={`inline-flex h-11 min-w-[180px] items-center justify-center rounded-full px-7 text-sm transition disabled:cursor-not-allowed disabled:opacity-55 ${primaryButton}`}>
                 {attendanceRequestSaving ? "Sending..." : "Send request"}
               </button>
             </div>
@@ -2662,44 +2621,31 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       )}
 
       {attendanceAdjustOpen && (
-        <div onMouseDown={() => setAttendanceAdjustOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
-          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={saveAttendanceAdjustment} className={`employee-report-drawer relative flex h-full w-full max-w-xl flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.32)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex items-start justify-between border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div>
-                <h2 className="text-xl font-black">Adjustments</h2>
-                <p className={`mt-1 text-xs ${muted}`}>
-                  {adjustTab === "time"
-                    ? "Set clock in and clock out in IST for the selected employee/date."
-                    : "Mark a holiday or shutdown day. Everyone counts as present and the column reads NWD."}
-                </p>
-                <div className={`mt-3 inline-flex rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f2f4f0]"}`}>
-                  {[{ id: "time", label: "Time" }, { id: "nwd", label: "No working day" }].map((tab) => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setAdjustTab(tab.id)}
-                      className={`h-8 rounded-full px-4 text-xs font-bold transition ${adjustTab === tab.id ? "bg-[#171714] text-white" : darkMode ? "text-white/60" : "text-slate-600"}`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <button type="button" onClick={() => setAttendanceAdjustOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
-            </div>
-            <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
+        <div onMouseDown={() => setAttendanceAdjustOpen(false)} className={backdrop}>
+          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={saveAttendanceAdjustment} className={`employee-report-drawer relative flex h-full w-full max-w-xl flex-col overflow-hidden sm:m-2.5 sm:h-[calc(100%-20px)] sm:rounded-[24px] shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerSheet}`}>
+            <DrawerHead
+              darkMode={darkMode}
+              icon={adjustTab === "time" ? Clock3 : CalendarOff}
+              tone={adjustTab === "time" ? "peach" : "mint"}
+              title="Adjustments"
+              subtitle={adjustTab === "time" ? "Set clock in and clock out in IST for the selected employee/date." : "Mark a holiday or shutdown day. Everyone counts as present and the column reads NWD."}
+              onClose={() => setAttendanceAdjustOpen(false)}
+            >
+              <Tabs darkMode={darkMode} className="mt-3" items={[{ id: "time", label: "Time" }, { id: "nwd", label: "No working day" }]} value={adjustTab} onChange={setAdjustTab} />
+            </DrawerHead>
+            <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 ${drawerBody}`}>
               {adjustTab === "nwd" ? (
-                <section className={`rounded-[26px] border p-4 sm:p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
-                  <div className={`rounded-[22px] p-4 ${darkMode ? "bg-teal-300/[0.08]" : "bg-[#ecfdf7]"}`}>
-                    <p className={`text-sm font-black ${darkMode ? "text-teal-200" : "text-[#0f766e]"}`}>What a no working day does</p>
-                    <p className={`mt-1.5 text-xs leading-5 ${muted}`}>
+                <section className={`rounded-[20px] border p-4 sm:p-5 ${drawerCard}`}>
+                  <div className={`rounded-[16px] p-4 ${darkMode ? "bg-[#cff07a]/15" : "bg-[#d4f28a]"}`}>
+                    <p className="text-[14px]">What a no working day does</p>
+                    <p className={`mt-1.5 text-xs leading-5 ${darkMode ? "text-white/60" : "text-[#3d4a1a]"}`}>
                       The whole column reads <b>NWD</b> for every employee and the day counts towards present days, so a company holiday or shutdown never shows up as absence. Hours anyone did work that day still count towards their total. Sundays are already non-working, so marking one changes nothing.
                     </p>
                   </div>
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,180px)_1fr_auto] sm:items-end">
                     <label className="block">
-                      <span className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Date</span>
+                      <span className={`text-xs ${fieldLabel}`}>Date</span>
                       <DateInput
                         darkMode={darkMode}
                         value={nwdForm.date}
@@ -2708,32 +2654,32 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       />
                     </label>
                     <label className="block">
-                      <span className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Reason (optional)</span>
+                      <span className={`text-xs ${muted}`}>Reason (optional)</span>
                       <input
                         value={nwdForm.label}
                         onChange={(event) => setNwdForm((current) => ({ ...current, label: event.target.value }))}
                         placeholder="Diwali, Independence Day, office shutdown..."
-                        className={`mt-1.5 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-[#0b1016] text-white/85 placeholder:text-white/25" : "border-black/10 bg-white text-black/75 placeholder:text-black/30"}`}
+                        className={`mt-1.5 h-10 w-full rounded-full px-4 text-[13.5px] outline-none ${textField}`}
                       />
                     </label>
                     <button
                       type="button"
                       onClick={saveNoWorkingDay}
                       disabled={nwdSaving || !nwdForm.date}
-                      className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0f766e] px-5 text-sm font-black text-white transition hover:bg-[#115e59] disabled:opacity-50"
+                      className={`flex h-10 items-center justify-center gap-2 rounded-full px-5 text-[13px] transition disabled:opacity-50 ${primaryButton}`}
                     >
                       {nwdSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarOff className="h-4 w-4" />} Mark day
                     </button>
                   </div>
 
                   <div className="mt-6">
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Marked days</p>
+                    <p className={`text-xs ${muted}`}>Marked days</p>
                     {noWorkingDays.length ? (
                       <div className="mt-2 grid gap-2">
                         {noWorkingDays.map((day) => (
-                          <div key={day.date} className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f6faf2]"}`}>
+                          <div key={day.date} className={`flex items-center justify-between gap-3 rounded-[14px] px-4 py-3 ${softPanel}`}>
                             <div className="min-w-0">
-                              <p className="text-sm font-black">{formatDateLabel(day.date)}</p>
+                              <p className="text-sm">{formatDateLabel(day.date)}</p>
                               <p className={`truncate text-xs ${muted}`}>
                                 {day.label || "No reason noted"}
                                 {day.markedByName ? ` · marked by ${day.markedByName}` : ""}
@@ -2743,7 +2689,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                               type="button"
                               onClick={() => removeNoWorkingDay(day.date)}
                               disabled={nwdSaving}
-                              className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition disabled:opacity-50 ${darkMode ? "bg-rose-400/10 text-rose-200 hover:bg-rose-400/20" : "bg-rose-50 text-rose-600 hover:bg-rose-100"}`}
+                              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:opacity-50 ${darkMode ? "bg-[rgba(251,113,133,0.13)] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"}`}
                               title="Make this a working day again"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -2752,41 +2698,30 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         ))}
                       </div>
                     ) : (
-                      <p className={`mt-2 rounded-2xl px-4 py-6 text-center text-sm ${darkMode ? "bg-white/[0.03] text-white/45" : "bg-[#f6faf2] text-black/45"}`}>
+                      <p className={`mt-2 rounded-[14px] px-4 py-6 text-center text-[13px] ${softPanel} ${muted}`}>
                         No days marked yet. Pick a date above to add one.
                       </p>
                     )}
                   </div>
                 </section>
               ) : (
-              <section className={`rounded-[26px] border p-4 sm:p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
-                <div className={`mb-5 grid gap-3 rounded-[22px] p-4 sm:grid-cols-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f6faf2]"}`}>
+              <section className={`rounded-[20px] border p-4 sm:p-5 ${drawerCard}`}>
+                <div className={`mb-5 grid gap-3 rounded-[16px] p-4 sm:grid-cols-3 ${softPanel}`}>
                   <div>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Employee</p>
-                    <p className="mt-1 truncate text-sm font-black">{selectedAttendanceAdjustEmployee?.displayName || selectedAttendanceAdjustEmployee?.username || "Select employee"}</p>
+                    <p className={`text-xs ${muted}`}>Employee</p>
+                    <p className="mt-1 truncate text-sm">{selectedAttendanceAdjustEmployee?.displayName || selectedAttendanceAdjustEmployee?.username || "Select employee"}</p>
                   </div>
                   <div>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Date</p>
-                    <p className="mt-1 text-sm font-black">{formatDateLabel(attendanceAdjustForm.date)}</p>
+                    <p className={`text-xs ${muted}`}>Date</p>
+                    <p className="mt-1 text-sm">{formatDateLabel(attendanceAdjustForm.date)}</p>
                   </div>
                   <div>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Time</p>
-                    <p className="mt-1 text-sm font-black">{attendanceAdjustmentIsToday ? (attendanceAdjustForm.clockInTime ? displayTimeInput(attendanceAdjustForm.clockInTime) : "No record") : `${attendanceAdjustForm.clockInTime ? displayTimeInput(attendanceAdjustForm.clockInTime) : "No record"} - ${attendanceAdjustForm.clockOutTime ? displayTimeInput(attendanceAdjustForm.clockOutTime) : "No record"}`}</p>
+                    <p className={`text-xs ${muted}`}>Time</p>
+                    <p className="mt-1 text-sm">{attendanceAdjustmentIsToday ? (attendanceAdjustForm.clockInTime ? displayTimeInput(attendanceAdjustForm.clockInTime) : "No record") : `${attendanceAdjustForm.clockInTime ? displayTimeInput(attendanceAdjustForm.clockInTime) : "No record"} - ${attendanceAdjustForm.clockOutTime ? displayTimeInput(attendanceAdjustForm.clockOutTime) : "No record"}`}</p>
                   </div>
                 </div>
                 <div className="grid gap-4">
-                  <div className={`inline-flex w-fit rounded-full p-1 ${darkMode ? "bg-white/[0.06]" : "bg-[#f2f4f0]"}`}>
-                    {[{ id: "single", label: "Single date" }, { id: "bulk", label: "Bulk dates" }].map((mode) => (
-                      <button
-                        key={mode.id}
-                        type="button"
-                        onClick={() => setAttendanceAdjustMode(mode.id)}
-                        className={`h-8 rounded-full px-4 text-xs font-bold transition ${attendanceAdjustMode === mode.id ? "bg-[#171714] text-white" : darkMode ? "text-white/60" : "text-slate-600"}`}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
+                  <Tabs darkMode={darkMode} className="w-fit" items={[{ id: "single", label: "Single date" }, { id: "bulk", label: "Bulk dates" }]} value={attendanceAdjustMode} onChange={setAttendanceAdjustMode} />
                   <DrawerSelect
                     darkMode={darkMode}
                     label="Employee"
@@ -2808,14 +2743,14 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                           const rowIsToday = row.date === todayInput();
                           const rowRecord = attendanceRecords.find((record) => String(record.userId || "") === String(attendanceAdjustForm.userId || "") && record.date === row.date);
                           return (
-                            <section key={`${row.date}-${index}`} className={`rounded-[22px] border p-4 ${darkMode ? "border-white/[0.07] bg-white/[0.035]" : "border-black/10 bg-[#fbfcf9]"}`}>
+                            <section key={`${row.date}-${index}`} className={`rounded-[16px] p-4 ${softPanel}`}>
                               <div className="mb-3 flex items-center justify-between gap-3">
                                 <div>
-                                  <p className="text-sm font-black">Date {index + 1}</p>
+                                  <p className="text-sm">Date {index + 1}</p>
                                   <p className={`mt-1 text-xs ${muted}`}>{rowRecord ? "Existing record loaded" : "No record found yet"}</p>
                                 </div>
                                 {attendanceAdjustRows.length > 1 && (
-                                  <button type="button" onClick={() => removeAttendanceAdjustRow(index)} className={`grid h-9 w-9 place-items-center rounded-xl ${darkMode ? "bg-rose-400/10 text-rose-200 hover:bg-rose-400/20" : "bg-rose-50 text-rose-600 hover:bg-rose-100"}`} title="Remove date">
+                                  <button type="button" onClick={() => removeAttendanceAdjustRow(index)} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-[rgba(251,113,133,0.13)] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"}`} title="Remove date">
                                     <Trash2 className="h-4 w-4" />
                                   </button>
                                 )}
@@ -2833,14 +2768,14 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                                 <AttendanceTimePicker darkMode={darkMode} label="Clock in" value={row.clockInTime} onChange={(clockInTime) => updateAttendanceAdjustRow(index, { clockInTime })} />
                                 <AttendanceTimePicker darkMode={darkMode} label="Clock out" value={row.clockOutTime} onChange={(clockOutTime) => updateAttendanceAdjustRow(index, { clockOutTime })} emptyLabel={rowIsToday ? "Optional today" : "No record"} />
                               </div>
-                              <label className="mt-3 block text-xs font-medium text-black/65 dark:text-white/60">Reason / note
-                                <textarea value={row.reason} onChange={(event) => updateAttendanceAdjustRow(index, { reason: event.target.value })} rows={2} placeholder="Example: Forgot to clock out, corrected manually." className={`mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-sm font-semibold leading-6 outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:ring-2 focus:ring-emerald-300/20" : "border-black/10 bg-white text-[#171714] placeholder:text-black/35 focus:ring-2 focus:ring-[#6ee72f]/20"}`} />
+                              <label className={`mt-3 block text-xs ${fieldLabel}`}>Reason / note
+                                <textarea value={row.reason} onChange={(event) => updateAttendanceAdjustRow(index, { reason: event.target.value })} rows={2} placeholder="Example: Forgot to clock out, corrected manually." className={`mt-2 w-full resize-none rounded-[16px] px-4 py-3 text-[13.5px] leading-6 outline-none transition ${textField}`} />
                               </label>
                             </section>
                           );
                         })}
                       </div>
-                      <button type="button" onClick={addAttendanceAdjustRow} className={`flex h-11 w-fit items-center gap-2 rounded-2xl border px-5 text-sm font-black ${darkMode ? "border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]" : "border-black/10 bg-white text-black/70 hover:bg-[#f6faf2]"}`}>
+                      <button type="button" onClick={addAttendanceAdjustRow} className={`flex h-10 w-fit items-center gap-2 rounded-full px-5 text-[13px] transition ${darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
                         <Plus className="h-4 w-4" /> Add another date
                       </button>
                     </>
@@ -2860,9 +2795,9 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         )}
                       </div>
                       {selectedAttendanceAdjustRecord ? (
-                        <p className={`rounded-2xl px-4 py-3 text-xs font-semibold ${darkMode ? "bg-emerald-300/10 text-emerald-100" : "bg-[#e7f6ed] text-[#08764f]"}`}>Existing record found. Pick exact hour and minute only if you need to correct it.</p>
+                        <p className={`rounded-[14px] px-4 py-3 text-xs ${darkMode ? "bg-[rgba(74,222,128,0.12)] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"}`}>Existing record found. Pick exact hour and minute only if you need to correct it.</p>
                       ) : (
-                        <p className={`rounded-2xl px-4 py-3 text-xs font-semibold ${darkMode ? "bg-amber-300/10 text-amber-100" : "bg-amber-50 text-amber-700"}`}>No record found for this employee/date. Choose the time manually to create one.</p>
+                        <p className={`rounded-[14px] px-4 py-3 text-xs ${darkMode ? "bg-[rgba(251,191,36,0.13)] text-[#f5d27a]" : "bg-[#fbf0d4] text-[#8a6200]"}`}>No record found for this employee/date. Choose the time manually to create one.</p>
                       )}
                       <DrawerSelect
                         darkMode={darkMode}
@@ -2872,8 +2807,8 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         options={["Office", "Remote"]}
                         onChange={(workMode) => setAttendanceAdjustForm((current) => ({ ...current, workMode: workMode.toLowerCase() }))}
                       />
-                      <label className="text-xs font-medium text-black/65 dark:text-white/60">Reason / note
-                        <textarea value={attendanceAdjustForm.reason} onChange={(event) => setAttendanceAdjustForm((current) => ({ ...current, reason: event.target.value }))} rows={5} placeholder="Example: Forgot to clock in, corrected from HR approval." className={`mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-sm font-semibold leading-6 outline-none transition ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:ring-2 focus:ring-emerald-300/20" : "border-black/10 bg-white text-[#171714] placeholder:text-black/35 focus:ring-2 focus:ring-[#6ee72f]/20"}`} />
+                      <label className={`text-xs ${fieldLabel}`}>Reason / note
+                        <textarea value={attendanceAdjustForm.reason} onChange={(event) => setAttendanceAdjustForm((current) => ({ ...current, reason: event.target.value }))} rows={5} placeholder="Example: Forgot to clock in, corrected from HR approval." className={`mt-2 w-full resize-none rounded-[16px] px-4 py-3 text-[13.5px] leading-6 outline-none transition ${textField}`} />
                         <span className={`mt-2 block text-[11px] leading-5 ${muted}`}>This note is saved in the activity log with the adjustment.</span>
                       </label>
                     </>
@@ -2882,10 +2817,10 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </section>
               )}
             </div>
-            <div className={`flex shrink-0 items-center justify-between gap-4 border-t px-6 py-5 ${darkMode ? "border-white/[0.07] bg-[#080c11]" : "border-black/10 bg-white"}`}>
-              <button type="button" onClick={() => setAttendanceAdjustOpen(false)} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
+            <div className={`flex shrink-0 items-center justify-between gap-4 border-t px-6 py-5 ${drawerFooter}`}>
+              <Button darkMode={darkMode} variant="secondary" size="lg" onClick={() => setAttendanceAdjustOpen(false)}>Cancel</Button>
               {adjustTab === "time" ? (
-              <button disabled={attendanceAdjustSaving || !attendanceAdjustForm.userId || (attendanceAdjustMode === "bulk" ? !attendanceAdjustBulkReady : (!attendanceAdjustForm.date || !attendanceAdjustForm.clockInTime || (!attendanceAdjustmentIsToday && !attendanceAdjustForm.clockOutTime)))} className="h-11 min-w-[180px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">{attendanceAdjustSaving ? "Saving..." : attendanceAdjustMode === "bulk" ? "Save adjustments" : "Save adjustment"}</button>
+              <button disabled={attendanceAdjustSaving || !attendanceAdjustForm.userId || (attendanceAdjustMode === "bulk" ? !attendanceAdjustBulkReady : (!attendanceAdjustForm.date || !attendanceAdjustForm.clockInTime || (!attendanceAdjustmentIsToday && !attendanceAdjustForm.clockOutTime)))} type="submit" className={`inline-flex h-11 min-w-[180px] items-center justify-center rounded-full px-7 text-sm transition disabled:cursor-not-allowed disabled:opacity-55 ${primaryButton}`}>{attendanceAdjustSaving ? "Saving..." : attendanceAdjustMode === "bulk" ? "Save adjustments" : "Save adjustment"}</button>
               ) : null}
             </div>
           </form>
@@ -2893,41 +2828,41 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       )}
 
       {attendanceSettingsOpen && (
-        <div onMouseDown={closeAttendanceSettings} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
-          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={saveAttendanceSettings} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.38)] ${attendanceSettingsExpanded ? "employee-report-shell-expanded" : ""} animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#080c11] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex items-center justify-between border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div>
-                <h2 className="text-xl font-black">Attendance settings</h2>
-                <p className={`mt-1 text-xs ${muted}`}>Set the allowed work location and radius.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setAttendanceSettingsExpanded((current) => !current)} className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={attendanceSettingsExpanded ? "Restore drawer size" : "Expand attendance settings"}>
-                  {attendanceSettingsExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+        <div onMouseDown={closeAttendanceSettings} className={backdrop}>
+          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={saveAttendanceSettings} className={`employee-report-drawer employee-report-shell absolute flex flex-col overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.16)] ${attendanceSettingsExpanded ? "employee-report-shell-expanded" : "sm:!rounded-[24px]"} animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerSheet}`}>
+            <DrawerHead
+              darkMode={darkMode}
+              icon={MapPin}
+              tone="peach"
+              title="Attendance settings"
+              subtitle="Set the allowed work location and radius."
+              onClose={closeAttendanceSettings}
+              extra={(
+                <Button darkMode={darkMode} variant="soft" size="sm" icon={attendanceSettingsExpanded ? Minimize2 : Maximize2} onClick={() => setAttendanceSettingsExpanded((current) => !current)} aria-label={attendanceSettingsExpanded ? "Restore drawer size" : "Expand attendance settings"}>
                   <span className="hidden sm:inline">{attendanceSettingsExpanded ? "Restore" : "Expand"}</span>
-                </button>
-                <button type="button" onClick={closeAttendanceSettings} className={`h-8 rounded-full px-3 text-xs font-bold transition ${darkMode ? "text-emerald-300 hover:bg-white/10" : "text-[#08764f] hover:bg-[#e7f6ed]"}`}>Close</button>
-              </div>
-            </div>
-            <div className={`min-h-0 flex-1 overflow-hidden ${darkMode ? "bg-[#060a0f]" : "bg-[#f5f7f2]"}`}>
+                </Button>
+              )}
+            />
+            <div className={`min-h-0 flex-1 overflow-hidden ${drawerBody}`}>
               <div className="grid h-full min-h-0 gap-5 overflow-y-auto p-5 xl:grid-cols-[minmax(360px,0.48fr)_minmax(0,0.52fr)]">
                 <div className="min-w-0 space-y-5">
-                  <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
+                  <section className={`rounded-[20px] border p-5 ${drawerCard}`}>
                     <div className="flex flex-col gap-3">
-                      <label className="newq relative text-xs font-bold uppercase tracking-[0.14em] text-black/45 dark:text-white/45">Search address
-                        <div className={`mt-2 flex h-12 items-center gap-3 rounded-full border px-5 ${darkMode ? "border-white/[0.1] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
+                      <label className={`newq relative text-xs ${fieldLabel}`}>Search address
+                        <div className={`mt-1.5 flex h-11 items-center gap-3 rounded-full px-5 ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
                           <Search className={`h-4 w-4 ${muted}`} />
-                          <input value={attendanceForm.address} onChange={(event) => handleAttendanceAddressInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void searchTypedAttendanceAddress(); } }} placeholder="Type office, site, city or landmark..." className="attendance-search-input newq min-w-0 flex-1 appearance-none border-0 bg-transparent text-sm font-semibold outline-none ring-0 placeholder:text-black/35 focus:border-0 focus:outline-none focus:ring-0 dark:placeholder:text-white/35" />
+                          <input value={attendanceForm.address} onChange={(event) => handleAttendanceAddressInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void searchTypedAttendanceAddress(); } }} placeholder="Type office, site, city or landmark..." className={`attendance-search-input newq min-w-0 flex-1 appearance-none border-0 bg-transparent text-[13.5px] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 ${darkMode ? "text-white placeholder:text-white/35" : "text-[#141414] placeholder:text-[#a3a3a0]"}`} />
                           {attendanceLocating && <RefreshCw className={`h-4 w-4 animate-spin ${muted}`} />}
                         </div>
                         {!!attendanceSearchResults.length && (
-                          <div className={`absolute left-0 right-0 top-[calc(100%+8px)] z-[95] max-h-[360px] overflow-y-auto rounded-3xl border p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)] ${darkMode ? "border-white/[0.08] bg-[#101720]" : "border-[#e1e5df] bg-white"}`}>
+                          <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`absolute left-0 right-0 top-[calc(100%+8px)] z-[95] max-h-[360px] overflow-y-auto rounded-[18px] border p-1.5 ${darkMode ? "border-white/10 bg-[#17181c]" : "border-[#ececec] bg-white"}`}>
                             {attendanceSearchResults.map((item) => {
                               const selected = item.lat !== null && item.lat !== undefined && item.lon !== null && item.lon !== undefined && Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon)) && String(Number(attendanceForm.latitude)) === String(Number(item.lat)) && String(Number(attendanceForm.longitude)) === String(Number(item.lon));
                               return (
-                                <button key={`${item.place_id}-${item.display_name}`} type="button" onClick={() => selectAttendanceSearchResult(item)} className={`flex w-full items-start gap-3 rounded-2xl p-3 text-left normal-case tracking-normal transition ${selected ? darkMode ? "bg-emerald-400/10" : "bg-[#effbe9]" : darkMode ? "hover:bg-white/[0.06]" : "hover:bg-[#f6faf2]"}`}>
-                                  <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full ${selected ? darkMode ? "bg-emerald-300/18 text-emerald-200" : "bg-[#6ee72f] text-[#10210c]" : darkMode ? "bg-emerald-400/12 text-emerald-300" : "bg-[#e7f6ed] text-[#08764f]"}`}><MapPin className="h-4 w-4" /></span>
+                                <button key={`${item.place_id}-${item.display_name}`} type="button" onClick={() => selectAttendanceSearchResult(item)} className={`flex w-full items-start gap-3 rounded-[12px] p-2.5 text-left normal-case tracking-normal transition ${selected ? darkMode ? "bg-white/[0.08]" : "bg-[#f4f4f2]" : darkMode ? "hover:bg-white/[0.05]" : "hover:bg-[#f6f6f4]"}`}>
+                                  <IconTile icon={MapPin} tone={selected ? "lime" : "peach"} darkMode={darkMode} size="sm" />
                                   <span className="min-w-0">
-                                    <span className="block truncate text-sm font-black text-[#171714] dark:text-white">{item.name || item.display_name?.split(",")?.[0] || "Location"}</span>
+                                    <span className={`block truncate text-[13.5px] ${darkMode ? "text-white" : "text-[#141414]"}`}>{item.name || item.display_name?.split(",")?.[0] || "Location"}</span>
                                     <span className={`mt-1 block line-clamp-2 text-xs leading-5 ${muted}`}>{item.display_name}</span>
                                   </span>
                                 </button>
@@ -2936,47 +2871,47 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                           </div>
                         )}
                       </label>
-                      <button type="button" onClick={useCurrentAttendanceLocation} disabled={attendanceLocating} className={`newq h-12 w-fit rounded-full px-6 text-sm font-bold disabled:opacity-55 ${darkMode ? "bg-emerald-400/14 text-emerald-200 hover:bg-emerald-400/20" : "bg-[#e7f6ed] text-[#08764f]"}`}>Use current</button>
+                      <button type="button" onClick={useCurrentAttendanceLocation} disabled={attendanceLocating} className={`newq inline-flex h-10 w-fit items-center gap-2 rounded-full px-5 text-[13px] transition disabled:opacity-55 ${darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}><Navigation className="h-4 w-4" /> Use current location</button>
                     </div>
                   </section>
 
-                  <section className={`rounded-[26px] border p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
+                  <section className={`rounded-[20px] border p-5 ${drawerCard}`}>
                     {attendanceForm.latitude && attendanceForm.longitude ? (
                       <>
                     <div className="flex flex-col gap-4">
                       <div className="min-w-0 flex-1 overflow-hidden">
-                        <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Selected location</p>
-                        <p className="mt-2 block max-w-full overflow-hidden truncate whitespace-nowrap text-lg font-black">{attendanceForm.address || "Pinned location"}</p>
+                        <p className={`text-xs ${muted}`}>Selected location</p>
+                        <p className="mt-1 block max-w-full overflow-hidden truncate whitespace-nowrap text-[17px]">{attendanceForm.address || "Pinned location"}</p>
                         <p className={`mt-1 text-xs ${muted}`}>{attendanceForm.latitude}, {attendanceForm.longitude}</p>
                       </div>
-                      <a className={`inline-flex h-11 w-fit shrink-0 items-center gap-2 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-emerald-400/14 text-emerald-200" : "bg-[#e7f6ed] text-[#08764f]"}`} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${attendanceForm.latitude},${attendanceForm.longitude}`)}`} target="_blank" rel="noreferrer"><Navigation className="h-4 w-4" /> Open map</a>
+                      <a className={`inline-flex h-9 w-fit shrink-0 items-center gap-2 rounded-full border px-4 text-[13px] ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${attendanceForm.latitude},${attendanceForm.longitude}`)}`} target="_blank" rel="noreferrer"><Navigation className="h-4 w-4" /> Open map</a>
                     </div>
                     <div className="mt-5 grid gap-3">
-                      <label className="text-xs font-medium">Latitude
-                        <input type="number" step="any" value={attendanceForm.latitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, latitude: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} />
+                      <label className={`text-xs ${fieldLabel}`}>Latitude
+                        <input type="number" step="any" value={attendanceForm.latitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, latitude: event.target.value }))} className={`mt-2 h-10 w-full rounded-full px-4 text-[13.5px] outline-none ${textField}`} />
                       </label>
-                      <label className="text-xs font-medium">Longitude
-                        <input type="number" step="any" value={attendanceForm.longitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, longitude: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} />
+                      <label className={`text-xs ${fieldLabel}`}>Longitude
+                        <input type="number" step="any" value={attendanceForm.longitude} onChange={(event) => setAttendanceForm((current) => ({ ...current, longitude: event.target.value }))} className={`mt-2 h-10 w-full rounded-full px-4 text-[13.5px] outline-none ${textField}`} />
                       </label>
-                      <label className="block text-xs font-medium">Allowed radius
-                        <div className={`mt-2 flex h-11 items-center rounded-2xl border px-3 ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`}>
-                          <input type="number" min="25" value={attendanceForm.radiusMeters} onChange={(event) => setAttendanceForm((current) => ({ ...current, radiusMeters: event.target.value }))} className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none" />
-                          <span className={`text-xs font-bold ${muted}`}>meters</span>
+                      <label className={`block text-xs ${fieldLabel}`}>Allowed radius
+                        <div className={`mt-2 flex h-10 items-center rounded-full px-4 ${darkMode ? "bg-white/[0.06] text-white" : "bg-[#f4f4f2] text-[#141414]"}`}>
+                          <input type="number" min="25" value={attendanceForm.radiusMeters} onChange={(event) => setAttendanceForm((current) => ({ ...current, radiusMeters: event.target.value }))} className="min-w-0 flex-1 border-0 !bg-transparent text-[13.5px] outline-none" />
+                          <span className={`text-xs ${muted}`}>meters</span>
                         </div>
                       </label>
-                      <label className="block text-xs font-medium mt-3">Google Sheet URL (for export)
-                        <input type="url" value={attendanceForm.googleSheetLink} onChange={(event) => setAttendanceForm((current) => ({ ...current, googleSheetLink: event.target.value }))} className={`mt-2 h-11 w-full rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/[0.08] bg-[#080d13]" : "border-[#e1e5df] bg-white"}`} placeholder="https://docs.google.com/spreadsheets/d/..." />
+                      <label className={`mt-3 block text-xs ${fieldLabel}`}>Google Sheet URL (for export)
+                        <input type="url" value={attendanceForm.googleSheetLink} onChange={(event) => setAttendanceForm((current) => ({ ...current, googleSheetLink: event.target.value }))} className={`mt-2 h-10 w-full rounded-full px-4 text-[13.5px] outline-none ${textField}`} placeholder="https://docs.google.com/spreadsheets/d/..." />
                         <p className={`mt-1.5 text-[10px] ${muted}`}>Attendance will be appended daily at 11 PM to this sheet.</p>
                       </label>
                     </div>
                     </>
                     ) : (
-                      <div className={`rounded-2xl border border-dashed p-5 text-sm ${darkMode ? "border-white/10 text-white/45" : "border-black/10 text-black/45"}`}>Choose a location to show coordinates and radius.</div>
+                      <div className={`rounded-[16px] p-5 text-[13px] ${softPanel} ${muted}`}>Choose a location to show coordinates and radius.</div>
                     )}
                   </section>
                 </div>
-                <section className={`min-h-[420px] rounded-[26px] border p-5 ${darkMode ? "border-white/[0.07] bg-[#0d131a]" : "border-transparent bg-white"}`}>
-                  <div className="h-full overflow-hidden rounded-[24px] border border-black/5 bg-[#eef2ed] dark:border-white/[0.07] dark:bg-[#080d13]">
+                <section className={`min-h-[420px] rounded-[20px] border p-5 ${drawerCard}`}>
+                  <div className={`h-full overflow-hidden rounded-[16px] ${darkMode ? "bg-white/[0.04]" : "bg-[#f4f4f2]"}`}>
                     {attendanceForm.latitude && attendanceForm.longitude ? (
                       <iframe title="Attendance Google map" className="h-full min-h-[420px] w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" src={`https://www.google.com/maps?q=${encodeURIComponent(`${attendanceForm.latitude},${attendanceForm.longitude}`)}&z=17&output=embed`} />
                     ) : attendanceForm.address ? (
@@ -2988,41 +2923,35 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 </section>
               </div>
             </div>
-            <div className={`flex shrink-0 items-center justify-between gap-6 border-t px-6 py-5 ${darkMode ? "border-white/[0.07] bg-[#080c11]" : "border-black/10 bg-white"}`}>
-              <button type="button" onClick={closeAttendanceSettings} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
-              <button disabled={attendanceSaving || !attendanceForm.latitude || !attendanceForm.longitude} className="h-11 min-w-[190px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">{attendanceSaving ? "Saving..." : "Save geo fence"}</button>
+            <div className={`flex shrink-0 items-center justify-between gap-6 border-t px-6 py-5 ${drawerFooter}`}>
+              <Button darkMode={darkMode} variant="secondary" size="lg" onClick={closeAttendanceSettings}>Cancel</Button>
+              <button disabled={attendanceSaving || !attendanceForm.latitude || !attendanceForm.longitude} type="submit" className={`inline-flex h-11 min-w-[190px] items-center justify-center rounded-full px-7 text-sm transition disabled:cursor-not-allowed disabled:opacity-55 ${primaryButton}`}>{attendanceSaving ? "Saving..." : "Save geo fence"}</button>
             </div>
           </form>
         </div>
       )}
 
       {salaryDrawerOpen && (
-        <div onMouseDown={() => setSalaryDrawerOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#10231c]/55 backdrop-blur-sm">
-          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={submitSalarySlip} className={`employee-report-drawer employee-report-shell salary-slip-drawer relative flex h-full w-full flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex items-start justify-between border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div>
-                <h2 className="text-xl font-black">{editingSalaryId ? "Edit salary slip" : "Generate salary slip"}</h2>
-                <p className={`mt-1 text-xs ${muted}`}>Salary details save for the next generation.</p>
-              </div>
-              <button type="button" onClick={() => setSalaryDrawerOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
-            </div>
-            <div className={`min-h-0 flex-1 overflow-hidden ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
+        <div onMouseDown={() => setSalaryDrawerOpen(false)} className={backdrop}>
+          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={submitSalarySlip} className={`employee-report-drawer employee-report-shell salary-slip-drawer relative flex h-full w-full flex-col overflow-hidden sm:m-2.5 sm:h-[calc(100%-20px)] sm:!rounded-[24px] shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerSheet}`}>
+            <DrawerHead darkMode={darkMode} icon={WalletCards} tone="lime" title={editingSalaryId ? "Edit salary slip" : "Generate salary slip"} subtitle="Salary details save for the next generation." onClose={() => setSalaryDrawerOpen(false)} />
+            <div className={`min-h-0 flex-1 overflow-hidden ${drawerBody}`}>
               <div className={`grid h-full min-h-0 gap-5 p-5 ${canManageSalary ? "lg:grid-cols-[230px_minmax(0,1fr)]" : "lg:grid-cols-1"}`}>
-                {canManageSalary && <aside className={`h-fit space-y-4 self-start rounded-[24px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/5 bg-[#f0f3ec]"}`}>
-                  <span className="inline-flex rounded-md bg-[#dcfacb] px-3 py-2 text-[11px] font-black uppercase tracking-wide text-[#4b9b16]">Salary Slip</span>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white/70"}`}>
-                    <p className={`text-[11px] font-bold uppercase ${muted}`}>Employee</p>
-                    <p className="mt-2 text-lg font-black">{salaryForm.employeeName || "Select employee"}</p>
+                {canManageSalary && <aside className={`h-fit space-y-4 self-start rounded-[20px] p-4 ${softPanel}`}>
+                  <Badge icon={WalletCards} tone="lime" darkMode={darkMode}>Salary slip</Badge>
+                  <div className={`rounded-[14px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                    <p className={`text-xs ${muted}`}>Employee</p>
+                    <p className="mt-2 text-lg">{salaryForm.employeeName || "Select employee"}</p>
                     <p className={`mt-1 text-xs ${muted}`}>{salaryForm.designation || "Designation not added"}</p>
                   </div>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white/70"}`}>
-                    <p className={`text-[11px] font-bold uppercase ${muted}`}>Pay period</p>
-                    <p className="mt-2 font-black">{selectedSalaryMonthLabel || "Select month"}</p>
+                  <div className={`rounded-[14px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                    <p className={`text-xs ${muted}`}>Pay period</p>
+                    <p className="mt-2">{selectedSalaryMonthLabel || "Select month"}</p>
                     <p className={`mt-1 text-xs ${muted}`}>{salaryForm.payDate ? `Pay date ${formatDateLabel(salaryForm.payDate)}` : "Pay date pending"}</p>
                   </div>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-emerald-400/10" : "bg-[#dcfacb]"}`}>
-                    <p className={`text-[11px] font-medium uppercase ${darkMode ? "text-emerald-100" : "text-[#4b9b16]"}`}>Net payable</p>
-                    <p className="mt-2 text-2xl font-black">₹{Math.max(0, moneyValue(salaryForm.basic) + salaryForm.earnings.reduce((sum, item) => sum + moneyValue(item.amount), 0) - salaryForm.deductions.reduce((sum, item) => sum + moneyValue(item.amount), 0)).toLocaleString("en-IN")}</p>
+                  <div className={`rounded-[14px] p-4 ${darkMode ? "bg-[#cff07a]/15" : "bg-[#d4f28a]"}`}>
+                    <p className={`text-xs ${darkMode ? "text-white/60" : "text-[#3d4a1a]"}`}>Net payable</p>
+                    <p className="mt-2 text-[26px] leading-none tracking-[-0.02em] tabular-nums">₹{Math.max(0, moneyValue(salaryForm.basic) + salaryForm.earnings.reduce((sum, item) => sum + moneyValue(item.amount), 0) - salaryForm.deductions.reduce((sum, item) => sum + moneyValue(item.amount), 0)).toLocaleString("en-IN")}</p>
                   </div>
                 </aside>}
                 <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
@@ -3050,38 +2979,38 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       ["UAN", "uan", "text"],
                       ["Monthly In-Hand Salary", "monthlyInHandSalary", "number"],
                     ].map(([label, key, type]) => (
-                      <label key={key} className="text-xs font-medium">{label}{["employeeName", "joiningDate", "monthlyInHandSalary"].includes(key) ? " *" : ""}
-                        <input required={["employeeName", "joiningDate", "monthlyInHandSalary"].includes(key)} type={type} value={salaryForm[key]} onChange={(event) => setSalaryForm((current) => ({ ...current, [key]: event.target.value, ...(key === "monthlyInHandSalary" ? { basic: event.target.value } : {}) }))} className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                      <label key={key} className={`text-xs ${fieldLabel}`}>{label}{["employeeName", "joiningDate", "monthlyInHandSalary"].includes(key) ? " *" : ""}
+                        <input required={["employeeName", "joiningDate", "monthlyInHandSalary"].includes(key)} type={type} value={salaryForm[key]} onChange={(event) => setSalaryForm((current) => ({ ...current, [key]: event.target.value, ...(key === "monthlyInHandSalary" ? { basic: event.target.value } : {}) }))} className={`mt-2 h-10 w-full rounded-full px-4 text-[13.5px] outline-none ${textField}`} />
                       </label>
                     ))}
                     <DrawerSelect darkMode={darkMode} label="Employment Status" required value={salaryForm.employmentType === "permanent" ? "Permanent" : "Probation"} placeholder="Select status..." options={["Permanent", "Probation"]} onChange={(employmentType) => setSalaryForm((current) => ({ ...current, employmentType: employmentType.toLowerCase() }))} />
-                    <label className="text-xs font-medium">Paid Days
-                      <input readOnly value="Auto calculated from approved leave" className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.025] text-white/50" : "border-black/10 bg-slate-50 text-black/50"}`} />
+                    <label className={`text-xs ${fieldLabel}`}>Paid days
+                      <input readOnly value="Auto calculated from approved leave" className={`mt-2 h-10 w-full rounded-full px-4 text-[13.5px] outline-none ${textField}`} />
                     </label>
-                    <label className="text-xs font-medium">LOP Days
-                      <input readOnly value="Auto calculated from approved leave" className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.025] text-white/50" : "border-black/10 bg-slate-50 text-black/50"}`} />
+                    <label className={`text-xs ${fieldLabel}`}>LOP days
+                      <input readOnly value="Auto calculated from approved leave" className={`mt-2 h-10 w-full rounded-full px-4 text-[13.5px] outline-none ${textField}`} />
                     </label>
                     <DrawerDatePicker darkMode={darkMode} label="Joining Date" value={salaryForm.joiningDate} placeholder="Select joining date" onChange={(joiningDate) => setSalaryForm((current) => ({ ...current, joiningDate, month: current.month && current.month < joiningDate.slice(0, 7) ? joiningDate.slice(0, 7) : current.month }))} />
                   </div>
                 )]] : []),
               ].map(([title, content]) => (
-                <section key={title} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
-                  <p className={`mb-3 text-[11px] font-medium uppercase tracking-wide ${muted}`}>{title}</p>
+                <section key={title} className={`rounded-[20px] p-4 ${drawerCard}`}>
+                  <p className="mb-3 text-[14px]">{title}</p>
                   {content}
                 </section>
               ))}
 
               {canManageSalary && ["earnings", "deductions"].map((type) => (
-                <section key={type} className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
+                <section key={type} className={`rounded-[20px] p-4 ${drawerCard}`}>
                   <div className="mb-3 flex items-center justify-between">
-                    <p className={`text-[11px] font-medium uppercase tracking-wide ${muted}`}>{type === "earnings" ? "Allowances / earnings" : "Deductions"}</p>
-                    <button type="button" onClick={() => addSalaryComponent(type)} className={`rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10" : "bg-black/[0.05]"}`}>Add</button>
+                    <p className="text-[14px]">{type === "earnings" ? "Allowances / earnings" : "Deductions"}</p>
+                    <button type="button" onClick={() => addSalaryComponent(type)} className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] ${darkMode ? "bg-white/[0.07] hover:bg-white/[0.11]" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}><Plus className="h-3.5 w-3.5" /> Add</button>
                   </div>
                   <div className="space-y-2">
                     {salaryForm[type].map((item, index) => (
                       <div key={`${type}-${index}`} className="grid gap-2 sm:grid-cols-[1fr_130px]">
-                        <input value={item.label} onChange={(event) => updateSalaryComponent(type, index, { label: event.target.value })} placeholder={type === "earnings" ? "Allowance name" : "Deduction name"} className={`h-10 rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
-                        <input type="number" value={item.amount} onChange={(event) => updateSalaryComponent(type, index, { amount: event.target.value })} placeholder="Amount" className={`h-10 rounded-2xl border px-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                        <input value={item.label} onChange={(event) => updateSalaryComponent(type, index, { label: event.target.value })} placeholder={type === "earnings" ? "Allowance name" : "Deduction name"} className={`h-10 rounded-full px-4 text-[13.5px] outline-none ${textField}`} />
+                        <input type="number" value={item.amount} onChange={(event) => updateSalaryComponent(type, index, { amount: event.target.value })} placeholder="Amount" className={`h-10 rounded-full px-4 text-[13.5px] outline-none ${textField}`} />
                       </div>
                     ))}
                   </div>
@@ -3089,13 +3018,13 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               ))}
 
               {salaryMeta?.canEditCompany && (
-                <section className={`rounded-[22px] p-4 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
-                  <p className={`mb-3 text-[11px] font-medium uppercase tracking-wide ${muted}`}>Company details</p>
+                <section className={`rounded-[20px] p-4 ${drawerCard}`}>
+                  <p className="mb-3 text-[14px]">Company details</p>
                   <div className="mb-4 flex items-center gap-3">
-                    <span className={`grid h-14 w-20 place-items-center overflow-hidden rounded-2xl border text-xs font-bold ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-[#f8faf8]"}`}>
+                    <span className={`grid h-14 w-20 place-items-center overflow-hidden rounded-[14px] text-xs ${darkMode ? "bg-white/[0.06] text-white/50" : "bg-[#f4f4f2] text-[#8a8a8a]"}`}>
                       {salaryForm.companyLogo ? <Image src={salaryForm.companyLogo} alt="Company logo" width={80} height={56} unoptimized className="h-full w-full object-contain" /> : "Logo"}
                     </span>
-                    <label className={`cursor-pointer rounded-full border px-4 py-2 text-xs font-bold ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
+                    <label className={`inline-flex h-8 cursor-pointer items-center rounded-full border px-4 text-[12.5px] ${darkMode ? "border-white/10 bg-white/[0.04] hover:bg-white/10" : "border-[#e6e6e3] bg-white hover:bg-[#f6f6f4]"}`}>
                       Upload logo
                       <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(event) => {
                         const file = event.target.files?.[0];
@@ -3114,12 +3043,12 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       ["Email ID", "companyEmail"],
                       ["PF A/C Number", "pfAccountNumber"],
                     ].map(([label, key]) => (
-                      <label key={key} className="text-xs font-medium">{label}
-                        <input value={salaryForm[key]} onChange={(event) => setSalaryForm((current) => ({ ...current, [key]: event.target.value }))} className={`mt-2 h-10 w-full rounded-2xl border px-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                      <label key={key} className={`text-xs ${fieldLabel}`}>{label}
+                        <input value={salaryForm[key]} onChange={(event) => setSalaryForm((current) => ({ ...current, [key]: event.target.value }))} className={`mt-2 h-10 w-full rounded-full px-4 text-[13.5px] outline-none ${textField}`} />
                       </label>
                     ))}
-                    <label className="text-xs font-medium sm:col-span-2">Footer Note
-                      <textarea value={salaryForm.note} onChange={(event) => setSalaryForm((current) => ({ ...current, note: event.target.value }))} className={`mt-2 min-h-20 w-full rounded-2xl border px-3 py-3 text-sm font-bold outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+                    <label className={`text-xs sm:col-span-2 ${fieldLabel}`}>Footer note
+                      <textarea value={salaryForm.note} onChange={(event) => setSalaryForm((current) => ({ ...current, note: event.target.value }))} className={`mt-2 min-h-20 w-full rounded-[16px] px-4 py-3 text-[13.5px] outline-none ${textField}`} />
                     </label>
                   </div>
                 </section>
@@ -3127,65 +3056,58 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                 </div>
               </div>
             </div>
-            <div className={`flex shrink-0 items-center justify-between gap-6 border-t px-6 py-5 ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/10 bg-white"}`}>
-              <button type="button" onClick={() => setSalaryDrawerOpen(false)} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
-              <button disabled={salarySaving} className="h-11 min-w-[190px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">{salarySaving ? "Saving..." : !canManageSalary ? "Download PDF" : editingSalaryId ? "Save changes" : "Generate PDF"}</button>
+            <div className={`flex shrink-0 items-center justify-between gap-6 border-t px-6 py-5 ${drawerFooter}`}>
+              <Button darkMode={darkMode} variant="secondary" size="lg" onClick={() => setSalaryDrawerOpen(false)}>Cancel</Button>
+              <button disabled={salarySaving} type="submit" className={`inline-flex h-11 min-w-[190px] items-center justify-center rounded-full px-7 text-sm transition disabled:cursor-not-allowed disabled:opacity-55 ${primaryButton}`}>{salarySaving ? "Saving..." : !canManageSalary ? "Download PDF" : editingSalaryId ? "Save changes" : "Generate PDF"}</button>
             </div>
           </form>
         </div>
       )}
 
       {salaryDeleteTarget && (
-        <div onMouseDown={() => setSalaryDeleteTarget(null)} className="fixed inset-0 z-[120] grid place-items-center bg-[#10231c]/55 p-4 backdrop-blur-sm">
-          <section onMouseDown={(event) => event.stopPropagation()} className={`w-full max-w-md overflow-hidden rounded-[28px] border p-6 shadow-[0_30px_100px_rgba(0,0,0,0.28)] animate-[mrn-drawer-in_260ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
+        <div onMouseDown={() => setSalaryDeleteTarget(null)} className="fixed inset-0 z-[120] grid place-items-center bg-black/35 p-4">
+          <section onMouseDown={(event) => event.stopPropagation()} style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`ui-pop w-full max-w-md overflow-hidden rounded-[24px] border p-6 ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
             <div className="flex items-start gap-4">
-              <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${darkMode ? "bg-red-400/15 text-red-200" : "bg-red-50 text-red-600"}`}>
-                <Trash2 className="h-5 w-5" />
-              </span>
+              <IconTile icon={Trash2} tone="rose" darkMode={darkMode} />
               <div>
-                <h2 className="text-xl font-black">Delete salary slip?</h2>
+                <h2 className="text-[16px]">Delete salary slip?</h2>
                 <p className={`mt-2 text-sm leading-6 ${muted}`}>This will permanently remove {salaryDeleteTarget.title || "this salary slip"} for {salaryDeleteTarget.employeeName || "the employee"}.</p>
               </div>
             </div>
-            <div className="mt-7 flex justify-end gap-3">
-              <button type="button" onClick={() => setSalaryDeleteTarget(null)} className={`h-11 rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white"}`}>Cancel</button>
-              <button type="button" onClick={() => deleteSalarySlip(salaryDeleteTarget)} className="h-11 rounded-full bg-red-500 px-6 text-sm font-bold text-white shadow-[0_16px_36px_rgba(239,68,68,0.22)]">Delete slip</button>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button darkMode={darkMode} variant="secondary" onClick={() => setSalaryDeleteTarget(null)}>Cancel</Button>
+              <Button darkMode={darkMode} variant="danger" onClick={() => deleteSalarySlip(salaryDeleteTarget)}>Delete slip</Button>
             </div>
           </section>
         </div>
       )}
 
       {leaveDrawerOpen && (
-        <div onMouseDown={() => setLeaveDrawerOpen(false)} className="fixed inset-0 z-[90] flex justify-end bg-[#10231c]/55 backdrop-blur-sm">
-          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={submitLeave} className={`employee-report-drawer employee-report-shell hr-leave-drawer relative flex h-full w-full flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#111216] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex items-start justify-between border-b p-5 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div className="flex min-w-0 items-center gap-3">
-                <div><h2 className="text-xl font-black">Apply for Leave</h2><p className={`mt-1 text-xs ${muted}`}>Sent to HR/admin for approval.</p></div>
-              </div>
-              <button type="button" onClick={() => setLeaveDrawerOpen(false)} className={`grid h-10 w-10 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-5 w-5" /></button>
-            </div>
-            <div className={`min-h-0 flex-1 overflow-hidden ${darkMode ? "bg-[#101116]" : "bg-[#f5f7f2]"}`}>
+        <div onMouseDown={() => setLeaveDrawerOpen(false)} className={backdrop}>
+          <form onMouseDown={(event) => event.stopPropagation()} onSubmit={submitLeave} className={`employee-report-drawer employee-report-shell hr-leave-drawer relative flex h-full w-full flex-col overflow-hidden sm:m-2.5 sm:h-[calc(100%-20px)] sm:!rounded-[24px] shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerSheet}`}>
+            <DrawerHead darkMode={darkMode} icon={CalendarDays} tone="mint" title="Apply for leave" subtitle="Sent to HR/admin for approval." onClose={() => setLeaveDrawerOpen(false)} />
+            <div className={`min-h-0 flex-1 overflow-hidden ${drawerBody}`}>
               <div className="grid h-full min-h-0 gap-5 p-5 lg:grid-cols-[230px_minmax(0,1fr)]">
-                <aside className={`h-fit space-y-4 self-start rounded-[24px] border p-5 ${darkMode ? "border-white/10 bg-white/[0.035]" : "border-black/5 bg-[#f0f3ec]"}`}>
-                  <span className={`inline-flex rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wide ${darkMode ? "bg-lime-300/15 text-lime-200" : "bg-[#dcfacb] text-[#4b9b16]"}`}>Leave request</span>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white/75"}`}>
-                    <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Applicant</p>
-                    <p className="mt-2 text-lg font-black">{currentName}</p>
+                <aside className={`h-fit space-y-4 self-start rounded-[20px] p-4 ${softPanel}`}>
+                  <Badge icon={CalendarDays} tone="mint" darkMode={darkMode}>Leave request</Badge>
+                  <div className={`rounded-[14px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                    <p className={`text-xs ${muted}`}>Applicant</p>
+                    <p className="mt-2 text-lg">{currentName}</p>
                     <p className={`mt-1 text-xs ${muted}`}>{user?.designation || user?.department || "Employee"}</p>
                   </div>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white/75"}`}>
-                    <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Leave type</p>
-                    <p className="mt-2 text-base font-black">{leaveForm.leaveType || "Select leave type"}</p>
+                  <div className={`rounded-[14px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                    <p className={`text-xs ${muted}`}>Leave type</p>
+                    <p className="mt-2 text-base">{leaveForm.leaveType || "Select leave type"}</p>
                   </div>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-emerald-300/12 text-emerald-100" : "bg-[#dfffd2] text-[#10210c]"}`}>
-                    <p className={`text-[11px] font-bold uppercase tracking-wide ${darkMode ? "text-emerald-100/75" : "text-[#4b9b16]"}`}>Period</p>
-                    <p className="mt-2 text-sm font-black leading-5">{leavePeriodPreview}</p>
-                    <p className={`mt-1 text-xs ${darkMode ? "text-emerald-100/70" : "text-black/55"}`}>{leavePreviewDays ? `${leavePreviewDays} day${leavePreviewDays === 1 ? "" : "s"}` : "Dates not selected"}</p>
+                  <div className={`rounded-[14px] p-4 ${darkMode ? "bg-[#cff07a]/15 text-white" : "bg-[#d4f28a] text-[#141414]"}`}>
+                    <p className={`text-xs ${darkMode ? "text-white/60" : "text-[#3d4a1a]"}`}>Period</p>
+                    <p className="mt-2 text-sm leading-5">{leavePeriodPreview}</p>
+                    <p className={`mt-1 text-xs ${darkMode ? "text-white/60" : "text-[#3d4a1a]"}`}>{leavePreviewDays ? `${leavePreviewDays} day${leavePreviewDays === 1 ? "" : "s"}` : "Dates not selected"}</p>
                   </div>
                 </aside>
                 <div className="min-h-0 space-y-5 overflow-y-auto pr-1">
-                  <section className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
-                    <p className={`mb-3 text-[11px] font-bold uppercase tracking-wide ${muted}`}>Leave details</p>
+                  <section className={`rounded-[20px] p-5 ${drawerCard}`}>
+                    <p className="mb-3 text-[14px]">Leave details</p>
                     <DrawerSelect darkMode={darkMode} label="Leave Type" required value={leaveForm.leaveType} placeholder="Select leave type..." options={["Casual Leave", "Sick Leave", "Paid Leave", "Advance Leave"]} onChange={(leaveType) => setLeaveForm((current) => ({ ...current, leaveType }))} />
                     <p className={`mt-3 text-xs leading-5 ${muted}`}>Leave type is for reference. If policy balance is exceeded later, extra days can be marked as advance leave.</p>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -3193,24 +3115,24 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       <DrawerDatePicker darkMode={darkMode} label="End Date" value={leaveForm.endDate} placeholder="Select end date" minDate={leaveForm.startDate || todayInput()} onChange={(endDate) => setLeaveForm((current) => ({ ...current, endDate }))} />
                     </div>
                   </section>
-                  <div className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
-                    <label className="block text-xs font-semibold text-black/65 dark:text-white/60">Reason *</label>
-                    <textarea required minLength={10} value={leaveForm.reason} onChange={(event) => setLeaveForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Please provide a detailed reason..." className={`mt-2 min-h-32 w-full rounded-2xl border px-3 py-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] placeholder:text-white/35" : "border-black/10 bg-white placeholder:text-black/35"}`} />
+                  <div className={`rounded-[20px] p-5 ${drawerCard}`}>
+                    <label className={`block text-xs ${fieldLabel}`}>Reason *</label>
+                    <textarea required minLength={10} value={leaveForm.reason} onChange={(event) => setLeaveForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Please provide a detailed reason..." className={`mt-2 min-h-32 w-full rounded-[16px] px-4 py-3 text-[13.5px] outline-none ${textField}`} />
                     <p className={`mt-2 text-xs ${muted}`}>Minimum 10 characters required</p>
                   </div>
                 </div>
               </div>
             </div>
-            <div className={`flex shrink-0 items-center justify-between gap-6 border-t px-6 py-5 ${darkMode ? "border-white/10 bg-[#111216]" : "border-black/10 bg-white"}`}>
-              <button type="button" onClick={() => setLeaveDrawerOpen(false)} className={`h-11 min-w-[108px] rounded-full border px-6 text-sm font-bold ${darkMode ? "border-white/15" : "border-black/15"}`}>Cancel</button>
-              <button disabled={leaveSaving} className="h-11 min-w-[190px] rounded-full bg-[#6ee72f] px-7 text-sm font-bold text-[#10210c] shadow-[0_18px_45px_rgba(110,231,47,0.25)] disabled:opacity-60">{leaveSaving ? "Sending..." : "Send for approval"}</button>
+            <div className={`flex shrink-0 items-center justify-between gap-6 border-t px-6 py-5 ${drawerFooter}`}>
+              <Button darkMode={darkMode} variant="secondary" size="lg" onClick={() => setLeaveDrawerOpen(false)}>Cancel</Button>
+              <button disabled={leaveSaving} type="submit" className={`inline-flex h-11 min-w-[190px] items-center justify-center rounded-full px-7 text-sm transition disabled:cursor-not-allowed disabled:opacity-55 ${primaryButton}`}>{leaveSaving ? "Sending..." : "Send for approval"}</button>
             </div>
           </form>
         </div>
       )}
 
       {selectedLeave && (
-        <div onMouseDown={() => setSelectedLeave(null)} className="fixed inset-0 z-[90] flex justify-end bg-black/35 p-3 backdrop-blur-md sm:p-5">
+        <div onMouseDown={() => setSelectedLeave(null)} className="fixed inset-0 z-[90] flex justify-end bg-black/20 p-2.5 backdrop-blur-[2px]">
           {(() => {
             const isCurrentLeaveUser = String(selectedLeave.userId || "") === String(user?.id || "");
             const selectedLeaveEmployee = isCurrentLeaveUser ? user : employees.find((employee) => String(employee.id || "") === String(selectedLeave.userId || ""));
@@ -3223,48 +3145,41 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               avatarUrl: selectedLeave.avatarUrl,
             };
             return (
-          <section onMouseDown={(event) => event.stopPropagation()} className={`flex h-full w-full max-w-md flex-col overflow-hidden rounded-[18px] border shadow-[-24px_0_80px_rgba(0,0,0,0.22)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "border-white/10 bg-[#111216] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
-            <div className={`flex items-center justify-between border-b px-4 py-3 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div className="flex min-w-0 items-center gap-3">
-                <span className={`h-6 w-6 rounded-md ${darkMode ? "bg-emerald-300/15" : "bg-[#eafbdc]"}`} />
-                <p className="truncate text-sm font-black">Leave #{selectedLeave.id?.slice(-5) || "request"}</p>
-                <span className={`rounded-md px-2 py-1 text-[10px] font-bold capitalize ${statusClass(selectedLeave.status)}`}>{selectedLeave.status}</span>
-              </div>
-              <button type="button" onClick={() => setSelectedLeave(null)} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}><X className="h-4 w-4" /></button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <section onMouseDown={(event) => event.stopPropagation()} className={`flex h-full w-full max-w-md flex-col overflow-hidden rounded-[24px] shadow-[0_24px_70px_rgba(0,0,0,0.16)] animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerSheet}`}>
+            <DrawerHead darkMode={darkMode} icon={CalendarDays} tone={statusTone(selectedLeave.status)} title={`Leave #${selectedLeave.id?.slice(-5) || "request"}`} onClose={() => setSelectedLeave(null)} extra={statusChip(selectedLeave.status)} />
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
               <div className="flex items-center gap-4 pb-4">
                 <UserAvatar user={selectedLeaveAvatarUser} name={selectedLeave.employeeName} size="lg" />
                 <div className="min-w-0">
-                  <h2 className="truncate text-xl font-black">{selectedLeave.employeeName}</h2>
+                  <h2 className="truncate text-[20px] tracking-[-0.01em]">{selectedLeave.employeeName}</h2>
                   <p className={`mt-1 truncate text-sm ${muted}`}>{selectedLeave.department || "No department"}</p>
                 </div>
               </div>
 
-              <div className={`grid grid-cols-3 border-y py-3 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <div className={`grid grid-cols-3 gap-2 rounded-[16px] p-4 ${softPanel}`}>
                 {[["Type", selectedLeave.leaveType], ["Paid", selectedLeave.paidLeaveDays || 0], ["Unpaid", selectedLeave.unpaidLeaveDays || 0]].map(([label, value]) => (
                   <div key={label}>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>{label}</p>
-                    <p className="mt-1 text-sm font-black capitalize">{value}</p>
+                    <p className={`text-xs ${muted}`}>{label}</p>
+                    <p className="mt-1 text-[14px] capitalize">{value}</p>
                   </div>
                 ))}
               </div>
 
-              <div className={`border-b py-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
+              <div className={`border-b py-5 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-black">Leave details</h3>
+                  <h3 className="text-[14px]">Leave details</h3>
                 </div>
-                <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f8f9fc]"}`}>
-                  <p className="text-sm font-bold">{selectedLeave.startDate} → {selectedLeave.endDate}</p>
+                <div className={`rounded-[14px] p-3.5 ${softPanel}`}>
+                  <p className="text-sm">{selectedLeave.startDate} → {selectedLeave.endDate}</p>
                   <p className={`mt-1 text-xs ${muted}`}>Submitted {selectedLeave.createdAt ? new Date(selectedLeave.createdAt).toLocaleString("en-IN") : "-"}</p>
                 </div>
-                <div className={`mt-3 rounded-2xl p-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f8f9fc]"}`}>
-                  <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Reason</p>
+                <div className={`mt-3 rounded-[14px] p-3.5 ${softPanel}`}>
+                  <p className={`text-xs ${muted}`}>Reason</p>
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{selectedLeave.reason}</p>
                 </div>
                 {selectedLeave.adminComment && (
-                  <div className={`mt-3 rounded-2xl p-3 ${darkMode ? "bg-emerald-400/10" : "bg-emerald-50"}`}>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${muted}`}>Admin comment</p>
+                  <div className={`mt-3 rounded-[14px] p-3.5 ${darkMode ? "bg-[rgba(74,222,128,0.12)]" : "bg-[#e4f1e6]"}`}>
+                    <p className={`text-xs ${muted}`}>Admin comment</p>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{selectedLeave.adminComment}</p>
                   </div>
                 )}
@@ -3272,7 +3187,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
 
               <div className="py-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-black">Timeline</h3>
+                  <h3 className="text-[14px]">Timeline</h3>
                 </div>
                 {[
                   { label: "Request submitted", value: selectedLeave.createdAt ? new Date(selectedLeave.createdAt).toLocaleString("en-IN") : "-", type: "submitted" },
@@ -3282,7 +3197,7 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                     {index === 0 && <span className={`absolute left-[7px] top-5 h-[calc(100%-12px)] w-px ${timelineLineClass(selectedLeave.status)}`} />}
                     <span className={`mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-full ${timelineDotClass(item.type)}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold">{item.label}</p>
+                      <p className="text-sm">{item.label}</p>
                       <p className={`mt-0.5 text-xs ${muted}`}>{item.value}</p>
                     </div>
                   </div>
@@ -3290,17 +3205,17 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
               </div>
 
               {data?.canManageHr && selectedLeave.status === "pending" && (
-                <div className={`rounded-2xl p-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f8f9fc]"}`}>
-                  <p className="text-sm font-black">Approval decision</p>
-                  <textarea value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="Add comment for the applicant..." className={`mt-3 min-h-20 w-full rounded-2xl border px-3 py-3 text-sm outline-none ${darkMode ? "border-white/10 bg-white/[0.04] placeholder:text-white/35" : "border-black/10 bg-white placeholder:text-black/35"}`} />
+                <div className={`rounded-[14px] p-3.5 ${softPanel}`}>
+                  <p className="text-[14px]">Approval decision</p>
+                  <textarea value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="Add comment for the applicant..." className={`mt-3 min-h-20 w-full rounded-[16px] px-4 py-3 text-[13.5px] outline-none ${textField}`} />
                   <div className="mt-3 flex gap-2">
-                    <button disabled={leaveReviewSaving} onClick={() => reviewLeave("declined")} className="h-10 flex-1 rounded-full border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-600 disabled:opacity-60">Decline</button>
-                    <button disabled={leaveReviewSaving} onClick={() => reviewLeave("approved")} className="h-10 flex-1 rounded-full bg-[#171714] px-4 text-sm font-bold text-white disabled:opacity-60">Approve</button>
+                    <button disabled={leaveReviewSaving} onClick={() => reviewLeave("declined")} className={`h-10 flex-1 rounded-full px-4 text-[13px] disabled:opacity-60 ${darkMode ? "bg-[rgba(251,113,133,0.13)] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"}`}>Decline</button>
+                    <button disabled={leaveReviewSaving} onClick={() => reviewLeave("approved")} className={`h-10 flex-1 rounded-full px-4 text-[13px] disabled:opacity-60 ${primaryButton}`}>Approve</button>
                   </div>
                 </div>
               )}
               {canDeleteLeave(selectedLeave) && (
-                <button onClick={() => deleteLeave(selectedLeave)} className={`mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full border text-sm font-bold ${darkMode ? "border-red-400/20 bg-red-400/10 text-red-200" : "border-red-200 bg-red-50 text-red-600"}`}>
+                <button onClick={() => deleteLeave(selectedLeave)} className={`mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full text-[13px] ${darkMode ? "bg-[rgba(251,113,133,0.13)] text-[#f7aab5]" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"}`}>
                   <Trash2 className="h-4 w-4" /> Delete pending request
                 </button>
               )}
@@ -3312,93 +3227,93 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
       )}
 
       {selectedEmployee && (
-        <div onMouseDown={() => { setSelectedEmployee(null); setEmployeeDetailExpanded(false); }} className="fixed inset-0 z-[90] flex justify-end bg-[#020609]/70 backdrop-blur-sm">
-          <section onMouseDown={(event) => event.stopPropagation()} className={`employee-report-drawer employee-report-shell hr-employee-drawer absolute flex flex-col overflow-hidden shadow-[-24px_0_80px_rgba(0,0,0,0.28)] ${employeeDetailExpanded ? "employee-report-shell-expanded" : ""} animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${darkMode ? "bg-[#101216] text-white" : "bg-white text-[#171714]"}`}>
-            <div className={`flex items-center justify-between border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-              <div className="min-w-0">
-                <h2 className="truncate text-xl font-black">Employee profile · {selectedEmployee.displayName || selectedEmployee.username}</h2>
-                <p className={`mt-1 truncate text-xs ${muted}`}>Profile, HR setup, employee documents, and request history.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setEmployeeDetailExpanded((current) => !current)} className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f3f5ef] text-black/60 hover:bg-[#eafbdc] hover:text-[#4b9b16]"}`} aria-label={employeeDetailExpanded ? "Restore drawer size" : "Expand employee profile"}>
-                  {employeeDetailExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+        <div onMouseDown={() => { setSelectedEmployee(null); setEmployeeDetailExpanded(false); }} className={backdrop}>
+          <section onMouseDown={(event) => event.stopPropagation()} className={`employee-report-drawer employee-report-shell hr-employee-drawer absolute flex flex-col overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.16)] ${employeeDetailExpanded ? "employee-report-shell-expanded" : "sm:!rounded-[24px]"} animate-[mrn-drawer-in_360ms_cubic-bezier(0.22,1,0.36,1)] ${drawerSheet}`}>
+            <DrawerHead
+              darkMode={darkMode}
+              icon={UserRound}
+              tone="sky"
+              title={`Employee profile · ${selectedEmployee.displayName || selectedEmployee.username}`}
+              subtitle="Profile, HR setup, employee documents, and request history."
+              onClose={() => { setSelectedEmployee(null); setEmployeeDetailExpanded(false); }}
+              extra={(
+                <Button darkMode={darkMode} variant="soft" size="sm" icon={employeeDetailExpanded ? Minimize2 : Maximize2} onClick={() => setEmployeeDetailExpanded((current) => !current)} aria-label={employeeDetailExpanded ? "Restore drawer size" : "Expand employee profile"}>
                   <span className="hidden sm:inline">{employeeDetailExpanded ? "Restore" : "Expand"}</span>
-                </button>
-                <button type="button" onClick={() => { setSelectedEmployee(null); setEmployeeDetailExpanded(false); }} className={`h-9 rounded-full px-3 text-xs font-bold transition ${darkMode ? "text-emerald-300 hover:bg-white/10" : "text-[#08764f] hover:bg-[#e7f6ed]"}`}>Close</button>
-              </div>
-            </div>
-            <div className={`min-h-0 flex-1 overflow-hidden ${darkMode ? "bg-[#0a0d12]" : "bg-[#f5f7f2]"}`}>
+                </Button>
+              )}
+            />
+            <div className={`min-h-0 flex-1 overflow-hidden ${drawerBody}`}>
               <div className={`grid h-full min-h-0 gap-5 overflow-y-auto p-5 ${employeeDetailExpanded ? "xl:grid-cols-[280px_minmax(0,1fr)]" : "xl:grid-cols-[250px_minmax(0,1fr)]"}`}>
-                <aside className={`h-fit space-y-4 self-start rounded-[26px] border p-5 xl:sticky xl:top-0 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
-                  <span className={`inline-flex rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wide ${darkMode ? "bg-lime-300/15 text-lime-200" : "bg-[#dcfacb] text-[#4b9b16]"}`}>Employee</span>
-                  <div className={`rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-emerald-100 bg-white"}`}>
+                <aside className={`h-fit space-y-3 self-start rounded-[20px] p-4 xl:sticky xl:top-0 ${softPanel}`}>
+                  <Badge icon={UserRound} tone="sky" darkMode={darkMode}>Employee</Badge>
+                  <div className={`rounded-[14px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
                     <UserAvatar user={selectedEmployee} name={selectedEmployee.displayName || selectedEmployee.username} size="lg" rounded="lg" />
-                    <p className="mt-4 text-lg font-black">{selectedEmployee.displayName || selectedEmployee.username}</p>
+                    <p className="mt-4 text-lg">{selectedEmployee.displayName || selectedEmployee.username}</p>
                     <p className={`mt-1 text-xs ${muted}`}>{selectedEmployee.designation || "Designation not set"}</p>
                   </div>
-                  <div className={`rounded-2xl border p-4 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-emerald-100 bg-white"}`}>
-                    <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Department</p>
-                    <p className="mt-2 text-base font-black">{selectedEmployee.department || "Not set"}</p>
+                  <div className={`rounded-[14px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+                    <p className={`text-xs ${muted}`}>Department</p>
+                    <p className="mt-2 text-base">{selectedEmployee.department || "Not set"}</p>
                   </div>
-                  <div className={`rounded-2xl p-4 ${darkMode ? "bg-emerald-300/12 text-emerald-100" : "bg-[#dfffd2] text-[#10210c]"}`}>
-                    <p className={`text-[11px] font-bold uppercase tracking-wide ${darkMode ? "text-emerald-100/75" : "text-[#4b9b16]"}`}>Access</p>
-                    <p className="mt-2 text-3xl font-black">{selectedEmployee.menus?.length || 0}</p>
-                    <p className={`mt-1 text-xs ${darkMode ? "text-emerald-100/70" : "text-black/55"}`}>{selectedEmployee.privileges?.length || 0} permissions</p>
+                  <div className={`rounded-[14px] p-4 ${darkMode ? "bg-[rgba(167,139,250,0.14)] text-white" : "bg-[#ece8fb] text-[#141414]"}`}>
+                    <p className={`text-xs ${darkMode ? "text-white/60" : "text-[#6b4fd1]"}`}>Access</p>
+                    <p className="mt-2 text-[28px] leading-none tracking-[-0.03em] tabular-nums">{selectedEmployee.menus?.length || 0}</p>
+                    <p className={`mt-1.5 text-xs ${darkMode ? "text-white/55" : "text-[#6b6b6b]"}`}>{selectedEmployee.privileges?.length || 0} permissions</p>
                   </div>
                 </aside>
                 <div className="min-w-0 space-y-5">
                   {data?.canManageHr && (
-                    <form onSubmit={saveEmployeeHrDetails} className={`rounded-[28px] border p-6 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
+                    <form onSubmit={saveEmployeeHrDetails} className={`rounded-[20px] border p-6 ${drawerCard}`}>
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <div>
-                          <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Leave and attendance policy</p>
-                          <h3 className="mt-1 text-xl font-black">Employee HR setup</h3>
+                          <p className={`text-xs ${muted}`}>Leave and attendance policy</p>
+                          <h3 className="mt-1 text-[18px] tracking-[-0.01em]">Employee HR setup</h3>
                         </div>
-                        <button disabled={employeeSaving} className="h-10 rounded-full bg-[#6ee72f] px-5 text-sm font-bold text-[#10210c] disabled:opacity-60">{employeeSaving ? "Saving..." : "Save details"}</button>
+                        <button disabled={employeeSaving} className={`h-9 rounded-full px-5 text-[13px] disabled:opacity-60 ${primaryButton}`}>{employeeSaving ? "Saving..." : "Save details"}</button>
                       </div>
                       <div className="mt-4 grid gap-3">
                         <DrawerSelect darkMode={darkMode} label="Employment Status" required value={employeeForm.employmentType === "permanent" ? "Permanent" : "Probation"} placeholder="Select status..." options={["Permanent", "Probation"]} onChange={(employmentType) => setEmployeeForm((current) => ({ ...current, employmentType: employmentType.toLowerCase() }))} />
                       </div>
-                      <label className={`mt-4 flex items-start gap-3 rounded-2xl border p-4 ${darkMode ? "border-sky-300/15 bg-sky-300/8" : "border-sky-100 bg-sky-50"}`}>
+                      <label className={`mt-4 flex items-start gap-3 rounded-[16px] p-4 ${softPanel}`}>
                         <button
                           type="button"
                           disabled={Boolean(employeeRemoteSavingId)}
                           onClick={() => saveEmployeeRemoteWork(!employeeForm.remoteWorkEnabled)}
-                          className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-60 ${employeeForm.remoteWorkEnabled ? "border-emerald-500 bg-emerald-500 text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white hover:border-emerald-300"}`}
+                          className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-[9px] border transition disabled:cursor-not-allowed disabled:opacity-60 ${employeeForm.remoteWorkEnabled ? (darkMode ? "border-[#cff07a] bg-[#cff07a] text-[#141414]" : "border-[#141414] bg-[#141414] text-white") : darkMode ? "border-white/15 bg-white/[0.04]" : "border-[#dcdcd8] bg-white hover:border-[#a3a3a0]"}`}
                         >
                           {employeeRemoteSavingId === selectedEmployee?.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : employeeForm.remoteWorkEnabled && <Check className="h-4 w-4" />}
                         </button>
                         <span>
-                          <span className="block text-sm font-black">Remote Today {employeeRemoteSavingId === selectedEmployee?.id ? "· Saving..." : ""}</span>
+                          <span className="block text-sm">Remote Today {employeeRemoteSavingId === selectedEmployee?.id ? "· Saving..." : ""}</span>
                           <span className={`mt-1 block text-xs leading-5 ${muted}`}>When this is checked, this employee attendance is marked as remote and skips the office geofence.</span>
                         </span>
                       </label>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <label className={`flex items-start gap-3 rounded-2xl border p-4 ${darkMode ? "border-rose-300/15 bg-rose-300/8" : "border-rose-100 bg-rose-50"}`}>
+                        <label className={`flex items-start gap-3 rounded-[16px] p-4 ${softPanel}`}>
                           <button
                             type="button"
                             disabled={Boolean(employeeRemoteSavingId)}
                             onClick={() => saveEmployeeManualAttendance(selectedEmployeeOnLeaveToday ? "clear" : "leave")}
-                            className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-60 ${selectedEmployeeOnLeaveToday ? "border-rose-700 bg-rose-700 text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white hover:border-rose-300"}`}
+                            className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-[9px] border transition disabled:cursor-not-allowed disabled:opacity-60 ${selectedEmployeeOnLeaveToday ? "border-[#c0394b] bg-[#c0394b] text-white" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-[#dcdcd8] bg-white hover:border-[#a3a3a0]"}`}
                           >
                             {employeeRemoteSavingId === selectedEmployee?.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : selectedEmployeeOnLeaveToday && <Check className="h-4 w-4" />}
                           </button>
                           <span>
-                            <span className="block text-sm font-black">On Leave</span>
+                            <span className="block text-sm">On Leave</span>
                             <span className={`mt-1 block text-xs leading-5 ${muted}`}>Marks today as leave in attendance when the employee did not apply from the leave module.</span>
                           </span>
                         </label>
-                        <label className={`flex items-start gap-3 rounded-2xl border p-4 ${darkMode ? "border-violet-300/20 bg-violet-300/10" : "border-violet-100 bg-violet-50"}`}>
+                        <label className={`flex items-start gap-3 rounded-[16px] p-4 ${softPanel}`}>
                           <button
                             type="button"
                             disabled={Boolean(employeeRemoteSavingId)}
                             onClick={() => saveEmployeeManualAttendance(selectedEmployeeHalfDayToday ? "clear" : "half-day")}
-                            className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-60 ${selectedEmployeeHalfDayToday ? "border-violet-600 bg-violet-200 text-violet-800" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-black/10 bg-white hover:border-violet-300"}`}
+                            className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-[9px] border transition disabled:cursor-not-allowed disabled:opacity-60 ${selectedEmployeeHalfDayToday ? "border-[#6b4fd1] bg-[#ece8fb] text-[#6b4fd1]" : darkMode ? "border-white/15 bg-white/[0.04]" : "border-[#dcdcd8] bg-white hover:border-[#a3a3a0]"}`}
                           >
                             {employeeRemoteSavingId === selectedEmployee?.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : selectedEmployeeHalfDayToday && <Check className="h-4 w-4" />}
                           </button>
                           <span>
-                            <span className="block text-sm font-black">Half Day</span>
+                            <span className="block text-sm">Half Day</span>
                             <span className={`mt-1 block text-xs leading-5 ${muted}`}>Marks today as HF in attendance exports with a lavender cell.</span>
                           </span>
                         </label>
@@ -3406,43 +3321,41 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       <p className={`mt-3 text-xs leading-5 ${muted}`}>Permanent employees get 1 paid leave per month. Probation employees have no paid leave.</p>
                     </form>
                   )}
-                  <section className={`w-full min-w-0 overflow-hidden rounded-[22px] border p-3 sm:rounded-[28px] sm:p-6 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
+                  <section className={`w-full min-w-0 overflow-hidden rounded-[20px] border p-3 sm:p-6 ${drawerCard}`}>
                     <div className="flex flex-col gap-1">
-                      <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Profile information</p>
-                      <h3 className="text-xl font-black">Contact & work details</h3>
+                      <p className={`text-xs ${muted}`}>Profile information</p>
+                      <h3 className="text-[18px] tracking-[-0.01em]">Contact & work details</h3>
                     </div>
                     <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {[
-                          { label: "Work mode", value: selectedEmployee.remoteWorkEnabled ? "Remote" : "Office", icon: MapPin, tone: selectedEmployee.remoteWorkEnabled ? (darkMode ? "bg-sky-300/14 text-sky-200" : "bg-sky-100 text-sky-700") : (darkMode ? "bg-white/10 text-white/70" : "bg-black/5 text-black/60") },
-                          { label: "Status", value: selectedEmployee.blacklisted ? "Blacklisted" : "Active", icon: CheckCircle2, tone: selectedEmployee.blacklisted ? (darkMode ? "bg-red-400/14 text-red-200" : "bg-red-100 text-red-700") : (darkMode ? "bg-emerald-300/14 text-emerald-200" : "bg-emerald-100 text-emerald-700") },
-                          { label: "Paid leave remaining", value: `${selectedEmployeePaidLeavesRemaining} day${selectedEmployeePaidLeavesRemaining === 1 ? "" : "s"}`, icon: CalendarCheck, tone: darkMode ? "bg-lime-300/14 text-lime-200" : "bg-lime-100 text-lime-700" },
-                          { label: "Total leaves taken", value: `${selectedEmployeeTotalLeavesTaken} day${selectedEmployeeTotalLeavesTaken === 1 ? "" : "s"}`, icon: CalendarDays, tone: darkMode ? "bg-rose-300/14 text-rose-200" : "bg-rose-100 text-rose-700" },
-                          { label: "Email", value: selectedEmployee.email || "Not set", icon: Mail, tone: darkMode ? "bg-amber-300/14 text-amber-200" : "bg-amber-100 text-amber-700" },
-                          { label: "Phone", value: selectedEmployee.phone || "Not set", icon: Phone, tone: darkMode ? "bg-blue-300/14 text-blue-200" : "bg-blue-100 text-blue-700" },
-                          { label: "WhatsApp", value: selectedEmployee.whatsappPhone || "Not set", icon: MessageCircle, tone: darkMode ? "bg-green-300/14 text-green-200" : "bg-green-100 text-green-700" },
+                          { label: "Work mode", value: selectedEmployee.remoteWorkEnabled ? "Remote" : "Office", icon: MapPin, tone: selectedEmployee.remoteWorkEnabled ? "sky" : "neutral" },
+                          { label: "Status", value: selectedEmployee.blacklisted ? "Blacklisted" : "Active", icon: CheckCircle2, tone: selectedEmployee.blacklisted ? "rose" : "mint" },
+                          { label: "Paid leave remaining", value: `${selectedEmployeePaidLeavesRemaining} day${selectedEmployeePaidLeavesRemaining === 1 ? "" : "s"}`, icon: CalendarCheck, tone: "lime" },
+                          { label: "Total leaves taken", value: `${selectedEmployeeTotalLeavesTaken} day${selectedEmployeeTotalLeavesTaken === 1 ? "" : "s"}`, icon: CalendarDays, tone: "rose" },
+                          { label: "Email", value: selectedEmployee.email || "Not set", icon: Mail, tone: "amber" },
+                          { label: "Phone", value: selectedEmployee.phone || "Not set", icon: Phone, tone: "sky" },
+                          { label: "WhatsApp", value: selectedEmployee.whatsappPhone || "Not set", icon: MessageCircle, tone: "mint" },
                         ].map(({ label, value, icon: Icon, tone }) => (
-                          <div key={label} className={`min-w-0 rounded-[20px] p-4 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f7f2]"}`}>
+                          <div key={label} className={`min-w-0 rounded-[16px] p-4 ${softPanel}`}>
                             <div className="flex items-start gap-3">
-                              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`}>
-                                <Icon className="h-4 w-4" />
-                              </span>
+                              <IconTile icon={Icon} tone={tone} darkMode={darkMode} size="sm" />
                               <span className="min-w-0">
-                                <span className={`block text-[10px] font-bold uppercase tracking-wide ${muted}`}>{label}</span>
-                                <span className="mt-1 block truncate text-sm font-black">{value}</span>
+                                <span className={`block text-xs ${muted}`}>{label}</span>
+                                <span className="mt-0.5 block truncate text-[13.5px]">{value}</span>
                               </span>
                             </div>
                           </div>
                         ))}
                     </div>
                   </section>
-                  <section className={`rounded-[28px] border p-6 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
+                  <section className={`rounded-[20px] border p-6 ${drawerCard}`}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <h3 className="text-xl font-black">Documents</h3>
+                        <h3 className="text-[18px] tracking-[-0.01em]">Documents</h3>
                         <p className={`mt-1 text-sm ${muted}`}>Employee document links stored in their Google Drive folder.</p>
                       </div>
                       {selectedEmployee.employeeDocumentsFolderId && (
-                        <a href={`https://drive.google.com/drive/folders/${selectedEmployee.employeeDocumentsFolderId}`} target="_blank" rel="noreferrer" className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-full px-4 text-xs font-black sm:w-auto ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#eef8e8] text-[#39710f] hover:bg-[#e1f7d3]"}`}>
+                        <a href={`https://drive.google.com/drive/folders/${selectedEmployee.employeeDocumentsFolderId}`} target="_blank" rel="noreferrer" className={`inline-flex h-9 w-full items-center justify-center gap-2 rounded-full border px-4 text-[13px] sm:w-auto ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}>
                           <FolderOpen className="h-4 w-4" />
                           Open folder
                         </a>
@@ -3458,26 +3371,24 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                         const meta = DOCUMENT_CARD_META[docType.id] || DOCUMENT_CARD_META.aadhar_card_copy;
                         const Icon = meta.Icon;
                         return (
-                          <div key={docType.id} className={`w-full min-w-0 overflow-hidden rounded-[20px] border p-3 transition hover:-translate-y-0.5 sm:rounded-[24px] sm:p-4 ${darkMode ? "border-white/10 bg-[#191b20]" : "border-black/5 bg-white"}`}>
+                          <div key={docType.id} className={`w-full min-w-0 overflow-hidden rounded-[20px] border p-3 sm:p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
                             <div className="mb-4 flex items-center justify-between gap-3">
                               <div className="flex min-w-0 items-center gap-2">
-                                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/10 text-white" : meta.icon}`}>
-                                  <Icon className="h-5 w-5" />
-                                </span>
+                                <IconTile icon={Icon} tone={meta.tone} darkMode={darkMode} size="sm" />
                                 <div className="min-w-0">
-                                  <p className={`text-[11px] font-semibold ${darkMode ? "text-white/55" : "text-black/50"}`}>HR Document</p>
-                                  <p className="truncate text-sm font-black text-[#171714] dark:text-white">{docType.label}</p>
+                                  <p className={`text-[11.5px] ${muted}`}>HR document</p>
+                                  <p className={`truncate text-[13.5px] ${darkMode ? "text-white" : "text-[#141414]"}`}>{docType.label}</p>
                                 </div>
                               </div>
-                              <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${document ? (darkMode ? "bg-emerald-400/18 text-emerald-100" : "bg-emerald-100 text-emerald-700") : (darkMode ? "bg-red-400/18 text-red-100" : "bg-red-100 text-red-700")}`}>{document ? `${documents.length} uploaded` : "Missing"}</span>
+                              <Chip tone={document ? "mint" : "rose"} darkMode={darkMode} className="h-6 shrink-0 px-2.5 text-[11.5px]">{document ? `${documents.length} uploaded` : "Missing"}</Chip>
                             </div>
-                            <div className={`relative min-h-[170px] w-full min-w-0 overflow-hidden rounded-[18px] p-5 sm:min-h-[200px] sm:p-6 ${darkMode ? "bg-white/10 text-white" : meta.card}`}>
-                              <p className="text-sm font-semibold opacity-80">{document ? "Verified file" : "Pending upload"}</p>
-                              <h4 className="mt-5 max-w-full break-words text-[21px] font-black leading-[1.08] text-[#171714] dark:text-white sm:max-w-[15rem] sm:text-[22px]">{docType.label}</h4>
-                              <p className={`mt-2 text-xs font-semibold ${darkMode ? "text-white/70" : "text-black/55"}`}>{progress ? `Uploading ${progress.current} of ${progress.total}` : document ? `${documents.length} file${documents.length === 1 ? "" : "s"} ready for HR review` : multiple ? "Multiple files accepted" : "No document uploaded yet"}</p>
+                            <div style={{ backgroundColor: darkMode ? toneOf(meta.tone)[2] : toneOf(meta.tone)[0] }} className={`relative min-h-[150px] w-full min-w-0 overflow-hidden rounded-[16px] p-5 sm:min-h-[180px] ${darkMode ? "text-white" : "text-[#141414]"}`}>
+                              <p className="text-[12.5px] opacity-70">{document ? "Verified file" : "Pending upload"}</p>
+                              <h4 className="mt-4 max-w-full break-words text-[19px] leading-[1.12] tracking-[-0.01em] sm:max-w-[15rem]">{docType.label}</h4>
+                              <p className={`mt-2 text-xs ${darkMode ? "text-white/60" : "text-[#6b6b6b]"}`}>{progress ? `Uploading ${progress.current} of ${progress.total}` : document ? `${documents.length} file${documents.length === 1 ? "" : "s"} ready for HR review` : multiple ? "Multiple files accepted" : "No document uploaded yet"}</p>
                               {progress && (
                                 <div className="mt-3">
-                                  <p className={`truncate text-[10px] font-semibold ${darkMode ? "text-white/60" : "text-black/45"}`}>{progress.name}</p>
+                                  <p className={`truncate text-[10px] ${darkMode ? "text-white/60" : "text-black/45"}`}>{progress.name}</p>
                                   <div className={`mt-2 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/15" : "bg-black/10"}`}>
                                     <div className={`h-full rounded-full transition-all duration-300 ${darkMode ? "bg-white" : "bg-black"}`} style={{ width: `${Math.max(8, Math.round((progress.current / progress.total) * 100))}%` }} />
                                   </div>
@@ -3485,12 +3396,12 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                               )}
                             </div>
                             <div className="mt-4 flex items-center gap-2">
-                              <label className={`inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl text-xs font-black transition ${uploading ? "pointer-events-none opacity-60" : ""} ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f5f6f2] text-[#171714] hover:bg-[#ecefe8]"}`}>
+                              <label className={`inline-flex h-9 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full text-[13px] transition ${uploading ? "pointer-events-none opacity-60" : ""} ${darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
                                 {uploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                                 {progress ? `Uploading ${progress.current}/${progress.total}` : uploading ? "Uploading" : multiple && document ? "Add files" : document ? "Replace" : "Upload"}
                                 <input type="file" className="hidden" multiple={multiple} disabled={uploading} onChange={(event) => uploadEmployeeDocument(docType.id, event.target.files)} />
                               </label>
-                              <a href={document?.url || "#"} target={document ? "_blank" : undefined} rel="noreferrer" onClick={(event) => { if (!document) event.preventDefault(); }} className={`grid h-10 w-12 place-items-center rounded-xl ${darkMode ? "bg-white/10 text-white" : "bg-[#f5f6f2] text-[#171714]"}`}>
+                              <a href={document?.url || "#"} target={document ? "_blank" : undefined} rel="noreferrer" onClick={(event) => { if (!document) event.preventDefault(); }} className={`grid h-9 w-9 place-items-center rounded-full ${darkMode ? "bg-white/[0.07] text-white" : "bg-[#f4f4f2] text-[#141414]"}`}>
                                 {document ? <ExternalLink className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                               </a>
                             </div>
@@ -3499,28 +3410,28 @@ export default function HrDashboard({ darkMode, section = "dashboard" }) {
                       })}
                     </div>
                   </section>
-                  <section className={`rounded-[28px] border p-6 ${darkMode ? "border-white/[0.07] bg-[#0f141b]" : "border-transparent bg-white"}`}>
+                  <section className={`rounded-[20px] border p-6 ${drawerCard}`}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <h3 className="text-xl font-black">HR request history</h3>
+                        <h3 className="text-[18px] tracking-[-0.01em]">HR request history</h3>
                         <p className={`mt-1 text-sm ${muted}`}>Leave applications submitted by this employee.</p>
                       </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-black/5 text-black/55"}`}>{selectedEmployeeLeaveHistory.length} requests</span>
+                      <Chip darkMode={darkMode}>{selectedEmployeeLeaveHistory.length} requests</Chip>
                     </div>
                     {selectedEmployeeLeaveHistory.length ? (
-                      <div className="mt-4 overflow-hidden rounded-2xl">
+                      <div className="mt-4 grid gap-2">
                         {selectedEmployeeLeaveHistory.slice(0, 5).map((request) => (
-                          <button key={request.id} onClick={() => { setSelectedLeave(request); setReviewComment(request.adminComment || ""); }} className={`flex w-full items-center justify-between gap-4 border-b p-4 text-left last:border-b-0 ${darkMode ? "border-white/[0.07] bg-white/[0.035] hover:bg-white/[0.06]" : "border-black/5 bg-[#f7f5ef] hover:bg-[#f1f4ee]"}`}>
+                          <button key={request.id} onClick={() => { setSelectedLeave(request); setReviewComment(request.adminComment || ""); }} className={`flex w-full items-center justify-between gap-4 rounded-[14px] px-4 py-3 text-left transition ${darkMode ? "bg-white/[0.04] hover:bg-white/[0.06]" : "bg-[#f7f7f5] hover:bg-[#f1f1ef]"}`}>
                             <span className="min-w-0">
-                              <span className="block truncate text-sm font-black">{request.leaveType}</span>
+                              <span className="block truncate text-[13.5px]">{request.leaveType}</span>
                               <span className={`mt-1 block truncate text-xs ${muted}`}>{request.startDate} to {request.endDate} · {request.days} day{request.days === 1 ? "" : "s"}</span>
                             </span>
-                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass(request.status)}`}>{request.status}</span>
+                            {statusChip(request.status, "shrink-0")}
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <div className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-white/[0.035]" : "bg-[#f7f5ef]"}`}>
+                      <div className={`mt-4 rounded-[14px] p-4 ${softPanel}`}>
                         <p className={`text-sm ${muted}`}>No leave applications from this employee yet.</p>
                       </div>
                     )}

@@ -1,7 +1,9 @@
 import { Banknote, CalendarDays, CreditCard, FileText, ReceiptText, Table2, UserRound } from "lucide-react";
 import { isWithinDateRange, money, parseAmount } from "./amountUtils";
+import { IconTile } from "../ui";
+import { Metric, PALETTE } from "./viewKit";
 
-const CHART_COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899", "#84cc16"];
+const CHART_COLORS = PALETTE;
 
 function cleanValue(value) {
   const text = String(value ?? "").trim();
@@ -32,35 +34,23 @@ function sumBy(rows, groupColumn, valueColumn) {
   return Object.entries(totals).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
 }
 
-function Metric({ darkMode, icon: Icon, label, value, accent }) {
-  return (
-    <div className={`relative overflow-hidden rounded-[22px] p-5 ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-      <span className="absolute -right-6 -top-6 h-20 w-20 rounded-full opacity-20" style={{ background: accent }} />
-      <div className="flex items-center justify-between gap-3">
-        <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/40"}`}>{label}</p>
-        <Icon className="h-4 w-4" style={{ color: accent }} />
-      </div>
-      <p className={`mt-4 text-2xl font-semibold sm:text-3xl ${darkMode ? "text-white" : "text-black"}`}>{value}</p>
-    </div>
-  );
-}
 
 function Bars({ darkMode, title, data, valueFormatter = (value) => value }) {
   const items = data.filter((item) => item.value > 0).slice(0, 8);
   const max = Math.max(...items.map((item) => item.value), 1);
-  const muted = darkMode ? "text-white/45" : "text-black/40";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
 
   return (
-    <div className={`rounded-[22px] p-5 ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-      <h3 className={`text-sm font-medium ${darkMode ? "text-white" : "text-black"}`}>{title}</h3>
+    <div className={`rounded-[20px] p-5 ${darkMode ? "bg-[#15171c] border border-white/10" : "bg-white border border-[#ececec]"}`}>
+      <h3 className={`text-[15px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{title}</h3>
       <div className="mt-5 space-y-3">
         {items.map((item, index) => (
           <div key={item.label}>
             <div className="mb-1 flex justify-between gap-3 text-xs">
-              <span className={`truncate ${darkMode ? "text-white/65" : "text-black/55"}`}>{item.label}</span>
+              <span className={`truncate ${darkMode ? "text-white/65" : "text-[#3d3d3b]"}`}>{item.label}</span>
               <span className={muted}>{valueFormatter(item.value)}</span>
             </div>
-            <div className={`h-2.5 overflow-hidden rounded-full ${darkMode ? "bg-white/8" : "bg-black/5"}`}>
+            <div className={`h-2.5 overflow-hidden rounded-full ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}>
               <div className="h-full rounded-full" style={{ width: `${Math.max(7, (item.value / max) * 100)}%`, background: CHART_COLORS[index % CHART_COLORS.length] }} />
             </div>
           </div>
@@ -72,7 +62,7 @@ function Bars({ darkMode, title, data, valueFormatter = (value) => value }) {
 }
 
 export default function DirectorPaymentDashboard({ darkMode, currentSheet, searchQuery, dateRange = {} }) {
-  const muted = darkMode ? "text-white/50" : "text-black/45";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
   const headers = currentSheet?.headers || [];
   const query = searchQuery.trim().toLowerCase();
   const rows = (currentSheet?.rows || []).filter((row) => {
@@ -102,13 +92,13 @@ export default function DirectorPaymentDashboard({ darkMode, currentSheet, searc
 
       <div className="mb-5 grid gap-4 xl:grid-cols-2">
         {sortedRows.map((row) => (
-          <article key={`${row.__sheetName}-${row.__rowIndex}`} className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.04] border border-white/10" : "bg-white border border-black/5"}`}>
+          <article key={`${row.__sheetName}-${row.__rowIndex}`} className={`rounded-[20px] p-5 ${darkMode ? "bg-[#15171c] border border-white/10" : "bg-white border border-[#ececec]"}`}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <p className={`text-xl font-semibold ${darkMode ? "text-white" : "text-black"}`}>{cleanValue(row["Expense Type"]) || "Payment request"}</p>
+                <p className={`text-[17px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{cleanValue(row["Expense Type"]) || "Payment request"}</p>
                 <p className={`mt-1 text-sm ${muted}`}>{cleanValue(row.Remarks) || cleanValue(row["Requested By"]) || "No remarks"}</p>
               </div>
-              <span className={`rounded-full px-3 py-1.5 text-sm font-medium ${darkMode ? "bg-[#d8f36a] text-black" : "bg-black text-white"}`}>{money(parseAmount(row.Amount))}</span>
+              <span className={`rounded-full px-3 py-1.5 text-sm ${darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white"}`}>{money(parseAmount(row.Amount))}</span>
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -120,12 +110,12 @@ export default function DirectorPaymentDashboard({ darkMode, currentSheet, searc
                 ["Email", cleanValue(row["Email address"]), UserRound],
                 ["Remarks", cleanValue(row.Remarks), ReceiptText],
               ].map(([label, value, Icon]) => (
-                <div key={label} className={`rounded-2xl p-3 ${darkMode ? "bg-black/20" : "bg-black/[0.025]"}`}>
-                  <p className={`mb-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] ${darkMode ? "text-white/35" : "text-black/35"}`}>
+                <div key={label} className={`rounded-[14px] p-3 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
+                  <p className={`mb-1 flex items-center gap-2 text-[11.5px] ${darkMode ? "text-white/35" : "text-[#9a9a98]"}`}>
                     <Icon className="h-3 w-3" />
                     {label}
                   </p>
-                  <p className={`break-words text-sm leading-5 ${darkMode ? "text-white/75" : "text-black/70"}`}>{value || "N/A"}</p>
+                  <p className={`break-words text-sm leading-5 ${darkMode ? "text-white/75" : "text-[#3d3d3b]"}`}>{value || "N/A"}</p>
                 </div>
               ))}
             </div>
@@ -133,25 +123,25 @@ export default function DirectorPaymentDashboard({ darkMode, currentSheet, searc
         ))}
       </div>
 
-      <div className={`overflow-hidden rounded-[24px] ${darkMode ? "bg-white/[0.035] border border-white/10" : "bg-white border border-black/5"}`}>
-        <div className="flex items-center justify-between border-b border-black/5 px-5 py-4 dark:border-white/10">
-          <h3 className={`text-sm font-medium ${darkMode ? "text-white" : "text-black"}`}>Complete director payment data</h3>
-          <Table2 className={`h-4 w-4 ${muted}`} />
+      <div className={`overflow-hidden rounded-[20px] ${darkMode ? "bg-[#15171c] border border-white/10" : "bg-white border border-[#ececec]"}`}>
+        <div className={`flex items-center justify-between border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
+          <h3 className={`text-[15px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>Complete director payment data</h3>
+          <IconTile icon={Table2} tone="neutral" darkMode={darkMode} size="sm" />
         </div>
         <div className="max-h-[360px] overflow-auto">
           <table className="w-full min-w-[900px] text-sm">
             <thead className={`sticky top-0 z-10 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-              <tr className={darkMode ? "border-b border-white/10" : "border-b border-black/5"}>
+              <tr className={darkMode ? "border-b border-white/10" : "border-b border-[#f0f0ee]"}>
                 {headers.map((header) => (
-                  <th key={header} className={`whitespace-nowrap px-5 py-3 text-left font-medium ${darkMode ? "text-white/55" : "text-black/45"}`}>{header}</th>
+                  <th key={header} className={`whitespace-nowrap px-5 py-3 text-left text-[12px] font-normal ${darkMode ? "text-white/55" : "text-[#8a8a8a]"}`}>{header}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {sortedRows.slice(0, 150).map((row) => (
-                <tr key={row.__rowIndex} className={darkMode ? "border-b border-white/5" : "border-b border-black/5"}>
+                <tr key={row.__rowIndex} className={darkMode ? "border-b border-white/[0.06]" : "border-b border-[#f0f0ee]"}>
                   {headers.map((header) => (
-                    <td key={header} className={`min-w-[150px] px-5 py-3 align-top ${darkMode ? "text-white/75" : "text-black/65"}`}>
+                    <td key={header} className={`min-w-[150px] px-5 py-3 align-top ${darkMode ? "text-white/75" : "text-[#3d3d3b]"}`}>
                       {cleanValue(row[header]) || "N/A"}
                     </td>
                   ))}

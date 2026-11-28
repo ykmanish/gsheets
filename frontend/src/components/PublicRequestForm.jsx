@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CircleCheckBig, Info, Link2Off, Loader2, Paperclip, Send, Ticket, TriangleAlert, X } from "lucide-react";
+import { CircleCheckBig, ClipboardList, Info, Link2Off, Loader2, Paperclip, Send, Ticket, TriangleAlert, X } from "lucide-react";
 import { API_URL } from "./AuthProvider";
-import { Select } from "./ui";
+import { Badge, Button, DateInput, IconTile, Notice, Select, SectionTitle } from "./ui";
 
 // The shareable side of an accounts request form. Deliberately standalone: no sidebar,
 // no auth provider, nothing that assumes a signed-in raga user — a link recipient may
 // have no account at all.
 
-const PAGE = "min-h-screen bg-[#e9ecf3] px-4 py-8 text-[#171714] sm:px-6 sm:py-12";
-const SHEET = "mx-auto w-full max-w-3xl rounded-2xl border border-black/[0.05] bg-white";
-const RULE = "border-t border-black/[0.08]";
+const PAGE = "newq min-h-screen bg-white px-4 py-8 text-[#141414] sm:px-6 sm:py-14";
+const SHEET = "mx-auto w-full max-w-3xl rounded-[24px] border border-[#ececec] bg-white";
+const RULE = "border-t border-[#f0f0ee]";
 
 function Shell({ children }) {
   return <main className={PAGE}><div className={SHEET}>{children}</div></main>;
@@ -19,15 +19,13 @@ function Shell({ children }) {
 
 // Every dead end — used link, cancelled link, closed form — lands here rather than on a
 // bare error string, so a recipient always knows whether to ask for a new link.
-function Message({ icon: Icon, title, children }) {
+function Message({ icon: Icon, title, children, tone = "neutral" }) {
   return (
     <Shell>
-      <div className="px-8 py-14 text-center sm:px-14">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-black/[0.08]">
-          <Icon className="h-6 w-6 text-black/50" />
-        </span>
-        <h1 className="small mt-6 text-2xl font-black">{title}</h1>
-        <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-black/50">{children}</p>
+      <div className="flex flex-col items-center px-8 py-14 text-center sm:px-14">
+        <IconTile icon={Icon} tone={tone} size="lg" />
+        <h1 className="mt-6 text-[26px] leading-tight tracking-[-0.02em]">{title}</h1>
+        <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-6 text-[#8a8a8a]">{children}</p>
       </div>
     </Shell>
   );
@@ -144,26 +142,26 @@ export default function PublicRequestForm({ slug }) {
     }
     if (error.needsToken) {
       return (
-        <Message icon={Ticket} title="You need a personal link">
+        <Message icon={Ticket} tone="amber" title="You need a personal link">
           This form is filled in through a link made for one person. Ask the accounts team to send you yours.
         </Message>
       );
     }
     if (error.badToken) {
       return (
-        <Message icon={Link2Off} title="This link is not valid">
+        <Message icon={Link2Off} tone="peach" title="This link is not valid">
           It may have been cancelled or typed incorrectly. Ask the accounts team for a new one.
         </Message>
       );
     }
-    return <Message icon={TriangleAlert} title="Form unavailable">{error.message}</Message>;
+    return <Message icon={TriangleAlert} tone="rose" title="Form unavailable">{error.message}</Message>;
   }
 
   if (!form) {
     return (
       <main className={PAGE}>
         <div className="grid min-h-[60vh] place-items-center">
-          <div className="flex items-center gap-3 text-sm font-semibold text-black/45"><Loader2 className="h-5 w-5 animate-spin" /> Loading form...</div>
+          <div className="flex items-center gap-3 text-[13.5px] text-[#8a8a8a]"><Loader2 className="h-5 w-5 animate-spin" /> Loading form...</div>
         </div>
       </main>
     );
@@ -171,13 +169,13 @@ export default function PublicRequestForm({ slug }) {
 
   if (done) {
     return (
-      <Message icon={CircleCheckBig} title="Request submitted">
+      <Message icon={CircleCheckBig} tone="mint" title="Request submitted">
         {notice || "Thank you — the accounts team has it."}
       </Message>
     );
   }
 
-  const field = "h-12 w-full rounded-xl border border-black/[0.12] bg-white px-4 text-sm text-[#171714] outline-none transition placeholder:text-black/30 focus:border-black/40";
+  const field = "h-12 w-full rounded-full border border-transparent bg-[#f4f4f2] px-5 text-[13.5px] text-[#141414] outline-none transition placeholder:text-[#a3a3a0] hover:bg-[#efefec] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]";
   const required = form.fields.filter((item) => item.required).length;
   const oneTime = form.submissionMode === "single";
 
@@ -185,25 +183,19 @@ export default function PublicRequestForm({ slug }) {
     <main className={PAGE}>
       <form onSubmit={submit} className={SHEET}>
         <div className="px-7 pt-10 sm:px-12">
-          <p className="text-sm font-black tracking-tight text-black/40">Request form</p>
-          <h1 className="small mt-2 text-3xl font-black leading-tight">{form.name}</h1>
-        </div>
-
-        <div className="px-7 pt-7 sm:px-12">
-          <div className={RULE} />
+          <Badge icon={ClipboardList} tone="peach" className="mb-4">Request form</Badge>
+          <SectionTitle size="lg" title={form.name} subtitle="fill in and send" />
         </div>
 
         {(form.description || oneTime) && (
-          <div className="px-7 pt-6 sm:px-12">
-            <div className="flex items-start gap-3 rounded-xl bg-[#f3f4f9] px-5 py-4">
-              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-black/25">
-                {oneTime ? <Ticket className="h-3 w-3 text-black/55" /> : <Info className="h-3 w-3 text-black/55" />}
-              </span>
+          <div className="px-7 pt-7 sm:px-12">
+            <div className="flex items-start gap-3.5 rounded-[20px] bg-[#f7f7f5] px-5 py-4">
+              <IconTile icon={oneTime ? Ticket : Info} tone={oneTime ? "amber" : "sky"} size="sm" />
               <div className="min-w-0">
-                <p className="text-sm font-black">
+                <p className="text-[14px]">
                   {oneTime ? `One-time link${linkLabel ? ` · ${linkLabel}` : ""}` : "About this form"}
                 </p>
-                <p className="mt-1 text-sm leading-6 text-black/45">
+                <p className="mt-0.5 text-[13px] leading-6 text-[#8a8a8a]">
                   {oneTime
                     ? `This link accepts one response and then closes.${form.description ? ` ${form.description}` : ""}`
                     : form.description}
@@ -213,13 +205,13 @@ export default function PublicRequestForm({ slug }) {
           </div>
         )}
 
-        <div className="px-7 pt-7 sm:px-12">
+        <div className="px-7 pt-8 sm:px-12">
           <div className={RULE} />
         </div>
 
         <div className="px-7 pt-7 sm:px-12">
-          <h2 className="small text-2xl font-black">Your answers</h2>
-          <p className="mt-1.5 text-sm text-black/40">
+          <h2 className="text-[20px] tracking-[-0.01em]">Your answers</h2>
+          <p className="mt-0.5 text-[13px] text-[#8a8a8a]">
             {form.fields.length} question{form.fields.length === 1 ? "" : "s"}
             {required ? ` · ${required} required` : " · nothing required"}
           </p>
@@ -228,20 +220,20 @@ export default function PublicRequestForm({ slug }) {
             {form.fields.map((item) => (
               <div key={item.key} className={isWide(item) ? "sm:col-span-2" : ""}>
                 <label className="block">
-                  <span className="text-sm font-black">
+                  <span className="text-[13px] text-[#3d3d3b]">
                     {item.label}
-                    {item.required ? <span className="ml-1 text-rose-500">*</span> : null}
+                    {item.required ? <span className="ml-1 text-[#c0394b]">*</span> : null}
                   </span>
 
                   {item.type === "toggle" ? (
                     <button
                       type="button"
                       onClick={() => setValue(item.key, !values[item.key])}
-                      className={`mt-2 flex h-12 w-full items-center justify-between rounded-xl border px-4 text-sm font-bold transition ${values[item.key] ? "border-black/40" : "border-black/[0.12]"}`}
+                      className={`mt-2 flex h-12 w-full items-center justify-between rounded-full px-5 text-[13.5px] transition ${values[item.key] ? "bg-[#eef8cc]" : "bg-[#f4f4f2] hover:bg-[#efefec]"}`}
                     >
                       <span>{values[item.key] ? "Yes" : "No"}</span>
-                      <span className={`relative h-6 w-11 rounded-full transition ${values[item.key] ? "bg-[#171714]" : "bg-black/12"}`}>
-                        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${values[item.key] ? "left-[22px]" : "left-0.5"}`} />
+                      <span className={`relative h-6 w-11 rounded-full transition ${values[item.key] ? "bg-[#141414]" : "bg-[#dcdcd8]"}`}>
+                        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-all ${values[item.key] ? "left-[22px]" : "left-0.5"}`} />
                       </span>
                     </button>
                   ) : item.type === "textarea" ? (
@@ -250,15 +242,17 @@ export default function PublicRequestForm({ slug }) {
                       value={values[item.key] || ""}
                       placeholder={item.placeholder}
                       onChange={(event) => setValue(item.key, event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-black/[0.12] bg-white p-4 text-sm text-[#171714] outline-none transition placeholder:text-black/30 focus:border-black/40"
+                      className="mt-2 w-full rounded-[16px] border border-transparent bg-[#f4f4f2] p-4 text-[13.5px] text-[#141414] outline-none transition placeholder:text-[#a3a3a0] hover:bg-[#efefec] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]"
                     />
                   ) : item.type === "select" ? (
                     <Select darkMode={false} value={values[item.key] || ""} onChange={(event) => setValue(item.key, event.target.value)} className="mt-2" placeholder="Choose..." size="lg">
                       {(item.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
                     </Select>
-                  ) : item.type === "file" ? null : (
+                  ) : item.type === "file" ? null : item.type === "date" ? (
+                    <DateInput darkMode={false} value={values[item.key] || ""} onChange={(event) => setValue(item.key, event.target.value)} className="mt-2" size="lg" placeholder={item.placeholder || "Choose date"} />
+                  ) : (
                     <input
-                      type={item.type === "number" ? "number" : item.type === "date" ? "date" : "text"}
+                      type={item.type === "number" ? "number" : "text"}
                       value={values[item.key] || ""}
                       placeholder={item.placeholder}
                       onChange={(event) => setValue(item.key, event.target.value)}
@@ -272,7 +266,7 @@ export default function PublicRequestForm({ slug }) {
                     <button
                       type="button"
                       onClick={() => fileInputs.current[item.key]?.click()}
-                      className="flex h-11 items-center gap-2 rounded-xl border border-dashed border-black/[0.18] px-4 text-sm font-bold text-black/45 transition hover:border-black/45 hover:text-black"
+                      className="flex h-10 items-center gap-2 rounded-full border border-dashed border-[#d6d6d2] px-4 text-[13px] text-[#5f5f5c] transition hover:border-[#141414] hover:text-[#141414]"
                     >
                       <Paperclip className="h-4 w-4" /> {item.type === "file" ? "Choose files" : "Attach a file"}
                     </button>
@@ -284,10 +278,10 @@ export default function PublicRequestForm({ slug }) {
                       onChange={(event) => { addFiles(item.key, event.target.files); event.target.value = ""; }}
                     />
                     {(files[item.key] || []).map((file, fileIndex) => (
-                      <span key={`${file.name}-${fileIndex}`} className="mt-2 mr-2 inline-flex max-w-full items-center gap-2 rounded-lg bg-[#f3f4f9] px-3 py-1.5 text-xs font-bold">
-                        <Paperclip className="h-3 w-3 shrink-0 text-black/35" />
+                      <span key={`${file.name}-${fileIndex}`} className="mr-2 mt-2 inline-flex h-7 max-w-full items-center gap-2 rounded-full bg-[#f4f4f2] px-3 text-[12px]">
+                        <Paperclip className="h-3 w-3 shrink-0 text-[#8a8a8a]" />
                         <span className="truncate">{file.name}</span>
-                        <button type="button" onClick={() => removeFile(item.key, fileIndex)} aria-label="Remove file" className="shrink-0 text-black/35 transition hover:text-rose-500"><X className="h-3.5 w-3.5" /></button>
+                        <button type="button" onClick={() => removeFile(item.key, fileIndex)} aria-label="Remove file" className="shrink-0 text-[#8a8a8a] transition hover:text-[#c0394b]"><X className="h-3.5 w-3.5" /></button>
                       </span>
                     ))}
                   </div>
@@ -301,22 +295,14 @@ export default function PublicRequestForm({ slug }) {
           <div className={RULE} />
 
           {notice ? (
-            <p className="mt-6 flex items-start gap-2.5 rounded-xl bg-rose-50 px-5 py-4 text-sm font-bold text-rose-600">
-              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" /> {notice}
-            </p>
+            <Notice tone="red" icon={TriangleAlert} className="mt-6">{notice}</Notice>
           ) : null}
 
           <div className="mt-6 flex flex-col-reverse items-center justify-between gap-4 sm:flex-row">
-            <p className="text-xs text-black/35">
+            <p className="text-[12px] text-[#9a9a98]">
               {oneTime ? "This link works once · files up to 15 MB each" : "Files up to 15 MB each"}
             </p>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#171714] px-8 text-sm font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-black/25 sm:w-auto"
-            >
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Submit request
-            </button>
+            <Button type="submit" variant="primary" size="lg" icon={Send} loading={submitting} disabled={submitting} className="w-full sm:w-auto">Submit request</Button>
           </div>
         </div>
       </form>

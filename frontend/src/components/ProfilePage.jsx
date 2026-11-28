@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, ExternalLink, Eye, EyeOff, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, KeyRound, LogIn, LogOut, Mail, MessageCircleMore, Pencil, Phone, ReceiptText, RefreshCw, Save, ShieldCheck, Upload } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, ExternalLink, Eye, EyeOff, FileText, FolderOpen, GraduationCap, HeartPulse, IdCard, KeyRound, LogIn, LogOut, Mail, MessageCircleMore, Pencil, Phone, ReceiptText, RefreshCw, Save, ShieldCheck, Upload, UserRound, X } from "lucide-react";
 import { API_URL, useAuth } from "./AuthProvider";
 import UserAvatar, { beanheadPresetsForGender } from "./UserAvatar";
-import { SelectMenu } from "./ui";
+import { Button, Chip, IconTile, PageHeader, SelectMenu, cx, toneOf } from "./ui";
 
 const EMPLOYEE_DOCUMENT_TYPES = [
   { id: "aadhar_card_copy", label: "Aadhar card copy" },
@@ -18,25 +18,39 @@ const EMPLOYEE_DOCUMENT_TYPES = [
 const MULTI_EMPLOYEE_DOCUMENT_TYPES = new Set(["last_3_months_pay_slip", "educational_certificates", "last_company_letters"]);
 
 const DOCUMENT_CARD_META = {
-  aadhar_card_copy: { Icon: IdCard, card: "bg-orange-100 text-[#171714]", icon: "bg-orange-50 text-orange-600" },
-  pan_card_copy: { Icon: BadgeCheck, card: "bg-blue-100 text-[#171714]", icon: "bg-blue-50 text-blue-600" },
-  educational_certificates: { Icon: GraduationCap, card: "bg-cyan-100 text-[#171714]", icon: "bg-cyan-50 text-cyan-600" },
-  last_3_months_pay_slip: { Icon: ReceiptText, card: "bg-violet-100 text-[#171714]", icon: "bg-violet-50 text-violet-600" },
-  last_company_letters: { Icon: Building2, card: "bg-rose-100 text-[#171714]", icon: "bg-rose-50 text-rose-600" },
-  medical_certificate: { Icon: HeartPulse, card: "bg-green-100 text-[#171714]", icon: "bg-green-50 text-green-600" },
+  aadhar_card_copy: { Icon: IdCard, tone: "peach" },
+  pan_card_copy: { Icon: BadgeCheck, tone: "sky" },
+  educational_certificates: { Icon: GraduationCap, tone: "lavender" },
+  last_3_months_pay_slip: { Icon: ReceiptText, tone: "amber" },
+  last_company_letters: { Icon: Building2, tone: "rose" },
+  medical_certificate: { Icon: HeartPulse, tone: "mint" },
 };
+
+const labelClass = (darkMode) => `text-[12px] ${darkMode ? "text-white/55" : "text-[#8a8a8a]"}`;
+const fieldShell = (darkMode) => cx(
+  "border border-transparent transition-[background-color,border-color,box-shadow]",
+  darkMode
+    ? "bg-white/[0.06] text-white focus-within:bg-white/[0.09] focus-within:ring-[3px] focus-within:ring-white/10"
+    : "bg-[#f4f4f2] text-[#141414] focus-within:border-[#e2e2df] focus-within:bg-white focus-within:ring-[3px] focus-within:ring-black/[0.05]",
+);
 
 function ProfileField({ darkMode, label, value, onChange, icon: Icon, className = "", ...props }) {
   const disabled = Boolean(props.disabled);
   return (
     <label className={`block ${className}`}>
-      <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>{label}</span>
-      <span className="relative mt-2 block">
-        {Icon && <Icon className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${darkMode ? "text-white/38" : "text-black/35"}`} />}
+      <span className={labelClass(darkMode)}>{label}</span>
+      <span className="relative mt-1.5 block">
+        {Icon && <Icon className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${darkMode ? "text-white/40" : "text-[#8a8a87]"}`} />}
         <input
           value={value || ""}
           onChange={(event) => onChange(event.target.value)}
-          className={`h-12 w-full rounded-2xl border px-4 text-sm outline-none transition focus:ring-4 disabled:cursor-default ${Icon ? "pl-11" : ""} ${darkMode ? "border-white/10 bg-white/[0.045] text-white placeholder:text-white/30 focus:ring-white/5 disabled:bg-white/[0.025]" : "border-black/10 bg-white text-black placeholder:text-black/35 focus:ring-emerald-500/10 disabled:bg-[#f7f8f5]"} ${disabled ? "opacity-75" : ""}`}
+          className={cx(
+            "h-11 w-full rounded-full px-4 text-[13.5px] outline-none disabled:cursor-default",
+            Icon && "pl-11",
+            fieldShell(darkMode),
+            darkMode ? "placeholder:text-white/35" : "placeholder:text-[#a3a3a0]",
+            disabled && (darkMode ? "!bg-white/[0.03] text-white/75" : "!bg-[#f7f7f5] text-[#3d3d3b]"),
+          )}
           {...props}
         />
       </span>
@@ -47,14 +61,14 @@ function ProfileField({ darkMode, label, value, onChange, icon: Icon, className 
 function PasswordField({ darkMode, label, value, onChange, visible, onToggle, autoComplete, placeholder }) {
   return (
     <label className="block">
-      <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>{label}</span>
-      <span className={`mt-2 flex h-12 items-center rounded-2xl border pr-2 transition focus-within:ring-4 ${darkMode ? "border-white/10 bg-white/[0.045] focus-within:ring-white/5" : "border-black/10 bg-white focus-within:ring-emerald-500/10"}`}>
-        <KeyRound className={`ml-4 h-4 w-4 shrink-0 ${darkMode ? "text-white/38" : "text-black/35"}`} />
+      <span className={labelClass(darkMode)}>{label}</span>
+      <span className={cx("mt-1.5 flex h-11 items-center rounded-full pr-1.5", fieldShell(darkMode))}>
+        <KeyRound className={`ml-4 h-4 w-4 shrink-0 ${darkMode ? "text-white/40" : "text-[#8a8a87]"}`} />
         <input
           type={visible ? "text" : "password"}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className={`min-w-0 flex-1 bg-transparent px-3 text-sm outline-none ${darkMode ? "text-white placeholder:text-white/30" : "text-black placeholder:text-black/35"}`}
+          className={`min-w-0 flex-1 !rounded-none !border-0 !bg-transparent px-3 text-[13.5px] !shadow-none outline-none !ring-0 ${darkMode ? "text-white placeholder:text-white/35" : "text-[#141414] placeholder:text-[#a3a3a0]"}`}
           autoComplete={autoComplete}
           placeholder={placeholder}
           required
@@ -62,7 +76,7 @@ function PasswordField({ darkMode, label, value, onChange, visible, onToggle, au
         <button
           type="button"
           onClick={onToggle}
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${darkMode ? "text-white/55 hover:bg-white/10" : "text-black/45 hover:bg-black/5"}`}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition ${darkMode ? "text-white/55 hover:bg-white/10" : "text-[#8a8a87] hover:bg-black/5"}`}
           aria-label={visible ? "Hide password" : "Show password"}
         >
           {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -409,64 +423,70 @@ export default function ProfilePage({ darkMode }) {
     }
   }
 
+  const card = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
+  const clockBusy = attendanceLoading || attendanceSaving || reportChecking;
+  const clockedIn = Boolean(todayAttendance?.clockInAt && !todayAttendance?.clockOutAt);
+
   return (
-    <main className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${darkMode ? "bg-[#0d0f12] text-white" : "bg-[#f4f6f2] text-[#171714]"}`}>
-      <div className="mx-auto w-full max-w-[1680px]">
+    <main className={`newq min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8 ${darkMode ? "bg-[#121317] text-white" : "bg-white text-[#141414]"}`}>
+      <div className="mx-auto w-full max-w-[1600px]">
         <form onSubmit={saveProfile}>
-          <section className="pb-4">
-          <div className={`relative rounded-[28px] border ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#e3e8df] bg-white"}`}>
+          <PageHeader
+            darkMode={darkMode}
+            badge={editing ? "Editing profile" : "My profile"}
+            badgeIcon={UserRound}
+            badgeTone="sky"
+            title="Profile"
+            subtitle="your details, password and HR documents"
+            actions={
+              editing ? (
+                <Button darkMode={darkMode} variant="primary" type="submit" disabled={saving} icon={Save} loading={saving}>
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              ) : (
+                <Button
+                  darkMode={darkMode}
+                  variant="primary"
+                  icon={Pencil}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setEditing(true);
+                  }}
+                >
+                  Edit
+                </Button>
+              )
+            }
+          />
+
+          <section className="pt-6 pb-4">
+          <div className={`relative rounded-[20px] border ${card}`}>
             <div
-              className="relative h-32 overflow-hidden rounded-t-[28px] bg-cover bg-center sm:h-40"
-              style={{ backgroundImage: "url('https://images.unsplash.com/photo-1623594845764-13991ac51774?q=80&w=1074&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')" }}
-            >
-              <div className="absolute inset-0 bg-black/10" />
-              <div className="absolute right-4 top-4 flex items-center gap-2">
-                {editing ? (
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#72ec31] px-6 text-sm font-black text-black transition hover:bg-[#66de29] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Save className="h-4 w-4" />
-                    {saving ? "Saving..." : "Save"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setEditing(true);
-                    }}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#72ec31] px-6 text-sm font-black text-black transition hover:bg-[#66de29] active:scale-[0.98]"
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </button>
-                )}
-              </div>
-            </div>
+              className={`relative h-28 rounded-t-[20px] sm:h-32 ${darkMode ? "bg-[linear-gradient(120deg,rgba(207,240,122,0.10),rgba(96,165,250,0.08))]" : "bg-[linear-gradient(120deg,#eef6e4,#e9f0f8)]"}`}
+            />
 
             <div className="grid gap-6 px-5 pb-6 md:grid-cols-[minmax(0,1fr)_300px] md:px-7">
-              <div className="relative z-10 -mt-10 min-w-0 sm:-mt-12">
-                <UserAvatar user={avatarUser} name={displayName} size="xl" className={`border-[3px] bg-white ${darkMode ? "border-[#15171c]" : "border-white"}`} />
+              <div className="relative z-10 -mt-12 min-w-0 sm:-mt-14">
+                <UserAvatar user={avatarUser} name={displayName} size="xl" className={`border-[4px] bg-white ${darkMode ? "border-[#15171c]" : "border-white"}`} />
                 {editing && (
                   <div ref={avatarPickerRef} className="relative mt-3 w-fit">
                     <button
                       type="button"
                       onClick={() => setAvatarDrawerOpen((current) => !current)}
-                      className={`inline-flex h-10 items-center justify-center rounded-full px-4 text-xs font-black transition ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#e8f6ee] text-[#15734d] hover:bg-[#dcfacb]"}`}
+                      className={`inline-flex h-8 items-center justify-center rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}
                     >
                       Change avatar
                     </button>
                     {avatarDrawerOpen && (
-                      <div className={`absolute left-0 top-[calc(100%+10px)] z-[80] w-[330px] max-w-[calc(100vw-2rem)] rounded-[22px] border p-3 shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:left-[calc(100%+12px)] md:top-[-116px] ${darkMode ? "border-white/10 bg-[#181a20] text-white" : "border-black/10 bg-white text-[#171714]"}`}>
+                      <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`absolute left-0 top-[calc(100%+8px)] z-[80] w-[330px] max-w-[calc(100vw-2rem)] rounded-[18px] border p-3 md:left-[calc(100%+12px)] md:top-[-116px] ${darkMode ? "border-white/10 bg-[#17181c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <div>
-                            <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-[#d8f36a]" : "text-[#4b9b16]"}`}>All avatars</p>
-                            <p className="text-sm font-black">Choose avatar</p>
+                            <p className="text-[14px]">Choose avatar</p>
+                            <p className={`text-[12px] ${muted}`}>All avatars</p>
                           </div>
-                          <button type="button" onClick={() => setAvatarDrawerOpen(false)} className={`grid h-8 w-8 place-items-center rounded-full text-lg leading-none ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`} aria-label="Close avatar picker">×</button>
+                          <button type="button" onClick={() => setAvatarDrawerOpen(false)} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`} aria-label="Close avatar picker"><X className="h-3.5 w-3.5" /></button>
                         </div>
                         <div className="grid max-h-[min(16rem,calc(100vh-14rem))] grid-cols-5 gap-2 overflow-y-auto pr-1 md:max-h-[min(20rem,calc(100vh-10rem))]">
                           {avatarPresets.map((preset) => {
@@ -479,7 +499,7 @@ export default function ProfilePage({ darkMode }) {
                                   setForm((current) => ({ ...current, avatarPreset: preset.id }));
                                   setAvatarDrawerOpen(false);
                                 }}
-                                className={`grid h-12 w-12 place-items-center rounded-full transition active:scale-[0.96] ${selected ? "bg-[#e7fadc] ring-2 ring-[#67c94a]" : darkMode ? "bg-white/[0.04] hover:bg-white/[0.08]" : "bg-[#f8faf7] hover:bg-[#eef9e8]"}`}
+                                className={`grid h-12 w-12 place-items-center rounded-full transition active:scale-[0.96] ${selected ? (darkMode ? "bg-white/10 ring-2 ring-[#cff07a]" : "bg-[#eef8cc] ring-2 ring-[#141414]") : darkMode ? "bg-white/[0.04] hover:bg-white/[0.08]" : "bg-[#f7f7f5] hover:bg-[#efefec]"}`}
                               >
                                 <UserAvatar user={{ ...avatarUser, avatarPreset: preset.id, avatarUrl: "" }} name={displayName} size="lg" className="h-11 w-11" />
                               </button>
@@ -491,49 +511,50 @@ export default function ProfilePage({ darkMode }) {
                   </div>
                 )}
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <h1 className="text-3xl small text-black dark:text-white font-black tracking-tight">{displayName}</h1>
+                  <h1 className={`text-[28px] leading-tight tracking-[-0.02em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{displayName}</h1>
                   <button
                     type="button"
-                    onClick={mustFillReportBeforeClockOut ? openEmployeeReport : todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? clockOutFromProfile : clockInFromProfile}
-                    disabled={attendanceLoading || attendanceSaving || reportChecking || (mustFillReportBeforeClockOut ? false : todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? !canClockOut : !canClockIn)}
-                    className={`inline-flex h-12 w-fit min-w-[142px] items-center justify-center gap-2 rounded-full px-6 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    onClick={mustFillReportBeforeClockOut ? openEmployeeReport : clockedIn ? clockOutFromProfile : clockInFromProfile}
+                    disabled={clockBusy || (mustFillReportBeforeClockOut ? false : clockedIn ? !canClockOut : !canClockIn)}
+                    className={`inline-flex h-10 w-fit min-w-[132px] items-center justify-center gap-2 rounded-full px-5 text-[13px] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${
                       todayAttendance?.clockOutAt
-                        ? darkMode ? "bg-emerald-400/16 text-emerald-100" : "bg-[#e8f6ee] text-[#15734d]"
+                        ? darkMode ? "bg-emerald-400/[0.12] text-[#a7e8bf]" : "bg-[#e4f1e6] text-[#2f7a4f]"
                         : mustFillReportBeforeClockOut
-                          ? darkMode ? "bg-sky-400/14 text-sky-200 hover:bg-sky-400/20" : "bg-sky-50 text-sky-700 hover:bg-sky-100"
+                          ? darkMode ? "bg-sky-400/[0.13] text-[#a9cbf7] hover:bg-sky-400/20" : "bg-[#e3eefb] text-[#2f6fc0] hover:bg-[#d6e6f9]"
                         : todayAttendance?.clockInAt
-                          ? darkMode ? "bg-red-600 text-white hover:bg-red-500" : "bg-red-500 text-white hover:bg-red-600"
-                          : "bg-green-500 text-white hover:bg-green-600"
+                          ? darkMode ? "bg-rose-400/[0.13] text-[#f7aab5] hover:bg-rose-400/20" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d6da]"
+                          : darkMode ? "bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a]" : "bg-[#141414] text-white hover:bg-black"
                     }`}
                   >
-                    {attendanceLoading || attendanceSaving || reportChecking ? <RefreshCw className="h-4 w-4 animate-spin" /> : todayAttendance?.clockOutAt ? <CheckCircle2 className="h-4 w-4" /> : mustFillReportBeforeClockOut ? <FileText className="h-4 w-4" /> : todayAttendance?.clockInAt ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+                    {clockBusy ? <RefreshCw className="h-4 w-4 animate-spin" /> : todayAttendance?.clockOutAt ? <CheckCircle2 className="h-4 w-4" /> : mustFillReportBeforeClockOut ? <FileText className="h-4 w-4" /> : todayAttendance?.clockInAt ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
                     {attendanceLoading
                       ? "Checking"
                       : reportChecking
                         ? "Checking report"
                       : attendanceSaving
-                        ? todayAttendance?.clockInAt && !todayAttendance?.clockOutAt ? "Clocking out" : "Clocking in"
+                        ? clockedIn ? "Clocking out" : "Clocking in"
                         : todayAttendance?.clockOutAt ? "Clocked out" : mustFillReportBeforeClockOut ? "Fill Employee Report" : todayAttendance?.clockInAt ? "Clock out" : "Clock in"}
                   </button>
                 </div>
-                <p className={`mt-1 text-sm ${darkMode ? "text-white/60" : "text-black/55"}`}>{form.designation || "Designation not added"}</p>
-                <p className={`text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>{form.department || "Department not added"} · {user?.username || "username"}</p>
+                <p className={`mt-1 text-[14px] ${darkMode ? "text-white/60" : "text-[#5f5f5c]"}`}>{form.designation || "Designation not added"}</p>
+                <p className={`text-[13px] ${muted}`}>{form.department || "Department not added"} · {user?.username || "username"}</p>
 
                 <div className="mt-5 flex flex-wrap gap-2">
-                  <span className={`rounded-full px-4 py-2 text-xs font-black ${darkMode ? "bg-[#d8f36a] text-black" : "bg-[#e8f6ee] text-[#15734d]"}`}>{editing ? "Editing" : "Profile"}</span>
-                  <span className={`rounded-full border px-4 py-2 text-xs font-black ${darkMode ? "border-white/15 text-white/75" : "border-black/20 text-[#171714]"}`}>{user?.roleName || "Team member"}</span>
+                  <Chip tone={editing ? "lime" : "sky"} darkMode={darkMode}>{editing ? "Editing" : "Profile"}</Chip>
+                  <Chip tone="outline" darkMode={darkMode}>{user?.roleName || "Team member"}</Chip>
                 </div>
               </div>
 
-              <aside className="pt-1 md:pt-8">
-                <p className={`text-right text-xs font-semibold ${darkMode ? "text-white/50" : "text-black/45"}`}>Current role</p>
-                <p className={`ml-auto mt-2 w-fit rounded-full px-3 py-1.5 text-xs font-black ${darkMode ? "bg-white/10 text-white" : "bg-[#f2f4ef] text-[#171714]"}`}>{user?.roleName || "Team member"}</p>
-                <div className="mt-8">
-                  <p className={`text-right text-xs font-semibold ${darkMode ? "text-white/50" : "text-black/45"}`}>Contact</p>
-                  <div className="mt-4 flex flex-wrap justify-end gap-3">
-                    {[form.email || "No email", form.whatsappPhone ? `+${form.whatsappPhone}` : "WhatsApp required"].map((item) => (
-                      <span key={item} className={`rounded-full px-4 py-2 text-xs font-bold ${darkMode ? "bg-white/10 text-white/70" : "bg-[#f5eee8] text-[#5b524c]"}`}>{item}</span>
-                    ))}
+              <aside className="pt-1 md:pt-6">
+                <p className={`text-[12px] md:text-right ${muted}`}>Current role</p>
+                <div className="mt-2 flex md:justify-end">
+                  <Chip tone="neutral" darkMode={darkMode} icon={ShieldCheck}>{user?.roleName || "Team member"}</Chip>
+                </div>
+                <div className="mt-6">
+                  <p className={`text-[12px] md:text-right ${muted}`}>Contact</p>
+                  <div className="mt-2 flex flex-wrap gap-2 md:justify-end">
+                    <Chip tone="neutral" darkMode={darkMode} icon={Mail}>{form.email || "No email"}</Chip>
+                    <Chip tone={form.whatsappPhone ? "mint" : "amber"} darkMode={darkMode} icon={MessageCircleMore}>{form.whatsappPhone ? `+${form.whatsappPhone}` : "WhatsApp required"}</Chip>
                   </div>
                 </div>
               </aside>
@@ -542,22 +563,28 @@ export default function ProfilePage({ darkMode }) {
           </div>
         </section>
 
-        <section className="grid gap-5 py-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className={`rounded-[26px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-            <h3 className="text-lg font-black">Personal information</h3>
+        <section className="grid gap-4 py-2 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className={`rounded-[20px] border p-5 ${card}`}>
+            <div className="flex items-center gap-2.5">
+              <IconTile icon={UserRound} tone="sky" darkMode={darkMode} size="sm" />
+              <div>
+                <h3 className="text-[15px]">Personal information</h3>
+                <p className={`text-[12.5px] ${muted}`}>name, role and team</p>
+              </div>
+            </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <ProfileField darkMode={darkMode} label="Full name" value={form.displayName} onChange={(value) => setForm((current) => ({ ...current, displayName: value }))} disabled={!editing} required />
               <ProfileField darkMode={darkMode} label="Designation" value={form.designation} onChange={(value) => setForm((current) => ({ ...current, designation: value }))} disabled={!editing} placeholder="e.g. Designer" icon={BriefcaseBusiness} />
               <ProfileField darkMode={darkMode} label="Department" value={form.department} onChange={(value) => setForm((current) => ({ ...current, department: value }))} disabled={!editing} placeholder="e.g. Design" />
               <ProfileField darkMode={darkMode} label="Email" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} disabled={!editing} placeholder="name@company.com" icon={Mail} type="email" />
               <label className="block">
-                <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${darkMode ? "text-white/45" : "text-black/42"}`}>Gender</span>
+                <span className={labelClass(darkMode)}>Gender</span>
                 <SelectMenu
                   darkMode={darkMode}
                   value={form.gender || "male"}
                   onChange={(value) => setForm((current) => ({ ...current, gender: value, avatarPreset: "" }))}
                   disabled={!editing}
-                  className="mt-2"
+                  className="mt-1.5"
                   options={[
                     { value: "male", label: "Male" },
                     { value: "female", label: "Female" },
@@ -567,8 +594,14 @@ export default function ProfilePage({ darkMode }) {
             </div>
           </div>
 
-          <div className={`rounded-[26px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-            <h3 className="text-lg font-black">Phone & WhatsApp</h3>
+          <div className={`rounded-[20px] border p-5 ${card}`}>
+            <div className="flex items-center gap-2.5">
+              <IconTile icon={Phone} tone="mint" darkMode={darkMode} size="sm" />
+              <div>
+                <h3 className="text-[15px]">Phone and WhatsApp</h3>
+                <p className={`text-[12.5px] ${muted}`}>where reminders reach you</p>
+              </div>
+            </div>
             <div className="mt-5 space-y-4">
               <ProfileField darkMode={darkMode} label="Phone number" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value.replace(/\D/g, "") }))} disabled={!editing} placeholder="919898892887" icon={Phone} inputMode="numeric" />
               <ProfileField darkMode={darkMode} label="WhatsApp number" value={form.whatsappPhone} onChange={(value) => setForm((current) => ({ ...current, whatsappPhone: value.replace(/\D/g, "") }))} disabled={!editing} placeholder="919898892887" icon={MessageCircleMore} inputMode="numeric" />
@@ -577,16 +610,16 @@ export default function ProfilePage({ darkMode }) {
         </section>
         </form>
 
-        <form onSubmit={changePassword} className={`mb-6 rounded-[26px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+        <form onSubmit={changePassword} className={`mb-4 mt-4 rounded-[20px] border p-5 ${card}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-lg font-black">Password & security</h3>
-              <p className={`mt-1 text-sm ${darkMode ? "text-white/55" : "text-black/55"}`}>Change your account password using your current password.</p>
+            <div className="flex items-center gap-2.5">
+              <IconTile icon={KeyRound} tone="lavender" darkMode={darkMode} size="sm" />
+              <div>
+                <h3 className="text-[15px]">Password and security</h3>
+                <p className={`text-[12.5px] ${muted}`}>Change your account password using your current password.</p>
+              </div>
             </div>
-            <span className={`inline-flex h-10 w-fit items-center gap-2 rounded-full px-4 text-xs font-black ${darkMode ? "bg-white/10 text-white/70" : "bg-[#eef8e8] text-[#39710f]"}`}>
-              <ShieldCheck className="h-4 w-4" />
-              Secure
-            </span>
+            <Chip tone="mint" darkMode={darkMode} icon={ShieldCheck} className="w-fit">Secure</Chip>
           </div>
           <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
             <PasswordField
@@ -619,75 +652,67 @@ export default function ProfilePage({ darkMode }) {
               autoComplete="new-password"
               placeholder="Confirm new password"
             />
-            <button
-              type="submit"
-              disabled={passwordSaving}
-              className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto ${darkMode ? "bg-[#d8f36a] text-black hover:bg-[#cbe95b]" : "bg-black text-white hover:bg-black/85"}`}
-            >
-              {passwordSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+            <Button darkMode={darkMode} variant="primary" type="submit" disabled={passwordSaving} icon={KeyRound} loading={passwordSaving} className="h-11 w-full lg:w-auto">
               {passwordSaving ? "Changing" : "Change password"}
-            </button>
+            </Button>
           </div>
         </form>
 
-        <section className={`mb-6 w-full min-w-0 overflow-hidden rounded-[22px] p-3 sm:rounded-[26px] sm:p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+        <section className={`mb-6 w-full min-w-0 overflow-hidden rounded-[20px] border p-4 sm:p-5 ${card}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-lg font-black">Documents</h3>
-              <p className={`mt-1 text-sm ${darkMode ? "text-white/55" : "text-black/55"}`}>Upload required HR documents. Files are saved to your Google Drive employee folder.</p>
+            <div className="flex items-center gap-2.5">
+              <IconTile icon={FolderOpen} tone="amber" darkMode={darkMode} size="sm" />
+              <div>
+                <h3 className="text-[15px]">Documents</h3>
+                <p className={`text-[12.5px] ${muted}`}>Upload required HR documents. Files are saved to your Google Drive employee folder.</p>
+              </div>
             </div>
             {user?.employeeDocumentsFolderId && (
-              <a href={`https://drive.google.com/drive/folders/${user.employeeDocumentsFolderId}`} target="_blank" rel="noreferrer" className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-full px-4 text-xs font-black sm:w-auto ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#eef8e8] text-[#39710f] hover:bg-[#e1f7d3]"}`}>
+              <a href={`https://drive.google.com/drive/folders/${user.employeeDocumentsFolderId}`} target="_blank" rel="noreferrer" className={`inline-flex h-9 w-full items-center justify-center gap-2 rounded-full border px-4 text-[13px] transition sm:w-auto ${darkMode ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"}`}>
                 <FolderOpen className="h-4 w-4" />
                 Open folder
               </a>
             )}
           </div>
-          <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {EMPLOYEE_DOCUMENT_TYPES.map((docType) => {
+          <div className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {EMPLOYEE_DOCUMENT_TYPES.map((docType, index) => {
               const documents = (user?.employeeDocuments || []).filter((item) => item.type === docType.id);
               const document = documents[0];
               const multiple = MULTI_EMPLOYEE_DOCUMENT_TYPES.has(docType.id);
               const uploading = documentUploading === docType.id;
               const progress = documentUploadProgress[docType.id];
               const meta = DOCUMENT_CARD_META[docType.id] || DOCUMENT_CARD_META.aadhar_card_copy;
-              const Icon = meta.Icon;
+              const tone = toneOf(meta.tone);
               return (
-                <div key={docType.id} className={`w-full min-w-0 overflow-hidden rounded-[20px] border p-3 transition hover:-translate-y-0.5 sm:rounded-[24px] sm:p-4 ${darkMode ? "border-white/10 bg-[#191b20]" : "border-black/5 bg-white"}`}>
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${darkMode ? "bg-white/10 text-white" : meta.icon}`}>
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className={`text-[11px] font-semibold ${darkMode ? "text-white/55" : "text-black/50"}`}>HR Document</p>
-                        <p className="truncate text-sm font-black text-[#171714] dark:text-white">{docType.label}</p>
-                      </div>
+                <div key={docType.id} className={`flex w-full min-w-0 flex-col overflow-hidden rounded-[20px] border p-4 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}>
+                  <div className="rounded-[16px] p-4" style={{ backgroundColor: darkMode ? tone[2] : tone[0] }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <span style={{ color: darkMode ? tone[3] : tone[1] }}><meta.Icon className="h-5 w-5" strokeWidth={1.8} /></span>
+                      <span className={`text-[12px] tabular-nums ${darkMode ? "text-white/40" : "text-black/30"}`}>{String(index + 1).padStart(2, "0")}</span>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${document ? (darkMode ? "bg-emerald-400/18 text-emerald-100" : "bg-emerald-100 text-emerald-700") : (darkMode ? "bg-red-400/18 text-red-100" : "bg-red-100 text-red-700")}`}>{document ? `${documents.length} uploaded` : "Missing"}</span>
-                  </div>
-                  <div className={`relative min-h-[170px] w-full min-w-0 overflow-hidden rounded-[18px] p-5 sm:min-h-[200px] sm:p-6 ${darkMode ? "bg-white/10 text-white" : meta.card}`}>
-                    <p className="text-sm font-semibold opacity-80">{document ? "Verified file" : "Pending upload"}</p>
-                    <h4 className="mt-5 max-w-full break-words text-[21px] font-black leading-[1.08] text-[#171714] dark:text-white sm:max-w-[15rem] sm:text-[22px]">{docType.label}</h4>
-                    <p className={`mt-2 text-xs font-semibold ${darkMode ? "text-white/70" : "text-black/55"}`}>{progress ? `Uploading ${progress.current} of ${progress.total}` : document ? `${documents.length} file${documents.length === 1 ? "" : "s"} ready for HR review` : multiple ? "Multiple files accepted" : "No document uploaded yet"}</p>
+                    <h4 className={`mt-6 max-w-full break-words text-[16px] leading-snug tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{docType.label}</h4>
+                    <p className={`mt-1 text-[12.5px] ${darkMode ? "text-white/55" : "text-[#6b6b6b]"}`}>{progress ? `Uploading ${progress.current} of ${progress.total}` : document ? `${documents.length} file${documents.length === 1 ? "" : "s"} ready for HR review` : multiple ? "Multiple files accepted" : "No document uploaded yet"}</p>
                     {progress && (
                       <div className="mt-3">
-                        <p className={`truncate text-[10px] font-semibold ${darkMode ? "text-white/60" : "text-black/45"}`}>{progress.name}</p>
-                        <div className={`mt-2 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/15" : "bg-black/10"}`}>
-                          <div className={`h-full rounded-full transition-all duration-300 ${darkMode ? "bg-white" : "bg-black"}`} style={{ width: `${Math.max(8, Math.round((progress.current / progress.total) * 100))}%` }} />
+                        <p className={`truncate text-[11px] ${darkMode ? "text-white/60" : "text-[#6b6b6b]"}`}>{progress.name}</p>
+                        <div className={`mt-2 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/15" : "bg-white/70"}`}>
+                          <div className={`h-full rounded-full transition-all duration-300 ${darkMode ? "bg-white" : "bg-[#141414]"}`} style={{ width: `${Math.max(8, Math.round((progress.current / progress.total) * 100))}%` }} />
                         </div>
                       </div>
                     )}
                   </div>
-                  <div className="mt-4 flex items-center gap-2">
-                    <label className={`inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl text-xs font-black transition ${uploading ? "pointer-events-none opacity-60" : ""} ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f5f6f2] text-[#171714] hover:bg-[#ecefe8]"}`}>
-                      {uploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                      {progress ? `Uploading ${progress.current}/${progress.total}` : uploading ? "Uploading" : multiple && document ? "Add files" : document ? "Replace" : "Upload"}
-                      <input type="file" className="hidden" multiple={multiple} disabled={uploading} onChange={(event) => uploadProfileDocument(docType.id, event.target.files)} />
-                    </label>
-                    <a href={document?.url || "#"} target={document ? "_blank" : undefined} rel="noreferrer" onClick={(event) => { if (!document) event.preventDefault(); }} className={`grid h-10 w-12 place-items-center rounded-xl ${darkMode ? "bg-white/10 text-white" : "bg-[#f5f6f2] text-[#171714]"}`}>
-                      {document ? <ExternalLink className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-                    </a>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <Chip tone={document ? "mint" : "rose"} darkMode={darkMode}>{document ? `${documents.length} uploaded` : "Missing"}</Chip>
+                    <div className="flex items-center gap-2">
+                      <label className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-full px-4 text-[12.5px] transition ${uploading ? "pointer-events-none opacity-60" : ""} ${darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
+                        {uploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        {progress ? `Uploading ${progress.current}/${progress.total}` : uploading ? "Uploading" : multiple && document ? "Add files" : document ? "Replace" : "Upload"}
+                        <input type="file" className="hidden" multiple={multiple} disabled={uploading} onChange={(event) => uploadProfileDocument(docType.id, event.target.files)} />
+                      </label>
+                      <a href={document?.url || "#"} target={document ? "_blank" : undefined} rel="noreferrer" onClick={(event) => { if (!document) event.preventDefault(); }} aria-label={document ? "Open document" : "No document yet"} className={`grid h-9 w-9 place-items-center rounded-full transition ${document ? "" : "opacity-50"} ${darkMode ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}>
+                        {document ? <ExternalLink className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                      </a>
+                    </div>
                   </div>
                 </div>
               );

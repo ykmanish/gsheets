@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ArrowRight, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, ClipboardList, FileSpreadsheet, FileText, FolderLock, Images, LayoutDashboard, ListTodo, MessageCircleMore, MessagesSquare, PackageSearch, Search, ShieldCheck, SlidersHorizontal, UserRound, UserRoundSearch, Users, Workflow, X, ChartNoAxesCombined, Sheet } from "lucide-react";
 import { preloadModule } from "./appModules";
+import { EmptyState, IconTile } from "./ui";
+
+// Each group keeps one pastel tone so a result is recognisable by colour as well as name.
+const GROUP_TONES = { Workspace: "mint", Projects: "peach", HR: "lavender", Admin: "sky", "Access Control": "rose", Account: "sky" };
 
 const COMMAND_ITEMS = [
   { id: "dashboard", label: "Dashboard", description: "Overview, documents, activity, and workspace status", group: "Workspace", keywords: ["home", "overview"], icon: LayoutDashboard },
@@ -104,8 +108,8 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
 
   return (
     <div className={`fixed inset-0 z-[100] flex items-start justify-center px-3 pt-[10vh] newq transition duration-200 ${open ? "pointer-events-auto bg-black/25 opacity-100" : "pointer-events-none bg-black/0 opacity-0"}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closePalette(); }}>
-      <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`flex max-h-[70vh] w-full max-w-xl origin-top flex-col overflow-hidden rounded-[16px] border transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "translate-y-0 scale-100 opacity-100" : "-translate-y-2 scale-[0.98] opacity-0"} ${darkMode ? "border-white/10 bg-[#17181c] text-white" : "border-[#e8e8e6] bg-white text-[#171717]"}`}>
-        <div className={`flex h-12 shrink-0 items-center gap-2.5 border-b px-4 ${darkMode ? "border-white/10" : "border-[#efefed]"}`}>
+      <div style={{ boxShadow: "var(--ui-shadow-pop)" }} className={`flex max-h-[70vh] w-full max-w-xl origin-top flex-col overflow-hidden rounded-[24px] border transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "translate-y-0 scale-100 opacity-100" : "-translate-y-2 scale-[0.98] opacity-0"} ${darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]"}`}>
+        <div className={`flex h-14 shrink-0 items-center gap-2.5 border-b px-5 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
           <Search className={`h-4 w-4 shrink-0 ${darkMode ? "text-white/45" : "text-[#a3a3a0]"}`} />
           <input
             ref={inputRef}
@@ -116,20 +120,20 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
             }}
             onKeyDown={handleKeyDown}
             placeholder="Search modules, pages, or actions..."
-            className={`min-w-0 flex-1 bg-transparent text-[14px] outline-none ${darkMode ? "placeholder:text-white/35" : "placeholder:text-[#a3a3a0]"}`}
+            className={`min-w-0 flex-1 !rounded-none !border-0 !bg-transparent !p-0 text-[15px] !shadow-none outline-none !ring-0 ${darkMode ? "placeholder:text-white/35" : "placeholder:text-[#a3a3a0]"}`}
           />
-          <kbd className={`hidden rounded-[6px] border px-1.5 py-0.5 text-[11px] sm:inline ${darkMode ? "border-white/10 text-white/50" : "border-[#e4e4e1] text-[#8a8a87]"}`}>Esc</kbd>
-          <button type="button" onClick={closePalette} className={`grid h-7 w-7 place-items-center rounded-[8px] ${darkMode ? "text-white/55 hover:bg-white/10" : "text-[#8a8a87] hover:bg-[#f1f1ef]"}`} aria-label="Close search">
+          <kbd className={`hidden rounded-full px-2 py-0.5 text-[11px] sm:inline ${darkMode ? "bg-white/[0.07] text-white/50" : "bg-[#f4f4f2] text-[#8a8a87]"}`}>Esc</kbd>
+          <button type="button" onClick={closePalette} className={`grid h-8 w-8 place-items-center rounded-full ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-[#f4f4f2] text-[#5f5f5c] hover:bg-[#ebebe8]"}`} aria-label="Close search">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {!query.trim() && (
-            <p className={`px-2.5 pb-1 pt-2 text-[11.5px] font-medium ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>Go to</p>
+            <p className={`px-3 pb-1.5 pt-2 text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>Go to</p>
           )}
           {query.trim() && filteredItems.length > 0 && (
-            <p className={`px-2.5 pb-1 pt-2 text-[11.5px] font-medium ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>{filteredItems.length} result{filteredItems.length === 1 ? "" : "s"}</p>
+            <p className={`px-3 pb-1.5 pt-2 text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>{filteredItems.length} result{filteredItems.length === 1 ? "" : "s"}</p>
           )}
 
           {visibleItems.length > 0 ? (
@@ -146,14 +150,12 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
                       void preloadModule(item.id);
                     }}
                     onClick={() => selectItem(item)}
-                    className={`group relative flex w-full items-center gap-3 rounded-[9px] px-2.5 py-2 text-left transition-colors duration-100 ${active ? (darkMode ? "bg-white/[0.07]" : "bg-[#f3f3f1]") : ""}`}
+                    className={`group relative flex w-full items-center gap-3 rounded-[14px] px-2.5 py-2 text-left transition-colors duration-100 ${active ? (darkMode ? "bg-white/[0.07]" : "bg-[#f4f4f2]") : ""}`}
                   >
-                    <span className={`relative grid h-7 w-7 shrink-0 place-items-center rounded-[8px] border ${darkMode ? "border-white/10 bg-white/[0.04] text-white/70" : "border-[#ececea] bg-white text-[#5f5f5c]"}`}>
-                      <Icon className="h-[15px] w-[15px]" />
-                    </span>
+                    <IconTile icon={Icon} tone={GROUP_TONES[item.group] || "neutral"} darkMode={darkMode} size="sm" />
                     <span className="relative min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-[13.5px] font-medium">{item.label}</span>
+                        <span className="truncate text-[13.5px]">{item.label}</span>
                         {item.parent && <span className={`shrink-0 text-[11.5px] ${darkMode ? "text-white/40" : "text-[#a3a3a0]"}`}>in {item.parent}</span>}
                       </span>
                       <span className={`block truncate text-[12px] ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>{item.description}</span>
@@ -164,26 +166,27 @@ export default function CommandPalette({ open, onClose, onNavigate, allowedMenus
               })}
             </div>
           ) : (
-            <div className="grid min-h-[260px] place-items-center text-center">
-              <div>
-                <span className={`mx-auto grid h-20 w-20 place-items-center rounded-full ${darkMode ? "bg-white/5 text-white/45" : "bg-slate-50 text-slate-400"}`}>
-                  <Search className="h-9 w-9" />
-                </span>
-                <h3 className="mt-6 text-xl font-semibold">No results found</h3>
-                <p className={`mt-2 text-sm ${darkMode ? "text-white/45" : "text-slate-500"}`}>Try a different module, page, or action name.</p>
-                <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <EmptyState
+              darkMode={darkMode}
+              icon={Search}
+              tone="neutral"
+              title="No results found"
+              text="Try a different module, page, or action name."
+              className="m-1 py-10"
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
                   {SUGGESTIONS.map((suggestion) => (
-                    <button key={suggestion} type="button" onClick={() => setQuery(suggestion)} className={`rounded-xl px-3 py-2 text-sm ${darkMode ? "bg-white/7 text-white/65 hover:bg-white/10" : "bg-slate-50 text-slate-600 hover:bg-slate-100"}`}>{suggestion}</button>
+                    <button key={suggestion} type="button" onClick={() => setQuery(suggestion)} className={`h-8 rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-white/[0.07] text-white/70 hover:bg-white/[0.11]" : "border border-[#e6e6e3] bg-white text-[#3d3d3b] hover:bg-[#f6f6f4]"}`}>{suggestion}</button>
                   ))}
                 </div>
-              </div>
-            </div>
+              }
+            />
           )}
         </div>
 
-        <div className={`grid shrink-0 grid-cols-2 items-center gap-3 border-t px-4 py-2.5 text-[11.5px] sm:grid-cols-3 ${darkMode ? "border-white/10 text-white/45" : "border-[#efefed] text-[#8a8a87]"}`}>
-          <span><kbd className="rounded-[5px] border px-1.5 py-0.5">↑↓</kbd> Navigate</span>
-          <span className="text-center"><kbd className="rounded-[5px] border px-1.5 py-0.5">Enter</kbd> Select</span>
+        <div className={`grid shrink-0 grid-cols-2 items-center gap-3 border-t px-5 py-3 text-[12px] sm:grid-cols-3 ${darkMode ? "border-white/10 text-white/45" : "border-[#f0f0ee] text-[#8a8a87]"}`}>
+          <span><kbd className={`rounded-full px-2 py-0.5 ${darkMode ? "bg-white/[0.07]" : "bg-[#f4f4f2]"}`}>↑↓</kbd> Navigate</span>
+          <span className="text-center"><kbd className={`rounded-full px-2 py-0.5 ${darkMode ? "bg-white/[0.07]" : "bg-[#f4f4f2]"}`}>Enter</kbd> Select</span>
           <span className="hidden text-right sm:block">{query.trim() ? `Showing ${filteredItems.length} of ${items.length}` : `Search across ${items.length} items`}</span>
         </div>
       </div>

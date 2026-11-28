@@ -12,6 +12,8 @@ import {
   FileText,
   HardHat,
   Images,
+  Inbox,
+  LayoutDashboard,
   Loader2,
   RefreshCw,
   UserCheck,
@@ -19,7 +21,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { DatePicker } from "./ui";
+import { Button, Chip, DatePicker, EmptyState, IconTile, Notice, PageHeader, StatTile, cx, toneOf } from "./ui";
 
 /*
  * Dashboard daily summary.
@@ -434,7 +436,9 @@ async function loadSiteImages() {
 
 // blockEscape lets a layer stacked above the drawer (the image preview) claim
 // the Escape key, so the first press closes that layer, not the whole drawer.
-function Drawer({ darkMode, title, subtitle, count, onClose, blockEscape = false, toolbar = null, children }) {
+// Styled like the kit Drawer (floating, radius 24, icon tile header, round close),
+// kept local because of the date toolbar, the count and blockEscape.
+function Drawer({ darkMode, title, subtitle, count, icon, tone = "neutral", onClose, blockEscape = false, toolbar = null, children }) {
   const [closing, setClosing] = useState(false);
   const requestClose = useCallback(() => {
     setClosing(true);
@@ -452,7 +456,7 @@ function Drawer({ darkMode, title, subtitle, count, onClose, blockEscape = false
 
   return (
     <div
-      className={`fixed inset-0 z-[90] flex justify-end bg-black/25 backdrop-blur-[1px] transition-opacity duration-200 ${closing ? "opacity-0" : "opacity-100"}`}
+      className={`newq fixed inset-0 z-[90] flex justify-end bg-black/20 backdrop-blur-[2px] transition-opacity duration-200 ${closing ? "opacity-0" : "opacity-100"}`}
       onMouseDown={(event) => {
         if (event.currentTarget === event.target) requestClose();
       }}
@@ -461,39 +465,43 @@ function Drawer({ darkMode, title, subtitle, count, onClose, blockEscape = false
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex h-full w-full max-w-[560px] flex-col transition-transform duration-200 ${closing ? "translate-x-full" : "translate-x-0"} ${darkMode ? "bg-[#111318] text-white" : "bg-[#f7f9f8] text-[#171714]"}`}
+        className={cx(
+          "flex h-full w-full max-w-[560px] flex-col overflow-hidden border-l shadow-[0_24px_70px_rgba(0,0,0,0.16)] transition-transform duration-200 sm:m-2.5 sm:h-[calc(100%-20px)] sm:rounded-[24px] sm:border",
+          closing ? "translate-x-[110%]" : "translate-x-0",
+          darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]",
+        )}
       >
-        <header
-          className={`flex min-h-16 shrink-0 items-center justify-between gap-3 px-5 ${darkMode ? "bg-[#16181d]" : "bg-white"}`}
-        >
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold">
-              {title}
-              {typeof count === "number" && (
-                <span className={`ml-2 text-sm font-normal ${darkMode ? "text-white/45" : "text-black/45"}`}>
-                  {count}
-                </span>
+        <header className={cx("flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+          <div className="flex min-w-0 items-center gap-3">
+            {icon && <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />}
+            <div className="min-w-0">
+              <h2 className="truncate text-[17px] tracking-[-0.01em]">
+                {title}
+                {typeof count === "number" && (
+                  <span className={`ml-2 text-[15px] ${darkMode ? "text-white/40" : "text-[#9a9a98]"}`}>{count}</span>
+                )}
+              </h2>
+              {subtitle && (
+                <p className={`truncate text-[12.5px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>{subtitle}</p>
               )}
-            </h2>
-            {subtitle && (
-              <p className={`mt-0.5 truncate text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>
-                {subtitle}
-              </p>
-            )}
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {toolbar}
-            <button
-              type="button"
-              onClick={requestClose}
-              aria-label="Close"
-              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={requestClose}
+            aria-label="Close"
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
+          >
+            <X className="h-4 w-4" />
+          </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        {toolbar && (
+          <div className={cx("flex shrink-0 items-center justify-between gap-3 border-b px-6 py-3", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+            <span className={`text-[12.5px] ${darkMode ? "text-white/45" : "text-[#8a8a8a]"}`}>Showing</span>
+            {toolbar}
+          </div>
+        )}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
       </aside>
     </div>
   );
@@ -602,54 +610,40 @@ function ImagePreview({ photos, index, onIndex, onClose }) {
   );
 }
 
-function SummaryCard({ darkMode, card, onOpen }) {
-  const disabled = card.unavailable || !card.count;
+// Splits the tiles into two rows; on wide screens each row shares the width equally.
+function TwoRows({ items, renderItem, busy = false }) {
+  const firstRow = Math.ceil(items.length / 2);
   return (
-    <button
-      type="button"
-      onClick={() => !card.unavailable && onOpen(card.id)}
-      disabled={card.unavailable}
-      className={`group flex min-h-[124px] w-full flex-col justify-between rounded-[22px] border-0 p-4 text-left shadow-none transition-colors disabled:cursor-not-allowed ${
-        darkMode
-          ? "bg-white/[0.05] hover:bg-white/[0.08] disabled:hover:bg-white/[0.05]"
-          : "bg-[#f5f5f3] hover:bg-[#eeeeeb] disabled:hover:bg-[#f5f5f3]"
-      }`}
-    >
-      {/* Title sits beside the icon so the card is identifiable from the header
-          row alone; it is therefore not repeated under the value. */}
-      <div className="flex items-center gap-2">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${card.tone}`}>
-          <card.icon className="h-4.5 w-4.5" />
-        </span>
-        <span className={`small min-w-0 flex-1 truncate text-sm font-medium ${darkMode ? "text-white/50" : "text-black/45"}`}>
-          {card.label}
-        </span>
-        {!card.unavailable && (
-          <ChevronRight
-            className={`h-4 w-4 shrink-0 transition group-hover:translate-x-0.5 ${darkMode ? "text-white/30" : "text-black/25"}`}
-          />
-        )}
-      </div>
-      <div className="mt-3 min-w-0">
-        <p className="small truncate text-[32px] font-bold leading-tight tabular-nums">
-          {card.unavailable ? "—" : card.value}
-        </p>
-        {card.hint && (
-          <p className={`small mt-1.5 truncate text-xs font-medium ${darkMode ? "text-white/45" : "text-black/45"}`}>
-            {card.unavailable ? card.unavailableReason || "Not available" : card.hint}
-          </p>
-        )}
-      </div>
-    </button>
+    <div className="mt-6 space-y-3" aria-busy={busy || undefined}>
+      {[items.slice(0, firstRow), items.slice(firstRow)].map((row, index) => (
+        <div key={index} className="grid grid-cols-2 gap-3 lg:grid-flow-col lg:grid-cols-none lg:auto-cols-fr">
+          {row.map(renderItem)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SummaryCard({ darkMode, card, onOpen }) {
+  // Pastel stat tile in the card's own tone; a source this account can't read
+  // stays visible but is not clickable.
+  return (
+    <StatTile
+      darkMode={darkMode}
+      icon={card.icon}
+      tone={card.tone}
+      value={card.unavailable ? "—" : card.value}
+      label={card.label}
+      hint={card.unavailable ? card.unavailableReason || "Not available" : card.hint}
+      size="lg"
+      onClick={card.unavailable ? undefined : () => onOpen(card.id)}
+      className={cx("min-w-0 [&>span>span]:truncate", card.unavailable && "cursor-not-allowed opacity-70")}
+    />
   );
 }
 
 function EmptyNote({ darkMode, children }) {
-  return (
-    <p className={`rounded-2xl px-4 py-10 text-center text-sm ${darkMode ? "bg-white/[0.04] text-white/45" : "bg-white text-black/45"}`}>
-      {children}
-    </p>
-  );
+  return <EmptyState darkMode={darkMode} icon={Inbox} title={children} className="py-10" />;
 }
 
 function Row({ darkMode, children, onClick }) {
@@ -658,22 +652,24 @@ function Row({ darkMode, children, onClick }) {
     <Tag
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      className={`flex w-full items-center gap-3 px-4 py-3 text-left ${onClick ? (darkMode ? "hover:bg-white/[0.04]" : "hover:bg-black/[0.02]") : ""}`}
+      className={`flex w-full items-center gap-3 rounded-[14px] px-4 py-3 text-left transition-colors ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"} ${onClick ? (darkMode ? "hover:bg-white/[0.07]" : "hover:bg-[#f1f1ef]") : ""}`}
     >
       {children}
     </Tag>
   );
 }
 
-function ListCard({ darkMode, children }) {
-  return (
-    <div
-      className={`divide-y overflow-hidden rounded-2xl ${darkMode ? "divide-white/[0.06] bg-white/[0.04]" : "divide-black/[0.05] bg-white"}`}
-    >
-      {children}
-    </div>
-  );
+function ListCard({ children }) {
+  return <div className="space-y-1.5">{children}</div>;
 }
+
+// Met-or-beat the plan reads mint, short reads rose — same rule everywhere on this page.
+function planTone(met, darkMode) {
+  const t = toneOf(met ? "mint" : "rose");
+  return darkMode ? t[3] : t[1];
+}
+
+const MUTED = (darkMode) => (darkMode ? "text-white/45" : "text-[#8a8a8a]");
 
 export default function DailySummary({ darkMode }) {
   const [state, setState] = useState({ loading: true });
@@ -890,13 +886,14 @@ export default function DailySummary({ darkMode }) {
           <button
             type="button"
             onClick={refreshManpower}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${darkMode ? "border-white/10 text-white/70 hover:bg-white/5 hover:text-white" : "border-black/10 text-black/60 hover:bg-black/5 hover:text-black"}`}
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${darkMode ? "bg-white/[0.06] text-white/75 hover:bg-white/10" : "bg-[#f4f4f2] text-[#3d3d3b] hover:bg-[#ebebe8]"}`}
             title="Pull latest data"
+            aria-label="Pull latest data"
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
         )}
-        <DatePicker darkMode={darkMode} value={dateFor(id)} onChange={(value) => pickDate(id, value)} />
+        <DatePicker darkMode={darkMode} size="sm" value={dateFor(id)} onChange={(value) => pickDate(id, value)} />
       </div>
     ),
     [darkMode, dateFor, pickDate, dateLoading, refreshManpower],
@@ -914,7 +911,7 @@ export default function DailySummary({ darkMode }) {
         value: delayed.length,
         count: delayed.length,
         hint: delayed.length ? `across ${new Set(delayed.map((r) => r.project.id)).size} projects` : "Nothing overdue",
-        tone: "bg-rose-50 text-rose-600 dark:bg-rose-400/10 dark:text-rose-300",
+        tone: "rose",
         unavailable: !state.project,
         unavailableReason: state.projectError,
       },
@@ -925,7 +922,7 @@ export default function DailySummary({ darkMode }) {
         value: starting.length,
         count: starting.length,
         hint: starting.length ? "tasks kicking off" : "Nothing starts today",
-        tone: "bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300",
+        tone: "sky",
         unavailable: !state.project,
         unavailableReason: state.projectError,
       },
@@ -939,7 +936,7 @@ export default function DailySummary({ darkMode }) {
         // "54 / 6" can't be read the wrong way round.
         value: manpower ? (
           <>
-            <span className={manpower.actual >= manpower.planned ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
+            <span style={{ color: planTone(manpower.actual >= manpower.planned, darkMode) }}>
               {manpower.actual}
             </span>
             <span className="opacity-35"> / </span>
@@ -950,7 +947,7 @@ export default function DailySummary({ darkMode }) {
         hint: manpower
           ? `Actual / Planned · ${manpower.variance >= 0 ? "+" : ""}${manpower.variance}`
           : "",
-        tone: "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300",
+        tone: "amber",
         unavailable: !manpower,
         unavailableReason: state.manpowerError,
       },
@@ -963,7 +960,7 @@ export default function DailySummary({ darkMode }) {
         hint: todayAttendance.length
           ? `${todayAttendance.filter((r) => r.clockOutAt).length} clocked out`
           : "No one clocked in yet",
-        tone: "bg-violet-50 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300",
+        tone: "lavender",
         unavailable: !state.attendance,
         unavailableReason: state.attendanceError,
       },
@@ -976,7 +973,7 @@ export default function DailySummary({ darkMode }) {
         hint: state.mrn
           ? `${todayMrn.length} raised today · ${state.mrn.open} open`
           : "",
-        tone: "bg-sky-50 text-sky-600 dark:bg-sky-400/10 dark:text-sky-300",
+        tone: "peach",
         unavailable: !state.mrn,
         unavailableReason: state.mrnError,
       },
@@ -999,7 +996,7 @@ export default function DailySummary({ darkMode }) {
           : state.employee.pdfReady || istMinutesNow() >= REPORT_CUTOFF_MINUTES
             ? "Today's report available"
             : `Available after ${REPORT_CUTOFF_LABEL}`,
-        tone: "bg-teal-50 text-teal-600 dark:bg-teal-400/10 dark:text-teal-300",
+        tone: "mint",
         unavailable: !state.employee,
         unavailableReason: state.employeeError,
       },
@@ -1012,69 +1009,83 @@ export default function DailySummary({ darkMode }) {
         hint: todayPhotos.length
           ? `${new Set(todayPhotos.map((p) => p.site)).size} sites · ${formatDay(today)}`
           : `Nothing uploaded ${formatDay(today)}`,
-        tone: "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300",
+        tone: "lime",
         unavailable: !state.images,
         unavailableReason: state.imagesError,
       },
     ];
-  }, [state, today, todayPhotos, todayAttendance, todayMrn]);
+  }, [state, today, todayPhotos, todayAttendance, todayMrn, darkMode]);
+
+  const header = (
+    <PageHeader
+      darkMode={darkMode}
+      badge={`Daily report · ${formatDay(today)}`}
+      badgeIcon={LayoutDashboard}
+      badgeTone="lime"
+      title="Today at a glance"
+      subtitle="across projects, sites and people"
+      actions={
+        <Button darkMode={darkMode} variant="soft" size="sm" icon={RefreshCw} loading={refreshing} onClick={refresh} disabled={state.loading}>
+          Refresh
+        </Button>
+      }
+    />
+  );
 
   if (state.loading) {
     return (
-      <div className={`flex items-center justify-center gap-2 rounded-[24px] px-4 py-10 text-sm ${darkMode ? "bg-white/[0.04] text-white/50" : "bg-white text-black/45"}`}>
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Building today&apos;s summary…
-      </div>
+      <>
+        {header}
+        <TwoRows
+          busy
+          items={["rose", "sky", "amber", "lavender", "peach", "mint", "lime"]}
+          renderItem={(tone) => (
+            <div
+              key={tone}
+              style={{ backgroundColor: darkMode ? toneOf(tone)[2] : toneOf(tone)[0] }}
+              className="flex min-h-[172px] flex-col justify-between rounded-[24px] p-5 opacity-70"
+            >
+              <span className={`h-6 w-6 rounded-md ${darkMode ? "bg-white/10" : "bg-white/60"}`} />
+              <span className={`h-10 w-20 rounded-lg ${darkMode ? "bg-white/10" : "bg-white/60"}`} />
+            </div>
+          )}
+        />
+        <p className={`mt-3 flex items-center gap-2 px-1 text-[12.5px] ${MUTED(darkMode)}`}>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Building today&apos;s summary…
+        </p>
+      </>
     );
   }
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 px-1">
-        <div>
-          <p className={`text-[10px] uppercase tracking-[0.24em] ${darkMode ? "text-white/40" : "text-[#8c948f]"}`}>
-            Daily report
-          </p>
-          <h2 className={`small mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-[#171714]"}`}>
-            Today at a glance
-          </h2>
-        </div>
-        <button
-          type="button"
-          onClick={refresh}
-          className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs transition ${darkMode ? "bg-white/[0.06] text-white/70 hover:bg-white/10" : "bg-white text-black/60 hover:bg-black/[0.03]"}`}
-        >
-          <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
-      </div>
+      {header}
 
-      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-        {cards.map((card) => (
-          <SummaryCard key={card.id} darkMode={darkMode} card={card} onOpen={setOpen} />
-        ))}
-      </div>
+      <TwoRows items={cards} renderItem={(card) => <SummaryCard key={card.id} darkMode={darkMode} card={card} onOpen={setOpen} />} />
 
       {open === "delayed" && (
         <Drawer
           darkMode={darkMode}
           title="Delayed tasks"
           subtitle="Past their due date"
+          icon={AlertTriangle}
+          tone="rose"
           count={state.project?.delayed.length}
           onClose={() => setOpen(null)}
         >
           {!state.project?.delayed.length ? (
             <EmptyNote darkMode={darkMode}>Nothing is past its due date.</EmptyNote>
           ) : (
-            <ListCard darkMode={darkMode}>
+            <ListCard>
               {state.project.delayed.map((row) => (
                 <Row key={row.key} darkMode={darkMode}>
-                  <span className="w-[74px] shrink-0 rounded-full bg-rose-50 px-2 py-1 text-center text-[11px] font-semibold text-rose-600 dark:bg-rose-400/10 dark:text-rose-300">
+                  <Chip tone="rose" darkMode={darkMode} className="w-[78px] shrink-0 justify-center px-2 text-[12px]">
                     {row.daysLate}d late
-                  </span>
+                  </Chip>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{row.task.title || "Untitled task"}</span>
-                    <span className={`mt-0.5 block truncate text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                    <span className="block truncate text-[13.5px]">{row.task.title || "Untitled task"}</span>
+                    <span className={`mt-0.5 block truncate text-[12px] ${MUTED(darkMode)}`}>
                       {row.project.name}
                       {row.task.phaseName ? ` · ${row.task.phaseName}` : ""} · Due {formatDay(row.due)}
                     </span>
@@ -1091,19 +1102,21 @@ export default function DailySummary({ darkMode }) {
           darkMode={darkMode}
           title="Starting today"
           subtitle={formatDay(today)}
+          icon={CalendarClock}
+          tone="sky"
           count={state.project?.starting.length}
           onClose={() => setOpen(null)}
         >
           {!state.project?.starting.length ? (
             <EmptyNote darkMode={darkMode}>No task is scheduled to start today.</EmptyNote>
           ) : (
-            <ListCard darkMode={darkMode}>
+            <ListCard>
               {state.project.starting.map((row) => (
                 <Row key={row.key} darkMode={darkMode}>
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" />
+                  <IconTile icon={CalendarClock} tone="sky" darkMode={darkMode} size="xs" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{row.task.title || "Untitled task"}</span>
-                    <span className={`mt-0.5 block truncate text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                    <span className="block truncate text-[13.5px]">{row.task.title || "Untitled task"}</span>
+                    <span className={`mt-0.5 block truncate text-[12px] ${MUTED(darkMode)}`}>
                       {row.project.name}
                       {row.task.phaseName ? ` · ${row.task.phaseName}` : ""}
                       {row.due ? ` · Due ${formatDay(row.due)}` : ""}
@@ -1121,6 +1134,8 @@ export default function DailySummary({ darkMode }) {
           darkMode={darkMode}
           title="Manpower"
           subtitle={formatDay(manpowerDate)}
+          icon={HardHat}
+          tone="amber"
           toolbar={dateToolbar("manpower")}
           onClose={() => setOpen(null)}
         >
@@ -1128,29 +1143,35 @@ export default function DailySummary({ darkMode }) {
             <EmptyNote darkMode={darkMode}>No manpower data for this date.</EmptyNote>
           ) : (
           <>
-          <div className={`grid grid-cols-3 gap-3 rounded-2xl p-4 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}>
+          <div className="grid grid-cols-3 gap-2.5">
             {(() => {
-              // Same rule as the card: met-or-beat the plan is green, short is red.
-              const short = drawerManpower.actual < drawerManpower.planned;
-              const tone = short ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400";
+              // Same rule as the card: met-or-beat the plan is mint, short is rose.
+              const met = drawerManpower.actual >= drawerManpower.planned;
+              const tone = met ? "mint" : "rose";
               return [
-                ["Planned", drawerManpower.planned, ""],
+                ["Planned", drawerManpower.planned, "neutral"],
                 ["Actual", drawerManpower.actual, tone],
                 ["Variance", `${drawerManpower.variance >= 0 ? "+" : ""}${drawerManpower.variance}`, tone],
-              ].map(([label, value, valueTone]) => (
-                <div key={label}>
-                  <p className={`text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>{label}</p>
-                  <p className={`mt-1 text-xl font-semibold tabular-nums ${valueTone}`}>{value}</p>
-                </div>
-              ));
+              ].map(([label, value, valueTone]) => {
+                const t = toneOf(valueTone);
+                return (
+                  <div key={label} style={{ backgroundColor: darkMode ? t[2] : t[0] }} className="rounded-[16px] px-4 py-3.5">
+                    <p className="text-[22px] leading-none tracking-[-0.02em] tabular-nums" style={{ color: valueTone === "neutral" ? undefined : darkMode ? t[3] : t[1] }}>{value}</p>
+                    <p className={`mt-2 text-[12px] ${darkMode ? "text-white/55" : "text-[#6b6b6b]"}`}>{label}</p>
+                  </div>
+                );
+              });
             })()}
           </div>
           {drawerManpower.missing > 0 && (
-            <p className={`mt-3 rounded-2xl px-4 py-3 text-xs ${darkMode ? "bg-amber-400/10 text-amber-300" : "bg-amber-50 text-amber-700"}`}>
+            <Notice tone="amber" darkMode={darkMode} className="mt-3">
               {drawerManpower.missing} of {drawerManpower.records} rows have no actual filled in yet.
-            </p>
+            </Notice>
           )}
-          <h3 className="mt-6 text-sm font-semibold">By site</h3>
+          <div className="mt-6">
+            <h3 className="text-[15px]">By site</h3>
+            <p className={`text-[12.5px] ${MUTED(darkMode)}`}>actual against planned</p>
+          </div>
           <div className="mt-3">
             {!drawerManpower.sites.length ? (
               <EmptyNote darkMode={darkMode}>No site rows for today.</EmptyNote>
@@ -1159,25 +1180,25 @@ export default function DailySummary({ darkMode }) {
                 {/* "22/7" says nothing about which number is which, so label the two columns and
                     keep the same actual-then-planned order the dashboard card uses. Paddings match
                     Row's px-4/gap-3 so the headings sit over their own numbers. */}
-                <div className={`mb-1.5 flex items-center gap-3 px-4 text-[10px] font-bold uppercase tracking-[0.1em] ${darkMode ? "text-white/40" : "text-black/40"}`}>
+                <div className={`mb-1.5 flex items-center gap-3 px-4 text-[12px] ${MUTED(darkMode)}`}>
                   <span className="min-w-0 flex-1">Site</span>
                   <span className="w-14 shrink-0 text-right">Actual</span>
                   <span className="w-14 shrink-0 text-right">Planned</span>
                 </div>
-                <ListCard darkMode={darkMode}>
+                <ListCard>
                   {drawerManpower.sites.map((site) => (
                     <Row key={site.label} darkMode={darkMode}>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{site.label}</span>
-                        <span className={`mt-0.5 block text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                        <span className="block truncate text-[13.5px]">{site.label}</span>
+                        <span className={`mt-0.5 block text-[12px] ${MUTED(darkMode)}`}>
                           {site.records} {site.records === 1 ? "row" : "rows"}
                         </span>
                       </span>
-                      {/* Same tone rule as the totals above: met-or-beat the plan is green, short is red. */}
-                      <span className={`w-14 shrink-0 text-right text-sm font-semibold tabular-nums ${site.actual >= site.planned ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                      {/* Same tone rule as the totals above: met-or-beat the plan is mint, short is rose. */}
+                      <span className="w-14 shrink-0 text-right text-[14px] tabular-nums" style={{ color: planTone(site.actual >= site.planned, darkMode) }}>
                         {site.actual}
                       </span>
-                      <span className={`w-14 shrink-0 text-right text-sm font-medium tabular-nums ${darkMode ? "text-white/55" : "text-black/55"}`}>
+                      <span className={`w-14 shrink-0 text-right text-[14px] tabular-nums ${darkMode ? "text-white/55" : "text-[#6b6b6b]"}`}>
                         {site.planned}
                       </span>
                     </Row>
@@ -1196,6 +1217,8 @@ export default function DailySummary({ darkMode }) {
           darkMode={darkMode}
           title="Attendance"
           subtitle={formatDay(attendanceDate)}
+          icon={UserCheck}
+          tone="lavender"
           count={drawerAttendance.length}
           toolbar={dateToolbar("attendance")}
           onClose={() => setOpen(null)}
@@ -1203,31 +1226,31 @@ export default function DailySummary({ darkMode }) {
           {!drawerAttendance.length ? (
             <EmptyNote darkMode={darkMode}>No one clocked in on this date.</EmptyNote>
           ) : (
-            <ListCard darkMode={darkMode}>
+            <ListCard>
               {drawerAttendance.map((record) => {
                 const duration = formatDuration(record.workMinutes);
                 return (
                   <Row key={record.id} darkMode={darkMode}>
                     <span
-                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${record.clockOutAt ? "bg-slate-400" : "bg-emerald-500"}`}
+                      className={`h-2 w-2 shrink-0 rounded-full ${record.clockOutAt ? (darkMode ? "bg-white/30" : "bg-[#c4c4c1]") : "bg-[#2f7a4f]"}`}
                       title={record.clockOutAt ? "Clocked out" : "Currently in"}
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{record.employeeName}</span>
-                      <span className={`mt-0.5 block truncate text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                      <span className="block truncate text-[13.5px]">{record.employeeName}</span>
+                      <span className={`mt-0.5 block truncate text-[12px] ${MUTED(darkMode)}`}>
                         {[record.designation || record.department, record.workMode === "remote" ? "Remote" : "Office"]
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
                     </span>
                     <span className="shrink-0 text-right">
-                      <span className="block text-xs font-medium tabular-nums">
+                      <span className="block text-[12.5px] tabular-nums">
                         {formatClock(record.clockInAt)}
                         <span className="opacity-40"> → </span>
                         {formatClock(record.clockOutAt)}
                       </span>
                       {duration && (
-                        <span className={`mt-0.5 block text-[11px] tabular-nums ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                        <span className={`mt-0.5 block text-[12px] tabular-nums ${MUTED(darkMode)}`}>
                           {duration}
                         </span>
                       )}
@@ -1245,6 +1268,8 @@ export default function DailySummary({ darkMode }) {
           darkMode={darkMode}
           title="MRN raised"
           subtitle={formatDay(mrnDate)}
+          icon={ClipboardList}
+          tone="peach"
           count={drawerMrn.length}
           toolbar={dateToolbar("mrn")}
           onClose={() => setOpen(null)}
@@ -1275,45 +1300,42 @@ export default function DailySummary({ darkMode }) {
                 return (
                   <article
                     key={record.id}
-                    className={`rounded-2xl p-5 ${darkMode ? "bg-white/[0.04]" : "bg-white"}`}
+                    className={`rounded-[20px] border p-5 ${darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white"}`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-semibold">{record.mrnNo}</p>
-                        {materials.length === 1 && (
-                          <p className={`mt-1.5 text-[15px] leading-6 ${darkMode ? "text-white/75" : "text-black/75"}`}>
-                            {materials[0]}
-                          </p>
-                        )}
-                        {materials.length > 1 && (
-                          <ul className={`mt-2 space-y-2 ${darkMode ? "text-white/75" : "text-black/75"}`}>
-                            {materials.map((item, index) => (
-                              <li key={`${record.id}-m${index}`} className="flex gap-2.5 text-[15px] leading-6">
-                                <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#89ed3f]" />
-                                <span className="min-w-0">{item}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                      <div className="flex min-w-0 items-start gap-3">
+                        <IconTile icon={ClipboardList} tone="peach" darkMode={darkMode} size="sm" />
+                        <div className="min-w-0">
+                          <p className="truncate text-[15px]">{record.mrnNo}</p>
+                          {materials.length === 1 && (
+                            <p className={`mt-1 text-[13.5px] leading-6 ${darkMode ? "text-white/70" : "text-[#3d3d3b]"}`}>
+                              {materials[0]}
+                            </p>
+                          )}
+                          {materials.length > 1 && (
+                            <ul className={`mt-1.5 space-y-1.5 ${darkMode ? "text-white/70" : "text-[#3d3d3b]"}`}>
+                              {materials.map((item, index) => (
+                                <li key={`${record.id}-m${index}`} className="flex gap-2.5 text-[13.5px] leading-6">
+                                  <span className={`mt-[10px] h-1.5 w-1.5 shrink-0 rounded-full ${darkMode ? "bg-white/35" : "bg-[#b0b0ae]"}`} />
+                                  <span className="min-w-0">{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                       </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                          delivered
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
-                            : "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300"
-                        }`}
-                      >
+                      <Chip tone={delivered ? "mint" : "amber"} darkMode={darkMode} className="shrink-0">
                         {record.status || "Open"}
-                      </span>
+                      </Chip>
                     </div>
                     {details.length > 0 && (
-                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+                      <dl className={`mt-4 grid grid-cols-2 gap-x-4 gap-y-3 rounded-[16px] p-4 ${darkMode ? "bg-white/[0.04]" : "bg-[#f7f7f5]"}`}>
                         {details.map(([label, value]) => (
                           <div key={label} className="min-w-0">
-                            <dt className={`text-[11px] uppercase tracking-wide ${darkMode ? "text-white/40" : "text-black/40"}`}>
+                            <dt className={`text-[12px] ${MUTED(darkMode)}`}>
                               {label}
                             </dt>
-                            <dd className="mt-1 truncate text-sm font-medium" title={String(value)}>
+                            <dd className="mt-0.5 truncate text-[13px]" title={String(value)}>
                               {value}
                             </dd>
                           </div>
@@ -1321,7 +1343,7 @@ export default function DailySummary({ darkMode }) {
                       </dl>
                     )}
                     {record.remark && (
-                      <p className={`mt-3 rounded-xl px-3 py-2.5 text-[13px] leading-6 ${darkMode ? "bg-white/[0.04] text-white/60" : "bg-black/[0.03] text-black/60"}`}>
+                      <p className={`mt-3 rounded-[14px] px-4 py-3 text-[13px] leading-6 ${darkMode ? "bg-white/[0.04] text-white/60" : "bg-[#f7f7f5] text-[#5f5f5c]"}`}>
                         {record.remark}
                       </p>
                     )}
@@ -1332,7 +1354,7 @@ export default function DailySummary({ darkMode }) {
                             href={record.mrnPhoto}
                             target="_blank"
                             rel="noreferrer"
-                            className={`rounded-full px-3.5 py-2 text-[13px] font-medium transition ${darkMode ? "bg-white/[0.07] hover:bg-white/10" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
+                            className={`inline-flex h-8 items-center rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-white/[0.07] hover:bg-white/[0.11]" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
                           >
                             MRN photo
                           </a>
@@ -1342,7 +1364,7 @@ export default function DailySummary({ darkMode }) {
                             href={record.quotationPhoto}
                             target="_blank"
                             rel="noreferrer"
-                            className={`rounded-full px-3.5 py-2 text-[13px] font-medium transition ${darkMode ? "bg-white/[0.07] hover:bg-white/10" : "bg-black/[0.04] hover:bg-black/[0.07]"}`}
+                            className={`inline-flex h-8 items-center rounded-full px-3.5 text-[12.5px] transition ${darkMode ? "bg-white/[0.07] hover:bg-white/[0.11]" : "bg-[#f4f4f2] hover:bg-[#ebebe8]"}`}
                           >
                             Quotation
                           </a>
@@ -1362,6 +1384,8 @@ export default function DailySummary({ darkMode }) {
           darkMode={darkMode}
           title="Employee report"
           subtitle={formatDay(reportDate)}
+          icon={FileText}
+          tone="mint"
           toolbar={dateToolbar("report")}
           onClose={() => setOpen(null)}
         >
@@ -1369,12 +1393,14 @@ export default function DailySummary({ darkMode }) {
             type="button"
             onClick={downloadReport}
             disabled={!reportReady || downloading}
-            className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-4 text-sm font-semibold transition disabled:cursor-not-allowed ${
+            className={`flex h-12 w-full items-center justify-center gap-2 rounded-full px-5 text-[13.5px] transition active:scale-[0.99] disabled:cursor-not-allowed ${
               reportReady
-                ? "bg-[#171714] text-white hover:bg-black disabled:opacity-60 dark:bg-[#d8f36a] dark:text-[#11150f] dark:hover:bg-[#cdea5e]"
+                ? darkMode
+                  ? "bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a] disabled:opacity-60"
+                  : "bg-[#141414] text-white hover:bg-black disabled:opacity-60"
                 : darkMode
                   ? "bg-white/[0.06] text-white/40"
-                  : "bg-black/[0.04] text-black/35"
+                  : "bg-[#f4f4f2] text-[#9a9a98]"
             }`}
           >
             {downloading ? (
@@ -1395,26 +1421,29 @@ export default function DailySummary({ darkMode }) {
             )}
           </button>
           {!reportReady && (
-            <p className={`mt-2 text-center text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
+            <p className={`mt-2.5 text-center text-[12px] leading-5 ${MUTED(darkMode)}`}>
               Employees can still submit until the cut-off, so the report is only
               final after {REPORT_CUTOFF_LABEL}. Pick an earlier date to download it now.
             </p>
           )}
           {reportDate === today && state.employee?.pdfGeneratedAt && (
-            <p className={`mt-2 text-center text-xs ${darkMode ? "text-white/40" : "text-black/40"}`}>
+            <p className={`mt-2.5 text-center text-[12px] ${MUTED(darkMode)}`}>
               Generated automatically at {formatClock(state.employee.pdfGeneratedAt)}
             </p>
           )}
 
           {state.employee?.isAdmin && (
             <>
-              <div className="mt-6 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold">
-                  {reportDate === today ? "Submissions today" : `Submissions on ${formatDay(reportDate)}`}
-                </h3>
-                <span className={`text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>
+              <div className="mt-7 flex items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-[15px]">
+                    {reportDate === today ? "Submissions today" : `Submissions on ${formatDay(reportDate)}`}
+                  </h3>
+                  <p className={`text-[12.5px] ${MUTED(darkMode)}`}>pending first</p>
+                </div>
+                <Chip tone="neutral" darkMode={darkMode}>
                   {reportSubmissions ? `${reportSubmissions.submitted} of ${reportSubmissions.total}` : "Loading…"}
-                </span>
+                </Chip>
               </div>
               <div className="mt-3">
                 {!reportSubmissions ? (
@@ -1422,32 +1451,22 @@ export default function DailySummary({ darkMode }) {
                 ) : !reportSubmissions.people.length ? (
                   <EmptyNote darkMode={darkMode}>No employees linked for reporting.</EmptyNote>
                 ) : (
-                  <ListCard darkMode={darkMode}>
+                  <ListCard>
                     {[...reportSubmissions.people]
                       // Outstanding first — that is the list anyone chasing
                       // submissions actually needs to see.
                       .sort((a, b) => Number(a.submitted) - Number(b.submitted))
                       .map((person) => (
                         <Row key={person.userId} darkMode={darkMode}>
-                          <span
-                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${person.submitted ? "bg-emerald-500" : "bg-amber-400"}`}
-                            title={person.submitted ? "Submitted" : "Pending"}
-                          />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">{person.employeeName}</span>
-                            <span className={`mt-0.5 block truncate text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                            <span className="block truncate text-[13.5px]">{person.employeeName}</span>
+                            <span className={`mt-0.5 block truncate text-[12px] ${MUTED(darkMode)}`}>
                               {person.department || "—"}
                             </span>
                           </span>
-                          <span
-                            className={`shrink-0 text-[11px] font-medium ${
-                              person.submitted
-                                ? darkMode ? "text-emerald-300" : "text-emerald-600"
-                                : darkMode ? "text-amber-300" : "text-amber-600"
-                            }`}
-                          >
+                          <Chip tone={person.submitted ? "mint" : "amber"} darkMode={darkMode} className="shrink-0">
                             {person.submitted ? formatClock(person.submittedAt) || "Submitted" : "Pending"}
-                          </span>
+                          </Chip>
                         </Row>
                       ))}
                   </ListCard>
@@ -1463,6 +1482,8 @@ export default function DailySummary({ darkMode }) {
           darkMode={darkMode}
           title="Site images"
           subtitle={formatDay(imagesDate)}
+          icon={Images}
+          tone="lime"
           count={drawerPhotos.length}
           toolbar={dateToolbar("images")}
           blockEscape={previewIndex >= 0}
@@ -1480,8 +1501,8 @@ export default function DailySummary({ darkMode }) {
                 return (
                   <section key={site}>
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="min-w-0 truncate text-sm font-semibold">{site}</h3>
-                      <span className={`shrink-0 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                      <h3 className="min-w-0 truncate text-[14px]">{site}</h3>
+                      <span className={`shrink-0 text-[12px] ${MUTED(darkMode)}`}>
                         {sitePhotos.length} {sitePhotos.length === 1 ? "image" : "images"}
                       </span>
                     </div>
@@ -1494,18 +1515,18 @@ export default function DailySummary({ darkMode }) {
                           // pages through every image rather than stopping at
                           // the end of a site block.
                           onClick={() => setPreviewIndex(drawerPhotos.indexOf(photo))}
-                          className="group block w-full overflow-hidden rounded-xl text-left"
+                          className="group block w-full text-left"
                           title={`${photo.trade} · ${photo.uploadedBy}`}
                         >
-                          <img
-                            src={driveThumb(photo.url)}
-                            alt={photo.trade}
-                            loading="lazy"
-                            className="h-24 w-full bg-black/5 object-cover transition group-hover:scale-[1.03]"
-                          />
-                          <span
-                            className={`block truncate px-1 pt-1 text-[11px] ${darkMode ? "text-white/45" : "text-black/45"}`}
-                          >
+                          <span className="block overflow-hidden rounded-[14px]">
+                            <img
+                              src={driveThumb(photo.url)}
+                              alt={photo.trade}
+                              loading="lazy"
+                              className={`h-24 w-full object-cover transition group-hover:scale-[1.03] ${darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]"}`}
+                            />
+                          </span>
+                          <span className={`block truncate px-1 pt-1.5 text-[12px] ${MUTED(darkMode)}`}>
                             {photo.trade}
                           </span>
                         </button>

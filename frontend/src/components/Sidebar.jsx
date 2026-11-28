@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { LayoutDashboard, FileText, Workflow, ChartNoAxesCombined, Sheet, ShieldCheck, Activity, MessageCircleMore, X, ClipboardList, Building2, FileSpreadsheet, ChevronDown, CalendarCheck, Users, PanelLeftClose, PanelLeftOpen, Search, LogOut, Images, SlidersHorizontal, UserRound, BriefcaseBusiness, PackageSearch, CalendarDays, MapPin, ListTodo, MessagesSquare, FolderLock, CircleDollarSign, UserRoundSearch } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { API_URL, fetchJsonShared } from "./AuthProvider";
 import UserAvatar from "./UserAvatar";
 import { menuPaths, preloadModule } from "./appModules";
 import SlackLogo from "./SlackLogo";
+import BrandMark from "./BrandMark";
 
 const GROUP_CHILDREN = {
   projects: ["projects", "project-dmr", "project-mrn", "project-prn", "project-stock", "site-images"],
@@ -161,8 +161,8 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     }
   }
 
-  const shell = darkMode ? "bg-[#0b0c0f]" : "bg-[#f3f3f1]";
-  const muted = darkMode ? "text-white/38" : "text-[#9a9a97]";
+  const shell = darkMode ? "bg-[#0b0c0f]" : "bg-[#f5f5f3]";
+  const muted = darkMode ? "text-white/38" : "text-[#a8a8a5]";
   const displayName = user?.displayName || user?.username || "User";
 
   function openProfileModal() {
@@ -170,33 +170,31 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
     setProfileOpen(false);
   }
 
-  // Rows after the reference: quiet text, a soft hover, and a white bordered pill for the
-  // current page. The same pill marks a group whose page is open.
-  const activeRow = darkMode
-    ? "bg-white/[0.08] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
-    : "bg-white text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_0_0_1px_#e6e6e3]";
-  const idleRow = darkMode ? "text-white/65 hover:bg-white/[0.05] hover:text-white" : "text-[#3d3d3b] hover:bg-black/[0.04] hover:text-[#171717]";
+  // Rows after the Chax reference: quiet grey text, a soft hover, and a black pill for the
+  // current page (lime in dark mode). The same pill marks a collapsed group whose page is open.
+  const activeRow = darkMode ? "bg-[#cff07a] text-[#141414]" : "bg-[#141414] text-white";
+  const idleRow = darkMode ? "text-white/60 hover:bg-white/[0.06] hover:text-white" : "text-[#5f5f5c] hover:bg-black/[0.045] hover:text-[#141414]";
 
-  const leafItemClass = ({ active = false } = {}) => `newq group relative flex h-9 items-center gap-2.5 rounded-[10px] text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-150 ${collapsed ? "md:mx-auto md:h-10 md:w-10 md:justify-center md:gap-0 md:p-0" : "w-full px-2.5"} ${active ? `${activeRow} font-medium` : idleRow}`;
+  const leafItemClass = ({ active = false } = {}) => `newq group relative flex h-9 items-center gap-2.5 rounded-full text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-150 ${collapsed ? "md:mx-auto md:h-10 md:w-10 md:justify-center md:gap-0 md:p-0" : "w-full px-3"} ${active ? activeRow : idleRow}`;
 
   const leafIconClass = ({ active = false } = {}) => `relative z-10 flex h-5 w-5 shrink-0 items-center justify-center ${
-    active ? (darkMode ? "text-white" : "text-[#171717]") : darkMode ? "text-white/50 group-hover:text-white/80" : "text-[#7a7a77] group-hover:text-[#3d3d3b]"
+    active ? "text-current" : darkMode ? "text-white/50 group-hover:text-white/80" : "text-[#8a8a87] group-hover:text-[#3d3d3b]"
   }`;
 
-  const groupHeaderClass = ({ parentActive = false } = {}) => `newq group relative flex h-9 w-full items-center gap-2.5 rounded-[10px] text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-150 ${collapsed ? "md:mx-auto md:h-10 md:w-10 md:justify-center md:gap-0 md:p-0" : "px-2.5"} ${
-    parentActive ? (collapsed ? activeRow : darkMode ? "font-medium text-white" : "font-medium text-[#171717]") : idleRow
+  const groupHeaderClass = ({ parentActive = false } = {}) => `newq group relative flex h-9 w-full items-center gap-2.5 rounded-full text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-150 ${collapsed ? "md:mx-auto md:h-10 md:w-10 md:justify-center md:gap-0 md:p-0" : "px-3"} ${
+    parentActive ? (collapsed ? activeRow : darkMode ? "text-white" : "text-[#141414]") : idleRow
   }`;
 
   const groupHeaderIconClass = ({ parentActive = false } = {}) => `relative z-10 flex h-5 w-5 shrink-0 items-center justify-center ${
-    parentActive ? (darkMode ? "text-white" : "text-[#171717]") : darkMode ? "text-white/50 group-hover:text-white/80" : "text-[#7a7a77] group-hover:text-[#3d3d3b]"
+    parentActive ? (collapsed ? "text-current" : darkMode ? "text-white" : "text-[#141414]") : darkMode ? "text-white/50 group-hover:text-white/80" : "text-[#8a8a87] group-hover:text-[#3d3d3b]"
   }`;
 
-  const childItemClass = ({ active = false } = {}) => `newq group relative flex h-8 w-full items-center gap-2 rounded-[9px] px-2.5 text-left text-[13px] transition-[background-color,color,box-shadow] duration-150 ${
-    active ? `${activeRow} font-medium` : darkMode ? "text-white/55 hover:bg-white/[0.05] hover:text-white" : "text-[#5f5f5c] hover:bg-black/[0.04] hover:text-[#171717]"
+  const childItemClass = ({ active = false } = {}) => `newq group relative flex h-8 w-full items-center gap-2 rounded-full px-3 text-left text-[13px] transition-[background-color,color,box-shadow] duration-150 ${
+    active ? activeRow : darkMode ? "text-white/55 hover:bg-white/[0.06] hover:text-white" : "text-[#6b6b69] hover:bg-black/[0.045] hover:text-[#141414]"
   }`;
 
   const childIconClass = ({ active = false } = {}) => `relative z-10 flex h-4 w-4 shrink-0 items-center justify-center ${
-    active ? (darkMode ? "text-white" : "text-[#171717]") : darkMode ? "text-white/40" : "text-[#9a9a97] group-hover:text-[#5f5f5c]"
+    active ? "text-current" : darkMode ? "text-white/40" : "text-[#a3a3a0] group-hover:text-[#5f5f5c]"
   }`;
 
   // Kept as a no-op so the render code below stays the same: the pill is the row's own style now.
@@ -280,18 +278,14 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
         onClick={() => setMobileOpen?.(false)}
       />
       <aside
-        className={`app-sidebar fixed inset-y-0 left-0 z-50 flex w-[248px] transform flex-col dark:border-r lg:border-r-0 md:static md:z-auto md:h-screen md:translate-x-0 ${collapsed ? "app-sidebar-collapsed" : ""} ${
+        className={`app-sidebar newq fixed inset-y-0 left-0 z-50 flex w-[248px] transform flex-col dark:border-r lg:border-r-0 md:static md:z-auto md:h-screen md:translate-x-0 ${collapsed ? "app-sidebar-collapsed" : ""} ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } ${shell}`}
-        style={{
-          fontFamily:
-            '"Google Sans", "Product Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        }}
       >
         <div className={`relative px-3 pb-1 pt-4 transition-all duration-300 ${collapsed ? "md:px-2" : ""}`}>
           <div className={`flex items-center gap-2.5 px-1.5 ${collapsed ? "md:flex-col md:gap-3 md:px-0" : ""}`}>
-            <Image src="/logo.png" alt="UIPL Docs" width={26} height={26} className="h-7 w-7 shrink-0 rounded-[8px]" priority />
-            <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:flex-none md:opacity-0" : "max-w-[150px] opacity-100"} ${darkMode ? "text-white" : "text-[#171717]"}`}>
+            <BrandMark darkMode={darkMode} size={36} />
+            <span className={`force-bold small min-w-0 flex-1 overflow-hidden whitespace-nowrap text-[17px] tracking-[-0.02em] transition-[max-width,opacity] duration-300 ${collapsed ? "md:max-w-0 md:flex-none md:opacity-0" : "max-w-[150px] opacity-100"} ${darkMode ? "text-white" : "text-[#171717]"}`}>
               UIPL Docs
             </span>
             <button
@@ -321,14 +315,14 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
               onFocus={() => onOpenSearch?.()}
               onChange={(event) => setMenuSearch(event.target.value)}
               placeholder="Global Search"
-              className={`h-9 w-full rounded-[10px] border pl-9 pr-16 text-[13px] outline-none transition-shadow focus:ring-[3px] ${darkMode ? "border-white/10 bg-white/[0.04] text-white placeholder:text-white/35 focus:ring-white/10" : "border-[#e4e4e1] bg-white text-[#171717] placeholder:text-[#a3a3a0] shadow-[0_1px_1px_rgba(0,0,0,0.03)] focus:ring-black/[0.05]"}`}
+              className={`h-10 w-full rounded-full border pl-9 pr-16 text-[13px] outline-none transition-shadow focus:ring-[3px] ${darkMode ? "border-transparent bg-white/[0.06] text-white placeholder:text-white/35 focus:ring-white/10" : "border-[#ececec] bg-white text-[#141414] placeholder:text-[#a8a8a5] focus:ring-black/[0.05]"}`}
             />
-            <kbd className={`pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold sm:block ${darkMode ? "border-white/10 text-white/35" : "border-slate-200 text-slate-400"}`}>Ctrl K</kbd>
+            <kbd className={`pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-full border px-2 py-0.5 text-[10px] sm:block ${darkMode ? "border-white/10 text-white/35" : "border-[#ececec] text-[#a8a8a5]"}`}>Ctrl K</kbd>
           </div>
         </div>
 
         <nav ref={navRef} className={`flex-1 overflow-y-auto scroll-smooth px-3 py-2 transition-all duration-500 ${collapsed ? "md:px-0" : ""}`}>
-          <p className={`overflow-hidden px-3 newq text-[9px] font-bold uppercase tracking-[0.14em] transition-[max-height,opacity,margin] duration-300 ${muted} ${collapsed ? "md:mb-0 md:max-h-0 md:opacity-0" : "mb-2 max-h-5 opacity-100"}`}>Workspace</p>
+          <p className={`overflow-hidden px-3 newq text-[11.5px] transition-[max-height,opacity,margin] duration-300 ${muted} ${collapsed ? "md:mb-0 md:max-h-0 md:opacity-0" : "mb-2 max-h-5 opacity-100"}`}>Workspace</p>
           <div className={`space-y-1 ${collapsed ? "md:flex md:flex-col md:items-center md:gap-2 md:space-y-0" : ""}`}>
           {filteredMenuItems.map((item) => {
             if (item.parent === "projects") return null;
@@ -374,19 +368,19 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
 
         <div ref={profileRef} className={`relative newq shrink-0 px-3 pb-4 pt-3 transition-all duration-500 ${collapsed ? "md:flex md:justify-center md:px-0" : ""}`}>
           <div
-            className={`absolute bottom-[calc(100%+10px)] z-[70] origin-bottom rounded-[22px] p-2 shadow-[0_24px_70px_rgba(15,23,42,0.22)] ring-1 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? "md:left-2 md:w-56" : "left-3 right-3"} ${profileOpen ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-3 scale-95 opacity-0"} ${darkMode ? "bg-[#17181d] text-white ring-white/10" : "bg-white text-[#171714] ring-black/5"}`}
+            className={`absolute bottom-[calc(100%+10px)] z-[70] origin-bottom rounded-[22px] p-2 shadow-[0_24px_70px_rgba(15,23,42,0.22)] ring-1 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? "md:left-2 md:w-56" : "left-3 right-3"} ${profileOpen ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-3 scale-95 opacity-0"} ${darkMode ? "bg-[#17181d] text-white ring-white/10" : "bg-white text-[#141414] ring-[#ececec]"}`}
           >
-            <div className={`flex items-center gap-3 rounded-2xl px-3 py-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f5f7f2]"}`}>
+            <div className={`flex items-center gap-3 rounded-[16px] px-3 py-3 ${darkMode ? "bg-white/[0.045]" : "bg-[#f4f4f2]"}`}>
               <UserAvatar user={user} name={displayName} className="h-10 w-10" />
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{displayName}</p>
+                <p className="truncate text-sm">{displayName}</p>
                 <p className={`mt-1 truncate text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{user?.username || user?.roleName || "UIPL user"}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={openProfileModal}
-              className={`mt-2 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold transition ${darkMode ? "text-white/80 hover:bg-white/10" : "text-slate-700 hover:bg-[#f3f8f5]"}`}
+              className={`mt-2 flex w-full items-center gap-2 rounded-full px-3 py-2.5 text-left text-sm transition ${darkMode ? "text-white/80 hover:bg-white/10" : "text-[#3d3d3b] hover:bg-[#f4f4f2]"}`}
             >
               <UserRound className="h-4 w-4" />
               View profile
@@ -394,7 +388,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
             <button
               type="button"
               onClick={onLogout}
-              className="mt-2 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 transition hover:bg-red-500/10"
+              className="mt-1 flex w-full items-center gap-2 rounded-full px-3 py-2.5 text-left text-sm text-[#c0394b] transition hover:bg-[#fbe4e6]"
             >
               <LogOut className="h-4 w-4" />
               Logout
@@ -404,12 +398,12 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
           <button
             type="button"
             onClick={() => setProfileOpen((open) => !open)}
-            className={`flex items-center gap-2.5 text-left transition-colors duration-150 ${collapsed ? "md:mx-auto md:grid md:h-11 md:w-11 md:place-items-center md:gap-0 md:rounded-[12px] md:p-0" : "h-12 w-full rounded-[12px] px-2"} ${darkMode ? "text-white hover:bg-white/[0.06]" : "text-[#171717] hover:bg-black/[0.04]"}`}
+            className={`flex items-center gap-2.5 text-left transition-colors duration-150 ${collapsed ? "md:mx-auto md:grid md:h-11 md:w-11 md:place-items-center md:gap-0 md:rounded-[12px] md:p-0" : "h-12 w-full rounded-full px-2"} ${darkMode ? "text-white hover:bg-white/[0.06]" : "text-[#141414] hover:bg-black/[0.045]"}`}
             aria-expanded={profileOpen}
           >
             <UserAvatar user={user} name={displayName} className={`h-8 w-8 ${collapsed ? "md:m-0 md:h-9 md:w-9" : ""}`} />
             <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-300 ${collapsed ? "md:max-w-0 md:-translate-x-2 md:opacity-0" : "max-w-[145px] opacity-100"}`}>
-              <span className="block truncate text-[13px] font-medium">{displayName}</span>
+              <span className="block truncate text-[13px]">{displayName}</span>
               <span className={`block truncate text-[11.5px] ${darkMode ? "text-white/45" : "text-[#8a8a87]"}`}>{user?.email || user?.username || user?.roleName || "User"}</span>
             </span>
             <ChevronDown className={`h-4 w-4 shrink-0 transition-[transform,opacity,width] duration-300 ${profileOpen ? "rotate-180" : ""} ${collapsed ? "md:w-0 md:opacity-0" : ""} ${darkMode ? "text-white/45" : "text-black/45"}`} />
@@ -420,12 +414,12 @@ export default function Sidebar({ activeMenu, setActiveMenu, darkMode, allowedMe
 
       {flyout && (
         <div
-          className={`fixed z-[80] w-56 rounded-2xl p-2 shadow-[0_24px_60px_rgba(15,23,42,0.28)] ring-1 ${darkMode ? "bg-[#17181d] text-white ring-white/10" : "bg-white text-[#171714] ring-black/5"}`}
+          className={`newq fixed z-[80] w-56 rounded-[18px] p-2 shadow-[0_24px_60px_rgba(15,23,42,0.18)] ring-1 ${darkMode ? "bg-[#17181d] text-white ring-white/10" : "bg-white text-[#141414] ring-[#ececec]"}`}
           style={{ top: Math.max(8, flyout.top), left: flyout.left }}
           onMouseEnter={cancelCloseFlyout}
           onMouseLeave={scheduleCloseFlyout}
         >
-          <div className={`mb-1 flex items-center gap-2 px-2 py-1.5 text-xs font-bold uppercase tracking-wide ${darkMode ? "text-white/50" : "text-slate-400"}`}>
+          <div className={`mb-1 flex items-center gap-2 px-2 py-1.5 text-xs ${darkMode ? "text-white/50" : "text-[#a3a3a0]"}`}>
             <flyout.GroupIcon className="h-3.5 w-3.5" />
             {flyout.label}
           </div>

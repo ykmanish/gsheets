@@ -3,16 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  BarChart3,
   Boxes,
-  ChevronDown,
   ChevronRight,
   ExternalLink,
   FileSpreadsheet,
   Layers3,
-  Loader2,
   Package,
-  PackageCheck,
   PackageSearch,
   Pencil,
   Plus,
@@ -20,11 +16,12 @@ import {
   Save,
   Search,
   Trash2,
+  Warehouse,
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "./AuthProvider";
-import { ConfirmModal, SelectMenu } from "./ui";
+import { Badge, Button, Chip, ConfirmModal, EmptyState, IconTile, PageHeader, SectionTitle, SelectMenu, StatTile, cx, fieldClass } from "./ui";
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -44,12 +41,6 @@ function fmt(value, digits = 0) {
   return number.toLocaleString("en-IN", { maximumFractionDigits: digits });
 }
 
-function money(value) {
-  const number = Number(value) || 0;
-  if (!number) return "INR 0";
-  return `INR ${number.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-}
-
 function emptyForm() {
   return { name: "", sheetUrl: "", architecture: "auto", notes: "" };
 }
@@ -59,55 +50,46 @@ function initials(name = "Site") {
   return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : String(parts[0] || "ST").slice(0, 2)).toUpperCase();
 }
 
+const SITE_TONES = ["mint", "lavender", "peach", "sky", "lime", "amber"];
+function siteTone(name = "") {
+  const sum = [...String(name)].reduce((total, char) => total + char.charCodeAt(0), 0);
+  return SITE_TONES[sum % SITE_TONES.length];
+}
+
 function SoftDropdown({ darkMode, value, options = [], onChange, placeholder = "Select" }) {
   return <SelectMenu darkMode={darkMode} value={value} options={options} onChange={onChange} placeholder={placeholder} />;
 }
 
-function Metric({ darkMode, icon: Icon, label, value, note, tone = "green" }) {
-  const tones = {
-    green: darkMode ? "bg-emerald-400/10 text-emerald-200" : "bg-[#e7f9ef] text-[#079669]",
-    blue: darkMode ? "bg-sky-400/10 text-sky-200" : "bg-[#e9f3ff] text-[#1267bd]",
-    amber: darkMode ? "bg-amber-400/10 text-amber-200" : "bg-[#fff5db] text-[#b56a00]",
-    red: darkMode ? "bg-rose-400/10 text-rose-200" : "bg-[#ffeded] text-[#dc2626]",
-    slate: darkMode ? "bg-white/10 text-white/75" : "bg-[#f2f4ef] text-[#171714]",
-  };
-  return (
-    <section className={`rounded-[24px] p-5 ${darkMode ? "bg-white/[0.045]" : "bg-white"}`}>
-      <div className="flex items-start justify-between">
-        <span className={`grid h-11 w-11 place-items-center rounded-2xl ${tones[tone]}`}>
-          <Icon className="h-4 w-4" />
-        </span>
-        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${darkMode ? "bg-white/10 text-white/45" : "bg-[#f4f6f1] text-black/45"}`}>
-          {note}
-        </span>
-      </div>
-      <p className={`mt-5 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{label}</p>
-      <p className="mt-1 text-3xl font-bold tracking-tight">{value}</p>
-    </section>
-  );
+function FieldLabel({ darkMode, children }) {
+  return <span className={cx("mb-1.5 block text-[12.5px]", darkMode ? "text-white/55" : "text-[#8a8a8a]")}>{children}</span>;
 }
 
-function Drawer({ open, title, subtitle, children, onClose, darkMode, wide = false }) {
+function Drawer({ open, title, subtitle, icon, tone = "mint", children, onClose, darkMode, wide = false }) {
   return (
     <>
-      <div className={`fixed inset-0 z-[90] bg-black/35 backdrop-blur-[2px] transition duration-300 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`} onClick={onClose} />
+      <div className={`fixed inset-0 z-[90] bg-black/20 backdrop-blur-[2px] transition duration-300 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`} onClick={onClose} />
       <aside
-        className={`fixed z-[95] flex transform flex-col overflow-hidden border transition duration-300 ${
-          wide ? "inset-0 h-screen w-screen rounded-none border-0" : "inset-y-3 right-3 w-[min(1180px,calc(100vw-24px))] rounded-[28px]"
-        } ${
-          open ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0 pointer-events-none"
-        } ${darkMode ? "border-white/10 bg-[#101114] text-white" : "border-black/10 bg-white text-[#171714]"}`}
+        style={open ? { boxShadow: "var(--ui-shadow-pop)" } : undefined}
+        className={cx(
+          "newq fixed z-[95] flex transform flex-col overflow-hidden border transition duration-300",
+          wide ? "inset-0 sm:inset-2.5 sm:rounded-[24px]" : "inset-y-2.5 right-2.5 w-[min(1180px,calc(100vw-20px))] rounded-[24px]",
+          open ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-8 opacity-0",
+          darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]",
+        )}
       >
-        <header className={`flex items-center justify-between border-b px-5 py-4 ${darkMode ? "border-white/10" : "border-black/10"}`}>
-          <div className="min-w-0">
-            <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-[#171714]"}`}>{title}</p>
-            {subtitle && <p className={`mt-0.5 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{subtitle}</p>}
+        <header className={cx("flex items-center justify-between gap-3 border-b px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+          <div className="flex min-w-0 items-center gap-3">
+            {icon && <IconTile icon={icon} tone={tone} darkMode={darkMode} size="sm" />}
+            <div className="min-w-0">
+              <p className="truncate text-[17px] tracking-[-0.01em]">{title}</p>
+              {subtitle && <p className={cx("truncate text-[12.5px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{subtitle}</p>}
+            </div>
           </div>
-          <button type="button" onClick={onClose} className={`grid h-11 w-11 place-items-center rounded-full ${darkMode ? "hover:bg-white/10" : "hover:bg-black/5"}`}>
-            <X className="h-5 w-5" />
+          <button type="button" onClick={onClose} aria-label="Close" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
+            <X className="h-4 w-4" />
           </button>
         </header>
-        <div className={`min-h-0 flex-1 overflow-y-auto ${darkMode ? "bg-[#0c0d10]" : "bg-[#f5f7f2]"}`}>{children}</div>
+        <div className={cx("min-h-0 flex-1 overflow-y-auto", darkMode ? "bg-[#0f1014]" : "bg-[#fafaf9]")}>{children}</div>
       </aside>
     </>
   );
@@ -134,40 +116,40 @@ function SiteFormDrawer({ darkMode, open, site, saving, onClose, onSubmit }) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  const card = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
+
   return (
-    <Drawer open={open} onClose={onClose} darkMode={darkMode} title={site ? `${site.name} · Stock link` : "Add stock site"} subtitle="Link a native Google Sheet with one or more stock tabs.">
-      <form onSubmit={(event) => { event.preventDefault(); onSubmit(form); }} className="grid gap-5 p-5 lg:grid-cols-[320px_1fr]">
-        <aside className={`rounded-[28px] p-6 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-          <span className="inline-flex rounded-lg bg-[#eafbdc] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#4b9b16]">Stock setup</span>
-          <h2 className="mt-6 text-3xl font-bold tracking-tight">{site ? "Edit linked site" : "New site stock"}</h2>
-          <p className={`mt-3 text-sm leading-6 ${darkMode ? "text-white/50" : "text-black/50"}`}>
+    <Drawer open={open} onClose={onClose} darkMode={darkMode} icon={FileSpreadsheet} tone="mint" title={site ? `${site.name} · Stock link` : "Add stock site"} subtitle="Link a native Google Sheet with one or more stock tabs.">
+      <form onSubmit={(event) => { event.preventDefault(); onSubmit(form); }} className="grid gap-4 p-6 lg:grid-cols-[320px_1fr]">
+        <aside className={cx("flex flex-col rounded-[20px] border p-6", card)}>
+          <Badge icon={Package} tone="mint" darkMode={darkMode} className="self-start">Stock setup</Badge>
+          <SectionTitle darkMode={darkMode} className="mt-4" title={site ? "Edit linked site" : "New site stock"} subtitle="one sheet, any layout" />
+          <p className={cx("mt-3 text-[13px] leading-6", muted)}>
             Add the site name and Google Sheet URL. The dashboard auto-detects Final Sheet ledgers and category-wise stock tabs.
           </p>
-          <button disabled={saving} className="mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#89ed3f] text-sm font-bold text-black transition hover:bg-[#7dde35] disabled:opacity-60">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          <Button type="submit" darkMode={darkMode} variant="primary" size="lg" icon={Save} loading={saving} disabled={saving} className="mt-8 w-full">
             Save site
-          </button>
+          </Button>
         </aside>
-        <section className={`rounded-[28px] p-6 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+        <section className={cx("rounded-[20px] border p-6", card)}>
           <div className="grid gap-5 md:grid-cols-2">
             <label className="block">
-              <span className={`text-xs font-bold uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Site name</span>
-              <input value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="Kalhaar, Asteria, Warehouse..." className={`mt-2 h-14 w-full rounded-2xl border px-4 outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+              <FieldLabel darkMode={darkMode}>Site name</FieldLabel>
+              <input value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="Kalhaar, Asteria, Warehouse..." className={fieldClass(darkMode, { size: "lg" })} />
             </label>
             <label className="block">
-              <span className={`text-xs font-bold uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Architecture</span>
-              <div className="mt-2">
-                <SoftDropdown darkMode={darkMode} value={form.architecture} options={architectureOptions} onChange={(value) => update("architecture", value)} />
-              </div>
+              <FieldLabel darkMode={darkMode}>Architecture</FieldLabel>
+              <SoftDropdown darkMode={darkMode} value={form.architecture} options={architectureOptions} onChange={(value) => update("architecture", value)} />
             </label>
           </div>
           <label className="mt-5 block">
-            <span className={`text-xs font-bold uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Google Sheet link</span>
-            <input value={form.sheetUrl} onChange={(event) => update("sheetUrl", event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className={`mt-2 h-14 w-full rounded-2xl border px-4 outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+            <FieldLabel darkMode={darkMode}>Google Sheet link</FieldLabel>
+            <input value={form.sheetUrl} onChange={(event) => update("sheetUrl", event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className={fieldClass(darkMode, { size: "lg" })} />
           </label>
           <label className="mt-5 block">
-            <span className={`text-xs font-bold uppercase tracking-[0.16em] ${darkMode ? "text-white/45" : "text-black/45"}`}>Notes</span>
-            <textarea value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Optional sheet owner, update rhythm, or site notes." rows={5} className={`mt-2 w-full resize-none rounded-2xl border p-4 outline-none ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`} />
+            <FieldLabel darkMode={darkMode}>Notes</FieldLabel>
+            <textarea value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Optional sheet owner, update rhythm, or site notes." rows={5} className={cx("w-full resize-none rounded-[16px] border p-4 text-[13.5px] outline-none transition", darkMode ? "border-transparent bg-white/[0.06] focus:ring-[3px] focus:ring-white/10" : "border-transparent bg-[#f4f4f2] focus:border-[#e2e2df] focus:bg-white focus:ring-[3px] focus:ring-black/[0.05]")} />
           </label>
         </section>
       </form>
@@ -199,29 +181,29 @@ function SiteDetailDrawer({ darkMode, site, open, onClose, onEdit }) {
     return list.filter((item) => [item.itemName, item.category, item.unit, item.sheetName, item.location].join(" ").toLowerCase().includes(needle));
   }, [activeSheet, allItems, query]);
   const activeSheetLabel = activeSheet || "Selected sheet";
+  const card = darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white";
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
 
   return (
-    <Drawer wide open={open} onClose={onClose} darkMode={darkMode} title={`${site?.name || "Site"} · Stock details`} subtitle="Live parsed stock data grouped by sheets and categories.">
+    <Drawer wide open={open} onClose={onClose} darkMode={darkMode} icon={Boxes} tone="lavender" title={`${site?.name || "Site"} · Stock details`} subtitle="Live parsed stock data grouped by sheets and categories.">
       {!site ? null : (
-        <div className="space-y-5 p-5">
-          <section className={`rounded-[28px] p-6 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
+        <div className="space-y-4 p-6">
+          <section className={cx("rounded-[20px] border p-6", card)}>
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 items-center gap-4">
-                <span className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-[#10ad73] text-3xl font-bold text-white">{initials(site.name)}</span>
+                <IconTile icon={<span className="text-[20px]">{initials(site.name)}</span>} tone={siteTone(site.name)} darkMode={darkMode} size="lg" className="h-16 w-16 rounded-[20px]" />
                 <div className="min-w-0">
-                  <p className={`text-xs font-bold uppercase tracking-[0.16em] ${darkMode ? "text-[#d8f36a]" : "text-[#4b9b16]"}`}>Stock workspace</p>
-                  <h2 className="mt-2 truncate small text-4xl font-bold tracking-tight">{site.name}</h2>
-                  <p className={`mt-1 text-sm ${darkMode ? "text-white/45" : "text-black/45"}`}>
+                  <Badge icon={Package} tone="mint" darkMode={darkMode}>Stock workspace</Badge>
+                  <h2 className="mt-2 truncate text-[28px] leading-tight tracking-[-0.02em]">{site.name}</h2>
+                  <p className={cx("mt-0.5 text-[13px]", muted)}>
                     {fmt(site.summary?.totalItems)} items · {fmt(site.summary?.totalQuantity, 1)} quantity · {fmt(site.summary?.lowStock)} low / zero stock
                   </p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={() => onEdit(site)} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#89ed3f] px-6 text-sm font-bold text-black">
-                  <Pencil className="h-4 w-4" /> Edit link
-                </button>
+              <div className="flex flex-wrap gap-2">
+                <Button darkMode={darkMode} variant="primary" icon={Pencil} onClick={() => onEdit(site)}>Edit link</Button>
                 {site.sheetUrl && (
-                  <a href={site.sheetUrl} target="_blank" rel="noreferrer" className={`flex h-12 items-center justify-center gap-2 rounded-full border px-6 text-sm font-semibold ${darkMode ? "border-white/10 hover:bg-white/5" : "border-black/10 hover:bg-black/[0.03]"}`}>
+                  <a href={site.sheetUrl} target="_blank" rel="noreferrer" className={cx("inline-flex h-9 items-center justify-center gap-2 rounded-full border px-4 text-[13px] transition-colors", darkMode ? "border-white/10 bg-white/[0.04] hover:bg-white/10" : "border-[#e6e6e3] bg-white hover:bg-[#f6f6f4]")}>
                     <ExternalLink className="h-4 w-4" /> Open sheet
                   </a>
                 )}
@@ -229,88 +211,92 @@ function SiteDetailDrawer({ darkMode, site, open, onClose, onEdit }) {
             </div>
           </section>
 
-          <section className="space-y-5">
-            <div className={`rounded-[28px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Sheet breakdown</p>
-                  <h3 className="mt-1 text-xl font-bold">Tabs in this stock file</h3>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {(site.sheets || []).map((sheet) => (
-                  <button
-                    type="button"
-                    key={sheet.name}
-                    onClick={() => setActiveSheet(sheet.name)}
-                    className={`rounded-[20px] border p-4 text-left transition ${
-                      activeSheet === sheet.name
-                        ? darkMode ? "border-[#89ed3f] bg-[#89ed3f]/10" : "border-[#10ad73] bg-[#f0ffea]"
-                        : darkMode ? "border-white/10 bg-white/[0.035] hover:bg-white/[0.06]" : "border-black/10 bg-[#fbfcf8] hover:bg-[#f4f8ef]"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h4 className="font-bold">{sheet.name}</h4>
-                        <p className={`mt-1 text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{fmt(sheet.totalItems)} items · {fmt(sheet.totalQuantity, 1)} qty</p>
-                      </div>
-                      <span className="rounded-full bg-[#eafbdc] px-3 py-1 text-[11px] font-bold text-[#4b9b16]">{fmt(sheet.lowStockItems?.length || 0)} low</span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {(sheet.categories || []).slice(0, 4).map((category) => (
-                        <span key={category.name} className={`rounded-full px-3 py-1 text-xs ${darkMode ? "bg-white/10 text-white/65" : "bg-white text-black/60"}`}>{category.name} · {category.items}</span>
-                      ))}
-                    </div>
-                  </button>
-                ))}
+          <section className={cx("rounded-[20px] border p-5", card)}>
+            <div className="flex items-center gap-3">
+              <IconTile icon={Layers3} tone="sky" darkMode={darkMode} size="sm" />
+              <div>
+                <h3 className="text-[15px]">Tabs in this stock file</h3>
+                <p className={cx("text-[12.5px]", muted)}>Sheet breakdown</p>
               </div>
             </div>
-
-            <div className={`rounded-[28px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Stock items</p>
-                  <h3 className="mt-1 text-xl font-bold">{activeSheetLabel} · {items.length} visible items</h3>
-                </div>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="min-w-72">
-                    <SoftDropdown darkMode={darkMode} value={activeSheet} options={sheetOptions} onChange={setActiveSheet} placeholder="Choose sheet" />
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {(site.sheets || []).map((sheet) => (
+                <button
+                  type="button"
+                  key={sheet.name}
+                  onClick={() => setActiveSheet(sheet.name)}
+                  className={cx(
+                    "rounded-[18px] border p-4 text-left transition-colors",
+                    activeSheet === sheet.name
+                      ? darkMode ? "border-[#cff07a]/50 bg-[#cff07a]/10" : "border-[#141414] bg-white"
+                      : darkMode ? "border-transparent bg-white/[0.04] hover:bg-white/[0.07]" : "border-transparent bg-[#f7f7f5] hover:bg-[#f1f1ef]",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="truncate text-[14px]">{sheet.name}</h4>
+                      <p className={cx("mt-0.5 text-[12px]", muted)}>{fmt(sheet.totalItems)} items · {fmt(sheet.totalQuantity, 1)} qty</p>
+                    </div>
+                    <Chip tone={(sheet.lowStockItems?.length || 0) ? "rose" : "mint"} darkMode={darkMode} className="h-6 shrink-0 text-[11.5px]">{fmt(sheet.lowStockItems?.length || 0)} low</Chip>
                   </div>
-                  <label className={`flex h-12 min-w-64 items-center gap-2 rounded-2xl border px-4 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
-                    <Search className="h-4 w-4 text-[#4b9b16]" />
-                    <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search stock..." className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
-                  </label>
-                </div>
-              </div>
-              <div className="mt-4 max-h-[520px] overflow-auto rounded-2xl">
-                <table className="w-full min-w-[760px] border-separate border-spacing-y-2 text-left text-sm">
-                  <thead className={darkMode ? "text-white/45" : "text-black/45"}>
-                    <tr>
-                      <th className="px-4 py-2">Item</th>
-                      <th className="px-4 py-2">Category</th>
-                      <th className="px-4 py-2">Sheet</th>
-                      <th className="px-4 py-2 text-right">Qty</th>
-                      <th className="px-4 py-2">Unit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item) => (
-                      <tr key={`${item.sheetName}-${item.rowNumber}-${item.itemName}`} className={darkMode ? "bg-white/[0.035]" : "bg-[#f7f9f4]"}>
-                        <td className="rounded-l-2xl px-4 py-3 font-semibold">{item.itemName}</td>
-                        <td className="px-4 py-3">{item.category || "-"}</td>
-                        <td className="px-4 py-3">{item.sheetName}</td>
-                        <td className={`px-4 py-3 text-right font-bold ${item.quantity <= Math.max(0, item.reorderMin || 0) ? "text-red-500" : "text-[#0f9f6e]"}`}>{fmt(item.quantity, 1)}</td>
-                        <td className="rounded-r-2xl px-4 py-3">{item.unit || "-"}</td>
-                      </tr>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {(sheet.categories || []).slice(0, 4).map((category) => (
+                      <span key={category.name} className={cx("rounded-full px-2.5 py-0.5 text-[11.5px]", darkMode ? "bg-white/10 text-white/65" : "bg-white text-[#5f5f5c]")}>{category.name} · {category.items}</span>
                     ))}
-                  </tbody>
-                </table>
-                {!items.length && (
-                  <div className={`rounded-2xl border border-dashed p-8 text-center text-sm ${darkMode ? "border-white/10 text-white/45" : "border-black/10 text-black/45"}`}>
-                    No parsed stock rows found for {activeSheetLabel}.
                   </div>
-                )}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className={cx("rounded-[20px] border p-5", card)}>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <IconTile icon={PackageSearch} tone="peach" darkMode={darkMode} size="sm" />
+                <div>
+                  <h3 className="text-[15px]">{activeSheetLabel}</h3>
+                  <p className={cx("text-[12.5px]", muted)}>{items.length} visible items</p>
+                </div>
               </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="min-w-72">
+                  <SoftDropdown darkMode={darkMode} value={activeSheet} options={sheetOptions} onChange={setActiveSheet} placeholder="Choose sheet" />
+                </div>
+                <label className={cx(fieldClass(darkMode), "w-auto min-w-64 cursor-text")}>
+                  <Search className={cx("h-4 w-4 shrink-0", muted)} />
+                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search stock..." className="min-w-0 flex-1 bg-transparent outline-none" />
+                </label>
+              </div>
+            </div>
+            <div className="mt-4 max-h-[520px] overflow-auto">
+              <table className="w-full min-w-[760px] border-collapse text-left text-[13px]">
+                <thead className={cx("sticky top-0", darkMode ? "bg-[#15171c]" : "bg-white")}>
+                  <tr className={muted}>
+                    <th className="px-4 pb-2.5 pt-1 text-[12px] font-normal">Item</th>
+                    <th className="px-4 pb-2.5 pt-1 text-[12px] font-normal">Category</th>
+                    <th className="px-4 pb-2.5 pt-1 text-[12px] font-normal">Sheet</th>
+                    <th className="px-4 pb-2.5 pt-1 text-right text-[12px] font-normal">Qty</th>
+                    <th className="px-4 pb-2.5 pt-1 text-[12px] font-normal">Unit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => {
+                    const low = item.quantity <= Math.max(0, item.reorderMin || 0);
+                    return (
+                      <tr key={`${item.sheetName}-${item.rowNumber}-${item.itemName}`} className={cx("border-t", darkMode ? "border-white/[0.07]" : "border-[#f0f0ee]")}>
+                        <td className="px-4 py-3">{item.itemName}</td>
+                        <td className={cx("px-4 py-3", darkMode ? "text-white/65" : "text-[#5f5f5c]")}>{item.category || "-"}</td>
+                        <td className={cx("px-4 py-3", darkMode ? "text-white/65" : "text-[#5f5f5c]")}>{item.sheetName}</td>
+                        <td className="px-4 py-3 text-right"><Chip tone={low ? "rose" : "mint"} darkMode={darkMode} className="h-6 tabular-nums">{fmt(item.quantity, 1)}</Chip></td>
+                        <td className={cx("px-4 py-3", darkMode ? "text-white/65" : "text-[#5f5f5c]")}>{item.unit || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {!items.length && (
+                <EmptyState darkMode={darkMode} icon={PackageSearch} tone="neutral" title="No stock rows" text={`No parsed stock rows found for ${activeSheetLabel}.`} />
+              )}
             </div>
           </section>
         </div>
@@ -320,48 +306,47 @@ function SiteDetailDrawer({ darkMode, site, open, onClose, onEdit }) {
 }
 
 function StockSiteTable({ darkMode, sites, canManage, onOpen, onEdit, onDelete }) {
+  const muted = darkMode ? "text-white/45" : "text-[#8a8a8a]";
   return (
-    <div className={`overflow-hidden rounded-[24px] border ${darkMode ? "border-white/10" : "border-black/10"}`}>
-      <table className="w-full min-w-[980px] border-collapse text-left text-sm">
-        <thead className={`${darkMode ? "bg-white/[0.05] text-white/45" : "bg-[#f2f4ef] text-black/45"}`}>
-          <tr>
-            <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.12em]">Site</th>
-            <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.12em]">Sheets</th>
-            <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-[0.12em]">Items</th>
-            <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-[0.12em]">Qty</th>
-            <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-[0.12em]">Low</th>
-            <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-[0.12em]">Action</th>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[980px] border-collapse text-left text-[13px]">
+        <thead>
+          <tr className={muted}>
+            <th className="px-4 pb-2.5 pt-1 text-[12px] font-normal">Site</th>
+            <th className="px-4 pb-2.5 pt-1 text-[12px] font-normal">Sheets</th>
+            <th className="px-4 pb-2.5 pt-1 text-right text-[12px] font-normal">Items</th>
+            <th className="px-4 pb-2.5 pt-1 text-right text-[12px] font-normal">Qty</th>
+            <th className="px-4 pb-2.5 pt-1 text-right text-[12px] font-normal">Low</th>
+            <th className="px-4 pb-2.5 pt-1 text-right text-[12px] font-normal" />
           </tr>
         </thead>
         <tbody>
           {sites.map((site) => {
             const hasError = Boolean(site.error);
             return (
-              <tr key={site.id} className={`border-t ${darkMode ? "border-white/10 hover:bg-white/[0.04]" : "border-black/10 hover:bg-[#fafcf7]"}`}>
-                <td className="px-6 py-5">
-                  <div className="flex items-center gap-4">
-                    <span className={`grid h-12 w-12 place-items-center rounded-2xl text-base font-bold text-white ${hasError ? "bg-red-500" : "bg-[#10ad73]"}`}>{initials(site.name)}</span>
+              <tr key={site.id} className={cx("border-t transition-colors", darkMode ? "border-white/[0.07] hover:bg-white/[0.03]" : "border-[#f0f0ee] hover:bg-[#fafaf9]")}>
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <IconTile icon={hasError ? AlertTriangle : <span className="text-[13px]">{initials(site.name)}</span>} tone={hasError ? "rose" : siteTone(site.name)} darkMode={darkMode} size="md" />
                     <div className="min-w-0">
-                      <p className="font-bold">{site.name}</p>
-                      <p className={`mt-0.5 max-w-[220px] truncate text-xs ${darkMode ? "text-white/45" : "text-black/45"}`}>{hasError ? site.error : site.linkedFileName || "Linked stock file"}</p>
+                      <p className="text-[14px]">{site.name}</p>
+                      <p className={cx("mt-0.5 max-w-[240px] truncate text-[12px]", hasError ? "text-[#c0394b]" : muted)}>{hasError ? site.error : site.linkedFileName || "Linked stock file"}</p>
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-5 font-semibold">{fmt(site.summary?.sheets)}</td>
-                <td className="px-6 py-5 text-right font-bold">{fmt(site.summary?.totalItems)}</td>
-                <td className="px-6 py-5 text-right font-bold">{fmt(site.summary?.totalQuantity, 1)}</td>
-                <td className="px-6 py-5 text-right font-bold text-red-500">{fmt(site.summary?.lowStock)}</td>
-                <td className="px-6 py-5">
+                <td className={cx("px-4 py-3.5 tabular-nums", darkMode ? "text-white/65" : "text-[#5f5f5c]")}>{fmt(site.summary?.sheets)}</td>
+                <td className="px-4 py-3.5 text-right tabular-nums">{fmt(site.summary?.totalItems)}</td>
+                <td className="px-4 py-3.5 text-right tabular-nums">{fmt(site.summary?.totalQuantity, 1)}</td>
+                <td className="px-4 py-3.5 text-right"><Chip tone={site.summary?.lowStock ? "rose" : "neutral"} darkMode={darkMode} className="h-6 tabular-nums">{fmt(site.summary?.lowStock)}</Chip></td>
+                <td className="px-4 py-3.5">
                   <div className="flex justify-end gap-2">
                     {canManage && (
                       <>
-                        <button type="button" onClick={() => onEdit(site)} className={`flex h-11 items-center gap-2 rounded-full px-5 text-sm font-bold ${darkMode ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#89ed3f] text-black hover:bg-[#7dde35]"}`}><Pencil className="h-4 w-4" /> Edit</button>
-                        <button type="button" onClick={() => onDelete(site)} className="grid h-11 w-11 place-items-center rounded-full bg-red-50 text-red-500 hover:bg-red-100"><Trash2 className="h-4 w-4" /></button>
+                        <Button darkMode={darkMode} variant="soft" size="sm" icon={Pencil} onClick={() => onEdit(site)}>Edit</Button>
+                        <button type="button" aria-label="Remove site" onClick={() => onDelete(site)} className={cx("grid h-8 w-8 place-items-center rounded-full transition-colors", darkMode ? "bg-rose-400/10 text-[#f7aab5] hover:bg-rose-400/20" : "bg-[#fbe4e6] text-[#c0394b] hover:bg-[#f8d5d9]")}><Trash2 className="h-4 w-4" /></button>
                       </>
                     )}
-                    <button type="button" onClick={() => onOpen(site)} className={`flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold ${darkMode ? "border-white/10 hover:bg-white/10" : "border-black/10 bg-white hover:bg-[#f7faf2]"}`}>
-                      View detail <ChevronRight className="h-4 w-4" />
-                    </button>
+                    <Button darkMode={darkMode} variant="secondary" size="sm" iconRight={ChevronRight} onClick={() => onOpen(site)}>View detail</Button>
                   </div>
                 </td>
               </tr>
@@ -384,7 +369,7 @@ export default function StockDashboard({ darkMode }) {
   const [saving, setSaving] = useState(false);
   const [selectedSite, setSelectedSite] = useState(null);
 
-  const muted = darkMode ? "text-white/50" : "text-black/50";
+  const muted = darkMode ? "text-white/50" : "text-[#8a8a8a]";
 
   const load = useCallback(async (force = false) => {
     try {
@@ -414,6 +399,19 @@ export default function StockDashboard({ darkMode }) {
     if (!needle) return list;
     return list.filter((site) => [site.name, site.linkedFileName, ...(site.categories || []).map((item) => item.name)].join(" ").toLowerCase().includes(needle));
   }, [data?.sites, query]);
+
+  // Display-only totals for the stat tiles, from the server summary when it sends one.
+  const totals = useMemo(() => {
+    const all = data?.sites || [];
+    const sum = (key) => all.reduce((total, site) => total + (Number(site.summary?.[key]) || 0), 0);
+    const summary = data?.summary || {};
+    return {
+      sites: summary.sites ?? all.length,
+      sheets: summary.totalSheets ?? sum("sheets"),
+      items: summary.totalItems ?? sum("totalItems"),
+      low: summary.lowStock ?? sum("lowStock"),
+    };
+  }, [data?.sites, data?.summary]);
 
   function openAdd() {
     setEditingSite(null);
@@ -464,59 +462,66 @@ export default function StockDashboard({ darkMode }) {
 
   if (loading) {
     return (
-      <main className={`flex min-h-0 flex-1 items-center justify-center ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f7f2] text-[#171714]"}`}>
-        <div className={`w-full max-w-lg rounded-[32px] p-8 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#eafbdc] text-[#4b9b16]"><Package className="h-6 w-6" /></span>
-          <h2 className="mt-5 text-2xl font-bold">Opening stock workspace</h2>
-          <p className={`mt-2 text-sm ${muted}`}>Reading linked site stock sheets and preparing dashboard cards.</p>
-          <div className={`mt-6 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-white/10" : "bg-black/[0.06]"}`}><div className="h-full w-1/3 animate-pulse rounded-full bg-[#89ed3f]" /></div>
+      <main className={cx("flex min-h-0 flex-1 items-center justify-center p-5", darkMode ? "text-white" : "text-[#141414]")}>
+        <div className={cx("w-full max-w-md rounded-[24px] border p-7", darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white")}>
+          <IconTile icon={Package} tone="mint" darkMode={darkMode} size="lg" />
+          <h2 className="mt-5 text-[20px] tracking-[-0.01em]">Opening stock workspace</h2>
+          <p className={cx("mt-1 text-[13px]", muted)}>Reading linked site stock sheets and preparing dashboard cards.</p>
+          <div className={cx("mt-6 h-1.5 overflow-hidden rounded-full", darkMode ? "bg-white/10" : "bg-[#f0f0ee]")}><div className={cx("h-full w-1/3 animate-pulse rounded-full", darkMode ? "bg-[#cff07a]" : "bg-[#141414]")} /></div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className={`min-h-0 flex-1 overflow-y-auto p-5 sm:p-7 ${darkMode ? "bg-[#0c0d10] text-white" : "bg-[#f5f7f2] text-[#171714]"}`}>
-      <section className={`rounded-[32px] p-6 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#4b9b16]"><PackageSearch className="h-3.5 w-3.5" /> Projects · Stock</span>
-            <h1 className="mt-3 text-4xl font-bold small text-black dark:text-white tracking-tight">Site stock dashboard</h1>
-            <p className={`mt-2 max-w-2xl text-sm ${muted}`}>Track site and warehouse inventory from linked Google Sheets, even when each workbook uses a different stock layout.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {data?.canManage && (
-              <button type="button" onClick={openAdd} className="flex h-12 items-center gap-2 rounded-full bg-[#89ed3f] px-5 text-sm font-bold text-black hover:bg-[#7dde35]"><Plus className="h-4 w-4" /> Add site</button>
-            )}
-            <button type="button" onClick={() => load(true)} className={`flex h-12 items-center gap-2 rounded-full border px-5 text-sm font-semibold ${darkMode ? "border-white/10 hover:bg-white/5" : "border-black/10 bg-white hover:bg-[#f7faf2]"}`}>
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-            </button>
-          </div>
-        </div>
-      </section>
+    <main className={cx("min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8", darkMode ? "text-white" : "text-[#141414]")}>
+      <PageHeader
+        darkMode={darkMode}
+        badge="Projects · Stock"
+        badgeIcon={Warehouse}
+        badgeTone="mint"
+        title="Site stock"
+        subtitle="what's on hand, where"
+        description="Track site and warehouse inventory from linked Google Sheets, even when each workbook uses a different stock layout."
+        actions={<>
+          <Button darkMode={darkMode} variant="secondary" onClick={() => load(true)}><RefreshCw className={cx("h-4 w-4", refreshing && "animate-spin")} /> Refresh</Button>
+          {data?.canManage && <Button darkMode={darkMode} variant="primary" icon={Plus} onClick={openAdd}>Add site</Button>}
+        </>}
+      />
 
-      <section className={`mt-5 rounded-[32px] p-5 ${darkMode ? "bg-[#15171c]" : "bg-white"}`}>
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#4b9b16]">Sites</p>
-            <h2 className="mt-1 text-2xl font-bold">Stock locations</h2>
-            <p className={`mt-1 text-sm ${muted}`}>{sites.length} visible site{sites.length === 1 ? "" : "s"}</p>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile darkMode={darkMode} icon={Warehouse} tone="mint" value={fmt(totals.sites)} label="Linked sites" />
+        <StatTile darkMode={darkMode} icon={Layers3} tone="sky" value={fmt(totals.sheets)} label="Sheet tabs" />
+        <StatTile darkMode={darkMode} icon={Boxes} tone="lavender" value={fmt(totals.items)} label="Stock items" />
+        <StatTile darkMode={darkMode} icon={AlertTriangle} tone="rose" value={fmt(totals.low)} label="Low or zero stock" />
+      </div>
+
+      <section className={cx("mt-6 rounded-[20px] border p-5", darkMode ? "border-white/10 bg-[#15171c]" : "border-[#ececec] bg-white")}>
+        <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex shrink-0 items-center gap-3">
+            <IconTile icon={PackageSearch} tone="peach" darkMode={darkMode} size="sm" />
+            <div>
+              <h2 className="text-[15px]">Stock locations</h2>
+              <p className={cx("text-[12.5px]", muted)}>{sites.length} visible site{sites.length === 1 ? "" : "s"}</p>
+            </div>
           </div>
-          <label className={`flex h-12 min-w-72 items-center gap-2 rounded-2xl border px-4 ${darkMode ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-white"}`}>
-            <Search className="h-4 w-4 text-[#4b9b16]" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search site, sheet, category..." className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+          <label className={cx(fieldClass(darkMode), "cursor-text lg:w-80")}>
+            <Search className={cx("h-4 w-4 shrink-0", muted)} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search site, sheet, category..." className="min-w-0 flex-1 bg-transparent outline-none" />
           </label>
         </div>
 
         {sites.length ? (
           <StockSiteTable darkMode={darkMode} sites={sites} canManage={data?.canManage} onOpen={setSelectedSite} onEdit={openEdit} onDelete={deleteSite} />
         ) : (
-          <div className={`rounded-[28px] border border-dashed p-10 text-center ${darkMode ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-[#fbfcf8]"}`}>
-            <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[#eafbdc] text-[#4b9b16]"><FileSpreadsheet className="h-7 w-7" /></span>
-            <h3 className="mt-5 text-2xl font-bold">No stock sites linked yet</h3>
-            <p className={`mx-auto mt-2 max-w-md text-sm ${muted}`}>Add a site and paste its Google Sheet link. The dashboard will read all tabs and build the stock cards automatically.</p>
-            {data?.canManage && <button type="button" onClick={openAdd} className="mt-6 inline-flex h-12 items-center gap-2 rounded-full bg-[#171714] px-6 text-sm font-bold text-white"><Plus className="h-4 w-4" /> Add first site</button>}
-          </div>
+          <EmptyState
+            darkMode={darkMode}
+            icon={FileSpreadsheet}
+            tone="mint"
+            title="No stock sites linked yet"
+            text="Add a site and paste its Google Sheet link. The dashboard will read all tabs and build the stock cards automatically."
+            action={data?.canManage && <Button darkMode={darkMode} variant="primary" icon={Plus} onClick={openAdd}>Add first site</Button>}
+          />
         )}
       </section>
 

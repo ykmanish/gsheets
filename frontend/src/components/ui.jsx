@@ -1,13 +1,15 @@
 "use client";
 
-// UIPL's UI kit. Neutral, compact controls after the reference designs: white popovers with a
-// search row, rows with icons and a check on the chosen one, black for "selected", calendars
-// and time lists that match. No dependencies beyond React and lucide icons, and every popover
+// UIPL's UI kit, after the Chax reference: pill buttons and fields, soft grey fills, pastel
+// icon tiles (mint, lavender, peach, sky, rose, lime), black for "selected" and primary, and
+// two-line headings (black, then grey). Popovers have a search row, rows with icons and a
+// check on the chosen one; calendars and time lists match. No dependencies beyond React and lucide icons, and every popover
 // renders into <body> so a scrolling page or a drawer never clips it.
 
 import { Children, createElement, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowUpRight,
   CalendarDays,
   Check,
   ChevronDown,
@@ -122,8 +124,8 @@ export function Popover({ open, onClose, anchorRef, darkMode, width = "anchor", 
       aria-labelledby={labelledBy}
       style={{ ...style, boxShadow: "var(--ui-shadow-pop)" }}
       className={cx(
-        "ui-pop z-[400] flex flex-col overflow-hidden rounded-[14px] border text-[13px] newq",
-        darkMode ? "border-white/10 bg-[#17181c] text-white" : "border-[#e8e8e6] bg-white text-[#171717]",
+        "ui-pop z-[400] flex flex-col overflow-hidden rounded-[18px] border text-[13px] newq",
+        darkMode ? "border-white/10 bg-[#17181c] text-white" : "border-[#ececec] bg-white text-[#141414]",
         className,
       )}
     >
@@ -135,25 +137,25 @@ export function Popover({ open, onClose, anchorRef, darkMode, width = "anchor", 
 
 /* ───────── Shared styling ───────── */
 
-const SIZES = { sm: "h-8 text-[12.5px] px-2.5 rounded-[9px]", md: "h-10 text-[13.5px] px-3 rounded-[10px]", lg: "h-12 text-sm px-4 rounded-[12px]" };
+const SIZES = { sm: "h-8 text-[12.5px] px-3 rounded-full", md: "h-10 text-[13.5px] px-4 rounded-full", lg: "h-12 text-sm px-5 rounded-full" };
 
 export function fieldClass(darkMode, { open = false, size = "md", invalid = false } = {}) {
   return cx(
     "flex w-full min-w-0 items-center gap-2 border text-left outline-none transition-[background-color,border-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-55",
     SIZES[size] || SIZES.md,
     darkMode
-      ? "border-white/10 bg-[#17181c] text-white hover:bg-white/[0.05] focus-visible:ring-[3px] focus-visible:ring-white/10"
-      : "border-[#e4e4e1] bg-white text-[#171717] shadow-[0_1px_1px_rgba(0,0,0,0.03)] hover:bg-[#fafaf9] focus-visible:ring-[3px] focus-visible:ring-black/[0.06]",
-    open && (darkMode ? "ring-[3px] ring-white/10 border-white/20" : "ring-[3px] ring-black/[0.06] border-[#cfcfcb]"),
+      ? "border-transparent bg-white/[0.06] text-white hover:bg-white/[0.09] focus-visible:ring-[3px] focus-visible:ring-white/10"
+      : "border-transparent bg-[#f4f4f2] text-[#141414] hover:bg-[#efefec] focus-visible:bg-white focus-visible:border-[#e2e2df] focus-visible:ring-[3px] focus-visible:ring-black/[0.05]",
+    open && (darkMode ? "ring-[3px] ring-white/10 bg-white/[0.09]" : "bg-white border-[#e2e2df] ring-[3px] ring-black/[0.05]"),
     invalid && "border-red-400",
   );
 }
 
 const optionRowClass = (darkMode, { active, highlighted, disabled }) => cx(
-  "flex w-full items-center gap-2.5 rounded-[8px] px-2.5 py-[7px] text-left text-[13px] transition-colors",
+  "flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-[7px] text-left text-[13px] transition-colors",
   disabled && "cursor-not-allowed opacity-45",
   active
-    ? darkMode ? "bg-white/[0.08] font-medium text-white" : "bg-[#f1f1ef] font-medium text-[#171717]"
+    ? darkMode ? "bg-white/[0.08] text-white" : "bg-[#f4f4f2] text-[#141414]"
     : highlighted
     ? darkMode ? "bg-white/[0.05] text-white" : "bg-[#f6f6f4] text-[#171717]"
     : darkMode ? "text-white/80" : "text-[#3d3d3b]",
@@ -178,7 +180,8 @@ function SearchRow({ darkMode, value, onChange, placeholder, onKeyDown }) {
 /* ───────── Select ───────── */
 
 /**
- * options: [{ value, label, icon?: LucideIcon | ReactNode, description?, disabled?, group? }]
+ * options: [{ value, label, icon?: LucideIcon | ReactNode, description?, disabled?, group?, color? }]
+ * `color` tints that option's label; `triggerStyle` (inline) tints the closed field, e.g. by status.
  * A change of `group` between neighbours draws a divider, as in the reference menu.
  */
 export function SelectMenu({
@@ -198,6 +201,7 @@ export function SelectMenu({
   renderTrigger,
   ariaLabel,
   groupLabels = false,
+  triggerStyle,
 }) {
   const anchorRef = useRef(null);
   const listRef = useRef(null);
@@ -257,7 +261,7 @@ export function SelectMenu({
 
   return (
     <div ref={anchorRef} className={cx("relative min-w-0", className)}>
-      {label && <span id={labelId} className={cx("mb-1.5 block text-xs font-medium", darkMode ? "text-white/60" : "text-[#6f6f6c]")}>{label}</span>}
+      {label && <span id={labelId} className={cx("mb-1.5 block text-xs", darkMode ? "text-white/60" : "text-[#8a8a8a]")}>{label}</span>}
       <button
         type="button"
         disabled={disabled}
@@ -268,6 +272,7 @@ export function SelectMenu({
         onClick={() => (open ? close() : setOpen(true))}
         onKeyDown={onKeyDown}
         className={renderTrigger ? "w-full text-left" : fieldClass(darkMode, { open, size })}
+        style={renderTrigger ? undefined : triggerStyle}
       >
         {renderTrigger ? renderTrigger({ open, selected }) : (<>
         {LeadingIcon && renderIcon(LeadingIcon, cx("h-4 w-4 shrink-0", darkMode ? "text-white/50" : "text-[#8a8a87]"))}
@@ -285,7 +290,7 @@ export function SelectMenu({
             const newGroup = option.group && (index === 0 || option.group !== visible[index - 1].group);
             return (
               <div key={`${option.value}`}>
-                {newGroup && groupLabels && option.group.trim() && <p className={cx("px-2.5 pb-1 pt-2 text-[11px] font-medium", darkMode ? "text-white/40" : "text-[#8a8a87]")}>{option.group}</p>}
+                {newGroup && groupLabels && option.group.trim() && <p className={cx("px-2.5 pb-1 pt-2 text-[11px]", darkMode ? "text-white/40" : "text-[#8a8a87]")}>{option.group}</p>}
                 {newGroup && index > 0 && (!groupLabels || !option.group.trim()) && <div className={cx("my-1.5 h-px", darkMode ? "bg-white/10" : "bg-[#efefed]")} />}
                 <button
                   type="button"
@@ -296,13 +301,14 @@ export function SelectMenu({
                   onMouseEnter={() => setHighlight(index)}
                   onClick={() => choose(option)}
                   className={optionRowClass(darkMode, { active, highlighted: highlight === index, disabled: option.disabled })}
+                  style={option.color ? { color: option.color } : undefined}
                 >
                   {option.icon && renderIcon(option.icon, cx("h-4 w-4 shrink-0", darkMode ? "text-white/60" : "text-[#5f5f5c]"))}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{option.label}</span>
                     {option.description && <span className={cx("block truncate text-[11.5px]", darkMode ? "text-white/45" : "text-[#8a8a87]")}>{option.description}</span>}
                   </span>
-                  {option.badge && <span className={cx("shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-medium", darkMode ? "bg-white/10 text-white/60" : "bg-[#f1f1ef] text-[#6f6f6c]")}>{option.badge}</span>}
+                  {option.badge && <span className={cx("shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10.5px]", darkMode ? "bg-white/10 text-white/60" : "bg-[#f1f1ef] text-[#6f6f6c]")}>{option.badge}</span>}
                   {active && <Check className="h-3.5 w-3.5 shrink-0" />}
                 </button>
               </div>
@@ -339,15 +345,15 @@ export function MultiSelect({ darkMode, values = [], onChange, options = [], pla
 
   return (
     <div ref={anchorRef} className={cx("relative min-w-0", className)}>
-      <button type="button" onClick={() => (open ? close() : setOpen(true))} aria-haspopup="listbox" aria-expanded={open} className={cx(fieldClass(darkMode, { open, size }), "h-auto min-h-10 py-1.5")}>
+      <button type="button" onClick={() => (open ? close() : setOpen(true))} aria-haspopup="listbox" aria-expanded={open} className={cx(fieldClass(darkMode, { open, size }), "h-auto py-1.5", size === "lg" ? "min-h-12" : size === "sm" ? "min-h-8" : "min-h-10")}>
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           {picked.length === 0 && <span className={cx("truncate", darkMode ? "text-white/40" : "text-[#a3a3a0]")}>{emptyLabel || placeholder}</span>}
           {picked.slice(0, 2).map((option) => (
-            <span key={option.value} className={cx("inline-flex max-w-[140px] items-center rounded-[6px] px-1.5 py-0.5 text-[12px] font-medium", darkMode ? "bg-white/10" : "bg-[#f1f1ef]")}>
+            <span key={option.value} className={cx("inline-flex max-w-[140px] items-center rounded-full px-2 py-0.5 text-[12px]", darkMode ? "bg-white/10" : "bg-[#f1f1ef]")}>
               <span className="truncate">{option.label}</span>
             </span>
           ))}
-          {picked.length > 2 && <span className={cx("text-[12px] font-medium", darkMode ? "text-white/55" : "text-[#6f6f6c]")}>+{picked.length - 2}</span>}
+          {picked.length > 2 && <span className={cx("text-[12px]", darkMode ? "text-white/55" : "text-[#6f6f6c]")}>+{picked.length - 2}</span>}
         </span>
         <ChevronDown className={cx("h-4 w-4 shrink-0 transition-transform", open && "rotate-180", darkMode ? "text-white/45" : "text-[#8a8a87]")} />
       </button>
@@ -359,16 +365,16 @@ export function MultiSelect({ darkMode, values = [], onChange, options = [], pla
             const newGroup = option.group && (index === 0 || option.group !== visible[index - 1].group);
             return (
               <div key={option.value}>
-                {newGroup && groupLabels && <p className={cx("px-2.5 pb-1 pt-2 text-[11px] font-medium", darkMode ? "text-white/40" : "text-[#8a8a87]")}>{option.group}</p>}
+                {newGroup && groupLabels && <p className={cx("px-2.5 pb-1 pt-2 text-[11px]", darkMode ? "text-white/40" : "text-[#8a8a87]")}>{option.group}</p>}
                 <button type="button" role="option" aria-selected={checked} onClick={() => toggle(option)} className={optionRowClass(darkMode, { highlighted: false })}>
-                  <span className={cx("grid h-4 w-4 shrink-0 place-items-center rounded-[5px] border transition-colors", checked ? (darkMode ? "border-white bg-white text-black" : "border-[#171717] bg-[#171717] text-white") : darkMode ? "border-white/25" : "border-[#cfcfcb] bg-white")}>
+                  <span className={cx("grid h-4 w-4 shrink-0 place-items-center rounded-[5px] border transition-colors", checked ? (darkMode ? "border-white bg-white text-black" : "border-[#141414] bg-[#141414] text-white") : darkMode ? "border-white/25" : "border-[#cfcfcb] bg-white")}>
                     {checked && <Check className="h-3 w-3" strokeWidth={3} />}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{option.label}</span>
                     {option.description && <span className={cx("block truncate text-[11.5px]", darkMode ? "text-white/45" : "text-[#8a8a87]")}>{option.description}</span>}
                   </span>
-                  {option.badge && <span className={cx("shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-medium", darkMode ? "bg-white/10 text-white/60" : "bg-[#f1f1ef] text-[#6f6f6c]")}>{option.badge}</span>}
+                  {option.badge && <span className={cx("shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10.5px]", darkMode ? "bg-white/10 text-white/60" : "bg-[#f1f1ef] text-[#6f6f6c]")}>{option.badge}</span>}
                 </button>
               </div>
             );
@@ -422,19 +428,19 @@ const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 export function Calendar({ darkMode, monthDate, onMonthChange, onSelect, isSelected, inRange, isDisabled, isEdge, onHoverDay }) {
   const today = new Date();
   const days = useMemo(() => monthGrid(monthDate), [monthDate]);
-  const navButton = cx("grid h-7 w-7 place-items-center rounded-[8px] transition-colors", darkMode ? "text-white/70 hover:bg-white/10" : "text-[#5f5f5c] hover:bg-[#f1f1ef]");
+  const navButton = cx("grid h-7 w-7 place-items-center rounded-full transition-colors", darkMode ? "text-white/70 hover:bg-white/10" : "text-[#5f5f5c] hover:bg-[#f1f1ef]");
   return (
     <div className="select-none">
       <div className="flex items-center justify-between px-1 pb-2">
         <button type="button" aria-label="Previous month" onClick={() => onMonthChange(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))} className={navButton}>
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <p className="text-[13px] font-semibold">{monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</p>
+        <p className="text-[13px]">{monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</p>
         <button type="button" aria-label="Next month" onClick={() => onMonthChange(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))} className={navButton}>
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
-      <div className={cx("grid grid-cols-7 pb-1 text-center text-[11px] font-medium", darkMode ? "text-white/40" : "text-[#a3a3a0]")}>
+      <div className={cx("grid grid-cols-7 pb-1 text-center text-[11px]", darkMode ? "text-white/40" : "text-[#a3a3a0]")}>
         {WEEKDAYS.map((label) => <span key={label} className="py-1">{label}</span>)}
       </div>
       <div className="grid grid-cols-7 gap-y-0.5">
@@ -445,7 +451,7 @@ export function Calendar({ darkMode, monthDate, onMonthChange, onSelect, isSelec
           const disabled = isDisabled?.(day);
           const edge = isEdge?.(day);
           return (
-            <div key={day.toISOString()} className={cx("flex justify-center", ranged && (darkMode ? "bg-white/[0.06]" : "bg-[#f3f3f1]"), edge === "start" && "rounded-l-[9px]", edge === "end" && "rounded-r-[9px]")}>
+            <div key={day.toISOString()} className={cx("flex justify-center", ranged && (darkMode ? "bg-white/[0.06]" : "bg-[#f3f3f1]"), edge === "start" && "rounded-l-full", edge === "end" && "rounded-r-full")}>
               <button
                 type="button"
                 disabled={disabled}
@@ -453,9 +459,9 @@ export function Calendar({ darkMode, monthDate, onMonthChange, onSelect, isSelec
                 onMouseEnter={() => onHoverDay?.(day)}
                 aria-pressed={selected}
                 className={cx(
-                  "relative h-8 w-8 rounded-[9px] text-[12.5px] tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-30",
+                  "relative h-8 w-8 rounded-full text-[12.5px] tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-30",
                   selected
-                    ? darkMode ? "bg-white font-semibold text-black" : "bg-[#171717] font-semibold text-white"
+                    ? darkMode ? "bg-white text-black" : "bg-[#141414] text-white"
                     : outside
                     ? darkMode ? "text-white/25 hover:bg-white/[0.06]" : "text-[#c4c4c1] hover:bg-[#f3f3f1]"
                     : darkMode ? "text-white/85 hover:bg-white/[0.08]" : "text-[#2b2b29] hover:bg-[#f1f1ef]",
@@ -478,7 +484,7 @@ function FooterButton({ darkMode, onClick, children, strong = false }) {
       type="button"
       onClick={onClick}
       className={cx(
-        "h-8 rounded-[8px] px-3 text-[12.5px] font-medium transition-colors",
+        "h-8 rounded-full px-3.5 text-[12.5px] transition-colors",
         strong
           ? darkMode ? "bg-white text-black hover:bg-white/90" : "bg-[#171717] text-white hover:bg-black"
           : darkMode ? "text-white/70 hover:bg-white/10" : "text-[#5f5f5c] hover:bg-[#f1f1ef]",
@@ -506,7 +512,7 @@ export function DatePicker({ darkMode, value, onChange, placeholder = "Choose da
 
   return (
     <div ref={anchorRef} className={cx("relative min-w-0", className)}>
-      {label && <span className={cx("mb-1.5 block text-xs font-medium", darkMode ? "text-white/60" : "text-[#6f6f6c]")}>{label}</span>}
+      {label && <span className={cx("mb-1.5 block text-xs", darkMode ? "text-white/60" : "text-[#8a8a8a]")}>{label}</span>}
       <button
         type="button"
         disabled={disabled}
@@ -612,16 +618,16 @@ export function DateRangePicker({ darkMode, from, to, onChange, placeholder = "C
             ))}
           </div>
           <div className="min-w-0 flex-1 p-3" onMouseLeave={() => setHovered(null)}>
-            <div className={cx("mb-3 grid grid-cols-2 gap-1.5 rounded-[10px] p-1 text-[12px]", darkMode ? "bg-white/[0.05]" : "bg-[#f3f3f1]")}>
+            <div className={cx("mb-3 grid grid-cols-2 gap-1.5 rounded-[14px] p-1 text-[12px]", darkMode ? "bg-white/[0.05]" : "bg-[#f3f3f1]")}>
               {[["from", "Start", from], ["to", "End", to]].map(([key, name, val]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setPicking(key)}
-                  className={cx("rounded-[8px] px-2.5 py-1.5 text-left transition", picking === key ? (darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.06)]") : darkMode ? "text-white/55" : "text-[#8a8a87]")}
+                  className={cx("rounded-[11px] px-2.5 py-1.5 text-left transition", picking === key ? (darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.06)]") : darkMode ? "text-white/55" : "text-[#8a8a87]")}
                 >
-                  <span className="block text-[10.5px] uppercase tracking-wide opacity-70">{name}</span>
-                  <span className="block truncate font-medium">{formatDisplayDate(val, "—")}</span>
+                  <span className="block text-[10.5px] opacity-70">{name}</span>
+                  <span className="block truncate">{formatDisplayDate(val, "—")}</span>
                 </button>
               ))}
             </div>
@@ -707,7 +713,7 @@ export function TimePicker({ darkMode, value, onChange, placeholder = "Select ti
 
   return (
     <div ref={anchorRef} className={cx("relative min-w-0", className)}>
-      {label && <span className={cx("mb-1.5 block text-xs font-medium", darkMode ? "text-white/60" : "text-[#6f6f6c]")}>{label}</span>}
+      {label && <span className={cx("mb-1.5 block text-xs", darkMode ? "text-white/60" : "text-[#8a8a8a]")}>{label}</span>}
       <button type="button" disabled={disabled} onClick={() => (open ? close() : setOpen(true))} className={fieldClass(darkMode, { open, size })}>
         <Clock3 className={cx("h-4 w-4 shrink-0", darkMode ? "text-white/50" : "text-[#8a8a87]")} />
         <span className={cx("min-w-0 flex-1 truncate tabular-nums", !value && (darkMode ? "text-white/40" : "text-[#a3a3a0]"))}>{value ? formatTime12(value) : placeholder}</span>
@@ -835,7 +841,7 @@ export function ThemeSwitch({ darkMode, onToggle }) {
     <button
       type="button"
       onClick={onToggle}
-      className={cx("grid h-9 w-9 place-items-center rounded-[10px] border transition-colors", darkMode ? "border-white/10 bg-white/[0.04] text-white/80 hover:bg-white/10" : "border-[#e4e4e1] bg-white text-[#5f5f5c] hover:bg-[#f6f6f4]")}
+      className={cx("grid h-9 w-9 place-items-center rounded-full transition-colors", darkMode ? "bg-white/[0.06] text-white/80 hover:bg-white/10" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]")}
       aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
       title={darkMode ? "Light mode" : "Dark mode"}
     >
@@ -857,7 +863,7 @@ export function Toggle({ checked, onChange, label, disabled = false, darkMode, s
       className={cx(
         "relative shrink-0 rounded-full transition-colors duration-200 disabled:opacity-50",
         small ? "h-5 w-9" : "h-6 w-11",
-        checked ? "bg-[#1f9d55]" : darkMode ? "bg-white/20" : "bg-[#d9d9d6]",
+        checked ? (darkMode ? "bg-[#c9ee6a]" : "bg-[#141414]") : darkMode ? "bg-white/20" : "bg-[#dcdcd8]",
       )}
     >
       <span className={cx("absolute top-0.5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-transform duration-200", small ? "left-0.5 h-4 w-4" : "left-0.5 h-5 w-5", checked && (small ? "translate-x-4" : "translate-x-5"))} />
@@ -868,7 +874,7 @@ export function Toggle({ checked, onChange, label, disabled = false, darkMode, s
 // Segmented tabs: [{ id, label, icon? }]
 export function Tabs({ darkMode, items = [], value, onChange, className = "" }) {
   return (
-    <div role="tablist" className={cx("inline-flex rounded-[11px] p-1", darkMode ? "bg-white/[0.06]" : "bg-[#f1f1ef]", className)}>
+    <div role="tablist" className={cx("inline-flex rounded-full p-1", darkMode ? "bg-white/[0.06]" : "bg-[#f4f4f2]", className)}>
       {items.map(({ id, label, icon: Icon, count }) => {
         const active = value === id;
         return (
@@ -879,13 +885,13 @@ export function Tabs({ darkMode, items = [], value, onChange, className = "" }) 
             aria-selected={active}
             onClick={() => onChange?.(id)}
             className={cx(
-              "inline-flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium transition",
-              active ? (darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.07)]") : darkMode ? "text-white/55 hover:text-white" : "text-[#6f6f6c] hover:text-[#171717]",
+              "inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] transition",
+              active ? (darkMode ? "bg-[#26272d] text-white" : "bg-white text-[#141414] shadow-[0_1px_4px_rgba(0,0,0,0.08)]") : darkMode ? "text-white/55 hover:text-white" : "text-[#8a8a8a] hover:text-[#141414]",
             )}
           >
             {Icon && <Icon className="h-3.5 w-3.5" />}
             {label}
-            {count != null && <span className={cx("rounded-full px-1.5 text-[11px]", darkMode ? "bg-white/10" : "bg-[#ececea]")}>{count}</span>}
+            {count != null && <span className={cx("rounded-full px-1.5 text-[11px]", darkMode ? "bg-white/10" : active ? "bg-[#f4f4f2]" : "bg-[#e9e9e6]")}>{count}</span>}
           </button>
         );
       })}
@@ -894,9 +900,11 @@ export function Tabs({ darkMode, items = [], value, onChange, className = "" }) 
 }
 
 const BUTTON_VARIANTS = {
-  primary: (dm) => (dm ? "bg-white text-black hover:bg-white/90" : "bg-[#171717] text-white hover:bg-black"),
-  secondary: (dm) => (dm ? "border border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border border-[#e4e4e1] bg-white text-[#171717] shadow-[0_1px_1px_rgba(0,0,0,0.03)] hover:bg-[#f6f6f4]"),
-  ghost: (dm) => (dm ? "text-white/75 hover:bg-white/10" : "text-[#3d3d3b] hover:bg-[#f1f1ef]"),
+  primary: (dm) => (dm ? "bg-white text-black hover:bg-white/90" : "bg-[#141414] text-white hover:bg-black"),
+  accent: () => "bg-[#cff07a] text-[#141414] hover:bg-[#c4e96a]",
+  secondary: (dm) => (dm ? "border border-white/10 bg-white/[0.04] text-white hover:bg-white/10" : "border border-[#e6e6e3] bg-white text-[#141414] hover:bg-[#f6f6f4]"),
+  soft: (dm) => (dm ? "bg-white/[0.07] text-white hover:bg-white/[0.11]" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"),
+  ghost: (dm) => (dm ? "text-white/75 hover:bg-white/10" : "text-[#3d3d3b] hover:bg-[#f4f4f2]"),
   danger: () => "bg-[#e5484d] text-white hover:bg-[#d93f44]",
 };
 
@@ -906,8 +914,8 @@ export function Button({ variant = "secondary", size = "md", darkMode, icon: Ico
       type="button"
       {...props}
       className={cx(
-        "inline-flex items-center justify-center gap-2 font-medium transition-[background-color,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55",
-        size === "sm" ? "h-8 rounded-[9px] px-3 text-[12.5px]" : size === "lg" ? "h-11 rounded-[12px] px-5 text-sm" : "h-9 rounded-[10px] px-3.5 text-[13px]",
+        "inline-flex items-center justify-center gap-2 rounded-full transition-[background-color,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55",
+        size === "sm" ? "h-8 px-3.5 text-[12.5px]" : size === "lg" ? "h-11 px-6 text-sm" : "h-9 px-4 text-[13px]",
         (BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.secondary)(darkMode),
         className,
       )}
@@ -919,23 +927,32 @@ export function Button({ variant = "secondary", size = "md", darkMode, icon: Ico
   );
 }
 
+// Pastel tones shared by chips, icon tiles and stat tiles: [light bg, light fg, dark bg, dark fg].
+export const TONES = {
+  neutral: ["#f4f4f2", "#3d3d3b", "rgba(255,255,255,0.07)", "rgba(255,255,255,0.78)"],
+  mint: ["#e4f1e6", "#2f7a4f", "rgba(74,222,128,0.12)", "#a7e8bf"],
+  lavender: ["#ece8fb", "#6b4fd1", "rgba(167,139,250,0.14)", "#c9b9fb"],
+  peach: ["#fbe5dc", "#c2562b", "rgba(251,146,60,0.13)", "#f9bf9b"],
+  sky: ["#e3eefb", "#2f6fc0", "rgba(96,165,250,0.13)", "#a9cbf7"],
+  rose: ["#fbe4e6", "#c0394b", "rgba(251,113,133,0.13)", "#f7aab5"],
+  lime: ["#eef8cc", "#4d6b12", "rgba(207,240,122,0.14)", "#d8f39a"],
+  amber: ["#fbf0d4", "#8a6200", "rgba(251,191,36,0.13)", "#f5d27a"],
+};
+const TONE_ALIASES = { green: "mint", violet: "lavender", purple: "lavender", blue: "sky", red: "rose", yellow: "amber", orange: "peach" };
+export const toneOf = (tone) => TONES[TONE_ALIASES[tone] || tone] || TONES.neutral;
+const toneStyle = (tone, dm) => { const t = toneOf(tone); return { backgroundColor: dm ? t[2] : t[0], color: dm ? t[3] : t[1] }; };
+
 const CHIP_TONES = {
-  neutral: (dm) => (dm ? "bg-white/[0.07] text-white/75" : "bg-[#f1f1ef] text-[#3d3d3b]"),
-  green: (dm) => (dm ? "bg-emerald-400/12 text-emerald-200" : "bg-[#e6f6ec] text-[#16794a]"),
-  amber: (dm) => (dm ? "bg-amber-400/12 text-amber-200" : "bg-[#fff3dc] text-[#94600a]"),
-  red: (dm) => (dm ? "bg-red-400/12 text-red-200" : "bg-[#fdeceb] text-[#b4342f]"),
-  blue: (dm) => (dm ? "bg-blue-400/12 text-blue-200" : "bg-[#e9f0fe] text-[#2856c7]"),
-  violet: (dm) => (dm ? "bg-violet-400/12 text-violet-200" : "bg-[#f1ecfe] text-[#6440c4]"),
-  outline: (dm) => (dm ? "border border-white/12 text-white/75" : "border border-[#e4e4e1] bg-white text-[#3d3d3b]"),
+  outline: (dm) => (dm ? "border border-white/12 text-white/75" : "border border-[#e6e6e3] bg-white text-[#3d3d3b]"),
 };
 
 export function Chip({ tone = "neutral", darkMode, icon: Icon, children, className = "", onRemove }) {
   return (
-    <span className={cx("inline-flex h-7 items-center gap-1.5 rounded-[8px] px-2.5 text-[12.5px] font-medium", (CHIP_TONES[tone] || CHIP_TONES.neutral)(darkMode), className)}>
+    <span style={tone === "outline" ? undefined : toneStyle(tone, darkMode)} className={cx("inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12.5px]", tone === "outline" && CHIP_TONES.outline(darkMode), className)}>
       {Icon && <Icon className="h-3.5 w-3.5" />}
       {children}
       {onRemove && (
-        <button type="button" onClick={onRemove} aria-label="Remove" className="-mr-1 grid h-5 w-5 place-items-center rounded-[6px] opacity-60 hover:opacity-100">
+        <button type="button" onClick={onRemove} aria-label="Remove" className="-mr-1 grid h-5 w-5 place-items-center rounded-full opacity-60 hover:opacity-100">
           <X className="h-3 w-3" />
         </button>
       )}
@@ -943,14 +960,14 @@ export function Chip({ tone = "neutral", darkMode, icon: Icon, children, classNa
   );
 }
 
-export function Card({ darkMode, title, icon: Icon, actions, className = "", bodyClassName = "", children }) {
+export function Card({ darkMode, title, subtitle, icon: Icon, tone = "neutral", actions, className = "", bodyClassName = "", children }) {
   return (
-    <section className={cx("rounded-[18px] border", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#e8e8e6] bg-white text-[#171717]", className)}>
+    <section className={cx("rounded-[20px] border", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]", className)}>
       {(title || actions) && (
         <header className="flex items-center justify-between gap-3 px-5 pt-4">
-          <h3 className="flex min-w-0 items-center gap-2 text-[14.5px] font-semibold">
-            {Icon && <Icon className={cx("h-4 w-4 shrink-0", darkMode ? "text-white/60" : "text-[#6f6f6c]")} />}
-            <span className="truncate">{title}</span>
+          <h3 className="flex min-w-0 items-center gap-2.5 text-[15px]">
+            {Icon && <IconTile icon={Icon} tone={tone} darkMode={darkMode} size="sm" />}
+            <span className="min-w-0"><span className="block truncate">{title}</span>{subtitle && <span className={cx("block truncate text-[12px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{subtitle}</span>}</span>
           </h3>
           {actions}
         </header>
@@ -963,11 +980,11 @@ export function Card({ darkMode, title, icon: Icon, actions, className = "", bod
 // Label / value rows on a soft panel, like the reference's detail cards.
 export function InfoRows({ darkMode, rows = [], className = "" }) {
   return (
-    <dl className={cx("grid grid-cols-[minmax(0,110px)_1fr] gap-x-4 gap-y-2.5 rounded-[12px] p-3.5 text-[13px]", darkMode ? "bg-white/[0.04]" : "bg-[#f6f6f5]", className)}>
+    <dl className={cx("grid grid-cols-[minmax(0,110px)_1fr] gap-x-4 gap-y-2.5 rounded-[16px] p-4 text-[13px]", darkMode ? "bg-white/[0.04]" : "bg-[#f4f4f2]", className)}>
       {rows.filter(Boolean).map(([label, value, Icon]) => (
         <div key={label} className="contents">
           <dt className={cx("flex items-center gap-2", darkMode ? "text-white/50" : "text-[#7a7a77]")}>{Icon && <Icon className="h-3.5 w-3.5" />}{label}</dt>
-          <dd className="min-w-0 font-medium">{value}</dd>
+          <dd className="min-w-0">{value}</dd>
         </div>
       ))}
     </dl>
@@ -975,16 +992,17 @@ export function InfoRows({ darkMode, rows = [], className = "" }) {
 }
 
 const NOTICE_TONES = {
-  amber: { box: (dm) => (dm ? "bg-amber-400/[0.08] text-amber-100" : "bg-gradient-to-b from-[#fff8ec] to-[#fffcf6] text-[#4a3a1c]"), icon: "text-[#f0a020]" },
-  blue: { box: (dm) => (dm ? "bg-blue-400/[0.08] text-blue-100" : "bg-[#f1f5fe] text-[#1f3463]"), icon: "text-[#3b6fe0]" },
-  red: { box: (dm) => (dm ? "bg-red-400/[0.08] text-red-100" : "bg-[#fdf1f0] text-[#5c1f1c]"), icon: "text-[#e5484d]" },
-  green: { box: (dm) => (dm ? "bg-emerald-400/[0.08] text-emerald-100" : "bg-[#eef8f2] text-[#16432c]"), icon: "text-[#1f9d55]" },
+  amber: { box: (dm) => (dm ? "bg-amber-400/[0.08] text-amber-100" : "bg-[#fbf3dc] text-[#4a3a1c]"), icon: "text-[#b07d00]" },
+  blue: { box: (dm) => (dm ? "bg-blue-400/[0.08] text-blue-100" : "bg-[#e9f1fb] text-[#1f3463]"), icon: "text-[#2f6fc0]" },
+  red: { box: (dm) => (dm ? "bg-red-400/[0.08] text-red-100" : "bg-[#fcebed] text-[#5c1f1c]"), icon: "text-[#c0394b]" },
+  green: { box: (dm) => (dm ? "bg-emerald-400/[0.08] text-emerald-100" : "bg-[#e9f4eb] text-[#16432c]"), icon: "text-[#2f7a4f]" },
+  neutral: { box: (dm) => (dm ? "bg-white/[0.05] text-white/80" : "bg-[#f4f4f2] text-[#3d3d3b]"), icon: "text-[#6b6b6b]" },
 };
 
 export function Notice({ tone = "amber", darkMode, icon: Icon = Info, children, className = "" }) {
   const t = NOTICE_TONES[tone] || NOTICE_TONES.amber;
   return (
-    <div className={cx("flex items-start gap-2.5 px-4 py-3 text-[13px] leading-5", t.box(darkMode), className)}>
+    <div className={cx("flex items-start gap-2.5 rounded-[14px] px-4 py-3 text-[13px] leading-5", t.box(darkMode), className)}>
       <Icon className={cx("mt-0.5 h-4 w-4 shrink-0", t.icon)} />
       <div className="min-w-0">{children}</div>
     </div>
@@ -1000,11 +1018,11 @@ export function Timeline({ darkMode, items = [] }) {
         return (
           <li key={item.id || index} className="relative grid grid-cols-[22px_1fr] gap-3 pb-6 last:pb-0">
             {index < items.length - 1 && <span className={cx("absolute bottom-0 left-[10.5px] top-6 w-px", darkMode ? "bg-white/10" : "bg-[#e8e8e6]")} />}
-            <span className={cx("relative mt-0.5 grid h-[22px] w-[22px] place-items-center rounded-full", item.tone === "green" ? "bg-[#e6f6ec] text-[#1f9d55]" : darkMode ? "bg-white/10 text-white/70" : "bg-[#f1f1ef] text-[#5f5f5c]")}>
+            <span className={cx("relative mt-0.5 grid h-[22px] w-[22px] place-items-center rounded-full", item.tone === "green" ? "bg-[#e4f1e6] text-[#2f7a4f]" : darkMode ? "bg-white/10 text-white/70" : "bg-[#f4f4f2] text-[#5f5f5c]")}>
               {Icon ? <Icon className="h-3 w-3" /> : <span className="h-2 w-2 rounded-full bg-current" />}
             </span>
             <div className="min-w-0">
-              <p className="text-[13.5px] font-medium">{item.title}</p>
+              <p className="text-[13.5px]">{item.title}</p>
               {item.time && <p className={cx("mt-0.5 text-[12px]", darkMode ? "text-white/45" : "text-[#8a8a87]")}>{item.time}</p>}
               {item.children && <div className="mt-3">{item.children}</div>}
             </div>
@@ -1016,7 +1034,7 @@ export function Timeline({ darkMode, items = [] }) {
 }
 
 // Right-side panel with a slide in/out. Escape and the backdrop close it.
-export function Drawer({ open, onClose, darkMode, title, icon: Icon, width = 520, footer, children, notice }) {
+export function Drawer({ open, onClose, darkMode, title, subtitle, icon: Icon, tone = "neutral", width = 520, footer, children, notice }) {
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
   if (open && !mounted) {
@@ -1043,17 +1061,17 @@ export function Drawer({ open, onClose, darkMode, title, icon: Icon, width = 520
   if (!mounted || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-[300] flex justify-end newq">
-      <div className={cx("ui-backdrop absolute inset-0 bg-black/25", closing && "is-closing")} onMouseDown={onClose} aria-hidden />
-      <aside role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : undefined} style={{ maxWidth: width }} className={cx("ui-drawer relative flex h-full w-full flex-col border-l shadow-[0_24px_70px_rgba(0,0,0,0.18)] sm:m-2 sm:h-[calc(100%-16px)] sm:rounded-[18px] sm:border", closing && "is-closing", darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#e8e8e6] bg-white text-[#171717]")}>
-        <header className={cx("flex items-center justify-between gap-3 border-b px-5 py-4", darkMode ? "border-white/10" : "border-[#efefed]")}>
-          <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold">{Icon && <Icon className="h-4 w-4" />}<span className="truncate">{title}</span></h2>
-          <button type="button" onClick={onClose} aria-label="Close" className={cx("grid h-8 w-8 place-items-center rounded-[9px]", darkMode ? "hover:bg-white/10" : "hover:bg-[#f1f1ef]")}>
+      <div className={cx("ui-backdrop absolute inset-0 bg-black/20 backdrop-blur-[2px]", closing && "is-closing")} onMouseDown={onClose} aria-hidden />
+      <aside role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : undefined} style={{ maxWidth: width }} className={cx("ui-drawer relative flex h-full w-full flex-col overflow-hidden border-l shadow-[0_24px_70px_rgba(0,0,0,0.16)] sm:m-2.5 sm:h-[calc(100%-20px)] sm:rounded-[24px] sm:border", closing && "is-closing", darkMode ? "border-white/10 bg-[#121317] text-white" : "border-[#ececec] bg-white text-[#141414]")}>
+        <header className={cx("flex items-center justify-between gap-3 border-b px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>
+          <h2 className="flex min-w-0 items-center gap-3 text-[17px] tracking-[-0.01em]">{Icon && <IconTile icon={Icon} tone={tone} darkMode={darkMode} size="sm" />}<span className="min-w-0"><span className="block truncate">{title}</span>{subtitle && <span className={cx("block truncate text-[12.5px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{subtitle}</span>}</span></h2>
+          <button type="button" onClick={onClose} aria-label="Close" className={cx("grid h-9 w-9 place-items-center rounded-full", darkMode ? "bg-white/[0.06] hover:bg-white/10" : "bg-[#f4f4f2] hover:bg-[#ebebe8]")}>
             <X className="h-4 w-4" />
           </button>
         </header>
         {notice}
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
-        {footer && <footer className={cx("flex items-center justify-end gap-2 border-t px-5 py-3.5", darkMode ? "border-white/10" : "border-[#efefed]")}>{footer}</footer>}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        {footer && <footer className={cx("flex items-center justify-end gap-2 border-t px-6 py-4", darkMode ? "border-white/10" : "border-[#f0f0ee]")}>{footer}</footer>}
       </aside>
     </div>,
     document.body,
@@ -1074,13 +1092,13 @@ export function ConfirmModal({
   if (!open) return null;
   return (
     <div className="ui-backdrop fixed inset-0 z-[320] flex items-center justify-center bg-black/35 p-4 newq">
-      <div role="alertdialog" aria-modal="true" className={cx("ui-pop w-full max-w-md rounded-[18px] border p-5", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#e8e8e6] bg-white text-[#171717]")} style={{ boxShadow: "var(--ui-shadow-pop)" }}>
+      <div role="alertdialog" aria-modal="true" className={cx("ui-pop w-full max-w-md rounded-[24px] border p-6", darkMode ? "border-white/10 bg-[#15171c] text-white" : "border-[#ececec] bg-white text-[#141414]")} style={{ boxShadow: "var(--ui-shadow-pop)" }}>
         <div className="flex items-start gap-3.5">
-          <span className={cx("grid h-10 w-10 shrink-0 place-items-center rounded-[11px]", darkMode ? "bg-red-500/10" : "bg-[#fdeceb]")}>
-            <AlertTriangle className="h-[18px] w-[18px] text-[#e5484d]" />
+          <span className={cx("grid h-11 w-11 shrink-0 place-items-center rounded-[14px]", darkMode ? "bg-red-500/10" : "bg-[#fbe4e6]")}>
+            <AlertTriangle className="h-[18px] w-[18px] text-[#c0394b]" />
           </span>
           <div className="min-w-0">
-            <h3 className="text-[15.5px] font-semibold">{title}</h3>
+            <h3 className="text-[16px]">{title}</h3>
             <p className={cx("mt-1.5 text-[13px] leading-5", darkMode ? "text-white/55" : "text-[#6f6f6c]")}>{message}</p>
           </div>
         </div>
@@ -1104,4 +1122,124 @@ export function DocumentIcon({ doc, darkMode, className = "w-4 h-4" }) {
   if (["zip", "rar", "7z"].includes(ext)) return <FileArchive className={`${className} text-amber-500`} />;
   if (["txt", "md", "rtf"].includes(ext)) return <FileText className={`${className} ${base}`} />;
   return <File className={`${className} ${base}`} />;
+}
+
+/* ───────── Reference building blocks ───────── */
+
+const TILE_SIZES = { xs: "h-7 w-7 rounded-[9px] [&>svg]:h-3.5 [&>svg]:w-3.5", sm: "h-9 w-9 rounded-[11px] [&>svg]:h-4 [&>svg]:w-4", md: "h-11 w-11 rounded-[14px] [&>svg]:h-5 [&>svg]:w-5", lg: "h-14 w-14 rounded-[18px] [&>svg]:h-6 [&>svg]:w-6" };
+
+// A pastel square with an icon, as on every reference card.
+export function IconTile({ icon: Icon, tone = "neutral", darkMode, size = "md", className = "" }) {
+  if (!Icon) return null;
+  return (
+    <span style={toneStyle(tone, darkMode)} className={cx("grid shrink-0 place-items-center", TILE_SIZES[size] || TILE_SIZES.md, className)}>
+      {isValidElement(Icon) ? Icon : createElement(Icon, { strokeWidth: 1.8 })}
+    </span>
+  );
+}
+
+// Small pill with an icon: "Area A · Scam interception".
+export function Badge({ icon: Icon, tone = "mint", darkMode, children, className = "" }) {
+  return (
+    <span style={toneStyle(tone, darkMode)} className={cx("inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px]", className)}>
+      {Icon && (isValidElement(Icon) ? Icon : createElement(Icon, { className: "h-3.5 w-3.5", strokeWidth: 1.9 }))}
+      {children}
+    </span>
+  );
+}
+
+// Two-line heading: the first line black, the second grey.
+export function SectionTitle({ darkMode, title, subtitle, size = "md", className = "" }) {
+  const big = size === "lg";
+  const line = big ? "text-[30px] leading-[1.08] sm:text-[34px]" : "text-[22px] leading-[1.15]";
+  return (
+    <div className={cx("min-w-0", className)}>
+      <h2 className={cx("tracking-[-0.02em]", line, darkMode ? "text-white" : "text-[#141414]")}>{title}</h2>
+      {subtitle && <p className={cx("tracking-[-0.02em]", line, darkMode ? "text-white/40" : "text-[#9a9a98]")}>{subtitle}</p>}
+    </div>
+  );
+}
+
+// The top of every module: badge, two-line title, an optional line of text and actions.
+export function PageHeader({ darkMode, badge, badgeIcon, badgeTone = "mint", title, subtitle, description, actions, className = "" }) {
+  return (
+    <header className={cx("flex flex-wrap items-end justify-between gap-4", className)}>
+      <div className="min-w-0">
+        {badge && <Badge icon={badgeIcon} tone={badgeTone} darkMode={darkMode} className="mb-3">{badge}</Badge>}
+        <SectionTitle darkMode={darkMode} title={title} subtitle={subtitle} />
+        {description && <p className={cx("mt-2 max-w-2xl text-[13.5px] leading-6", darkMode ? "text-white/55" : "text-[#7a7a78]")}>{description}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </header>
+  );
+}
+
+// A pastel number tile: icon, big value, small label.
+// size "lg" is the dashboard's big tile: value and label set large and bold in the heading font.
+export function StatTile({ darkMode, icon, tone = "mint", value, label, hint, onClick, size = "md", className = "" }) {
+  const Tag = onClick ? "button" : "div";
+  const t = toneOf(tone);
+  const lg = size === "lg";
+  return (
+    <Tag type={onClick ? "button" : undefined} onClick={onClick} style={{ backgroundColor: darkMode ? t[2] : t[0] }} className={cx("group flex min-w-0 flex-col justify-between text-left transition-transform", lg ? "min-h-[160px] rounded-[24px] p-4 sm:min-h-[172px] sm:p-5" : "min-h-[118px] rounded-[20px] p-4", onClick && "hover:-translate-y-0.5 active:scale-[0.99]", className)}>
+      {(icon || (lg && onClick)) && (
+        <span className="flex items-start justify-between gap-2">
+          {icon ? <span style={{ color: darkMode ? t[3] : t[1] }}>{isValidElement(icon) ? icon : createElement(icon, { className: lg ? "h-6 w-6" : "h-5 w-5", strokeWidth: 1.8 })}</span> : <span />}
+          {/* An arrow on big clickable tiles says "opens details". */}
+          {lg && onClick && (
+            <span className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5", darkMode ? "bg-white/10 text-white/85" : "bg-white/75 text-[#141414]")}>
+              <ArrowUpRight className="h-[18px] w-[18px]" strokeWidth={2} />
+            </span>
+          )}
+        </span>
+      )}
+      <span className={cx("block", lg ? "mt-5" : "mt-4")}>
+        <span className={cx("block truncate leading-none tracking-[-0.03em] tabular-nums", lg ? "small force-bold text-[38px] sm:text-[46px]" : "text-[28px]", darkMode ? "text-white" : "text-[#141414]")}>{value}</span>
+        {label && <span className={cx("block", lg ? "small force-bold mt-3 text-[15px] tracking-[-0.01em] sm:text-[17px]" : "mt-2 text-[12.5px]", darkMode ? (lg ? "text-white/85" : "text-white/55") : lg ? "text-[#2a2a28]" : "text-[#6b6b6b]")}>{label}</span>}
+        {hint && <span className={cx("block", lg ? "mt-1 text-[13px]" : "mt-0.5 text-[11.5px]", darkMode ? "text-white/45" : "text-[#8a8a88]")}>{hint}</span>}
+      </span>
+    </Tag>
+  );
+}
+
+// A white card with a pastel icon tile, a title and a short line, like the reference feature cards.
+export function FeatureCard({ darkMode, icon, tone = "mint", title, text, index, footer, onClick, className = "", children }) {
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag type={onClick ? "button" : undefined} onClick={onClick} className={cx("relative flex flex-col rounded-[20px] border p-5 text-left transition-colors", darkMode ? "border-white/10 bg-[#15171c] hover:bg-[#191b21]" : "border-[#ececec] bg-white hover:bg-[#fcfcfb]", className)}>
+      {index != null && <span className={cx("absolute right-5 top-4 text-[12px] tabular-nums", darkMode ? "text-white/35" : "text-[#b0b0ae]")}>{String(index).padStart(2, "0")}</span>}
+      <IconTile icon={icon} tone={tone} darkMode={darkMode} />
+      {title && <h4 className={cx("mt-4 text-[15px] tracking-[-0.01em]", darkMode ? "text-white" : "text-[#141414]")}>{title}</h4>}
+      {text && <p className={cx("mt-1.5 text-[13px] leading-5", darkMode ? "text-white/55" : "text-[#7a7a78]")}>{text}</p>}
+      {children}
+      {footer && <div className={cx("mt-4 text-[12px]", darkMode ? "text-white/45" : "text-[#8a8a8a]")}>{footer}</div>}
+    </Tag>
+  );
+}
+
+// A lime (or black) highlight strip: icon, title, line.
+export function Highlight({ darkMode, icon, title, text, tone = "lime", action, className = "" }) {
+  const ink = tone === "ink";
+  return (
+    <div className={cx("flex items-center gap-3.5 rounded-[20px] px-5 py-4", ink ? "bg-[#141414] text-white" : darkMode ? "bg-[#cff07a]/15 text-white" : "bg-[#d4f28a] text-[#141414]", className)}>
+      {icon && (isValidElement(icon) ? icon : createElement(icon, { className: "h-5 w-5 shrink-0", strokeWidth: 1.8 }))}
+      <div className="min-w-0 flex-1">
+        {title && <p className="text-[14px]">{title}</p>}
+        {text && <p className={cx("text-[12.5px]", ink || darkMode ? "text-white/60" : "text-[#3d4a1a]")}>{text}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+// Empty state: a soft tile, a line and an optional action.
+export function EmptyState({ darkMode, icon, tone = "neutral", title, text, action, className = "" }) {
+  return (
+    <div className={cx("flex flex-col items-center justify-center rounded-[20px] px-6 py-12 text-center", darkMode ? "bg-white/[0.03]" : "bg-[#f7f7f5]", className)}>
+      <IconTile icon={icon} tone={tone} darkMode={darkMode} size="lg" />
+      {title && <p className={cx("mt-4 text-[15px]", darkMode ? "text-white" : "text-[#141414]")}>{title}</p>}
+      {text && <p className={cx("mt-1 max-w-sm text-[13px]", darkMode ? "text-white/50" : "text-[#8a8a8a]")}>{text}</p>}
+      {action && <div className="mt-4">{action}</div>}
+    </div>
+  );
 }

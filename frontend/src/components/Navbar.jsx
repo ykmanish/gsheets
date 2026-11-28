@@ -111,8 +111,8 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
       title: "Internet connection is working",
       Icon: Wifi,
       className: darkMode
-        ? "bg-emerald-400/12 text-emerald-200 ring-emerald-300/15"
-        : "bg-emerald-50 text-emerald-700 ring-emerald-100",
+        ? "bg-emerald-400/12 text-emerald-200"
+        : "bg-[#e4f1e6] text-[#2f7a4f]",
       dot: "bg-emerald-500",
     },
     unstable: {
@@ -120,8 +120,8 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
       title: "Network looks unstable",
       Icon: Activity,
       className: darkMode
-        ? "bg-amber-400/12 text-amber-200 ring-amber-300/15"
-        : "bg-amber-50 text-amber-700 ring-amber-100",
+        ? "bg-amber-400/12 text-amber-200"
+        : "bg-[#fbf0d4] text-[#8a6200]",
       dot: "bg-amber-500",
     },
     offline: {
@@ -129,8 +129,8 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
       title: "No internet connection",
       Icon: WifiOff,
       className: darkMode
-        ? "bg-red-400/12 text-red-200 ring-red-300/15"
-        : "bg-red-50 text-red-700 ring-red-100",
+        ? "bg-red-400/12 text-red-200"
+        : "bg-[#fbe4e6] text-[#c0394b]",
       dot: "bg-red-500",
     },
   }[networkStatus] || {};
@@ -187,23 +187,24 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
   }, [darkMode, onNewNotification, userId]);
 
   return (
-    <div className={`newq flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3 sm:px-5 ${darkMode ? "border-white/10" : "border-[#efefed]"}`}>
+    <div className={`newq flex h-16 shrink-0 items-center justify-between gap-3 border-b px-3 sm:px-6 ${darkMode ? "border-white/10" : "border-[#f0f0ee]"}`}>
       <div className="flex min-w-0 items-center gap-2">
         <button
           onClick={onMenuClick}
           aria-label="Open menu"
-          className={`grid h-9 w-9 shrink-0 place-items-center rounded-[10px] md:hidden ${darkMode ? "text-white/75 hover:bg-white/10" : "text-[#5f5f5c] hover:bg-[#f1f1ef]"}`}
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full md:hidden ${darkMode ? "bg-white/[0.06] text-white/75 hover:bg-white/10" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"}`}
         >
           <Menu className="h-[18px] w-[18px]" />
         </button>
         {(() => {
           const [section, page, PageIcon] = PAGES[moduleId] || ["Workspace", "UIPL Docs", LayoutDashboard];
           return (
-            <nav aria-label="Breadcrumb" className={`flex min-w-0 items-center gap-1.5 text-[13.5px] ${darkMode ? "text-white/50" : "text-[#7a7a77]"}`}>
-              <PageIcon className="h-4 w-4 shrink-0" />
-              <span className="hidden truncate sm:inline">{section}</span>
-              <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
-              <span title={`${greeting}, ${displayName}`} className={`truncate font-medium ${darkMode ? "text-white" : "text-[#171717]"}`}>{page}</span>
+            <nav aria-label="Breadcrumb" className={`flex min-w-0 items-center gap-2.5 ${darkMode ? "text-white/45" : "text-[#9a9a98]"}`}>
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] ${darkMode ? "bg-white/[0.06] text-white/80" : "bg-[#f4f4f2] text-[#141414]"}`}><PageIcon className="h-4 w-4" /></span>
+              <span className="min-w-0 leading-tight">
+                <span className="hidden truncate text-[11.5px] sm:block">{section}</span>
+                <span title={`${greeting}, ${displayName}`} className={`block truncate text-[15px] tracking-[-0.01em] ${darkMode ? "text-white" : "text-[#141414]"}`}>{page}</span>
+              </span>
             </nav>
           );
         })()}
@@ -213,11 +214,11 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
         <button
           type="button"
           onClick={onOpenSearch}
-          className={`hidden h-9 w-[220px] items-center gap-2 rounded-[10px] border px-3 text-[13px] transition-colors lg:flex ${darkMode ? "border-white/10 bg-white/[0.04] text-white/45 hover:bg-white/[0.07]" : "border-[#e4e4e1] bg-white text-[#a3a3a0] shadow-[0_1px_1px_rgba(0,0,0,0.03)] hover:bg-[#fafaf9]"}`}
+          className={`hidden h-10 w-[240px] items-center gap-2 rounded-full px-4 text-[13px] transition-colors lg:flex ${darkMode ? "bg-white/[0.06] text-white/45 hover:bg-white/[0.09]" : "bg-[#f4f4f2] text-[#9a9a98] hover:bg-[#efefec]"}`}
         >
           <Search className="h-4 w-4" />
           <span className="flex-1 text-left">Search...</span>
-          <kbd className={`rounded-[5px] border px-1.5 text-[10.5px] ${darkMode ? "border-white/10" : "border-[#e8e8e6]"}`}>Ctrl K</kbd>
+          <kbd className={`rounded-full px-2 py-0.5 text-[10.5px] ${darkMode ? "bg-white/10" : "bg-white"}`}>Ctrl K</kbd>
         </button>
         <SlackAnnouncementComposer darkMode={darkMode} />
 
@@ -225,7 +226,7 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
         {showLoopButton && (
           <button
             onClick={onLoopClick}
-            className="relative hidden h-9 items-center gap-1.5 rounded-[10px] bg-[#2563eb] px-3 text-[13px] font-medium text-white transition-colors hover:bg-[#1d4ed8] active:scale-[0.98] lg:flex"
+            className="relative hidden h-9 items-center gap-1.5 rounded-full bg-[#141414] px-4 text-[13px] text-white transition-colors hover:bg-black active:scale-[0.98] dark:bg-[#cff07a] dark:text-[#141414] lg:flex"
             title="Loop chat"
             aria-label="Open Loop chat"
           >
@@ -240,7 +241,7 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
         )}
 
         <div
-          className={`hidden h-9 items-center gap-2 rounded-[10px] px-2.5 text-[12px] font-medium ring-1 transition-colors xl:flex ${networkMeta.className}`}
+          className={`hidden h-9 items-center gap-2 rounded-full px-3 text-[12px] transition-colors xl:flex ${networkMeta.className}`}
           title={networkMeta.title}
           aria-label={`Network status: ${networkMeta.label}`}
         >
@@ -256,8 +257,8 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
 
         <button
           onClick={onNotificationsClick}
-          className={`relative grid h-9 w-9 place-items-center rounded-[10px] border transition-colors ${
-            darkMode ? "border-white/10 bg-white/[0.04] text-white/80 hover:bg-white/10" : "border-[#e4e4e1] bg-white text-[#5f5f5c] hover:bg-[#f6f6f4]"
+          className={`relative grid h-9 w-9 place-items-center rounded-full transition-colors ${
+            darkMode ? "bg-white/[0.06] text-white/80 hover:bg-white/10" : "bg-[#f4f4f2] text-[#141414] hover:bg-[#ebebe8]"
           }`}
           title="Notifications"
         >
@@ -265,7 +266,7 @@ export default function Navbar({ darkMode, setDarkMode, user, onMenuClick, onNot
           {unreadCount > 0 && (
             <span className="absolute -right-1 -top-1 flex h-[22px] w-[22px] items-center justify-center">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-60"></span>
-              <span className={`relative inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm border-2 ${darkMode ? "border-[#0f1115]" : "border-white"}`}>
+              <span className={`relative inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#141414] text-[10px] text-white border-2 ${darkMode ? "border-[#0f1115]" : "border-white"}`}>
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             </span>
